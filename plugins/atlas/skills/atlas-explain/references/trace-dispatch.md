@@ -31,7 +31,7 @@ OUT OF SCOPE:
 STOP CONDITIONS:
   - The named symbol/file/ref does not exist: stop and report that fact instead of tracing a substitute.
   - The behavior spans >4 ownership boundaries: report that the question is unscoped rather than fanning out further.
-  - Dispatch-fatal tool outage after the serena fallback: report what you grounded and what remains ungrounded.
+  - Dispatch-fatal tool outage after the lean-ctx fallback: report what you grounded and what remains ungrounded.
 SCHEMA: explain-trace v1
 summary:      <2-3 sentences: the mechanism in plain terms>
 trace:        [ { claim: <one line of behavior>, evidence: <file:line you read>, kind: behavior|documented-rationale|inference } ]

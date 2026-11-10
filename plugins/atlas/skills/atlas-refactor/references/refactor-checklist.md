@@ -90,7 +90,7 @@ change and stop.
 
 ## 6. Precision edits
 
-- Use symbol-level navigation and targeted edits (Serena, LSP).
+- Use symbol-level navigation and targeted edits (lean-ctx, native LSP).
 - Do not rewrite whole files to change one function.
 - Do not reformat code that is not part of the refactor. Style fixes
   belong in a separate commit.

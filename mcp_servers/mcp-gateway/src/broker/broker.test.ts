@@ -166,9 +166,11 @@ class TestOAuthProvider implements OAuthClientProvider {
 interface Driven {
   final: URL;
   consentHtml?: string;
+  consentHeaders?: Headers;
+  confirmUrl?: URL;
 }
 
-async function drive(start: URL, redirectPrefix: string, jar = new CookieJar()): Promise<Driven> {
+async function drive(start: URL, redirectPrefix: string, jar = new CookieJar(), stopAtConsent = false): Promise<Driven> {
   let url = start;
   let method = "GET";
   let consentHtml: string | undefined;
@@ -193,6 +195,7 @@ async function drive(start: URL, redirectPrefix: string, jar = new CookieJar()):
     if (res.status === 200 && form) {
       consentHtml = body;
       url = new URL(form[1]!.replaceAll("&#47;", "/"), url);
+      if (stopAtConsent) return { final: url, consentHtml, consentHeaders: res.headers, confirmUrl: url };
       method = "POST";
       continue;
     }
@@ -351,6 +354,45 @@ describe("acceptance 6: broker round trip", () => {
     });
     expect(html).not.toMatch(/<script|<x>|<i>|<mcp>/i);
     expect(escapeHtml(`<>&"'`)).toBe("&#60;&#62;&#38;&#34;&#39;");
+  });
+});
+
+describe("consent form CSRF origin check", () => {
+  // Each call walks to a fresh consent page: a confirmed interaction cannot be replayed.
+  async function atConsent(): Promise<{ driven: Driven; jar: CookieJar }> {
+    const redirect = "http://127.0.0.1:9/cb";
+    const provider = new TestOAuthProvider(redirect);
+    expect(await auth(provider, { serverUrl: resource })).toBe("REDIRECT");
+    const jar = new CookieJar();
+    return { driven: await drive(provider.authUrl!, redirect, jar, true), jar };
+  }
+
+  async function confirm(origin: string | undefined): Promise<Response> {
+    const { driven, jar } = await atConsent();
+    const cookie = jar.headerFor(driven.confirmUrl!);
+    return fetch(driven.confirmUrl!, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded", ...(cookie ? { cookie } : {}), ...(origin ? { origin } : {}) },
+      body: "",
+    });
+  }
+
+  it("sends a Referrer-Policy that keeps the real Origin on the same-origin form POST", async () => {
+    const { driven } = await atConsent();
+    // no-referrer makes Chrome send "Origin: null", which the strict check rejects.
+    expect(driven.consentHeaders!.get("referrer-policy")).toBe("same-origin");
+  });
+
+  it("rejects a cross-origin POST, and the null origin, with 403", async () => {
+    expect((await confirm("https://evil.example.com")).status).toBe(403);
+    expect((await confirm("null")).status).toBe(403);
+  });
+
+  it("accepts a same-origin POST and a POST with no Origin header", async () => {
+    for (const origin of [base, undefined]) {
+      expect((await confirm(origin)).status).toBe(303);
+    }
   });
 });
 

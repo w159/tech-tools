@@ -10494,5 +10494,676 @@
     "status": "verified",
     "verified_at": "2026-11-10T10:25:17+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "sec3-completion-gate",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Plan s3 completion gate: crew attribution crosses sessions",
+    "evidence": [
+      "hooks/completion_gate_core.py _team_records crew branch; scripts/atlas_crew.py:1010 no lead_session"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest -q test_completion_gate.py (631 pass); mutation of _team_gate fails 2 tests",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-10T10:38:52+00:00",
+    "verified_by": "atlas:verifier (verdict of 2026-11-10T08:58Z, ledger row re-entered by orchestrator after the release worktree was removed)"
+  },
+  {
+    "id": "tcd12c5ac",
+    "surface": "mcp-gateway broker /auth + /interaction",
+    "category": "live-verification",
+    "severity": "low",
+    "title": "Live browser sign-in reaches the gateway consent screen and returns an authorization code (Entra SSO, no human-only prompt)",
+    "evidence": [
+      "browser screenshot: gateway 'Authorize access' consent page (Application live-client.mjs, Access requested: mcp)",
+      "/tmp/gw/final-client.log: 'callback ok code=kFOY_I...(len 43)' and final URL http://127.0.0.1:60426/callback?code=kFOY_I_ce7YWtHV8Qq-ebTC8NqUuFuvHksZnP6FRY7e"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-scoped.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io ; open the printed auth URL in Chrome; click Allow",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "tcd12c5ac-TOKEN",
+    "surface": "mcp-gateway /token",
+    "category": "production-config",
+    "severity": "high",
+    "title": "Token endpoint fails closed: Entra Graph membership re-check unavailable, so no access token is ever issued (tools/list and tool call unreachable)",
+    "evidence": [
+      "az containerapp logs show -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --tail 60 -> {\"event\":\"auth_failed\",\"actor\":{\"sub\":\"a_ttFU4-CXEhiS32lZ5CUm0PWTNgrBFMfN\",\"idp\":\"entra\",\"tenant\":\"f00db7e5-ade5-49b2-b9cd-8813b81ef30a\"},\"client_id\":\"CIdbbPaoSBGfDShpqeO0b_Np2eNQyZIwbtUWKGcbmcz\",\"reason\":\"membership_check_unavailable\",\"outcome\":\"backend_error\"} (3x: 12:28:00, 12:28:46, 12:34:22)",
+      "/tmp/gw/final-client.log: FAIL: token exchange HTTP 400: {\"error\":\"invalid_grant\",\"error_description\":\"grant request is invalid\"}"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-scoped.mjs <base>; sign in; consent; the token POST then returns invalid_grant and the audit line says membership_check_unavailable",
+    "proposed_fix": "Give the container's managed identity (gwh-mcp-gateway-id, clientId 27080ee0-e240-4400-bac3-b3fada17fa7d) the Graph app permissions Application.Read.All/User.Read.All/GroupMember.Read.All and set ENTRA_MANAGED_IDENTITY_CLIENT_ID, or make the membership check use the app registration client credentials (verified working from outside: Graph token HTTP 200, servicePrincipals/appRoleAssignedTo/users all HTTP 200)",
+    "blast_radius": "every user of the live broker gateway; no token can be issued until the Graph membership check can authenticate",
+    "status": "rejected",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "tcd12c5ac-CSRF",
+    "surface": "mcp_servers/mcp-gateway/src/broker/interactions.ts securityHeaders() + originOk()",
+    "category": "code-defect",
+    "severity": "high",
+    "title": "Consent form POST is rejected 403 in every real browser: Referrer-Policy no-referrer makes Chrome send Origin: null, which originOk() refuses",
+    "evidence": [
+      "CDP Network.requestWillBeSentExtraInfo for POST /interaction/<uid>/confirm: origin= null | referer= (empty) | sec-fetch-site= same-origin; server answered 403 'Request blocked - This form was submitted from another site.'",
+      "controlled experiment on 127.0.0.1:9913: a page served with 'referrer-policy: no-referrer' produced origin=\"null\" on a same-origin form POST, while the same page without that header produced origin=\"http://127.0.0.1:9913\""
+    ],
+    "doc_refs": [],
+    "reproduction": "open the printed auth URL in Chrome, click Allow on the consent page -> 403 Request blocked",
+    "proposed_fix": "Accept Origin: null (or compare the Origin against the request's own host) in originOk(), or drop Referrer-Policy: no-referrer from the interaction pages, or replace the Origin check with a double-submit CSRF token",
+    "blast_radius": "any browser-based sign-in: the user can never accept the consent screen",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "tcd12c5ac-SCOPE",
+    "surface": "mcp_servers/mcp-gateway/src/broker/interactions.ts showConsent/handleConfirm + oidc-provider interactions action",
+    "category": "code-defect",
+    "severity": "medium",
+    "title": "Authorization without a scope parameter ends in access_denied (no scope was granted) while the consent page shows 'Access requested: (none)'",
+    "evidence": [
+      "client without scope: callback error=access_denied; with scope=mcp offline_access: callback code=... issued (same browser, same gateway)",
+      "oidc-provider 9.12.2 lib/actions/authorization/interactions.js:73 'authorization request resolved without requesting interactions but no scope was granted'"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client.mjs <base> (no scope) vs node /tmp/gw/live-client-scoped.mjs <base> (scope=mcp offline_access)",
+    "proposed_fix": "Send scope=mcp from the client, and/or default the authorization scope to the resource scope in the gateway; surface the provider error_description on the consent page instead of a bare access_denied",
+    "blast_radius": "any MCP client that omits scope, although the protected-resource metadata advertises scopes_supported=[mcp]",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:35:58+00:00",
+    "verified_by": "LiveSignInVerify"
+  },
+  {
+    "id": "GW-001",
+    "surface": "mcp-gateway",
+    "category": "browser-consent",
+    "severity": "high",
+    "title": "Gateway consent form POST is rejected 403 in every real browser (Referrer-Policy no-referrer makes Chrome send Origin: null)",
+    "evidence": [
+      "live audit + CDP requestWillBeSentExtraInfo origin=null sec-fetch-site=same-origin",
+      "mcp_servers/mcp-gateway/src/broker/interactions.ts:58 (Referrer-Policy), :93 (originOk)"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io -> browser consent POST -> HTTP 403 Request blocked",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:38:32+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "GW-002",
+    "surface": "mcp-gateway",
+    "category": "entra-membership",
+    "severity": "high",
+    "title": "Gateway token endpoint fails closed: membership check cannot get a Graph token from the container (managed identity has no Graph permissions, no client-credentials fallback)",
+    "evidence": [
+      "container audit event auth_failed reason=membership_check_unavailable x3 (12:28:00, 12:28:46, 12:34:22)",
+      "az role assignment list --all --assignee 8fa02505-c220-40bb-abfc-f5fdf72a938b -> no Graph app permissions"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io -> token exchange HTTP 400 invalid_grant",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:38:32+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "te71619af",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Live Entra sign-in through gwh-mcp-gateway--fix1 issues a token, exposes 208 role-scoped tools (no paylocity), and reaches the real NinjaOne backend",
+    "evidence": [
+      "/tmp/gw/reverify2-client.log: token ok type=Bearer expires_in=900 access=eyJhbG...(len 1118) refresh=yjAFKA...(len 43) scope=mcp; tools/list -> 208 tools",
+      "/tmp/gw/reverify3-client.log: tools/call ninjaone_devices_list -> isError=false (organization_id=1)",
+      "az containerapp logs show -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --revision gwh-mcp-gateway--fix1 --tail 300: audit token_issued / tools_listed tool_count=208 / tool_call connector=ninjaone effect=read decision=allow reason=grant:it outcome=ok"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-refresh.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io 'ninjaone_devices_list' '' '{\"ninjaone_devices_list\":{\"organization_id\":1}}' (consent accepted via browser-use)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:50:33+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "te71619af",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Live Entra sign-in through gwh-mcp-gateway--fix1 issues a token, exposes 208 role-scoped tools (no paylocity), and reaches the real NinjaOne backend",
+    "evidence": [
+      "/tmp/gw/reverify2-client.log: 'token ok type=Bearer expires_in=900 access=<masked len 1118> refresh=<masked len 43> scope=mcp'; 'tools/list -> 208 tools'",
+      "/tmp/gw/reverify3-client.log: tools/call ninjaone_devices_list -> isError=false (organization_id=1)",
+      "az containerapp logs show -g gwh-mcp-gateway-rg -n gwh-mcp-gateway --revision gwh-mcp-gateway--fix1 --tail 300: audit token_issued / tools_listed tool_count=208 / tool_call connector=ninjaone effect=read decision=allow reason=grant:it outcome=ok (no token values in audit)"
+    ],
+    "doc_refs": [],
+    "reproduction": "node /tmp/gw/live-client-refresh.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io 'ninjaone_devices_list' '' '{\"ninjaone_devices_list\":{\"organization_id\":1}}' (consent accepted via browser-use)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:50:43+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "GW-003",
+    "surface": "mcp-gateway",
+    "category": "end-to-end",
+    "severity": "info",
+    "title": "Live Entra sign-in through the broker-mode gateway is VERIFIED end to end: token issued, 208 tools scoped to the caller's roles, read-only vendor call succeeded",
+    "evidence": [
+      "client token ok type=Bearer expires_in=900 scope=mcp",
+      "tools/list -> 208 tools (panos 60, ninjaone 45, threatlocker 30, knowbe4 30, vanta 28, falcon 4, spanning 2, sonicwall 2, connectwise 2, blumira 2, auvik 2, cipp 1), zero paylocity tools",
+      "ninjaone_organizations_list isError=false and ninjaone_devices_list isError=false against the real NinjaOne backend",
+      "container audit: token_issued x3, tools_listed tool_count=208 x3, tool_call x7, decision allow reason grant:it"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /tmp/gw && node live-client-scoped.mjs https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io (then sign in in the browser)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T12:52:04+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "gateway-credentials-2026-10-28",
+    "surface": "mcp-gateway",
+    "category": "credentials",
+    "severity": "medium",
+    "title": "Gateway connector credentials are stored in Key Vault and three connectors authenticate live",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-mcp-gateway-credentials.md",
+      "docs/architecture/mcp-gateway-broker-runbook.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "curl -sS https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io/health",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T17:02:19+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "gateway-credentials-2026-10-28",
+    "surface": "mcp-gateway",
+    "category": "credentials",
+    "severity": "medium",
+    "title": "Gateway credential wiring ships green: tsc clean, 223/223 tests pass, and the docs commit is on the pushed branch",
+    "evidence": [
+      "mcp_servers/mcp-gateway: Test Files 17 passed (17), Tests 223 passed (223)",
+      ".atlas/evidence/2026-10-28-mcp-gateway-credentials.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && npx tsc --noEmit && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T17:03:31+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "cipp-connector-url-only",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "medium",
+    "title": "The CIPP connector is a URL-only remote MCP server; OAuth registration, sign-in and token exchange verified live",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-cipp-connector.md",
+      "mcp_servers/mcp-gateway: 17 files / 223 tests passed; gen-catalog --check current"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && node scripts/gen-catalog.mjs --check && npx tsc --noEmit && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T18:00:05+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "cipp-connector-url-only",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "medium",
+    "title": "CIPP connector URL-only change independently re-derived by atlas:implementer: no divergence, catalog unchanged, 223/223 tests green",
+    "evidence": [
+      "atlas:implementer (cipp-connector-config): spec re-derived, filesChanged=0, gen-catalog --check current, tsc clean, 223/223 tests",
+      ".atlas/evidence/2026-10-28-cipp-connector.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && node scripts/gen-catalog.mjs --check && npx tsc --noEmit && npm test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T18:01:19+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "cipp-connector-client-id",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "medium",
+    "title": "CIPP connector now carries oauth.clientId: cipp_client_id user config (default a0b18b3a-2064-457f-ab94-1fdb5c11ca80, the same client id CIPP PublicMcpRegister returns); armada contract suite green (21 tests) with a new guard that every user_config placeholder in .mcp.json resolves; gateway suite 223/223; catalog.json unchanged",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-cipp-connector.md section 6",
+      "commit 19de3953: plugins/armada/.mcp.json cipp entry = type http + url from user_config.cipp_mcp_url + oauth.clientId from user_config.cipp_client_id; plugin.json userConfig 53 -> 54",
+      "python3 plugins/armada/tests/test_armada_contract.py -> Ran 21 tests, OK (the count assertion was stale at 57 after the earlier URL-only change; now 54)",
+      "cd mcp_servers/mcp-gateway && node scripts/gen-catalog.mjs --check -> catalog/catalog.json is current; npx tsc --noEmit clean; npm test -> 17 files / 223 tests"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/armada && python3 tests/test_armada_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T18:14:58+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "gateway-connector-auth-truth",
+    "surface": "mcp-gateway",
+    "category": "connector",
+    "severity": "high",
+    "title": "Gateway connector auth truth (live, container-held credentials): 7 of 13 WORKING (auvik, connectwise, falcon, ninjaone, paylocity, spanning, threatlocker); knowbe4 and vanta REJECTED by the vendor (401); blumira, cipp, sonicwall UNCONFIGURED (no env var mounted, no vault secret); panos credential valid but appliance unreachable from Azure and ungranted. All 8 Azure resources Succeeded; custom domain mcp.henssler.com NXDOMAIN (non-blocking)",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-gateway-connector-auth-audit.md",
+      "az containerapp show gwh-mcp-gateway -> 35 env secretRefs + 1 volume secretRef, 0 unresolved; no BLUMIRA_/CIPP_/SONICWALL_ env var; az keyvault secret list -> 40 names, 4 unreferenced by the gateway (the sibling dynamics app)",
+      "per-connector <vendor>_status run with the vault value injected (never printed): auvik/connectwise/falcon/ninjaone/paylocity/spanning/threatlocker OK; knowbe4 FAILED HTTP 401 Invalid Token; vanta token mint 401; blumira/cipp/sonicwall NOT CONFIGURED; panos OK locally but in-container fetch to 10.8.254.3 UND_ERR_CONNECT_TIMEOUT and no policy grant",
+      "curl https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io/health -> status ok with 13 backends; POST /mcp without a token -> 401 invalid_token; no token can be minted without a browser (AADSTS500011 / broker client_credentials 401 invalid_client)"
+    ],
+    "doc_refs": [],
+    "reproduction": "az containerapp show --name gwh-mcp-gateway -g gwh-mcp-gateway-rg --query \"{env:properties.template.containers[0].env,volumes:properties.template.volumes}\" -o json; az keyvault secret list --vault-name gwh-mcp-gateway-kv --query \"[].name\" -o tsv; curl -s https://gwh-mcp-gateway.delightfulpebble-1c14644e.eastus.azurecontainerapps.io/health",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T19:29:52+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "local-connector-credentials",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "high",
+    "title": "Local connector credentials repaired from Key Vault and re-verified: auvik, spanning, paylocity, threatlocker and falcon now authenticate from ~/.config/atlas/atlas.env (HTTP 200 / state OK); knowbe4 and vanta remain rejected upstream (401); blumira, sonicwall and gateway-side CIPP remain unprovisioned; department yaml records updated",
+    "evidence": [
+      ".atlas/evidence/2026-10-28-local-connector-credentials.md",
+      "node /tmp/gw-auth/probe.mjs plugins/armada/mcp/<vendor>/server.mjs <vendor>_status with env from ~/.config/atlas/atlas.env -> auvik/spanning/paylocity/threatlocker OK (HTTP 200), falcon state OK authenticated true tool_count 145; knowbe4 FAILED HTTP 401 Invalid Token; vanta FAILED HTTP 401 token mint failed",
+      "~/.config/atlas/atlas.env mode 600, 25 keys, FALCON_* added from vault falcon-client-id/secret/base-url; leak grep over .atlas/departments returns nothing"
+    ],
+    "doc_refs": [],
+    "reproduction": "set -a && . ~/.config/atlas/atlas.env && set +a && MCP_TRANSPORT=stdio node /tmp/gw-auth/probe.mjs plugins/armada/mcp/auvik/server.mjs auvik_status",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T20:15:11+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "armada-plugin-version-bump",
+    "surface": "armada-plugin",
+    "category": "connector",
+    "severity": "medium",
+    "title": "armada plugin version 2.2.1 -> 2.3.0 (plugin.json + marketplace.json) so the URL-only CIPP connector is installable; claude plugin validate passes and the armada contract suite is green (21 tests)",
+    "evidence": [
+      "commit de83bb39: plugins/armada/.claude-plugin/plugin.json version 2.3.0, .claude-plugin/marketplace.json armada entry 2.3.0, plugins/armada/CHANGELOG.md 2.3.0 entry naming the CIPP change",
+      "claude plugin validate plugins/armada -> Validation passed (PRIVACY_URL_MISSING warning only); cd plugins/armada && python3 tests/test_armada_contract.py -> Ran 21 tests OK; jq .userConfig|length = 54 matches the assertion"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/armada && cd plugins/armada && python3 tests/test_armada_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-10-28T20:15:11+00:00",
+    "verified_by": "main"
+  },
+  {
+    "id": "daybreak-v1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Hook failures reproduced: 620s Stop timeout (config vs test cap 300) + payload-guard shlex/BSD test (test defect)",
+    "evidence": [
+      "hooks/hooks.json:99-103; hooks/test_hook_hardening.py:423; hooks/test_payload_guards.py:126"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_payload_guards test_hook_hardening (in plugins/atlas/hooks)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-05T15:45:18+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "daybreak-v2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "StopGateArmingTest 6 errors = BSD sed -i without suffix (test env)",
+    "evidence": [
+      "hooks/test_completion_gate.py:4021"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_completion_gate.StopGateArmingTest",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-05T15:45:18+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "daybreak-v3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "CIPP: 2 dashboard tests stale vs hosted OAuth .mcp.json; F821 atlas_seats.py:132 confirmed; crew_worker shell=True primitive",
+    "evidence": [
+      "armada/.mcp.json:34-38; atlas_dashboard.py:485; atlas_seats.py:132; hooks/crew_worker.py:225"
+    ],
+    "doc_refs": [],
+    "reproduction": "unittest test_atlas_dashboard_live.ConnectorTruth; ruff check scripts/atlas_seats.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-05T15:45:19+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-render-divergence",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ATLAS render divergence across three sessions: surface-by-surface verification finds NO behavioural difference established - the three screenshots show different draw sites of one system (AbovePrompt band, message-header pills, assistant prose) that coexist, no gate suppresses a surface in one session while another shows it (ATLAS_MOD unset everywhere, ATLAS_DASHBOARD=off gates only the web dashboard), and the version pin cannot cause a shape difference because band.tsx, restyle.tsx, register.ts, theme.ts and hooks.json are byte-identical between 17.1.0 and 17.2.0; the pin explains code-tree skew and per-PROCESS resolution only, and content differences come from per-workspace .atlas state. Image 1's workspace and host remain unproven.",
+    "evidence": [
+      ".atlas/evidence/2026-11-06-atlas-render-divergence.md",
+      "ls ~/.claude/plugins/cache/tech-tools/atlas/*/.in_use -> 17.1.0/.in_use/1983 (Nov 5 16:51), 17.2.0/.in_use/58350 (Nov 6 08:56); ps shows pid 1983 = claude resume 41e6b90d cwd gwh-firstrespondersapp started Nov 5 16:47 and pid 58350 = claude session-id aa162b87 cwd gwh-doc-analyzer started Nov 6 08:47; 17.1.0/.orphaned_at exists",
+      "shasum -a 256 {17.1.0,17.2.0}/mod/{band.tsx,restyle.tsx,register.ts,theme.ts} identical in both versions; diff -rq 17.1.0 17.2.0 shows omp/usage-statusline.ts, omp/proc.ts, hooks/session_boot_core.py differ",
+      "gates: plugins/atlas/mod/register.ts:721 ATLAS_MOD=off, restyle.tsx:236-238 null snapshot, discipline.ts:3 interactive only, band.tsx:259 cols>=120 collapses the band; commit c06754b6 moved ATLAS_MOD from read-once to per-render",
+      "per-workspace state: gwh-doc-analyzer .atlas/.run Nov 6 15:24 vs gwh-firstrespondersapp Nov 6 15:24 with separate evidence/findings dirs; ~/.omp/.atlas/.run stale Oct 30"
+    ],
+    "doc_refs": [],
+    "reproduction": "ls ~/.claude/plugins/cache/tech-tools/atlas/*/.in_use && ps -axo pid,lstart,command | grep claude && shasum -a 256 ~/.claude/plugins/cache/tech-tools/atlas/{17.1.0,17.2.0}/mod/{band.tsx,restyle.tsx}",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-06T20:40:52+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-render-divergence-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Independent check of the run that documented the ATLAS render divergence: the atlas plugin contract suite passes (111 passed, 3 skipped, 122 subtests) and atlas-doctor --hook reports only pre-existing warnings - codex-wiring (hooks must be ./hooks/hooks.json), omp-bridge (omp runs 17.2.0 but this plugin is 16.4.2), 13 files need renaming and 3 global memory entries to migrate - none caused by this run",
+    "evidence": [
+      "python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q -> 111 passed, 3 skipped, 122 subtests passed in 6.56s",
+      "python3 plugins/atlas/scripts/atlas_doctor.py --hook -> warns codex-wiring (hooks must be ./hooks/hooks.json) and omp-bridge (omp runs 17.2.0 but this plugin is 16.4.2); both are pre-existing repo state, not caused by this run",
+      "git status shows only docs/CHANGELOG.md, .atlas/evidence/2026-11-06-atlas-render-divergence.md and .atlas/.run/findings.json changed by this run; every other dirty file belongs to another workstream"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q && python3 plugins/atlas/scripts/atlas_doctor.py --hook",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-06T20:51:59+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-render-divergence-verdict",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Surface-by-surface verification verdict: no ATLAS behavioural difference is established between the three sessions; the version pin is refuted as the cause (identical renderer sources and hooks.json across 17.1.0 and 17.2.0), the band and header-pill surfaces coexist by design, and two earlier claims are corrected - commit c06754b6 did NOT make ATLAS_MOD a per-render read (installed 17.2.0 restyle.tsx:232-239 reads it once per registration) and the missing prompt.submit hook was a naming artifact (the hook is UserPromptSubmit, firing 51 times in 5fa73dfc and 23 times in aa162b87)",
+    "evidence": [
+      ".atlas/evidence/2026-11-06-atlas-render-divergence.md Finding 9",
+      "ATLAS_MOD unset in every session; ATLAS_DASHBOARD=off gates only the web dashboard; ATLAS_QUIET is not a code gate; no surface is suppressed in one session and present in another",
+      "grep -o 'hookName[^,]*' on both transcripts: UserPromptSubmit 51 (5fa73dfc) and 23 (aa162b87)",
+      "shasum identical for ~/.claude/plugins/cache/tech-tools/atlas/{17.1.0,17.2.0}/mod/{band.tsx,restyle.tsx,register.ts,theme.ts} and hooks/hooks.json",
+      "shadowing user copy ~/.omp/agent/extensions/usage-statusline.ts sha256 831b02773687d8de... vs plugin copy 164538e2ea74b5c0..."
+    ],
+    "doc_refs": [],
+    "reproduction": "grep -o 'hookName[^,]*' ~/.claude/projects/-Users-jerry-MEGA-Projects-Web-gwh-firstrespondersapp/5fa73dfc-*.jsonl ~/.claude/projects/-Users-jerry-MEGA-Projects-Web-gwh-doc-analyzer/aa162b87-*.jsonl | sort | uniq -c | grep UserPromptSubmit",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-06T21:05:02+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "penny-persona-rework",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Penny persona rework verified as a source draft only: commit bd7ff0c (agent-penny-teams, local and unpushed) carries the new base voice and IT banter block with persona.test.ts at 17/17; the hand-adapted paste-ready n8n delta was corrected after verification found it had dropped four production rules - uncertain-means-serious, receipts-only, the bit-off switch, proactive reach-out with human review - plus the injection-safety line; the unrequested git init in agent-penny was removed and its two doc edits kept as plain files",
+    "evidence": [
+      "npx vitest run agent/lib/persona.test.ts -> 17/17 pass in agent-penny-src; npm test additionally fails 2 pre-existing assertions in the UNTRACKED penny/learning/memory-optimizer.test.ts, which no persona file references",
+      "git show --stat bd7ff0c -> exactly agent-penny-src/agent/instructions.md, agent/lib/persona.ts, agent/lib/persona.test.ts; branch master, unpushed",
+      "independent verification of the paste-ready n8n delta against the committed instructions.md: it kept the no-narration, no-date-preamble, no-throat-clearing, no-restating, one-good-line, no-humor-at-end-users and no-humor-under-stress rules and did not contradict vendor silence; the four dropped rules and the injection-safety line were then restored in docs/features/2026-11-03-n8n-penny-agent.md",
+      "agent-penny has no .git (unrequested repo creation removed); docs/CHANGELOG.md 2026-11-06 entry and the feature doc persona sections remain as plain file edits"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/agent-penny-teams/agent-penny-src && npx vitest run agent/lib/persona.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-06T22:33:53+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "penny-persona-humor-ownership",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Penny humor ownership contradiction resolved and verified: the always-on base voice now grants no humor permission at all (0 forbidden phrases remain) and assigns humor solely to the verified-IT IT teammate register, which n8n lacks - so the live n8n agent gets one consistent rule instead of both a humor grant and a humor ban; three contract assertions lock it, and the paste-ready n8n delta was corrected to match",
+    "evidence": [
+      "agent-penny-teams commit cbfc373f2 (on top of 6c8fce9a, bd7ff0c), local and unpushed, touching only agent-penny-src/agent/instructions.md and agent/lib/persona.test.ts; persona.ts untouched so IT_BANTER_BLOCK keeps the humor, the one-bit rule, receipts-only and the hard stop",
+      "git show HEAD:agent-penny-src/agent/instructions.md | grep -cEi 'sense of humor|do not ration|dry line|GoFundMe|Here is the register for IT|one good line per reply|bit is not landing|running (gag|joke)|invent a bit' -> 0",
+      "npx vitest run agent/lib/persona.test.ts -> 19 passed (19); npx eslint agent/lib/persona.ts agent/lib/persona.test.ts -> clean",
+      "independent verification: base voice lines 33-34 assign humor to the IT register and forbid jokes with end users; persona.ts lines 22/26/32/33 still carry the IT humor rules; the n8n delta retains human review, no-humor-under-stress, injection safety, never-store-secrets and broadcast-safe, and states the Agent has no IT register"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/agent-penny-teams/agent-penny-src && PATH=/opt/homebrew/bin:/Users/jerry/.cargo/bin:/Users/jerry/.openclaw/bin:/Users/jerry/.local/bin:/Users/jerry/.openclaw/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/usr/local/share/dotnet:~/.dotnet/tools:/opt/homebrew/bin npx vitest run agent/lib/persona.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-06T22:45:10+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "port-verify-29a8",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Port: resolutions, conflicts, suites, armada 2.3.0 verified; 3 new dup ids and crew.ts gw-docs state noted",
+    "evidence": [
+      ".atlas/.run/port-resolutions/*.tsv; tsc 0; vitest 223; unittest 22; bun 1022 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "see board note to lead-e18e74",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T11:16:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "v7480-dup",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "findings ledger parses but has 53 duplicate ids (3 new from port)",
+    "evidence": [
+      ".atlas/.run/port-resolutions, .claude-plugin/marketplace.json, plugins/atlas/mod/data/crew.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 id-count of .atlas/.run/findings.json vs HEAD",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-10T11:16:54+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "v7480-mktdesc",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "marketplace atlas description differs from plugin.json (contract test fails)",
+    "evidence": [
+      ".atlas/.run/port-resolutions, .claude-plugin/marketplace.json, plugins/atlas/mod/data/crew.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "plugins/atlas/hooks: python3 -m unittest test_atlas_contract",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-10T11:16:54+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "v7480-crewts",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "crew.ts reports dead port28 gw-docs as running (pid file, no exit)",
+    "evidence": [
+      ".atlas/.run/port-resolutions, .claude-plugin/marketplace.json, plugins/atlas/mod/data/crew.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "read plugins/atlas/mod/data/crew.ts + .atlas/.run/crew/port28",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-10T11:16:54+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "v7480-resolutions",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "59 conflict rows all resolved; 42 superseded/already-present rows confirmed",
+    "evidence": [
+      ".atlas/.run/port-resolutions, .claude-plugin/marketplace.json, plugins/atlas/mod/data/crew.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "script over port-resolutions/*.tsv + git show; suites tsc/223 tests/22 armada/1022 bun pass",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T11:16:54+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "port-gateway-branch-resolutions",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Port of 28 unported gateway-branch commits: every commit/file pair applied, present or resolved with a verdict",
+    "evidence": [
+      ".atlas/.run/port-apply-report.tsv; .atlas/.run/port-resolutions/*.tsv; verifiers 29a8 and 7480 checked all 42 superseded/already-present rows, 59/59 conflict rows resolved, 0 orphans"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/mcp-gateway && npx --no-install tsc --noEmit && npm test (223 passed); python3 -m unittest plugins/armada/tests/test_armada_contract.py (22 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T11:17:24+00:00",
+    "verified_by": "atlas:verifier (team t79eb6d)"
+  },
+  {
+    "id": "mod-crew-reader-live-shape",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Mod crew reader: dead pid without exit file shows a worker as running",
+    "evidence": [
+      "plugins/atlas/mod/data/crew.ts vs .atlas/.run/crew/port28 (gw-docs pid 36392 dead, no exit file)"
+    ],
+    "doc_refs": [],
+    "reproduction": "read crew.ts readCrew against .atlas/.run/crew/port28",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-10T11:17:24+00:00",
+    "verified_by": "atlas:verifier (verifier-7480)"
+  },
+  {
+    "id": "verify-be89-release",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "17.5.0 tree: 10 tests fail on tree but pass on HEAD (stale tests/codex hooks json/crew.md TOC); live checks 1-4,6,8 pass",
+    "evidence": [
+      ".atlas/tmp/verify/a.log b.log; hooks.codex.json vs gen_codex_hooks; plugins/atlas/skills/atlas-orchestrate/references/crew.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/hooks / scripts; same files in git worktree of HEAD",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-10T11:37:27+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "prerelease-17.5.0-f264",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "17.5.0 pre-release: 8 test files regress vs HEAD, 3 banned chars added; live behavior checks 1-4 pass",
+    "evidence": [
+      ".atlas/tmp/verify/hooks.out, .atlas/tmp/verify/scripts.out, .atlas/tmp/verify/rc.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/hooks -p 'test_*.py'; python3 -m unittest discover -s plugins/atlas/scripts -p 'test_*.py'; HEAD worktree per-file compare",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-10T11:45:55+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "tf178d2-regressions",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "17.5.0 regression fixes: hooks 2822 OK, scripts only HEAD-known failures, bun 0 fail",
+    "evidence": [
+      "/tmp/v4fca_hooks.log /tmp/v4fca_scripts.log /tmp/v4fca_bun.log"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/{hooks,scripts} -p test_*.py; cd plugins/atlas && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T12:11:58+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "atlas-17-5-0-release",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 17.5.0 tree: suites green apart from failures that pre-exist on 446635b3; live checks pass",
+    "evidence": [
+      "verifier-4fca (team tf178d2): hooks Ran 2822 OK; scripts Ran 4313 with only HEAD-known failures (irc_speculate x3, statusline empty_stdin, 22 pytest ModuleNotFound); bun 0 fail; verifiers be89/f264 (team t9d8afa): gateway tsc 0 and 223/223, programmer 92 OK, test-mcp-tools 574 tools PASS, live crew green-check refusal, tripwire deny, gate symlink path, readCrew on real crew dirs"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/hooks -p 'test_*.py'; python3 -m unittest discover -s plugins/atlas/scripts -p 'test_*.py'; cd plugins/atlas && bun test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T12:18:39+00:00",
+    "verified_by": "atlas:verifier (verifier-4fca, verifier-be89, verifier-f264)"
   }
 ]

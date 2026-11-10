@@ -22,6 +22,14 @@ import atlas_irc
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
 import crew_worker  # noqa: E402
 
+try:
+    import pytest  # noqa: F401
+
+    HAVE_PYTEST = True
+except ImportError:
+    HAVE_PYTEST = False
+NEEDS_PYTEST = unittest.skipUnless(HAVE_PYTEST, "pytest is not installed")
+
 
 def _bus(tmp, nicks=("a", "b"), chan="#t"):
     return atlas_irc.init_bus(Path(tmp) / "irc", chan, list(nicks), lead="lead")
@@ -238,6 +246,20 @@ class GatewayTests(unittest.TestCase):
 
 
 class HookTests(unittest.TestCase):
+    def test_global_hook_binding_is_inert_outside_a_crew_worker(self):
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch.object(sys, "argv", ["crew_worker.py", "PreToolUse"]),
+            mock.patch.object(sys, "stdin", io.StringIO("not-json")),
+            mock.patch.object(crew_worker, "pre_tool_use") as pre,
+            mock.patch.object(crew_worker, "post_tool_use") as post,
+            mock.patch.object(crew_worker, "stop") as stop,
+        ):
+            self.assertEqual(crew_worker.main(), 0)
+        pre.assert_not_called()
+        post.assert_not_called()
+        stop.assert_not_called()
+
     def _env(self, tmp, **extra):
         d = _bus(tmp, nicks=("semver", "ranges"))
         env = {
@@ -751,6 +773,59 @@ class WorkerLaunchTests(unittest.TestCase):
         named = atlas_crew.worker_argv("sonnet", None, "/s.json", "sid-1", "P", name="crew-x-a")
         self.assertEqual(named[named.index("--name") + 1], "crew-x-a")
 
+    def test_codex_worker_is_noninteractive_and_resumable(self):
+        argv = atlas_crew.worker_argv(
+            "gpt-6-sol", "high", "/unused.json", "unused", "PROMPT", harness="codex"
+        )
+        self.assertEqual(argv[:2], ["codex", "exec"])
+        self.assertIn("--json", argv)
+        self.assertEqual(argv[argv.index("--sandbox") + 1], "workspace-write")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-6-sol")
+        self.assertIn('model_reasoning_effort="high"', argv)
+        self.assertNotIn("--settings", argv)
+        self.assertIn("coding-agent sessions", argv[-1])
+        self.assertNotIn("Claude sessions", argv[-1])
+        resumed = atlas_crew.worker_argv(
+            None, None, "/unused.json", "unused", "FIX", resume="thread-1", harness="codex"
+        )
+        self.assertEqual(resumed[:4], ["codex", "exec", "resume", "thread-1"])
+
+    def test_codex_result_thread_and_usage_are_understood(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "codex.log"
+            log.write_text(
+                json.dumps({"type": "thread.started", "thread_id": "thread-1"})
+                + "\n"
+                + json.dumps(
+                    {
+                        "type": "turn.completed",
+                        "usage": {
+                            "input_tokens": 30,
+                            "cached_input_tokens": 20,
+                            "output_tokens": 5,
+                        },
+                    }
+                )
+                + "\n"
+            )
+            self.assertTrue(atlas_crew._result_ok(log))
+            self.assertEqual(atlas_crew._codex_thread_id(log), "thread-1")
+            usage = atlas_crew.usage_of(log)
+        self.assertEqual(usage["total"], 35)
+        self.assertEqual(usage["turns"], 1)
+
+    def test_codex_run_records_harness_and_claude_stays_default(self):
+        claude = atlas_crew.worker_argv("sonnet", None, "/s.json", "sid-1", "P")
+        self.assertEqual(claude[:2], ["claude", "-p"])
+        self.assertIn("coding-agent sessions", claude[claude.index("--system-prompt") + 1])
+
+    def test_run_parser_defaults_to_claude_and_accepts_codex(self):
+        self.assertEqual(atlas_crew.parser().parse_args(["run", "--plan", "p"]).harness, "claude")
+        self.assertEqual(
+            atlas_crew.parser().parse_args(["run", "--plan", "p", "--harness", "codex"]).harness,
+            "codex",
+        )
+
     def test_worker_env_drops_the_leads_session_identity(self):
         plan = {
             "workers": [{"name": "a", "owns": ["a.py"], "task": "t", "check": "true"}]
@@ -761,6 +836,15 @@ class WorkerLaunchTests(unittest.TestCase):
             "TMUX": "x",
             "KEEP": "1",
             "PATH": "/usr/bin",
+            "HOME": "/home/worker",
+            "LANG": "en_US.UTF-8",
+            "LC_CTYPE": "UTF-8",
+            "TMPDIR": "/tmp/crew",
+            "CODEX_HOME": "/codex",
+            "CLAUDE_CONFIG_DIR": "/claude",
+            "ANTHROPIC_API_KEY": "provider-key",
+            "CLAUDE_CODE_OAUTH_TOKEN": "oauth",
+            "ATLAS_WORKER_STALE": "lead-only",
         }
         with (
             tempfile.TemporaryDirectory() as tmp,
@@ -770,8 +854,23 @@ class WorkerLaunchTests(unittest.TestCase):
         self.assertNotIn("CLAUDE_CODE_SESSION_ID", env)
         self.assertNotIn("CLAUDE_CODE_REMOTE_SESSION_ID", env)
         self.assertNotIn("TMUX", env)
-        self.assertEqual(env["KEEP"], "1")
+        self.assertNotIn("ATLAS_WORKER_STALE", env)
+        # Claude workers authenticate exactly as the lead does: provider credentials are inherited
+        for required in (
+            "KEEP",
+            "ANTHROPIC_API_KEY",
+            "CLAUDE_CODE_OAUTH_TOKEN",
+            "HOME",
+            "LANG",
+            "LC_CTYPE",
+            "TMPDIR",
+            "CODEX_HOME",
+            "CLAUDE_CONFIG_DIR",
+        ):
+            self.assertEqual(env[required], lead_env[required])
         self.assertEqual(env["ATLAS_IRC_NICK"], "a")
+        self.assertEqual(env["ATLAS_WORKER_NAME"], "a")
+        self.assertEqual(env["ATLAS_MANDATES"], "off")
         self.assertTrue(env["PATH"].startswith(str(Path(tmp) / "bin")))
 
     def test_worker_that_lingers_after_its_result_is_reaped_as_success(self):
@@ -1595,6 +1694,61 @@ class SupervisorOverlapTests(unittest.TestCase):
     def test_parser_accepts_session_flag(self):
         self.assertEqual(atlas_crew.parser().parse_args(["run", "--session", "s1"]).session, "s1")
 
+    def _green_run(self, tmp, check, **extra):
+        plan = {"workers": [{"name": "zed", "owns": ["z.py"], "task": "t", "check": check}]}
+        Path(tmp, "p.json").write_text(json.dumps(plan))
+        buf = io.StringIO()
+        launched = []
+        ran = {c: atlas_crew._run_check(c, tmp) for c in ("true", "test -f z.py")}  # real runs: Popen is patched below
+        with (mock.patch.dict(os.environ, {"ATLAS_CREW_TMUX": "off"}),
+              mock.patch.object(atlas_crew, "_run_check", lambda cmd, root, timeout=900: ran.get(cmd, (1, ""))),
+              mock.patch.object(atlas_crew, "_launch", lambda *x: launched.append(x)),
+              mock.patch.object(atlas_crew.subprocess, "Popen"), contextlib.redirect_stdout(buf)):
+            code = atlas_crew.cmd_run(types.SimpleNamespace(plan=str(Path(tmp, "p.json")), root=tmp, run_id="crew-g", model=None,
+                                                            effort=None, fix_rounds=0, timeout=60, no_tmux=True, wait=0, spec=None,
+                                                            files=None, session="s", **extra))
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1]), launched
+
+    def test_run_refuses_a_worker_whose_check_already_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out, launched = self._green_run(tmp, "true")
+            self.assertFalse(Path(tmp, ".atlas/.run/crew/crew-g").exists())
+        self.assertEqual(code, 2)
+        self.assertFalse(out["ok"])
+        self.assertIn("zed", out["error"])
+        self.assertIn("true", out["error"])
+        self.assertIn("--allow-green-check", out["error"])
+        self.assertEqual(launched, [])
+
+    def test_run_allows_a_green_check_with_the_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out, launched = self._green_run(tmp, "true", allow_green_check=True)
+        self.assertEqual(code, 0)
+        self.assertTrue(out["ok"])
+        self.assertEqual(len(launched), 1)
+
+    def test_run_launches_when_the_check_fails_before_work(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out, launched = self._green_run(tmp, "test -f z.py")
+        self.assertEqual(code, 0)
+        self.assertTrue(out["ok"])
+        self.assertEqual(len(launched), 1)
+
+    def test_green_check_guard_runs_each_unit_check_in_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "a.py").write_text("x")
+            plan = {"workers": [{"name": "red", "unit_check": "test -f b.py"}, {"name": "none"},
+                                {"name": "green", "unit_check": "test -f a.py"}]}
+            with self.assertRaises(ValueError) as ctx:
+                atlas_crew.green_check_guard(plan, tmp)
+            self.assertIn("green", str(ctx.exception))
+            self.assertIn("test -f a.py", str(ctx.exception))
+            atlas_crew.green_check_guard({"workers": plan["workers"][:2]}, tmp)
+
+    def test_parser_accepts_allow_green_check(self):
+        self.assertTrue(atlas_crew.parser().parse_args(["run", "--allow-green-check"]).allow_green_check)
+        self.assertFalse(atlas_crew.parser().parse_args(["run"]).allow_green_check)
+
 
 class ShardedCheckTests(unittest.TestCase):
     """The supervisor's final pytest check runs as parallel shards plus a rest shard."""
@@ -1638,6 +1792,7 @@ class ShardedCheckTests(unittest.TestCase):
             groups = atlas_crew._shard_files(["a.py", "b.py", "c.py", "d.py"], root, 2)
             self.assertEqual(sorted(map(tuple, groups)), [("a.py",), ("b.py", "c.py", "d.py")])
 
+    @NEEDS_PYTEST
     def test_combined_run_passes_and_runs_tests_outside_the_known_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(tmp)
@@ -1672,6 +1827,7 @@ class ShardedCheckTests(unittest.TestCase):
                     atlas_crew.sharded_check(self.PY, Path(tmp), ["test_a.py", "test_b.py"], 4)
                     rc.assert_called_once()
 
+    @NEEDS_PYTEST
     def test_a_failing_shard_fails_the_combined_check_and_its_output_comes_last(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(tmp)
@@ -1686,6 +1842,7 @@ class ShardedCheckTests(unittest.TestCase):
             plan = {"workers": [{"name": "w", "owns": [], "tests": ["test_c.py"]}]}
             self.assertIn("w", atlas_crew.route_failures(plan, out))
 
+    @NEEDS_PYTEST
     def test_rest_shard_exit_5_counts_as_a_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(tmp, extra=False)
@@ -1722,6 +1879,7 @@ class PlainPytestTests(unittest.TestCase):
         self.assertEqual(self._files("python -m pytest -pno:cacheprovider t.py"), ["t.py"])
 
 
+@NEEDS_PYTEST
 class CheckCacheTests(unittest.TestCase):
     """The supervisor's final check skips test files whose worker's DONE passed against the bytes on disk."""
 

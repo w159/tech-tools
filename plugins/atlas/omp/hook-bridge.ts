@@ -317,7 +317,7 @@ export function claudeMcpName(name: string): string {
 
 /** Built-in underscoredServers list: the fail-open fallback when contracts/mcp-servers.json is unreadable (twin of omp_transcript._KNOWN_MCP_SERVERS_FALLBACK). */
 const UNDERSCORED_SERVERS_FALLBACK: readonly string[] = [
-	"lean_ctx", "context_mode_context_mode", "context_mode", "claude_mem", "browser_use", "azure", "serena", "context7", "microsoft_docs", "plaid", "mobbin", "clippy",
+	"lean_ctx", "context_mode_context_mode", "context_mode", "claude_mem", "browser_use", "azure", "context7", "microsoft_docs", "plaid", "mobbin", "clippy",
 	"armada_connectwise", "atlas_connectwise", "mcp_search", "cmux_browser",
 ];
 

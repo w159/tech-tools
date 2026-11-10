@@ -30,10 +30,6 @@ Every MCP tool below is an `xd://` device: call it with `write`, `path` = the de
     xd://mcp__lean_ctx_ctx_search
     xd://mcp__lean_ctx_ctx_read
     xd://mcp__lean_ctx_ctx_glob
-    xd://mcp__serena_activate_project
-    xd://mcp__serena_get_symbols_overview
-    xd://mcp__serena_find_symbol
-    xd://mcp__serena_find_referencing_symbols
     xd://mcp__context_mode_context_mode_ctx_batch_execute
     xd://mcp__context_mode_context_mode_ctx_execute
     xd://mcp__claude_mem_mcp_search_search
@@ -42,10 +38,10 @@ Every MCP tool below is an `xd://` device: call it with `write`, `path` = the de
 
 Do not probe devices one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.
 
-**When serena is down, lean-ctx is the fallback - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
+**lean-ctx is the code-navigation path - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
 
 ## Method
-- **Reproduce, don't trust.** Re-open the cited `file:line` yourself (via `serena`/read of the exact span). Re-run the exact test or command. Re-issue the query. Re-read the diff against what the change set claimed to do.
+- **Reproduce, don't trust.** Re-open the cited `file:line` yourself (via `ctx_read` of the exact span). Re-run the exact test or command. Re-issue the query. Re-read the diff against what the change set claimed to do.
 - For any library-behavior claim, confirm it against `context7` docs for the version actually in the manifest - not from memory.
 - For a fix: confirm it makes the failing case pass AND that it does only what it claimed (no scope creep, no `.env` touched, no unrelated files changed). Run the affected gate.
 - **Runtime parity, not just test parity.** A green suite against a test double is not evidence the running system changed. For a user-facing change (page, endpoint, UI state), `verified` requires runtime evidence: an atlas:ui-runtime-tester pass, a live request/response, or an observed render - not only unit/integration tests. For a backend change that adds or alters schema, confirm the target environment can actually hold it: compare `alembic current`/migration state (or the stack's equivalent) on the environment the user runs against the revisions the change assumes. Tests that create their own schema (`create_all`, in-memory SQLite) prove nothing about that. You cannot dispatch atlas:ui-runtime-tester yourself - if runtime evidence is unobtainable from your context, the verdict is `needs-evidence` naming the exact runtime check and the role that could produce it, never `verified`.

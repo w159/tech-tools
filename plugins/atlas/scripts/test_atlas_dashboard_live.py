@@ -413,8 +413,7 @@ class ConnectorTruth(LiveCase):
         rows = self.status(
             {
                 "BLUMIRA_JWT_TOKEN": "j",
-                "CIPP_BASE_URL": "https://cipp.example",
-                "CIPP_API_KEY": "k",
+                "CIPP_MCP_URL": "https://cipp.example/api/ExecMcp",
                 "PANOS_HOST": "fw.example",
                 "PANOS_API_KEY": "k",
                 "NINJAONE_CLIENT_ID": "id",

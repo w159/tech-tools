@@ -146,7 +146,7 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   5.26.0 (`TodoBoardDrainTest`, 7 cases, `hooks/test_completion_gate.py:1999`); a live TodoWrite payload through
   `_open_todos` is still pending.
 - [in-progress] `atlas_doctor` has no check that verifies claude-mem,
-  context-mode, ponytail, lean-ctx, or serena are actually *registered as MCP
+  context-mode, ponytail, or lean-ctx are actually *registered as MCP
   servers* -- `context-tooling` (added 2026-09-28) only checks that a
   project's `AGENTS.md` carries the routing block that tells agents to use
   them, not that the servers themselves are reachable. `session_boot.py`'s
@@ -156,7 +156,7 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   nothing even though claude-mem shows 145 real `tool_calls` across 88
   sessions in `~/.atlas/atlas.db` over the last ~6 months -- it *is*
   registered and working as an MCP server, it just has no CLI binary on
-  `$PATH` here. Extending that same proxy to lean-ctx/serena would risk
+  `$PATH` here. Extending that same proxy to lean-ctx would risk
   exactly the false-"ABSENT" noise it already produces for claude-mem. A
   real check needs to read whatever config surface Claude Code actually
   uses to register user-scope MCP servers (not `$PATH`); that surface was
@@ -234,7 +234,6 @@ Source: `docs/audits/2026-10-26_atlas-state-examination.md`.
 - [planned] Local scoring hits a 2048-token context limit: trim the input.
 - [planned] Global projects table cleanup: 346 non-canonical rows.
 - [planned] 34 global memory entries stay in `~/.atlas/memory/MEMORY.md` because their tag names a non-project folder (hooks, frontend, local) or matches several old project copies; review by hand or drop.
-- [planned] `plugins/atlas/mod/contract.ts:4` still cites the old plan path: the file has the macOS immutable flag (uchg), so the rewrite fails; clear the flag, then rewrite.
 - [planned] Parity-round verifier holes deferred: (2) long workers fall out of the 10 s burst window, (5) tripwire tests inherit `ATLAS_*` in worker panes, (6) a member without a section gets only the shared text.
 - [planned] `recall_gate` costs 159 ms per tool call: move the marker check ahead of the plugin-dir walk.
 
@@ -316,8 +315,6 @@ Ships as atlas 12.4.2 (2026-10-14), verified live (finding `openrig-backend-2026
 - [planned] Live TUI check under tmux if the verifier reports gaps.
 - [planned] herdr transport attach from the TUI.
 - [planned] Re-run one W1 explorer brief on haiku to validate the tier (an ASSUMED item in `docs/plans/2026-10-20_atlas-tiering-design.md`).
-- [done] Codex CLI parity for skills and hooks (2026-11-05, Unreleased): `.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json`, `hooks/hooks.codex.json`, `scripts/atlas_harness.py` (shared detector; PreToolUse ask becomes deny under Codex), `hooks/test_codex_parity.py`. Loaded in Codex CLI 0.166: 41 skills, 14 hooks. Known gaps: (1) plugins cannot ship agents in Codex, so the 14 agents are not loadable; closing it needs a generator from `agents/*.md` to `.codex/agents/*.toml`; (2) Codex clamps the SessionEnd hook to 3 s, so transcript ingest at session end may be cut short; (3) hooks matching `Agent|Task` (dispatch tripwire, worker gates) do not fire because Codex names its subagent tools differently; (4) a guard that would ask the human now denies, and the model must confirm with the user and re-run; `atlas_git.py allow` needs the user to run it; (5) hooks need trust in Codex (`/hooks`); (6) live hook execution inside a Codex model turn is unverified (no login in this check); (7) armada and programmer are not listed in the Codex marketplace: no `.codex-plugin` manifest, not load-tested.
-- [done] Codex tool mapping, SessionEnd budget and agents (2026-11-05, Unreleased): `apply_patch`, `spawn_agent` and `update_plan` payloads are rewritten to the Claude shape in `scripts/atlas_harness.py` (hooks fire on the Codex tools); `scripts/gen_codex_hooks.py` generates `hooks.codex.json` (Codex matchers, SessionEnd 3 s); `ingest_session.py` detaches at SessionEnd; `scripts/atlas_codex_agents.py` writes `.codex/agents/atlas-*.toml`; `programmer` is in the Codex marketplace, `armada` is not (needs `userConfig`). Remaining: no Codex Read/Grep/Glob tool, live hook run in a model turn unverified, `programmer` scan-on-edit hook is a no-op under Codex.
 
 Unreleased, test-verified in source (see `docs/CHANGELOG.md` Unreleased). The herdr autostart, Start button, reap and tmux items below were verified live during the OpenRig work; the rest keep their live check pending.
 

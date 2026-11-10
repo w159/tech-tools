@@ -248,12 +248,12 @@ class RunstateTest(unittest.TestCase):
 
     def test_rebaseline_absorbs_tool_state_written_after_the_snapshot(self):
         self.run_cli("snapshot")
-        self._write(".serena/project.yml", "a\n")
-        self._write(".serena/.gitignore", "b\n")
+        self._write(".lean-ctx/project.yml", "a\n")
+        self._write(".lean-ctx/.gitignore", "b\n")
         res = self.run_cli("rebaseline")
         self.assertTrue(res["ok"])
         self.assertEqual(
-            sorted(res["absorbed"]), [".serena/.gitignore", ".serena/project.yml"]
+            sorted(res["absorbed"]), [".lean-ctx/.gitignore", ".lean-ctx/project.yml"]
         )
         # the Stop gate's own comparison now sees no shell edits
         self.assertEqual(self._gate_diff(), [])
@@ -261,14 +261,14 @@ class RunstateTest(unittest.TestCase):
     def test_rebaseline_never_absorbs_a_real_code_edit(self):
         self.run_cli("snapshot")
         self._write("src/app.py", "print(1)\n")
-        self._write(".serena/project.yml")
+        self._write(".lean-ctx/project.yml")
         res = self.run_cli("rebaseline")
-        self.assertEqual(res["absorbed"], [".serena/project.yml"])
+        self.assertEqual(res["absorbed"], [".lean-ctx/project.yml"])
         self.assertNotIn("src/app.py", self._snapshot_paths())
         self.assertEqual(self._gate_diff(), ["src/app.py"])
 
     def test_rebaseline_is_a_noop_without_a_snapshot_and_keeps_earlier_entries(self):
-        self._write(".serena/project.yml")
+        self._write(".lean-ctx/project.yml")
         self.assertFalse(
             self.run_cli("rebaseline")["absorbed"]
         )  # no snapshot: nothing to rebaseline
@@ -283,16 +283,16 @@ class RunstateTest(unittest.TestCase):
     def test_rebaseline_absorbs_tool_state_already_in_the_snapshot_whose_content_changed(
         self,
     ):
-        # serena rewrites project.yml each session: a file present at SessionStart can differ by Stop
-        self._write(".serena/project.yml", "before\n")
+        # a tool rewrites its state file each session: a file present at SessionStart can differ by Stop
+        self._write(".lean-ctx/project.yml", "before\n")
         self.run_cli("snapshot")
-        self.assertIn(".serena/project.yml", self._snapshot_paths())
-        self._write(".serena/project.yml", "after\n")
+        self.assertIn(".lean-ctx/project.yml", self._snapshot_paths())
+        self._write(".lean-ctx/project.yml", "after\n")
         self.assertEqual(
-            self._gate_diff(), [".serena/project.yml"]
+            self._gate_diff(), [".lean-ctx/project.yml"]
         )  # what the gate would wrongly count
         res = self.run_cli("rebaseline")
-        self.assertEqual(res["absorbed"], [".serena/project.yml"])
+        self.assertEqual(res["absorbed"], [".lean-ctx/project.yml"])
         self.assertEqual(self._gate_diff(), [])
 
     def test_rebaseline_never_rewrites_a_changed_code_file_already_in_the_snapshot(
@@ -308,11 +308,11 @@ class RunstateTest(unittest.TestCase):
 
     def test_rebaseline_resolves_the_docs_root_from_a_subdirectory_cwd(self):
         self.run_cli("snapshot")  # written under the docs root, as session_boot does
-        self._write(".serena/project.yml")
+        self._write(".lean-ctx/project.yml")
         sub = os.path.join(self.proj, "src", "pkg")
         os.makedirs(sub)
         res = self.run_cli("rebaseline", cwd=sub)
-        self.assertEqual(res["absorbed"], [".serena/project.yml"])
+        self.assertEqual(res["absorbed"], [".lean-ctx/project.yml"])
         self.assertEqual(self._gate_diff(), [])
 
     # ---- fail-open -----------------------------------------------------
@@ -403,7 +403,7 @@ class InProcess(unittest.TestCase):
     def test_tool_state_dirs_reads_the_contract_file(self):
         dirs = omp_runstate._tool_state_dirs()
         self.assertIsInstance(dirs, tuple)
-        self.assertIn(".serena", dirs)
+        self.assertIn(".lean-ctx", dirs)
 
     def _fake_here(self, content):
         d = os.path.join(self.tmp, "here", "scripts")
@@ -615,13 +615,13 @@ class InProcess(unittest.TestCase):
 
     def test_rebaseline_no_dirs_is_noop_even_with_changes(self):
         omp_runstate.cmd_snapshot(self.ns())
-        self._snap_with({".serena/project.yml": "a\n"})
+        self._snap_with({".lean-ctx/project.yml": "a\n"})
         with mock.patch.object(omp_runstate, "_tool_state_dirs", return_value=()):
             self.assertEqual(
                 omp_runstate.cmd_rebaseline(self.ns()), {"ok": True, "absorbed": []}
             )
         with open(session_boot.snapshot_path(self.proj, self.SID)) as fh:
-            self.assertNotIn(".serena/project.yml", json.load(fh)["paths"])
+            self.assertNotIn(".lean-ctx/project.yml", json.load(fh)["paths"])
 
     def test_rebaseline_empty_session_id_is_noop(self):
         self.assertEqual(
@@ -632,30 +632,30 @@ class InProcess(unittest.TestCase):
     def test_rebaseline_absorbs_returns_sorted_and_updates_snapshot_hashes(self):
         omp_runstate.cmd_snapshot(self.ns())
         self._snap_with(
-            {".serena/z.yml": "z\n", ".serena/a.yml": "a\n", "code.py": "c\n"}
+            {".lean-ctx/z.yml": "z\n", ".lean-ctx/a.yml": "a\n", "code.py": "c\n"}
         )
         res = omp_runstate.cmd_rebaseline(self.ns())
         self.assertEqual(
-            res, {"ok": True, "absorbed": [".serena/a.yml", ".serena/z.yml"]}
+            res, {"ok": True, "absorbed": [".lean-ctx/a.yml", ".lean-ctx/z.yml"]}
         )
         with open(session_boot.snapshot_path(self.proj, self.SID)) as fh:
             snap = json.load(fh)
         now = session_boot.dirty_map(self.proj)
         self.assertEqual(snap["session"], self.SID)
-        self.assertEqual(snap["paths"][".serena/a.yml"], now[".serena/a.yml"])
-        self.assertEqual(snap["paths"][".serena/z.yml"], now[".serena/z.yml"])
+        self.assertEqual(snap["paths"][".lean-ctx/a.yml"], now[".lean-ctx/a.yml"])
+        self.assertEqual(snap["paths"][".lean-ctx/z.yml"], now[".lean-ctx/z.yml"])
         self.assertNotIn("code.py", snap["paths"])
 
     def test_rebaseline_matches_dir_segments_not_substrings(self):
         omp_runstate.cmd_snapshot(self.ns())
         self._snap_with(
-            {"x.serena/y.py": "1\n", "serena/z.py": "2\n", "a/.serena/ok.yml": "3\n"}
+            {"x.lean-ctx/y.py": "1\n", "lean-ctx/z.py": "2\n", "a/.lean-ctx/ok.yml": "3\n"}
         )
         res = omp_runstate.cmd_rebaseline(self.ns())
-        self.assertEqual(res["absorbed"], ["a/.serena/ok.yml"])
+        self.assertEqual(res["absorbed"], ["a/.lean-ctx/ok.yml"])
 
     def test_rebaseline_unchanged_file_is_not_absorbed(self):
-        self._snap_with({".serena/project.yml": "same\n"})
+        self._snap_with({".lean-ctx/project.yml": "same\n"})
         omp_runstate.cmd_snapshot(self.ns())
         self.assertEqual(omp_runstate.cmd_rebaseline(self.ns())["absorbed"], [])
 
@@ -664,7 +664,7 @@ class InProcess(unittest.TestCase):
         path = session_boot.snapshot_path(self.proj, self.SID)
         with open(path, "w") as fh:
             fh.write("{not json")
-        self._snap_with({".serena/p.yml": "1\n"})
+        self._snap_with({".lean-ctx/p.yml": "1\n"})
         self.assertEqual(
             omp_runstate.cmd_rebaseline(self.ns()), {"ok": True, "absorbed": []}
         )
@@ -676,7 +676,7 @@ class InProcess(unittest.TestCase):
         path = session_boot.snapshot_path(self.proj, self.SID)
         with open(path, "w") as fh:
             json.dump({"session": self.SID}, fh)
-        self._snap_with({".serena/p.yml": "1\n"})
+        self._snap_with({".lean-ctx/p.yml": "1\n"})
         self.assertEqual(omp_runstate.cmd_rebaseline(self.ns())["absorbed"], [])
 
     def test_rebaseline_uses_cwd_itself_when_no_docs_root_found(self):

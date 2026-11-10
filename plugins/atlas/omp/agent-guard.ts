@@ -16,7 +16,7 @@
  * (`local://`, `proc://`), so removing `write` from a child would cut all of those. The
  * handler therefore blocks `write` only when its `path` is not a `scheme://` target.
  * `mcp__<server>__<tool>` entries in `disallowedTools` are enforced on their `xd://` device path (deviceReason), so a
- * read-only agent cannot reach serena's replace/insert tools or lean-ctx's ctx_patch through `write xd://...`.
+ * read-only agent cannot reach lean-ctx's ctx_patch through `write xd://...`.
  *
  * NOT COVERED: writes made through the `bash` tool (`sed -i`, `tee`, `>` redirects, ...).
  * `disallowedTools` names no shell restriction and omp has no per-agent shell policy, so a
@@ -269,7 +269,7 @@ function deviceOf(claudeName: string, deps: AgentGuardDeps): string | undefined 
 	return m && map ? mcpDevice(m[1], m[2], map) : undefined;
 }
 
-/** omp's `write` also carries `xd://` MCP device calls: a disallowed `mcp__*` tool is blocked on its device path (serena replace/insert, lean-ctx ctx_patch, ...). */
+/** omp's `write` also carries `xd://` MCP device calls: a disallowed `mcp__*` tool is blocked on its device path (lean-ctx ctx_patch, ...). */
 function deviceReason(event: GuardEvent, who: { agent: string; disallowed: string[] }, deps: AgentGuardDeps): string | undefined {
 	if (toolKey(event) !== "write") return undefined;
 	const target = (event.input as Record<string, unknown> | undefined)?.path;

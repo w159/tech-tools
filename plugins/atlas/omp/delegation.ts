@@ -25,7 +25,7 @@ const DELETED = "deleted";
 
 /**
  * Repo-relative path exempt from the mandate: docs dirs, *.md, and dirs agent
- * tooling writes by itself (`toolStateDirs`, e.g. serena's .serena/project.yml
+ * tooling writes by itself (`toolStateDirs`, e.g. the .lean-ctx/ state written
  * at session start). Unreadable contract → exempt. Only the shell-dirt snapshot
  * uses this: an explicit edit/write of such a path (index.ts isNonDocsPath) is
  * still a model edit.

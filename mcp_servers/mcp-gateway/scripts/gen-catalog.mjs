@@ -39,12 +39,16 @@ export function buildCatalog(manifest, overrides) {
     const vendorVars = Object.keys(server.env ?? {})
       .filter((k) => k.startsWith("CFG_"))
       .map((k) => k.slice(4));
-    const prefix = commonPrefix(vendorVars);
+    // Remote connectors (type http/sse) carry no env: the gateway uses the
+    // override's command/args and env prefix for them.
+    const remote = server.type === "http" || server.type === "sse";
+    const prefix = remote ? (o.envPrefixes?.[0] ?? `${id.toUpperCase()}_`) : commonPrefix(vendorVars);
     if (!prefix) throw new Error(`${id}: cannot derive an env prefix from ${JSON.stringify(vendorVars)}`);
 
     let command = o.command;
     let args = o.args;
     if (command === undefined) {
+      if (remote) throw new Error(`${id}: remote connector needs a command/args override for the gateway catalog`);
       if (server.command !== "node") throw new Error(`${id}: non-node command "${server.command}" needs a command override`);
       command = "node";
       // Drop "--import .../_env/load.mjs": the gateway passes env directly.

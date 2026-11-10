@@ -256,11 +256,10 @@ class AtlasGatesInProcess(unittest.TestCase):
     def test_routing_counts_only_matching_kind_and_server(self):
         self.conn.execute("INSERT INTO session_logs (session_id, agent) VALUES (?, 'claude')", (SESSION,))
         calls = [
-            ("mcp", "serena", "find_symbol", 0),
-            ("mcp", "Serena", "get_symbols_overview", 0),
             ("mcp", "lean-ctx", "ctx_read", 1),
+            ("mcp", "Lean_Ctx", "ctx_search", 0),
             ("mcp", "other", "x", 0),
-            ("builtin", "serena", "Read", 0),
+            ("builtin", "lean-ctx", "Read", 0),
             ("builtin", None, "Read", 0),
             ("builtin", None, "Edit", 0),
         ]
@@ -272,10 +271,13 @@ class AtlasGatesInProcess(unittest.TestCase):
         self.conn.commit()
         lines = {ln["id"]: ln for ln in self.gates.routing_group(SESSION)["lines"]}
         note = self.gates._ROUTING_NOTE
-        self.assertEqual(lines["serena"]["detail"], f"2 {note}")
-        self.assertEqual(lines["lean-ctx"]["detail"], f"1 {note}")
+        self.assertEqual(lines["lean-ctx"]["detail"], f"2 {note}")
         self.assertEqual(lines["context-mode"]["detail"], f"0 {note}")
-        self.assertTrue(all(lines[n]["ok"] for n in ("serena", "lean-ctx", "claude-mem")))
+        self.assertTrue(all(lines[n]["ok"] for n in ("lean-ctx", "context-mode", "claude-mem")))
+        self.assertEqual(
+            {k for k in lines if not k.startswith("native-")},
+            {"lean-ctx", "context-mode", "claude-mem", "denied"},
+        )
         self.assertEqual((lines["native-Read"]["ok"], lines["native-Read"]["detail"]), (False, f"2 {note}"))
         self.assertTrue(lines["native-Grep"]["ok"])
         self.assertEqual((lines["denied"]["ok"], lines["denied"]["detail"]), (False, f"1 {note}"))

@@ -1,7 +1,7 @@
 {
     "name": "atlas",
-    "version": "17.4.3",
-    "description": "Multi-agent coding architect for Claude Code: plans, delegates to named subagents, verifies with evidence, and blocks 'done' until the evidence exists.",
+    "version": "17.5.0",
+    "description": "Multi-agent coding architect for Claude Code and Codex: plans, delegates to named subagents, verifies with evidence, and blocks 'done' until the evidence exists.",
     "author": {
         "name": "w159",
         "url": "https://github.com/w159"
@@ -38,7 +38,6 @@
         "prompt-optimization",
         "claude-mem",
         "context-mode",
-        "serena",
         "lean-ctx",
         "tool-routing",
         "fallow",

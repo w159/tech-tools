@@ -54,7 +54,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash|Edit|Write|MultiEdit|NotebookEdit|Read|read|mcp__.*ctx_read|Grep|Glob|Skill|mcp__.*",
+        "matcher": "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|collaboration\\.spawn_agent|Bash|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write|Edit|Write|MultiEdit|NotebookEdit|Read|read|mcp__.*ctx_read|Grep|Glob|Skill|mcp__.*",
         "hooks": [
           {
             "type": "command",

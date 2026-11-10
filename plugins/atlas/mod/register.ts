@@ -16,6 +16,7 @@ import { rowOf } from './runs';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { leadChannelName } from './data/root';
+import { crewSig } from './data/crew';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -365,6 +366,7 @@ async function dataFingerprint($: EngineInterface): Promise<string> {
 	} catch {
 		parts.push('no-board');
 	}
+	parts.push(await crewSig(engineFs($), root));
 	return parts.join('|');
 }
 

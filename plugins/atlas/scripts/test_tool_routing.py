@@ -50,43 +50,27 @@ class ScanStackTests(unittest.TestCase):
         self.assertTrue(s["js_ts"])
         self.assertTrue(s["has_code"])
 
-    def test_serena_yml_languages(self):
-        write(
-            os.path.join(self.tmp, ".serena", "project.yml"),
-            'languages: ["python"]\n',
-        )
-        write(os.path.join(self.tmp, "a.py"), "x=1\n")
-        s = tool_routing.scan_stack(self.tmp)
-        self.assertTrue(s["serena_yml"])
-        self.assertTrue(s["serena_languages_ok"])
-
-
 class BootLinesTests(unittest.TestCase):
     def test_always_has_routing_line(self):
         lines = tool_routing.boot_lines(stack={"has_code": False, "js_ts": False})
         self.assertTrue(any("Tool routing" in L for L in lines))
-        self.assertTrue(any("serena" in L for L in lines))
+        self.assertTrue(any("lean-ctx" in L for L in lines))
 
-    def test_code_mentions_activate(self):
+    def test_code_mentions_batch_and_matrix(self):
         lines = tool_routing.boot_lines(
-            stack={
-                "has_code": True,
-                "languages": ["python"],
-                "serena_yml": True,
-                "serena_languages_ok": True,
-                "js_ts": False,
-            }
+            stack={"has_code": True, "languages": ["python"], "js_ts": False}
         )
         blob = "\n".join(lines)
-        self.assertIn("activate_project", blob)
+        self.assertIn("ToolSearch-load the batch", blob)
         self.assertIn("tool-routing.md", blob)
+        self.assertNotIn("activate_project", blob)
 
     def test_routes_only_present_tools(self):
         stack = {"has_code": True, "languages": ["python"], "js_ts": False}
-        lines = tool_routing.boot_lines(stack=stack, present={"serena"})
+        lines = tool_routing.boot_lines(stack=stack, present={"lean-ctx"})
         blob = "\n".join(lines)
-        self.assertIn("serena", blob)
-        for absent in ("lean-ctx", "context-mode", "claude-mem"):
+        self.assertIn("lean-ctx", blob)
+        for absent in ("context-mode", "claude-mem"):
             self.assertNotIn(absent, blob)
 
     def test_nothing_present_emits_no_routing(self):
@@ -101,11 +85,14 @@ class BootLinesTests(unittest.TestCase):
 
 
 class BatchTests(unittest.TestCase):
-    def test_batch_includes_activate_and_edit(self):
+    def test_batch_includes_navigation_and_recall(self):
         b = tool_routing.TOOLSEARCH_BATCH
-        self.assertIn("activate_project", b)
-        self.assertIn("replace_symbol_body", b)
         self.assertIn("ctx_compose", b)
+        self.assertIn("ctx_callgraph", b)
+        self.assertIn("ctx_batch_execute", b)
+        self.assertIn("get_observations", b)
+        self.assertNotIn("activate_project", b)
+        self.assertNotIn("replace_symbol_body", b)
         self.assertIn("ToolSearch", b)
 
 
@@ -275,11 +262,36 @@ class ScanStackMore(unittest.TestCase):
             "python",
             "has_package_json",
             "has_pyproject",
-            "serena_yml",
-            "serena_languages_ok",
             "docs",
         ):
             self.assertIs(s[k], False, k)
+        self.assertEqual(
+            set(s),
+            {
+                "root",
+                "has_code",
+                "js_ts",
+                "python",
+                "languages",
+                "has_package_json",
+                "has_pyproject",
+                "docs",
+            },
+        )
+
+    def test_toolsearch_batch_names_only_remaining_servers(self):
+        body = tool_routing.TOOLSEARCH_BATCH.split('"')[1].split(":", 1)[1]
+        for name in body.split(","):
+            self.assertTrue(
+                name.startswith(
+                    (
+                        "mcp__lean-ctx__",
+                        "mcp__plugin_context-mode_context-mode__",
+                        "mcp__plugin_claude-mem_mcp-search__",
+                    )
+                ),
+                name,
+            )
 
     def test_pyproject_markers_each_flag_python(self):
         for name in ("pyproject.toml", "setup.py", "requirements.txt"):
@@ -386,42 +398,6 @@ class ScanStackMore(unittest.TestCase):
         self.w("docs/guide/a.md")
         self.assertTrue(tool_routing.scan_stack(self.tmp)["docs"])
 
-    def test_serena_yml_without_languages_key(self):
-        self.w(".serena/project.yml", "name: x\n  languages: [py]\n")
-        s = tool_routing.scan_stack(self.tmp)
-        self.assertTrue(s["serena_yml"])
-        self.assertFalse(s["serena_languages_ok"])  # indented key is not top level
-
-    def test_serena_project_yaml_spelling_counts(self):
-        self.w(".serena/project.yaml", "languages:\n- python\n")
-        s = tool_routing.scan_stack(self.tmp)
-        self.assertTrue(s["serena_yml"] and s["serena_languages_ok"])
-
-    def test_serena_other_filename_is_ignored(self):
-        self.w(".serena/other.yml", "languages: [x]\n")
-        s = tool_routing.scan_stack(self.tmp)
-        self.assertFalse(s["serena_yml"])
-
-    def test_project_yml_outside_serena_dir_is_ignored(self):
-        self.w("cfg/project.yml", "languages: [x]\n")
-        self.assertFalse(tool_routing.scan_stack(self.tmp)["serena_yml"])
-
-    def test_canonical_serena_path_found_when_walk_budget_cuts_it_off(self):
-        for i in range(5):
-            self.w(f"f{i}.txt")
-        self.w(".serena/project.yml", "languages: [python]\n")
-        s = tool_routing.scan_stack(self.tmp, budget=1)
-        self.assertTrue(s["serena_yml"])
-        self.assertTrue(s["serena_languages_ok"])
-
-    def test_canonical_serena_path_without_languages(self):
-        for i in range(5):
-            self.w(f"f{i}.txt")
-        self.w(".serena/project.yml", "name: x\n")
-        s = tool_routing.scan_stack(self.tmp, budget=1)
-        self.assertTrue(s["serena_yml"])
-        self.assertFalse(s["serena_languages_ok"])
-
     def test_budget_stops_the_walk_after_the_current_directory(self):
         for i in range(3):
             self.w(f"f{i}.txt")
@@ -431,13 +407,6 @@ class ScanStackMore(unittest.TestCase):
         full = tool_routing.scan_stack(self.tmp)
         self.assertEqual(full["languages"], ["go"])
 
-    def test_unreadable_serena_yml_is_swallowed(self):
-        self.w(".serena/project.yml", "languages: [x]\n")
-        with mock.patch.object(Path, "read_text", side_effect=OSError("no")):
-            s = tool_routing.scan_stack(self.tmp)
-        self.assertTrue(s["serena_yml"])
-        self.assertFalse(s["serena_languages_ok"])
-
     def test_missing_root_returns_empty_stack(self):
         s = tool_routing.scan_stack(os.path.join(self.tmp, "nope"))
         self.assertFalse(s["has_code"])
@@ -445,31 +414,31 @@ class ScanStackMore(unittest.TestCase):
 
 class McpConfigured(HomeCase):
     def test_nothing_configured_is_false(self):
-        self.assertIs(tool_routing.mcp_configured("serena", str(self.proj)), False)
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", str(self.proj)), False)
 
     def test_user_level_mcp_servers(self):
-        self.put(self.home / ".claude.json", {"mcpServers": {"serena": {}}})
-        self.assertIs(tool_routing.mcp_configured("serena"), True)
+        self.put(self.home / ".claude.json", {"mcpServers": {"lean-ctx": {}}})
+        self.assertIs(tool_routing.mcp_configured("lean-ctx"), True)
         self.assertIs(tool_routing.mcp_configured("other"), False)
 
     def test_per_project_mcp_servers_need_matching_root(self):
         root = str(self.proj)
         self.put(
             self.home / ".claude.json",
-            {"projects": {root: {"mcpServers": {"serena": {}}}}},
+            {"projects": {root: {"mcpServers": {"lean-ctx": {}}}}},
         )
-        self.assertIs(tool_routing.mcp_configured("serena", root), True)
-        self.assertIs(tool_routing.mcp_configured("serena", str(self.tmp)), False)
-        self.assertIs(tool_routing.mcp_configured("serena"), False)  # no root
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", root), True)
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", str(self.tmp)), False)
+        self.assertIs(tool_routing.mcp_configured("lean-ctx"), False)  # no root
 
     def test_project_entry_that_is_not_a_dict_is_ignored(self):
         root = str(self.proj)
-        self.put(self.home / ".claude.json", {"projects": {root: ["serena"]}})
-        self.assertIs(tool_routing.mcp_configured("serena", root), False)
+        self.put(self.home / ".claude.json", {"projects": {root: ["lean-ctx"]}})
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", root), False)
 
     def test_projects_not_a_dict_is_ignored(self):
         self.put(self.home / ".claude.json", {"projects": [str(self.proj)]})
-        self.assertIs(tool_routing.mcp_configured("serena", str(self.proj)), False)
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", str(self.proj)), False)
 
     def test_project_mcp_json(self):
         self.put(self.proj / ".mcp.json", {"mcpServers": {"lean-ctx": {}}})
@@ -477,18 +446,18 @@ class McpConfigured(HomeCase):
         self.assertIs(tool_routing.mcp_configured("lean-ctx"), False)  # root omitted
 
     def test_mcp_servers_must_be_a_dict(self):
-        self.put(self.proj / ".mcp.json", {"mcpServers": ["serena"]})
-        self.assertIs(tool_routing.mcp_configured("serena", str(self.proj)), False)
+        self.put(self.proj / ".mcp.json", {"mcpServers": ["lean-ctx"]})
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", str(self.proj)), False)
 
     def test_bad_first_source_does_not_hide_the_second(self):
         self.put(self.home / ".claude.json", "{broken")
-        self.put(self.proj / ".mcp.json", {"mcpServers": {"serena": {}}})
-        self.assertIs(tool_routing.mcp_configured("serena", str(self.proj)), True)
+        self.put(self.proj / ".mcp.json", {"mcpServers": {"lean-ctx": {}}})
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", str(self.proj)), True)
 
     def test_non_dict_json_document_is_skipped(self):
         self.put(self.home / ".claude.json", [1])
-        self.put(self.proj / ".mcp.json", {"mcpServers": {"serena": {}}})
-        self.assertIs(tool_routing.mcp_configured("serena", str(self.proj)), True)
+        self.put(self.proj / ".mcp.json", {"mcpServers": {"lean-ctx": {}}})
+        self.assertIs(tool_routing.mcp_configured("lean-ctx", str(self.proj)), True)
 
     def test_enabled_plugin_counts(self):
         self.user_settings({"enabledPlugins": {"claude-mem@m": True}})
@@ -503,59 +472,38 @@ class BootLinesExact(unittest.TestCase):
     CODE = {
         "has_code": True,
         "languages": ["python", "go"],
-        "serena_yml": True,
-        "serena_languages_ok": True,
         "js_ts": False,
     }
 
-    def test_routing_line_lists_all_four_tools_in_order(self):
+    def test_routing_line_lists_all_three_tools_in_order(self):
         (line,) = tool_routing.boot_lines(stack={"has_code": False})
         self.assertEqual(
             line,
-            "Tool routing: symbols/edits -> serena (activate_project first); "
-            "orient/search -> lean-ctx ctx_compose/ctx_search/ctx_read; "
+            "Tool routing: orient/search/symbols -> lean-ctx ctx_compose/ctx_search/ctx_read; "
             "output >~20 lines -> context-mode ctx_batch_execute; "
             "prior lessons -> claude-mem search/timeline/get_observations.",
         )
 
-    def test_code_stack_line_exact_with_fallback_and_no_note(self):
+    def test_code_stack_line_exact(self):
         lines = tool_routing.boot_lines(stack=self.CODE)
         self.assertEqual(len(lines), 2)
         self.assertEqual(
             lines[1],
-            "Code stack (python,go): ToolSearch-load the batch first; serena down -> "
-            "lean-ctx only. See atlas-orchestrate/references/tool-routing.md",
+            "Code stack (python,go): ToolSearch-load the batch first. "
+            "See atlas-orchestrate/references/tool-routing.md",
         )
 
-    def test_missing_yml_note(self):
-        st = dict(self.CODE, serena_yml=False, serena_languages_ok=False)
-        self.assertIn(
-            "; no .serena/project.yml yet (atlas-setup covers it).",
-            tool_routing.boot_lines(stack=st)[1],
+    def test_code_line_needs_lean_ctx(self):
+        lines = tool_routing.boot_lines(
+            stack=self.CODE, present={"claude-mem", "context-mode"}
         )
-
-    def test_missing_languages_note(self):
-        st = dict(self.CODE, serena_languages_ok=False)
-        self.assertIn(
-            "; project.yml lacks languages: (boot heals it).",
-            tool_routing.boot_lines(stack=st)[1],
-        )
-
-    def test_no_note_when_serena_absent(self):
-        st = dict(self.CODE, serena_yml=False)
-        line = tool_routing.boot_lines(stack=st, present={"lean-ctx"})[1]
-        self.assertNotIn(".serena", line)
-        self.assertNotIn("serena down", line)
-        self.assertIn("first.", line)
-
-    def test_no_fallback_when_only_serena_present(self):
-        line = tool_routing.boot_lines(stack=self.CODE, present={"serena"})[1]
-        self.assertNotIn("serena down", line)
-
-    def test_code_line_needs_serena_or_lean_ctx(self):
-        lines = tool_routing.boot_lines(stack=self.CODE, present={"claude-mem"})
         self.assertEqual(len(lines), 1)
         self.assertTrue(lines[0].startswith("Tool routing:"))
+
+    def test_code_line_when_only_lean_ctx_present(self):
+        lines = tool_routing.boot_lines(stack=self.CODE, present={"lean-ctx"})
+        self.assertEqual(len(lines), 2)
+        self.assertIn("first.", lines[1])
 
     def test_code_line_absent_without_code(self):
         st = dict(self.CODE, has_code=False)
@@ -609,8 +557,8 @@ class BatchExact(unittest.TestCase):
         self.assertTrue(b.startswith('ToolSearch("select:mcp__'))
         self.assertTrue(b.endswith('")'))
         names = b[len('ToolSearch("select:') : -2].split(",")
-        self.assertEqual(len(names), 20)
-        self.assertEqual(len(set(names)), 20)
+        self.assertEqual(len(names), 11)
+        self.assertEqual(len(set(names)), 11)
         self.assertTrue(all(n.startswith("mcp__") and " " not in n for n in names))
 
 

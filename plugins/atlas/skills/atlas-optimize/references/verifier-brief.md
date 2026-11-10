@@ -15,8 +15,7 @@ CONTEXT:
   Baseline median <X>, spread <S>, n=<k>; after median <Y>, spread <S2>, n=<k>
 TOOLS (required):
   ToolSearch first, ONE batched call, before any Read/Grep/Bash:
-  ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__serena__activate_project,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__plugin_context-mode_context-mode__ctx_execute")
-  FIRST: activate_project(serena) on the project cwd.
+  ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__plugin_context-mode_context-mode__ctx_execute")
   ctx_read for evidence files; ctx_execute for any spot-check re-run; ctx_search for the
   changed code sites.
 NON-INTERACTIVE: "You cannot reach the user. Decide, state the assumption, and return the

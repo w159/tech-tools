@@ -38,18 +38,10 @@ RULES = [
         "match": lambda c: c["dep_count"] >= 8,
     },
     {
-        "id": "serena",
-        "type": "mcp",
-        "reason": "Symbol intelligence for code: activate_project, overview, find, "
-        "referencing, surgical edits. Primary nav; never start with Grep/Bash.",
-        "cmd": "claude mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context claude-code --project-from-cwd",
-        "match": lambda c: c["has_code"],
-    },
-    {
         "id": "lean-ctx",
         "type": "mcp",
         "reason": "Context-shaped compose/search/read so raw file bytes stay out of the window. "
-        "Fallback when serena is down; first choice for prose/config.",
+        "Primary code navigation and first choice for prose/config; never start with Grep/Bash.",
         "cmd": "claude mcp add lean-ctx -- lean-ctx",
         "match": lambda c: c["has_code"],
     },

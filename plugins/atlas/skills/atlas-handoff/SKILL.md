@@ -53,11 +53,8 @@ schema in `references/handoff-memory-schema.md` for the structured shape
 (both the prose file and the memory record use the same fields).
 
 Where to write it:
-- If serena has an active project, write the record with `write_memory` (key
-  `handoff/<topic-slug>`); `list_memories` / `read_memory` retrieve it next session.
-  There is no `prepare_for_new_conversation` tool in serena 1.6 - compose the record
-  yourself from the field schema.
-- Otherwise, write the handoff to the project's docs directory or its memory store.
+- Write the handoff to the project's docs directory (`docs/handoffs/<topic-slug>.md`) or its
+  memory store, composing the record yourself from the field schema.
 - If you cannot tell where the project keeps memory or docs, ask once, then proceed.
 
 The handoff must capture, factually and specifically:
@@ -75,7 +72,7 @@ VERIFY before reporting:
 - Confirm every file path listed exists and the named symbols are correct.
 
 REPORT:
-- Where the handoff was written (Serena memory key, or the file path).
+- Where the handoff was written (the file path or memory-store location).
 - The exact commands a fresh session should run first to confirm current state, with expected output.
 
 If a required input is missing or ambiguous, ask once for it, then proceed.

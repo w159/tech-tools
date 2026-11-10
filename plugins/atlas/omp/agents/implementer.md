@@ -30,15 +30,6 @@ Every MCP tool below is an `xd://` device: call it with `write`, `path` = the de
     xd://mcp__lean_ctx_ctx_glob
     xd://mcp__lean_ctx_ctx_tree
     xd://mcp__lean_ctx_ctx_callgraph
-    xd://mcp__serena_activate_project
-    xd://mcp__serena_get_symbols_overview
-    xd://mcp__serena_find_symbol
-    xd://mcp__serena_find_referencing_symbols
-    xd://mcp__serena_find_declaration
-    xd://mcp__serena_find_implementations
-    xd://mcp__serena_replace_symbol_body
-    xd://mcp__serena_insert_after_symbol
-    xd://mcp__serena_get_diagnostics_for_file
     xd://mcp__context_mode_context_mode_ctx_batch_execute
     xd://mcp__context_mode_context_mode_ctx_execute
     xd://mcp__claude_mem_mcp_search_search
@@ -47,13 +38,13 @@ Every MCP tool below is an `xd://` device: call it with `write`, `path` = the de
 
 Do not probe devices one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.
 
-**When serena is down, lean-ctx is the fallback - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
+**lean-ctx is the code-navigation path - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
 
-Edit a named symbol with serena `replace_symbol_body` / `insert_after_symbol` and check `get_diagnostics_for_file` after; `ctx_callgraph` for who-calls-whom.
+Locate a named symbol with `ctx_search` / `ctx_read` before editing and check LSP diagnostics for the file after; `ctx_callgraph` for who-calls-whom.
 
 ## Method
 - **Docs before code.** Pull version-correct docs via `context7` (Microsoft surfaces -> `microsoft-docs`) before using any library/framework/SDK; cite what you relied on.
-- **Navigate with symbols** (`serena`/LSP), not bulk reads. After an edit, check LSP diagnostics for the file before moving on.
+- **Navigate with symbols** (lean-ctx `ctx_search` / `ctx_read` or LSP), not bulk reads. After an edit, check LSP diagnostics for the file before moving on.
 - **Minimal diff.** Touch only what the GOAL requires. No drive-by refactors, no renames, no reformatting unrelated lines.
 - **Match the surrounding code** - its naming, idioms, comment density, error handling.
 - **Run the project's real gate** (derive commands from `package.json`/`pyproject.toml`/`Makefile`/CI - never invent): typecheck, lint, the relevant tests, and build if config/aliases changed.

@@ -40,14 +40,13 @@ ROLE: <one line, which specialist this is>
 GOAL: <one sentence, measurable>
 SCOPE: <class>/<effort>
 CONTEXT: <only what it cannot derive itself: key paths, the inventory line, prior finding ids>
-TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, find_symbol); context-mode for noisy output.
+TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read, ctx_compose); context-mode for noisy output.
   Load step: ToolSearch first, ONE batched call, before any Read/Grep/Bash - paste it verbatim
   (also exported as scripts/tool_routing.py TOOLSEARCH_BATCH):
-    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__serena__find_declaration,mcp__serena__find_implementations,mcp__serena__replace_symbol_body,mcp__serena__insert_after_symbol,mcp__serena__get_diagnostics_for_file,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
-  Activate: activate_project(serena) on the project cwd before any serena symbol call
+    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__lean-ctx__ctx_callgraph,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
   Orient:  ctx_compose (lean-ctx)
-  Symbols: get_symbols_overview / find_symbol / find_referencing_symbols (serena)
-  Edits:   replace_symbol_body / insert_after_symbol (serena) for implementers
+  Symbols: ctx_read mode=signatures / ctx_callgraph (lean-ctx); native LSP where wired
+  Edits:   minimal targeted Edit for implementers (never a whole-file rewrite)
   Search:  ctx_search (lean-ctx); noisy output: ctx_batch_execute / ctx_execute (context-mode)
   Docs:    context7 (resolve-library-id -> query-docs); microsoft-docs for Azure/.NET/M365/Entra
   Recall:  claude-mem search -> timeline -> get_observations (ids as numbers)
@@ -56,17 +55,12 @@ TOOLS: ToolSearch lean-ctx (ctx_search, ctx_read) + serena (activate_project, fi
   Matrix:  references/tool-routing.md
   Allowed:   <explicit>
   Forbidden: package installs - migrations - .env edits - git push  (+ Write/Edit for read-only roles)
-  If serena fails (`No active project`, `KeyError: 'languages'`, `No such tool available`):
-    say so in one line, do NOT retry the rest of serena, and use ctx_search / ctx_read /
-    ctx_compose. Dropping to `Bash grep`/`cat`/`sed` instead is the defect this line exists
+  If a lean-ctx tool fails (`No such tool available`): say so in one line and use a narrow
+    native Read of a known path span. Dropping to `Bash grep`/`cat`/`sed` instead is the defect this line exists
     to prevent.
-NON-INTERACTIVE (required, verbatim): "You cannot reach the user. Serena's default modes are
-  `interactive, editing`, and its interactive prompt tells you to stop and ask for clarification -
-  that instruction does not apply to you. Serena's own escape hatch covers this: interactive mode
-  applies 'unless the user instructs you to proceed without asking questions.' You are so
-  instructed. Decide, state the assumption, and return the deliverable."
-  (serena 1.6.1's claude-code context exposes no `switch_modes` tool, so the mode cannot be
-  changed per dispatch - the counter-instruction in the brief is the only lever.)
+NON-INTERACTIVE (required, verbatim): "You cannot reach the user. Any tool or prompt that tells you to stop and ask
+  for clarification does not apply to you: proceed without asking questions. Decide, state the
+  assumption, and return the deliverable."
 DISCOVER FIRST: confirm the best-fit capability for this exact job,
   check live skills/MCP/LSP; augment the TOOLS list for nuances the spec missed.
 DELIVERABLE: <exact artifact: a report, a diff, a findings entry path>

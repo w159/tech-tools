@@ -218,8 +218,24 @@ def _record_pass():
 
 # Block texts are read by the model and pasted into a shell it runs itself,
 # where $CLAUDE_PLUGIN_ROOT is NOT set (Claude Code expands it only for the hook
-# command line), so scripts are named by the absolute path resolved here.
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+# command line), so scripts are named by an absolute path fixed here. It is
+# spelled as CLAUDE_PLUGIN_ROOT spells it (else abspath), NOT symlink-resolved:
+# the plugin cache is often a symlink and its realpath reads as another plugin.
+def _user_facing_scripts_dir() -> Path:
+    root = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+    if root:
+        return Path(root) / "scripts"
+    # Python resolves the symlinks of a script's own dir for sys.path[0], so this
+    # module's __file__ is already the target; the entry script's __file__ (as
+    # invoked) is the only place the spelled path survives.
+    main = getattr(sys.modules.get("__main__"), "__file__", None) or ""
+    here = os.path.abspath(main) if main else ""
+    if not here or not os.path.isfile(os.path.join(os.path.dirname(here), "completion_gate_core.py")):
+        here = os.path.abspath(__file__)
+    return Path(here).parents[1] / "scripts"
+
+
+SCRIPTS_DIR = _user_facing_scripts_dir()
 
 
 def _check_evidence(root: Path, started: float | None = None) -> bool:
@@ -404,7 +420,7 @@ def _delegation_exempt():
     contracts/native-tools.json (also read by omp/contracts.ts); None if unreadable."""
     try:
         path = (
-            Path(__file__).resolve().parent.parent / "contracts" / "native-tools.json"
+            Path(os.path.abspath(__file__)).parents[1] / "contracts" / "native-tools.json"
         )
         spec = json.loads(path.read_text())["delegationExempt"]
         return tuple(str(d) for d in spec["dirs"]), tuple(
@@ -2304,7 +2320,7 @@ CONTRACT_GATE_MARKER_DIR = os.environ.get("ATLAS_CONTRACT_GATE_DIR") or os.path.
 )
 
 _CONTRACT_PATH = (
-    Path(__file__).resolve().parent.parent / "contracts" / "operating-contract.json"
+    Path(os.path.abspath(__file__)).parents[1] / "contracts" / "operating-contract.json"
 )
 
 # Kill-switch env var names. The contract's `switches` is authoritative; these

@@ -156,6 +156,7 @@ firebase-adminsdk*.json
 !test-mcp-tools.mjs
 !scripts/
 !scripts/check_versions.py
+!scripts/assert-dynamics-connector-entra-perms.sh
 !scripts/check_attribution.py
 !scripts/test_*.py
 !scripts/telemetry_report.py

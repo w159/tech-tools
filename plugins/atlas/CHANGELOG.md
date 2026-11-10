@@ -1,5 +1,36 @@
 # Changelog
 
+## 17.5.0 - 2026-11-10
+
+Port and follow-up release. The lead ported the 28 commits main lacked from branch `claude/gateway-broker-mode-main` (MCP gateway broker mode with Entra-scoped roles, the CIPP URL-only remote connector with an OAuth client id, armada 2.3.0, gateway and CIPP evidence and findings, and the Codex-harness pieces in atlas scripts and hooks listed below). Crew waves then fixed the mod lead channel, the completion gate remediation paths, the team deny and the crew launch guard, and removed serena from atlas. The gateway and connector changes live in `mcp_servers/mcp-gateway/` and `plugins/armada/` (see `plugins/armada/CHANGELOG.md` 2.3.0 and `docs/CHANGELOG.md`).
+
+### Added
+
+- Codex crew workers (`scripts/atlas_crew.py`): `run --harness codex` starts each worker with `codex exec --json --sandbox workspace-write` and resumes it by the `thread.started` thread id; `run.json` records `harness`, and `claude` stays the default. Codex workers get the crew protocol in the prompt and are told to run `irc read` between steps. A `turn.completed` event counts as success, `turn.failed` or `error` as failure. Tests: `test_codex_worker_is_noninteractive_and_resumable`, `test_codex_result_thread_and_usage_are_understood`, `test_codex_run_records_harness_and_claude_stays_default`, `test_run_parser_defaults_to_claude_and_accepts_codex` (`scripts/test_atlas_crew.py`).
+- Codex dispatches (`hooks/dispatch_tripwire_core.py` `_normalize_codex_dispatch`): a `collaboration.spawn_agent` call is translated into the `Agent` contract (`agent_type`, `task_name`, `message`), so the dispatch gates apply to it. `hooks/hooks.json`, `hooks/event_dispatch.py` and `hooks/todo_capture.py` match `collaboration\.spawn_agent`; `todo_capture.py` also mirrors `mcp__mcp_search__work_state_write` calls to the todo board. Tests: `test_codex_spawn_agent_logs_dispatch_and_marks_orchestration`, `test_codex_non_spawn_collaboration_tools_do_not_count_as_dispatches` (`hooks/test_dispatch_tripwire.py`).
+- Doctor check `codex-wiring` (`scripts/atlas_doctor.py` `check_codex_wiring`): `.codex-plugin/plugin.json` must name `atlas`, carry the `.claude-plugin/plugin.json` version and expose `./skills/` and `./hooks/hooks.codex.json` or `./hooks/hooks.json`. Tests: `test_codex_wiring_requires_supported_manifest`, `test_codex_wiring_accepts_codex_hooks_manifest`, `test_codex_wiring_passes_on_real_dev_tree` (`scripts/test_atlas_doctor.py`).
+- Mod crew reader (`mod/data/crew.ts`, `readCrew` and `crewSig`): reads `.atlas/.run/crew/<run-id>/{run.json,pid/,exit/,irc/log.jsonl}` for live runs and runs touched in the last 30 minutes. `mod/snapshot.ts` adds the crew workers to the squad and up to 100 crew log lines to the channel notes; `mod/register.ts` adds `crewSig` to the refresh signature. Tests: `mod/data/crew.test.ts`.
+- `atlas_crew.py run` refuses a plan whose worker unit check already passes before launch, because a worker stops as soon as its check passes and would report DONE before doing the work (`green_check_guard`, 300 s per check, run in the project root). `--allow-green-check` skips the guard. Tests: `test_run_refuses_a_worker_whose_check_already_passes`, `test_run_allows_a_green_check_with_the_flag`, `test_run_launches_when_the_check_fails_before_work`, `test_green_check_guard_runs_each_unit_check_in_root`, `test_parser_accepts_allow_green_check`.
+
+### Changed
+
+- Team deny (`hooks/dispatch_tripwire_core.py` `_team_note`): with tmux on PATH the tripwire denies every in-process working-role `atlas:*` dispatch with `dispatch_denied:team`, the first one and a one-seat or `low` scope included, and a team or crew launched in the run no longer lifts the deny. Closing roles (planner, verifier, completeness-critic, docs-curator, docs-auditor) stay in-process. Without tmux, under omp or with `ATLAS_TEAM_GATE=off`, the 17.4.3 advisory on the 2nd working dispatch of a 2+ seat scope remains. The deny text no longer offers `SCOPE: <class>/low` as a way out. Tests: `test_first_working_dispatch_is_denied_with_the_team_command`, `test_every_working_dispatch_is_denied`, `test_single_seat_scope_is_denied`, `test_first_low_scope_dispatch_is_denied`, `test_team_launch_does_not_allow_in_process_workers`, `test_closing_role_is_not_denied`, `test_omp_is_advisory` (`hooks/test_dispatch_tripwire.py`).
+- serena removed from atlas. The dispatch `TOOLS:` gate accepts lean-ctx or a `ctx_*` tool as the code-nav token and no longer accepts `serena`; session boot no longer edits `.serena/project.yml` (`heal_serena_project` deleted; test `test_boot_has_no_project_config_heal_entry_point`); `scripts/tool_routing.py`, `scripts/atlas_doctor.py`, `contracts/mcp-servers.json` and `contracts/native-tools.json`, the agents (`agents/*.md`, `omp/agents/*.md`), skills, references and the manifest keywords drop it.
+- `hooks/crew_worker.py`: hook commands and `main()` return at once unless `ATLAS_CREW_WORKER` is set, so the hook is inert in the lead and in normal sessions (test `test_global_hook_binding_is_inert_outside_a_crew_worker`). `atlas_crew.py` gives each worker `ATLAS_WORKER_NAME` and `ATLAS_MANDATES=off`.
+- Manifest and marketplace descriptions name Claude Code and Codex.
+- `README.md`: Version row, `crew_worker.py` hook row (six hooks deny or block on purpose), Harnesses row, companions without serena, team deny and crew launch guard text.
+
+### Fixed
+
+- Mod lead channel (`mod/data/channels.ts`): a bare `lead-<id>` candidate resolves by suffix to the real `<folder>@<branch>/lead-<id>` channel key, so the side panel, Team and Channel tabs read the live channel.
+- Completion gate remediation commands (`hooks/completion_gate_core.py` `SCRIPTS_DIR`) name scripts under `CLAUDE_PLUGIN_ROOT` as spelled, else under the `abspath` of the plugin, and no longer under the resolved symlink target, which could read as another plugin; contract paths use `abspath` too. Tests: `ScriptsDirNotResolvedTest` (`hooks/test_completion_gate.py`).
+- `mod/contract.ts`: the macOS immutable flag (uchg) is cleared and the file matches HEAD, which cites `docs/plans/2026-10-09_atlas-mod.md`.
+
+### Known limits
+
+- Nothing here has been observed in an installed plugin in a live terminal; the changes are covered by hook, script and mod unit tests.
+- Codex crew workers and Codex dispatch translation are covered by unit tests only, not by a live Codex run.
+
 ## 17.4.3 - 2026-11-10
 
 Colony routing enforcement. Over 14 days `~/.atlas/atlas.db` held 813 lead-level in-process Agent/Task calls, at most 8 `atlas_mux.py spawn-team` commands and 0 Workflow runs: 2+ worker jobs were run as in-process subagents, not as tmux teams or crews. The prompt optimizer now classifies the prompt and names the resolved team and the next command, the tripwire denies the 2nd in-process working-role dispatch when the scope is a team, completion gate (p) counts real team and crew members, a new gate (s) backs the deny at Stop, and the mod route row shows what the lead actually ran. Plan: `docs/plans/2026-11-10_colony-routing-enforcement.md`.
@@ -473,6 +504,16 @@ Evidence: `.atlas/evidence/2026-10-30_display-parity-16.9.0/`.
 - Crew: speculative `irc check`. It runs the unit check as soon as every peer file is installed, without waiting for the peers' DONE, and posts DONE without a re-run when the peers' DONE digests then match the bytes it tested against (8 modules: all DONEs within 0.6 s of the critical file's DONE, was 2.5 s). `ATLAS_CREW_SPECULATE=off` disables it (`scripts/test_atlas_irc_speculate.py`).
 - Crew: the DONE record also carries `peer_digests` (the digests of its needs closure) and `test_digest` (its test files plus `conftest.py`, `pytest.ini`, `pyproject.toml`, `setup.cfg`, `tox.ini`). The supervisor's final check skips a test file whose worker holds a current DONE with all three equal to the bytes on disk and whose `unit_check` is plain pytest (`-q`, `-qq`, `-x`, `-p no:cacheprovider` and literal test files only; any other flag means not verified); unowned tests still run, and the round records `check_cached` (the full re-run cost 1.7-4.4 s after the last DONE at 30 modules). `ATLAS_CREW_CHECK_CACHE=off` disables it.
 - Crew: the final check is sharded across CPUs and each `irc check` restores docstrings in one pass (see the entries above); with v11-v15 together, crew vs one Claude prompt on the same task: 8 modules 40.6 s (28.2% of 144.1 s), 18 modules 47.8 s (26.4% of 181.2 s), 30 modules 56.5 s (24.8% of 227.8 s); tokens 16.9%, 11.9% and 13.0%. Evidence: `docs/audits/2026-10-29_atlas-16.5.0-crew-benchmark.md`, `.atlas/evidence/2026-10-29_crew-16.5.0/`.
+
+## 16.4.2 - 2026-11-03
+
+### Added
+
+- Codex compatibility manifest (`.codex-plugin/plugin.json`) exposes Atlas skills and lifecycle hooks from the same source tree; Atlas Doctor now reports `codex-wiring` and verifies the Codex and Claude manifest versions agree.
+
+### Changed
+
+- The generated Codex operating-contract block now describes plugin-enforced skills and hooks while retaining `AGENTS.md` as the visible fallback until hook trust is granted.
 
 ## 16.4.1 - 2026-10-28
 

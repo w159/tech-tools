@@ -54,7 +54,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^(update_plan|Agent|spawn_agent|Bash|Edit|apply_patch|Write|mcp__.*)$",
+        "matcher": "^(update_plan|Agent|spawn_agent|collaboration\\.spawn_agent|Bash|Edit|apply_patch|Write|mcp__.*)$",
         "hooks": [
           {
             "type": "command",

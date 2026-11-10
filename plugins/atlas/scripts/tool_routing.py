@@ -3,7 +3,7 @@
 
 The full matrix lives in skills/atlas-orchestrate/references/tool-routing.md.
 This module only emits short, load-bearing lines for session_boot and discovery
-so boot context stays tiny while still forcing serena/lean-ctx/claude-mem usage
+so boot context stays tiny while still forcing lean-ctx/context-mode/claude-mem usage
 instead of Bash grep/cat bloat.
 
 Stdlib only. Fail-open callers should catch exceptions.
@@ -25,15 +25,6 @@ TOOLSEARCH_BATCH = (
     "mcp__lean-ctx__ctx_glob,"
     "mcp__lean-ctx__ctx_tree,"
     "mcp__lean-ctx__ctx_callgraph,"
-    "mcp__serena__activate_project,"
-    "mcp__serena__get_symbols_overview,"
-    "mcp__serena__find_symbol,"
-    "mcp__serena__find_referencing_symbols,"
-    "mcp__serena__find_declaration,"
-    "mcp__serena__find_implementations,"
-    "mcp__serena__replace_symbol_body,"
-    "mcp__serena__insert_after_symbol,"
-    "mcp__serena__get_diagnostics_for_file,"
     "mcp__plugin_context-mode_context-mode__ctx_batch_execute,"
     "mcp__plugin_context-mode_context-mode__ctx_execute,"
     "mcp__plugin_claude-mem_mcp-search__search,"
@@ -139,8 +130,6 @@ def scan_stack(root: str | Path, budget: int = 4000) -> dict:
         "languages": [],
         "has_package_json": False,
         "has_pyproject": False,
-        "serena_yml": False,
-        "serena_languages_ok": False,
         "docs": False,
     }
     counts: dict[str, int] = {}
@@ -153,8 +142,6 @@ def scan_stack(root: str | Path, budget: int = 4000) -> dict:
                 out["docs"] = True
             for fn in fns:
                 seen += 1
-                low = fn.lower()
-                path = os.path.join(dp, fn)
                 if fn == "package.json":
                     out["has_package_json"] = True
                     out["js_ts"] = True
@@ -163,19 +150,6 @@ def scan_stack(root: str | Path, budget: int = 4000) -> dict:
                     out["has_pyproject"] = True
                     out["python"] = True
                     out["has_code"] = True
-                if rel in (".serena",) or dp.rstrip(os.sep).endswith(
-                    os.sep + ".serena"
-                ):
-                    if low in ("project.yml", "project.yaml"):
-                        out["serena_yml"] = True
-                        try:
-                            text = Path(path).read_text(encoding="utf-8")
-                            out["serena_languages_ok"] = any(
-                                line.startswith("languages:")
-                                for line in text.splitlines()
-                            )
-                        except Exception:
-                            pass
                 ext = os.path.splitext(fn)[1].lower()
                 lang = _CODE_EXTS.get(ext)
                 if lang:
@@ -191,18 +165,6 @@ def scan_stack(root: str | Path, budget: int = 4000) -> dict:
         pass
     ranked = sorted(counts.items(), key=lambda kv: -kv[1])
     out["languages"] = [name for name, _ in ranked[:5]]
-    if not out["serena_yml"]:
-        # also check canonical path without walk hit
-        yml = os.path.join(root, ".serena", "project.yml")
-        if os.path.isfile(yml):
-            out["serena_yml"] = True
-            try:
-                text = Path(yml).read_text(encoding="utf-8")
-                out["serena_languages_ok"] = any(
-                    line.startswith("languages:") for line in text.splitlines()
-                )
-            except Exception:
-                pass
     out["docs"] = out["docs"] or os.path.isdir(os.path.join(root, "docs"))
     return out
 
@@ -240,7 +202,7 @@ def boot_lines(
 ) -> list[str]:
     """Compact lines for SessionStart additionalContext. No essay.
 
-    `present` names the tools that exist (serena, lean-ctx, context-mode, claude-mem);
+    `present` names the tools that exist (lean-ctx, context-mode, claude-mem);
     only those are routed to. None means all are assumed present. Absent tools are
     reported once, by the caller's setup-gap line, not here."""
     if stack is None:
@@ -252,26 +214,18 @@ def boot_lines(
     routes = [
         text
         for tool, text in (
-            ("serena", "symbols/edits -> serena (activate_project first)"),
-            ("lean-ctx", "orient/search -> lean-ctx ctx_compose/ctx_search/ctx_read"),
+            ("lean-ctx", "orient/search/symbols -> lean-ctx ctx_compose/ctx_search/ctx_read"),
             ("context-mode", "output >~20 lines -> context-mode ctx_batch_execute"),
             ("claude-mem", "prior lessons -> claude-mem search/timeline/get_observations"),
         )
         if has(tool)
     ]
     lines = ["Tool routing: " + "; ".join(routes) + "."] if routes else []
-    if stack.get("has_code") and (has("serena") or has("lean-ctx")):
+    if stack.get("has_code") and has("lean-ctx"):
         langs = ",".join(stack.get("languages") or []) or "code"
-        note = ""
-        if has("serena"):
-            if not stack.get("serena_yml"):
-                note = "; no .serena/project.yml yet (atlas-setup covers it)"
-            elif not stack.get("serena_languages_ok"):
-                note = "; project.yml lacks languages: (boot heals it)"
-        fallback = "; serena down -> lean-ctx only" if has("serena") and has("lean-ctx") else ""
         lines.append(
-            "Code stack (%s): ToolSearch-load the batch first%s%s. See atlas-orchestrate/references/tool-routing.md"
-            % (langs, fallback, note)
+            "Code stack (%s): ToolSearch-load the batch first. See atlas-orchestrate/references/tool-routing.md"
+            % langs
         )
     if stack.get("js_ts"):
         lines.append("JS/TS: fallow for dead-code/dupes/audit (CLI or fallow-mcp).")

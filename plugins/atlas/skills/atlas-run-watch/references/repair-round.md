@@ -12,7 +12,7 @@ Dispatch per the atlas-orchestrate subagent-kit schema. Template:
 ROLE: atlas:explorer - diagnose a CI failure from its logs
 GOAL: Identify the root cause of the failing check(s) on PR <N> head <sha>, with file:line.
 CONTEXT: PR <N> (<url>), head <sha>, failing checks <list>, run_watch failure artifact at <artifact://path>.
-TOOLS (required): ToolSearch first, ONE batched call, then ctx_compose / ctx_search / ctx_read / ctx_glob / serena symbol tools. Read-only.
+TOOLS (required): ToolSearch first, ONE batched call, then ctx_compose / ctx_search / ctx_read / ctx_glob. Read-only.
 DISCOVER FIRST: confirm the repo's test/build entry points from AGENTS.md and docs/ before interpreting logs.
 TOOLS ALLOWED: read/search/shell (non-mutating). TOOLS FORBIDDEN: Edit, Write, git push, package installs.
 DELIVERABLE: one root-cause finding per distinct failure: {check, root cause, file:line, proposed minimal fix sketch, confidence}.
@@ -30,7 +30,7 @@ If the explorer returns multiple unrelated root causes, spend one round per dist
 ROLE: atlas:implementer - apply a minimal CI fix
 GOAL: Make failing check(s) <list> pass with the minimal change in the PR worktree at <path>, committed locally.
 CONTEXT: explorer finding: <paste the root-cause finding verbatim>. PR <N>, head <sha>, round <k>/<budget>.
-TOOLS (required): ToolSearch first, ONE batched call, then serena edits (replace_symbol_body / insert_after_symbol) + ctx_* reads + Bash for the local gate.
+TOOLS (required): ToolSearch first, ONE batched call, then minimal targeted edits + ctx_* reads + Bash for the local gate.
 TOOLS ALLOWED: Edit, Write, Bash, read/search. TOOLS FORBIDDEN: git push, force-push, rebase, merge, package installs beyond what the failing check itself needs.
 DELIVERABLE: local commit(s) in the PR worktree + proof the failing check passes locally (exact command + output captured to .atlas/evidence/<YYYY-MM-DD>_pr<N>-round<k>/).
 SUCCESS CRITERIA: the exact failed CI step now passes when run locally; the diff touches only files implicated by the root cause; a conventional commit message exists ("fix: <what> (PR <N> round <k>)"); nothing is pushed.
@@ -47,7 +47,7 @@ REPORT BACK (final message only): diff summary, local gate output, commit sha, e
 ROLE: atlas:verifier - independently confirm the round's fix
 GOAL: Independently verify that local commit <sha> in <worktree path> fixes failing check <check>, and nothing else.
 CONTEXT: root cause finding, commit range <base>..<sha>, the original failure artifact path.
-TOOLS (required): ToolSearch first, ONE batched call, then serena/ctx_* reads + Bash to re-run the check.
+TOOLS (required): ToolSearch first, ONE batched call, then ctx_* reads + Bash to re-run the check.
 TOOLS ALLOWED: read/search/shell. TOOLS FORBIDDEN: Edit, Write, dispatch, push.
 DELIVERABLE: verdict (verified / rejected / needs-evidence) + a findings.json row written via:
   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id "PR<N>-R<k>" --status <verdict> \

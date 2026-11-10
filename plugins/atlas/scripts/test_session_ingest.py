@@ -1312,14 +1312,14 @@ def _own_connect(dbpath):
 class ClassifyEdgeTest(unittest.TestCase):
     def test_non_plugin_mcp_server(self):
         # mcp__<server>__<tool> where server is not a plugin_* segment
-        kind, target, server = session_ingest.classify("mcp__serena__find_symbol", {})
+        kind, target, server = session_ingest.classify("mcp__context7__query_docs", {})
         self.assertEqual(
-            (kind, target, server), ("mcp", "serena.find_symbol", "serena")
+            (kind, target, server), ("mcp", "context7.query_docs", "context7")
         )
 
     def test_mcp_no_toolpart(self):
-        kind, target, server = session_ingest.classify("mcp__serena", {})
-        self.assertEqual((kind, target, server), ("mcp", "serena", "serena"))
+        kind, target, server = session_ingest.classify("mcp__context7", {})
+        self.assertEqual((kind, target, server), ("mcp", "context7", "context7"))
 
     def test_skill_missing_name(self):
         kind, target, server = session_ingest.classify("Skill", {})

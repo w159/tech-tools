@@ -35,7 +35,7 @@ export interface GraphClientOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-export interface Page<T> {
+interface Page<T> {
   value: T[];
   "@odata.nextLink"?: string;
 }

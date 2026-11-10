@@ -34,7 +34,7 @@ export interface ExplorationShellSpec {
 export interface NativeToolContract {
 	exemptDirs: string[];
 	exemptExtensions: string[];
-	/** Dirs agent tooling writes on its own (.serena, .lean-ctx, ...); shell dirt under them is not a model edit. Absent or malformed → [] so older contract files still load. */
+	/** Dirs agent tooling writes on its own (.lean-ctx, .context-mode, ...); shell dirt under them is not a model edit. Absent or malformed → [] so older contract files still load. */
 	toolStateDirs: string[];
 	kinds: Record<LeanKind, KindSpec>;
 	/** Absent or malformed → undefined, and nothing is ever classified as exploration (fail open). */

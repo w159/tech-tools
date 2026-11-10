@@ -1383,6 +1383,73 @@ class HelperUnitTest(unittest.TestCase):
             self.assertIn(f'python3 "{path}"', msg)
 
 
+class ScriptsDirNotResolvedTest(unittest.TestCase):
+    """SCRIPTS_DIR in remediation text keeps the plugin root as spelled, never the
+    symlink target (the plugin cache under ~/.claude/plugins is often a symlink)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        real = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.link = os.path.join(self.tmp, "plugin-link")
+        os.symlink(real, self.link)
+
+    def _scripts_dir(self, env_root):
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+        if env_root is not None:
+            env["CLAUDE_PLUGIN_ROOT"] = env_root
+        code = (
+            "import sys; sys.path.insert(0, sys.argv[1]); "
+            "sys.path.insert(1, sys.argv[2]); "
+            "import completion_gate_core as c; print(c.SCRIPTS_DIR)"
+        )
+        out = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                code,
+                os.path.join(self.link, "hooks"),
+                os.path.join(self.link, "scripts"),
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return out.stdout.strip().splitlines()[-1]
+
+    def test_plugin_root_env_is_not_resolved(self):
+        self.assertEqual(
+            self._scripts_dir(self.link), os.path.join(self.link, "scripts")
+        )
+
+    def test_symlinked_file_path_is_not_resolved(self):
+        self.assertEqual(self._scripts_dir(None), os.path.join(self.link, "scripts"))
+
+    def test_symlinked_entry_script_is_not_resolved(self):
+        """Real hook run: `python3 <link>/hooks/completion_gate.py` (Python resolves the
+        script dir for sys.path[0], so the core module's own __file__ is the target)."""
+        site = os.path.join(self.tmp, "site")
+        os.mkdir(site)
+        with open(os.path.join(site, "sitecustomize.py"), "w") as fh:
+            fh.write(
+                "import atexit, sys\n"
+                "def _p():\n"
+                "    m = sys.modules.get('completion_gate_core')\n"
+                "    if m: print('SD=' + str(m.SCRIPTS_DIR))\n"
+                "atexit.register(_p)\n"
+            )
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+        env["PYTHONPATH"] = site
+        out = subprocess.run(
+            [sys.executable, os.path.join(self.link, "hooks", "completion_gate.py")],
+            input="{}", capture_output=True, text=True, env=env, timeout=60,
+        )
+        sd = [ln for ln in out.stdout.splitlines() if ln.startswith("SD=")]
+        self.assertEqual(sd, ["SD=" + os.path.join(self.link, "scripts")], out.stdout + out.stderr)
+
+
 def _todo_transcript(path, todos, name="TodoWrite"):
     """Write a minimal Claude Code transcript containing one TodoWrite tool_use."""
     with open(path, "w", encoding="utf-8") as fh:

@@ -28,7 +28,7 @@ COLONY_OFF_HINT = (
 def ensure_dashboard():
     """Start the shared multi-session dashboard daemon if needed.
 
-    Mirrors claude-mem/Serena worker UX: one loopback UI for all terminals.
+    Mirrors the claude-mem worker UX: one loopback UI for all terminals.
     Does NOT open a browser tab (avoids focus-stealing on every SessionStart).
     Returns a short status line with the URL, or None on failure (fail-open).
     """
@@ -572,12 +572,7 @@ def detect_dep(module_marker):
         return False
 
 
-# --- serena project self-heal ------------------------------------------------
-# Subagents lose every symbol tool when serena cannot load a project: calls return
-# `No active project ... known projects: []` or `KeyError: 'languages'`, and the agent
-# falls back to Bash grep/cat/sed. Both failures share one cause -- a `.serena/project.yml`
-# written before serena 1.6 made `languages:` a required field. Heal it at boot so the
-# whole session, subagents included, starts with working symbol lookup.
+# --- language detection: rank source languages of a tree by file count (bounded walk) ---
 
 _LANG_BY_EXT = {
     ".py": "python",
@@ -625,45 +620,6 @@ def _detect_languages(root, cap=3):
             break
     ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:cap]
     return [lang for lang, _ in ranked]
-
-
-def heal_serena_project(root):
-    """Append the `languages:` key serena >= 1.6 requires. Returns a status line or None.
-
-    Idempotent: a config that already declares `languages:` at top level is left alone.
-    Writes only when detection found at least one language; there is no default.
-    Absent configs are NOT created -- serena's own onboarding owns that.
-    """
-    cfg = os.path.join(root, ".serena", "project.yml")
-    if not os.path.isfile(cfg):
-        return None
-    try:
-        with open(cfg, encoding="utf-8") as fh:
-            text = fh.read()
-    except Exception:
-        return None
-    # Top-level key only: `language_servers:` and indented matches do not count.
-    for line in text.splitlines():
-        if line.startswith("languages:"):
-            return None
-    langs = _detect_languages(root)
-    if not langs:
-        return None  # never guess a language: a wrong one is worse than serena's own onboarding
-    block = (
-        "\n# required by serena >= 1.6 (ProjectConfig.FIELDS_WITHOUT_DEFAULTS); without it the\n"
-        "# project fails to load with KeyError: 'languages' and every symbol tool goes dark\n"
-        "# for this session and all its subagents. Added automatically by atlas session_boot.\n"
-        "languages: [" + ", ".join(f'"{lang}"' for lang in langs) + "]\n"
-    )
-    try:
-        with open(cfg, "a", encoding="utf-8") as fh:
-            fh.write(block)
-    except Exception:
-        return None
-    return (
-        f"serena: repaired {cfg} (added languages: {', '.join(langs)}) - symbol tools now load for "
-        "subagents; they had been failing with KeyError: 'languages'"
-    )
 
 
 def _relative_time(epoch_s):
@@ -1603,12 +1559,7 @@ def main():
         if notice:
             lines.append(notice)
 
-    with contextlib.suppress(Exception):  # serena heal is best-effort; never block boot
-        healed = heal_serena_project(payload.get("cwd") or os.getcwd())
-        if healed:
-            lines.append(healed)
-
-    # Compact tool-routing lines (serena/lean-ctx/claude-mem/...). Full matrix is
+    # Compact tool-routing lines (lean-ctx/context-mode/claude-mem). Full matrix is
     # progressive-disclosure under atlas-orchestrate/references/tool-routing.md.
     with contextlib.suppress(Exception):
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
@@ -1617,7 +1568,6 @@ def main():
         present = {
             tool
             for tool, found in (
-                ("serena", has_cmd("serena") or tool_routing.mcp_configured("serena", boot_root)),
                 ("lean-ctx", has_cmd("lean-ctx") or tool_routing.mcp_configured("lean-ctx", boot_root)),
                 ("context-mode", bool(ctx)),
                 ("claude-mem", bool(mem)),

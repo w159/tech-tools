@@ -475,7 +475,7 @@ test("permissionDecision ask fails closed as a deny; allow stays an allow", () =
 
 // ---- MCP device classification ----
 
-/** Every `xd://mcp__…` device name of a real omp session (the audit's 33), with the Claude name hooks must see. */
+/** Every `xd://mcp__...` device name of a real omp session, with the Claude name hooks must see. */
 const REAL_DEVICES: Array<[string, string]> = [
 	["mcp__atlas_falcon_falcon_get_host_details", "mcp__atlas_falcon__get_host_details"],
 	["mcp__atlas_knowbe4_knowbe4_account_get", "mcp__atlas_knowbe4__account_get"],
@@ -508,12 +508,10 @@ const REAL_DEVICES: Array<[string, string]> = [
 	["mcp__microsoft_docs_search", "mcp__microsoft_docs__search"],
 	["mcp__mobbin_search_screens", "mcp__mobbin__search_screens"],
 	["mcp__plaid_get_mock_data_prompt", "mcp__plaid__get_mock_data_prompt"],
-	["mcp__serena_find_symbol", "mcp__serena__find_symbol"],
-	["mcp__serena_initial_instructions", "mcp__serena__initial_instructions"],
 ];
 
-test("all 33 real device names classify as the MCP tool, never as a file Write", () => {
-	expect(REAL_DEVICES.length).toBe(33);
+test("all 31 real device names classify as the MCP tool, never as a file Write", () => {
+	expect(REAL_DEVICES.length).toBe(31);
 	for (const [device, expected] of REAL_DEVICES) {
 		expect(claudeNamesForCall("write", { path: `xd://${device}`, content: "{}" })).toEqual([expected]);
 	}
@@ -552,7 +550,7 @@ test("every MCP call reaches the connector_credential_watch matcher; the hook it
 	for (const device of ["mcp__armada_falcon_falcon_status", "mcp__armada_connectwise_cw_status", "mcp__armada_ninjaone_ninjaone_devices_list", "mcp__armada_vanta_vanta_status", "mcp__armada_cipp_cipp_status"]) {
 		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(true);
 	}
-	for (const device of ["mcp__lean_ctx_ctx_read", "mcp__serena_find_symbol", "mcp__mcp_search_search"]) {
+	for (const device of ["mcp__lean_ctx_ctx_read", "mcp__context7_query_docs", "mcp__mcp_search_search"]) {
 		expect(matcherNames(claudeNamesForCall("write", { path: `xd://${device}` })).some(n => matcher.test(n))).toBe(true);
 		for (const response of ["401 Unauthorized invalid api key", { ok: true }]) {
 			const out = Bun.spawnSync(["python3", join(pluginRoot(), "hooks", "connector_credential_watch.py")], {

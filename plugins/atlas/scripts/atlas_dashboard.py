@@ -482,10 +482,8 @@ CONNECTOR_AUTH = {
         ["BLUMIRA_JWT_TOKEN"],
         ["BLUMIRA_CLIENT_ID", "BLUMIRA_CLIENT_SECRET"],
     ],
-    "cipp": [
-        ["CIPP_BASE_URL", "CIPP_API_KEY"],
-        ["CIPP_BASE_URL", "CIPP_TENANT_ID", "CIPP_CLIENT_ID", "CIPP_CLIENT_SECRET"],
-    ],
+    # URL-only remote MCP server: the oauth client id has a shipped default.
+    "cipp": [["CIPP_MCP_URL"]],
     "connectwise": [
         [
             "CW_MANAGE_COMPANY_ID",
@@ -551,7 +549,8 @@ def _connector_status():
         env_map = cfg.get("env") or {}
         # user_config refs in ${user_config.foo}
         uc_refs = []
-        for v in env_map.values():
+        # remote servers (cipp) carry theirs in url and oauth.clientId, not env
+        for v in [*env_map.values(), cfg.get("url"), (cfg.get("oauth") or {}).get("clientId")]:
             if isinstance(v, str):
                 for m in re.finditer(r"\$\{user_config\.([a-z0-9_]+)\}", v):
                     if m.group(1) not in uc_refs:

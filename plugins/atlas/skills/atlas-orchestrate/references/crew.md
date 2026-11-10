@@ -5,15 +5,24 @@ parallel (a spec with one section per module, a feature that touches N
 independent files, a port of N modules). Use `atlas_mux.py spawn-team` for
 read-only and review teams (audit, explore, verify), where nothing is merged.
 
+## Contents
+
+- [Start it in one call](#start-it-in-one-call)
+- [What runs](#what-runs)
+- [Launch priority](#launch-priority)
+- [Plan](#plan)
+- [Why this shape](#why-this-shape)
+
 ## Start it in one call
 
 From a Claude session the entry point is the manual skill `/atlas:atlas-crew`,
 which takes the flags below (`/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py'
 --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q'`). Its body runs
 `atlas_crew.py run $ARGUMENTS --wait 100` as pre-executed shell, so the crew is
-running before the lead's first model call and the lead is one turn. If the
-summary has not appeared after 100 s it prints only the start line; run
-`atlas_crew.py wait --run <id>` as below. The direct call:
+running before the lead's first model call and the lead is one turn. Codex does
+not execute that dynamic skill line: run the direct command once with
+`--harness codex`. If the summary has not appeared after 100 s it prints only
+the start line; run `atlas_crew.py wait --run <id>` as below. The direct call:
 
 ```bash
 # spec-driven: one worker per file, each gets only its own spec section
@@ -22,6 +31,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run \
   --check 'python3 -m pytest -q' --model <model> --effort <effort> --wait 580
 # hand-written plan (see "Plan" below)
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run --plan plan.json --wait 580
+# Codex: add --harness codex to either run command
 ```
 
 Set the Bash timeout to 600000. `--wait` prints the final JSON summary on one line; if it
@@ -47,7 +57,7 @@ starting anything.
 | No sleeping  | PreToolUse denies `sleep N` with N >= 3 s; workers wait with `irc wait --from <peer> --timeout <s>` or `irc check`. |
 | Fix rounds   | After all workers exit, the supervisor runs the global check and resumes only the owners of failing tests (`--fix-rounds`, default 2). Sharded final check: When the global check is a plain `pytest` command (no `\|`, `&&`, `;`, `>`) and the workers' `tests` name at least 2 existing files, the supervisor (round 0 and fix rounds) runs it as `min(ncpu, files)` parallel shards of those files, balanced by file size, plus one rest shard with `--ignore=<file>` for each so other tests still run (rest exit 5, nothing collected, counts as a pass). Failing shards' output comes first, so `route_failures` still sees the test file names; the round records `check_shards`. Reason: the 784-test `python3 -m pytest -q` took 3.95 s in one benchmark run and 8.5-8.9 s in two others (one test file had a 5.1 s test), after the last DONE. `ATLAS_CREW_SHARD=off` runs the command once. A test file is also skipped (round records `check_cached`) when its worker's standing DONE carries `digest`, `peer_digests` (its needs closure) and `test_digest` (its tests plus conftest.py/pytest.ini/pyproject.toml/setup.cfg/tox.ini) equal to the bytes now on disk and its `unit_check` is plain pytest (only `-q`, `-qq`, `-x`, `-p no:cacheprovider`, literal test files) (1.4-4.4 s on the critical path measured at 18-30 modules); `ATLAS_CREW_CHECK_CACHE=off` disables it. |
 | Early exit   | PostToolUse ends the worker's session right after a Bash call whose check posted DONE and whose check, re-run by the hook, passes: no final model turn. The re-run is skipped when `done_current` proves the DONE (stored `digest`) matches the owned files. |
-| Lean workers | Each worker is `claude -p` with its own session id, `--strict-mcp-config`, project settings only, tools `Bash,Edit,Write`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` and a short replacement system prompt. |
+| Lean workers | Claude (default `--harness claude`): `claude -p` with its own session id, `--strict-mcp-config`, project settings only, tools `Bash,Edit,Write`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` and a short replacement system prompt. Codex (`--harness codex`): `codex exec --json --sandbox workspace-write`, the same protocol in its prompt, and the emitted `thread.started` id saved under `sid/` so a fix round runs `codex exec resume <id>`; `turn.completed` counts as the result and its usage feeds the summary. Codex workers get no `crew_worker.py` hooks (`--settings` is Claude-only and `hooks/hooks.codex.json` does not wire them): no pushed channel lines, leases or Stop gate, so they poll with `irc read`; `irc check` and the supervisor's global check still gate DONE. Workers inherit the lead's environment minus the lead's session identity (`SCRUB_ENV`, `ATLAS_WORKER_*`, `CMUX_*`), so they authenticate exactly as the lead does. |
 
 ## Launch priority
 

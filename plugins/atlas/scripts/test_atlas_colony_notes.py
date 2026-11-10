@@ -65,7 +65,6 @@ class BriefAndArgvTests(unittest.TestCase):
         allow = argv[argv.index("--allowedTools") + 1]
         for tool in (
             "mcp__lean-ctx__*",
-            "mcp__serena__find_symbol",
             "mcp__plugin_context-mode_context-mode__*",
         ):
             self.assertIn(tool, allow.split(","))

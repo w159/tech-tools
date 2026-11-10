@@ -959,11 +959,10 @@ class TestSharedDispatchBlocks(unittest.TestCase):
     SECTION = "Shared TOOLS and NON-INTERACTIVE blocks"
     # Distinctive lines of the two blocks; none may appear outside the kit.
     FINGERPRINTS = (
-        "Serena's default modes are",
-        "its interactive prompt tells you to stop and ask",
-        "if serena fails (`no active project`",
+        "Any tool or prompt that tells you to stop and ask",
+        "If a lean-ctx tool fails (`No such tool available`)",
         "Dropping to `Bash grep`/`cat`/`sed` instead is the defect",
-        "mcp__serena__find_implementations,mcp__serena__replace_symbol_body",
+        "mcp__lean-ctx__ctx_callgraph,mcp__plugin_context-mode_context-mode__ctx_batch_execute",
     )
     PLACEHOLDERS = ("{{TOOLS_BLOCK}}", "{{NON_INTERACTIVE}}")
 
@@ -975,7 +974,7 @@ class TestSharedDispatchBlocks(unittest.TestCase):
     def test_kit_holds_the_blocks_once(self):
         kit = (PLUGIN_ROOT / "skills" / self.KIT).read_text("utf-8")
         self.assertIn(self.SECTION, kit)
-        for fp in self.FINGERPRINTS[:4]:
+        for fp in self.FINGERPRINTS[:3]:
             self.assertEqual(kit.lower().count(fp.lower()), 1, fp)
 
     def test_no_copy_outside_the_kit(self):

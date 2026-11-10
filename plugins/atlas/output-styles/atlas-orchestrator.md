@@ -112,12 +112,12 @@ drift). Workers post notes via `atlas_todo.py note`; you alone declare done.
 Subagents inherit neither this style nor the conversation, so every `atlas:*`
 prompt carries the literal deliverable, target paths, and a TOOLS block. TOOLS
 rule: name the code-navigation tools the harness provides (Claude Code:
-ToolSearch + serena/lean-ctx; omp: lean-ctx via xd:// devices). Fork for
+ToolSearch + lean-ctx; omp: lean-ctx via xd:// devices). Fork for
 atlas:planner, atlas:completeness-critic, atlas:docs-curator; fresh for
 atlas:verifier and atlas:explorer. Code-shipping runs MUST dispatch an agent for
 the change, then verify; Stop enforces this.
 
-Investigate via serena, lean-ctx, context-mode (noisy output) and claude-mem
+Investigate via lean-ctx, context-mode (noisy output) and claude-mem
 (recall), never an opening Bash grep/cat; with lean-ctx configured, native
 Grep/Glob are denied (`ctx_search`, `ctx_glob`, `ctx_read`).
 

@@ -503,6 +503,28 @@ def count_assets(ip):
     return counts
 
 
+def check_codex_wiring(ip):
+    """Confirm the Codex compatibility manifest exposes Atlas skills and hooks."""
+    path = os.path.join(ip, ".codex-plugin", "plugin.json")
+    if not os.path.isfile(path):
+        return False, ".codex-plugin/plugin.json absent"
+    try:
+        manifest = _load_json(path)
+        claude = _load_json(os.path.join(ip, ".claude-plugin", "plugin.json"))
+    except (OSError, ValueError) as exc:
+        return False, f"Codex manifest unreadable: {exc}"
+    problems = []
+    if manifest.get("name") != "atlas":
+        problems.append("name must be atlas")
+    if manifest.get("version") != claude.get("version"):
+        problems.append("version differs from .claude-plugin/plugin.json")
+    if manifest.get("skills") != "./skills/":
+        problems.append("skills must be ./skills/")
+    if manifest.get("hooks") not in ("./hooks/hooks.codex.json", "./hooks/hooks.json"):
+        problems.append("hooks must be ./hooks/hooks.codex.json or ./hooks/hooks.json")
+    return (False, "; ".join(problems)) if problems else (True, "skills and hooks exposed to Codex")
+
+
 def find_stale_assets(ip, clone, plugin_name, user_skills=None, user_agents=None):
     """Locate deprecated/renamed skill dirs and agent files that still exist.
 
@@ -779,7 +801,7 @@ def _repo_root(cwd):
 def check_context_tooling(root_path=None):
     """Detect whether this project's AGENTS.md carries the atlas-tooling
     routing block that tells agents to route through context-mode/lean-ctx/
-    claude-mem/serena instead of raw Read/Grep/Bash on source.
+    claude-mem instead of raw Read/Grep/Bash on source.
 
     Returns (ok, detail). ok True when the marker is present. A missing
     AGENTS.md or a pre-atlas-tooling AGENTS.md means every agent working in
@@ -940,7 +962,8 @@ def _todo_capture_tools(plugin_root):
         with open(os.path.join(plugin_root, "hooks", "event_dispatch.py"), encoding="utf-8") as f:
             m = re.search(r'\(\s*"todo_capture"\s*,\s*"([^"]+)"', f.read())
         if m:
-            return tuple(m.group(1).split("|"))
+            # the source spells regex escapes (collaboration\\.spawn_agent); check the literal tool name
+            return tuple(t.replace("\\", "") for t in m.group(1).split("|"))
     except OSError:
         pass
     return DISPLAY_TODO_FALLBACK_TOOLS
@@ -1849,6 +1872,10 @@ def _content_checks(add, ctx, ip, clone, plugin_name):
         counts["agents"] > 0 and counts["skills"] > 0,
         json.dumps(counts),
     )
+
+    # C7b: Codex must discover the same skills and lifecycle hooks from this plugin.
+    codex_ok, codex_detail = check_codex_wiring(ip)
+    add("codex-wiring", codex_ok, codex_detail)
 
     # C8: no deprecated/renamed asset may shadow the live set anywhere
     stale = find_stale_assets(ip, clone, plugin_name)

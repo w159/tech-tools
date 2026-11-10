@@ -138,8 +138,8 @@ test("tool names translate on word boundaries only", () => {
 test("phrase keys are gone; single-token names still translate across wraps", () => {
 	for (const key of Object.keys(MAP.claudeToOmp)) expect(key).not.toMatch(/\s/);
 	expect(Object.keys(MAP.claudeToOmp).filter(k => /^[A-Z]\w*$/.test(k)).length).toBeGreaterThan(0);
-	expect(translateToolNames("carries the ToolSearch\n+ serena/lean-ctx TOOLS block", MAP)).toBe(
-		"carries the xd:// device catalog\n+ serena/lean-ctx TOOLS block",
+	expect(translateToolNames("carries the ToolSearch\n+ lean-ctx TOOLS block", MAP)).toBe(
+		"carries the xd:// device catalog\n+ lean-ctx TOOLS block",
 	);
 	expect(translateToolNames("(`ToolSearch(\"select:TodoWrite\")`)", MAP)).toBe("(`xd:// device catalog(\"select:todo\")`)");
 });

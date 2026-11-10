@@ -13,7 +13,7 @@ Sometimes the root cause is not the code: it's that Claude Code is missing a too
 ## High-leverage gap checks
 
 ### Token & context economy (usually the biggest wins)
-- **Code-intelligence LSP plugins for active languages.** One LSP call replaces 3-10 file reads and gives automatic post-edit diagnostics. Detect languages from manifests; check `enabledPlugins` for the matching `*-lsp@claude-plugins-official` (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). Missing ones for a language in active use = recommend install + enable. (Note any `serena`/other symbol MCP already covering this, don't stack redundant nav.)
+- **Code-intelligence LSP plugins for active languages.** One LSP call replaces 3-10 file reads and gives automatic post-edit diagnostics. Detect languages from manifests; check `enabledPlugins` for the matching `*-lsp@claude-plugins-official` (e.g. `typescript-lsp`, `pyright-lsp`, `gopls-lsp`, `rust-analyzer-lsp`). Missing ones for a language in active use = recommend install + enable. (Note any symbol MCP already covering this, don't stack redundant nav.)
 - **`permissions.deny` Read rules for build artifacts** so they never enter context: `Read(./**/dist/**)`, `Read(./**/build/**)`, `Read(./**/*.generated.*)`, `Read(./**/node_modules/**)`, `Read(./**/.venv*/**)`, `Read(./vendor/**)`.
 - **`claudeMdExcludes`** (in `settings.local.json`) to skip CLAUDE.md for packages outside the task scope; and prefer launching from the relevant sub-package dir so sibling CLAUDE.md files don't load.
 - **`subagentDefaults.maxTurns` / `contextHandling`** set, so subagents are bounded and can fork context off the main thread.

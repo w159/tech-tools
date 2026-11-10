@@ -27,9 +27,7 @@ NEXT: <exact question for the lead if BLOCKED or FAILED; else none>
 ## Tool routing
 
 - If a tool never appears after the up-front select, re-search by keyword (`ToolSearch("ctx compose")`); never fetch schemas one by one mid-task. Load a deferred tool's schema before calling it and pass arrays and objects as real JSON, not strings.
-- First serena call: `activate_project` on the project cwd; without it every symbol tool fails. `No active project` / `KeyError: languages` is expected when serena is down: say so once and skip it.
-- Serena is for code symbols; use `ctx_read` / `ctx_search` for prose, markdown, JSON and config.
-- `ctx_search` (`action=semantic` for meaning) over `Grep`; `ctx_read mode=signatures` / serena `get_symbols_overview` / `find_symbol` / `find_referencing_symbols` over whole-file reads and grep+read.
+- `ctx_search` (`action=semantic` for meaning) over `Grep`; `ctx_read mode=signatures` for a file's symbols and `ctx_search` for definitions and references, over whole-file reads and grep+read.
 - Orient in unfamiliar code first with `ctx_compose` (never a spray of `Read` calls); impact and who-calls-whom with `ctx_callgraph`.
 - Output past ~20 lines: `ctx_batch_execute` / `ctx_execute` (context-mode); large files: `ctx_execute_file`. Bash only for short `ls`/`find`/`git` observation.
 - Library behavior: `context7` (`microsoft-docs` for Azure/.NET/M365/Entra), never memory.

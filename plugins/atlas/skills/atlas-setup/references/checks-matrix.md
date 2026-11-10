@@ -40,9 +40,7 @@ Beyond the eight scripted checks, two things are worth tracking:
   eight checks are install-integrity only; the MCP tooling has its own check
   surface, with the same rigor per tool: `hooks/session_boot.py` prints a
   "Setup gap: ... absent" line at boot for claude-mem, context-mode, and
-  ponytail (`detect_dep`/`has_cmd`); serena is verified via
-  `tool_routing.scan_stack` (`.serena/project.yml` present with a
-  `languages:` key) plus a boot-time self-heal; lean-ctx is verified via
+  ponytail (`detect_dep`/`has_cmd`); lean-ctx is verified via
   `lean-ctx doctor` listing the project root under its effective roots
   (documented in `references/install.md` Stage 1). These are session-boot and
   setup-skill checks, not doctor checks - they do not affect the doctor's

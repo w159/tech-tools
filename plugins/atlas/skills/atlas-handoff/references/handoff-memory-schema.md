@@ -1,7 +1,7 @@
 # Handoff Memory Schema
 
-The structured shape of a handoff record, for storage in Serena project
-memory or an on-disk file. The schema is the contract a fresh session
+The structured shape of a handoff record, for storage in the project's
+memory store or an on-disk file. The schema is the contract a fresh session
 relies on to resume without re-discovery.
 
 ## Fields
@@ -25,15 +25,10 @@ relies on to resume without re-discovery.
 
 ## Storage locations (in priority order)
 
-1. **serena project memory** - if serena has an active project, compose the
-   record from the field schema above and store it with `write_memory`.
-   Key: `handoff/<topic-slug>`. Retrieve with `list_memories` / `read_memory`.
-   (serena 1.6 has no `prepare_for_new_conversation` tool; earlier versions of
-   this doc named one, which is a call that fails.)
-2. **Project docs directory** - write to `docs/handoffs/<topic-slug>.md`
+1. **Project docs directory** - write to `docs/handoffs/<topic-slug>.md`
    if the project keeps a docs tree.
-3. **Project memory store** - write to the project's declared memory
-   location if neither of the above is available.
+2. **Project memory store** - write to the project's declared memory
+   location if the project keeps no docs tree.
 
 If you cannot tell where the project keeps memory or docs, ask once,
 then proceed.

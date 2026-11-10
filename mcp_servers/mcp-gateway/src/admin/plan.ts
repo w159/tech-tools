@@ -67,7 +67,7 @@ function stringList(v: unknown, where: string, problems: string[], opts: { nonEm
   return v as string[];
 }
 
-export function parseAnswers(text: string, org: OrgModel, connectorIds: readonly string[]): Answers {
+function parseAnswers(text: string, org: OrgModel, connectorIds: readonly string[]): Answers {
   let doc: unknown;
   try {
     doc = parseYaml(text);
@@ -177,18 +177,18 @@ export function uuidV5(name: string, namespace = ROLE_NAMESPACE): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function slugify(s: string): string {
+function slugify(s: string): string {
   return s
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
-export const GRAPH_APP_ID = "00000003-0000-0000-c000-000000000000";
+const GRAPH_APP_ID = "00000003-0000-0000-c000-000000000000";
 // Delegated permission ids of Microsoft Graph, checked against the Graph permissions
 // reference (Delegated column of the openid, profile, offline_access and User.Read entries):
 // https://learn.microsoft.com/en-us/graph/permissions-reference
-export const GRAPH_SCOPES: ReadonlyArray<{ value: string; id: string }> = [
+const GRAPH_SCOPES: ReadonlyArray<{ value: string; id: string }> = [
   { value: "openid", id: "37f7f235-527c-4136-accd-4a02d197296e" },
   { value: "profile", id: "14dad69e-099b-42c9-810b-d002981feec1" },
   { value: "offline_access", id: "7427e0e9-2fba-42fe-b0c0-848c9e6a8182" },

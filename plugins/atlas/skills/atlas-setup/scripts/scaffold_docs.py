@@ -104,11 +104,11 @@ source or shell out for things these tools already do:
 - **context-mode** -- context-window protection for noisy output (build/test
   logs, large command output, web fetches). Route anything over ~20 lines
   through it instead of raw shell into context.
-- **serena** + **lean-ctx** -- the code-nav pair for this tree. serena for
-  code symbols (definitions, references, call graphs); lean-ctx for shaped
-  file/tree access, search, and edits on everything else (prose, config,
-  markdown). Native Read/Grep on source is a fallback only when both are
-  unreachable, never a first choice.
+- **lean-ctx** -- code navigation for this tree: `ctx_compose` to orient,
+  `ctx_search` and `ctx_read` (signatures/map modes) for definitions and
+  references, plus shaped file/tree access, search, and edits on everything
+  else (prose, config, markdown). Native Read/Grep on source is a fallback
+  only when lean-ctx is unreachable, never a first choice.
 - **ponytail** -- simplicity discipline; keep changes minimal and avoid
   speculative abstraction.
 
@@ -119,7 +119,7 @@ cache-hit ratio, per-tool error rate).
 
 CLAUDE_TOOLING_BLOCK = """<!-- atlas-tooling -->
 See `AGENTS.md`'s Tool Routing section (canonical, shared) for the
-claude-mem / context-mode / serena+lean-ctx / ponytail tooling bar this
+claude-mem / context-mode / lean-ctx / ponytail tooling bar this
 project expects every agent to use. Nothing Claude-Code-specific to add
 here; do not duplicate it.
 <!-- /atlas-tooling -->"""
@@ -533,7 +533,7 @@ def main(argv: list) -> int:
     root_ok = scaffold_named_files(repo_root, ROOT_FILES)
 
     # Tool-routing block: keeps AGENTS.md/CLAUDE.md carrying the current
-    # claude-mem/context-mode/serena+lean-ctx/ponytail routing rules,
+    # claude-mem/context-mode/lean-ctx/ponytail routing rules,
     # inserted on first scaffold and replaced (upgraded) on every re-run.
     tooling_ok = True
     for name, block in TOOLING_BLOCKS.items():

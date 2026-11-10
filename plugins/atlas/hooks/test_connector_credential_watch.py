@@ -168,7 +168,7 @@ class CredentialWatchFalsePositives(unittest.TestCase):
             "mcp__lean_ctx_ctx_read",
             "mcp__context_mode_context_mode_ctx_execute",
             "mcp__claude_mem_mcp_search_search",
-            "mcp__serena_find_symbol",
+            "mcp__lean_ctx_ctx_search",
         ):
             r = _run(self._p("HTTP 401 Unauthorized", tool=tool), home=self.home)
             self.assertEqual(r.stdout.strip(), "", tool)
@@ -302,14 +302,14 @@ class ConnectorCredentialWatch(unittest.TestCase):
         self.assertIn("STALE CREDENTIAL", later.stdout)
 
     def test_content_returning_server_never_warns(self):
-        """lean-ctx/context-mode/serena return FILE CONTENT. Reading this very
+        """lean-ctx/context-mode/claude-mem return FILE CONTENT. Reading this very
         hook, or grepping the connector sources, puts "Invalid Token" and
         "Unauthorized" in the response body. Warning there would inject a false
         restart order mid-task -- the nudge-in-subagent-context defect again."""
         for tool in (
             "mcp__lean-ctx__ctx_read",
             "mcp__plugin_context-mode_context-mode__ctx_execute",
-            "mcp__serena__find_symbol",
+            "mcp__lean-ctx__ctx_search",
             "mcp__plugin_claude-mem_mcp-search__search",
             "mcp__context7__query-docs",
         ):

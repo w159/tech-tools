@@ -274,7 +274,6 @@ class MainTests(unittest.TestCase):
         self.assertIn("playwright", ids)
         self.assertIn("ui-ux-pro-max", ids)
         self.assertIn("context7", ids)  # dep_count >= 8
-        self.assertIn("serena", ids)
         self.assertIn("lean-ctx", ids)
         self.assertIn("fallow", ids)
         self.assertIn("fallow-mcp", ids)
@@ -441,7 +440,6 @@ class InstalledTests(unittest.TestCase):
         ids = self.ids()
         for want in (
             "claude-mem",
-            "serena",
             "lean-ctx",
             "fallow",
             "fallow-mcp",
@@ -464,7 +462,7 @@ class InstalledTests(unittest.TestCase):
         )
         write(
             os.path.join(self.home, ".claude.json"),
-            json.dumps({"mcpServers": {"serena": {}, "lean-ctx": {}, "fallow": {}}}),
+            json.dumps({"mcpServers": {"lean-ctx": {}, "fallow": {}}}),
         )
         write(
             os.path.join(self.proj, ".mcp.json"),
@@ -476,7 +474,6 @@ class InstalledTests(unittest.TestCase):
             ids = self.ids()
         for installed in (
             "claude-mem",
-            "serena",
             "lean-ctx",
             "fallow",
             "fallow-mcp",

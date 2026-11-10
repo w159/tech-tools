@@ -48,6 +48,8 @@ export class FakeEntraGraph {
   // Token the Graph resource endpoints accept.
   acceptedToken = GRAPH_TOKEN;
   tokenExpiresIn = 3600;
+  // When set, the managed identity endpoint answers with this status and no token.
+  miStatus?: number;
   requests: RecordedRequest[] = [];
 
   async start(): Promise<void> {
@@ -101,6 +103,7 @@ export class FakeEntraGraph {
 
     // Managed identity endpoint: GET with X-IDENTITY-HEADER, api-version, resource.
     if (rec.method === "GET" && url.pathname === "/msi/token") {
+      if (this.miStatus !== undefined) return send(res, this.miStatus, { error: "identity_unavailable" });
       if (req.headers["x-identity-header"] !== MI_HEADER || url.searchParams.get("api-version") !== "2019-08-01") {
         return send(res, 400, { error: "bad_request" });
       }
@@ -148,7 +151,12 @@ export class FakeEntraGraph {
       }
       if (rec.method === "GET" && !userMatch[2]) return send(res, 200, { id: userMatch[1], accountEnabled: user.enabled, ...(user.sessionsValidFrom === "" ? {} : { signInSessionsValidFromDateTime: user.sessionsValidFrom ?? "2020-01-01T00:00:00Z" }) });
       if (rec.method === "POST" && userMatch[2] === "/checkMemberGroups") {
-        const ids = (JSON.parse(body) as { groupIds?: string[] }).groupIds ?? [];
+        let ids: string[];
+        try {
+          ids = (JSON.parse(body) as { groupIds?: string[] }).groupIds ?? [];
+        } catch {
+          return send(res, 400, { error: { code: "Request_BadRequest" } });
+        }
         if (ids.length > 20) return send(res, 400, { error: { code: "Request_BadRequest" } });
         return send(res, 200, { value: ids.filter((g) => user.groups.includes(g)) });
       }

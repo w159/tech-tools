@@ -83,6 +83,10 @@ class TestConnectorsWiring(unittest.TestCase):
     def test_mcp_server_runs_vendored_bundle_through_env_preloader(self) -> None:
         for name, entry in self.connectors.items():
             server = self.mcp_servers[name]
+            if "url" in server:
+                # Remote MCP server (cipp): nothing is launched locally.
+                self.assertNotIn("command", server, name)
+                continue
             if entry.name == "server.mjs":
                 self.assertEqual(
                     server.get("command"),
@@ -136,6 +140,13 @@ class TestConnectorsWiring(unittest.TestCase):
             "every ${user_config.<key>} in .mcp.json must be declared in plugin.json",
         )
 
+    def _oauth_client_id_keys(self) -> set[str]:
+        found: set[str] = set()
+        for server in self.mcp_servers.values():
+            client_id = (server.get("oauth") or {}).get("clientId", "")
+            found.update(_INTERPOLATION_RE.findall(client_id))
+        return found
+
     def test_every_user_config_key_defaults_to_empty_string(self) -> None:
         bad: list[str] = []
         for key, spec in self.user_config.items():
@@ -143,6 +154,9 @@ class TestConnectorsWiring(unittest.TestCase):
             if spec.get("type") == "boolean":
                 continue
             default = spec.get("default")
+            # A remote server's oauth client id is public and ships with a default.
+            if key in self._oauth_client_id_keys():
+                continue
             if default != "":
                 bad.append(f"{key}={default!r}")
         self.assertEqual(

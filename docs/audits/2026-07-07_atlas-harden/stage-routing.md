@@ -5,7 +5,7 @@ Edit target: `plugins/atlas/skills/atlas-engine/references/capability-routing.md
 ## What changed
 
 1. **Added three Step 2 rows** (after the `atlas-sextant` row, before the `code-reviewer` row):
-   - `Project boot / onboarding / configure tooling for a repo` -> `(orchestrator dispatches atlas-architect)` / `atlas-architect` / `serena`, hook/config wiring / sonnet
+   - `Project boot / onboarding / configure tooling for a repo` -> `(orchestrator dispatches atlas-architect)` / `atlas-architect` / `lean-ctx`, hook/config wiring / sonnet
    - `Multi-stage / multi-surface orchestration ...` -> `(this skill is the orchestrator itself - normally entered via its own skill trigger, not routed to from within a session)` / `atlas-engine` / whatever Step 1 discovers live / sonnet
    - `Choosing / stacking which skills to run for a goal or stack` -> `(orchestrator dispatches atlas-stacks)` / `atlas-stacks` / - / sonnet
 

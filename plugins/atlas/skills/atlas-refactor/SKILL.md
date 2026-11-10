@@ -35,7 +35,7 @@ Rules:
 - Behavior is frozen. Before refactoring any unit, capture its current behavior (a test, a sample run, or recorded input/output). After refactoring, prove the behavior is unchanged.
 - Incremental progress. Work in small independently verifiable steps. Run tests after every single step. Do not batch changes.
 - Clean execution. Fix in place. Delete dead code entirely; do not comment it out. No parallel version files (no file_v2).
-- Precision edits. Use symbol-level navigation and targeted edits rather than full-file rewrites (Serena or LSP where available).
+- Precision edits. Use symbol-level navigation and targeted edits rather than full-file rewrites (lean-ctx `ctx_read`/`ctx_search` or native LSP where available).
 
 Sequence:
 1. Analysis. Map the current structure and list specific problems with evidence (file and line numbers).

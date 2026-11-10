@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""atlas_crew -- a team of lean Claude workers in tmux that talk over an IRC channel.
+"""atlas_crew -- a team of lean coding-agent workers in tmux that talk over an IRC channel.
 
 The lead writes a plan (JSON) that splits the work by FILE OWNERSHIP, then runs it:
 
@@ -133,7 +133,7 @@ shell heredocs), run the code to verify it, and stay terse: no explanations, pla
 """
 
 PROTOCOL = """\
-You are one worker of an Atlas crew: several Claude sessions building one deliverable in parallel,
+You are one worker of an Atlas crew: several coding-agent sessions building one deliverable in parallel,
 each owning different files. You talk to the others on the team IRC channel.
 
 Channel commands (run them with Bash):
@@ -384,6 +384,8 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
             "PATH": f"{rundir / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
             # the worker's own hooks are the crew hooks; atlas's lead-side gates stay off in workers
             "ATLAS_CREW_WORKER": w["name"],
+            "ATLAS_WORKER_NAME": w["name"],
+            "ATLAS_MANDATES": "off",
             # no background shells: a stray `cat > f` with no input was moved to the background at
             # the 2-minute timeout and kept the finished worker alive for 9 minutes (live run).
             # With this set, a timed-out command is killed and its error goes back to the worker.
@@ -461,7 +463,19 @@ def worker_model(w: dict, meta: dict):
     return env if re.fullmatch(r"[A-Za-z0-9._-]+", env) else (w.get("model") or meta.get("model"))
 
 
-def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None) -> list:
+def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None, harness="claude") -> list:
+    if harness == "codex":
+        # codex has no replacement system prompt or --settings: the protocol rides in the prompt
+        argv = ["codex", "exec"]
+        if resume:
+            argv += ["resume", resume, "--json"]
+        else:
+            argv += ["--json", "--sandbox", "workspace-write"]
+        if model:
+            argv += ["--model", model]
+        if effort:
+            argv += ["--config", f'model_reasoning_effort="{effort}"']
+        return [*argv, BASE_PROMPT + CODEX_NOTE + PROTOCOL + prompt]
     argv = ["claude", "-p", "--output-format", "stream-json", "--verbose"]
     argv += ["--resume", resume] if resume else ["--session-id", sid]
     if model:
@@ -492,6 +506,13 @@ def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None) ->
     return argv
 
 
+CODEX_NOTE = """\
+Codex harness: "Bash" below means your shell tool; "Write" and "Edit" mean your file-editing tool
+(apply_patch). Peer messages are not pushed to you: run `irc read` between steps.
+
+"""
+
+
 RESULT_GRACE_S = 20
 
 
@@ -516,12 +537,38 @@ def _result_ok(log_path) -> bool:
     except OSError:
         return False
     for line in reversed(lines):
-        if '"type":"result"' in line.replace(" ", ""):
-            try:
-                return not json.loads(line).get("is_error")
-            except ValueError:
-                return False
+        kind = _event_type(line)
+        if kind == "result":
+            return not json.loads(line).get("is_error")
+        if kind == "turn.completed":  # codex exec --json
+            return True
+        if kind in ("turn.failed", "error"):
+            return False
     return False
+
+
+def _event_type(line: str) -> str:
+    if '"type"' not in line:
+        return ""
+    try:
+        event = json.loads(line)
+    except ValueError:
+        return ""
+    return str(event.get("type") or "") if isinstance(event, dict) else ""
+
+
+def _codex_thread_id(log_path) -> str | None:
+    try:
+        lines = Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        if _event_type(line) != "thread.started":
+            continue
+        tid = json.loads(line).get("thread_id")
+        if tid:
+            return str(tid)
+    return None
 
 
 def cmd_worker(a) -> int:
@@ -533,8 +580,10 @@ def cmd_worker(a) -> int:
     root = meta["root"]
     rnd = a.round
     sid_file = rundir / "sid" / f"{a.name}"
+    harness = meta.get("harness", "claude")
     if rnd == 0:
-        sid = str(uuid.uuid4())
+        # codex picks its own thread id; it is read from the log after the run
+        sid = "" if harness == "codex" else str(uuid.uuid4())
         sid_file.parent.mkdir(parents=True, exist_ok=True)
         sid_file.write_text(sid)
         prompt = (rundir / "prompts" / f"{a.name}.md").read_text(encoding="utf-8")
@@ -547,7 +596,16 @@ def cmd_worker(a) -> int:
         resume = sid
     model = worker_model(w, meta)
     effort = worker_effort(w, meta)
-    argv = worker_argv(model, effort, meta["settings"], sid, prompt, resume=resume, name=f"{meta['run_id']}-{a.name}")
+    argv = worker_argv(
+        model,
+        effort,
+        meta["settings"],
+        sid,
+        prompt,
+        resume=resume,
+        name=f"{meta['run_id']}-{a.name}",
+        harness=harness,
+    )
     env = worker_env(rundir, plan, w, root)
     if rnd:
         # a fix round gets a fresh gate budget
@@ -598,7 +656,7 @@ def cmd_worker(a) -> int:
             for line in proc.stdout:
                 log.write(line)
                 log.flush()
-                if reaper is None and '"type":"result"' in line.replace(" ", ""):
+                if reaper is None and _event_type(line) in ("result", "turn.completed"):
                     # the turn is over; a process still alive after the grace period is held open
                     # by something left running (a shell, a watcher), not by work
                     reaper = threading.Timer(RESULT_GRACE_S, _reap, (proc, log_path))
@@ -618,8 +676,12 @@ def cmd_worker(a) -> int:
                 if code != 0 and _result_ok(log_path):
                     code = 0  # reaped after a successful result: the work finished
         except FileNotFoundError:
-            log.write("claude not found on PATH\n")
+            log.write(f"{argv[0]} not found on PATH\n")
             code = 127
+    if harness == "codex":
+        sid = _codex_thread_id(log_path) or sid
+        if sid:
+            sid_file.write_text(sid)
     if feed is not None:
         try:
             feed.finish(code)
@@ -995,6 +1057,25 @@ def lead_session(flag=None) -> str:
         return ""
 
 
+GREEN_CHECK_TIMEOUT = 300
+
+
+def green_check_guard(plan: dict, root, timeout=GREEN_CHECK_TIMEOUT) -> None:
+    """Raise ValueError when a worker unit check already exits 0 before any work. crew_worker ends a worker as
+    soon as its check passes, so a check that is green at launch would end it mid-work and report DONE falsely."""
+    for w in plan["workers"]:
+        unit = (w.get("unit_check") or "").strip()
+        if not unit:
+            continue
+        code, _ = _run_check(unit, root, timeout=timeout)
+        if code == 0:
+            raise ValueError(
+                f"worker {w["name"]!r}: its check already passes before any work ({unit!r}), so the worker "
+                "would be ended at once and report DONE falsely; give it a check that fails until the task is "
+                "done, or pass --allow-green-check"
+            )
+
+
 def cmd_run(a) -> int:
     root = os.path.realpath(a.root or os.getcwd())
     try:
@@ -1005,6 +1086,8 @@ def cmd_run(a) -> int:
             a.plan = str(Path(root, ".atlas", "crew-plan.json"))
             Path(a.plan).write_text(json.dumps(auto_plan(root, a.spec, a.files, a.tests, a.check, a.goal), indent=1))
         plan = load_plan(a.plan)
+        if not getattr(a, "allow_green_check", False):
+            green_check_guard(plan, root)
     except (OSError, ValueError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}))
         return 2
@@ -1027,6 +1110,7 @@ def cmd_run(a) -> int:
         "plan": plan,
         "model": worker_model({}, {"model": a.model}),
         "effort": a.effort,
+        "harness": getattr(a, "harness", None) or "claude",
         "settings": worker_settings(rundir),
         "session": f"atlas-{run_id}",
         "lead_session": lead_session(getattr(a, "session", None)),
@@ -1541,12 +1625,20 @@ def usage_of(log: Path) -> dict:
         return {**t, "total": 0}
     with fh:
         for line in fh:
-            if '"type":"result"' not in line.replace(" ", ""):
+            kind = _event_type(line)
+            if kind == "turn.completed":
+                # codex exec --json: usage is per turn; input_tokens includes the cached part
+                usage = json.loads(line).get("usage") or {}
+                cached = int(usage.get("cached_input_tokens") or 0)
+                t["results"] += 1
+                t["turns"] += 1
+                t["input"] += max(int(usage.get("input_tokens") or 0) - cached, 0)
+                t["cache_read"] += cached
+                t["output"] += int(usage.get("output_tokens") or 0)
                 continue
-            try:
-                e = json.loads(line)
-            except ValueError:
+            if kind != "result":
                 continue
+            e = json.loads(line)
             t["results"] += 1
             t["cost_usd"] = float(e.get("total_cost_usd") or 0)
             t["turns"] += int(e.get("num_turns") or 0)
@@ -1723,11 +1815,17 @@ def parser():
     r.add_argument("--root")
     r.add_argument("--model")
     r.add_argument("--effort")
+    r.add_argument("--harness", choices=("claude", "codex"), default="claude")
     r.add_argument("--run-id")
     r.add_argument("--session", help="lead session id stamped into run.json as lead_session")
     r.add_argument("--fix-rounds", type=int, default=2)
     r.add_argument("--timeout", type=float, default=3600)
     r.add_argument("--no-tmux", action="store_true")
+    r.add_argument(
+        "--allow-green-check",
+        action="store_true",
+        help="launch even when a worker check already passes before any work (it would end that worker at once)",
+    )
     r.add_argument(
         "--wait",
         type=float,

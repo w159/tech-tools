@@ -44,7 +44,7 @@ The script prints one PASS/FAIL line per check and exits 0 (healthy) or 1
 
 **Scope of `--fix`:** it repairs plugin/marketplace install state only. It
 does not repair MCP registrations or installations - a missing or
-misregistered claude-mem, context-mode, ponytail, serena, or lean-ctx entry
+misregistered claude-mem, context-mode, ponytail, or lean-ctx entry
 is out of its reach for all of them equally (there is no per-tool MCP
 remediation path in the doctor). The repair for those is the install
 command from `discover_capabilities.py` / `references/install.md` Stage 1,

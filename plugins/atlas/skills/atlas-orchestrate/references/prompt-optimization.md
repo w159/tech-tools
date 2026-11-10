@@ -42,7 +42,7 @@ contract, not a paragraph of hope. The mechanics live in `references/subagent-ki
 - **Specify the deliverable and the evidence**, not the vibe. "Return a findings entry with
   `file:line` + the failing test output" beats "look into the bug."
 - **Pass paths and symbol names, never file bodies.** Every byte you paste is context the
-  subagent spends before it starts. Hand it `serena`/LSP entry points and let it pull what it
+  subagent spends before it starts. Hand it lean-ctx/LSP entry points and let it pull what it
   needs.
 - **Cut everything the agent can derive itself.** Its prompt is its entire system prompt; trim
   to GOAL - CONTEXT it can't derive - TOOLS - SUCCESS CRITERIA - OUT OF SCOPE - REPORT shape.
@@ -51,7 +51,7 @@ contract, not a paragraph of hope. The mechanics live in `references/subagent-ki
   `subagent-kit.md`, name table in `capability-routing.md` Step 2b). Name real tools -
   `find_symbol`, `ctx_compose`, `ctx_batch_execute`, `query-docs` - and tell the agent to
   `ToolSearch` for their schemas first, because deferred MCP tools are not in its tool list until
-  it does. "Use the right tools" and "use serena" both produce an agent that quietly falls back to
+  it does. "Use the right tools" and "use lean-ctx" both produce an agent that quietly falls back to
   `Read`/`Grep`; that is the failure this line exists to prevent.
 - **State the model and effort deliberately** (per the tier tables in `SKILL.md`). Sonnet is the
   ceiling for `atlas:*` companions and effort is `low` for spec-executing roles - which is only

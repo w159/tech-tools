@@ -41,9 +41,6 @@ Every MCP tool below is an `xd://` device: call it with `write`, `path` = the de
     xd://mcp__lean_ctx_ctx_read
     xd://mcp__lean_ctx_ctx_search
     xd://mcp__lean_ctx_ctx_glob
-    xd://mcp__serena_activate_project
-    xd://mcp__serena_get_symbols_overview
-    xd://mcp__serena_find_symbol
     xd://mcp__context_mode_context_mode_ctx_batch_execute
     xd://mcp__context_mode_context_mode_ctx_execute
 
@@ -51,7 +48,7 @@ Do not probe devices one by one mid-task - that is how runs fall back to noisy `
 
 Read the files your steps name with `ctx_read`. Run a command whose output is longer than 20 lines with `ctx_batch_execute`. Edit only the file and text a step names.
 
-**When serena is down, lean-ctx is the fallback - not Bash.** Say so once and use `ctx_read` and `ctx_search`. `Bash grep` / `cat` / `sed` / `head` is a defect, not a fallback.
+**lean-ctx is the code-navigation path - not Bash.** Use `ctx_read` and `ctx_search`. `Bash grep` / `cat` / `sed` / `head` is a defect, not a fallback.
 
 ## Communication
 - Blocked, or a step collides with something a sibling owns: send one short message to the lead, then stop. Use `write` to `agent://<lead name from your dispatch>` (`agent://Main` if none is given). Say the step number, what you saw, and the question.

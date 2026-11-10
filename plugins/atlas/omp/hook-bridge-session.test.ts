@@ -111,7 +111,7 @@ test("claudeMcpName splits on the longest known server, accepts the xd:// form, 
 	expect(claudeMcpName("mcp__gcloud_list")).toBe("mcp__gcloud__list");
 	expect(claudeMcpName("mcp__ciphertext_tool")).toBe("mcp__ciphertext_tool"); // `cipp_` is not a prefix of `ciphertext_`
 	expect(claudeMcpName("mcp__cipp_")).toBe("mcp__cipp_"); // an empty tool is not a split
-	expect(claudeMcpName("mcp__serena_find_symbol")).toBe("mcp__serena_find_symbol");
+	expect(claudeMcpName("mcp__context7_query_docs")).toBe("mcp__context7_query_docs");
 	expect(claudeMcpName("bash")).toBe("bash");
 	expect([...CONNECTOR_SERVERS].sort()).toEqual(["cipp", "connectwise", "falcon-mcp", "gcloud", "plaid", "plugin_armada"]);
 });
@@ -363,7 +363,7 @@ async function thresholdScenario(leanCtx: boolean) {
 		}
 		const firstDeny = verdicts.findIndex(v => v.blocked);
 
-		const TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
+		const TOOLS = "TOOLS: first load them with ToolSearch, then use lean-ctx for code navigation.\n";
 		const SPEC = "GOAL: g\nDELIVERABLE: d\nSUCCESS CRITERIA: s\nOUT OF SCOPE: o\nSTOP CONDITIONS: c\nREPORT: r\nSCOPE: implement/low\n";
 		const dispatch = await call("task", { tasks: [{ name: "W", agent: "implementer", task: TOOLS + SPEC }] });
 		const afterReset = await inline(1);
@@ -440,7 +440,7 @@ async function expectSecondOffenseAndEdges(fire: Fire) {
 	expect(await fire("edit", { path: "docs/CHANGELOG.md", input: "x" })).toBeUndefined();
 }
 
-const SPEC_TOOLS = "TOOLS: first load them with ToolSearch, then use serena and lean-ctx for code navigation.\n";
+const SPEC_TOOLS = "TOOLS: first load them with ToolSearch, then use lean-ctx for code navigation.\n";
 const SCOPED = "SCOPE: fix/low\n";
 const WELL_FORMED_SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\nREPORT: structured result\nSCOPE: fix/low\n";
 const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
@@ -462,7 +462,7 @@ test("REAL dispatch_tripwire through the bridge: first spec-less call is advisor
 
 // omp has no ToolSearch: its tools are xd:// devices. The Claude tripwire asks every atlas dispatch for a `ToolSearch`
 // load step, so a faithful omp lead could never satisfy it and was pushed into writing Claude-only wording (and into
-// activating serena). The bridge sets ATLAS_TOOLKIT_LOAD=omp so only that half of the requirement is waived.
+// loading schemas it has no tool for). The bridge sets ATLAS_TOOLKIT_LOAD=omp so only that half of the requirement is waived.
 test("REAL dispatch_tripwire through the bridge: an omp-shaped TOOLS block passes, a dispatch naming no navigation tool is still denied", async () => {
 	await withSandbox(async root => {
 		const runstate = join(import.meta.dir, "..", "scripts", "omp_runstate.py");
@@ -480,7 +480,7 @@ test("REAL dispatch_tripwire through the bridge: an omp-shaped TOOLS block passe
 			return undefined;
 		};
 		const SPEC = "GOAL: fix add\nDELIVERABLE: patched src/calc.py\nSUCCESS CRITERIA: pytest passes\nOUT OF SCOPE: docs\nSTOP CONDITIONS: tests green\nREPORT: structured result\nSCOPE: fix/low\n";
-		const OMP_TOOLS = "TOOLS: use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search); do not activate serena.\n";
+		const OMP_TOOLS = "TOOLS: use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search); no schema-load step.\n";
 		const task = (prompt: string) => ({ tasks: [{ name: "W", agent: "implementer", task: prompt }] });
 		expect(await fire(task(OMP_TOOLS + SPEC))).toBeUndefined();
 		expect(String((await fire(task(`read the files you need\n${SPEC}`)))?.reason)).toContain("missing the code-nav TOOLS block");
@@ -510,7 +510,7 @@ test("splitMcpDevice agrees with scripts/omp_transcript.py _split_mcp_xd on ever
 	const devices = [
 		"xd://mcp__lean_ctx_ctx_search", "xd://mcp__lean_ctx_ctx_shell", "xd://mcp__claude_mem_mcp_search_search",
 		"xd://mcp__context_mode_context_mode_ctx_execute", "xd://mcp__atlas_falcon_falcon_get_host_details", "xd://mcp__azure_azure_acr",
-		"xd://mcp__serena_find_symbol", "xd://mcp__microsoft_docs_microsoft_docs_search", "xd://mcp__plaid_search_documentation",
+		"xd://mcp__context7_query_docs", "xd://mcp__microsoft_docs_microsoft_docs_search", "xd://mcp__plaid_search_documentation",
 		"xd://mcp__unknownserver_thing", "xd://mcp__x", "xd://mcp__a_a", "xd://not_a_device", "xd://mcp__",
 	];
 	const script = "import json,sys; sys.path.insert(0, sys.argv[1]); import omp_transcript as o; print(json.dumps([o._split_mcp_xd(d) for d in json.loads(sys.argv[2])]))";
@@ -574,7 +574,7 @@ test("REAL dispatch_tripwire through the bridge: spec and TOOLS carried by the b
 			}
 			return undefined;
 		};
-		const SHARED = "TOOLS: use lean-ctx via xd://mcp__lean_ctx_ctx_search; do not activate serena.\nGOAL: implement the slice named below\nDELIVERABLE: the file\nSUCCESS CRITERIA: its tests pass\nOUT OF SCOPE: other files\nSTOP CONDITIONS: tests green\nREPORT: structured result\nSCOPE: fix/low\n";
+		const SHARED = "TOOLS: use lean-ctx via xd://mcp__lean_ctx_ctx_search; no schema-load step.\nGOAL: implement the slice named below\nDELIVERABLE: the file\nSUCCESS CRITERIA: its tests pass\nOUT OF SCOPE: other files\nSTOP CONDITIONS: tests green\nREPORT: structured result\nSCOPE: fix/low\n";
 		const items = [{ name: "A", agent: "implementer", task: "# Target\nsrc/a.py" }, { name: "B", agent: "implementer", task: "# Target\nsrc/b.py" }];
 		expect(await fire({ context: SHARED.replace("GOAL: implement the slice named below\n", "").concat("GOAL: g\n"), tasks: items })).toBeUndefined(); // spec only in context: bounded
 		expect(String((await fire({ tasks: items }))?.reason)).toContain("missing the code-nav TOOLS block"); // same items, no context: still denied

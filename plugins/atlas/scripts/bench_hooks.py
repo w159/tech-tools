@@ -167,6 +167,9 @@ def main_bytes(root, show=False):
         base_env = {k: os.environ[k] for k in ("PATH", "LANG", "LC_ALL", "PYTHONHASHSEED") if k in os.environ}
         env = dict(base_env, CLAUDE_PLUGIN_ROOT=root, ATLAS_HOME=home, HOME=home, TMPDIR=scratch,
                    ATLAS_BURST_SECS="99", ATLAS_GATES="always",  # always: the scratch dir is not a "real project"
+                   # off: with tmux on PATH the tripwire denies every in-process working dispatch, so the
+                   # brief and burst-advisory bytes this table measures only exist on the advisory path
+                   ATLAS_TEAM_GATE="off",
                    ATLAS_DB=os.path.join(tmp, "atlas.db"), CLAUDE_PROJECT_DIR=cwd,
                    ATLAS_HOOKSTATE_DIR=os.path.join(tmp, "hookstate"),
                    ATLAS_CONTRACT_GATE_DIR=os.path.join(tmp, "markers"))

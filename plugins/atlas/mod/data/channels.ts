@@ -9,7 +9,7 @@ const MAX_LINE = 110;
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
 /** Board ts as a string the rest of the mod can rely on: ISO when parseable, '' when absent. */
-function isoTs(ts: unknown): string {
+export function isoTs(ts: unknown): string {
 	if (typeof ts === 'number' && Number.isFinite(ts)) {
 		const ms = ts < 1e12 ? ts * 1000 : ts; // epoch seconds vs ms
 		const d = new Date(ms);
@@ -126,7 +126,9 @@ export async function readRoster(
 	}
 	const channels = (reg as { channels?: Record<string, unknown> } | undefined)?.channels;
 	if (!channels || typeof channels !== 'object') return { channel: null, members: [] };
-	for (const name of candidates) {
+	for (const candidate of candidates) {
+		// Real keys are "<folder>@<branch>/lead-<s6>": a bare "lead-<s6>" candidate matches by suffix.
+		const name = candidate in channels ? candidate : Object.keys(channels).find((k) => k.endsWith(`/${candidate}`)) ?? candidate;
 		const members = (channels[name] as { members?: unknown } | undefined)?.members;
 		if (!Array.isArray(members)) continue;
 		return {

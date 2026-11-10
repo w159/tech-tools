@@ -481,7 +481,7 @@ class ColonyReaderRoutingTest(_ColonyDb):
         # a write to any other xd:// device (or a repo file) is not a ctx route
         self.assertFalse(
             atlas_doctor._colony_is_ctx_call(
-                "write", '{"path": "xd://mcp__serena_find_symbol", "content": "{}"}'
+                "write", '{"path": "xd://mcp__context7_query_docs", "content": "{}"}'
             )
         )
         self.assertFalse(

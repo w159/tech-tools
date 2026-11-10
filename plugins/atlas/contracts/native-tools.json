@@ -9,7 +9,7 @@
       ".md"
     ]
   },
-  "ompToolStateDirs": [".serena", ".lean-ctx", ".context-mode", ".fallow", ".supermemory", ".taskmaster", ".scratch", ".agents"],
+  "ompToolStateDirs": [".lean-ctx", ".context-mode", ".fallow", ".supermemory", ".taskmaster", ".scratch", ".agents"],
   "kinds": {
     "search": {
       "claude": "Grep",

@@ -854,7 +854,7 @@ class AgentTierContract(unittest.TestCase):
         )
 
     def test_every_agent_routes_to_concrete_mcp_tools(self):
-        """Prose like "use serena" is why no agent ever called it. Names must be callable."""
+        """Prose like "use lean-ctx" is why no agent ever called it. Names must be callable."""
         bad = []
         for path in _agent_files():
             body = path.read_text(encoding="utf-8")
@@ -866,7 +866,7 @@ class AgentTierContract(unittest.TestCase):
                 bad.append("%s: names no context-mode/lean-ctx tool" % path.name)
         self.assertEqual(bad, [], "agents with no concrete tool routing: %s" % bad)
 
-    def test_code_agents_name_serena_symbol_tools(self):
+    def test_code_agents_name_code_navigation_tools(self):
         needs_symbols = {
             "explorer",
             "implementer",
@@ -880,16 +880,15 @@ class AgentTierContract(unittest.TestCase):
             if fm.get("name") not in needs_symbols:
                 continue
             body = path.read_text(encoding="utf-8")
-            if not any(t in body for t in ("find_symbol", "get_symbols_overview")):
+            if not any(t in body for t in ("ctx_search", "ctx_read")):
                 bad.append(path.name)
-        self.assertEqual(bad, [], "code agents with no serena symbol routing: %s" % bad)
+        self.assertEqual(bad, [], "code agents with no lean-ctx code navigation: %s" % bad)
 
     def test_agents_load_symbol_toolset_up_front(self):
         """Per-tool ToolSearch mid-task loses to Grep: by then the agent has fallen back.
 
-        One batched `select:` covering all three servers, loaded before the first
-        Read/Grep/Bash. Measured failure this guards: 12 subagent runs that loaded
-        serena alone, hit `KeyError: 'languages'`, and had nothing else in reach.
+        One batched `select:` covering lean-ctx and context-mode, loaded before the
+        first Read/Grep/Bash, so the code-navigation tools are in reach from turn one.
         """
         bad = []
         for path in _agent_files():
@@ -903,8 +902,6 @@ class AgentTierContract(unittest.TestCase):
                 bad.append("%s: no up-front batched toolset load" % path.name)
                 continue
             select = body[starts[0] : body.index('")', starts[0])]
-            if select.count("mcp__serena__") < 3:
-                bad.append("%s: loads serena tools one at a time" % path.name)
             if "mcp__lean-ctx__" not in select:
                 bad.append("%s: select loads no lean-ctx tool" % path.name)
             if "context-mode" not in select:
@@ -913,20 +910,16 @@ class AgentTierContract(unittest.TestCase):
             bad, [], "agents not loading the full toolset up front: %s" % bad
         )
 
-    def test_agents_name_lean_ctx_not_bash_as_the_serena_fallback(self):
-        """The measured defect: serena dies, the agent drops to Bash grep/cat/sed.
+    def test_agents_rule_out_bash_as_the_code_reader(self):
+        """The measured defect: agents drop to Bash grep/cat/sed to read code.
 
-        Across the last 12 recorded subagent runs, every serena call failed
-        (`No active project`, `KeyError: 'languages'`) and the agents fell back to
-        378 Bash calls -- 61 grep, 25 cat, 15 sed -- against 8 MCP calls total, with
-        zero lean-ctx calls because lean-ctx was never loaded. The agent spec must
-        name lean-ctx as the fallback and Bash-as-reader as the defect.
+        Recorded subagent runs made 378 Bash calls -- 61 grep, 25 cat, 15 sed --
+        against 8 MCP calls total, with zero lean-ctx calls because lean-ctx was
+        never loaded. The agent spec must name Bash-as-reader as the defect.
         """
         bad = []
         for path in _agent_files():
             body = path.read_text(encoding="utf-8")
-            if "lean-ctx is the fallback" not in body:
-                bad.append("%s: no serena-down fallback to lean-ctx" % path.name)
             if "`Bash grep`" not in body:
                 bad.append("%s: does not rule out Bash grep/cat/sed" % path.name)
         self.assertEqual(bad, [], "agents with an unusable fallback ladder: %s" % bad)
@@ -950,31 +943,9 @@ class AgentTierContract(unittest.TestCase):
             "dispatch template does not order the up-front ToolSearch",
         )
 
-    def test_agents_do_not_name_context_excluded_serena_tools(self):
-        """The claude-code context excludes these; naming them guarantees a failed call.
-
-        Empirically: every recorded search_for_pattern call errored for this reason.
-        """
-        excluded = (
-            "search_for_pattern",
-            "read_file",
-            "create_text_file",
-            "execute_shell_command",
-            "find_file",
-            "list_dir",
-        )
-        bad = []
-        for path in _agent_files():
-            body = path.read_text(encoding="utf-8")
-            for tool in excluded:
-                if tool in body:
-                    bad.append("%s: names context-excluded %s" % (path.name, tool))
-        self.assertEqual(bad, [], "agents naming excluded serena tools: %s" % bad)
-
-    def test_dispatch_brief_overrides_serena_interactive_mode(self):
-        """serena's default modes include `interactive`, which tells subagents to stop and
-        ask the user questions they cannot ask. No switch_modes tool exists in the
-        claude-code context, so the dispatch brief must carry the counter-instruction."""
+    def test_dispatch_brief_is_non_interactive(self):
+        """A subagent cannot ask the user questions; one that stops to ask stalls the
+        run. The dispatch brief must carry the counter-instruction."""
         kit = (
             PLUGIN_ROOT
             / "skills"
@@ -988,49 +959,9 @@ class AgentTierContract(unittest.TestCase):
         self.assertIn(
             "proceed without asking questions",
             kit,
-            "brief does not invoke serena's documented interactive-mode escape hatch",
+            "brief does not tell the subagent to proceed without asking",
         )
 
-    def test_no_atlas_file_routes_to_a_nonexistent_serena_tool(self):
-        """Naming a tool serena does not have is a guaranteed failed call.
-
-        atlas-handoff told agents to call `prepare_for_new_conversation` for
-        months; no such tool exists in serena 1.6. Same defect shape as "tools
-        named in prose are not callable" -- caught here instead of at runtime.
-        A mention is allowed only on a line that says the tool is gone.
-        """
-        gone = (
-            "prepare_for_new_conversation",
-            "think_about_task_adherence",
-            "think_about_whether_you_are_done",
-            "think_about_collected_information",
-            "summarize_changes",
-            "switch_modes",
-        )
-        bad = []
-        for path in sorted(PLUGIN_ROOT.rglob("*.md")):
-            # A changelog's job is to record removals; naming a tool it dropped is
-            # the entry, not a route to it.
-            if path.name == "CHANGELOG.md":
-                continue
-            for lineno, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), 1
-            ):
-                for tool in gone:
-                    if tool not in line:
-                        continue
-                    # A line disclaiming the tool is the documentation of its absence.
-                    if any(
-                        w in line for w in ("no ", "No ", "not exist", "gone", "fails")
-                    ):
-                        continue
-                    bad.append(
-                        "%s:%d routes to nonexistent %s"
-                        % (path.relative_to(PLUGIN_ROOT), lineno, tool)
-                    )
-        self.assertEqual(
-            bad, [], "atlas names serena tools that do not exist: %s" % bad
-        )
 
 
 def _fm_list(path: Path, key: str) -> list:
@@ -1160,112 +1091,6 @@ class TierTableContract(unittest.TestCase):
         haiku_row = next(l for l in doc.splitlines() if l.startswith("| **haiku**"))
         for role, (model, _) in TIER_TABLE.items():
             self.assertEqual(role in haiku_row, model == "haiku", role)
-
-
-class SerenaHealContract(unittest.TestCase):
-    """A `.serena/project.yml` without `languages:` takes every symbol tool down.
-
-    Serena >= 1.6 lists `languages` in ProjectConfig.FIELDS_WITHOUT_DEFAULTS, so a
-    pre-1.6 config raises `KeyError: 'languages'` on activation and every later call
-    answers `No active project ... known projects: []`. That is the single cause behind
-    every failed serena call in the recorded subagent transcripts.
-    """
-
-    def _boot(self):
-        sys.path.insert(0, str(HOOKS_DIR))
-        import session_boot
-
-        return session_boot
-
-    def _project(self, tmp, body):
-        root = Path(tmp)
-        (root / ".serena").mkdir()
-        (root / ".serena" / "project.yml").write_text(body, encoding="utf-8")
-        (root / "app.py").write_text("x = 1\n", encoding="utf-8")
-        return root
-
-    def test_adds_languages_when_missing(self):
-        boot = self._boot()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = self._project(tmp, 'project_name: "demo"\nencoding: "utf-8"\n')
-            msg = boot.heal_serena_project(str(root))
-            text = (root / ".serena" / "project.yml").read_text(encoding="utf-8")
-            self.assertIsNotNone(msg, "heal reported nothing on a broken config")
-            self.assertIn("languages:", text)
-            self.assertIn("python", text)
-
-    def test_is_idempotent(self):
-        boot = self._boot()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = self._project(tmp, 'project_name: "demo"\nlanguages: ["python"]\n')
-            before = (root / ".serena" / "project.yml").read_text(encoding="utf-8")
-            self.assertIsNone(boot.heal_serena_project(str(root)))
-            self.assertEqual(
-                before, (root / ".serena" / "project.yml").read_text(encoding="utf-8")
-            )
-
-    def test_language_servers_key_does_not_count_as_languages(self):
-        """The pre-1.6 key is `language_servers:`. Substring-matching it would leave
-        the config broken while reporting it healthy."""
-        boot = self._boot()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = self._project(tmp, 'project_name: "demo"\nlanguage_servers: []\n')
-            self.assertIsNotNone(boot.heal_serena_project(str(root)))
-            self.assertIn(
-                "languages:",
-                (root / ".serena" / "project.yml").read_text(encoding="utf-8"),
-            )
-
-    def test_no_config_is_left_alone(self):
-        """serena's own onboarding owns config creation; inventing one invites drift."""
-        boot = self._boot()
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertIsNone(boot.heal_serena_project(tmp))
-            self.assertFalse((Path(tmp) / ".serena").exists())
-
-    def test_unreadable_config_fails_open_when_open_raises(self):
-        """Root-independent: chmod 000 is ignored for euid 0, so force the OSError."""
-        boot = self._boot()
-        real_open = open
-
-        def deny_cfg(path, *a, **kw):
-            if str(path).endswith("project.yml"):
-                raise PermissionError(13, "denied", str(path))
-            return real_open(path, *a, **kw)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / ".serena").mkdir()
-            (root / ".serena" / "project.yml").write_text("x", encoding="utf-8")
-            with mock.patch("builtins.open", side_effect=deny_cfg):
-                self.assertIsNone(boot.heal_serena_project(str(root)))
-
-    @unittest.skipIf(
-        hasattr(os, "geteuid") and os.geteuid() == 0,
-        "chmod 000 does not block reads for root; covered by the mocked variant",
-    )
-    def test_unreadable_config_fails_open(self):
-        boot = self._boot()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / ".serena").mkdir()
-            (root / ".serena" / "project.yml").write_text("x", encoding="utf-8")
-            os.chmod(root / ".serena" / "project.yml", 0o000)
-            try:
-                self.assertIsNone(boot.heal_serena_project(str(root)))
-            finally:
-                os.chmod(root / ".serena" / "project.yml", 0o644)
-
-    def test_shipped_repo_config_is_valid(self):
-        """This repo's own config must not be the one that breaks its subagents."""
-        cfg = REPO_ROOT / ".serena" / "project.yml"
-        if not cfg.exists():
-            self.skipTest("no serena project config in this checkout")
-        lines = cfg.read_text(encoding="utf-8").splitlines()
-        self.assertTrue(
-            any(ln.startswith("languages:") for ln in lines),
-            "%s has no top-level languages: key -- serena will refuse to load it" % cfg,
-        )
 
 
 class NoiseContract(unittest.TestCase):
@@ -1474,9 +1299,9 @@ class InsightRemediationContract(unittest.TestCase):
         matcher = matchers[0]
         # Any mcp__* call: the dispatcher short-circuits on a success payload, and
         # connector_credential_watch itself skips content servers (lean-ctx,
-        # context-mode, serena, ...) whose results are file content.
+        # context-mode, context7, ...) whose results are file content.
         self.assertEqual(matcher, "mcp__.*")
-        for content_server in ("lean-ctx", "context-mode", "serena", "context7"):
+        for content_server in ("lean-ctx", "context-mode", "context7"):
             self.assertNotIn(content_server, matcher)
 
     def test_tripwire_brackets_verifier_dispatches(self):
@@ -1757,7 +1582,10 @@ class TodoBoardContract(unittest.TestCase):
             for ev, name, m in _dispatched()
             if ev == "PostToolUse" and name == "todo_capture"
         ]
-        self.assertEqual(matchers, ["TodoWrite|TaskCreate|TaskUpdate|Agent|Task|Bash"])
+        self.assertEqual(matchers, [
+                "TodoWrite|TaskCreate|TaskUpdate|Agent|Task|collaboration\\.spawn_agent|Bash"
+                "|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write"
+            ])
 
     def test_gate_falls_back_to_board_and_ledger(self):
         src = (HOOKS_DIR / "completion_gate_core.py").read_text(encoding="utf-8")

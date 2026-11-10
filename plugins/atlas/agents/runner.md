@@ -35,11 +35,11 @@ You execute; you never delegate. Nested dispatch tools (`Agent`, legacy `Task`, 
 ## Tools
 Load your tools first, with this one call, before any read or search:
 
-    ToolSearch("select:mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_glob,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute")
+    ToolSearch("select:mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_glob,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute")
 
 Read the files your steps name with `ctx_read`. Run a command whose output is longer than 20 lines with `ctx_batch_execute`. Edit only the file and text a step names.
 
-**When serena is down, lean-ctx is the fallback - not Bash.** Say so once and use `ctx_read` and `ctx_search`. `Bash grep` / `cat` / `sed` / `head` is a defect, not a fallback.
+**lean-ctx is the code-navigation path - not Bash.** Use `ctx_read` and `ctx_search`. `Bash grep` / `cat` / `sed` / `head` is a defect, not a fallback.
 
 ## Communication
 - Blocked, or a step collides with something a sibling owns: send one short message to the lead, then stop. On Claude Code use SendMessage to the lead by name. On omp use `write` to `agent://<lead name from your dispatch>` (`agent://Main` if none is given). Say the step number, what you saw, and the question.

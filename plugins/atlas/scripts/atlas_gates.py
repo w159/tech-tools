@@ -45,7 +45,6 @@ _LABELS = {
 _NATIVE = ("Read", "Grep", "Glob", "Bash")
 _CONTEXT_SERVERS = (
     ("lean-ctx", ("lean-ctx", "lean_ctx")),
-    ("serena", ("serena",)),
     ("context-mode", ("context-mode", "context_mode")),
     ("claude-mem", ("claude-mem", "claude_mem", "mcp-search")),
 )

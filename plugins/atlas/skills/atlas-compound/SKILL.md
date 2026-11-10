@@ -88,7 +88,7 @@ GOAL: Write the single learning artifact below to <target path> exactly as assem
 CONTEXT: Overlap verdict: <high-update|moderate-new|low-new> against <existing file if any>. Evidence backing: <findings.json row id / .atlas/evidence/ path / verifier verdict>. Corpus category: <category dir>. Target path: <path>. On update: bump last_updated to <date>, preserve existing frontmatter fields, merge into existing sections only.
 TOOLS (required):
   ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__lean-ctx__ctx_tree,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
-  (docs-curator's own brief loads the full set; if serena is unavailable, ctx_* is the fallback, never Bash grep)
+  (docs-curator's own brief loads the full set; ctx_* is the code-nav route, never Bash grep)
 {{NON_INTERACTIVE}}
 TOOLS ALLOWED: Read, Glob, Grep, Bash, Edit, Write (writable scope: docs/** + durable .atlas/ subfolders only)
 TOOLS FORBIDDEN: git push - package installs - source edits - .atlas/.run/ or .atlas/evidence/ writes

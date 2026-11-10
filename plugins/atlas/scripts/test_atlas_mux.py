@@ -264,6 +264,9 @@ class Base(unittest.TestCase):
         self.env["PATH"] = self.bin_dir + os.pathsep + self.env["PATH"]
         self.env["FAKE_TMUX_STATE"] = self.state
         self.env["FAKE_HARNESS_LOG"] = os.path.join(self.state, "log")
+        self.env["ATLAS_WORKER_FORWARD_ENV"] = ",".join(
+            ("FAKE_TMUX_STATE", "FAKE_HARNESS_LOG", "FAKE_STOP_EXIT", "FAKE_BG_EXIT", "FAKE_HARNESS_EXIT")
+        )
         # hermetic omp modelRoles: never read the real ~/.omp config
         self.omp_config = pathlib.Path(self.root) / "omp-config.yml"
         self.omp_config.write_text("modelRoles:\n")
@@ -1068,6 +1071,35 @@ class SpawnCodexTests(Base):
         self.assertTrue(argv[-1].endswith("# Task\ncolonize the pane"))
         log = pathlib.Path(self.root) / ".atlas" / ".run" / "logs" / "Cx.log"
         self.assertTrue(log.read_text().startswith("$ codex exec --json"))
+
+    def test_codex_sandbox_follows_tools_profile(self):
+        import atlas_mux
+
+        def sandbox(profile):
+            argv = atlas_mux.harness_argv(
+                "codex", "explorer", "task", None, None, "", "dontAsk",
+                tools_profile=profile,
+            )
+            return argv[argv.index("-s") + 1]
+
+        self.assertEqual("read-only", sandbox("read"))
+        self.assertEqual("workspace-write", sandbox("edit"))
+        self.assertEqual("workspace-write", sandbox("exec"))
+
+    def test_codex_body_translates_claude_only_tool_vocabulary(self):
+        import atlas_mux
+
+        body = (
+            'First ToolSearch("select:mcp__plugin_lean_ctx__ctx_read"). '
+            "Then SendMessage the lead and update TodoWrite."
+        )
+        prompt = atlas_mux.harness_argv(
+            "codex", "explorer", "task", None, None, body, "dontAsk",
+            tools_profile="read",
+        )[-1]
+        for token in ("ToolSearch", "SendMessage", "TodoWrite", "mcp__plugin_"):
+            self.assertNotIn(token, prompt)
+        self.assertIn("collaboration.send_message", prompt)
 
     def test_codex_needs_no_model_and_rejects_effort(self):
         self.make_agent("claude", "explorer", "---\nmodel: opus\neffort: high\n---\nb\n")
@@ -2156,15 +2188,17 @@ class ClaudeBgTests(Base):
         (worker_allow), so dontAsk does not auto-deny its verification commands."""
         base = ["Bash(python3 *atlas_todo.py*)", "mcp__claude_mem_mcp_search"]
         allow = self._bg_allow("--tools-profile", "exec")
-        for rule in base + ["Bash(pytest *)", "Read", "mcp__serena__find_symbol"]:
+        for rule in base + ["Bash(pytest *)", "Read", "mcp__lean-ctx__*"]:
             self.assertIn(rule, allow)
         self.assertNotIn("Edit", allow)
         # no profile: MCP navigation list plus the two base rules, nothing that runs commands
         allow = self._bg_allow()
-        for rule in base + ["mcp__serena__find_symbol"]:
+        for rule in base + ["mcp__lean-ctx__*"]:
             self.assertIn(rule, allow)
         self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base], allow)
         self.assertNotIn("Read", allow)
+        # the navigation list names only installed servers: no symbol-tool rules for an uninstalled MCP server
+        self.assertFalse([r for r in allow if "symbol" in r.lower()], allow)
 
     def test_spawn_claude_bg_is_unattended_safe_by_default(self):
         """Unattended bg workers must not hang on permission prompts: with no caller
@@ -2442,6 +2476,18 @@ class ClaudeBgTests(Base):
         self.assertTrue(data.get("ok"), data)
         # claude --bg is claude-only: omp falls back to panes (herdr is not running here)
         self.assertIn("new-window", "\n".join(_tmux_log_calls(self.state)))
+
+    def test_codex_without_pane_transport_fails_explicitly(self):
+        prompt = self.make_prompt("codex", "x")
+        rc, data, _, err = _run(
+            "spawn", "--run", "r1", "--harness", "codex", "--name", "Codex",
+            "--agent", "explorer", "--prompt-file", prompt, "--root", self.root,
+            env=self.bg_env(),
+        )
+        self.assertEqual(1, rc, (data, err))
+        self.assertFalse(data.get("ok"), data)
+        self.assertIn("requires tmux or herdr", data.get("error", ""))
+        self.assertNotIn("new-window", "\n".join(_tmux_log_calls(self.state)))
 
     def test_herdr_opt_in_still_takes_claude_workers(self):
         import test_atlas_herdr as th

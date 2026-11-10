@@ -44,7 +44,7 @@ class ContentServerTest(unittest.TestCase):
             "mcp__lean_ctx__ctx_read",
             "mcp__plugin_context-mode_context-mode__ctx_execute",
             "mcp__plugin_claude-mem_mcp-search__search",
-            "mcp__serena__find_symbol",
+            "mcp__lean-ctx__ctx_search",
             "mcp__context7__query-docs",
             "mcp__microsoft-docs__search",
         ):

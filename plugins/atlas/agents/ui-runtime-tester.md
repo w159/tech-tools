@@ -6,7 +6,7 @@ effort: low
 tier_allow: [sonnet]
 effort_allow: [low, medium]
 color: pink
-disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__serena__replace_symbol_body, mcp__serena__insert_after_symbol, mcp__serena__insert_before_symbol, mcp__serena__replace_content, mcp__serena__replace_in_files, mcp__serena__rename_symbol, mcp__serena__safe_delete_symbol, mcp__lean-ctx__ctx_patch, mcp__cmux-browser__browser_is_webview_focused, mcp__cmux-browser__browser_open_split, mcp__cmux-browser__browser_highlight, mcp__cmux-browser__browser_frame, mcp__cmux-browser__browser_tab, mcp__cmux-browser__browser_dialog, mcp__cmux-browser__browser_viewport, mcp__cmux-browser__browser_geolocation, mcp__cmux-browser__browser_offline, mcp__cmux-browser__browser_focus_webview, mcp__cmux-browser__browser_eval, mcp__cmux-browser__browser_cookies, mcp__cmux-browser__browser_storage, mcp__cmux-browser__browser_state, mcp__cmux-browser__browser_network, mcp__cmux-browser__browser_add_script, mcp__cmux-browser__browser_add_init_script, mcp__cmux-browser__browser_add_style, mcp__cmux-browser__browser_download, mcp__cmux-browser__browser_trace, mcp__cmux-browser__browser_screencast]
+disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__lean-ctx__ctx_patch, mcp__cmux-browser__browser_is_webview_focused, mcp__cmux-browser__browser_open_split, mcp__cmux-browser__browser_highlight, mcp__cmux-browser__browser_frame, mcp__cmux-browser__browser_tab, mcp__cmux-browser__browser_dialog, mcp__cmux-browser__browser_viewport, mcp__cmux-browser__browser_geolocation, mcp__cmux-browser__browser_offline, mcp__cmux-browser__browser_focus_webview, mcp__cmux-browser__browser_eval, mcp__cmux-browser__browser_cookies, mcp__cmux-browser__browser_storage, mcp__cmux-browser__browser_state, mcp__cmux-browser__browser_network, mcp__cmux-browser__browser_add_script, mcp__cmux-browser__browser_add_init_script, mcp__cmux-browser__browser_add_style, mcp__cmux-browser__browser_download, mcp__cmux-browser__browser_trace, mcp__cmux-browser__browser_screencast]
 ---
 
 # atlas:ui-runtime-tester
@@ -21,9 +21,9 @@ You prove what the app *actually does* when it runs. "The code looks right" is n
 
 Deferred MCP tools are absent until fetched. **First action:** one `ToolSearch` select (unmatched names are skipped):
 
-    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__serena__activate_project,mcp__serena__get_symbols_overview,mcp__serena__find_symbol,mcp__serena__find_referencing_symbols,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
+    ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search,mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_glob,mcp__plugin_context-mode_context-mode__ctx_batch_execute,mcp__plugin_context-mode_context-mode__ctx_execute,mcp__plugin_claude-mem_mcp-search__search,mcp__plugin_claude-mem_mcp-search__timeline,mcp__plugin_claude-mem_mcp-search__get_observations")
 
-**When serena is down, lean-ctx is the fallback - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
+**lean-ctx is the code-navigation path - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
 
 For a web page use `ctx_fetch_and_index` (context-mode), never `WebFetch`.
 

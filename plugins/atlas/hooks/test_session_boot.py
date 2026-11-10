@@ -762,31 +762,37 @@ class DaemonBootLineTest(MainInProcessTest):
         self.assertIn("ATLAS_HERDR_AUTOSTART=off", ctx)
 
 
-class HealSerenaProjectTest(unittest.TestCase):
-    def _root(self, files):
-        root = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, root, True)
-        os.makedirs(os.path.join(root, ".serena"))
-        cfg = os.path.join(root, ".serena", "project.yml")
-        with open(cfg, "w", encoding="utf-8") as fh:
-            fh.write("project_name: x\n")
-        for f in files:
-            open(os.path.join(root, f), "w").close()
-        return root, cfg
+class BootRoutingPresenceTest(unittest.TestCase):
+    """main() hands tool_routing.boot_lines only the supported code/context tools."""
 
-    def test_no_detected_language_leaves_config_untouched(self):
-        root, cfg = self._root(["README.md", "notes.txt"])
-        self.assertIsNone(session_boot.heal_serena_project(root))
-        with open(cfg, encoding="utf-8") as fh:
-            self.assertEqual(fh.read(), "project_name: x\n")
+    def test_present_set_is_limited_to_supported_tools(self):
+        import tool_routing
 
-    def test_detected_language_is_written_without_python_default(self):
-        root, cfg = self._root(["main.go", "util.go"])
-        self.assertIn("go", session_boot.heal_serena_project(root))
-        with open(cfg, encoding="utf-8") as fh:
-            text = fh.read()
-        self.assertIn('languages: ["go"]', text)
-        self.assertNotIn("python", text.split("languages:")[1])
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        seen = {}
+
+        def record(root=None, present=None):
+            seen["present"] = set(present or ())
+            return []
+
+        env = {
+            "ATLAS_DB": os.path.join(tmp, "atlas.db"),
+            "ATLAS_DASHBOARD": "off",
+            "ATLAS_COLONY": "off",
+        }
+        with (
+            mock.patch.object(tool_routing, "boot_lines", side_effect=record),
+            mock.patch.object(tool_routing, "mcp_configured", return_value=True),
+            mock.patch.object(session_boot, "has_cmd", return_value=True),
+        ):
+            run_main_inprocess({"session_id": "s1", "cwd": tmp}, env)
+        self.assertIn("present", seen)
+        self.assertLessEqual(seen["present"], {"lean-ctx", "context-mode", "claude-mem"})
+        self.assertIn("lean-ctx", seen["present"])
+
+    def test_boot_has_no_project_config_heal_entry_point(self):
+        self.assertEqual([n for n in dir(session_boot) if n.startswith("heal_")], [])
 
 
 class DocsStructureRepairTest(unittest.TestCase):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Hooks for an atlas crew worker (scripts/atlas_crew.py). Wired through the worker's own
---settings, so they run only inside crew workers, never in the lead or a normal session.
+"""Hooks for an atlas crew worker (scripts/atlas_crew.py). Hook commands and main()
+are guarded by ATLAS_CREW_WORKER, so they are inert in the lead and normal sessions.
 
   PostToolUse  push unread team-channel messages into the worker's context (additionalContext),
                so a peer's question or announcement lands at the worker's next tool boundary; and end
@@ -34,6 +34,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import atlas_env  # noqa: E402
+
+atlas_env.apply_store_env()
+
 import atlas_irc  # noqa: E402
 
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
@@ -301,6 +305,8 @@ def stop(payload) -> None:
 
 
 def main() -> int:
+    if not (os.environ.get("ATLAS_CREW_WORKER") or "").strip():
+        return 0
     event = sys.argv[1] if len(sys.argv) > 1 else ""
     try:
         payload = json.loads(sys.stdin.read() or "{}")

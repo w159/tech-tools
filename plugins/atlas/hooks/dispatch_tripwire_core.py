@@ -51,6 +51,8 @@ def __getattr__(name):
 
 INLINE_TOOLS = {"Read", "Grep", "Glob", "Edit", "Write", "Bash"}
 DISPATCH_TOOLS = {"Agent", "Task"}
+# Codex app-server collaboration tool; bare spawn_agent is normalized upstream by atlas_harness.
+CODEX_DISPATCH_TOOL = "collaboration.spawn_agent"
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # PreToolUse deny tier: the Nth UNSANCTIONED inline op with no intervening dispatch
 # is denied. 6 prior ops means this call is the 7th -> deny. Sanctioned writes (the
@@ -583,14 +585,19 @@ def _run_key(conn, run_id):
 
 
 def _team_note(root, session, tinput, run_key):
-    """(deny, text) for a working-role atlas: dispatch. The 2nd in-process working dispatch of a run whose
-    resolved team has 2+ working seats is denied when tmux is on PATH (advisory without tmux);
-    ATLAS_TEAM_GATE=off keeps the old behaviour. Closing roles are never counted. Fail-open."""
+    """(deny, text) for a working-role atlas: dispatch. With tmux on PATH every in-process working dispatch is
+    denied (the first one and a one-seat scope too): working subagents run as a tmux team or crew. Without tmux,
+    under omp or with ATLAS_TEAM_GATE=off the 2nd in-process working dispatch of a run whose resolved team has
+    2+ working seats gets an advisory. Closing roles are never counted or denied. Fail-open."""
     import shutil
 
     if not run_key or not _is_working_role(tinput.get("subagent_type")):
         return False, ""
     off = os.environ.get("ATLAS_TEAM_GATE", "on").strip().lower() == "off"
+    omp = _omp_harness()
+    tmux = bool(shutil.which("tmux"))
+    blocked = tmux and not off and not omp
+    prior = 0
     try:
         with _name_state(root, session) as st:
             team = st.get("team") or {}
@@ -598,11 +605,7 @@ def _team_note(root, session, tinput, run_key):
                 team = {"run": run_key, "working": 0}
             prior = int(team.get("working", 0))
             if team.get("launched"):
-                prior = 0  # this run already ran a tmux team or crew: no in-process count
-            scope = _working_seats(tinput, root, session) if prior else None
-            many = bool(scope) and scope[2] >= 2
-            tmux = many and bool(shutil.which("tmux"))
-            blocked = tmux and not off and not _omp_harness()
+                prior = 0  # this run already ran a tmux team or crew: no in-process advisory count
             if blocked:
                 slot = st.get("slot")
                 if slot is not None and st.get("open") and st["open"][-1] == slot:
@@ -613,23 +616,35 @@ def _team_note(root, session, tinput, run_key):
             st["team"] = team
     except Exception as exc:
         _record_fault(exc)
-        return False, ""
-    if not many:
+        if not blocked:
+            return False, ""
+    scope = _working_seats(tinput, root, session) if (blocked or prior) else None
+    cmds = (
+        "Run a team (scripts under ${CLAUDE_PLUGIN_ROOT}/scripts/):\n"
+        "  atlas_mux.py spawn-team --class {cls} --effort {effort} --paths a,b --task-file T\n"
+        'or a crew:\n  atlas_crew.py run --spec S --files G --goal "..."\n'
+    )
+    if blocked:
+        cls, effort = (scope[0], scope[1]) if scope else ("C", "E")
+        role = str(tinput.get("subagent_type") or "")
+        return True, (
+            f"DENY - in-process working dispatch ({role}) with tmux on PATH: working subagents never run "
+            "in-process, not the first one and not a one-seat scope. "
+            + cmds.replace("{cls}", cls).replace("{effort}", effort)
+            + "Ways out: run that team or crew command. Closing roles (planner, verifier, completeness-critic, "
+            "docs-curator, docs-auditor) stay in-process."
+        )
+    if not (scope and scope[2] >= 2):
         return False, ""
     cls, effort, seats = scope
-    if blocked:
-        head = "DENY"
-    elif off:
+    if off:
         head = "[atlas] ADVISORY (ATLAS_TEAM_GATE=off)"
     else:
-        head = "[atlas] ADVISORY (no tmux)" if not tmux else "[atlas] ADVISORY (omp)"
-    return blocked, (
+        head = "[atlas] ADVISORY (omp)" if omp else "[atlas] ADVISORY (no tmux)"
+    return False, (
         f"{head} - 2nd in-process working dispatch this run; SCOPE {cls}/{effort} = {seats} working seats. "
-        "Run a team (scripts under ${CLAUDE_PLUGIN_ROOT}/scripts/):\n"
-        f"  atlas_mux.py spawn-team --class {cls} --effort {effort} --paths a,b --task-file T\n"
-        'or a crew:\n  atlas_crew.py run --spec S --files G --goal "..."\n'
-        f"Ways out: run that team or crew command, or, if the task really needs one worker, declare "
-        f"the smaller scope (SCOPE: {cls}/low)."
+        + cmds.replace("{cls}", cls).replace("{effort}", effort)
+        + "Ways out: run that team or crew command."
     )
 
 
@@ -705,14 +720,15 @@ def _toolkit_gap(tinput):
 
     Measured: 3 of 12 recorded subagent runs got no TOOLS block and made 0 MCP calls,
     reading the repo through Bash grep/cat instead. Requiring ToolSearch alone was not
-    enough when the batch omitted serena/lean-ctx; require both the load step and a
-    named symbol/context tool so agents cannot "ToolSearch" a decoy and still grep.
+    enough when the batch omitted lean-ctx; require both the load step and a
+    named code-nav tool (lean-ctx, ctx_search, ctx_read, ctx_compose) so agents cannot
+    "ToolSearch" a decoy and still grep.
     """
     agent = str(tinput.get("subagent_type") or "")
     if not agent.startswith("atlas:"):
         return None  # forks inherit the parent's loaded tools; non-atlas agents opt out
     # Docs-only roles still benefit from lean-ctx; keep the bar for all atlas:*.
-    # The tools must be named inside a line-anchored TOOLS: block: the words "ToolSearch" and "serena" in prose
+    # The tools must be named inside a line-anchored TOOLS: block: the words "ToolSearch" and "lean-ctx" in prose
     # (or in a decoy sentence) are not an instruction the subagent can follow.
     prompt = _block_body(str(tinput.get("prompt") or ""), ("TOOLS:",)) or ""
     low = prompt.lower()
@@ -724,8 +740,7 @@ def _toolkit_gap(tinput):
         or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
     )
     has_nav = (
-        "serena" in low
-        or "lean-ctx" in low
+        "lean-ctx" in low
         or "lean_ctx" in low
         # Any ctx_* device mention or xd:// device path routes the subagent to
         # real tools: the whitelist used to need a code edit per new device
@@ -748,17 +763,16 @@ def _toolkit_gap_reason(tool, gap):
         return (
             f"DENY - this {tool} dispatch is missing the code-nav TOOLS block. Add one line to the task, "
             "e.g. `TOOLS: use lean-ctx via its xd:// devices (write JSON to xd://mcp__lean_ctx_ctx_search, "
-            "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute; do not activate serena "
-            f"unless a symbol edit needs it`. Without it {gap} greps the tree."
+            "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute`. "
+            f"Without it {gap} greps the tree."
         )
     return (
         f"DENY - this {tool} dispatch is missing the code-nav TOOLS block. "
         "Paste subagent-kit.md / tool-routing.md: one batched ToolSearch that "
-        "includes lean-ctx (ctx_compose/ctx_search/ctx_read) AND serena "
-        "(activate_project, get_symbols_overview, find_symbol, and for "
-        "implementers replace_symbol_body), plus context-mode for noisy "
-        "output. The subagent must run that before Read/Grep/Bash; serena "
-        f"down -> lean-ctx only, never Bash grep. Without it {gap} greps the tree."
+        "includes lean-ctx (ctx_compose/ctx_search/ctx_read), plus "
+        "context-mode for noisy output. The subagent must run that before "
+        "Read/Grep/Bash, never Bash grep. "
+        f"Without it {gap} greps the tree."
     )
 
 
@@ -1113,8 +1127,8 @@ def _role_block(agent):
         )
     else:
         tools = (
-            "TOOLS: one batched ToolSearch select of lean-ctx (ctx_compose, ctx_search, ctx_read) "
-            "and serena (activate_project, get_symbols_overview, find_symbol), plus context-mode "
+            "TOOLS: one batched ToolSearch select of lean-ctx (ctx_compose, ctx_search, ctx_read), "
+            "plus context-mode "
             "ctx_execute for noisy output, before any Read/Grep/Bash"
         )
     call = (
@@ -2434,6 +2448,21 @@ def _inject_name(payload, out):
         return out
 
 
+
+def _normalize_codex_dispatch(payload):
+    """Translate Codex collaboration.spawn_agent into the existing Agent contract."""
+    if payload.get("tool_name") != CODEX_DISPATCH_TOOL:
+        return
+    tinput = payload.get("tool_input")
+    tinput = dict(tinput) if isinstance(tinput, dict) else {}
+    tinput.setdefault("subagent_type", tinput.get("agent_type", ""))
+    tinput.setdefault("name", tinput.get("task_name", ""))
+    tinput.setdefault("prompt", tinput.get("message", ""))
+    payload["tool_name"] = "Agent"
+    payload["tool_input"] = tinput
+    payload["_atlas_codex_dispatch"] = True
+
+
 def main():
     raw = sys.stdin.read()
     try:
@@ -2448,6 +2477,7 @@ def main():
     payload = payload if isinstance(payload, dict) else {}
     if "tool_input" in payload and not isinstance(payload["tool_input"], dict):
         payload["tool_input"] = {}  # a malformed tool_input is "no input", the gate still applies
+    _normalize_codex_dispatch(payload)
     if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
         _PAYLOAD_CWD[0] = payload["cwd"]
     if payload.get("hook_event_name") == "SubagentStart":
@@ -2691,7 +2721,7 @@ def _run(payload):
                     wave_id=atlas_db.next_wave_id(conn, dispatch_run_id),
                 )
             agent_type = str(tinput.get("subagent_type", ""))
-            if agent_type.startswith(("atlas:", "atlas-")):
+            if payload.get("_atlas_codex_dispatch") or agent_type.startswith(("atlas:", "atlas-")):
                 # Dispatching an atlas squad agent is unambiguous orchestration.
                 _arm_orchestrating(conn, atlas_db, session, payload.get("cwd"))
             if str(tinput.get("isolation", "")).strip() == "worktree":

@@ -69,7 +69,6 @@ export function ompBody(body: string): string {
 		.replace(/the ToolSearch call above exists/g, "the xd:// devices above exist")
 		.replace(/Load deferred\/MCP tool schemas \(`ToolSearch`\) before calling them([.,])/g, "Read an `xd://<device>` schema before the first call$1")
 		.replace(/Load deferred\/MCP tool schemas before calling them\*\* \(`ToolSearch` to fetch the schema\)/g, "Read an `xd://<device>` schema before the first call**")
-		.replace(/`activate_project`/g, "`xd://mcp__serena_activate_project`")
 		.replace(
 			/(Your final message is exactly the container below[^\n]*\n)/g,
 			"$1On omp, return these same fields through `yield` as the structured result (`status`, `stepsDone`, `stepsTotal`, `filesChanged`, `evidence[{step, command, output}]`, `deliverable`, `next`); do not write the container as prose.\n",

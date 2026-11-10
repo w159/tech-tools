@@ -6,6 +6,7 @@ import type {
   AtlasSnapshot, ChannelMember, ChannelNote, Contract, FsLike, Persona, PhaseId, SquadAgent,
 } from './contract';
 import { boardRoot, leadChannelName } from './data/root';
+import { readCrew } from './data/crew';
 import { computeCounts, currentPhase, groupTodos, readTodos, type TodosCache, type TodosError } from './data/todos';
 import { NoteReader, readRoster } from './data/channels';
 import { loadContract, loadPersonas } from './data/personas';
@@ -139,12 +140,14 @@ export class SnapshotBuilder {
     const read = await readTodos(this.fs, this.root, this.sessionId, memberNames, this.contract, this.todoCache);
     this.todoCache = read.cache;
     this.todoError = read.error;
-    const notes: ChannelNote[] = this.channel !== null && this.notes !== null
-      ? await this.notes.read(this.channel)
-      : [];
+    const crew = await readCrew(this.fs, this.root, live.now).catch(() => ({ agents: [] as SquadAgent[], notes: [] as ChannelNote[] }));
+    const notes: ChannelNote[] = [
+      ...(this.channel !== null && this.notes !== null ? await this.notes.read(this.channel) : []),
+      ...crew.notes,
+    ];
     const { panes } = parseHerdrStatus(live.herdrStdout ?? '');
     const phase = currentPhase(read.items, live.headerPhase);
-    const squad = mergeSquad(this.members, notes, panes, [...live.taskAgents, ...(live.mux ?? [])], live.now);
+    const squad = mergeSquad(this.members, notes, panes, [...crew.agents, ...live.taskAgents, ...(live.mux ?? [])], live.now);
     return {
       ...orchestrate(notes, squad),
       ...passthrough,

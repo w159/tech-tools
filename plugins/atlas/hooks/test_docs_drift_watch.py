@@ -362,7 +362,7 @@ class DocsDriftWatchInProcessTest(unittest.TestCase):
 
         state_path = dw._state_path(Path(self.tmp))
         with mock.patch.object(dw, "git_changed_paths", side_effect=counting):
-            for uri in ("agent://BetaSend", "xd://mcp__serena_find_symbol", "proc://1"):
+            for uri in ("agent://BetaSend", "xd://mcp__lean_ctx_ctx_search", "proc://1"):
                 for key in ("file_path", "path"):
                     out = self._call(
                         {

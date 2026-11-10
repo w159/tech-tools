@@ -8,10 +8,10 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.0.0 (`.claude-plugin/plugin.json`)                                                                               |
+| Version    | 17.5.0 (`.claude-plugin/plugin.json`)                                                                               |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 8 JSON contracts                                               |
-| Harnesses  | Claude Code (native), omp (extension package), codex (as a colony worker)                                            |
+| Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
 
@@ -208,16 +208,19 @@ another subagent.
 A long task run inline fills the main context window with file reads and tool
 output. Atlas moves that work out in two shapes: a crew for a parallel build,
 and a team for read-only work. When the prompt optimizer arms a session it
-names the resolved team and the next command; the dispatch tripwire denies the
-2nd in-process working-role dispatch of a run whose scope has 2+ working seats
-(`dispatch_denied:team`, tmux on PATH, closing roles exempt), and completion gate
-(s) blocks once when a run ends with 2+ in-process working-role dispatches and no
-team or crew record. A lead can still declare `SCOPE: <class>/low` to stay
-in-process. `atlas_crew.py run` stamps `lead_session` into `run.json` (`--session`,
+names the resolved team and the next command. With tmux on PATH the dispatch
+tripwire denies every in-process working-role dispatch (`dispatch_denied:team`),
+the first one and a one-seat or `low` scope included; closing roles are exempt.
+Without tmux, under omp or with `ATLAS_TEAM_GATE=off` the 2nd in-process
+working-role dispatch of a run whose scope has 2+ working seats gets an advisory.
+Completion gate (s) blocks once when a run ends with 2+ in-process working-role
+dispatches and no team or crew record. `atlas_crew.py run` stamps `lead_session` into `run.json` (`--session`,
 else the first set of `CLAUDE_CODE_SESSION_ID`, `CLAUDE_SESSION_ID`,
 `ATLAS_SESSION_ID`, else empty, with a `warning` field in the output) so gate (p)
-can tie a crew to its session. The deny is skipped once the run has launched a
-team or crew.
+can tie a crew to its session. A team or crew launched in the run does not lift
+the deny. `atlas_crew.py run` refuses a plan whose worker check already passes
+before launch (a worker stops as soon as its check passes); `--allow-green-check`
+overrides.
 
 ### Crew: a parallel build that talks over IRC
 
@@ -433,8 +436,8 @@ one process per tool event, each with its original matcher and a time slice;
 median Pre+Post blocking time per Bash call fell from 289 ms to 174 ms
 ([evidence](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md)).
 
-Most hooks fail open on an internal error. Five deny or block on purpose:
-`dispatch_tripwire.py`, `recall_gate.py`, `completion_gate.py`,
+Most hooks fail open on an internal error. Six deny or block on purpose:
+`dispatch_tripwire.py`, `recall_gate.py`, `completion_gate.py`, `crew_worker.py`,
 `worker_report_gate.py`, and `fallow_gate.py` (when the fallow CLI returns
 `verdict: fail` or is older than `FALLOW_GATE_MIN_VERSION`, default 2.85.0;
 fail-open when the CLI is absent).
@@ -449,13 +452,14 @@ fail-open when the CLI is absent).
 | `bash_advisor.py`               | PreToolUse (Bash)                                                  | Warns on catastrophic commands; never denies                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `git_guard.py`                  | PreToolUse (Bash, Write, Agent, Task, mcp__*)                      | Keeps commits and pushes off protected branches (the default branch, `production`, `release/*`, GitHub-protected) while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. Policy: `.atlas/git-policy.json`, `scripts/atlas_git.py policy` (`ATLAS_GIT_GUARD=off`)                                                                                         |
 | `edit_read_nudge.py`            | PreToolUse, PostToolUse                                            | Nudges when an edit targets a file read only through `ctx_read`                                                                                                                                                                                                                                                                                                                                                                              |
-| `dispatch_tripwire.py`          | PreToolUse, PostToolUse, SubagentStart                             | Routes native Grep and Glob to lean-ctx where it is configured; counts inline work and denies past the threshold in orchestration runs; names an unnamed `atlas:*` dispatch (denies it instead with `ATLAS_AUTONAME=off`); denies model-overriding `atlas:*` dispatches, dispatches missing the GOAL / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / STOP CONDITIONS spec or bundling more than one GOAL, and any nested subagent dispatch; denies the 2nd in-process working-role dispatch of a run whose scope has 2+ working seats when tmux is on PATH (`dispatch_denied:team`) |
+| `dispatch_tripwire.py`          | PreToolUse, PostToolUse, SubagentStart                             | Routes native Grep and Glob to lean-ctx where it is configured; counts inline work and denies past the threshold in orchestration runs; names an unnamed `atlas:*` dispatch (denies it instead with `ATLAS_AUTONAME=off`); denies model-overriding `atlas:*` dispatches, dispatches missing the GOAL / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / STOP CONDITIONS spec or bundling more than one GOAL, and any nested subagent dispatch; denies every in-process working-role dispatch when tmux is on PATH (`dispatch_denied:team`; closing roles exempt) |
 | `fallow_gate.py`                | PreToolUse (Bash)                                                  | Runs `fallow audit` on `git commit` and `git push` and denies on `verdict: fail` or a CLI below the minimum version (`ATLAS_FALLOW=off`)                                                                                                                                                                                                                                                                                                     |
 | `todo_capture.py`               | PostToolUse                                                        | Mirrors TodoWrite plans to the durable board (`ATLAS_TODO=off`)                                                                                                                                                                                                                                                                                                                                                                              |
 | `docs_drift_watch.py`           | PostToolUse                                                        | Warns as soon as code ships without a `docs/CHANGELOG.md` entry (debounced per session)                                                                                                                                                                                                                                                                                                                                                      |
 | `delegation_prewarn.py`         | PostToolUse                                                        | Once per session, warns that an inline code edit will trip gate condition (m)                                                                                                                                                                                                                                                                                                                                                                |
 | `connector_credential_watch.py` | PostToolUse                                                        | On the first 401 or 403 from an armada connector, says to restart the server instead of retrying (`ATLAS_CONNECTOR_WATCH=off`)                                                                                                                                                                                                                                                                                                               |
 | `format_after_edit.py`          | PostToolUse (Edit, Write)                                          | Runs the repo's formatter                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `crew_worker.py`                | PreToolUse, PostToolUse, Stop (crew worker settings, not `hooks.json`) | In crew workers only, delivers IRC context, enforces file leases and the check/report gate; guarded by `ATLAS_CREW_WORKER` elsewhere |
 | `completion_gate.py`            | Stop                                                               | Blocks a premature "done" (conditions a to q above)                                                                                                                                                                                                                                                                                                                                                                                          |
 | `stop_tail.py`                  | Stop                                                               | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter                                                                                                                                                                                                                                                                                                                                        |
 | `ingest_session.py`             | SubagentStop, SessionEnd, PreCompact (and Stop via `stop_tail.py`) | Mirrors the transcript into the observability DB (`ATLAS_INGEST=off`)                                                                                                                                                                                                                                                                                                                                                                        |
@@ -660,8 +664,8 @@ switches:
 
 Companions, recommended by `atlas-setup` and used when present: claude-mem
 (cross-session memory), context-mode (keeps large output out of the context
-window), serena (symbol navigation and edits), lean-ctx (shaped search and
-read), ponytail (optional), and Fallow for JS and TS trees. Atlas uses only the
+window), lean-ctx (code navigation, shaped search and read), ponytail
+(optional), and Fallow for JS and TS trees. Atlas uses only the
 tools present in the session.
 
 ## Troubleshooting
@@ -682,7 +686,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.0.0
+|-- .claude-plugin/plugin.json   manifest, version 17.5.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

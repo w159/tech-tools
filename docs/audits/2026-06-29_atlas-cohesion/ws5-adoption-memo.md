@@ -29,7 +29,6 @@ below are limited to signals that are unambiguous regardless of the window.
 | context-mode | 951 calls, 45 err (4.7%) | Heavily adopted, healthy. Keep. |
 | claude-mem | 9 calls, 4 err (44%) | Near-unused AND failing nearly half its calls. |
 | supermemory | 0 calls; auth "expired or revoked" all session | Dead. Not functioning. |
-| serena | 1 call | Near-unused (likely inline LSP used instead). |
 | sequentialthinking, codex | 0 calls | Not invoked this window. |
 | atlas skills invoked | only `atlas-sextant` of 8 (tool_calls) | Undercounted - engine/architect run inline. |
 | atlas squad invoked | 5 of 18 (`explorer, implementer, verifier, docs-curator, completeness-critic`) | The core review/build loop is used; specialist agents idle. |

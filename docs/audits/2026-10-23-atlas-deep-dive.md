@@ -280,7 +280,7 @@ into one dispatcher process, as `stop_tail.py` already does for Stop.
 |---|---|---|
 | Recursive evidence scan, mtime filter kept | S | Nested fresh file counts; nested stale file does not |
 | Scrub lead, worker and channel env at the test-runner entry | S | Suite green with `ATLAS_LEAD_NAME` set |
-| Root-safe Serena test (patch the read to raise) | S | Passes as root and non-root |
+| Root-safe config-heal test (patch the read to raise) | S | Passes as root and non-root |
 | Move install parity to atlas_doctor or a release gate | S | Source suite no longer depends on the cache |
 | Scope (c), (d), (e), (h) to code-shipping runs | S | Read-only Stop with no ROADMAP passes; needs owner sign-off |
 | Exempt config and data extensions from (m) | S | Single `package.json` edit, no dispatch: passes |

@@ -59,7 +59,6 @@ def skill_dirs():
 
 class DiscoverabilityTest(unittest.TestCase):
     """Claude Code only scans skills/<name>/SKILL.md, commands/, and agents/."""
-
     def test_setup_skills_are_top_level_and_discoverable(self):
         found = {p.name for p in skill_dirs()}
         missing = [s for s in SETUP_SKILLS if s not in found]
@@ -88,7 +87,6 @@ class DiscoverabilityTest(unittest.TestCase):
 
 class RouterTest(unittest.TestCase):
     """The root skill reports and routes; it does not run a setup interview."""
-
     def setUp(self):
         self.body = (PLUGIN / "skills" / "armada" / "SKILL.md").read_text(
             encoding="utf-8"
@@ -117,7 +115,6 @@ class RouterTest(unittest.TestCase):
 
 class PathReferenceTest(unittest.TestCase):
     """Every ${CLAUDE_PLUGIN_ROOT} path a skill cites must actually exist."""
-
     def test_plugin_root_references_resolve(self):
         pattern = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9_./-]+)")
         broken = []
@@ -179,8 +176,14 @@ class ManifestTest(unittest.TestCase):
         names = [p["name"] for p in mp["plugins"]]
         self.assertIn("armada", names)
 
+    def test_mcp_placeholders_resolve_to_declared_user_config(self):
+        manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
+        used = set(re.findall(r"\$\{user_config\.([A-Za-z0-9_]+)\}", (PLUGIN / ".mcp.json").read_text()))
+        self.assertTrue(used)
+        self.assertEqual(sorted(used - set(manifest["userConfig"])), [])
+
     def test_armada_declares_the_vendor_connectors_and_atlas_declares_none(self):
-        """The 13 vendor MCP connectors and their 57 credential keys live on armada."""
+        """The 13 vendor MCP connectors and their 54 credential keys live on armada."""
         manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest.get("mcpServers"), "./.mcp.json")
         servers = json.loads((PLUGIN / ".mcp.json").read_text())["mcpServers"]
@@ -191,7 +194,7 @@ class ManifestTest(unittest.TestCase):
                 "paylocity sonicwall spanning threatlocker vanta".split()
             ),
         )
-        self.assertEqual(len(manifest["userConfig"]), 57)
+        self.assertEqual(len(manifest["userConfig"]), 54)
         for name in servers:
             self.assertTrue(
                 (PLUGIN / "mcp" / name).is_dir(), f"mcp/{name} missing on armada"
@@ -205,7 +208,6 @@ class ManifestTest(unittest.TestCase):
 
 class EnterpriseModeTest(unittest.TestCase):
     """Enterprise mode lives in armada; the separate harbor plugin is gone."""
-
     SKILL = PLUGIN / "skills" / "armada-enterprise"
     REFERENCES = ["setup", "policy", "audit", "connect"]
 

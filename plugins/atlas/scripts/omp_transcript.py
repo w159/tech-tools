@@ -150,7 +150,6 @@ _KNOWN_MCP_SERVERS_FALLBACK = (
     "claude_mem",
     "browser_use",
     "azure",
-    "serena",
     "context7",
     "microsoft_docs",
     "plaid",

@@ -19,7 +19,7 @@ loaders fall back to values saved under the atlas plugin, and
 | KnowBe4 | security | knowbe4_api_key | api_key |
 | ThreatLocker | security | threatlocker_api_key | api_key |
 | Blumira | security | blumira_jwt_token (or blumira_client_id + blumira_client_secret) | jwt_token OR client_id + client_secret |
-| CIPP | microsoft-365 | cipp_base_url, cipp_api_key (or cipp_tenant_id + cipp_client_id + cipp_client_secret) | base_url + (api_key OR tenant_id + client_id + client_secret) |
+| CIPP | microsoft-365 | cipp_mcp_url, cipp_client_id | mcp_url (client id has a working default) |
 | CrowdStrike Falcon | security | falcon_client_id, falcon_client_secret, falcon_base_url, falcon_member_cid | client_id + client_secret |
 | Paylocity | hr | paylocity_client_id, paylocity_client_secret, paylocity_company_id | client_id + client_secret + company_id |
 | PAN-OS | none assigned | panos_host, panos_api_key (or panos_username + panos_password), panos_target, panos_verify_tls, panos_rest_version | host + (api_key OR username + password) |

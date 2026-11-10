@@ -113,7 +113,7 @@ For small direct changes in one-developer repos: `export ATLAS_MODE=solo` (case-
 | `references/prompt-optimization.md` | sharpening prompts |
 | `references/hooks-automation.md` | hook install/config |
 | `references/fallow-tools.md` | JS/TS fallow CLI/MCP/skills + atlas fallow_gate |
-| `references/tool-routing.md` | serena/lean-ctx/claude-mem/context-mode/ponytail matrix (min context) |
+| `references/tool-routing.md` | lean-ctx/claude-mem/context-mode/ponytail matrix (min context) |
 | `references/claude-code-tuning.md` | Claude Code setup root causes |
 | `references/docs-ssot.md` | docs/ taxonomy |
 | `references/multi-stage-planning.md` | stage maps, standing consent, fan-out |

@@ -1,5 +1,19 @@
 # Changelog
 
+## atlas 17.5.0 - 2026-11-10
+
+- atlas 17.5.0: port of the 28 commits main lacked from `claude/gateway-broker-mode-main` (MCP gateway broker mode with Entra-scoped roles, the CIPP URL-only remote connector with an OAuth client id, armada 2.3.0, Codex-harness pieces) plus follow-up fixes. The mod lead channel resolves by the real `<folder>@<branch>/lead-<id>` key, and the new crew reader `mod/data/crew.ts` shows `atlas_crew` workers and their log. Completion gate remediation commands name scripts under `CLAUDE_PLUGIN_ROOT` as spelled, not its resolved symlink target. With tmux on PATH the dispatch tripwire denies every in-process working-role `atlas:*` dispatch, the first and one-seat scopes included. `atlas_crew.py run` refuses a plan whose worker check already passes before launch unless `--allow-green-check`, and accepts `--harness codex`. serena is removed from atlas (gate tokens, session-boot heal, tool routing, doctor checks, agents, skills, docs); new doctor check `codex-wiring`. `plugins/atlas/mod/contract.ts` no longer carries the immutable flag. Covered by unit tests in `hooks/test_dispatch_tripwire.py`, `hooks/test_completion_gate.py`, `hooks/test_session_boot.py`, `scripts/test_atlas_crew.py`, `scripts/test_atlas_doctor.py` and `mod/data/crew.test.ts`; not observed in an installed plugin yet. Details in plugins/atlas/CHANGELOG.md.
+
+## marketplace 5.10.0 - 2026-11-10
+
+- marketplace 5.10.0: atlas 17.5.0, armada 2.3.0, programmer 1.0.3. The atlas entry drops the `serena` keyword and its description names Claude Code and Codex.
+
+## ROADMAP items closed - 2026-11-10
+
+- `plugins/atlas/mod/contract.ts:4` cited the old plan path because the macOS immutable flag (uchg) made every rewrite and checkout fail. 2026-11-10: flag cleared with `chflags nouchg` and the file restored from HEAD, which already cites `docs/plans/2026-10-09_atlas-mod.md`; `ModTypesContractSync` passes. Moved from ROADMAP 2026-11-10.
+- Codex CLI parity for skills and hooks (2026-11-05): `.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json`, `hooks/hooks.codex.json`, `scripts/atlas_harness.py` (shared detector; PreToolUse ask becomes deny under Codex), `hooks/test_codex_parity.py`. Loaded in Codex CLI 0.166: 41 skills, 14 hooks. Known gaps: (1) plugins cannot ship agents in Codex, so the 14 agents are not loadable; closing it needs a generator from `agents/*.md` to `.codex/agents/*.toml`; (2) Codex clamps the SessionEnd hook to 3 s, so transcript ingest at session end may be cut short; (3) hooks matching `Agent|Task` (dispatch tripwire, worker gates) do not fire because Codex names its subagent tools differently; (4) a guard that would ask the human now denies, and the model must confirm with the user and re-run; `atlas_git.py allow` needs the user to run it; (5) hooks need trust in Codex (`/hooks`); (6) live hook execution inside a Codex model turn is unverified (no login in this check); (7) armada and programmer are not listed in the Codex marketplace: no `.codex-plugin` manifest, not load-tested. Released in atlas 16.4.2 (`plugins/atlas/CHANGELOG.md`); moved from ROADMAP 2026-11-10.
+- Codex tool mapping, SessionEnd budget and agents (2026-11-05): `apply_patch`, `spawn_agent` and `update_plan` payloads are rewritten to the Claude shape in `scripts/atlas_harness.py` (hooks fire on the Codex tools); `scripts/gen_codex_hooks.py` generates `hooks.codex.json` (Codex matchers, SessionEnd 3 s); `ingest_session.py` detaches at SessionEnd; `scripts/atlas_codex_agents.py` writes `.codex/agents/atlas-*.toml`; `programmer` is in the Codex marketplace, `armada` is not (needs `userConfig`). Remaining: no Codex Read/Grep/Glob tool, live hook run in a model turn unverified, `programmer` scan-on-edit hook is a no-op under Codex. Atlas 17.5.0 adds `collaboration.spawn_agent` dispatch translation and the `codex-wiring` doctor check; moved from ROADMAP 2026-11-10.
+
 ## atlas 17.4.3 - 2026-11-10
 
 - atlas 17.4.3: colony routing enforcement. The arming nudge names the resolved team and the next command. A 2nd in-process working-role dispatch is denied (`dispatch_denied:team`) when the scope resolves to 2+ working seats and tmux is present; `ATLAS_TEAM_GATE=off` makes it advisory. Completion gate (p) counts only tmux team and crew members and their own channel lines; new condition (s) blocks once when 2+ working dispatches ran in-process with no team record. `atlas_crew.py` stamps `lead_session` in run.json. The sidepanel ROUTE section shows this session only, each row marked `tmux` or `in-process`. Reason: 14 days of `~/.atlas/atlas.db` showed 813 in-process Agent/Task calls against at most 8 spawn-team commands. Verified by full hooks (2816) and scripts (4281) suites, bun (3400 pass), tsc, ruff and plugin validate on a 17.4.2 worktree; evidence in .atlas/evidence/2026-11-10_colony-routing-suites.txt. Not observed in an installed plugin yet. Details in plugins/atlas/CHANGELOG.md; plan in docs/plans/2026-11-10_colony-routing-enforcement.md.
@@ -47,6 +61,47 @@
 ## marketplace 5.7.0 - 2026-11-06
 
 - marketplace 5.7.0: atlas 17.2.0, armada 2.2.3, programmer 1.0.3.
+
+## ATLAS render divergence across sessions: what is and is not established - 2026-11-06
+
+- The three screenshots show **different surfaces of the same system, not three different
+  behaviours**: the mod's AbovePrompt band (`plugins/atlas/mod/band.tsx`), the mod's message-header
+  pills (`plugins/atlas/mod/restyle.tsx`), and a plain ATLAS line written as prose inside a message.
+  A surface-by-surface comparison found **no gate that suppresses a surface in one session while
+  another shows it** - `ATLAS_MOD` is unset everywhere, `ATLAS_DASHBOARD=off` gates only the web
+  dashboard, and `ATLAS_QUIET` is not a code gate. Band and pills are independent draw sites and
+  can coexist in one session (bottom band vs message header), so a screenshot showing only one of
+  them is not evidence of a behavioural difference.
+- **No root cause is claimed.** The version pin is not one: `band.tsx`, `restyle.tsx`, `register.ts`,
+  `theme.ts` and `hooks/hooks.json` are byte-identical between 17.1.0 and 17.2.0, so a session
+  pinned to the older tree cannot draw a different surface. What the pin does explain is code-tree
+  skew and the CLI's `✓ Update installed · Restart to update` prompt: the tree is resolved once per
+  PROCESS and held for that process's life, so any restart - a reboot included - re-resolves it
+  (`ps` start times show pid 1983 alive since Nov 5 16:47 on 17.1.0 and pid 58350 since Nov 6 08:47
+  on 17.2.0).
+- Content differences between the screenshots are explained by per-workspace `.atlas` state (counts
+  `5/7` vs `3/7`, `idle` vs `implement`) and by message content; the `✗` in the pills is the model's
+  own glyph.
+- Corrections made while verifying: an earlier claim that commit `c06754b6` moved `ATLAS_MOD` from a
+  read-once to a per-render read was wrong (the installed 17.2.0 `restyle.tsx:232-239` still reads
+  it "once per registration (one per session)"), and an earlier lead - "the mod's prompt.submit hook
+  never fired" - was a naming artifact (the hook is `UserPromptSubmit`, and it fires in both
+  sessions: 51 times in 5fa73dfc, 23 times in aa162b87).
+- Health findings, none of them the cause: `atlas-doctor --hook` warns `codex-wiring` and
+  `omp-bridge: omp runs 17.2.0 but this plugin is 16.4.2`; the installed plugin (17.2.0, upstream
+  commit `92c78c0`) came from the marketplace clone while this repo is on branch
+  `claude/gateway-broker-mode-main` at atlas 16.4.1, so local edits are not in the running plugin
+  and a republish from here would install a lower-numbered tree; and a divergent user copy of the
+  omp statusline at `~/.omp/agent/extensions/usage-statusline.ts` (sha256 `831b0277...`, 43,789
+  bytes) shadows the plugin's own copy (`164538e2...`).
+- Recorded in `.atlas/evidence/2026-11-06-atlas-render-divergence.md` with the command output;
+  findings `atlas-render-divergence`, `atlas-render-divergence-verify` and
+  `atlas-render-divergence-verdict` in `.atlas/.run/findings.json`. Checked with
+  `python3 -m pytest plugins/atlas/hooks/test_atlas_contract.py -q` (111 passed, 3 skipped) and
+  `python3 plugins/atlas/scripts/atlas_doctor.py --hook`.
+- Still unproven: which workspace and host produced the third screenshot's raw ATLAS line (the only
+  transcript hit carries different content and a different count), and therefore why that session
+  produced a prose line instead of a band or pills.
 
 ## atlas 17.1.0 - 2026-11-05
 
@@ -165,9 +220,165 @@
 
 - atlas 16.5.0: crew critical path. Critical workers launch first, workers write through a stage dir instead of shell heredocs, the final check is sharded and starts before workers exit, DONE records owned-file digests (hooks skip re-checks, the supervisor skips test files a worker already passed on the same bytes), generation weight comes from spec section size, workers that would only wait are staggered, and `irc check` runs speculatively once the peer files are installed. Against one Claude prompt: 12-17% of the tokens and 24.8-28.2% of the wall time (the 25% target is met at 30 modules, 56.5 s against 57.0 s; missed at 8 and 18). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-29_atlas-16.5.0-crew-benchmark.md](audits/2026-10-29_atlas-16.5.0-crew-benchmark.md).
 
+## CIPP connector: remote MCP with OAuth client id - 2026-10-28
+
+- The CIPP connector is now a **remote MCP server configured by the instance URL and the app
+  registration's OAuth client id**. `plugins/armada/.mcp.json` declares
+  `"cipp": { "type": "http", "url": "${user_config.cipp_mcp_url}", "oauth": { "clientId": "${user_config.cipp_client_id}" } }`,
+  and the plugin's user config replaces the five old CIPP fields (base URL, API key, tenant ID,
+  client ID, client secret) with `cipp_mcp_url` (the instance's `/api/ExecMcp` endpoint) and
+  `cipp_client_id` (public client id, working default, no secret). The client id is what makes
+  Claude Code use the app registration instead of dynamic client registration. CIPP runs the
+  sign-in: the client sends the user to Microsoft, and every call runs with that user's own CIPP
+  role. The `oauth.clientId` shape comes from Claude Code's MCP config
+  (`claude mcp add --transport http --client-id`); the client-id sign-in was not exercised against
+  a live CIPP instance in this change. The live notes below cover dynamic client registration.
+- Verified live against the CIPP instance: dynamic client registration at
+  `POST /api/PublicMcpRegister` answered 201 with a public client
+  (`token_endpoint_auth_method: none`), the PKCE sign-in returned a code, and the token exchange
+  issued a Bearer token (`scope=https://<host>/user_impersonation`, refresh token included). Two
+  details the instance's own metadata gets wrong, which the connector has to handle: request
+  `scope=openid profile offline_access https://<host>/user_impersonation` and **no** `resource`
+  parameter (sending the advertised `resource` makes the tenant answer `AADSTS9010010`), and
+  register the loopback redirect as `http://localhost:<port>/callback` (`127.0.0.1` is rejected with
+  `AADSTS50011`).
+- The gateway keeps its own CIPP backend: `catalog/overrides.json` now carries the command, args and
+  env prefix for `cipp`, so the connector still reaches the gateway although the plugin entry became
+  a remote URL, and `scripts/gen-catalog.mjs` learned to read remote (`type: http`) entries. The
+  generated `catalog/catalog.json` is byte-identical to before this change.
+- The bundled `mcp_servers/cipp-mcp` server is unchanged and still serves the gateway's REST path.
+  Its stored credential is not accepted by this instance, and the MCP endpoint itself answers
+  `Access to this CIPP API endpoint is not allowed, the user does not have the required permission`
+  after a successful sign-in - the signed-in user needs a CIPP role that covers MCP.
+
+## MCP gateway connector credentials - 2026-10-28
+
+- Every vendor credential the gateway uses is now a **Key Vault reference**, not a
+  copy: the 29 vendor secrets live in `gwh-mcp-gateway-kv`, each container secret
+  is `{ secretRef: policy-yaml, keyvaultref: https://gwh-mcp-gateway-kv.vault.azure.net/secrets/<name> }`,
+  and the container's user-assigned identity `gwh-mcp-gateway-id` holds Key Vault
+  Secrets User on the vault. No secret value is stored in the container app
+  template, so a template read no longer exposes a credential. The connector env
+  vars are UPPER_CASE (`AUVIK_API_KEY`, `THREATLOCKER_ORGANIZATION_ID`, ...) and
+  are forwarded by the gateway's prefix allowlist; a lowercase env name is
+  dropped silently, which was hit and fixed during this work.
+- Live verification through the deployed gateway: a real Entra sign-in issued a
+  token (`Bearer`, `expires_in 900`, `scope mcp`) and `tools/list` returned
+  **384 tools**, byte-identical across two calls, up from 208 - falcon (4 ->
+  145), connectwise (2 -> 49), auvik (2 -> 39) and spanning (2 -> 13) gained
+  their full credential sets, and panos (60 -> 0) left with the policy. All six
+  of falcon, connectwise, ninjaone, auvik, spanning and threatlocker answer
+  "authenticated" through the gateway, the first three returning real data.
+  Paylocity exposes 0 tools because its grant is the `hr` role and the test
+  user holds `company`/`it`: the role model working as designed. This
+  supersedes the "7 of 13 connectors have no credentials" line in the
+  broker-mode entry below.
+- Four connectors were sourced from 1Password and validated against the vendor
+  APIs (HTTP 200): **paylocity**, **threatlocker** (the new API token, shard
+  `h`), **auvik** and **spanning**. The values were seeded into
+  `gwh-mcp-gateway-kv` and are live in the gateway.
+- Two container-wiring gaps were found while making that live and fixed:
+  `auvik-api-key` and `spanning-api-token` were in the vault and in
+  `~/.config/atlas/atlas.env` but were **not** in the container app's secret
+  list or its env list, so both connectors started with no credential
+  ("NOT CONFIGURED" / "Missing SPANNING_ADMIN_EMAIL or SPANNING_API_TOKEN")
+  even though a valid one existed. A credential in the vault is not a
+  credential in the container - the `env` entry is a separate, silent step.
+- Still without a usable credential: **knowbe4** and **vanta** (the stored values
+  are rejected 401 by the vendor), and **blumira**, **cipp** and **sonicwall**
+  (no value found). Their role grants are already in place, so each works as
+  soon as a valid value is stored.
+- **PAN-OS stays local-only** by decision: `PANOS_HOST` is `10.8.254.3` on the
+  corporate VPN and is unreachable from Azure. The grant was removed by
+  regenerating `policy.yaml` from the org's real answers input (the regenerated
+  file was byte-identical to the published one except for the single `panos`
+  line) and storing it as the `policy-yaml` secret - never by hand-editing the
+  generated secret. Custom domain `mcp.henssler.com` is not bound: henssler.com's
+  nameservers are not in any reachable subscription, so the gateway answers on its
+  Container Apps hostname.
+- Runbook: [architecture/mcp-gateway-broker-runbook.md](architecture/mcp-gateway-broker-runbook.md)
+  ("Connector credentials (2026-10-28)"). Evidence:
+  [../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md](../.atlas/evidence/2026-10-28-mcp-gateway-credentials.md).
+
+## Dynamics connector Entra permissions - 2026-10-28
+
+- The `gwh-dynamics-connector` app registrations now declare the Dataverse delegated resource and are
+  reproducible from this repo. Root cause: the two Entra app registrations declared no
+  `requiredResourceAccess`, so Entra could never issue the delegated token for the org-scoped Dynamics
+  scope and the consent POST was rejected. Both registrations now declare the first-party Dataverse
+  app `00000007-0000-0000-c000-000000000000` with scope id
+  `78ce3f0f-a1ce-49c2-8cde-64b5c0896db4` (`user_impersonation`) under AllPrincipals admin consent, and
+  the stray grants against the Power Pages resource `71234da4-b92f-429d-b8ec-6e62652e50d7` were
+  deleted. The fix lives on the Entra app objects, so it survives a container redeploy and is lost only
+  if the app registrations are recreated.
+- Added `scripts/assert-dynamics-connector-entra-perms.sh` (read-only `--check` by default, idempotent
+  `--apply`, exit 0 pass / 1 fail / 2 environment problem) and
+  `docs/runbooks/dynamics-connector-entra-permissions.md`. Live run against tenant
+  `f00db7e5-ade5-49b2-b9cd-8813b81ef30a`: 8 PASS rows (4 checks x 2 app registrations), exit 0.
+  Verification also caught and fixed three defects: the script and runbook first carried two
+  non-existent application ids (Graph 404s both - the real ones are
+  `96c7a2a1-7598-48cc-bab6-85dd4c1a4370` and `a53421ea-1768-40a3-b0ac-62e469d386c4`); the
+  declared-scope check used a JMESPath form that always returned 0; and `set -e` let az read failures
+  escape as exit 3 instead of the documented 2. `.gitignore` gained one line
+  (`!scripts/assert-dynamics-connector-entra-perms.sh` allow rule in the Root scripts block) because
+  the repo is a deny-by-default allowlist and `/**` ignored the new script.
+- The `--apply` path was deliberately not executed against the live tenant: the tenant already
+  satisfies the target state. Observed-behaviour evidence:
+  `../agent-penny/.atlas/evidence/2026-10-28-entra-perms-check.md`.
+
 ## atlas 16.4.1 - 2026-10-28
 
 - atlas 16.4.1: crew fixes. `auto_plan` now orders a worker after the peers its own tests import, and `irc check` restores the stub docstrings a worker's rewrite dropped. Measured against one Claude prompt on 8, 18 and 30 modules: 11-16% of the tokens and 29-33% of the wall time (25% target still missed). Notes: [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md); evidence: [audits/2026-10-28_atlas-16.4.0-crew-benchmark.md](audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
+
+## MCP gateway broker-mode cutover - 2026-10-28
+
+- The `gwh-mcp-gateway` Container App moved from direct mode (Entra ID as
+  the OAuth authorization server) to broker mode: the gateway is now its
+  own OAuth 2.1 authorization server (`oidc-provider`), federated to Entra
+  as the upstream IdP. The 26 flat per-vendor `<Vendor>.Read`/`<Vendor>.Write`
+  app roles (plus an orphaned `TypeSafe` pair) were pruned and replaced
+  with 6 named gateway roles (`it`, `compliance`, `accounting`, `hr`,
+  `planning`, `company`), each assigned to a real Entra group rather than
+  an individual. The Anthropic-only IP allowlist on ingress was removed;
+  access control is now Entra sign-in plus the role grant plus the audit
+  log. Design: [architecture/enterprise-mcp-gateway.md](architecture/enterprise-mcp-gateway.md);
+  historical direct-mode record:
+  [architecture/mcp-gateway-design.md](architecture/mcp-gateway-design.md);
+  reproduction steps:
+  [architecture/mcp-gateway-broker-runbook.md](architecture/mcp-gateway-broker-runbook.md);
+  full evidence: `.atlas/findings/2026-10-28_gateway-live-state.md`.
+- Two defects found and fixed during the cutover's live verification: the
+  consent-form POST was rejected 403 in every real browser because
+  `Referrer-Policy: no-referrer` on the consent page made Chrome send
+  `Origin: null`, which the CSRF guard refused - fixed by sending
+  `Referrer-Policy: same-origin` instead (`src/broker/interactions.ts`);
+  and the token endpoint failed closed with `membership_check_unavailable`
+  because the Entra group-membership re-check had only the managed
+  identity as its Graph token source and that identity holds no Graph
+  application permissions - fixed by adding a fallback to the
+  application's own client credentials, with a one-shot retry on a
+  401/403 from Graph, with fail-closed semantics unchanged
+  (`src/broker/entra-membership.ts`, `src/broker/provider.ts`). A third,
+  unrelated defect was also fixed: the admin `discover` tool sent
+  `Accept: application/json` to Graph's `/$count` endpoint, which only
+  speaks `text/plain`, so discovery failed with HTTP 415
+  (`src/admin/discover.ts`).
+- Verification: a real browser sign-in through Entra SSO against the live
+  gateway issued a token (`Bearer`, `expires_in 900`, `scope mcp`, refresh
+  token present), `tools/list` returned 208 tools scoped to exactly the
+  signed-in user's role grants (zero Paylocity tools), byte-identical
+  across two independent sign-ins, and two read-only NinjaOne calls
+  succeeded against the real backend. The gateway's test suite: 17 files,
+  223 tests, `npx tsc --noEmit` clean. Still open: 7 of 13 connectors
+  (auvik, blumira, cipp, falcon, paylocity, spanning, sonicwall) have no
+  credentials in Key Vault yet; the `mcp.henssler.com` custom domain
+  remains unbound (the gateway answers on its Container Apps hostname).
+- The runbook was corrected to the commands that were actually run: the
+  admin CLI's discover/plan/provision sequence with the existing app id
+  pinned, the real cookie-key generation command, the real
+  `az containerapp update --yaml` form, and the real skill reference path.
+  Observed-behaviour evidence for the cutover:
+  [../.atlas/evidence/2026-10-28-mcp-gateway-broker-mode.md](../.atlas/evidence/2026-10-28-mcp-gateway-broker-mode.md).
 
 ## atlas 16.4.0 - 2026-10-28
 

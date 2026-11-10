@@ -41,7 +41,7 @@ Severity: high, med, low, info. Harness: CC = Claude Code.
 |---|---|---|---|---|
 | 12-line length budget unenforced | med | output-styles/atlas-orchestrator.md "Length budget" | no check in completion_gate_core.py or stop_tail.py; text only | CC, omp, codex |
 | Status header (n) enforced on final reply only | low | hooks/completion_gate_core.py:2108,2140; hooks/session_boot_core.py:379 | style says "every substantive reply"; gate checks the final reply's first line | CC, omp |
-| Style body carries omp parentheticals | low | output-styles/atlas-orchestrator.md:124,138 | omp waives ToolSearch but receives the ToolSearch+serena rule | CC, omp |
+| Style body carries omp parentheticals | low | output-styles/atlas-orchestrator.md:124,138 | omp waives ToolSearch but receives the ToolSearch+lean-ctx rule | CC, omp |
 | Header rule injected 2-3 times | low | hooks/session_boot_core.py:379,383; omp/style.ts:185-201 | style body plus boot plus omp fallback | CC, omp |
 | Style reaches omp by runtime translation | info | omp/style.ts (registerStyle), kill switch :247 | before_agent_start appends stripped body to main prompt; runtime proof [unverified] | omp |
 | Style cost 9,151 chars every turn | med | output-styles/atlas-orchestrator.md | 898 chars more on omp (omp/lead-addendum.md) | CC, omp |
@@ -52,7 +52,7 @@ Severity: high, med, low, info. Harness: CC = Claude Code.
 |---|---|---|---|---|
 | Gates (n) and (o) undocumented | high | hooks/completion_gate_core.py:1246,2108,2163 | 0 hits in skills, output-styles, omp/lead-addendum.md, docs; (p) 5 files, (q) 2 | all |
 | Gate (p) test fails deterministically: real gate or test drift | high | hooks/test_completion_gate.py:499 (_seed_report_notes) | test_implementer_dispatch_with_no_diff_does_not_block_condition_g fails in isolation; block reason "(p) Colony channel ... carried nothing"; which side is wrong unread | CC |
-| omp lead addendum contradicts the CC TOOLS rule | high | omp/lead-addendum.md (loaded omp/style.ts:28) vs CLAUDE.md | omp: lean-ctx via xd://, no serena; CC: TOOLS line with ToolSearch and serena | CC vs omp |
+| omp lead addendum contradicts the CC TOOLS rule | high | omp/lead-addendum.md (loaded omp/style.ts:28) vs CLAUDE.md | omp: lean-ctx via xd://, no ToolSearch; CC: TOOLS line with ToolSearch and lean-ctx | CC vs omp |
 | Header string built in 3 places | low | hooks/session_boot_core.py:379,383; hooks/completion_gate_core.py:2140; omp/style.ts:201 | contracts/operating-contract.json claimed SSOT (completion_gate_core.py:97) | CC, omp |
 | Gate letters (f),(i),(j) exist only as inline comments | low | hooks/completion_gate_core.py:1171,1190 | no standalone definition | CC |
 | Parity doc header stale | low | docs/architecture/atlas-harness-parity.md:3 | says atlas 10.4.3 / omp 18.8.6; source 12.5.13; Gate (q) omp marked [unverified] | omp |

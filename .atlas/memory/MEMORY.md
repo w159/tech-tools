@@ -23,3 +23,5 @@ Assumption to avoid (tech-tools): failing test before each bullet. The new test 
 User correction (tech-tools): They spent extra turns disputing it, and one deleted a .DS_Store you never asked to have removed.",
 §
 Assumption to avoid (tech-tools): Next H: gate (o) and the 6-phase scaffold that led the model to mark phases it never ran.
+§
+Assumption to avoid (tech-tools): I committed both files and pushed (1d1a3027) without checking the duplicate first.

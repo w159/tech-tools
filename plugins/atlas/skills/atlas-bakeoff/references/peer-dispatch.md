@@ -80,7 +80,7 @@ CONTEXT:
 TOOLS (required):
   ToolSearch first, ONE batched call, per ${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/tool-routing.md; include web_search +
   Context7 if the packet's deciding facts extend beyond the repo
-TOOLS ALLOWED: Read, Glob, Grep, web_search, Context7, lean-ctx/serena reads
+TOOLS ALLOWED: Read, Glob, Grep, web_search, Context7, lean-ctx reads
 TOOLS FORBIDDEN: Write - Edit - git push - any modification
 DELIVERABLE: final message = the POV envelope below, nothing else
 SUCCESS CRITERIA: position stated; every claim cites file:line or URL; dossier errors (if

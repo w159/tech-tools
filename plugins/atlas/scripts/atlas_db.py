@@ -1897,7 +1897,7 @@ def top_error_snippets(conn, kind, target, limit=3, since=None):
 def context_tool_health(conn):
     """Cache efficiency + the context/memory/code-nav stack's call and error
     rates. Low cache-read share or a high error rate on context-mode,
-    claude-mem, ponytail, lean-ctx, or serena means the context-protection
+    claude-mem, ponytail, or lean-ctx means the context-protection
     layer is not actually helping."""
     tok = conn.execute(
         "SELECT COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(input_tokens),0),"
@@ -1911,7 +1911,7 @@ def context_tool_health(conn):
             "SELECT server, COUNT(*) AS calls, SUM(COALESCE(is_error,0)) AS errors,"
             " COUNT(DISTINCT session_id) AS sessions FROM tool_calls "
             "WHERE kind='mcp' AND server IN "
-            "('context-mode','claude-mem','ponytail','lean-ctx','serena') "
+            "('context-mode','claude-mem','ponytail','lean-ctx') "
             "GROUP BY server"
         )
     )

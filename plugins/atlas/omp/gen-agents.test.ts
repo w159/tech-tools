@@ -145,7 +145,7 @@ test("omp worker bodies carry no Claude-only tool vocabulary and instruct xd:// 
 	const explorer = generatedAgents().explorer;
 	for (const device of [
 		"xd://mcp__lean_ctx_ctx_compose",
-		"xd://mcp__serena_find_symbol",
+		"xd://mcp__lean_ctx_ctx_search",
 		"xd://mcp__context_mode_context_mode_ctx_batch_execute",
 		"xd://mcp__claude_mem_mcp_search_search",
 	]) {
@@ -156,13 +156,13 @@ test("omp worker bodies carry no Claude-only tool vocabulary and instruct xd:// 
 
 test("ompBody refuses a body that would still carry a Claude-only token", () => {
 	expect(() => ompBody("Call ToolSearch(\"x\") first.")).toThrow("ToolSearch");
-	expect(() => ompBody("Use mcp__serena__find_symbol.")).toThrow("mcp__");
+	expect(() => ompBody("Use mcp__lean-ctx__ctx_search.")).toThrow("mcp__");
 	expect(ompBody("Plain body.")).toBe("Plain body.");
 });
 
 test("read-only agents' omp definitions list no edit device; the writers still may", () => {
 	const generated = generatedAgents();
-	const editDevice = /xd:\/\/mcp__(serena_(replace_|insert_|rename_symbol|safe_delete)|lean_ctx_ctx_patch)/;
+	const editDevice = /xd:\/\/mcp__lean_ctx_ctx_patch/;
 	for (const [name, content] of Object.entries(generated)) {
 		if (["docs-curator", "implementer", "runner"].includes(name)) continue;
 		expect(content, name).not.toMatch(editDevice);

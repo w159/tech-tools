@@ -17,7 +17,7 @@ if [ "$1" = "--version" ]; then echo "fallow ${FAKE_FALLOW_VERSION:-2.90.0}"; ex
 echo "$@" >> "${FAKE_FALLOW_LOG:-/dev/null}"
 echo "{\"verdict\": \"${FAKE_VERDICT:-pass}\"}"; exit ${FAKE_RC:-0}
 """
-TOOLS = "TOOLS: ToolSearch select:mcp__lean-ctx__ctx_search,serena activate_project"
+TOOLS = "TOOLS: ToolSearch select:mcp__lean-ctx__ctx_search,lean-ctx ctx_read"
 # Contract: dispatch_tripwire requires SCOPE/GOAL/DELIVERABLE/SUCCESS/OUT OF SCOPE/STOP/REPORT/TOOLS
 # blocks on every atlas:* dispatch, so a probe's "valid" dispatch must carry all of them.
 SPEC = (
@@ -512,8 +512,20 @@ class Gates:
         p = self.proj
         s = sid()
         self.orchestrating(s)
+        # With tmux on PATH every in-process working dispatch is denied; the team gate
+        # off (or no tmux) is the only way a valid one is allowed.
+        if self.ctx.tmux_real:
+            self.rec(
+                G,
+                "deny: in-process implementer dispatch with tmux on PATH",
+                "deny",
+                tw(disp(s, SPEC)),
+            )
         self.rec(
-            G, "allow: valid atlas:implementer dispatch", "allow", tw(disp(s, SPEC))
+            G,
+            "allow: valid atlas:implementer dispatch (team gate off)",
+            "allow",
+            tw(disp(s, SPEC), {"ATLAS_TEAM_GATE": "off"}),
         )
         self.rec(
             G,
@@ -673,13 +685,13 @@ class Gates:
         )
         self.rec(
             G,
-            "BYPASS? 'not serena' decoy passes TOOLS",
+            "BYPASS? 'never use lean-ctx' decoy passes TOOLS",
             "deny",
             tw(
                 disp(
                     s,
                     SPEC.replace(
-                        TOOLS, "ToolSearch nothing; never use serena or lean-ctx"
+                        TOOLS, "ToolSearch nothing; never use lean-ctx or ctx_read"
                     ),
                 )
             ),
@@ -1005,14 +1017,14 @@ def probe_dispatch_spec(ctx):
         + TOOLS,
         "prose-goal-label": SPEC.replace("GOAL: do x", "the goal: do x"),
         "negated-tools": SPEC.replace(
-            TOOLS, "ToolSearch nothing; never use serena or lean-ctx"
+            TOOLS, "ToolSearch nothing; never use lean-ctx or ctx_read"
         ),
         "subgoal-substring": "SUBGOAL: a\n"
         + "\n".join(f"{x}:" for x in labels[1:])
         + "\n"
         + TOOLS,
         "tools-words-in-prose": SPEC.replace(
-            TOOLS, "I considered ToolSearch and serena earlier but did not use them."
+            TOOLS, "I considered ToolSearch and lean-ctx earlier but did not use them."
         ),
     }
     empty = {

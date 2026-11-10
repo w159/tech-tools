@@ -144,8 +144,8 @@ def cmd_snapshot(args) -> dict:
 def cmd_rebaseline(args) -> dict:
     """Fold tool state written or rewritten AFTER the SessionStart snapshot into that snapshot.
 
-    MCP servers (serena, ...) write `.serena/` only once they start, which on omp is after the
-    snapshot was taken, and rewrite files such as `.serena/project.yml` every session, so
+    MCP servers (lean-ctx, ...) write their state dirs (such as `.lean-ctx/`) only once they
+    start, which on omp is after the snapshot was taken, and may rewrite files there every session, so
     completion_gate's shell-dirt check (m) would count them as code the lead wrote. A path under
     `ompToolStateDirs` that is new, or whose content differs from the snapshot, is merged in.
     Every other path is left exactly as it is, so a real code edit still counts. The root is

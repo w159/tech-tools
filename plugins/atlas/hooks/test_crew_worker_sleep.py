@@ -144,7 +144,7 @@ class EarlyExitTest(_IrcEnvCase):
 
 class MainDispatchTest(unittest.TestCase):
     def run_main(self, argv):
-        with mock.patch.object(sys, "argv", argv), mock.patch.object(
+        with mock.patch.dict(os.environ, {"ATLAS_CREW_WORKER": "w1"}), mock.patch.object(sys, "argv", argv), mock.patch.object(
             sys, "stdin", mock.Mock(read=lambda: "{}")
         ), mock.patch.object(crew_worker, "stop") as stop:
             self.assertEqual(crew_worker.main(), 0)
@@ -153,6 +153,15 @@ class MainDispatchTest(unittest.TestCase):
     def test_event_argument_selects_handler(self):
         self.run_main(["crew_worker.py", "Stop"]).assert_called_once_with({})
         self.run_main(["crew_worker.py"]).assert_not_called()
+
+    def test_stop_is_inert_without_crew_worker_env(self):
+        with mock.patch.dict(os.environ, {"ATLAS_CREW_WORKER": ""}), mock.patch.object(
+            sys, "argv", ["crew_worker.py", "Stop"]
+        ), mock.patch.object(sys, "stdin", mock.Mock(read=lambda: "{}")), mock.patch.object(
+            crew_worker, "stop"
+        ) as stop:
+            self.assertEqual(crew_worker.main(), 0)
+        stop.assert_not_called()
 
 
 if __name__ == "__main__":

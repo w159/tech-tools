@@ -498,8 +498,8 @@ extension sets `CLAUDE_PLUGIN_ROOT` itself.
 **Side effects to expect.** Running either harness in a directory creates
 `.atlas/` there (atlas run state; see [Docs as the single source of
 truth](#docs-as-the-single-source-of-truth)) and `/atlas-setup` may write
-`.claude/atlas.local.md`. `.serena/` comes from the serena MCP tooling, not
-from atlas. Add these to `.gitignore` in real projects.
+`.claude/atlas.local.md`.
+Add these to `.gitignore` in real projects.
 
 ## Connectors
 
@@ -873,7 +873,7 @@ Atlas runs on both harnesses through `plugins/atlas/omp/` (load instructions in
 | Memory capture | Runs in omp; its durable-write path has not been observed live. |
 | Inline-op, production-edit, and dispatch-spec denies | Tested against the real hook through the bridge; not yet observed in a live omp session. |
 | Mixed `task` batches | The run-state fallback logs one row per batch (first agent only), so it undercounts. |
-| Tool-state directories (e.g. `.serena/`) | omp exempts them from the shell-edit count; Claude Code's condition (m) still counts them. |
+| Agent tool-state directories | omp exempts them from the shell-edit count; Claude Code's condition (m) still counts them. |
 | `session_shutdown` budget | omp allows handlers 2 s; a slow transcript conversion skips that shutdown's ingest (the Stop-time ingest still ran). |
 
 13 generated omp agents live in `plugins/atlas/omp/agents/` (regenerate with

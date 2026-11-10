@@ -36,13 +36,6 @@ afterEach(() => {
 // ── the real agent files: parsed lists equal what the files say ──
 
 const MCP_EDIT_TOOLS = [
-	"mcp__serena__replace_symbol_body",
-	"mcp__serena__insert_after_symbol",
-	"mcp__serena__insert_before_symbol",
-	"mcp__serena__replace_content",
-	"mcp__serena__replace_in_files",
-	"mcp__serena__rename_symbol",
-	"mcp__serena__safe_delete_symbol",
 	"mcp__lean-ctx__ctx_patch",
 ];
 const FULL_READONLY = [
@@ -221,12 +214,9 @@ test("the shipped contract carries the guard mapping as data, including the not-
 	expect(contract?.ompTools.ast_edit.blockedByClaude).toEqual(["Edit", "Write"]);
 });
 
-test("read-only agents are blocked from serena/lean-ctx edit devices; reads and writable agents are not", () => {
+test("read-only agents are blocked from lean-ctx edit devices; reads and writable agents are not", () => {
 	const h = harness();
 	for (const device of [
-		"xd://mcp__serena_replace_symbol_body",
-		"xd://mcp__serena_insert_after_symbol",
-		"xd://mcp__serena_replace_content",
 		"xd://mcp__lean_ctx_ctx_patch",
 	]) {
 		const denied = h.call(sub("verifier"), "write", { path: device, content: "{}" });
@@ -234,7 +224,7 @@ test("read-only agents are blocked from serena/lean-ctx edit devices; reads and 
 		expect(denied?.reason).toContain("agents/verifier.md");
 		expect(h.call(sub("implementer"), "write", { path: device, content: "{}" })).toBeUndefined();
 	}
-	for (const device of ["xd://mcp__serena_find_symbol", "xd://mcp__lean_ctx_ctx_read", "agent://Main", "local://x.md"]) {
+	for (const device of ["xd://mcp__lean_ctx_ctx_search", "xd://mcp__lean_ctx_ctx_read", "agent://Main", "local://x.md"]) {
 		expect(h.call(sub("verifier"), "write", { path: device, content: "{}" })).toBeUndefined();
 	}
 });

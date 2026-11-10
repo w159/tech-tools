@@ -134,7 +134,7 @@ test("exploration classifier fails closed on mutations hidden in read-looking co
 test("toolStateDirs loads from ompToolStateDirs and defaults to [] when the key is missing", () => {
 	const c = loadNativeTools();
 	expect(c?.toolStateDirs).toEqual(contract.ompToolStateDirs);
-	expect(c?.toolStateDirs).toContain(".serena");
+	expect(c?.toolStateDirs).toContain(".lean-ctx");
 	const dir = mkdtempSync(join(tmpdir(), "atlas-contract-"));
 	try {
 		const p = join(dir, "no-tool-state.json");

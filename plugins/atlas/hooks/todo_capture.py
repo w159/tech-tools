@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: mirror every TodoWrite / TaskCreate / TaskUpdate call to the project todo board.
+"""PostToolUse hook: mirror every TodoWrite / TaskCreate / TaskUpdate call, and Codex
+work-state writes, to the project todo board.
 
 Claude Code provides TaskCreate/TaskUpdate by default (TodoWrite only under
 CLAUDE_CODE_ENABLE_TASKS=0). A TaskCreate adds one board item keyed by the task id from
@@ -11,8 +12,13 @@ current plan. Mirroring it into <project>/.atlas/.run/todos.json makes the
 session's progress visible to the dashboard (Work tab) and readable by the
 completion gate and subagents, without depending on the transcript.
 
-It also gives one advisory when an atlas:* worker is dispatched (Agent/Task, or
-`atlas_mux.py spawn|spawn-team`) onto a board with no item for the session: TodoWrite is
+A Codex work-state write (mcp__mcp_search__work_state_write) upserts one board item keyed
+by (session, list, task) through atlas_todo.upsert_work_state; an update with no task is
+ignored.
+
+It also gives one advisory when a worker is dispatched (atlas:* Agent/Task,
+`collaboration.spawn_agent`, or `atlas_mux.py spawn|spawn-team`) onto a board with no
+item for the session: TodoWrite is
 not available to every model family, so the band would read `tasks 0/0` while workers run.
 The advisory carries the exact `atlas_todo.py set` command, once per session.
 
@@ -52,11 +58,17 @@ class _LazyTodo:
 
 atlas_todo = _LazyTodo()
 
+WORK_STATE_TOOLS = frozenset(
+    {"mcp__mcp_search__work_state_write", "mcp__mcp_search_work_state_write"}
+)
+
 
 def _is_dispatch(data: dict) -> bool:
     tool, inp = data.get("tool_name"), data.get("tool_input") or {}
     if tool in ("Agent", "Task"):
         return str(inp.get("subagent_type") or "").startswith("atlas:")
+    if tool == "collaboration.spawn_agent":
+        return True
     if tool == "Bash":
         cmd = str(inp.get("command") or "")
         return "atlas_mux.py" in cmd and (" spawn " in cmd or " spawn-team " in cmd)
@@ -174,17 +186,29 @@ def _task_update(cwd: str, sid: str, data: dict) -> None:
         atlas_todo.save(cwd, board)
 
 
+def _work_state(cwd: str, sid: str, data: dict) -> None:
+    inp = data.get("tool_input") or {}
+    if not isinstance(inp, dict):
+        return
+    fields = inp.get("fields")
+    if not isinstance(fields, dict) or not fields.get("task"):
+        return
+    atlas_todo.upsert_work_state(cwd, inp.get("list"), fields, sid)
+
+
 def main() -> int:
     if os.environ.get("ATLAS_TODO", "").lower() in ("0", "off", "false", "no"):
         return 0
     data = atlas_hook_guard.load_payload("todo_capture")
     tool = data.get("tool_name")
-    if tool in ("TaskCreate", "TaskUpdate"):
+    if tool in ("TaskCreate", "TaskUpdate") or tool in WORK_STATE_TOOLS:
         cwd = data.get("cwd") or os.getcwd()
+        if tool in WORK_STATE_TOOLS:
+            handler = _work_state
+        else:
+            handler = _task_create if tool == "TaskCreate" else _task_update
         try:
-            (_task_create if tool == "TaskCreate" else _task_update)(
-                cwd, data.get("session_id") or "", data
-            )
+            handler(cwd, data.get("session_id") or "", data)
         except Exception as exc:
             atlas_faults.record("todo_capture", exc, cwd)
         return 0

@@ -78,7 +78,6 @@ CONTENT_SERVERS = (
     "context-mode",
     "mcp-search",
     "claude-mem",
-    "serena",
     "context7",
     "microsoft-docs",
 )

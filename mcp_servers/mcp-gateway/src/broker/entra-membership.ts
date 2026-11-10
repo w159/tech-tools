@@ -121,7 +121,12 @@ export function managedIdentityTokenProvider(opts: {
   const doFetch = opts.fetch ?? fetch;
   const now = opts.now ?? (() => Date.now());
   return cachingProvider(async (signal) => {
-    const url = new URL(opts.endpoint);
+    let url: URL;
+    try {
+      url = new URL(opts.endpoint);
+    } catch {
+      throw new MembershipUnavailable("graph_token_unreachable");
+    }
     url.searchParams.set("resource", GRAPH_RESOURCE);
     url.searchParams.set("api-version", MI_API_VERSION);
     if (opts.clientId) url.searchParams.set("client_id", opts.clientId);
@@ -169,6 +174,43 @@ export function clientCredentialsTokenProvider(opts: {
     if (!res.ok) throw new MembershipUnavailable(`graph_token_http_${res.status}`);
     return parseTokenResponse(((await readJson(res)) ?? {}) as TokenResponse, now);
   }, now, opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+}
+
+// Prefers the primary source; when it cannot yield a token, or Graph rejects its
+// token (401/403, e.g. an identity holding no Graph roles), uses the fallback and
+// keeps using it for retryMs before trying the primary again. The membership
+// check itself stays fail-closed: if the fallback fails too, getToken throws.
+export function fallbackTokenProvider(
+  primary: GraphTokenProvider,
+  fallback: GraphTokenProvider,
+  opts: { now?: () => number; retryMs?: number } = {},
+): GraphTokenProvider {
+  const now = opts.now ?? (() => Date.now());
+  const retryMs = opts.retryMs ?? 600_000;
+  let primaryAfterMs = 0;
+  let active: GraphTokenProvider = primary;
+  const demote = (): void => {
+    primaryAfterMs = now() + retryMs;
+    active = fallback;
+  };
+  return {
+    async getToken(signal) {
+      if (active === fallback && now() >= primaryAfterMs) active = primary;
+      if (active === primary) {
+        try {
+          return await primary.getToken(signal);
+        } catch (err) {
+          if (signal.aborted) throw err;
+          demote();
+        }
+      }
+      return fallback.getToken(signal);
+    },
+    invalidate() {
+      if (active === primary) demote();
+      active.invalidate();
+    },
+  };
 }
 
 export type MembershipResult =
@@ -250,7 +292,8 @@ export class EntraMembership {
     return this.graphUrl(method, `${this.base}${path}`, signal, body);
   }
 
-  private async graphUrl(method: "GET" | "POST", url: string, signal: AbortSignal, body?: unknown): Promise<GraphReply> {
+  // A 401/403 drops the token (a fallback provider then switches source), so one retry with a fresh token.
+  private async graphUrl(method: "GET" | "POST", url: string, signal: AbortSignal, body?: unknown, retried = false): Promise<GraphReply> {
     const token = await this.opts.tokenProvider.getToken(signal);
     let res: Response;
     try {
@@ -267,7 +310,13 @@ export class EntraMembership {
     } catch {
       throw new MembershipUnavailable("graph_unreachable");
     }
-    if (res.status === 401) this.opts.tokenProvider.invalidate();
+    if (res.status === 401 || res.status === 403) {
+      this.opts.tokenProvider.invalidate();
+      if (!retried) {
+        await res.arrayBuffer().catch(() => undefined);
+        return this.graphUrl(method, url, signal, body, true);
+      }
+    }
     const json = res.ok ? await readJson(res) : undefined;
     // Drain error bodies without keeping them.
     if (!res.ok) await res.arrayBuffer().catch(() => undefined);
@@ -291,6 +340,7 @@ export class EntraMembership {
 
   // Follows @odata.nextLink pages and returns every item. A continuation that
   // leaves the Graph origin we call is rejected.
+  // fallow-ignore-next-line complexity
   private async pagedValues(firstUrl: string, signal: AbortSignal): Promise<{ status: number; items: unknown[] }> {
     const items: unknown[] = [];
     let url: string | undefined = firstUrl;
@@ -304,7 +354,13 @@ export class EntraMembership {
       items.push(...doc.value);
       const next = doc["@odata.nextLink"];
       if (typeof next === "string") {
-        if (new URL(next).origin !== new URL(this.base).origin) throw new MembershipUnavailable("graph_invalid_response");
+        let sameOrigin = false;
+        try {
+          sameOrigin = new URL(next).origin === new URL(this.base).origin;
+        } catch {
+          // malformed nextLink stays off-origin and is rejected below
+        }
+        if (!sameOrigin) throw new MembershipUnavailable("graph_invalid_response");
         url = next;
       } else url = undefined;
     }

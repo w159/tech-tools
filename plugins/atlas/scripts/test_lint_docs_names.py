@@ -53,7 +53,7 @@ class Violations(unittest.TestCase):
                 [
                     "docs/plans/2026-06-23_01-packer.md",
                     "docs/lessons/2026-07-09_enforcement.md",
-                    ".atlas/findings/2026-08-11_serena.md",
+                    ".atlas/findings/2026-08-11_lean-ctx.md",
                 ]
             ),
             [],

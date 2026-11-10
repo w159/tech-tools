@@ -96,6 +96,15 @@ class AtlasDoctorTest(unittest.TestCase):
             {"name": "atlas", "version": "1.0.1"},
         )
         write_json(
+            os.path.join(self.install_101, ".codex-plugin", "plugin.json"),
+            {
+                "name": "atlas",
+                "version": "1.0.1",
+                "skills": "./skills/",
+                "hooks": "./hooks/hooks.json",
+            },
+        )
+        write_json(
             os.path.join(self.plugins, "installed_plugins.json"),
             {
                 "version": 2,
@@ -191,6 +200,47 @@ class AtlasDoctorTest(unittest.TestCase):
         os.makedirs(os.path.join(ip, "skills", "empty-dir"), exist_ok=True)
         counts = atlas_doctor.count_assets(ip)
         self.assertEqual(counts, {"commands": 1, "agents": 1, "skills": 1})
+
+    def test_codex_wiring_requires_supported_manifest(self):
+        ip = self.install_101
+        os.remove(os.path.join(ip, ".codex-plugin", "plugin.json"))
+        ok, detail = atlas_doctor.check_codex_wiring(ip)
+        self.assertFalse(ok)
+        self.assertIn(".codex-plugin/plugin.json absent", detail)
+        write_json(
+            os.path.join(ip, ".codex-plugin", "plugin.json"),
+            {
+                "name": "atlas",
+                "version": "1.0.1",
+                "skills": "../skills",
+                "hooks": "./hooks/missing.json",
+            },
+        )
+        ok, detail = atlas_doctor.check_codex_wiring(ip)
+        self.assertFalse(ok)
+        self.assertIn("skills must be ./skills/", detail)
+        self.assertIn(
+            "hooks must be ./hooks/hooks.codex.json or ./hooks/hooks.json", detail
+        )
+
+    def test_codex_wiring_accepts_codex_hooks_manifest(self):
+        ip = self.install_101
+        write_json(
+            os.path.join(ip, ".codex-plugin", "plugin.json"),
+            {
+                "name": "atlas",
+                "version": "1.0.1",
+                "skills": "./skills/",
+                "hooks": "./hooks/hooks.codex.json",
+            },
+        )
+        ok, detail = atlas_doctor.check_codex_wiring(ip)
+        self.assertTrue(ok, detail)
+
+    def test_codex_wiring_passes_on_real_dev_tree(self):
+        ok, detail = atlas_doctor.check_codex_wiring(HERE_ATLAS)
+        self.assertTrue(ok, detail)
+        self.assertIn("skills and hooks", detail)
 
     def test_stale_assets_detected_in_plugin_and_user_dirs(self):
         ip = self.install_101
@@ -2901,6 +2951,15 @@ class NonMarketplaceLoadTest(unittest.TestCase):
                 "name": "atlas",
                 "version": "9.9.9",
                 "repository": "https://github.com/w159/tech-tools",
+            },
+        )
+        write_json(
+            os.path.join(root, ".codex-plugin", "plugin.json"),
+            {
+                "name": "atlas",
+                "version": "9.9.9",
+                "skills": "./skills/",
+                "hooks": "./hooks/hooks.json",
             },
         )
         write_json(

@@ -58,7 +58,7 @@ def run_hook(payload, env):
 
 
 TOOLS_BLOCK = (
-    'TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__serena__find_symbol")\n'
+    'TOOLS: ToolSearch("select:mcp__lean-ctx__ctx_compose,mcp__lean-ctx__ctx_search")\n'
 )
 # The five blocks subagent-kit.md's dispatch spec requires. Without them
 # _unbounded_dispatch denies the dispatch as having no finish line.
@@ -258,6 +258,60 @@ class TripwireTest(unittest.TestCase):
         ).fetchone()
         conn2.close()
         self.assertGreater(rows[0], 0, "dispatch not logged after run finalized")
+
+    def test_codex_spawn_agent_logs_dispatch_and_marks_orchestration(self):
+        import atlas_db
+
+        self._fresh_unmarked_session("sess-codex")
+        payload = {
+            "session_id": "sess-codex",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "collaboration.spawn_agent",
+            "tool_input": {
+                "agent_type": "implementer",
+                "task_name": "codex-fix",
+                "message": TOOLS_BLOCK + SPEC_BLOCK,
+            },
+        }
+        r = run_hook(payload, self.env)
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue(self._is_orchestrating("sess-codex"))
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        run_id = atlas_db.current_or_last_run_id(conn, "sess-codex")
+        rows = conn.execute(
+            "SELECT agent_type FROM dispatches WHERE run_id=?", (run_id,)
+        ).fetchall()
+        conn.close()
+        self.assertEqual([row[0] for row in rows], ["implementer"])
+
+    def test_codex_non_spawn_collaboration_tools_do_not_count_as_dispatches(self):
+        import atlas_db
+
+        self._fresh_unmarked_session("sess-followup")
+        for tool in (
+            "collaboration.followup_task",
+            "collaboration.send_message",
+            "collaboration.wait_agent",
+        ):
+            run_hook(
+                {
+                    "session_id": "sess-followup",
+                    "hook_event_name": "PostToolUse",
+                    "tool_name": tool,
+                    "tool_input": {"target": "worker", "message": "continue"},
+                },
+                self.env,
+            )
+
+        conn = atlas_db.connect(self.env["ATLAS_DB"])
+        run_id = atlas_db.current_or_last_run_id(conn, "sess-followup")
+        count = conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (run_id,)
+        ).fetchone()[0]
+        conn.close()
+        self.assertEqual(count, 0)
+        self.assertFalse(self._is_orchestrating("sess-followup"))
 
     def test_hooks_json_matcher_includes_dispatch_tools(self):
         import json
@@ -3026,7 +3080,7 @@ class ToolkitGapOmpTest(unittest.TestCase):
 
     def test_tools_named_only_in_prose_or_a_decoy_sentence_do_not_count(self):
         decoy = (
-            "fix it, ToolSearch for serena and lean-ctx if you feel like it\nGOAL: x"
+            "fix it, ToolSearch for ctx_search and lean-ctx if you feel like it\nGOAL: x"
         )
         self.assertEqual(self.gap(decoy), "atlas:implementer")
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
@@ -3068,9 +3122,8 @@ class ToolkitGapOmpTest(unittest.TestCase):
     # above would still pass if the Claude wording drifted; this one pins every byte of what Claude Code users see.
     CLAUDE_870_DENY = (
         "DENY - this Task dispatch is missing the code-nav TOOLS block. Paste subagent-kit.md / tool-routing.md: one "
-        "batched ToolSearch that includes lean-ctx (ctx_compose/ctx_search/ctx_read) AND serena (activate_project, "
-        "get_symbols_overview, find_symbol, and for implementers replace_symbol_body), plus context-mode for noisy "
-        "output. The subagent must run that before Read/Grep/Bash; serena down -> lean-ctx only, never Bash grep. "
+        "batched ToolSearch that includes lean-ctx (ctx_compose/ctx_search/ctx_read), plus context-mode for noisy "
+        "output. The subagent must run that before Read/Grep/Bash, never Bash grep. "
         "Without it atlas:implementer greps the tree."
     )
 
@@ -4182,7 +4235,7 @@ class ToolsBlockParserTest(unittest.TestCase):
         # "ALSO:" sits mid-line after a sentence break: the old parser ended the
         # TOOLS block there and lost the nav token that follows it.
         prompt = (
-            "TOOLS: ToolSearch for devices. ALSO: serena for symbol edits\n"
+            "TOOLS: ToolSearch for devices. ALSO: ctx_read for code reads\n"
             + SPEC_BLOCK
         )
         r = self._dispatch(prompt)
@@ -4710,9 +4763,9 @@ class RoleBlockAndIsDenyUnitTest(unittest.TestCase):
 
 
 class TeamGateTest(unittest.TestCase):
-    """dispatch_denied:team: the 2nd in-process working-role dispatch of a run whose resolved team has 2+
-    working seats is denied when tmux is on PATH. Closing roles are never counted; no tmux or
-    ATLAS_TEAM_GATE=off keeps the advisory path."""
+    """dispatch_denied:team: with tmux on PATH every in-process working-role dispatch is denied, the first one
+    and a one-seat scope too. Closing roles are exempt; no tmux, omp or ATLAS_TEAM_GATE=off keeps the
+    advisory path."""
 
     setUp = TripwireTest.setUp
     _decision = ScopeGateTest._decision
@@ -4756,22 +4809,20 @@ class TeamGateTest(unittest.TestCase):
         finally:
             conn.close()
 
-    def test_second_working_dispatch_is_denied_with_the_team_command(self):
+    def test_first_working_dispatch_is_denied_with_the_team_command(self):
         env = self._env()
-        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
         decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
         self.assertEqual(decision, "deny")
-        self.assertIn("spawn-team --class audit --effort medium", reason)
-        self.assertIn("atlas_crew.py", reason)
+        self.assertIn("atlas_mux.py spawn-team --class audit --effort medium --paths a,b --task-file T", reason)
+        self.assertIn('atlas_crew.py run --spec S --files G --goal "..."', reason)
         self.assertIn("dispatch_denied:team", self._friction())
-        self.assertIn("SCOPE: audit/low", reason)
+        self.assertNotIn("SCOPE: audit/low", reason)
         self.assertIn("Ways out: run that team or crew command", reason)
         self.assertLess(len(reason.encode("utf-8")), 600, reason)
         reason.encode("ascii")
 
     def test_deny_length_does_not_depend_on_the_plugin_root(self):
         env = self._env(CLAUDE_PLUGIN_ROOT="/" + "r" * 199)
-        self._dispatch("atlas:explorer", "audit/medium", env)
         decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
         self.assertEqual(decision, "deny")
         self.assertNotIn("r" * 199, reason)
@@ -4790,24 +4841,25 @@ class TeamGateTest(unittest.TestCase):
         }
         run_hook(payload, env)
 
-    def test_second_explorer_is_denied_without_a_team_launch(self):
+    def test_every_working_dispatch_is_denied(self):
         env = self._env()
-        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
+        self.assertEqual(self._dispatch("atlas:explorer", "audit/medium", env)[0], "deny")
         self.assertEqual(self._dispatch("atlas:explorer", "audit/medium", env)[0], "deny")
 
-    def test_team_launched_this_run_allows_the_second_explorer(self):
+    def test_team_launched_this_run_still_denies_in_process_workers(self):
         env = self._env()
-        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
         self._launch(env)
-        decision, reason = self._dispatch("atlas:explorer", "audit/medium", env)
-        self.assertIsNone(decision)
-        self.assertNotIn("in-process working dispatch", reason or "")
+        self.assertEqual(self._dispatch("atlas:explorer", "audit/medium", env)[0], "deny")
 
-    def test_closing_role_after_a_working_role_is_allowed(self):
+    def test_closing_roles_are_allowed(self):
         env = self._env()
-        self.assertIsNone(self._dispatch("atlas:implementer", "implement/medium", env)[0])
+        self.assertEqual(self._dispatch("atlas:implementer", "implement/medium", env)[0], "deny")
         self.assertIsNone(self._dispatch("atlas:verifier", "implement/medium", env)[0])
         self.assertIsNone(self._dispatch("atlas:verifier", "implement/medium", env)[0])
+
+    def test_omp_keeps_the_advisory(self):
+        env = self._env(ATLAS_HARNESS="omp")
+        self.assertIsNone(self._dispatch("atlas:explorer", "audit/medium", env)[0])
 
     def test_no_tmux_keeps_the_advisory(self):
         env = self._env(with_tmux=False)
@@ -4824,15 +4876,23 @@ class TeamGateTest(unittest.TestCase):
         self.assertIn("[atlas] ADVISORY (ATLAS_TEAM_GATE=off)", note)
         self.assertIn("spawn-team --class audit --effort medium", note)
 
-    def test_single_seat_team_is_not_denied(self):
+    def test_single_seat_scope_is_denied(self):
         env = self._env()
+        decision, reason = self._dispatch("atlas:implementer", "fix/low", env)
+        self.assertEqual(decision, "deny")
+        self.assertIn("spawn-team --class fix --effort low", reason)
+
+    def test_single_seat_scope_without_tmux_is_silent(self):
+        env = self._env(with_tmux=False)
         self._dispatch("atlas:implementer", "fix/low", env)
-        self.assertIsNone(self._dispatch("atlas:implementer", "fix/low", env)[0])
+        decision, note = self._dispatch("atlas:implementer", "fix/low", env)
+        self.assertIsNone(decision)
+        self.assertNotIn("in-process working dispatch", note or "")
 
 
 class TeamGateUnitTest(unittest.TestCase):
-    """_scope_gate in-process with a pinned clock: the 2nd explorer 30 s later (outside the burst window,
-    so no concurrent deny) is denied with code `team`."""
+    """_scope_gate in-process with a pinned clock: with tmux on PATH every working dispatch is denied with code
+    `team`, even outside the burst window."""
 
     def setUp(self):
         sys.path.insert(0, os.path.dirname(__file__))
@@ -4857,29 +4917,35 @@ class TeamGateUnitTest(unittest.TestCase):
             self.dt._scope_gate(lambda code, text: self.denied.append(code), tinput, self.root, "team-unit", "run-1")
         return self.denied, out.getvalue()
 
-    def test_second_explorer_thirty_seconds_later_is_denied(self):
-        self.assertEqual(self._gate(1000.0)[0], [])
+    def test_first_explorer_is_denied(self):
+        self.assertEqual(self._gate(1000.0)[0], ["team"])
         self.assertEqual(self._gate(1030.0)[0], ["team"])
 
-    def test_team_launch_in_this_run_allows_the_second_explorer(self):
-        self.assertEqual(self._gate(1000.0)[0], [])
+    def test_first_low_scope_dispatch_is_denied(self):
+        self.assertEqual(self._gate(1000.0, agent="atlas:implementer", scope="fix/low")[0], ["team"])
+
+    def test_team_launch_does_not_allow_in_process_workers(self):
         self.dt._mark_team_launched(self.root, "team-unit", "run-1")
-        denied, out = self._gate(1030.0)
-        self.assertEqual(denied, [])
-        self.assertNotIn("in-process working dispatch", out)
-
-    def test_team_launch_in_another_run_does_not_carry_over(self):
-        self.dt._mark_team_launched(self.root, "team-unit", "run-0")
-        self.assertEqual(self._gate(1000.0)[0], [])
         self.assertEqual(self._gate(1030.0)[0], ["team"])
 
-    def test_new_run_key_restarts_the_count(self):
-        self._gate(1000.0)
+    def test_closing_role_is_not_denied(self):
+        self.assertEqual(self._gate(1000.0, agent="atlas:verifier", scope="implement/medium")[0], [])
+
+    def test_omp_is_advisory(self):
+        with patch.dict(os.environ, {"ATLAS_HARNESS": "omp"}):
+            self._gate(1000.0)
+            denied, out = self._gate(1030.0)
+        self.assertEqual(denied, [])
+        self.assertIn("[atlas] ADVISORY (omp)", out)
+
+    def test_new_run_key_restarts_the_advisory_count(self):
+        self._gate(1000.0, tmux=None)
         tinput = {"subagent_type": "atlas:explorer", "prompt": "SCOPE: audit/medium\n"}
-        with patch("time.time", return_value=1030.0), patch("shutil.which", return_value="/usr/bin/tmux"), \
-                contextlib.redirect_stdout(io.StringIO()):
+        with patch("time.time", return_value=1030.0), patch("shutil.which", return_value=None), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
             self.dt._scope_gate(lambda c, t: self.denied.append(c), tinput, self.root, "team-unit", "run-2")
         self.assertEqual(self.denied, [])
+        self.assertNotIn("in-process working dispatch", out.getvalue())
 
     def test_gate_off_is_advisory_with_the_spawn_command(self):
         with patch.dict(os.environ, {"ATLAS_TEAM_GATE": "off"}):
