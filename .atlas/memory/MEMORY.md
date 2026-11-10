@@ -21,3 +21,5 @@ Assumption to avoid (tech-tools): ATLAS | 🔧 implement | The test rewrite didn
 Assumption to avoid (tech-tools): failing test before each bullet. The new test files cover each bullet and pass. I never ran them against the old code.
 §
 User correction (tech-tools): They spent extra turns disputing it, and one deleted a .DS_Store you never asked to have removed.",
+§
+Assumption to avoid (tech-tools): Next H: gate (o) and the 6-phase scaffold that led the model to mark phases it never ran.
