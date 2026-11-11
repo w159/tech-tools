@@ -20,7 +20,7 @@ const todo = (id: string, content: string, status: string, owner?: string): Todo
 const snapOf = (statuses: readonly [string, string, string]): LiveSnapshot =>
   busySnap({
     todos: [todo('T1', 'wire the gate', statuses[0]), todo('T2', 'map the auth flow', statuses[1], 'explorer-1'), todo('T3', 'edit auth middleware', statuses[2], 'impl-auth')],
-    squad: busySnap().squad.map((a) => (a.name === 'impl-auth' ? { ...a, state: 'done' as const } : a)),
+    squad: busySnap().squad.map((a) => (a.name === 'impl-auth' ? { ...a, state: 'finished' as const } : a)),
     activity: { ...busySnap().activity, 'impl-auth': { ...busySnap().activity['impl-auth']!, mood: 'done' as const } },
   });
 

@@ -10,7 +10,7 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, clip, gauge, ribbon, runsCells, spinFrameOf, STATE_TOKEN, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, clip, gauge, markOf, markToken, RETURNED, ribbon, runsCells, spinFrameOf, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
@@ -76,7 +76,7 @@ export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
   // Named only when it adds to the item's own word (a failed owner already reads `failed`; a waiting owner reads `blocked` and is named).
   const ownerState = state !== 'done' && (it.ownerState === 'failed' || it.ownerState === 'waiting' || it.ownerState === 'blocked') && it.ownerState !== state ? it.ownerState : undefined;
   const ended = it.status === 'ended';
-  const base = { label: bare(it.content), state, ...(ended ? { word: 'ended' } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}) };
+  const base = { label: bare(it.content), state, ...(ended ? { word: RETURNED } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}) };
   const ev = cleanEvidence(it.evidence);
   const detail = ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
   if (state === 'done' && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
@@ -199,7 +199,7 @@ export function labelCut(labels: readonly string[], w: number): string[] {
 /** One row at rest. `focus` marks the row the marker `▸` points at. */
 function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const f = form(o.cols);
-  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), stateRun(row.state, o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0), r(' ')];
+  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0), r(' ')];
   // Full form: done struck in sub, the focus bold. The 80 mock draws labels plain (text), the 40 mock dims a done one (sub).
   const text = o.shown ?? row.label;
   const labelRun = (w: number): Run =>
@@ -210,7 +210,7 @@ function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
   const word = row.word ?? row.state;
   if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + (o.wordW ?? STATE_W) + 1), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
-  const stateCell = o.rich ? (row.word ? chip(word, STATE_TOKEN[row.state], o.ui) : stateChip(row.state, o.ui)) : r(word);
+  const stateCell = o.rich ? (row.word ? chip(word, markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word);
   const withState = to([...withLabel, stateCell], COL.owner);
   const owner = to([...withState, ...(row.owner ? [r(clip(row.owner, OWNER_W), 'sub')] : [])], COL.detail);
   return [...owner, ...detailRuns(row, o, Math.max(0, o.cols - COL.detail - 1))];

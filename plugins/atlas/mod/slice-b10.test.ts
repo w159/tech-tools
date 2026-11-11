@@ -86,7 +86,7 @@ describe('B3: the band carries no offload and no route drift jargon', () => {
   test('a route that differs says so in plain words and never reads drift', () => {
     const m = { ...blank(), routes: [rt({ seats: [seat({ ran: ['haiku', 'haiku', 'haiku'] })], drift: ['3 explorers ran, 1 planned'] })] } as CoreModel;
     const t = cellsText(coreCells(m, 300));
-    expect(t).toContain('planned audit/low, ran 3 explorers');
+    expect(t).toContain('planned audit team (low effort), ran 3 explorers');
     expect(t).not.toContain('drift');
   });
 });

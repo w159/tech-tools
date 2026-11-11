@@ -29,7 +29,7 @@ describe('A2: the Board fold never hides an open row', () => {
   test('the agent ended but the store row is open (settled to ended): the plan row reads ended, never done', () => {
     const items = asBoard(settleDispatch(ownTodos(store(), SESSION), { 'gamma-explorer': 'done' }));
     const rows = boardRowsOf(items);
-    expect(rows[2]!.word).toBe('ended');
+    expect(rows[2]!.word).toBe('returned');
     expect(rows[2]!.state).not.toBe('done');
     expect(boardOpenFolded(items)).toBe(1);
   });

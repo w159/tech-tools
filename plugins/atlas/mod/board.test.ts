@@ -90,7 +90,7 @@ describe('board goldens', () => {
     expect(rows.map((x) => x.label)).toEqual(['T1 read a.py', 'T2 read b.py', 'T3 read c.py', 'T4 read d.py', 'T5 read e.py']);
     // the dispatch row's state is folded into the plan row: running, failed, and a finished worker leaves the open row `ended`
     expect(rows.map((x) => x.state)).toEqual(['running', 'failed', 'blocked', 'queued', 'queued']);
-    expect(rows[2]!.word).toBe('ended');
+    expect(rows[2]!.word).toBe('returned');
     expect(rows.map((x) => x.owner)).toEqual(['w-a', 'w-b', 'w-c', '', '']);
     // a plan row already done stays done while its worker's row is closed; an open worker row re-opens it (critique 9: the fold never hides an open row)
     expect(boardRowsOf([{ content: 'T1 x (w-a)', status: 'completed' }, disp('a', 'completed')]).map((x) => x.state)).toEqual(['done']);
@@ -233,7 +233,7 @@ describe('S1: a dispatch row follows its worker', () => {
   test('the board then draws the row ended (attention, never done) or failed, and the counts follow', () => {
     const settled = settleDispatch([dispatch({ id: '1' }), dispatch({ id: '2', owner: 'impl-b' })], { 'impl-a': 'done', 'impl-b': 'failed' });
     expect(boardRowsOf(settled).map((r) => r.state)).toEqual(['blocked', 'failed']);
-    expect(boardRowsOf(settled).map((r) => r.word)).toEqual(['ended', undefined]);
+    expect(boardRowsOf(settled).map((r) => r.word)).toEqual(['returned', undefined]);
   });
   test('A2: no open store status ever draws as done: the glyph is not the done glyph and the word is not `done`', () => {
     for (const status of ['pending', 'in_progress', 'ended', 'blocked']) {
@@ -246,10 +246,10 @@ describe('S1: a dispatch row follows its worker', () => {
   });
   test('an ended row names itself in the state column (plain and rich) and says why in the detail', () => {
     const rows = boardRowsOf([{ content: 'x', status: 'ended', origin: 'dispatch', owner: 'w' }]);
-    expect(boardText(boardBody(rows, { cols: 110, ui: ui('mocha') }))[1]).toMatch(/^ {2}▲ x +ended +w +agent ended, row still open$/);
+    expect(boardText(boardBody(rows, { cols: 110, ui: ui('mocha') }))[1]).toMatch(/^ {2}◃ x +returned +w +agent ended, row still open$/);
     const rich = boardBody(rows, { cols: 110, ui: ui('mocha'), rich: true })[1]!.runs.find((x) => x.chip)!;
-    expect(rich.t).toBe(' ENDED     ');
-    expect(rich.bg).toBe('warn');
+    expect(rich.t).toBe(' RETURNED  ');
+    expect(rich.bg).toBe('accent');
   });
 });
 
@@ -281,5 +281,17 @@ describe('mutation kills (round 2): blockedCount, boardCounts, the elapsed gauge
     expect(detail(running(15, 60), 120)).toBe('elapsed ██▌░░░░░░░ 00:15 of 01:00');
     // An estimate of one second still divides by one, not by a larger floor.
     expect(detail(running(1, 1), 120)).toBe('elapsed ██████████ 00:01 of 00:01');
+  });
+});
+
+describe('returned never draws the amber warning mark on the Board (wave 12 integration)', () => {
+  const rows = boardRowsOf([{ content: 'x', status: 'ended', origin: 'dispatch', owner: 'w' }]);
+  test('plain and ASCII rows lead with the returned mark, not the blocked triangle', () => {
+    expect(boardText(boardBody(rows, { cols: 110, ui: ui('mocha') }))[1]).not.toContain('▲');
+    expect(boardText(boardBody(rows, { cols: 110, ui: { ...ui('mocha'), ascii: true } }))[1]).toMatch(/^ {2}< x +returned/);
+  });
+  test('the mark run is the returned glyph in the accent tone', () => {
+    const head = boardBody(rows, { cols: 110, ui: ui('mocha') })[1]!.runs.find((x) => x.t === '◃')!;
+    expect(head.tone).not.toBe('warn');
   });
 });
