@@ -144,11 +144,20 @@ test('header is filled pills: brand on violet, phase on its hue, then the state 
   expect(rest.map((p) => p.children[0]).join('')).toBe(' 3/5 shipping restyle')
 })
 
-test('header row fits one line at 60 columns; under 60 only the two pills stay', () => {
-  const line = stringsOf({ type: 'Box', props: {}, children: pillsOf(`ATLAS | 🔧 implement 3/5 | ${'x'.repeat(120)}`, 60) })
-  expect(textWidth(line)).toBeLessThanOrEqual(60)
+test("critique 14 B2: the lead's sentence is never cut inside the chip; it wraps beside the pills", () => {
+  // live-110-61858003-1 tab-route.png: `marking T1 compl...` at the 66 columns the docked transcript has
+  const sentence = '1 of 3 explorers done (alpha), marking T1 complete'
+  const kids = pillsOf(`ATLAS | 🔍 research | ${sentence}`, 66)
+  const line = stringsOf({ type: 'Box', props: {}, children: kids })
+  expect(line).toContain(sentence)
+  expect(line).not.toContain('…')
+  const tail = kids.at(-1)!
+  expect(tail.children[0]).toBe(` ${sentence}`)
+  expect(tail.props.wrap).toBe('wrap') // a wrapping Text in a row shrinks and hangs under itself; truncate-end cut it
+  const long = pillsOf(`ATLAS | 🔧 implement 3/5 | ${'word '.repeat(40).trim()}`, 60)
+  expect(stringsOf({ type: 'Box', props: {}, children: long })).not.toContain('…')
   expect(line).not.toContain('|')
-  expect(pillsOf('ATLAS | ✅ verify | started', 50)).toHaveLength(2)
+  expect(pillsOf('ATLAS | ✅ verify | started', 39)).toHaveLength(2)
 })
 
 test('headerless or summary replies return null (engine-drawn)', () => {
@@ -233,7 +242,7 @@ const fakeE = (component: string, props: Record<string, unknown> = {}) =>
 test('registerRestyle wires the four sites; without a snapshot every site no-ops', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
-  expect(regs.length).toBe(7) // 4 sites + turn.start + ToolGroup + UserMessage
+  expect(regs.length).toBe(8) // 4 sites + turn.start + ToolGroup + UserMessage + Placed
   expect(regs.slice(0, 4).map((r) => r.matcher?.component)).toEqual(['Spinner', 'ToolUse', 'AssistantMessage', 'TurnDuration'])
   for (const r of regs.slice(0, 4)) {
     expect(await r.hook(fake$().$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
@@ -364,10 +373,10 @@ test('noisy badge is an inverse accent pill with the size; boundary is 8000', ()
   expect(noisyTree({ ...base, output: null })).toBeNull()
 })
 
-test('header pills: tail shows from 60 columns up, only the two pills below, and a width of 1 is narrow', () => {
+test('header pills: tail shows from 40 columns up, only the two pills below, and a width of 1 is narrow', () => {
   const t = 'ATLAS | 🔧 implement 3/5 | go'
-  expect(pillsOf(t, 60).length).toBeGreaterThan(2)
-  expect(pillsOf(t, 59)).toHaveLength(2)
+  expect(pillsOf(t, 40).length).toBeGreaterThan(2)
+  expect(pillsOf(t, 39)).toHaveLength(2)
   expect(pillsOf(t, 1)).toHaveLength(2)
   expect(pillsOf(t, 0).length).toBeGreaterThan(2) // unknown width draws it whole
 })

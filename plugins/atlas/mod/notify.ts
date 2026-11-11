@@ -30,12 +30,10 @@ const workersOf = (s: AtlasSnapshot): LiveWorker[] =>
  * mid-phrase (critique 11: `after` / `11s  +1 more` in live-110-5d6a53ef-3/frames/f0090.ans:3-4). One row the host never wraps. */
 export const TOAST_MAX = 40;
 
-/** How long a turn-boundary toast stays up, and the gap before the next routine one. The host stacks toasts: at 150 columns two live boxes
- * (8 rows) sat over the transcript and cut `T1-T3 still`, `The`, `Each` (critique 12: live-150-8271cfc8-1/frames/f0063.ans:1-8). The mod cannot move
- * a toast, so it keeps one up at a time: routine toasts inside the gap fold into the next one as ` +N more`. A failure, a wait or a note never waits. */
+/** How long a turn-boundary toast stays up. The host draws a toast over the top right of the transcript and the mod cannot move it (critique 12:
+ * two live boxes cut `T1-T3 still`; critique 14: `alpha-expl... +1 more`), so a turn boundary sends one only for what needs the person: a failure,
+ * a wait or a note. A routine start or finish is told by the HUD, the band and the finish card in the transcript, never by a toast. */
 export const TOAST_MS = 4000;
-const URGENT = new Set(['agent-fail', 'agent-blocked', 'note']);
-const HELD_MAX = 40;
 
 /** A toast and its merge facts: `bare` is the same toast without its fact (used when the fact would not fit beside the count),
  * `kind` groups toasts that a `+N more` may count (a burst of agents that finished, not every toast of the turn). */
@@ -52,10 +50,11 @@ export function mergeToasts(items: readonly (string | Toast)[]): string | null {
 	const all: Toast[] = items.map((i) => (typeof i === 'string' ? { text: i } : i));
 	const head = all[0]!;
 	const n = all.slice(1).filter((t) => head.kind === undefined || t.kind === head.kind).length;
-	const more = n > 0 ? ` +${n} more` : '';
-	const room = TOAST_MAX - cells(more);
-	for (const t of [head.text, head.bare]) if (t !== undefined && cells(t) <= room) return `${t}${more}`;
-	return `${clip(head.bare ?? head.text, room)}${more}`;
+	// ` +2 more`, else ` +2` when that keeps the whole name (critique 14 B4: `alpha-expl... +1 more` cut a name the short count would have kept)
+	const counts = n > 0 ? [` +${n} more`, ` +${n}`] : [''];
+	for (const more of counts) for (const t of [head.text, head.bare]) if (t !== undefined && cells(t) + cells(more) <= TOAST_MAX) return `${t}${more}`;
+	const more = counts[0]!;
+	return `${clip(head.bare ?? head.text, TOAST_MAX - cells(more))}${more}`;
 }
 
 /** A toast reads bar, ATLAS mark, state, name, one fact: `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps`. No code, no full stop. The host
@@ -135,8 +134,6 @@ export function registerNotify(
 ): void {
 	// Per registration, not module-level: a second registerNotify (another test, a re-register) must not inherit this one's baseline.
 	let lastSnapshot: AtlasSnapshot | null = null;
-	let shownAt = Number.NEGATIVE_INFINITY; // snapshot clock of the toast on screen
-	let held: (string | Toast)[] = []; // routine toasts that fell inside the gap, folded into the next one
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
 			const snap = await read($, snapshotState);
@@ -145,12 +142,9 @@ export function registerNotify(
 				const ui = (await lookOf($)).ui;
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
-						case 'agent-spawn':
-							texts.push(factToast('agent-spawn', 'running', ev.name, 'started', ui));
-							break;
-						case 'agent-complete':
-							texts.push(factToast('agent-done', 'done', ev.name, ev.age ? `after ${ev.age}` : '', ui)); // duration only: the agent's last line is free text (a `1.`, half a path), never a toast fact
-							break;
+						// A routine start or finish (agent-spawn, agent-complete, todo-done) sends no host toast: the host draws a toast over the top right of
+						// the transcript and cut the names (critique 14 B4: `alpha-expl... +1 more`). The HUD rows, the band and the finish card the mod places
+						// in the transcript (transcript/placed.ts) say it in surfaces the mod owns; the host toast stays for what needs the person.
 						case 'agent-fail':
 							texts.push(factToast('agent-fail', 'failed', ev.name, '', ui));
 							break;
@@ -160,9 +154,6 @@ export function registerNotify(
 						case 'note':
 							texts.push(noteToast(ev.sender, clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX), ui));
 							break;
-						case 'todo-done':
-							texts.push(factToast('todo-done', 'done', 'task', ev.text, ui));
-							break;
 						case 'phase':
 							if (deps.soundEnabled()) {
 								void $.audio.play({ asset: 'mod/fx/advance.wav' }).catch(() => {});
@@ -170,18 +161,8 @@ export function registerNotify(
 							break;
 					}
 				}
-				const queued = held;
-				const all = [...queued, ...texts];
-				const urgent = texts.some((t) => typeof t !== 'string' && t.kind !== undefined && URGENT.has(t.kind));
-				if (all.length > 0 && !urgent && snap.now - shownAt < TOAST_MS) held = all.slice(-HELD_MAX);
-				else {
-					held = [];
-					const merged = mergeToasts(urgent ? [...texts, ...queued] : all);
-					if (merged) {
-						$.ui.toast(merged, { timeoutMs: TOAST_MS });
-						shownAt = snap.now;
-					}
-				}
+				const merged = mergeToasts(texts);
+				if (merged) $.ui.toast(merged, { timeoutMs: TOAST_MS });
 				lastSnapshot = snap;
 				const suggestion = nextStepSuggestion(snap);
 				if (suggestion) void $.prompt.suggest({ text: suggestion });

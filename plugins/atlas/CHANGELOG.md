@@ -7,6 +7,10 @@
 - Critique 14 A3 (110 layout): the SUBAGENTS column-name row and one blank row under the agents stay in every frame where the slot can hold them with a one-row band title (`register.ts` `hudSlotCap`, `hudGapRows`; `mod/hud.ts` `hudFloorRows`); the floor used to leave the names out and the band butted against the last agent row.
 - Critique 14 A4 (110 layout): route rows in a pane under 50 cells draw a title whole when it cannot sit beside its state word (the state follows on the row under it, long titles wrap on words), so no `T1 read alpha.py (alpha...` and no state jammed against a title (`mod/panel-layout.ts` `todoRows`).
 - Critique 14 A4 (110 layout): core rows in a pane under 50 cells are never cut: a sentence that does not fit beside its label goes on the row under it, verdict titles and the dispatch team name wrap on words, and the zero-figure reading line and in-process route line take a short form (`withRoom`, `pickForm` in `mod/panel-layout.ts`).
+- Header chip keeps the lead's whole sentence (critique 14 B2): the text beside the pills wraps instead of truncating (`marking T1 compl...` at 110); the two-pills-only cut moves from 60 to 40 columns (`restyle.tsx` `tailOf`).
+- Finish card in 1 s (critique 14 B3): the rebuild tick that moves a worker's HUD row to done places the card itself with `$.ui.place` and a `Placed` render site (`transcript/placed.ts`), and the host's later task-notification row for that worker draws empty (one card per finish); the launch card also reads done from the mod's own end record when the host row lags (`outcome.ts`).
+- No host toast for a routine start or finish (critique 14 B4): `notify.ts` toasts only failures, waits and notes; `+N` counts keep the whole name (`alpha-explorer +2`, not `alpha-expl... +1 more`).
+- Final `done` header raw for one frame (critique 14 B1) is the host's first paint of the message before the hook answers (`header-chip.test.ts` pins the mod's side); the tofu is the chequered-flag emoji the contract teaches the model to write, not drawn by the mod.
 
 ## 17.12.0 - 2026-11-11
 

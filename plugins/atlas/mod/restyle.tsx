@@ -8,7 +8,7 @@ import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from '
 import { BRAND } from './contract'
 import { PHASES } from './intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
-import { contractGlyph, fitText, formatDuration, glyph, MOCHA, phaseHue, textWidth } from './theme'
+import { contractGlyph, formatDuration, glyph, MOCHA, phaseHue } from './theme'
 import { MARK as BRAND_MARK, shortTool } from './band'
 import type { ActivityEntry, LiveSnapshot } from './orchestra-types'
 import { activeCount, liveWorkers } from './data/live'
@@ -16,6 +16,7 @@ import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
+import { hideNotification, placedTree } from './transcript/placed'
 import { lookOf } from './look'
 import type { Outcome } from './transcript/outcome'
 
@@ -156,7 +157,10 @@ export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents
  const status = agentStatus(agents, { ...input, subagentType: input.subagentType ?? input.subagent_type }, props)
  const call = { ...props, input: { model: persona.model, effort: persona.effort, ...input } }
  const now = nowOf(snap, status.name ?? input.name)
- return workerCard(call, status.state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, status.label, { ...(now ? { now } : {}), ...extra })
+ // A worker the mod saw end is finished whatever the host row still says (cardExtra read the same record the HUD row does).
+ const ended = extra.ended !== undefined && extra.ended !== '' && !call.isRunning
+ const state = ended && (status.state === 'running' || status.state === 'spawning' || status.state === 'input') ? 'finished' : status.state
+ return workerCard(call, state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, ended && state !== status.state ? 'completed' : status.label, { ...(now ? { now } : {}), ...extra })
 }
 
 const activityOf = (snap: AtlasSnapshot, name?: string): ActivityEntry | undefined => (snap as Partial<LiveSnapshot>).activity?.[name ?? '']
@@ -176,7 +180,7 @@ function nowOf(snap: AtlasSnapshot, name?: string): string {
 
 // ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----
 
-const PILL_NARROW = 60 // below this many columns the header keeps its two pills only
+const PILL_NARROW = 40 // below this many columns the header keeps its two pills only
 const fixed = { wrap: 'truncate-end' }
 const isNarrow = (columns: number): boolean => columns > 0 && columns < PILL_NARROW
 const firstText = (k: RenderNode): string => (k as { children: string[] }).children[0] ?? ''
@@ -190,20 +194,18 @@ function pills(mid: string, phase: PhaseId): RenderNode[] {
  ]
 }
 
-/** ` 3/5` muted, then ` sentence` cut to `room` cells. ponytail: room <= 0 (width unknown) draws it whole; the
- * truncate-end wrap is the backstop. */
-function tailOf(nm: RegExpExecArray | null, sentence: string, room: number): RenderNode[] {
+/** ` 3/5` muted, then ` sentence` in a Text that wraps: in the pills' row it shrinks to the room left and hangs under itself, so the
+ * lead's words are never cut (critique 14 B2: `marking T1 compl...` at the 66 columns a docked transcript has). */
+function tailOf(nm: RegExpExecArray | null, sentence: string): RenderNode[] {
  const count = nm ? ` ${nm[1]}/${nm[2]}` : ''
- const left = room - textWidth(count) - 1
- const rest = sentence ? ` ${left > 0 ? fitText(sentence, left) : sentence}` : ''
- return [txt({ ...fixed, color: MOCHA.muted }, count), txt(fixed, rest)].filter((k) => firstText(k) !== '')
+ const rest = sentence ? ` ${sentence}` : ''
+ return [txt({ ...fixed, color: MOCHA.muted }, count), txt({ wrap: 'wrap' }, rest)].filter((k) => firstText(k) !== '')
 }
 
-/** Filled pills then the state text, never a glued pipe; under 60 columns the two pills only. */
+/** Filled pills then the state text, never a glued pipe; under 40 columns the two pills only. */
 function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, sentence: string, columns: number): RenderNode[] {
  const kids = pills(mid, phase)
- if (isNarrow(columns)) return kids
- return [...kids, ...tailOf(nm, sentence, columns - kids.reduce<number>((n, k) => n + textWidth(firstText(k)), 0))]
+ return isNarrow(columns) ? kids : [...kids, ...tailOf(nm, sentence)]
 }
 
 /** Every assistant text the transcript drew, by message id: whether its first line is the ATLAS header (a chip). `turn.complete` fires once per turn and
@@ -358,8 +360,16 @@ export function registerRestyle(on: On): void {
   try {
    if (e.props.isExpanded || e.props.origin?.kind === 'composer') return next(e)
    if (!(await ready($, cache))) return next(e)
-   if (e.props.task) return (await notificationRow($, e.props.task, outcomes)) ?? next(e)
+   if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name))) ?? next(e)
    return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0) ?? next(e)
+  } catch { return next(e) }
+ })
+
+ // The finish card the mod placed itself (transcript/placed.ts): drawn as the host's notification row is. Another plugin's row passes.
+ on('ui.render', { component: 'Placed' }, async ($, e, next) => {
+  try {
+   if (e.props.plugin !== 'atlas') return next(e)
+   return placedTree(e.props.id, (await lookOf($)).ui) ?? next(e)
   } catch { return next(e) }
  })
 }

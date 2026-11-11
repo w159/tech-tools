@@ -87,6 +87,21 @@ test('background launch card: an ended worker reads done in the border, its dura
   expect(out).not.toContain('finished');
 })
 
+test("critique 14 B3: a worker the mod saw end (the HUD's signal) reads done on its launch card although the host row still says running", async () => {
+  const e = launched('running')
+  const eng = engine([e.agent])
+  const ended = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'done', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
+  expect(await cardExtra(ended, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '15s' })
+  const out = strings(await sites().ToolUse!(ended, e, next))
+  expect(out).toContain('done')
+  expect(out).not.toContain('running')
+  const failed = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'failed', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
+  expect((await cardExtra(failed, e.props.output, [e.agent], new Map())).ended).toBe('failed')
+  expect(strings(await sites().ToolUse!(failed, e, next))).toContain('failed')
+  const working = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'working', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
+  expect(await cardExtra(working, e.props.output, [e.agent], new Map())).toEqual({ mark: spin(3, 'implement') })
+})
+
 test('a call still being written reads pending, not completed', async () => {
   const e = launched('running')
   const streaming = { ...e, props: { ...e.props, output: undefined } }
