@@ -27,7 +27,7 @@ export const todo_120_rich = [
 ];
 
 export const todo_80 = [
-  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3/7",
+  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3 of 7 done",
   "  ● Wire band to host     done",
   "  ● Layout grid tiers     done",
   "  ● Gate golden tests     done",
@@ -38,7 +38,7 @@ export const todo_80 = [
 ];
 
 export const todo_40 = [
-  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━ 3/7",
+  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━ 3 of 7 done",
   "  ● Wire band to host  done",
   "  ● Layout grid tiers  done",
   "  ● Gate golden tests  done",

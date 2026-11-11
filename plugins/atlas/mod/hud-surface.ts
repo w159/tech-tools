@@ -4,13 +4,14 @@
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
-import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, percent, ribbon, runsCells, spinFrameOf, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, percent, ribbon, runsCells, spinClock, spinFrameOf, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
-/** The spinner frame of row `id`: the shared clock's frame (spinFrameOf) when the snapshot's `now` is known, else the caller's tick. */
-const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>, id: string): number => (o.now !== undefined ? spinFrameOf(o.now, id) : o.tick ?? 0);
+export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
+/** The spinner frame of row `id` (the agent's squad name): the shared clock's frame (spinFrameOf of spinClock, as the side panel turns it)
+ * when the snapshot's `now` is known, else the caller's tick. */
+const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>, id: string): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), id) : o.tick ?? 0);
 export type SurfaceOpts = {
   cols: number;
   ui: Ui;
@@ -75,7 +76,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const tier = tierOf(cols);
   const rich = isRich(o);
   const done = rows.filter((r) => r.state === 'done').length;
-  const out: Run[][] = [ribbon(cols, 'TODO', tier === 'full' ? `${done} of ${rows.length} done` : `${done}/${rows.length}`, ui)];
+  const out: Run[][] = [ribbon(cols, 'TODO', `${done} of ${rows.length} done`, ui)]; // one count format at every width (the band, board and panel say `N of M`)
   if (b.cap === 0) return out;
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
@@ -219,7 +220,7 @@ function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, n
 
 function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const { ui, cols } = o;
-  const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.name)), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
+  const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.id ?? r.name)), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state)];
   /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. */
   const cell = (text: string, at: number | undefined, width: number, words = false): void => {

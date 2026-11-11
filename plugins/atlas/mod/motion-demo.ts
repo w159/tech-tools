@@ -6,7 +6,7 @@
 // one per line, `cat` it in a terminal). Each file is the ribbon and the row exactly as the live HUD draws them (24-bit ANSI, or xterm-256 with --color 256).
 // The frames are built by `demoFrames` (pure: file name -> text); only the CLI at the bottom touches the disk, through dynamic imports
 // that the mod's tsconfig (which has no node types) never resolves.
-import { colorMode, paintAnsi, spinFrameOf, uiFromEnv, type Ui } from './atlas-ui';
+import { colorMode, paintAnsi, uiFromEnv, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, hudMotionItems, type HudAgent, type HudInput } from './hud';
 import { Motion, MOTION_MS } from './motion';
@@ -21,7 +21,7 @@ const NAME = DEMO_AGENT;
 const TODO = (state: 'running' | 'done', now: number): TodoItem => ({
   id: 't1', content: 'wire the gate', status: state === 'done' ? 'completed' : 'in_progress', owner: NAME, ...(state === 'done' ? { evidence: 'tests green', completed_at: now / 1000 } : { claimed_at: now / 1000 - 72 }),
 } as TodoItem);
-const AGENT = (state: 'running' | 'done', now: number): HudAgent => ({ name: NAME, role: 'implementer', state: state === 'done' ? 'done' : 'working', model: 'opus', ...(state === 'running' ? { tool: 'read', target: 'runs.ts:17' } : { since: now }) });
+const AGENT = (state: 'running' | 'done', now: number): HudAgent => ({ name: NAME, role: 'implementer', state: state === 'done' ? 'done' : 'working', model: 'opus', ...(state === 'running' ? { tool: 'read', target: 'runs.ts:17' } : { since: now, lastLine: 'read runs.ts:17' }) }); // a finished agent keeps its last call: the LAST column stays through done
 
 type Shown = 'running' | 'done';
 /** The HUD input of a surface: `todo` shows the plan row, `agent` the Subagents row. */
@@ -42,7 +42,7 @@ export function demoFrames(cols = 100, step = 100, color: Ui['color'] = 'truecol
     seen('done', 1000); // the change: the window opens at t=1000
     const strip: string[] = [];
     const frame = (label: string, file: string, state: Shown, now: number, motion: ReturnType<Motion['ctx']>): void => {
-      const lines = hudLines(demoInput(surface, state, now), { cols, maxRows: 20, ui, tick: spinFrameOf(now, NAME), now, ...(motion ? { motion } : {}) }).map((r) => r.map((x) => paintAnsi(x, ui)).join(''));
+      const lines = hudLines(demoInput(surface, state, now), { cols, maxRows: 20, ui, tick: 0, now, ...(motion ? { motion } : {}) }).map((r) => r.map((x) => paintAnsi(x, ui)).join(''));
       put(file, lines);
       strip.push(`${label.padEnd(8)} ${lines.at(-1)}`);
     };

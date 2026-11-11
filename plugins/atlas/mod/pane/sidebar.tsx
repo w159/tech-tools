@@ -4,7 +4,7 @@
 // `k: label`, so the strip budgets 3 cells a tab, takes a shorter label form (`chan`, then two letters) when the pane is narrow and wraps only below that: it never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { cells, uiFromEnv, type Ui } from '../atlas-ui';
+import { cells, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
 import { HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
@@ -47,7 +47,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
 function boardIn(els: ClientElements, m: SidebarModel, cols: number, ui: Ui): RenderElement {
   const s = m.snapshot;
   const items = withOwnerStates(ownTodos(s.todos ?? [], s.sessionId), workerStates(s, liveWorkers(s, s.now)));
-  return boardTree(els, items, { cols, rows: Math.max(1, m.rows - 4), tick: m.tick ?? 0, now: Math.floor(s.now / 1000), nowMs: s.now, ui, motion: m.motion });
+  return boardTree(els, items, { cols, rows: Math.max(1, m.rows - 4), tick: m.tick ?? 0, now: Math.floor(s.now / 1000), ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), ui, motion: m.motion });
 }
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {

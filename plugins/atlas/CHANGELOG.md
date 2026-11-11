@@ -26,6 +26,10 @@
 - Fixed: the channel and core tabs fill a tall pane and stop at its last row: the channel log is sized to the pane, the core sections list more rows on a tall pane and fewer when the default overflows (`mod/panel-fill.test.ts`, 30 and 40 rows).
 - Fixed: the Board pane and the transcript worker cards fill with `surfaceHex` and draw tones with `runHex(.., mode)`, so a 256-colour terminal gets index 234, never the navy 17.
 - Fixed: `bun mod/motion-demo.ts --out <dir>` follows the terminal's colour depth (`TERM=*256color` without `COLORTERM` records 256-colour frames); `--color` still wins.
+- Motion (critique 7, C1/C2): the done-transition glyph is a dotted ring then a half-filled ring (`◌`, `◍`; ASCII `@`), drawn nowhere else in Atlas or the host and no longer the gauge track `░`; `mod/glyph-unique.test.ts` asserts it against every state glyph, spinner frame, bar track and fill, theme glyph and role eye. The 256-colour fade is 2 or 3 steps at least 12 CIE76 apart (`MIN_STEP_DE`; 193, 157, 151 for a done row), not the near-identical 194, 193, 187; a tone with no such steps keeps its resting colour and only the glyph pops.
+- One spinner clock (C3): `spinClock(snapshot.now, tick)` is the shared clock, and the HUD, the side panel and the pane board all turn `spinFrameOf(spinClock, squad name)`; the HUD agent row used the display name (a different phase) and ignored the tick (so it froze between polls), which showed `◐` in the panel and `◑` in the HUD.
+- One TODO header count (C4): `N of M done` at every width (it read `N/M` below 100 columns).
+- Side panel tabs (C5/C6): the team, channel and core tabs carry the panel surface down to the foot row (`fillRows`), the core tab says `planned audit/low, ran 3 explorers` and `differs` instead of `audit/low drift` / `3x explorer drift`, `teams` no longer says `the plan and what ran`, the route progress bar fills in the ok tone over a muted track, and the team footer `lead 0 running · 3 done` starts in the name column. The motion demo's agent row keeps its LAST column through done.
 
 ## 17.7.0 - 2026-11-11
 

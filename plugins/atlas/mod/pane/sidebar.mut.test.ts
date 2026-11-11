@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../live_fixture';
-import { spinFrameOf, spinnerGlyph } from '../atlas-ui';
+import { spinClock, spinFrameOf, spinnerGlyph } from '../atlas-ui';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './sidebar';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -36,11 +36,11 @@ describe('sidebar board tab', () => {
     expect(shown(board(many))).toBe(12);
     expect(board([]).join('\n')).toContain('(no state)');
   });
-  test('a running item turns the snapshot clock\'s spinner frame, whatever the pane tick says', () => {
+  test('a running item turns the shared spinner clock: the snapshot clock moved on by the pane tick', () => {
     const run = [todo(0, { status: 'in_progress', claimed_at: NOW / 1000 - 5 })];
     const glyphRow = (tick?: number) => board(run, tick === undefined ? {} : { tick }).join('\n');
-    const want = spinnerGlyph(spinFrameOf(NOW, 'item-0'));
-    for (const tick of [undefined, 0, 2]) expect(glyphRow(tick)).toContain(`${want} item-0`);
+    for (const tick of [undefined, 0, 2]) expect(glyphRow(tick)).toContain(`${spinnerGlyph(spinFrameOf(spinClock(NOW, tick ?? 0), 'item-0'))} item-0`);
+    expect(glyphRow(1)).not.toContain(`${spinnerGlyph(spinFrameOf(NOW, 'item-0'))} item-0`); // the tick moves the clock, as in the HUD and the team tab
     expect(spinnerGlyph(0)).not.toBe(spinnerGlyph(1));
   });
   test('a snapshot without a clock falls back to the pane tick for the spinner (0 when the pane has none)', () => {

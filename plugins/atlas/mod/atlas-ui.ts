@@ -214,10 +214,10 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
  * each is one cell wide and present in DejaVu Sans Mono (mod/fixtures/dejavu-sans-mono-glyphs.ts); keep this a single-line literal,
  * mod/fixtures/check_glyph_cmap.py reads it. */
-export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·';
+export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▲▁▂▃▄▅▆▇']);
+const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▲▁▂▃▄▅▆▇◌◍']);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -422,15 +422,15 @@ export function gaugeParts(width: number, value: number): { full: string; partia
   return { full: '█'.repeat(full), partial, track: '░'.repeat(w - full - (rem ? 1 : 0)) };
 }
 
-/** The gauge as runs: fill in `fg` (default `info`), track in `line`. ASCII: `=====...` in text over a muted track. */
-export function gauge(width: number, value: number, ui: Ui, fg: Token = 'info'): Run[] {
+/** The gauge as runs: fill in `fg` (default `info`), track in `track` (default `line`). ASCII: `=====...` in text over a muted track. */
+export function gauge(width: number, value: number, ui: Ui, fg: Token = 'info', track: Token = 'line'): Run[] {
   const w = Math.max(0, Math.floor(width));
   if (ui.ascii) {
     const n = Math.round(w * Math.min(1, Math.max(0, value || 0)));
     return [{ t: '='.repeat(n), tone: 'text' }, { t: '.'.repeat(w - n), tone: 'muted' }];
   }
   const p = gaugeParts(w, value);
-  const out: Run[] = [{ t: p.full + p.partial, tone: fg }, { t: p.track, tone: 'line' }];
+  const out: Run[] = [{ t: p.full + p.partial, tone: fg }, { t: p.track, tone: track }];
   return out.filter((x) => x.t);
 }
 /** Plain text of a gauge (Unicode form), for labels and tests. */
@@ -477,6 +477,9 @@ export function spinFrameOf(nowMs: number, id = ''): number {
   for (const c of id) phase = (phase + c.charCodeAt(0)) % SPIN_UNICODE.length;
   return Math.floor(nowMs / SPINNER_MS) + phase;
 }
+/** The one spinner clock: the snapshot's `now` moved on by the ticker (one SPINNER_MS per tick), so a spinner turns between data polls.
+ * Every surface turns spinFrameOf(spinClock(snapshot.now, tick), the agent's squad name); none reads `now` alone or a display name. */
+export const spinClock = (nowMs: number, tick = 0): number => nowMs + tick * SPINNER_MS;
 /** Spinner glyph at wall-clock `nowMs`: one frame per 100 ms. */
 export const spinnerFrame = (nowMs: number, ascii = false): string => spinnerGlyph(Math.floor(nowMs / SPINNER_MS), ascii);
 

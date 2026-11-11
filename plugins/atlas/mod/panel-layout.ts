@@ -246,7 +246,7 @@ function todoCount(m: PanelModel): PanelLine {
   const done = m.todos.filter((t) => t.state === 'done').length;
   const total = m.todos.length;
   if (!total) return line([label('todo', m.cols), r('no tasks yet', 'muted')]);
-  const g = m.cols >= 40 ? [...gauge(10, done / total, m.ui), r(' ')] : [];
+  const g = m.cols >= 40 ? [...gauge(10, done / total, m.ui, 'ok', 'muted'), r(' ')] : []; // the ok tone fills and the muted tone is the track: quieter than any state word
   return line([label('todo', m.cols), ...g, r(`${done} of ${total}`)]);
 }
 
@@ -415,7 +415,7 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
 function leadSummary(m: PanelModel): PanelLine {
   const n = (s: UiState): number => m.workers.filter((w) => w.state === s).length;
   const parts = UI_STATES.filter((s) => s === 'running' || n(s)).map((s) => `${n(s)} ${s}`);
-  return line(fitRuns([r('lead  ', 'text', { bold: true }), r(parts.join(` ${dot(m.ui)} `), 'muted')], m.cols));
+  return line(fitRuns([r(' '.repeat(GRID_LEAD)), r('lead  ', 'text', { bold: true }), r(parts.join(` ${dot(m.ui)} `), 'muted')], m.cols)); // in the name column, under the lead's own row
 }
 
 /** The lead as the band would read it: while the band is BLOCKED (declared, or a gate fails with no agent running) the lead is not `done`; it reads
@@ -707,7 +707,7 @@ const SEAT_WORD_W = 10; // `as planned`
 /** The dispatch plan against what ran: a row per team (class/effort, name, transport), a row per seat with the verdict `as planned`, `drift` or `not run`. */
 function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] {
   const teams = c.routes.slice(-cap).reverse();
-  const head = heading('teams', [r('the plan and what ran', 'muted')], m);
+  const head = heading('teams', teams.length ? [r(`${teams.length} this session`, 'muted')] : [], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
   const names = teams.flatMap((rt) => [`${rt.cls}/${rt.effort}`, ...rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`)]);
@@ -719,12 +719,15 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
   };
   const rows = teams.flatMap((rt): PanelLine[] => {
     const teamName = `${rt.cls}/${rt.effort}`;
-    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('failed', m.ui) : null, name: { t: teamName, bold: true }, nameW: cells(teamName), tail: rt.drift.length ? [r('  drift', 'bad')] : [] });
+    // A team that ran differently says what happened, in words: `planned audit/low, ran 3 explorers`.
+    const ranWords = rt.seats.filter((s) => s.ran.length).map((s) => `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'}`).join(', ');
+    const headName = rt.drift.length ? `planned ${teamName}, ran ${ranWords || 'nothing'}` : teamName;
+    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('failed', m.ui) : null, name: { t: headName, bold: true }, nameW: Math.min(cells(headName), Math.max(1, m.cols - GRID_LEAD)) });
     const seats = rt.seats.flatMap((s): PanelLine[] => {
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');
       const over = s.ran.length > s.count;
       const used = [...new Set(s.ran.map((x) => x.replace(/^claude-/, '')))].join(', ');
-      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['failed', 'drift', 'bad'];
+      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['failed', 'differs', 'bad'];
       // Plain words: `3 explorers ran, 1 planned (haiku), plan haiku/low`; a seat that ran another model reads `ran on opus, plan haiku/low`.
       const plan = `${s.model}/${s.effort}`;
       const detail = !s.ran.length ? `not run yet  ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${used}), plan ${plan}` : same ? `ran ${used}  ${plan}` : `ran on ${used}, plan ${plan}`;
@@ -780,6 +783,14 @@ function airy(m: PanelModel, lines: PanelLine[]): PanelLine[] {
   return lines.flatMap((l, i) => (starts(l, i) ? [BLANK, l] : [l]));
 }
 export const bodyLines = (m: PanelModel): PanelLine[] => airy(m, BODIES[m.tab](m));
+/** Tabs whose body ends where its data does: they carry the panel surface down to the pane's foot row. */
+const FILLED: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
+/** Blank rows after a `bodyLen`-row body so header + body + fill is `rows - 1` lines, the one foot row staying free (on team and channel the
+ * message field is that row). Only on a tab that has fewer rows than the pane; never negative, so a body taller than the pane is untouched. */
+export function fillRows(m: PanelModel, bodyLen: number): PanelLine[] {
+  const n = FILLED.has(m.tab) ? m.rows - 1 - headerRows(m).length - bodyLen : 0;
+  return n > 0 ? Array.from({ length: n }, () => BLANK) : [];
+}
 /** Every row of the panel: ribbon, blank, tab strip, rule, blank, then the active tab. */
 export const panelLines = (m: PanelModel): PanelLine[] =>
   [...headerRows(m), ...bodyLines(m)].map((l) => (rowWidth(l.runs) > m.cols ? { ...l, runs: fitRuns(l.runs, m.cols) } : l));
