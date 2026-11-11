@@ -121,25 +121,55 @@ export function stable256Indices(): readonly number[] {
   return stable;
 }
 
-const dist2 = (a: string, b: string): number => rgbOf(a).reduce((n, v, i) => n + (v - rgbOf(b)[i]!) ** 2, 0);
-/** The stable palette colour nearest `hex` (RGB distance) whose contrast on `bg` is at least `need` (the nearest overall when none is). */
+type Swatch = { hex: string; rgb: readonly [number, number, number] };
+let swatches: readonly Swatch[] | undefined;
+let swatchHexes: ReadonlySet<string> | undefined;
+/** The stable palette colours as {hex, rgb} records, built once. */
+function stableSwatches(): readonly Swatch[] {
+  swatches ??= stable256Indices().map((i) => ({ hex: xtermHex(i), rgb: rgbOf(xtermHex(i)) }));
+  swatchHexes ??= new Set(swatches.map((c) => c.hex));
+  return swatches;
+}
+const dist2 = (a: readonly number[], b: readonly number[]): number => (a[0]! - b[0]!) ** 2 + (a[1]! - b[1]!) ** 2 + (a[2]! - b[2]!) ** 2;
+const stable256Cache = new Map<string, string>();
+/** The stable palette colour nearest `hex` (RGB distance) whose contrast on `bg` is at least `need` (the nearest overall when none is). Memoised. */
 export function stable256(hex: string, bg?: string, need = 0): string {
-  const all = stable256Indices().map(xtermHex);
-  const ok = bg && need > 0 ? all.filter((c) => contrast(c, bg) >= need) : all;
-  return (ok.length ? ok : all).reduce((best, c) => (dist2(c, hex) < dist2(best, hex) ? c : best));
+  const key = `${hex}|${bg ?? ''}|${need}`;
+  const hit = stable256Cache.get(key);
+  if (hit !== undefined) return hit;
+  const all = stableSwatches();
+  const ok = bg && need > 0 ? all.filter((c) => contrast(c.hex, bg) >= need) : all;
+  const from = ok.length ? ok : all;
+  const want = rgbOf(hex);
+  const best = from.reduce((b, c) => (dist2(c.rgb, want) < dist2(b.rgb, want) ? c : b)).hex;
+  stable256Cache.set(key, best);
+  return best;
 }
 
+const surfaceCache = new Map<string, string>();
 /** A surface token's colour for `ui`: the palette hex, or in 256-colour mode the stable palette colour nearest it. Mocha panel #181825
- * becomes the near-black grey 234 (the host's own formula turns the raw hex into the saturated navy 17). */
+ * becomes the near-black grey 234 (the host's own formula turns the raw hex into the saturated navy 17). Memoised. */
 export function surfaceHex(tok: Token, ui: Pick<Ui, 'theme' | 'color'>): string {
   const hex = PALETTES[ui.theme][tok];
-  return ui.color === '256' ? stable256(hex) : hex;
+  if (ui.color !== '256') return hex;
+  const key = `${tok}|${ui.theme}`;
+  let out = surfaceCache.get(key);
+  if (out === undefined) surfaceCache.set(key, (out = stable256(hex)));
+  return out;
 }
 
-/** `hex` as drawn in 256-colour mode on the theme's panel: the nearest stable palette colour that keeps the contrast the original had (to 4.5:1). */
+const fitCache = new Map<string, string>();
+/** `hex` as drawn in 256-colour mode on the theme's panel: the nearest stable palette colour that keeps the contrast the original had (to 4.5:1). Memoised. */
 export function fitHex(hex: string, theme: ThemeName): string {
-  if (stable256Indices().some((i) => xtermHex(i) === hex)) return hex; // already a planned palette colour
-  return stable256(hex, surfaceHex('panel', { theme, color: '256' }), Math.min(NEED.text, contrast(hex, PALETTES[theme].panel)));
+  const key = `${hex}|${theme}`;
+  const hit = fitCache.get(key);
+  if (hit !== undefined) return hit;
+  stableSwatches();
+  const out = swatchHexes!.has(hex) // already a planned palette colour
+    ? hex
+    : stable256(hex, surfaceHex('panel', { theme, color: '256' }), Math.min(NEED.text, contrast(hex, PALETTES[theme].panel)));
+  fitCache.set(key, out);
+  return out;
 }
 
 /** SGR parameter for a foreground (`38`) or background (`48`) colour; empty when colour is off. */
