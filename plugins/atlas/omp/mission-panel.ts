@@ -9,7 +9,8 @@
 import type { MotionCtx, MotionItem } from "../mod/motion";
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
-import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
+import { gatesError, parseGates } from "../mod/gates";
+import { gateTally } from "../mod/data/runstate";
 import { hostEnv, PALETTES, sgrColor, type Ui, type UiState, uiFromEnv, runHex } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
@@ -130,7 +131,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 	const last = [...m.notes].reverse().find(n => isMessageKind(n.kind));
 	const lead = channelLead(m.channel);
 	const named = (n: string) => (lead && n === "lead" ? lead : n);
-	const gates = (m.gates ?? []).filter(g => g.lines.length > 0 || !!g.error);
+	const tally = gateTally(m.gates ?? []);
 	const workers = m.idle ? [] : m.workers.map(missionWorker);
 	const rail = railOf(railIds(m.phases), m.phase);
 	return {
@@ -147,7 +148,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		todoBlocked: blockedCount(m.todos ?? [], ownerStates(m)),
 		workers,
 		note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
-		checks: gates.length ? gates.map(g => ({ id: g.id, ok: !groupOpenCount(g) && !g.error })) : null,
+		checks: tally.total ? tally.checks : null,
 		elapsedSecs: m.elapsedSecs,
 		lastRun: m.idle,
 		core: coreCells(m.core, w),

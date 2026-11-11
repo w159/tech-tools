@@ -93,13 +93,13 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(plain.rows[0]).toContain('◖ ◆ ATLAS ◗');
     expect(cells(plain.rowNodes[0]!).every((t) => t.props.color === undefined && t.props.backgroundColor === undefined)).toBe(true);
   });
-  test('blocked reads `▲ blocked · needs you` and the phase rail keeps the last real phase lit', () => {
+  test('blocked reads `▲ BLOCKED · needs you` and the phase rail keeps the last real phase lit', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
     const { rows } = panel(160, { snapshot, live: [], lastPhase: 'implement', rich: true });
     expect(rows[0]).toContain('▸ 4 implement');
     const band = panel(160, { snapshot, live: [], lastPhase: 'implement' }).rows[0]!;
-    expect(band).toContain('▲ blocked · needs you');
+    expect(band).toContain('▲ BLOCKED · needs you');
     expect(band).not.toContain('idle');
   });
   test('rich: capsule with the numbered phase rail, a blank row, then the gauges', () => {
@@ -115,7 +115,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ██▌░░░░░░░ 1 of 4');
     expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ phase 4\/5 · todo 1\/4 · /);
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ph 4/5 · todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
   });
   test('idle shows the last run under the band', () => {
@@ -135,7 +135,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('last run counts the most recent spawn burst only, not every worker of the session', () => {
     const snapshot = busySnap({ comms: [] });
     const live = liveWorkers(snapshot, NOW).map((w, i) => ({ ...w, state: 'done' as const, startedAt: i < 2 ? NOW - 300_000 : NOW - 40_000, since: NOW - 20_000 }));
-    const last = panel(160, { snapshot: idleSnap(), live }).rows[1]!;
+    const last = panel(160, { snapshot: busySnap({ squad: [], activity: {}, comms: [], todos: [] }), live }).rows[1]!;
     expect(last).toContain('last run  1 worker ');
     expect(last).toContain('20s');
   });
@@ -274,10 +274,10 @@ describe('message and footer', () => {
     expect(rows[0]).not.toMatch(/gates|■ completion/);
     expect(rows.filter((r) => r.includes('completion'))).toHaveLength(1);
   });
-  test('the header check group never draws or counts as a check', () => {
+  test('the header contract group draws and counts as a check, as it does on the gates tab', () => {
     const header = { id: 'header' as const, title: 'Header', lines: [{ ok: false, label: 'h' }] } as any;
     const { all } = panel(200, { gates: [gate, header] });
-    expect(all).not.toContain('header');
+    expect(all).toContain('header');
   });
   test('when tight the footer keeps only failures, then a bare mark', () => {
     const groups = ['completion', 'tripwire', 'routing', 'verdict'].map((id, i) => ({ id, title: id, lines: [{ ok: i !== 1, label: id }] })) as any;
@@ -381,10 +381,10 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ ph 4/5 · todo 1/4 · ◒1 ■1` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ◒1 ■1` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ph 4/5 · todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
+    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {
@@ -396,7 +396,7 @@ describe('below 80 columns: only the band, one row', () => {
   test('a blocked band says so in the summary', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
-    expect(panel(70, { snapshot, live: [], lastPhase: 'implement' }).rows[0]).toContain('blocked');
+    expect(panel(70, { snapshot, live: [], lastPhase: 'implement' }).rows[0]).toContain('BLOCKED');
   });
   test('the panel is a non-shrinking column on the panel background', () => {
     const { node } = panel(160);

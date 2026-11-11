@@ -43,7 +43,7 @@ describe('mission-layout: A2 the header never reads idle or all ok beside a fail
     for (const cols of [160, 120, 100, 80, 60, 40]) {
       const b = band(model({ cols, checks: bad, phase: 'verify', done: 3 }));
       expect(b).not.toContain('idle');
-      expect(b).toContain('blocked');
+      expect(b).toContain('BLOCKED');
     }
     expect(band(model({ checks: [{ id: 'routing', ok: true }] }))).toContain('idle');
     expect(band(model({ checks: null }))).toContain('idle');
@@ -51,7 +51,7 @@ describe('mission-layout: A2 the header never reads idle or all ok beside a fail
   test('the rich band says blocked too', () => {
     const b = runsText(bandLines(model({ cols: 160, rich: true, checks: bad }))[0]!.runs);
     expect(b).not.toContain('idle');
-    expect(b).toContain('blocked');
+    expect(b).toContain('BLOCKED');
   });
   test('last run does not say all ok while a check fails; it does when none fails', () => {
     expect(all(model({ checks: bad, lastRun }))).not.toContain('all ok');

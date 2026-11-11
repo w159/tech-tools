@@ -9,7 +9,7 @@ import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
 import { ownTodos, planBasis, todoCounts } from './data/todos';
 import { blockedCount } from './board-model';
-import { groupOpenCount } from './gates';
+import { gateTally, ranWorkers } from './data/runstate';
 import { hostEnv, LINGER_MS, PALETTES, toneHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -89,13 +89,13 @@ function missionWorker(w: LiveWorker, now: number): MissionWorker {
 }
 
 const hhmm = (ts: number): string => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-const hasGateData = (g: GateGroup): boolean => g.lines.length > 0 || !!g.error;
 
-function lastRun(all: readonly LiveWorker[], now: number): MissionModel['lastRun'] {
+function lastRun(all: readonly LiveWorker[], now: number, owners: readonly string[]): MissionModel['lastRun'] {
   const wave = waves(all).pop();
-  if (!wave) return undefined;
+  const ran = ranWorkers((wave ?? []).map((w) => w.name), owners); // the burst plus every dispatch that ran (the host forgets a finished worker)
+  if (!wave) return ran.length ? { workers: ran.length, failed: 0 } : undefined;
   const end = Math.max(...wave.map((w) => (w.state === 'done' || w.state === 'failed' ? w.since : now)));
-  return { workers: wave.length, secs: Math.max(0, Math.round((end - Math.min(...wave.map((w) => w.startedAt))) / 1000)), failed: all.filter((w) => w.state === 'failed').length }; // a failure of an earlier wave still counts: idle never reads `all ok` over a failed worker
+  return { workers: ran.length, secs: Math.max(0, Math.round((end - Math.min(...wave.map((w) => w.startedAt))) / 1000)), failed: all.filter((w) => w.state === 'failed').length }; // a failure of an earlier wave still counts: idle never reads `all ok` over a failed worker
 }
 
 function missionModel(b: BandModel & { maxRows: number }): MissionModel {
@@ -107,7 +107,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const queued = queuedMembers(s).map((name): MissionWorker => ({ name, role: name.includes('-') ? name.replace(/-[^-]*$/, '') : undefined, state: 'queued', secs: 0 })); // dispatched, not listed by the host yet
   const shown = active.length || queued.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
   const { done, total } = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
-  const gates = b.gates.filter((g) => g.id !== 'header' && hasGateData(g)); // the header check is the mod's own group; omp never shows it
+  const tally = gateTally(b.gates); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract included
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
   const working = active.filter((w) => w.state === 'working' || w.state === 'blocked');
@@ -118,9 +118,9 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     done, total, todoBlocked: blockedCount(planBasis(s.todos, s.sessionId), workerStates(s, b.live)),
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
-    checks: gates.length ? gates.map((g) => ({ id: g.id, ok: !groupOpenCount(g) && !g.error })) : null,
+    checks: tally.total ? tally.checks : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
-    lastRun: lastRun(all, now),
+    lastRun: lastRun(all, now, ownTodos(s.todos, s.sessionId).filter((t) => t.origin === 'dispatch' && t.owner).map((t) => t.owner!)),
     core: coreCells(b.core, Math.max(1, b.columns), b.ui),
     boardRows: b.todoExpanded && ownTodos(s.todos, s.sessionId).length ? ownTodos(s.todos, s.sessionId).length + 1 : 0,
     ctx: s.contextPct > 0 ? Math.min(1, s.contextPct / 100) : undefined,
