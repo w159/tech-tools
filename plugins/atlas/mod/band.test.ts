@@ -284,8 +284,8 @@ describe('message and footer', () => {
   test('when tight the footer keeps only failures, then a bare mark', () => {
     const groups = ['completion', 'tripwire', 'routing', 'verdict'].map((id, i) => ({ id, title: id, lines: [{ ok: i !== 1, label: id }] })) as any;
     const foot = (columns: number) => panel(columns, { gates: groups, snapshot: idleSnap(), live: [] }).rows.at(-1)!.trim();
-    expect(foot(100)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3 of 4 green'); // the gates tab's own n of m unit
-    expect(foot(80)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3 of 4 green');
+    expect(foot(100)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3/4 green'); // the gates tab's own n/m unit
+    expect(foot(80)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3/4 green');
     const none = (columns: number) => panel(columns, { gates: groups, snapshot: idleSnap(), live: [], core: undefined }).rows.at(-1)!.trim();
     expect(none(80)).toContain('▲ tripwire');
   });

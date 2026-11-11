@@ -47,12 +47,15 @@ describe('B1: the blocker has one name on the band, the gates tab and the tally'
     const rows = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');
     expect(rows).toContain('Team gate');
   });
-  test('the checks row counts n of m green, the unit the gates tab uses', () => {
+  test('the checks row counts n/m, the figure the gates tab header prints, from one snapshot', () => {
     const t = gateTally(teamGate);
     const row = missionLines(mission({ checks: t.checks })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
-    expect(row).toContain('1 of 2 green');
+    const tab = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');
+    expect(row).toContain('1/2 green');
+    expect(tab).toContain('1/2');
+    expect(row).not.toMatch(/\d of \d green/);
     const pass = missionLines(mission({ checks: [{ id: 'a', ok: true }, { id: 'b', ok: true }, { id: 'c', ok: true }] })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
-    expect(pass).toContain('3 of 3 green');
+    expect(pass).toContain('3/3 green');
     expect(pass).not.toContain('all 3 pass');
   });
 });

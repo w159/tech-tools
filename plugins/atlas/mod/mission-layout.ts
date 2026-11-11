@@ -367,8 +367,8 @@ function noteLine(n: MissionNote, cols: number): Line {
   return { runs: [...left, ...fitRuns([r(noteState(n.kind), 'text')], Math.max(0, room)), ...right] };
 }
 
-/** `checks  ● completion  ■ tripwire  ● routing  2 of 3 green`; when that does not fit, `checks  ■ tripwire  2 of 3 green` (failures only) or
- * `checks  ● 3 of 3 green`. The figure is the gates tab's own `n of m green`. Failing names take the text tone so they stand out; passing names stay muted. */
+/** `checks  ● completion  ■ tripwire  ● routing  2/3 green`; when that does not fit, `checks  ■ tripwire  2/3 green` (failures only) or
+ * `checks  ● 3/3 green`. The figure is the gates tab's own `n/m green`. Failing names take the text tone so they stand out; passing names stay muted. */
 function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui, hint = 0): Run[] {
   const lean = hint > 0 ? checkRuns(checks, room - hint, ui) : []; // the form that leaves the hint its room, when one fits
   if (lean.length) return lean;
@@ -376,7 +376,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
   const one = (c: MissionCheck): Run[] => [c.ok ? stateRun('done', ui) : warnMark(ui), r(` ${c.id}`, c.ok ? 'sub' : 'text')];
   const join = (cs: readonly MissionCheck[]): Run[] => cs.flatMap((c, i) => [...(i ? [r('  ')] : []), ...one(c)]);
   const failing = checks.filter((c) => !c.ok);
-  const green = `${checks.length - failing.length} of ${checks.length} green`;
+  const green = `${checks.length - failing.length}/${checks.length} green`;
   const forms: Run[][] = [
     [...join(checks), r(`  ${green}`, 'sub')],
     join(checks), // tight: the names and marks carry the figure

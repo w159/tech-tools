@@ -1,7 +1,7 @@
 // runstate.ts: the one derivation of run state that the band, the checks row and the side panel share. Pure.
 //   gates  = every gate group that holds data (lines or an error), the header contract included.
 //   checks = those same groups, one entry each (a group is ok when no line fails and it has no error).
-// So `3 of 4 green` on the gates tab and `checks ... 3 ok` on the band are the same figure.
+// So `3/4 green` on the gates tab and `checks ... 3 ok` on the band are the same figure.
 import { groupOpenCount } from '../gates';
 import { textWidth } from '../theme';
 import type { GateGroup } from '../pane/sidebar-types';
