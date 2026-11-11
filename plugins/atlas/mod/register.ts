@@ -40,7 +40,7 @@ const WT_MS = 5000;
 const MUX_MS = 5000;
 const HERDR_MS = 5000;
 const GATES_MS = 30_000; // the backstop run; a change to a gate file runs the gates on the next poll instead
-const GATES_MIN_MS = 2000; // the shortest gap between two gate runs (a hook writes the gate DB on every tool call)
+const GATES_MIN_MS = 5000; // the shortest gap between two gate runs (a hook writes the gate DB on every tool call; a run spawns python)
 const PANE_ID = 'atlas';
 // The auto open (first render with a viewport) is docked only and asks no keyboard; /atlas-cc opens a
 // 12-row pane on demand, takes focus, and Esc closes it.
@@ -538,14 +538,15 @@ async function gatesSigOf($: EngineInterface, root: string): Promise<string> {
 }
 
 /** POLL_MS tick: a change to a gate file marks the gates stale; they re-run on this poll once GATES_MIN_MS has passed since
- * the last run (never wait out the 30 s backstop to show a check that just failed). */
+ * the last run (never wait out the 30 s backstop to show a check that just failed). The run starts here and is not awaited:
+ * the tick must not wait on a python run (gatesBusy keeps a second one from starting). */
 async function gatesPoll($: EngineInterface): Promise<void> {
 	const root = rootOf(await read($, snapshotState));
 	if (root === '' || sessionUuid === '') return;
 	const sig = await gatesSigOf($, root);
 	if (gatesSig !== '' && sig !== gatesSig) gatesDirty = true; // the first sight only records
 	gatesSig = sig;
-	if (gatesDirty && !gatesBusy && (await $.clock.now()) - gatesRunAt >= GATES_MIN_MS) await runGates($);
+	if (gatesDirty && !gatesBusy && (await $.clock.now()) - gatesRunAt >= GATES_MIN_MS) void runGates($).catch(() => undefined);
 }
 
 /** POLL_MS tick: rebuild only when the data files moved. */

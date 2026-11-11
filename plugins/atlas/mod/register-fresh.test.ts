@@ -114,12 +114,12 @@ describe('step 3: a gate file change re-runs the gates on the next poll', () => 
     await boot(s);
     await poll(s); // first sight records the signature
     const base = s.gateRuns.length;
-    for (let i = 0; i < 4; i++) await poll(s); // 2 s of quiet polls
+    for (let i = 0; i < 4; i++) await poll(s); // 2 s of quiet polls (inside the gap)
     expect(s.gateRuns.length).toBe(base);
     for (const [path, text] of [[FINDINGS, '[{"id":"a"}]'], [TODOS, items(2)], [DB, 'db1-longer']] as const) {
       s.write(path, text);
       await poll(s);
-      s.advance(2000); // past the minimum gap between two runs
+      s.advance(5000); // past the 5 s minimum gap between two runs
       await poll(s);
     }
     expect(s.gateRuns.length - base).toBe(3);
@@ -129,7 +129,7 @@ describe('step 3: a gate file change re-runs the gates on the next poll', () => 
     const s = stubEngine();
     await boot(s);
     await poll(s);
-    s.advance(2000);
+    s.advance(5000);
     await poll(s);
     const base = s.gateRuns.length;
     s.write(DB, 'db-a');
@@ -138,7 +138,7 @@ describe('step 3: a gate file change re-runs the gates on the next poll', () => 
     s.write(DB, 'db-bb');
     await poll(s);
     expect(s.gateRuns.length - base).toBe(1); // inside the gap: held, not dropped
-    s.advance(2000);
+    s.advance(5000);
     await poll(s);
     expect(s.gateRuns.length - base).toBe(2);
   });
