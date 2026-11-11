@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: the side panel counts gates with `gateTally` (the band's definition): a gate group with no data is neither green nor a gate, on the ribbon, the route gates row and the gates tab; the team and route tabs name an agent with `displayName` (the lead reads `lead`) and keep the whole name; the route tab's `agents` row lists agents under it from 30 rows; spinners turn `spinFrameOf(now, agent name)` (`PanelModel.now`, set by `panelModelOf`). Tests: `mod/panel-side.test.ts`.
+- Added: a pane of 30 rows or more fills its spare rows with detail already in the snapshot: per-agent task, model and last step on the team tab, each gate's checks on the gates tab, the newest messages read whole on the channel tab. No blank padding. Goldens regenerated: `tabGolden` route, team, channel, gates (`contracts/panel-golden.ts`), `teamLiveGolden`, `mod/pane/sidebar.golden-fixture.ts`.
 - Fixed: motion in 256 colours is a staircase of at least 3 distinct xterm palette steps (monotone in lightness toward the resting tone, the same index on Atlas's and the host's downsampler); a tone with no room for it (Mocha body text) keeps its colour and only the glyph pops (`easeSteps256`, `stable256`, `hostTo256` in `mod/atlas-ui.ts`, `mod/motion.ts`).
 - Fixed: the done pop is a quiet dot then the disc; it no longer starts at the open diamond, which is the queued glyph (`POP_UNICODE`, `POP_ASCII`).
 - Fixed: `mod/motion-demo.ts` draws through `hudLines` and paints with the shared `paintAnsi`, so a demo frame is the live HUD row (done titles struck, SGR 9, as the live frames are); `--color 256` records the 256-colour frames.

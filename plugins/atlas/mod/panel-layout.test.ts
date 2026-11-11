@@ -16,7 +16,8 @@ const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };
 const tabs = PANEL_TABS.map((t) => t.id);
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
-const rows = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => panelText(panelWorld(t, cols, ui, over));
+/** The short pane (the design's 24 rows) unless a test says otherwise: a pane of 30 rows or more fills its spare rows (mod/panel-side.test.ts, the tall goldens). */
+const rows = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => panelText(panelWorld(t, cols, ui, { rows: 24, ...over }));
 const card = (cols: number, ui: Ui = mocha): string[] => cardLines(worldCard(ui), cols).map((r) => runsString(r).trimEnd());
 
 describe('side panel design goldens', () => {
@@ -34,7 +35,7 @@ describe('side panel design goldens', () => {
   for (const t of tabs) {
     for (const cols of [120, 80, 56]) {
       test(`${t} at ${cols} equals its golden`, () => {
-        expect(rows(t, cols, { core })).toEqual(padStrip(tabGolden[t]![cols]!));
+        expect(rows(t, cols, { core, rows: 40 })).toEqual(padStrip(tabGolden[t]![cols]!)); // the golden pane is the live one: 40 rows
       });
     }
   }
@@ -103,7 +104,7 @@ describe('route tab', () => {
 
 describe('team tab lists the subagents by name and state', () => {
   test('every worker row names the worker and one of the six state words', () => {
-    const body = bodyLines(panelWorld('team', 80, mocha)).map(lineText);
+    const body = bodyLines(panelWorld('team', 80, mocha, { rows: 24 })).map(lineText); // the short pane: one row per worker
     expect(body).toHaveLength(world.workers.length);
     world.workers.forEach((w, i) => {
       expect(body[i]).toContain(w.name);
@@ -112,7 +113,7 @@ describe('team tab lists the subagents by name and state', () => {
     });
   });
   test('running first, then failed, queued, done (as the design lists them)', () => {
-    expect(bodyLines(panelWorld('team', 80, mocha)).map((l) => lineText(l).slice(4).split(' ')[0])).toEqual(
+    expect(bodyLines(panelWorld('team', 80, mocha, { rows: 24 })).map((l) => lineText(l).slice(4).split(' ')[0])).toEqual(
       ['implementer-band', 'implementer-live', 'runner-land', 'implementer-layout', 'implementer-gates']);
   });
   test('the recipient takes the focus marker; without one the first running worker does', () => {

@@ -79,7 +79,8 @@ describe('gate text', () => {
     expect(err).toContain('broke 012345');
   });
   test('a 16-hex or 18-hex run is left alone', () => {
-    const gates = [{ id: 'g', title: 'G 0123456789abcdef', lines: [] }, { id: 'h', title: 'H 0123456789abcdef01', lines: [] }]; // short titles: the name column cuts a long one in the middle
+    const one = [{ id: 'l', label: 'x', ok: true }];
+    const gates = [{ id: 'g', title: 'G 0123456789abcdef', lines: one }, { id: 'h', title: 'H 0123456789abcdef01', lines: one }]; // short titles: the name column cuts a long one in the middle
     const text = panelText(panelModelOf(model(world(), { gates: gates as never }, 'gates'), ui, 120)).join('\n');
     expect(text).toContain('G 0123456789abcdef');
     expect(text).toContain('H 0123456789abcdef01');

@@ -10,8 +10,9 @@ import { bodyLines, lineText, panelText, type PanelModel, type PanelNote, type P
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };
-const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => bodyLines(panelWorld(t, cols, ui, over)).map((l) => lineText(l).trimEnd());
-const full = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}): string[] => panelText(panelWorld(t, cols, mocha, over));
+/** The short pane (24 rows) unless a test says otherwise: a pane of 30 rows or more fills its spare rows (mod/panel-side.test.ts). */
+const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => bodyLines(panelWorld(t, cols, ui, { rows: 24, ...over })).map((l) => lineText(l).trimEnd());
+const full = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}): string[] => panelText(panelWorld(t, cols, mocha, { rows: 24, ...over }));
 const w = (name: string, state: PanelWorker['state'], over: Partial<PanelWorker> = {}): PanelWorker => ({ name, state, detail: '', ...over });
 
 describe('team tab: lead row, roster rows, lead tally', () => {
@@ -19,7 +20,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   const mates = [w('leader', 'queued', { role: 'unknown', detail: 'idle' })];
   for (const cols of [120, 80]) {
     test(`the live shape at ${cols} equals the hand-written golden`, () => {
-      expect(body('team', cols, { lead, mates })).toEqual(teamLiveGolden[cols]);
+      expect(body('team', cols, { lead, mates, rows: 40 })).toEqual(teamLiveGolden[cols]); // the live pane: 40 rows
     });
   }
   test('the lead row is first and the tally is last; the ribbon counts only the workers', () => {
