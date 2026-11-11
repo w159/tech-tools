@@ -6,7 +6,8 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, clip, clipMiddle, countRuns, gauge, GRID_LEAD, gridPlan, gridRow, percent, ribbon, stateGlyph, stateRun, stateWordTone, UI_STATES, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, percent, ribbon, stateGlyph, stateRun, stateWordTone, UI_STATES, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
 import { hasCore, tok, type CoreModel, type Verdict } from './data/core';
 
@@ -25,13 +26,15 @@ export const HOTKEY_W = 3;
 /** Cells between strip tabs. */
 export const STRIP_GAP = 2;
 
-/** A strip tab as drawn: its id, hotkey and the label of the form that fits (empty once its word is dropped: the key alone). */
+/** A strip tab as drawn: its id, hotkey and the label of the form that fits (two letters once its word is cut, never empty). */
 export type StripTab = { id: PanelTab | 'board'; key: string; label: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** Label forms of the strip, widest first: the words; `channel` shortened; then the words dropped from the right end, one tab at a
- * time, keeping the keys (`r: route  t: team  c: chan  g: gates  k:  o:`). The first form that fits the pane on one row is drawn. */
+/** Label forms of the strip, widest first: the words; `channel` shortened; then the words cut to two letters from the right end, one tab at a
+ * time (`r: route  t: team  c: chan  g: gates  k: co  o: bd`). The first form that fits the pane on one row is drawn. */
 const SHORT: Record<string, string> = { channel: 'chan' };
+/** The word a dropped tab keeps: two letters, so a key never stands alone (`k: co`). */
+const TINY: Record<string, string> = { route: 'rt', team: 'tm', channel: 'ch', gates: 'gt', core: 'co', board: 'bd' };
 type StripForm = { gap: number; label: (id: string, full: string) => string; drop: number };
 const STRIP_FORMS: readonly StripForm[] = [
   { gap: STRIP_GAP, label: (_, full) => full, drop: 0 },
@@ -41,7 +44,7 @@ const STRIP_FORMS: readonly StripForm[] = [
 ];
 const stripWidth = (tabs: readonly { label: string }[], gap: number): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + HOTKEY_W + cells(t.label), 0);
 
-/** The tabs of one form: the last `f.drop` tabs lose their word (the lit tab keeps its word, so the rule under it has a label to sit under). */
+/** The tabs of one form: the last `f.drop` tabs cut their word to two letters (the lit tab keeps its word, so the rule under it has a label to sit under). */
 function formTabs(f: StripForm, lit?: string): StripTab[] {
   let left = f.drop;
   const dropped = new Set<string>();
@@ -50,7 +53,7 @@ function formTabs(f: StripForm, lit?: string): StripTab[] {
     dropped.add(STRIP_TABS[i]!.id);
     left--;
   }
-  return STRIP_TABS.map((t): StripTab => ({ ...t, label: dropped.has(t.id) ? '' : f.label(t.id, t.label) }));
+  return STRIP_TABS.map((t): StripTab => ({ ...t, label: dropped.has(t.id) ? (TINY[t.id] ?? t.label.slice(0, 2)) : f.label(t.id, t.label) }));
 }
 
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and `gap` cells between; the rest wrap. */
@@ -123,6 +126,8 @@ export const BLANK: PanelLine = { runs: [] };
 const rowWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 const pad = (t: string, n: number): string => t + ' '.repeat(Math.max(0, n - cells(t)));
 const cut = (t: string, n: number): string => pad(clip(t, n), n);
+/** The grammar row with every name cut at its end: a name is never cut in the middle on the panel. */
+const gridRow = (spec: Parameters<typeof gridRowAt>[0]): Run[] => gridRowAt({ nameCut: 'end', ...spec });
 const oneLine = (t: string | undefined | null): string => (t ?? '').replace(/\s+/g, ' ').trim();
 
 /** Runs cut to `cols` cells: the run that overflows is clipped with `...`, the rest dropped. */
