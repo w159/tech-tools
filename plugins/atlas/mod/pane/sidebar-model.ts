@@ -66,7 +66,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
-    cols, rows: m.rows, ui, tab: m.ui.view, tick: m.tick ?? 0,
+    cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, tick: m.tick ?? 0,
     expanded: m.ui.expanded, recipient: m.ui.recipient,
     phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos: todosOf(s, workers), workers, lead,
     gates, core: m.core,

@@ -93,7 +93,7 @@ describe('route tab', () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: `task ${i}`, state: 'queued' as const }));
     const out = rows('route', 80, { todos: many, rows: 20 });
     expect(out.length).toBeLessThanOrEqual(20);
-    expect(out.at(-1)).toMatch(/\d+ more tasks on the board$/);
+    expect(out.some((l) => /\d+ more tasks on the board$/.test(l))).toBe(true);
   });
   test('names that do not fit the gates row fold to a labelled count', () => {
     expect(rows('route', 30).find((l) => l.startsWith('gates '))).toContain('2/3 green');
@@ -265,5 +265,30 @@ describe('toast', () => {
   });
   test('ASCII mode uses the ASCII state mark', () => {
     expect(toastText('failed', 'a', 'b', ascii)).toBe('| ATLAS  # failed  a  b');
+  });
+});
+
+describe('route tab names the running agents (live round2: `agents ◒ 3 running` and no name)', () => {
+  const plan = [{ id: 'T1', label: 'T1 read alpha.py (alpha-explorer)', state: 'queued' as const }, { id: 'T2', label: 'T2 combine the reports', state: 'queued' as const }]; // host-spawned agents: the plan rows have no owner
+  const running = ['alpha', 'beta', 'gamma'].map((n) => ({ name: `${n}-explorer`, state: 'running' as const, detail: 'Read', secs: 12 }));
+  test('each agent that holds no plan row is listed by name with its state word, at 80 and 120 columns', () => {
+    for (const cols of [80, 120]) {
+      const text = rows('route', cols, { todos: plan, workers: running }).filter((l) => /^ {4}\S/.test(l)).join('\n');
+      for (const n of ['alpha', 'beta', 'gamma']) expect(text).toMatch(new RegExp(`[◐◓◑◒] ${n}-explorer\\s+running`));
+    }
+  });
+  test('an agent that owns a plan row is named by that row, not listed twice; finished and parked ones are not listed', () => {
+    const owned = [{ ...plan[0]!, label: 'T1 read alpha.py', owner: 'alpha-explorer' }, plan[1]!];
+    const text = rows('route', 80, { todos: owned, workers: [...running, { name: 'delta-explorer', state: 'done' as const, detail: 'finished' }, { name: 'eps-explorer', state: 'queued' as const, detail: 'parked' }] }).join('\n');
+    expect(text.match(/alpha-explorer/g)).toHaveLength(1);
+    expect(text).toMatch(/beta-explorer\s+running/);
+    expect(text).not.toContain('delta-explorer');
+    expect(text).not.toContain('eps-explorer');
+  });
+  test('a long group folds into `+N more`, and a failed agent reads failed', () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ name: `w${i}-explorer`, state: i === 0 ? ('failed' as const) : ('running' as const), detail: 'x' }));
+    const out = rows('route', 80, { todos: plan, workers: many, rows: 40 });
+    expect(out.join('\n')).toMatch(/w0-explorer\s+failed/);
+    expect(out.join('\n')).toContain('3 more on the team tab');
   });
 });

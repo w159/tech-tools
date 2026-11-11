@@ -92,3 +92,32 @@ test('pressing the key again keeps one board pane (one per id) and the Atlas pan
   await settle();
   expect(opens.map((o) => o.id)).toEqual(['atlas-board', 'atlas-board']);
 });
+
+// Live (claude 2.1.322, round2/after/live-150): `o` pressed in the focused Atlas pane opened `atlas-board` as a second TAB behind
+// the shown Atlas pane (`focus` is a request the surface refuses while a pane holds the keys), so the person kept seeing the
+// gates tab under a `Board` tab label. The host's `$.ui.panes()` says which pane is shown; the board then draws in that pane.
+const livePanes = (on: On): void => {
+  on('ui.panes', async () => ({ value: [{ id: 'atlas', title: 'Atlas', isShown: true, isFocused: true, isPlaced: true }] }) as never);
+};
+const sidePane = (view: object = {}) => ({ plugin: 'atlas', surface: 'terminal', component: 'Pane', requestId: 'atlas', props: { title: 'Atlas', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view } as never }) as const;
+
+test('live host: `o` in the shown Atlas pane draws the board in that pane (▸ BOARD ribbon), and `o` again returns to the route', async ($, on) => {
+  const opens: Opened[] = [];
+  await boot(on, opens);
+  livePanes(on);
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  const side = await $.ui.mount(sidePane());
+  opens.length = 0;
+  await side.press({ key: 'tab:todos' });
+  await settle();
+  await side.unmount();
+  expect(opens.filter((o) => o.id === 'atlas-board')).toHaveLength(0); // a hidden tab is not a board the person can see
+  const again = await $.ui.mount(sidePane());
+  const text = await drawn(again);
+  for (const want of ['BOARD', '4 items', 'Wire band to host', 'Subagents block', 'Ship board mod']) expect(text).toContain(want);
+  expect(text).not.toContain('Completion gate');
+  await again.press({ key: 'tab:todos' });
+  await settle();
+  await again.unmount();
+  expect(await drawn(await $.ui.mount(sidePane()))).not.toContain('4 items');
+});

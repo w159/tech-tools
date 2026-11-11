@@ -126,31 +126,45 @@ export async function readRoster(
 	}
 	const channels = (reg as { channels?: Record<string, unknown> } | undefined)?.channels;
 	if (!channels || typeof channels !== 'object') return { channel: null, members: [] };
+	const keys = Object.keys(channels);
+	const found = (name: string): ChannelMember[] | undefined => {
+		const members = (channels[name] as { members?: unknown } | undefined)?.members;
+		return Array.isArray(members) ? membersOf(members) : undefined;
+	};
 	for (const candidate of candidates) {
 		// Real keys are "<folder>@<branch>/lead-<s6>": a bare "lead-<s6>" candidate matches by suffix.
-		const name = candidate in channels ? candidate : Object.keys(channels).find((k) => k.endsWith(`/${candidate}`)) ?? candidate;
-		const members = (channels[name] as { members?: unknown } | undefined)?.members;
-		if (!Array.isArray(members)) continue;
-		return {
-			channel: name,
-			members: members.flatMap((m) => {
-				if (!m || typeof m !== 'object') return [];
-				const e = m as Record<string, unknown>;
-				if (typeof e.name !== 'string') return [];
-				return [
-					{
-						name: e.name,
-						...(e.role !== undefined ? { role: str(e.role) } : {}),
-						...(e.pane_id !== undefined ? { pane_id: str(e.pane_id) } : {}),
-						...(typeof e.pid === 'number' ? { pid: e.pid } : {}),
-						...(e.ended_at !== undefined ? { ended_at: str(e.ended_at) ?? null } : {}),
-						...(typeof e.exit_code === 'number' ? { exit_code: e.exit_code } : {}),
-					},
-				];
-			}),
-		};
+		const name = candidate in channels ? candidate : keys.find((k) => k.endsWith(`/${candidate}`)) ?? candidate;
+		const members = found(name);
+		if (members) return { channel: name, members };
+	}
+	// No candidate matched (the host's session id is not the lead's, or the script keyed the main channel without the branch
+	// `atlas_todo.py _main_parts`, as in a repo with no readable branch): the project's main channel, `<folder>` or `<folder>@<ref>`.
+	for (const candidate of candidates) {
+		const folder = candidate.split('@')[0]!;
+		if (folder === '' || folder.includes('/')) continue;
+		const name = keys.find((k) => (k === folder || k.startsWith(`${folder}@`)) && !k.includes('/'));
+		const members = name === undefined ? undefined : found(name);
+		if (name !== undefined && members) return { channel: name, members };
 	}
 	return { channel: null, members: [] };
+}
+
+function membersOf(members: unknown[]): ChannelMember[] {
+	return members.flatMap((m) => {
+		if (!m || typeof m !== 'object') return [];
+		const e = m as Record<string, unknown>;
+		if (typeof e.name !== 'string') return [];
+		return [
+			{
+				name: e.name,
+				...(e.role !== undefined ? { role: str(e.role) } : {}),
+				...(e.pane_id !== undefined ? { pane_id: str(e.pane_id) } : {}),
+				...(typeof e.pid === 'number' ? { pid: e.pid } : {}),
+				...(e.ended_at !== undefined ? { ended_at: str(e.ended_at) ?? null } : {}),
+				...(typeof e.exit_code === 'number' ? { exit_code: e.exit_code } : {}),
+			},
+		];
+	});
 }
 
 /** `HH:MM owner → to │ text`, whitespace collapsed, cut to 110; HH:MM from `n.ts`, falling back to `now`. */

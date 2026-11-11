@@ -1409,6 +1409,12 @@ Folds in the unreleased 12.2.1 fixes.
 - omp lead member is finished before the shutdown channel-reap.
 - Claude subagent and lead channel members now finish. Real hook payloads showed (1) PostToolUse:Agent carries the original `tool_input` (no autonamed `name`), so the member is joined to `agentId` via `tool_use_id` recorded at PreToolUse; (2) a background atlas agent's SubagentStop has no `last_assistant_message`, which made `worker_report_gate` exit before `finish_member`; (3) SessionEnd now marks the lead finished and runs `reap_channels`.
 
+### Fixed (live capture 553a9bce, round 2)
+
+- Channel tab: `readRoster` (`mod/data/channels.ts`) falls back to the project's main channel (`<folder>` or `<folder>@<ref>`, the key `atlas_todo.py _main_parts` writes, bare when the branch cannot be read) when neither `lead-<session6>` nor `<folder>@<branch>` is a registry key, so the tab shows the repo-folder name and its members instead of `#channel` and `0 people`. Tests: `omp/live-channel-roster.test.ts` (registry written by the real `atlas_todo.py` in a temp dir, read through `SnapshotBuilder`) and the kit test `mod/live-channel.test.ts`.
+- Board key `o` in the side panel: a second pane opens as a tab behind the shown Atlas pane (`focus` is a request the host refuses while a pane holds the keys), so the live pane kept showing the gates tab under a `Board` label. With the Atlas pane shown, `openBoard` (`mod/register.ts`) now switches it to a `board` view (`mod/pane/sidebar.tsx` draws `boardTree` under the tab strip, `▸ BOARD` ribbon) and `o` again returns to the route; the separate `atlas-board` pane opens only when the Atlas pane is not the shown one. `atlasView` in `types/index.d.ts` gains `core` and `board`. Test: `mod/board-key.test.ts` (host `$.ui.panes()` reports the Atlas pane shown).
+- Route tab names the running agents: agents that hold no plan row (host-spawned agents leave the plan rows ownerless) are listed under the plan, `name  state word  detail`, in the HUD Subagents words (`mod/panel-layout.ts`; five rows, then `+N more on the team tab`). Tests: `mod/panel-layout.test.ts`; `mod/pane/sidebar.golden-fixture.ts` regenerated (route cases only).
+
 ## [12.1.1] - 2026-10-13 -- hook counts and README list include edit_read_nudge
 
 ### Fixed

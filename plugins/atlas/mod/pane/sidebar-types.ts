@@ -6,7 +6,7 @@ import { textWidth } from '../theme';
 
 export type GateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string };
 export type GateGroup = { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: GateLine[]; error?: string };
-export type SidebarView = 'team' | 'channel' | 'route' | 'gates' | 'core';
+export type SidebarView = 'team' | 'channel' | 'route' | 'gates' | 'core' | 'board';
 export type SidebarModel = {
   snapshot: LiveSnapshot;
   gates: GateGroup[];

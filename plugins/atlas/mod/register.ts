@@ -663,6 +663,14 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 
 /** Open (or retitle and focus) the Board pane; the press behind it is what the engine counts as asked, so it is placed at any width. */
 export async function openBoard($: EngineInterface): Promise<void> {
+	// A second pane opens as a tab BEHIND the shown one (`focus` is only a request the host refuses while a pane holds the
+	// keys), so with the Atlas pane shown the board draws inside it (view `board`); `o` again returns to the route.
+	const panes = await (async () => $.ui.panes())().catch(() => []); // a surface that lists none leaves the open below as it was
+	if (panes.some((p) => p.id === PANE_ID && p.isShown)) {
+		await update($, viewState, (cur) => (cur === 'board' ? 'route' : 'board'));
+		void rebuild($);
+		return;
+	}
 	toastUnplaced($)(await $.ui.open(PANE_BOARD));
 	void rebuild($); // the board draws the snapshot; refresh it so a press never shows a stale list
 }

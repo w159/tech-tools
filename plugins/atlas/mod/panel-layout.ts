@@ -236,6 +236,7 @@ function agentsRows(m: PanelModel): PanelLine[] {
   return out.map((runs) => line(runs));
 }
 
+const AGENT_ROWS = 5; // agents named under the plan on the route tab; the rest fold into `+N more`
 const WORD_W = 7; // `running` and `blocked` are the longest of the six state words
 const stateWordTone2 = (s: UiState): Tone => (s === 'failed' ? 'bad' : s === 'blocked' ? 'warn' : 'sub');
 const OWNER_W = 18;
@@ -277,7 +278,11 @@ function routeBody(m: PanelModel): PanelLine[] {
     else if (!m.workers.length) rows.push(BLANK, line([r('(no state)', 'muted'), r(`  no tasks yet ${dot(m.ui)} add one with /todo add`, 'muted')]));
     return rows;
   }
-  const room = bodyRows(m, rows.length);
+  // Agents that work but hold no plan row (the plan rows carry no owner while the agents are host-spawned): a group under the plan names them, in the HUD Subagents state words.
+  const owners = new Set(m.todos.map((t) => t.owner).filter((o): o is string => !!o));
+  const loose = m.workers.filter((w) => w.state !== 'done' && w.state !== 'queued' && !owners.has(w.name));
+  const looseShown = loose.slice(0, AGENT_ROWS);
+  const room = Math.max(1, bodyRows(m, rows.length) - (loose.length ? looseShown.length + 1 + (loose.length > looseShown.length ? 1 : 0) : 0));
   const ordered = m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
   const widest = Math.min(OWNER_W, Math.max(0, ...ordered.map((t) => cells(oneLine(t.owner)))));
   // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
@@ -290,6 +295,11 @@ function routeBody(m: PanelModel): PanelLine[] {
   }
   const hidden = ordered.length - ordered.filter((t) => shown.some((l) => l.press?.key === `task:${t.id}`)).length;
   rows.push(BLANK, ...shown, ...(hidden > 0 ? [line([r(`    ${hidden} more ${hidden === 1 ? 'task' : 'tasks'} on the board`, 'muted')])] : []));
+  if (loose.length) {
+    const nameW = Math.min(18, Math.max(...looseShown.map((w) => cells(w.name)), 1));
+    rows.push(BLANK, ...looseShown.map((w) => line(fitRuns([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateRun(w.state, m.ui, m.tick), name: { t: w.name, bold: true }, nameW, word: { t: w.state, tone: w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub' }, wordW: WORD_W, ...(m.cols >= WIDE && w.detail ? { detail: { t: oneLine(w.detail) } } : {}) })], m.cols))));
+    if (loose.length > looseShown.length) rows.push(line([r(`    ${loose.length - looseShown.length} more on the team tab`, 'muted')]));
+  }
   return rows;
 }
 
