@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Fixed (critique 10, slice A1): the HUD and the side panel draw one tick for the same TODO and agent row. `register.ts` hands both surfaces the motion driver's frame clock (`Motion.stamp`/`ctx()`) instead of two separate `$.clock.now()` reads, so the pop frame and fade colour never differ by a render; the HUD spinner for an unowned item turns the item id's phase, as the panel does (`mod/phase-sync.test.ts`).
+- Changed (critique 10, slice A2): `returned` has its own mark, `◃` (`<` in ASCII) in the accent tone, never the amber `▲`; `rowWordTone` is the one tone of a state word on the HUD and the panel.
+- Fixed (critique 10, slice A3): the 256-colour fade steps one palette colour per 100 ms beat (no repeated frame in the ramp; the window is 500 ms, was 900 ms with 4 to 5 identical frames per step), and the HUD state word fades with its glyph.
+
 ## 17.10.0 - 2026-11-11
 
 - Fixed (wave 11 integration): the band shows Stop's open count beside the plan (`todo 5/5 · 1 open`) when store rows the plan does not carry are open, so a full plan never reads as all done while Stop would refuse (`openWork` on the mission model, from the core row's contract.open).

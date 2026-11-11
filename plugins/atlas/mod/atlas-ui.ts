@@ -214,10 +214,10 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
  * each is one cell wide and present in DejaVu Sans Mono (mod/fixtures/dejavu-sans-mono-glyphs.ts); keep this a single-line literal,
  * mod/fixtures/check_glyph_cmap.py reads it. */
-export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍';
+export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▲▁▂▃▄▅▆▇◌◍']);
+const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▲▁▂▃▄▅▆▇◌◍◃']);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -231,11 +231,25 @@ export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '
 export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: '#', blocked: '!', waiting: '?' };
 export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'warn', waiting: 'info' };
 
-export const stateGlyph = (s: UiState, ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? STATE_ASCII[s] : STATE_GLYPHS[s]);
+/** `returned` is a word, not a seventh state: the owner agent ended and the store row is still open (a normal hand-back to the lead). It counts as
+ * `blocked` everywhere a count is kept, but its mark is its own: a hand-back arrow in the accent tone, never the amber warning triangle. */
+export const RETURNED = 'returned';
+export const RETURNED_GLYPH = '◃'; // the small triangle pointing back to the lead (U+25C3, hollow: a hand-back, not a fault; the focus mark ▸ points the other way)
+export const RETURNED_ASCII = '<';
+/** What a row's mark shows: a state, or `returned`. */
+export type MarkState = UiState | typeof RETURNED;
+/** The mark state of a row: `returned` when its word says so, else its state. */
+export const markOf = (state: UiState, word?: string): MarkState => (word === RETURNED ? RETURNED : state);
+/** The token of a mark: the state's own, or the accent for `returned`. */
+export const markToken = (s: MarkState): Token => (s === RETURNED ? 'accent' : STATE_TOKEN[s]);
+/** The one tone of a row's state WORD on every surface (HUD, side panel): failed red, blocked amber, `returned` accent, the rest the quiet sub tone. */
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : state === 'failed' ? 'bad' : state === 'blocked' ? 'warn' : 'sub');
+
+export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s] : STATE_GLYPHS[s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
-export function stateRun(s: UiState, ui: Ui, spinFrame = 0): Run {
+export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
   const g = s === 'running' ? spinnerGlyph(spinFrame, ui.ascii) : stateGlyph(s, ui);
-  return { t: g, tone: ui.ascii ? 'text' : glyphTone(STATE_TOKEN[s], ui.theme) };
+  return { t: g, tone: ui.ascii ? 'text' : glyphTone(markToken(s), ui.theme) };
 }
 /** Tone of a state WORD (text, 4.5:1): the state's token where it reaches 4.5:1 on the panel, else `text`; `text` in ASCII mode. */
 export function stateWordTone(s: UiState, ui: Pick<Ui, 'ascii' | 'theme'>): Token {

@@ -4,6 +4,7 @@ import { paintHud } from '../omp/hud-paint';
 import { uiFromEnv, type Ui } from './atlas-ui';
 import { hudLines } from './hud';
 import { demoFrames, demoInput, demoMain, type DemoIo } from './motion-demo';
+import { MOTION_FRAME_MS, MOTION_MS } from './motion';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips SGR
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -13,13 +14,13 @@ describe('motion-demo frames', () => {
   test('two runs are byte identical', () => {
     expect(demoFrames(100, 100)).toEqual(files);
   });
-  test('each surface writes the resting rows, a frame per 100 ms of the 900 ms window and a strip', () => {
+  test('each surface writes the resting rows, a frame per 100 ms of the window and a strip', () => {
     for (const s of ['todo', 'agent']) {
       const names = Object.keys(files).filter((n) => n.startsWith(`${s}-`));
       expect(names).toContain(`${s}-00-running.ans`);
       expect(names).toContain(`${s}-99-done.ans`);
       expect(names).toContain(`${s}-strip.ans`);
-      expect(names.filter((n) => /-t\d{4}ms\.ans$/.test(n))).toHaveLength(10);
+      expect(names.filter((n) => /-t\d{4}ms\.ans$/.test(n))).toHaveLength(MOTION_MS / MOTION_FRAME_MS + 1);
     }
   });
   test('the window moves: at least 5 distinct frames, the glyph pops, and the last frame is the resting done row byte for byte', () => {
@@ -47,10 +48,10 @@ describe('the demo draws what the live HUD draws', () => {
   const mocha: Ui = { ...uiFromEnv({}), color: 'truecolor' };
   const live = (surface: 'todo' | 'agent', now: number): string => `${paintHud(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui: mocha, tick: 0, now }).join('\n')}\n`;
   test('the resting done frame is the live builder output byte for byte, strike included', () => {
-    for (const s of ['todo', 'agent'] as const) expect(files[`${s}-99-done.ans`]).toBe(live(s, 1900));
+    for (const s of ['todo', 'agent'] as const) expect(files[`${s}-99-done.ans`]).toBe(live(s, 1000 + MOTION_MS));
   });
   test('done TODO titles are struck: the builder marks the run and the frames carry SGR 9, as the live frames do', () => {
-    const row = hudLines(demoInput('todo', 'done', 1900), { cols: 100, maxRows: 20, ui: mocha, now: 1900 }).flat().find((r) => r.t === 'wire the gate');
+    const row = hudLines(demoInput('todo', 'done', 1000 + MOTION_MS), { cols: 100, maxRows: 20, ui: mocha, now: 1000 + MOTION_MS }).flat().find((r) => r.t === 'wire the gate');
     expect(row?.strike).toBe(true);
     // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
     expect(files['todo-99-done.ans']).toMatch(/\x1b\[9;38;2;\d+;\d+;\d+;48;2;[\d;]+mwire the gate/);
@@ -65,7 +66,12 @@ describe('the demo draws what the live HUD draws', () => {
     expect(all).not.toContain('48;5;17;');
     for (const s of ['todo', 'agent']) {
       const frames = Object.keys(f256).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => f256[n]!);
-      expect(new Set(frames).size).toBeGreaterThanOrEqual(4);
+      expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
+      // critique 10: no step of the ramp repeats the one before it, until the row is at rest (the resting frame is the last file)
+      const rest = f256[`${s}-99-done.ans`]!;
+      const ramp = frames.slice(0, frames.findIndex((f) => f === rest));
+      expect(ramp.length).toBeGreaterThanOrEqual(2); // two palette steps, then the resting render
+      for (let i = 1; i < ramp.length; i++) expect([s, i, ramp[i] === ramp[i - 1]]).toEqual([s, i, false]);
     }
     expect(f256['todo-99-done.ans']).toContain('\x1b[9;');
   });

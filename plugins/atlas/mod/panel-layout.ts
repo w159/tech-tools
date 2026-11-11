@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, percent, ribbon, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, percent, ribbon, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
@@ -119,7 +119,7 @@ const r = (t: string, tone: Tone = 'text', o: Partial<Run> = {}): Run => ({ t, t
 const line = (runs: Run[], press?: Press): PanelLine => (press ? { runs, press } : { runs });
 export const BLANK: PanelLine = { runs: [] };
 /** A row's runs mid-transition when the model carries a motion view (key: the row's entry; accent: the state that leads). */
-const moving = (runs: Run[], key: string, accent: UiState, m: Pick<PanelModel, 'motion' | 'ui'>): Run[] => animateRow(runs, key, accent, m.motion, m.ui);
+const moving = (runs: Run[], key: string, accent: MarkState, m: Pick<PanelModel, 'motion' | 'ui'>): Run[] => animateRow(runs, key, accent, m.motion, m.ui);
 const rowWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 const pad = (t: string, n: number): string => t + ' '.repeat(Math.max(0, n - cells(t)));
 const cut = (t: string, n: number): string => pad(clip(t, n), n);
@@ -146,14 +146,14 @@ export const lineText = (l: PanelLine): string => runsText(l.runs);
 /** Spinner frame of agent `id`: the shared clock reading (spinFrameOf, a fixed phase per id) when the model carries one, else the tick. */
 const frameOf = (m: Pick<PanelModel, 'now' | 'tick'>, id = ''): number => (m.now !== undefined ? spinFrameOf(m.now, id) : m.tick);
 /** The state glyph of agent `id` on its row. */
-const stateMark = (s: UiState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => stateRun(s, m.ui, frameOf(m, id));
+const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => stateRun(s, m.ui, frameOf(m, id));
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
 const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal));
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
 const nameCap = (cols: number): number => Math.max(18, Math.min(40, cols - GRID_LEAD - 2 - 7 - 6));
 
 /** `◐ ` and friends: the state glyph run followed by a space. */
-const mark = (s: UiState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => {
+const mark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => {
   const g = stateMark(s, m, id);
   return { ...g, t: `${g.t} ` };
 };
@@ -275,7 +275,6 @@ function agentsRows(m: PanelModel): PanelLine[] {
 
 const AGENT_ROWS = 5; // agents named under the plan on the route tab; the rest fold into `+N more`
 const WORD_W = 7; // `running` and `blocked` are the longest of the six state words
-const stateWordTone2 = (s: UiState): Tone => (s === 'failed' ? 'bad' : s === 'blocked' ? 'warn' : 'sub');
 const OWNER_W = 18;
 const TITLE_MIN_W = 21; // the title column's least width (the state word starts in cell 26 when every title is short, as in the design); it grows to the longest title the pane has room for
 
@@ -285,16 +284,16 @@ const TITLE_MIN_W = 21; // the title column's least width (the state word starts
 function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; wordW: number; shown?: string }): PanelLine[] {
   const key = `task:${t.id}`;
   const runs = gridRow({
-    cols: m.cols, ui: m.ui, mark: stateMark(t.state, m, t.owner ?? t.id),
+    cols: m.cols, ui: m.ui, mark: stateMark(markOf(t.state, t.word), m, t.owner || t.id),
     name: { t: w.shown ?? oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text' }, nameW: w.nameW, nameCut: 'end',
-    word: { t: t.word ?? t.state, tone: stateWordTone2(t.state) }, wordW: w.wordW,
+    word: { t: t.word ?? t.state, tone: rowWordTone(t.state, t.word) }, wordW: w.wordW,
     ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
     ...(w.valueW && t.owner ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
   });
   const open = m.expanded === key;
   const facts = [t.owner ? `owner ${oneLine(t.owner)}` : '', oneLine(t.detail)].filter(Boolean).join(` ${dot(m.ui)} `);
   const extra = open ? [...(facts ? [facts] : []), t.evidence ? `evidence: ${oneLine(t.evidence)}` : 'no evidence yet'] : [];
-  return [line(fitRuns(moving(runs, key, t.state, m), m.cols), { kind: 'toggle', key }), ...extra.map((x) => line(fitRuns([r(`    ${x}`, 'muted')], m.cols)))];
+  return [line(fitRuns(moving(runs, key, markOf(t.state, t.word), m), m.cols), { kind: 'toggle', key }), ...extra.map((x) => line(fitRuns([r(`    ${x}`, 'muted')], m.cols)))];
 }
 
 /** What the Motion observes of the panel: each plan task, worker, gate group and gate line (key and state word), the rows `bodyLines` can move. */
@@ -320,7 +319,7 @@ const lastFit = (w: PanelWorker, room: number): string => clipWords(lastText(w.d
 
 /** An agent row under the route tab's `agents` row: glyph, whole name, state word, from 100 columns what it is doing. */
 function routeAgentRow(m: PanelModel, w: PanelWorker, nameW: number): PanelLine {
-  const tone: Tone = w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub';
+  const tone: Tone = rowWordTone(w.state);
   const last = m.cols >= WIDE ? lastFit(w, m.cols - 2 - (GRID_LEAD + nameW + 1 + WORD_W) - 1) : '';
   return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW, word: { t: w.state, tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
 }

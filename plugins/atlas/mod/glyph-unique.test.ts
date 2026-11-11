@@ -1,7 +1,7 @@
 // C1: the done-transition glyph is a mark nothing else in Atlas draws (state glyphs, spinner frames, bar tracks and fills, rail and focus
 // marks, the sparkline, the theme glyph tables, the role eyes and mouths) and not one of the host's own marks, in Unicode and in ASCII.
 import { describe, expect, test } from 'claude-code/testing';
-import { ATLAS_GLYPHS, gaugeParts, gauge, sparkline, spinnerGlyph, STATE_ASCII, STATE_GLYPHS, type Ui } from './atlas-ui';
+import { ATLAS_GLYPHS, RETURNED_ASCII, RETURNED_GLYPH, gaugeParts, gauge, sparkline, spinnerGlyph, STATE_ASCII, STATE_GLYPHS, type Ui } from './atlas-ui';
 import { POP_ASCII, POP_UNICODE } from './motion';
 import { MOUTHS, ROLE_EYES } from './roles';
 import { barParts, glyph, STATE_GLYPH } from './theme';
@@ -33,6 +33,12 @@ describe('C1: the done-transition glyph is used by nothing else', () => {
   test('ASCII frames match no state mark, spinner frame, gauge character, sparkline level, box character or host mark', () => {
     const taken = new Set([...asciiTokens(), ...HOST]);
     for (const g of POP_ASCII) expect([g, taken.has(g)]).toEqual([g, false]);
+  });
+  test('the `returned` mark is used by nothing else either: no state glyph, spinner frame, pop frame, gauge, role eye or host mark, in Unicode and ASCII', () => {
+    const uni = new Set([...unicodeTokens(), ...HOST, ...POP_UNICODE]);
+    const asc = new Set([...asciiTokens(), ...HOST, ...POP_ASCII]);
+    expect([RETURNED_GLYPH, uni.has(RETURNED_GLYPH), ATLAS_GLYPHS.includes(RETURNED_GLYPH), [...RETURNED_GLYPH].length]).toEqual([RETURNED_GLYPH, false, true, 1]);
+    expect([RETURNED_ASCII, asc.has(RETURNED_ASCII), RETURNED_ASCII.length]).toEqual([RETURNED_ASCII, false, 1]);
   });
   test('the frames are one cell each and listed in ATLAS_GLYPHS (checked against the DejaVu cmap by theme.test.ts)', () => {
     for (const g of POP_UNICODE) expect([g, [...g].length, ATLAS_GLYPHS.includes(g)]).toEqual([g, 1, true]);

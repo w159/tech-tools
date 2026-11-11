@@ -2,7 +2,7 @@
 // byte for byte, idle scheduling nothing, a new row revealing left to right, a done row popping its glyph, reduced motion.
 import { describe, expect, test } from 'claude-code/testing';
 import { cells, easeOutCubic, runsCells, runsString, sgrColor, type Run, type Ui } from './atlas-ui';
-import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_MS, reducedMotion, REVEAL_MS, revealRuns, stepTrack, trackBusy, type MotionItem } from './motion';
+import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTION_MS, reducedMotion, REVEAL_MS, revealRuns, stepTrack, trackBusy, type MotionItem } from './motion';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const row = (state: 'running' | 'done' = 'done'): Run[] => [
@@ -86,10 +86,10 @@ describe('animateRow', () => {
     m.observe('todo', items('running'), 0);
     m.observe('todo', items('done'), 2000);
     const glyph = (dt: number): string => runsString(animateRow(row('done'), 'todo:a', 'done', m.ctx(2000 + dt), ui)).slice(2, 3);
-    expect([glyph(0), glyph(MOTION_MS * 0.45), glyph(MOTION_MS * 0.8), glyph(MOTION_MS)]).toEqual(['◌', '◍', '●', '●']);
+    expect([glyph(0), glyph(MOTION_FRAME_MS), glyph(2 * MOTION_FRAME_MS), glyph(MOTION_MS)]).toEqual(['◌', '◍', '●', '●']); // one pop frame per beat
     const a: Ui = { ...ui, ascii: true };
     const ar: Run[] = [{ t: '*', tone: 'text' }, { t: ' x', tone: 'text' }];
-    expect([0, 0.45, 0.8].map((f) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + f * MOTION_MS), a))[0])).toEqual(['@', '@', '*']);
+    expect([0, 1, 2].map((b) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + b * MOTION_FRAME_MS), a))[0])).toEqual(['@', '@', '*']);
   });
   test('a new row reveals left to right over REVEAL_MS and keeps its width', () => {
     const m = new Motion(true);
@@ -126,7 +126,7 @@ describe('Motion: idle is free, reduced motion draws the resting render', () => 
     m.observe('todo', items('queued'), 0);
     expect(m.animating(10)).toBe(false);
     m.observe('todo', items('running'), 1000);
-    expect(m.animating(1500)).toBe(true);
+    expect(m.animating(1000 + MOTION_MS - 100)).toBe(true);
     expect(m.animating(1000 + MOTION_MS)).toBe(false);
   });
   test('an unchanged observation does not reopen a window', () => {
@@ -181,7 +181,7 @@ describe('MotionDriver: idle schedules nothing; a change runs one frame timer an
     await d.step({}, feedOf('running'));
     await d.step({}, feedOf('running')); // another snapshot: still one timer
     expect([t.scheduled, d.running]).toEqual([1, true]);
-    for (const dt of [100, 400, 800]) { t.now = 1000 + dt; t.fn?.(); await settle(); }
+    for (const dt of [100, 200, 400]) { t.now = 1000 + dt; t.fn?.(); await settle(); }
     expect([t.redraws, t.cancelled, d.running]).toEqual([3, 0, true]);
     t.now = 1000 + MOTION_MS;
     t.fn?.();

@@ -4,9 +4,9 @@
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
-import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, percent, ribbon, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, STATE_TOKEN, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, markOf, markToken, percent, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
-export type TodoRow = { label: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
+export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
 export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
 /** The spinner frame of row `id` (the agent's squad name): the shared clock's frame (spinFrameOf of spinClock, as the side panel turns it)
@@ -104,17 +104,17 @@ function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich:
 
 function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
   const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt);
-  return r.key === undefined ? runs : animateRow(runs, r.key, r.state, o.motion, o.ui);
+  return r.key === undefined ? runs : animateRow(runs, r.key, markOf(r.state, r.word), o.motion, o.ui);
 }
 
 function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
   const { ui } = o;
-  const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), stateRun(r.state, ui, spinOf(o, r.owner || r.label)), t(' ')]; // the cursor marks work in hand, never a queued row
+  const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), stateRun(markOf(r.state, r.word), ui, spinOf(o, r.owner || r.id || r.label)), t(' ')]; // the cursor marks work in hand, never a queued row; the spinner turns the owner's (else the item's id) phase, as the side panel does
   const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
   const text = clip(flat(r.label), labelW);
   const label = r.state === 'done' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
   if (stateAt === 0) return [...head, label];
-  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, STATE_TOKEN[r.state], ui) : stateChip(r.state, ui)) : t(r.word ?? r.state, r.word ? 'warn' : undefined)];
+  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(r.word ?? r.state, rowWordTone(r.state, r.word))];
   if (tier !== 'full' || r.detail === '') return row;
   return [...toCol(row, metaAt), t(clip(flat(r.detail), Math.max(1, o.cols - metaAt)), 'sub')];
 }
@@ -227,7 +227,7 @@ function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, n
 function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const { ui, cols } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.id ?? r.name)), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
-  let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state)];
+  let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state, rowWordTone(r.state))];
   /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. */
   const cell = (text: string, at: number | undefined, width: number, words = false): void => {
     if (text === '' || at === undefined) return;

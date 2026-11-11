@@ -105,7 +105,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const ev = flat(t.evidence);
     const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || flat(t.owner);
     const detail = ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base;
-    return { label: labelOf(t), state, ...(word ? { word } : {}), detail, focus: false, ...(flat(t.owner) ? { owner: flat(t.owner) } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
+    return { label: labelOf(t), ...(t.id ? { id: String(t.id) } : {}), state, ...(word ? { word } : {}), detail, focus: false, ...(flat(t.owner) ? { owner: flat(t.owner) } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
   const at = rows.findIndex((r) => r.state === 'running');
   const focus = at >= 0 ? at : rows.findIndex((r) => r.state !== 'done');

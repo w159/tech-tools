@@ -1096,7 +1096,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
 		const look = await lookOf($);
 		const tick = await read($, spinnerTickState);
-		const motionCtx = motion?.ctx(await $.clock.now());
+		const motionCtx = motion?.ctx(); // the frame clock the motion driver stamped: the HUD, the band and the pane draw one frame, never a render apart
 		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now, motion: motionCtx }; // the board's clock too: one `claimed_at`, one elapsed
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
 		const running = agents.some(isRunning);
@@ -1136,7 +1136,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (snapshot === null) return next(e);
 		const look = await lookOf($);
 		await read($, easeTickState); // a transition bumps it each frame: the pane redraws mid-transition too
-		const paneMotion = motion?.ctx(await $.clock.now());
+		const paneMotion = motion?.ctx();
 		if (e.requestId === BOARD_ID) {
 			return boardTree($.ui.resolve(e), withOwnerStates(ownTodos(snapshot.todos ?? [], snapshot.sessionId), workerStates(snapshot, liveWorkers(snapshot, snapshot.now))), {
 				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,

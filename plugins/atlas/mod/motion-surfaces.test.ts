@@ -15,7 +15,7 @@ import { bodyLines, panelMotionItems, type PanelModel } from './panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const T0 = 1000;
-const DTS = [0, 100, 300, 600] as const;
+const DTS = [0, 100, 200, 300] as const;
 
 /** Every run with the colour it is painted in: two frames that differ here differ on screen. */
 const shot = (rows: readonly (readonly Run[])[]): string => rows.map((r) => r.map((x) => `${x.fg ?? x.tone}${x.bg ?? ''}${x.bold ? 'b' : ''}${x.strike ? 's' : ''}|${x.t}`).join('')).join('\n');

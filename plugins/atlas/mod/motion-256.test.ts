@@ -55,12 +55,15 @@ describe('256-colour ease', () => {
     const resting: Run[] = [{ t: '●', tone: 'ok' }, { t: ' ', tone: 'text' }, { t: 'wire the gate', tone: 'sub', strike: true }, { t: 'tests green', tone: 'muted' }];
     for (const word of ['wire the gate', 'tests green']) {
       const seen: string[] = [];
+      let atRest = false;
       for (let dt = 0; dt < MOTION_MS; dt += 50) {
         const fg = animateRow(resting, 'todo:a', 'done', m.ctx(1000 + dt), ui, { pop: false, reveal: false }).find((r) => r.t === word)!.fg;
-        expect(fg).toBeDefined();
+        if (fg === undefined) { atRest = true; continue; } // past its last step a run wears its resting tone
+        expect(atRest).toBe(false); // and never leaves it again
         expect([fg, idx(fg!)]).toEqual([fg, hostTo256(fg!)]);
         if (seen.at(-1) !== fg) seen.push(fg!);
       }
+      expect(atRest).toBe(true);
       expect(new Set(seen.map(idx)).size).toBeGreaterThanOrEqual(MIN_STEPS_256);
       expect(seen.length).toBe(new Set(seen).size); // a staircase: no step comes back
     }
@@ -83,7 +86,7 @@ describe('256-colour ease', () => {
     const m = new Motion(true);
     m.observe('todo', [{ key: 'todo:a', state: 'running' }], 0);
     m.observe('todo', [{ key: 'todo:a', state: 'done' }], 1000);
-    const f = animateRow([{ t: '●', tone: 'text' }, { t: ' wire', tone: 'text' }], 'todo:a', 'done', m.ctx(1100), ui);
+    const f = animateRow([{ t: '●', tone: 'text' }, { t: ' wire', tone: 'text' }], 'todo:a', 'done', m.ctx(1000), ui);
     expect(runsString(f)[0]).toBe(POP_UNICODE[0]);
   });
 });

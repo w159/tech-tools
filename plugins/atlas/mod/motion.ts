@@ -10,10 +10,16 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, contrast, easeOutCubic, fitHex, hostEnv, luminance, PALETTES, STATE_TOKEN, stable256, stateGlyph, surfaceHex, type Run, type Ui, type UiEnv, type UiState } from './atlas-ui';
+import { cells, contrast, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, stable256, stateGlyph, surfaceHex, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
 
-/** A state change eases back to rest over this long. */
-export const MOTION_MS = 900;
+/** A frame every 100 ms, the spinner's rate: the motion timer's period and the length of one beat of a transition. */
+export const MOTION_FRAME_MS = 100;
+/** The beats a transition draws. Every beat is a frame of its own: a 256-colour run steps one palette colour per beat (at most
+ * MAX_STEPS_256) and is at rest after its last, the glyph pops one frame per beat, and a 24-bit ease gets five distinct colours. No two
+ * neighbouring frames of a ramp are alike (critique 10: a 900 ms window held 231 for five frames and 193 for four). */
+const MAX_BEATS = 5;
+/** A state change eases back to rest over this long (MAX_BEATS frames). */
+export const MOTION_MS = MAX_BEATS * MOTION_FRAME_MS;
 /** A new row reveals left to right over this long. */
 export const REVEAL_MS = 300;
 /** How far toward white the lead-in starts from the accent. */
@@ -79,8 +85,18 @@ export class Motion {
     if (next !== prev) this.tracks.set(surface, next);
   }
 
-  /** The view a builder reads at `now`; undefined when motion is off, so builders return the resting render untouched. */
-  ctx(now: number): MotionCtx | undefined {
+  private stamped = 0;
+  /** The frame clock: the reading the driver took at its last tick. Every surface draws a frame from this one number (`ctx()` with no
+   * argument), so the HUD and the side panel are never a render apart: the same row is on the same beat of its transition in both. */
+  stamp(now: number): void {
+    this.stamped = now;
+  }
+  get frameAt(): number {
+    return this.stamped;
+  }
+
+  /** The view a builder reads at `now` (default: the frame clock); undefined when motion is off, so builders return the resting render untouched. */
+  ctx(now: number = this.stamped): MotionCtx | undefined {
     if (!this.enabled) return undefined;
     return { now, entry: (key) => { for (const t of this.tracks.values()) { const e = t.get(key); if (e) return e; } return undefined; } };
   }
@@ -235,7 +251,7 @@ export type AnimateOpts = {
  * `runs` as drawn `ctx.now` ms into the row's window. `key` names the row's entry, `accent` is the state whose tone leads.
  * Returns `runs` itself (same reference) with no ctx, no entry, no colour, or past both windows: the resting render.
  */
-export function animateRow(runs: Run[], key: string, accent: UiState, ctx: MotionCtx | undefined, ui: Ui, o: AnimateOpts = {}): Run[] {
+export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: MotionCtx | undefined, ui: Ui, o: AnimateOpts = {}): Run[] {
   if (!ctx) return runs;
   const e = ctx.entry(key);
   if (!e) return runs;
@@ -244,24 +260,25 @@ export function animateRow(runs: Run[], key: string, accent: UiState, ctx: Motio
   if (pc >= 1 && pr >= 1) return runs;
   let out = runs;
   if (pc < 1) {
+    const beat = Math.max(0, Math.floor((ctx.now - e.changed) / MOTION_FRAME_MS)); // one beat per frame: the staircase and the pop both step on it
     if (ui.color !== 'none') {
       const palette = PALETTES[ui.theme];
-      const lead = mixHex(palette[STATE_TOKEN[accent]], '#ffffff', LEAD_WHITE);
+      const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
       const t = easeOutCubic(pc);
       const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '');
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;
         const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585b70') : palette[r.tone]);
         if (ui.color === '256') {
-          const stairs = easeSteps256(palette[STATE_TOKEN[accent]], rest, ui.theme);
-          return stairs.length ? { ...r, fg: stairs[Math.min(stairs.length - 1, Math.floor(pc * stairs.length))]! } : r;
+          const stairs = easeSteps256(palette[markToken(accent)], rest, ui.theme);
+          return beat < stairs.length ? { ...r, fg: stairs[beat]! } : r; // past its last step a run is at rest
         }
         return { ...r, fg: mixHex(lead, rest, t) };
       });
     }
     if (o.pop !== false && accent === 'done' && e.state === 'done') {
       const disc = stateGlyph('done', ui);
-      const step = Math.floor(pc * 3);
+      const step = Math.min(2, beat);
       const at = step < 2 ? out.findIndex((r) => r.t.trim() === disc) : -1;
       if (at >= 0) {
         const g = (ui.ascii ? POP_ASCII : POP_UNICODE)[step]!;
@@ -278,8 +295,6 @@ export const BAND_OPTS: AnimateOpts = { reveal: false, pop: false };
 
 // ---- the driver (host side, kept apart from the host so it can be tested with a fake scheduler) -----------------------------------------
 
-/** A frame every 100 ms, the spinner's rate. */
-export const MOTION_FRAME_MS = 100;
 export type Cancel = { cancel(): void };
 
 /**
@@ -301,6 +316,7 @@ export class MotionDriver {
   async step(source: unknown, feed: () => Promise<Record<string, readonly MotionItem[]>> | Record<string, readonly MotionItem[]>): Promise<void> {
     if (!this.motion.enabled) return;
     const now = await this.clock();
+    this.motion.stamp(now);
     if (source !== this.seen) {
       this.seen = source;
       for (const [surface, items] of Object.entries(await feed())) this.motion.observe(surface, items, now);
@@ -320,7 +336,9 @@ export class MotionDriver {
   }
 
   private async frame(): Promise<void> {
-    const busy = this.motion.animating(await this.clock());
+    const now = await this.clock();
+    const busy = this.motion.animating(now);
+    this.motion.stamp(now); // before the redraw: every surface the redraw touches reads this one reading
     await this.redraw();
     if (!busy) this.stop();
   }
