@@ -27,6 +27,7 @@ import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
 import { isOlder, mergeToasts, registerNotify, stateToast } from './notify';
+import { forgetPlaced, placeFinished } from './transcript/placed';
 import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
 import { clearLook, lookOf } from './look';
 import { Motion, MotionDriver, reducedMotion } from './motion';
@@ -517,8 +518,12 @@ async function rebuildOnce($: EngineInterface): Promise<void> {
 		});
 		// The snapshot write redraws the band, pane and restyles that read it. Stamped; an older build never replaces a newer one.
 		const stamped = { ...snap, seq };
-		await update($, snapshotState, (cur) => (cur && isOlder(cur, stamped) ? cur : stamped));
+		const prior: { snap: AtlasSnapshot | null } = { snap: null };
+		await update($, snapshotState, (cur) => { prior.snap = cur; return cur && isOlder(cur, stamped) ? cur : stamped; });
 		noteHeaderPattern(stamped.contract.headerFirstLinePattern); // the chip draws from this copy, with no state read (restyle.tsx)
+		// A worker that finished in this build gets its transcript card now, from the tick that moved its HUD row (critique 14 B3: the host's own row
+		// came 5 s later, when the lead took the notification up). An older build never places one.
+		if (!prior.snap || !isOlder(prior.snap, stamped)) await placeFinished($, prior.snap, stamped);
 		// The board keeps its last good rows; say why they may be stale.
 		if (builder.todoError !== undefined) reportFailure($, `atlas: todos.json is ${builder.todoError}, showing the last good board`);
 	} catch (err) {
@@ -926,6 +931,7 @@ let booted: { interactive: boolean } | null = null;
 let wired = false;
 async function boot($: EngineInterface, cwd: string, interactive: boolean): Promise<void> {
 	shownFailures.clear(); // a new session may toast its failures again
+	forgetPlaced(); // and its finish cards are its own
 	try {
 		booted = { interactive };
 		const modOn = (await $.env.get('ATLAS_MOD').catch(() => undefined)) !== 'off';

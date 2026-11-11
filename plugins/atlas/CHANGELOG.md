@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Header chip keeps the lead's whole sentence (critique 14 B2): the text beside the pills wraps instead of truncating (`marking T1 compl...` at 110); the two-pills-only cut moves from 60 to 40 columns (`restyle.tsx` `tailOf`).
+- Finish card in 1 s (critique 14 B3): the rebuild tick that moves a worker's HUD row to done places the card itself with `$.ui.place` and a `Placed` render site (`transcript/placed.ts`), and the host's later task-notification row for that worker draws empty (one card per finish); the launch card also reads done from the mod's own end record when the host row lags (`outcome.ts`).
+- No host toast for a routine start or finish (critique 14 B4): `notify.ts` toasts only failures, waits and notes; `+N` counts keep the whole name (`alpha-explorer +2`, not `alpha-expl... +1 more`).
+- Final `done` header raw for one frame (critique 14 B1) is the host's first paint of the message before the hook answers (`header-chip.test.ts` pins the mod's side); the tofu is the chequered-flag emoji the contract teaches the model to write, not drawn by the mod.
+
 ## 17.12.0 - 2026-11-11
 
 - Band checks row counts `n/m green` (`2/3 green`) like the panel and gates tab, replacing `2 of 3 green` (critiques 12 and 13: one count format); band goldens and tests updated.

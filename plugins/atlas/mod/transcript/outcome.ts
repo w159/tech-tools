@@ -24,6 +24,9 @@ type Who = { id: string; status: string; name: string; type: string }
 /** Host statuses after which a worker has nothing left to run (`idle`: a background subagent between turns). */
 const ENDED = new Set(['completed', 'failed', 'killed', 'idle'])
 
+/** The mod's own end moods (orch activity) as the host status they stand for. */
+const MOD_ENDED: Record<string, string> = { done: 'completed', failed: 'failed' }
+
 const handback = (m: Msg): string => {
  const call = [...(m.toolUses ?? [])].reverse().find((u) => u.tool === 'SubagentHandback')
  return typeof call?.input.message === 'string' ? call.input.message : ''
@@ -99,17 +102,22 @@ export const launchedId = (output: unknown): string => {
 /** A background launch's live spinner or its end result; {} for any other call. */
 export async function cardExtra($: EngineInterface, output: unknown, agents: readonly AgentInfo[], memo: Map<string, Outcome>): Promise<CardExtra> {
  const id = launchedId(output)
- const who = id ? await whoIs($, id, agents) : undefined
- if (!who) return {}
+ const found = id ? await whoIs($, id, agents) : undefined
+ if (!found) return {}
+ // The host row can say running for seconds after the worker's own turn ended; the HUD row reads the mod's record of that turn (data/orchestration
+ // onComplete), so the card does too and the two agree in the same tick (critique 14 B3).
+ const who = ENDED.has(found.status) ? found : { ...found, status: MOD_ENDED[(await read($, orchRef)).activity[id]?.mood ?? ''] ?? found.status }
  if (!ENDED.has(who.status)) return { mark: spin(await read($, spinnerTick), 'implement') }
  const o = await workerOutcome($, who, memo)
  return { ended: endedWord(o), outcome: outcomeDetail(o) }
 }
 
-/** Notification row for a background atlas worker; null leaves any other task's row to the engine. */
-export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>): Promise<RenderElement | null> {
+/** Notification row for a background atlas worker; null leaves any other task's row to the engine. `hide` says the worker's finish card is
+ * already in the transcript (transcript/placed.ts): the host's row then draws nothing, so a finish is one card. */
+export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean): Promise<RenderElement | null> {
  const who = await whoIs($, task.id ?? '', await $.agent.list().catch(() => [] as AgentInfo[]))
  if (!who) return null
+ if (hide?.(who.name)) return { type: 'Text', props: {}, children: [] }
  const o = await workerOutcome($, { ...who, status: firstOf(task.status, who.status) }, memo, task.durationMs)
  return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui)
 }
