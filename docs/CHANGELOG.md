@@ -1,5 +1,22 @@
 # Changelog
 
+## atlas 17.9.0 - 2026-11-11
+
+- atlas 17.9.0: fixes for hostile critique 8. The band reads BLOCKED only when Stop refused, from a Stop verdict the completion gate now records, and a failing check without a refusal reads `<gate> warning`: 0 of 6 live runs end on a false BLOCKED, against 4 of 6 at 17.8.0. Also in this release:
+  - The team tab lead row and the core and gates header counts share one evaluation.
+  - The band drops `phase n/m` when a plan exists.
+  - The board helper reports plan items and dispatches apart, and the Board tab names the folded dispatches.
+  - TODO rows read running while their owner runs.
+  - Agent durations stop at the agent's end, and the toast matches the card.
+  - The 256-colour fade starts on frame 0.
+  - LAST shows each agent's last distinct tool and target.
+
+  The audit table is corrected: lag max is the max over runs, and 14 of 19 lines with a 3x target are met. Not met: per-surface never-shown (2 lines), first-appearance lag (2 lines) and the design critic (6.1, target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.
+
+## marketplace 5.14.0 - 2026-11-11
+
+- marketplace 5.14.0: atlas 17.9.0. armada and programmer are unchanged.
+
 ## atlas 17.8.0 - 2026-11-11
 
 - atlas 17.8.0: fixes for hostile critiques 6 and 7. The Board equals the plan and never draws an open store row as done; a dispatch row closes when its agent ends, even on a retry stop, so the 3-explorer stall is gone in 6 of 6 live runs. The Stop team gate (s) skips read-only roles as the dispatch gate does (D11). The gates tab's team row calls the Stop gate's own check, and the blocker reason uses one string at every width. The header, evidence and TODO counts reconcile; there are no `STATUS:` caps on cards; LAST is deduped; the SUBAGENTS column header stays at 110 columns. The done-transition glyph is unique, there is one spinner clock, and the side-panel tabs use full words and fill the pane. Doctor `enforcement-rates` counts only projects where the deny can fire (0 FAIL again). Live, 3 runs per width against 17.5.0: TODO visibility 22.5% to 97.6% (150 cols) and 23.1% to 97.0% (110), band count 23.0% to 94.9% and 26.2% to 79.5%, workers on any surface 65.4% to 94.6% and 26.7% to 91.6%, every side-panel tab 100%. The 3x bar is met on 13 of 18 lines. Not met: events never shown per surface (2 lines), first-appearance lag (2 lines) and the design critic (5.9, target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.

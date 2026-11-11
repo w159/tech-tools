@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 17.9.0 - 2026-11-11
+
 - Fixed (critique 8 A1/A2): the band reads `BLOCKED` only when the lead declared it or the completion gate's last Stop verdict for the session refused the stop (`BLOCKED · stop: team gate`); a failing tripwire or other check with Stop allowed is `▲ <gate> warning` / `▲ <n> gates warning`. `completion_gate_core.py` records each Stop verdict in `.atlas/.run/stop-verdict.json` (per session), `atlas_gates.py` serves it as the completion group's `stop-verdict` line, and the team tab lead row reads the same verdict.
 - Fixed (critique 8 A3): the core row's `header n of m` is the one header evaluation; the gates tab `Header contract` line takes its pass or fail from it (`withHeaderTally`).
 - Fixed (critique 8 A4): with a plan the band drops `phase n/m` (the plan count is the progress figure), so `phase 1/5 · todo 4/5` cannot appear; without a plan the phase position stays.
