@@ -24,7 +24,7 @@ describe('A2: the Board fold never hides an open row', () => {
     expect(rows).toHaveLength(5);
     expect(rows.map((r) => r.state)).toEqual(['done', 'done', 'queued', 'done', 'done']);
     const text = boardText(boardLines(rows, { cols: 80, ui, folded: boardFolded(items), openFolded: boardOpenFolded(items) }));
-    expect(text.at(-1)).toBe('  5 items · 1 dispatch open');
+    expect(text.at(-1)).toBe('  1 dispatch open');
   });
   test('the agent ended but the store row is open (settled to ended): the plan row reads ended, never done', () => {
     const items = asBoard(settleDispatch(ownTodos(store(), SESSION), { 'gamma-explorer': 'done' }));
@@ -37,7 +37,7 @@ describe('A2: the Board fold never hides an open row', () => {
     const items = asBoard(ownTodos(store('completed'), SESSION));
     expect(boardOpenFolded(items)).toBe(0);
     expect(boardRowsOf(items).every((r) => r.state === 'done')).toBe(true);
-    expect(boardText(boardLines(boardRowsOf(items), { cols: 80, ui, folded: 3, openFolded: 0 })).at(-1)).toBe('  5 items · 3 dispatches folded');
+    expect(boardText(boardLines(boardRowsOf(items), { cols: 80, ui, folded: 3, openFolded: 0 })).at(-1)).toBe('  3 dispatches folded');
   });
 });
 

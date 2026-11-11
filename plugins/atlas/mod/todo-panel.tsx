@@ -45,12 +45,12 @@ export function todoRows(items: readonly BoardSource[], o: TodoPanelOpts): Segme
   return capRows(body, o.maxRows, moreLine).map((l) => rowOfLine(l, o.cols, ui));
 }
 
-export type BoardTreeOpts = { cols: number; rows: number; tick: number; now?: number; /** The snapshot clock in epoch ms (`now` is whole seconds): the spinner then turns the shared frame; absent: `tick`. */ nowMs?: number; ui?: Ui; rich?: boolean; motion?: MotionCtx | undefined };
+export type BoardTreeOpts = { /** Draw the BOARD ribbon (default true; the side panel's board view turns it off: the panel has its own header). */ ribbon?: boolean; cols: number; rows: number; tick: number; now?: number; /** The snapshot clock in epoch ms (`now` is whole seconds): the spinner then turns the shared frame; absent: `tick`. */ nowMs?: number; ui?: Ui; rich?: boolean; motion?: MotionCtx | undefined };
 
 /** The board pane: the whole surface (ribbon, blank row, header, items), capped at `rows` with a `+N more` row. */
 export function boardTree(els: ClientElements, items: readonly BoardSource[], o: BoardTreeOpts): RenderElement {
   const ui = o.ui ?? uiFromEnv();
-  const at = { cols: o.cols, ui, rich: o.rich ?? richEnv(), tick: o.tick, ...(o.nowMs !== undefined ? { nowMs: o.nowMs } : {}), motion: o.motion };
+  const at = { cols: o.cols, ui, ribbon: o.ribbon !== false, rich: o.rich ?? richEnv(), tick: o.tick, ...(o.nowMs !== undefined ? { nowMs: o.nowMs } : {}), motion: o.motion };
   const lines = items.length ? boardLines(boardRowsOf(items, o.now), { ...at, folded: boardFolded(items), openFolded: boardOpenFolded(items) }) : [...boardLines([], at), { runs: [{ t: '  (no state)', tone: 'muted' as const }] }];
   const rows = capRows(lines, Math.max(1, o.rows), moreLine).map((l) => rowOf(els, rowOfLine(l, o.cols, ui), o.cols));
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: rows });

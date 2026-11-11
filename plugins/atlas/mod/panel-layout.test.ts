@@ -91,6 +91,11 @@ describe('route tab', () => {
     expect(rows('route', 100, { todos: [done], expanded: 'task:d1' }).join('\n')).toContain('tests green');
     expect(rows('route', 100, { todos: [{ ...done, evidence: null }], expanded: 'task:d1' }).join('\n')).toContain('no evidence yet');
   });
+  test('critique 11 C4: a done task title is struck through in the panel, as in the HUD (live-150-5d6a53ef-2 f0079 row 14 vs 26); open rows are not', () => {
+    const todos = [{ id: 'd1', label: 'read alpha.py', state: 'done' as const }, { id: 'q1', label: 'read gamma.py', state: 'queued' as const }];
+    const runs = bodyLines(panelWorld('route', 100, mocha, { todos })).flatMap((l) => l.runs);
+    expect(runs.filter((x) => x.strike).map((x) => x.t.trim())).toEqual(['read alpha.py']);
+  });
   test('a plan longer than the row budget folds into a counted more row', () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: `task ${i}`, state: 'queued' as const }));
     const out = rows('route', 80, { todos: many, rows: 20 });
@@ -204,7 +209,7 @@ describe('core tab', () => {
 describe('channel tab', () => {
   test('header counts people and unread in words; blocked and handoff notes carry the state glyph and word', () => {
     const out = bodyLines(panelWorld('channel', 120, mocha)).map(lineText);
-    expect(out[0]).toBe(' #atlas-board-mod  5 people · 2 unread');
+    expect(out[0]).toBe('    #atlas-board-mod  5 people · 2 unread');
     expect(out[2]).toMatch(/^ {2}▲ implementer-live +blocked /);
     expect(out[3]).toMatch(/^ {2}● implementer-layout +handoff /);
   });

@@ -25,7 +25,7 @@ import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data
 import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
-import { headerPhaseOf, registerRestyle } from './restyle';
+import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, registerRestyle } from './restyle';
 import { isOlder, mergeToasts, registerNotify, stateToast } from './notify';
 import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
 import { clearLook, lookOf } from './look';
@@ -868,7 +868,7 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 		logs,
 		reports,
 		todos: planBasis(snap.todos ?? [], snap.sessionId), // the plan the band counts: no dispatch rows, advisor notes or other sessions' rows
-		header: await read($, headerTallyState),
+		header: ((t, d) => ({ ok: Math.max(t.ok, d.ok), total: Math.max(t.total, d.total) }))(await read($, headerTallyState), drawnHeaderTally()), // the transcript draws a chip per text block; turn.complete counts one answer per turn
 		openGates: openGateCount(await gateGroups($)),
 			// same channels teamsOf gets in muxRuns; dispatches are the orchestration spawn rows this mod already holds
 			channels: [snap.channel ?? '', `lead-${(snap.sessionId ?? '').slice(0, 6)}`], // a snapshot without a session id (older fixtures) matches no lead channel
@@ -952,6 +952,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		muxCalls = {};
 		resetCore();
 		await update($, headerTallyState, () => ({ ok: 0, total: 0 }));
+		forgetDrawnHeaders(); // a new session starts its own tally
 		const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
 		await builder.init(cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(cwd), await gitBranch($, cwd));
 		await rebuild($);

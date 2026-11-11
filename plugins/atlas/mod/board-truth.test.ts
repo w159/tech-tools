@@ -22,7 +22,7 @@ describe('B1: the Board footer names the folded dispatches', () => {
     expect(boardRowsOf(items)).toHaveLength(5);
     expect(boardFolded(items)).toBe(3);
     const text = boardText(boardLines(boardRowsOf(items), { cols: 80, ui, folded: boardFolded(items) }));
-    expect(text.at(-1)).toBe('  5 items · 3 dispatches folded');
+    expect(text.at(-1)).toBe('  3 dispatches folded'); // the ribbon says `5 items`; the footer does not say it again (critique 11)
     expect(boardText(boardLines(boardRowsOf(plan), { cols: 80, ui, folded: 0 })).join('\n')).not.toContain('folded');
   });
 });

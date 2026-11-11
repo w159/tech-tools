@@ -61,15 +61,15 @@ describe('team tab: lead row, roster rows, lead tally', () => {
 describe('channel tab: header, columns and marks', () => {
   const note = (over: Partial<PanelNote> = {}): PanelNote => ({ at: '10:02', from: 'lead', text: 'hello', ...over });
   test('one person is singular, more are plural', () => {
-    expect(body('channel', 80, { people: 1, unread: 0, notes: [] })[0]).toBe(' #atlas-board-mod  1 person');
-    expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe(' #atlas-board-mod  2 people');
+    expect(body('channel', 80, { people: 1, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  1 person');
+    expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
   test('a missing channel name reads #channel', () => {
-    expect(body('channel', 80, { channel: undefined, people: 3, unread: 0, notes: [] })[0]).toBe(' #channel  3 people');
+    expect(body('channel', 80, { channel: undefined, people: 3, unread: 0, notes: [] })[0]).toBe('    #channel  3 people');
   });
   test('unread is shown only when not zero, with its word', () => {
-    expect(body('channel', 80, { unread: 4, notes: [] })[0]).toBe(' #atlas-board-mod  5 people · 4 unread');
-    expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe(' #atlas-board-mod  5 people');
+    expect(body('channel', 80, { unread: 4, notes: [] })[0]).toBe('    #atlas-board-mod  5 people · 4 unread');
+    expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  5 people');
   });
   test('the time column starts at 50 cells', () => {
     expect(body('channel', 50, { notes: [note()] })[1]).toBe('    lead hello                               10:02'); // the right-aligned value column

@@ -74,7 +74,7 @@ describe('HUD rows', () => {
     const one = (i: HudInput): HudInput => ({ ...i, todos: i.todos.slice(0, 5) });
     mo.observe('hud-todo', hudMotionItems(one(without), { now: T0 }).todos, 0);
     mo.observe('hud-todo', hudMotionItems(without, { now: T0 }).todos, T0);
-    const inks = [0, 100, 200].map((dt) => hudLines(without, hudView(mo.ctx(T0 + dt))).map((r) => runsString(r).trimEnd().length).join(','));
+    const inks = [0, 150, 299].map((dt) => hudLines(without, hudView(mo.ctx(T0 + dt))).map((r) => runsString(r).replace(/\s/g, '').length).join(','));
     expect(new Set(inks).size).toBe(3);
   });
 });

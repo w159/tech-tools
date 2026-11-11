@@ -286,7 +286,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   const key = `task:${t.id}`;
   const runs = gridRow({
     cols: m.cols, ui: m.ui, mark: stateMark(markOf(t.state, t.word), m, t.owner || t.id),
-    name: { t: w.shown ?? oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text' }, nameW: w.nameW, nameCut: 'end',
+    name: { t: w.shown ?? oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text', ...(t.state === 'done' ? { strike: true } : {}) }, nameW: w.nameW, nameCut: 'end', // a done title is struck through, as in the HUD (critique 11)
     word: { t: t.word ?? t.state, tone: rowWordTone(t.state, t.word) }, wordW: w.wordW,
     ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
     ...(w.valueW && t.owner ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
@@ -485,11 +485,12 @@ function noteRow(m: PanelModel, n: PanelNote, g: { nameW: number; wordW: number;
 const NOTE_LINES = 4; // rows one message may take on a tall pane
 
 function channelBody(m: PanelModel): PanelLine[] {
+  const ind = ' '.repeat(GRID_LEAD); // the indent every other tab's rows have: the name column (critique 11: the channel head sat one cell from the border)
   const head = line(fitRuns([
-    r(` #${m.channel ?? 'channel'}  `, 'text', { bold: true }), // one cell in: the tab indent
+    r(`${ind}#${m.channel ?? 'channel'}  `, 'text', { bold: true }),
     r(`${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`, 'muted'),
   ], m.cols));
-  if (!m.notes.length) return [head, BLANK, line(fitRuns([r(' no messages yet', 'muted')], m.cols)), ...wrap('workers post here when they hand off or block; type below to message the lead', Math.max(8, m.cols - 3), 3).map((t) => line(fitRuns([r(` ${t}`, 'muted')], m.cols)))];
+  if (!m.notes.length) return [head, BLANK, line(fitRuns([r(`${ind}no messages yet`, 'muted')], m.cols)), ...wrap('workers post here when they hand off or block; type below to message the lead', Math.max(8, m.cols - GRID_LEAD - 1), 3).map((t) => line(fitRuns([r(`${ind}${t}`, 'muted')], m.cols)))];
   const log = m.notes.slice(-Math.max(1, tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4)); // a tall pane: the head, the log and the foot row make exactly the pane
   const hasKind = log.some((n) => n.kind === 'blocked' || n.kind === 'handoff' || n.kind === 'done');
   const timeW = m.cols >= 50 ? Math.max(0, ...log.map((n) => cells(n.at))) : 0;

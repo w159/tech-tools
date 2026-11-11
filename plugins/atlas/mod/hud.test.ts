@@ -27,13 +27,15 @@ const worldAgents = worldHudAgents;
 const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
 const phases = worldPhases();
 
+// The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the count and 3 after it.
+const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(━{6,})( \d+ of \d+ done)$/, (_m, f: string, c: string) => `${f.slice(2)}${c} ━━━`), ...rows.slice(1)];
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
     const input: HudInput = { todos: worldPlan(), agents: [], phases };
-    expect(trimmed(hudRows(input, view(120)))).toEqual([...todo_120]);
-    expect(trimmed(hudRows(input, view(120, true)))).toEqual([...todo_120_rich]);
-    expect(trimmed(hudRows(input, view(80)))).toEqual([...todo_80]);
-    expect(trimmed(hudRows(input, view(40)))).toEqual([...todo_40]);
+    expect(trimmed(hudRows(input, view(120)))).toEqual(edge(todo_120));
+    expect(trimmed(hudRows(input, view(120, true)))).toEqual(edge(todo_120_rich));
+    expect(trimmed(hudRows(input, view(80)))).toEqual(edge(todo_80));
+    expect(trimmed(hudRows(input, view(40)))).toEqual(edge(todo_40));
     expect(trimmed(hudRows(input, view(60))).slice(1)).toEqual(todo_40.slice(1));
   });
   test('SUBAGENTS at 120, 120 rich and 80 equals the design goldens; 60 and 40 draw none', () => {
@@ -49,7 +51,7 @@ describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   });
   test('both blocks stack as the TODO golden, a blank row, then the SUBAGENTS golden', () => {
     const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)));
-    expect(rows).toEqual([...todo_120, '', ...subagents_120]);
+    expect(rows).toEqual([...edge(todo_120), '', ...subagents_120]);
   });
   test('every row is padded to the width and none is wider', () => {
     for (const cols of [120, 80, 60, 40]) for (const r of hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))) expect(textWidth(text(r))).toBe(cols);

@@ -4,29 +4,29 @@ import { paintHud } from '../omp/hud-paint';
 import { uiFromEnv, type Ui } from './atlas-ui';
 import { hudLines } from './hud';
 import { demoFrames, demoInput, demoMain, type DemoIo } from './motion-demo';
-import { MOTION_FRAME_MS, MOTION_MS } from './motion';
+import { MOTION_MS, MOTION_STEP_MS } from './motion';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips SGR
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
 
 describe('motion-demo frames', () => {
-  const files = demoFrames(100, 100);
+  const files = demoFrames(100);
   test('two runs are byte identical', () => {
-    expect(demoFrames(100, 100)).toEqual(files);
+    expect(demoFrames(100)).toEqual(files);
   });
-  test('each surface writes the resting rows, a frame per 100 ms of the window and a strip', () => {
+  test('each surface writes the resting rows, a frame per held step of the window and a strip', () => {
     for (const s of ['todo', 'agent']) {
       const names = Object.keys(files).filter((n) => n.startsWith(`${s}-`));
       expect(names).toContain(`${s}-00-running.ans`);
       expect(names).toContain(`${s}-99-done.ans`);
       expect(names).toContain(`${s}-strip.ans`);
-      expect(names.filter((n) => /-t\d{4}ms\.ans$/.test(n))).toHaveLength(MOTION_MS / MOTION_FRAME_MS + 1);
+      expect(names.filter((n) => /-t\d{4}ms\.ans$/.test(n))).toHaveLength(MOTION_MS / MOTION_STEP_MS + 1);
     }
   });
-  test('the window moves: at least 5 distinct frames, the glyph pops, and the last frame is the resting done row byte for byte', () => {
+  test('the window moves: at least 3 distinct frames, the glyph pops, and the last frame is the resting done row byte for byte', () => {
     for (const s of ['todo', 'agent']) {
       const frames = Object.keys(files).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => files[n]!);
-      expect(new Set(frames).size).toBeGreaterThanOrEqual(5);
+      expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
       const row = (f: string): string => plain(f).trimEnd().split('\n').at(-1)!;
       expect(row(frames[0]!)).toContain('◌'); // the dotted ring: no state's own mark, no bar track, and not the host's `·` separator
       for (const f of frames) expect(['◇', '◆'].some((g) => row(f).includes(g))).toBe(false); // queued and the capsule keep their glyphs
@@ -44,7 +44,7 @@ describe('motion-demo frames', () => {
 });
 
 describe('the demo draws what the live HUD draws', () => {
-  const files = demoFrames(100, 100);
+  const files = demoFrames(100);
   const mocha: Ui = { ...uiFromEnv({}), color: 'truecolor' };
   const live = (surface: 'todo' | 'agent', now: number): string => `${paintHud(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui: mocha, tick: 0, now }).join('\n')}\n`;
   test('the resting done frame is the live builder output byte for byte, strike included', () => {
@@ -59,7 +59,7 @@ describe('the demo draws what the live HUD draws', () => {
     for (const f of Object.keys(files).filter((n) => /todo-\d\d-t/.test(n))) expect(files[f]).toMatch(/\x1b\[9;/);
   });
   test('256-colour frames: palette indices only, the neutral panel (never navy 17), still at least 5 distinct frames', () => {
-    const f256 = demoFrames(100, 100, '256');
+    const f256 = demoFrames(100, MOTION_STEP_MS, '256');
     const all = Object.values(f256).join('');
     expect(all).not.toMatch(/[34]8;2;/);
     expect(all).toContain('48;5;234');
@@ -74,6 +74,30 @@ describe('the demo draws what the live HUD draws', () => {
       for (let i = 1; i < ramp.length; i++) expect([s, i, ramp[i] === ramp[i - 1]]).toEqual([s, i, false]);
     }
     expect(f256['todo-99-done.ans']).toContain('\x1b[9;');
+  });
+});
+
+describe('critique 11 C1: the ramp is held long enough to be seen', () => {
+  test('three steps of at least 200 ms: the whole ramp spans at least 600 ms', () => {
+    expect(MOTION_STEP_MS).toBeGreaterThanOrEqual(200);
+    expect(MOTION_MS).toBeGreaterThanOrEqual(600);
+    expect(MOTION_MS / MOTION_STEP_MS).toBeGreaterThanOrEqual(3);
+  });
+  test('the default demo (one frame per held step) has no duplicate adjacent frames until rest, in truecolor and 256 colours', () => {
+    for (const color of ['truecolor', '256'] as const) {
+      const f = demoFrames(100, undefined, color);
+      for (const s of ['todo', 'agent']) {
+        const frames = Object.keys(f).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => f[n]!);
+        const rest = f[`${s}-99-done.ans`]!;
+        const ramp = frames.slice(0, frames.findIndex((x) => x === rest));
+        expect([color, s, ramp.length]).toEqual([color, s, ramp.length >= 2 ? ramp.length : 'short']);
+        for (let i = 1; i < ramp.length; i++) expect([color, s, i, ramp[i] === ramp[i - 1]]).toEqual([color, s, i, false]);
+      }
+    }
+  });
+  test('a frame sampled 400 ms into the window is still not at rest (a 0.5 s capture sees the ramp)', () => {
+    const f = demoFrames(100, 200);
+    expect(f['todo-03-t0400ms.ans']).not.toBe(f['todo-99-done.ans']);
   });
 });
 

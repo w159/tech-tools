@@ -10,16 +10,19 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, contrast, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, stable256, stateGlyph, surfaceHex, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
+import { cells, contrast, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, RETURNED, stable256, stateGlyph, surfaceHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
 
 /** A frame every 100 ms, the spinner's rate: the motion timer's period and the length of one beat of a transition. */
 export const MOTION_FRAME_MS = 100;
-/** The beats a transition draws. Every beat is a frame of its own: a 256-colour run steps one palette colour per beat (at most
+/** The beats a transition draws. Every beat is a held step of its own: a 256-colour run steps one palette colour per beat (at most
  * MAX_STEPS_256) and is at rest after its last, the glyph pops one frame per beat, and a 24-bit ease gets five distinct colours. No two
  * neighbouring frames of a ramp are alike (critique 10: a 900 ms window held 231 for five frames and 193 for four). */
-const MAX_BEATS = 5;
-/** A state change eases back to rest over this long (MAX_BEATS frames). */
-export const MOTION_MS = MAX_BEATS * MOTION_FRAME_MS;
+const MAX_BEATS = 3;
+/** How long one beat is held (critique 11: a 200 ms ramp against a 0.5 s capture period showed on 15 of 51 live frames). Each of the
+ * MAX_BEATS steps of the staircase and of the glyph pop stays on screen this long, so a capture or an eye sees every step. */
+export const MOTION_STEP_MS = 200;
+/** A state change eases back to rest over this long (MAX_BEATS held steps: at least 600 ms). */
+export const MOTION_MS = MAX_BEATS * MOTION_STEP_MS;
 /** A new row reveals left to right over this long. */
 export const REVEAL_MS = 300;
 /** How far toward white the lead-in starts from the accent. */
@@ -212,10 +215,11 @@ export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): 
 
 const blankWidth = (r: Run): Run => ({ t: ' '.repeat(cells(r.t)), tone: 'text' });
 /** `runs` cut to `n` cells from the left, the rest blanked in place (the row keeps its width). A wide glyph cut in half blanks. */
-export function revealRuns(runs: readonly Run[], n: number): Run[] {
+export function revealRuns(runs: readonly Run[], n: number, keep?: (run: Run) => boolean): Run[] {
   let used = 0;
   return runs.map((r) => {
     const w = cells(r.t);
+    if (keep?.(r)) { used += w; return r; }
     if (used + w <= n) { used += w; return r; }
     if (used >= n) { used += w; return blankWidth(r); }
     let out = '';
@@ -236,6 +240,15 @@ const lastInk = (runs: readonly Run[]): number => {
     for (const c of [...r.t]) { w += cells(c); if (c !== ' ') ink = w; }
   }
   return ink;
+};
+
+const STATE_WORDS: ReadonlySet<string> = new Set<string>([...UI_STATES, RETURNED]);
+/** The runs a new row never hides while it reveals: the marks (focus, state glyph, spinner: one non-word cell) and the state word (and a chip). Only the
+ * name and detail grow in, so no frame reads `ru` or `runni` for `running` (critique 11, from the HUD review). */
+export const staysWhileRevealing = (r: Run): boolean => {
+  if (r.chip) return true;
+  const w = r.t.trim();
+  return w !== '' && (STATE_WORDS.has(w.toLowerCase()) || (cells(w) === 1 && /[^\p{L}\p{N}]/u.test(w)));
 };
 
 export type AnimateOpts = {
@@ -260,7 +273,7 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
   if (pc >= 1 && pr >= 1) return runs;
   let out = runs;
   if (pc < 1) {
-    const beat = Math.max(0, Math.floor((ctx.now - e.changed) / MOTION_FRAME_MS)); // one beat per frame: the staircase and the pop both step on it
+    const beat = Math.max(0, Math.floor((ctx.now - e.changed) / MOTION_STEP_MS)); // one beat per held step: the staircase and the pop both step on it
     if (ui.color !== 'none') {
       const palette = PALETTES[ui.theme];
       const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
@@ -286,7 +299,7 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
       }
     }
   }
-  if (pr < 1) out = revealRuns(out, Math.ceil(pr * lastInk(out)));
+  if (pr < 1) out = revealRuns(out, Math.ceil(pr * lastInk(out)), staysWhileRevealing);
   return out;
 }
 

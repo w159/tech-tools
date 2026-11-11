@@ -206,6 +206,26 @@ function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, se
  return [...kids, ...tailOf(nm, sentence, columns - kids.reduce<number>((n, k) => n + textWidth(firstText(k)), 0))]
 }
 
+/** Every assistant text the transcript drew, by message id: whether its first line is the ATLAS header (a chip). `turn.complete` fires once per turn and
+ * `$.session.messages()` is empty live, so the header tally had one answer where the transcript showed a chip per text block (critique 11: `0 of 1`
+ * under five chips). Written by the AssistantMessage hook below (a plain Map, not `$.state`: the engine denies state writes while drawing), read by the
+ * tally. A streaming text re-draws under one id, so its last draw is the one that counts. */
+const drawnHeaders = new Map<string, boolean>();
+const DRAWN_MAX = 500;
+export const drawnHeaderTally = (): { ok: number; total: number } => {
+ let ok = 0
+ for (const v of drawnHeaders.values()) if (v) ok++
+ return { ok, total: drawnHeaders.size }
+}
+export const forgetDrawnHeaders = (): void => drawnHeaders.clear()
+function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): void {
+ if (!text.trim()) return
+ const key = id ?? text.slice(0, 120)
+ drawnHeaders.delete(key) // re-insert last: the oldest drops first
+ drawnHeaders.set(key, headerPhaseOf(text, snap) !== null)
+ if (drawnHeaders.size > DRAWN_MAX) drawnHeaders.delete(drawnHeaders.keys().next().value as string)
+}
+
 /** `ATLAS | ⚒ implement 3/5 | sentence` drawn in place as filled pills, body kept under it. */
 export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0): RenderElement | null {
  if (props.isSummary || !props.text) return null
@@ -286,6 +306,7 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
   try {
    const snap = await ready($, cache)
+   if (snap && !e.props.isSummary) noteDrawn(snap, e.requestId, e.props.text)
    return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0) ?? next(e)) : next(e)
   } catch { return next(e) }
  })

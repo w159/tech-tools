@@ -2,7 +2,7 @@
 // byte for byte, idle scheduling nothing, a new row revealing left to right, a done row popping its glyph, reduced motion.
 import { describe, expect, test } from 'claude-code/testing';
 import { cells, easeOutCubic, runsCells, runsString, sgrColor, type Run, type Ui } from './atlas-ui';
-import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTION_MS, reducedMotion, REVEAL_MS, revealRuns, stepTrack, trackBusy, type MotionItem } from './motion';
+import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, reducedMotion, REVEAL_MS, revealRuns, stepTrack, trackBusy, type MotionItem } from './motion';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const row = (state: 'running' | 'done' = 'done'): Run[] => [
@@ -86,10 +86,10 @@ describe('animateRow', () => {
     m.observe('todo', items('running'), 0);
     m.observe('todo', items('done'), 2000);
     const glyph = (dt: number): string => runsString(animateRow(row('done'), 'todo:a', 'done', m.ctx(2000 + dt), ui)).slice(2, 3);
-    expect([glyph(0), glyph(MOTION_FRAME_MS), glyph(2 * MOTION_FRAME_MS), glyph(MOTION_MS)]).toEqual(['◌', '◍', '●', '●']); // one pop frame per beat
+    expect([glyph(0), glyph(MOTION_STEP_MS), glyph(2 * MOTION_STEP_MS), glyph(MOTION_MS)]).toEqual(['◌', '◍', '●', '●']); // one pop frame per beat
     const a: Ui = { ...ui, ascii: true };
     const ar: Run[] = [{ t: '*', tone: 'text' }, { t: ' x', tone: 'text' }];
-    expect([0, 1, 2].map((b) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + b * MOTION_FRAME_MS), a))[0])).toEqual(['@', '@', '*']);
+    expect([0, 1, 2].map((b) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + b * MOTION_STEP_MS), a))[0])).toEqual(['@', '@', '*']);
   });
   test('a new row reveals left to right over REVEAL_MS and keeps its width', () => {
     const m = new Motion(true);
@@ -97,12 +97,17 @@ describe('animateRow', () => {
     m.observe('todo', items('queued'), 3000);
     const resting = row('running');
     const w = runsCells(resting);
-    const shown = (dt: number): number => runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000 + dt), ui, { pop: false })).trimEnd().length;
+    const shown = (dt: number): number => runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000 + dt), ui, { pop: false })).replace(/\s/g, '').length; // ink cells: the state word stays, the name grows
     const widths = [0, 80, 160, 240, REVEAL_MS - 1].map(shown);
     for (let i = 1; i < widths.length; i++) expect(widths[i]!).toBeGreaterThanOrEqual(widths[i - 1]!);
     expect(new Set(widths).size).toBeGreaterThanOrEqual(3);
     expect(runsCells(animateRow(resting, 'todo:a', 'queued', m.ctx(3000 + 100), ui))).toBe(w);
-    expect(shown(0)).toBe(0);
+    // the marks and the state word are there from the first frame; only the name grows in (critique 11: no `ru` / `runni`)
+    const first = runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000), ui, { pop: false }));
+    expect(first).not.toContain('wire');
+    expect(first).toContain('▸ ◐');
+    expect(first).toContain('running');
+    for (const dt of [0, 80, 160, 240, REVEAL_MS - 1]) expect(runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000 + dt), ui, { pop: false }))).toContain('running');
   });
   test('no ctx, no entry or a key that was never observed leaves the row alone', () => {
     const r = row();
