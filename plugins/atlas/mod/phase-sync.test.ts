@@ -9,7 +9,7 @@ import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinnerGlyph, type Run, type Ui } from './atlas-ui';
 import { busySnap, NOW } from './live_fixture';
-import { Motion, MOTION_FRAME_MS, MOTION_MS } from './motion';
+import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS } from './motion';
 import { motionFeed } from './motion-feed';
 import { panelModelOf } from './pane/sidebar-model';
 import type { TodoItem } from './contract';
@@ -109,7 +109,7 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
       const { m, after } = observed(ui);
       const rest = shot(surfaces(after, ui, undefined).hud);
       const beats: string[] = [];
-      for (let dt = 0; dt < MOTION_MS; dt += MOTION_FRAME_MS) beats.push(shot(surfaces({ ...after, now: NOW + 5000 + dt }, ui, m.ctx(NOW + 5000 + dt)).hud));
+      for (let dt = 0; dt < MOTION_MS; dt += MOTION_STEP_MS) beats.push(shot(surfaces({ ...after, now: NOW + 5000 + dt }, ui, m.ctx(NOW + 5000 + dt)).hud));
       const at = beats.indexOf(rest);
       const ramp = beats.slice(0, at < 0 ? beats.length : at);
       expect(ramp.length).toBeGreaterThanOrEqual(2);

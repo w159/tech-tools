@@ -1,15 +1,15 @@
 // motion-demo.ts: renders the frames of a TODO row and an agent row going running -> done to .ans files, so they can be recorded.
 // Deterministic: the clock is injected (no Date.now), the rows are fixed, so two runs write byte-identical files.
-//   bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 100] [--color truecolor|256]   (default: the terminal's depth, see colorMode)
+//   bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 200] [--color truecolor|256]   (default: the terminal's depth, see colorMode)
 // Writes, per surface (todo, agent): `<surface>-00-running.ans` (the resting row before the change), `<surface>-01-t0000ms.ans` ...
-// one file per frame of the 900 ms window, `<surface>-99-done.ans` (the resting row after), and `<surface>-strip.ans` (all of them,
+// one file per frame of the 600 ms window, `<surface>-99-done.ans` (the resting row after), and `<surface>-strip.ans` (all of them,
 // one per line, `cat` it in a terminal). Each file is the ribbon and the row exactly as the live HUD draws them (24-bit ANSI, or xterm-256 with --color 256).
 // The frames are built by `demoFrames` (pure: file name -> text); only the CLI at the bottom touches the disk, through dynamic imports
 // that the mod's tsconfig (which has no node types) never resolves.
 import { colorMode, paintAnsi, uiFromEnv, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, hudMotionItems, type HudAgent, type HudInput } from './hud';
-import { Motion, MOTION_MS } from './motion';
+import { Motion, MOTION_MS, MOTION_STEP_MS } from './motion';
 
 /** The demo draws through the live HUD (hudLines) and paints with the live ANSI painter (paintAnsi): same builder, same options, same
  * strike on done titles, so a recorded frame is what the terminal shows. `forced` is the colour depth the CLI asks for. */
@@ -29,7 +29,7 @@ export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number):
 const FEED = { 'todo': 'hud-todo', 'agent': 'hud-agents' } as const;
 
 /** File name -> text of every frame of both rows, for colour depth `color` (default truecolor). */
-export function demoFrames(cols = 100, step = 100, color: Ui['color'] = 'truecolor'): Record<string, string> {
+export function demoFrames(cols = 100, step = MOTION_STEP_MS, color: Ui['color'] = 'truecolor'): Record<string, string> {
   const ui = uiOf(color);
   const files: Record<string, string> = {};
   const put = (name: string, lines: string[]): void => {
@@ -68,7 +68,7 @@ const nodeIo = async (): Promise<DemoIo> => {
   };
 };
 
-/** `--out <dir> [--cols 100] [--step 100]`: write every frame; exit 2 without `--out`. */
+/** `--out <dir> [--cols 100] [--step 200]`: write every frame; exit 2 without `--out`. */
 export async function demoMain(host: Host, io?: DemoIo): Promise<void> {
   const arg = (k: string): string | undefined => {
     const i = host.argv.indexOf(k);
@@ -76,7 +76,7 @@ export async function demoMain(host: Host, io?: DemoIo): Promise<void> {
   };
   const out = arg('--out');
   if (!out) {
-    host.stderr.write('usage: bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 100] [--color truecolor|256]\n');
+    host.stderr.write('usage: bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 200] [--color truecolor|256]\n');
     host.exit(2);
     return;
   }
@@ -84,7 +84,7 @@ export async function demoMain(host: Host, io?: DemoIo): Promise<void> {
   // --color wins; else the terminal's own depth (colorMode: TERM=*256color with no COLORTERM is 256 colours, as the live host reads it).
   const flag = arg('--color');
   const color: Ui['color'] = flag === '256' || flag === 'truecolor' ? flag : colorMode(host.env ?? {}) === '256' ? '256' : 'truecolor';
-  const files = demoFrames(Number(arg('--cols') ?? 100), Number(arg('--step') ?? 100), color);
+  const files = demoFrames(Number(arg('--cols') ?? 100), Number(arg('--step') ?? MOTION_STEP_MS), color);
   disk.mkdir(out);
   for (const [name, text] of Object.entries(files)) disk.write(out, name, text);
   host.stdout.write(`${Object.keys(files).length} files in ${out}\n`);

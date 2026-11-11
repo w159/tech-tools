@@ -5,6 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { AtlasSnapshot, ChannelNote, SquadAgent, TodoItem } from './contract';
 import type { EngineInterface, On } from 'claude-code';
 import { memState } from './test_helpers';
+import { cells } from './atlas-ui';
 import { diffSnapshots, isOlder, mergeToasts, nextStepSuggestion, registerNotify, TOAST_MAX } from './notify';
 
 function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {
@@ -285,28 +286,35 @@ describe('registerNotify toasts', () => {
 		});
 		const { toasts } = await run(prev, next);
 		// One toast per turn: a burst of six left the stack undrawn and the host printed a notice into the transcript.
-		expect(toasts).toEqual([mergeToasts([
-			'▌ ◆ ATLAS  ◉ waiting  wait  needs a reply',
-			'▌ ◆ ATLAS  ■ failed  bad',
-			'▌ ◆ ATLAS  ◐ running  new  started',
-			'▌ ◆ ATLAS  ● done  done  after 1m30s',
-			'note  impl-auth  ship it.',
-			'▌ ◆ ATLAS  ● done  task  build it',
-		])!]);
-		expect(toasts[0]!.startsWith('▌ ◆ ATLAS  ◉ waiting  wait  needs a reply  +5 more')).toBe(true);
+		// `+N more` counts only the other toasts of the first one's kind (critique 11): one waiting agent among failures, spawns and todos is alone.
+		expect(toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  wait']);
+		expect(cells(toasts[0]!)).toBeLessThanOrEqual(TOAST_MAX);
 		expect(toasts[0]).not.toMatch(/[✓✗⏸▸]/u);
 	});
 	test('trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare', async () => {
 		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running'), agent('c', 'running')] }, { a: act(), b: act(), c: act() });
 		const next = withActivity({ squad: [agent('a', 'failed'), agent('b', 'input'), agent('c', 'finished')] }, { a: act(), b: act({ mood: 'blocked' }), c: act() });
-		expect((await run(prev, next)).toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  b  needs a reply  +2 more']);
+		expect((await run(prev, next)).toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  b  needs a reply']);
 	});
-	test('mergeToasts: one passes through, many fold into one row of at most TOAST_MAX', () => {
+	test('mergeToasts: one passes through, many fold into one row of at most TOAST_MAX cells, the count last', () => {
 		expect(mergeToasts([])).toBeNull();
 		expect(mergeToasts(['● done  a'])).toBe('● done  a');
-		expect(mergeToasts(['x'.repeat(120), 'y'.repeat(80)])!.length).toBe(TOAST_MAX);
-		expect(mergeToasts(['x'.repeat(120), 'y'.repeat(80)])!.endsWith('  +1 more')).toBe(true);
-		expect(mergeToasts(['a'.repeat(30), 'b'])).toBe(`${'a'.repeat(30)}  +1 more`);
+		expect(cells(mergeToasts(['x'.repeat(120), 'y'.repeat(80)])!)).toBe(TOAST_MAX);
+		expect(mergeToasts(['x'.repeat(120), 'y'.repeat(80)])!.endsWith(' +1 more')).toBe(true);
+		expect(mergeToasts(['a'.repeat(30), 'b'])).toBe(`${'a'.repeat(30)} +1 more`);
+		expect(cells(mergeToasts([{ text: 'wide '.repeat(20) }])!)).toBeLessThanOrEqual(TOAST_MAX); // a lone toast never wraps either
+	});
+	test('critique 11 C2: +N more counts only the other agents that finished in the same burst (3 agents and 5 tasks done: +2, not +8)', async () => {
+		const names = ['alpha-explorer', 'beta-explorer', 'gamma-explorer'];
+		const prev = withActivity({ now: 0, todos: ['t1', 't2', 't3', 't4', 't5'].map((id) => todo(id, 'in_progress', `task ${id}`)), squad: names.map((n) => agent(n, 'running')) }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0 })])));
+		const next = withActivity({ now: 12_000, todos: ['t1', 't2', 't3', 't4', 't5'].map((id) => todo(id, 'completed', `task ${id}`)), squad: names.map((n) => agent(n, 'finished')) }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0 })])));
+		const { toasts } = await run(prev, next);
+		expect(toasts).toHaveLength(1);
+		expect(toasts[0]).toMatch(/^▌ ◆ ATLAS {2}● done {2}alpha-.* \+2 more$/);
+		expect(toasts[0]).not.toContain('+8');
+		expect(cells(toasts[0]!)).toBeLessThanOrEqual(TOAST_MAX); // the host's 40 cell text box: no mid-phrase wrap (`after` / `11s +1 more`)
+		const one = await run(prev, withActivity({ now: 12_000, squad: [agent(names[0]!, 'finished'), agent(names[1]!, 'running'), agent(names[2]!, 'running')] }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0 })]))));
+		expect(one.toasts[0]).not.toContain('more'); // a lone finisher has nobody to count
 	});
 	test('B5: the toast fact comes from structured data (duration, state), never from the agent\'s last line', async () => {
 		const at = async (line: string, now: number) => {

@@ -55,14 +55,14 @@ describe('channel tab from the live snapshot', () => {
   const note = (seq: number, owner: string, over: Record<string, unknown> = {}) => ({ seq, ts: new Date(2026, 10, 11, 10, 2).toISOString(), owner, text: `note ${seq}`, ...over });
   const chan = (s: LiveSnapshot): string[] => bodyLines(panelModelOf(model(s, {}, 'channel'), ui, 100)).map((l) => lineText(l).trimEnd());
   test('unread counts the notes after the lead last spoke, and every note when it never spoke', () => {
-    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead'), note(3, 'a'), note(4, 'b')] as never }))[0]).toBe(' #chat  3 people · 2 unread');
-    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'b')] as never }))[0]).toBe(' #chat  2 people · 2 unread');
-    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead')] as never }))[0]).toBe(' #chat  2 people');
-    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead-9f2')] as never }))[0]).toBe(' #chat  2 people');
+    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead'), note(3, 'a'), note(4, 'b')] as never }))[0]).toBe('    #chat  3 people · 2 unread');
+    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'b')] as never }))[0]).toBe('    #chat  2 people · 2 unread');
+    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead')] as never }))[0]).toBe('    #chat  2 people');
+    expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead-9f2')] as never }))[0]).toBe('    #chat  2 people');
   });
   test('a missing channel name reads #channel; a note with a bad timestamp reads --:--; a good one reads hh:mm', () => {
     const out = chan(world({ channel: undefined as never, notes: [note(1, 'a', { ts: 'not a time' }), note(2, 'b')] as never }));
-    expect(out[0]).toMatch(/^ #channel /);
+    expect(out[0]).toMatch(/^ {4}#channel /);
     expect(out[1]).toMatch(/^ {4}a note 1 +--:--$/); // the time is the right-aligned value column
     expect(out[2]).toMatch(/^ {4}b note 2 +10:02$/);
   });

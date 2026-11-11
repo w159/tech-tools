@@ -31,7 +31,7 @@ export const sidepanelDesign: Record<number, string[]> = {
   "r: route  t: team  c: channel  g: gates  k: core  o: board",
   "   ━━━━━",
   " phase  research 2 of 4",
-  " gates  ● lint   ● test   ■ doctor   2 of 3 green"
+  " gates  ● lint   ● test   ▲ doctor   2 of 3 green"
  ],
  "120": [
   "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -40,7 +40,7 @@ export const sidepanelDesign: Record<number, string[]> = {
   "   ━━━━━",
   "",
   " phase  research   2 of 4",
-  " gates  ● lint   ● test   ■ doctor   2 of 3 green"
+  " gates  ● lint   ● test   ▲ doctor   2 of 3 green"
  ]
 };
 export const cardDesign: Record<number, string[]> = {
@@ -90,7 +90,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "   ━━━━━",
       "",
       " phase  research   2 of 4",
-      " gates  ● lint   ● test   ■ doctor   2 of 3 green",
+      " gates  ● lint   ● test   ▲ doctor   2 of 3 green",
       " agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed",
       "    ● implementer-layout done    9 of 9 steps",
       "    ● implementer-gates  done    golden tests written",
@@ -113,7 +113,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "   ━━━━━",
       " phase  research 2 of 4",
-      " gates  ● lint   ● test   ■ doctor   2 of 3 green",
+      " gates  ● lint   ● test   ▲ doctor   2 of 3 green",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
@@ -136,7 +136,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "r: route t: team c: channel g: gates k: core o: board",
       "   ━━━━━",
       " phase  research 2 of 4",
-      " gates  ● lint   ● test   ■ doctor   2 of 3 green",
+      " gates  ● lint   ● test   ▲ doctor   2 of 3 green",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
@@ -242,7 +242,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "                      ━━━━━━━",
       "",
-      " #atlas-board-mod  5 people · 2 unread",
+      "    #atlas-board-mod  5 people · 2 unread",
       "    lead                        ▸ implementer-band take T4, then run the gate tests                                10:02",
       "  ▲ implementer-live    blocked tests red 3, need a decision on the changelog                                      10:05",
       "  ● implementer-layout  handoff T1 and T2 merged                                                                   10:07"
@@ -252,7 +252,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "                      ━━━━━━━",
-      " #atlas-board-mod  5 people · 2 unread",
+      "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                                                   10:02",
       "    ▸ implementer-band take T4, then run the gate tests",
       "  ▲ implement...  blocked tests red 3, need a decision on the changelog    10:05",
@@ -263,7 +263,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "r: route t: team c: channel g: gates k: core o: board",
       "                    ━━━━━━━",
-      " #atlas-board-mod  5 people · 2 unread",
+      "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                           10:02",
       "    ▸ implementer-band take T4, then run the gate",
       "    tests",

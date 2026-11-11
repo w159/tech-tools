@@ -446,3 +446,21 @@ test('PHASE_RE picks a whole phase word and ignores substrings', () => {
   expect(PHASE_RE.exec('stuck, test blocked')?.[1]).toBe('test')
   expect(PHASE_RE.exec('contested undone')).toBeNull()
 })
+
+test('critique 11: the header tally counts every assistant text the transcript drew (a chip per text block), not one answer per turn', async () => {
+  const { drawnHeaderTally, forgetDrawnHeaders } = await import('./restyle')
+  forgetDrawnHeaders()
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const site = regs.find((r) => r.matcher?.component === 'AssistantMessage')!
+  const harness = fake$({ snapshot: snap() })
+  const draw = (id: string, text: string) => site.hook(harness.$, { surface: 'terminal', component: 'AssistantMessage', requestId: id, props: { text } }, engineNext)
+  await draw('m1', 'ATLAS | 🔍 research | 0/3 explorers returned, board 0/5')
+  await draw('m2', 'ATLAS | 🔍 research | 1/3 explorers returned, board 1/5')
+  await draw('m3', 'ATLAS | 🏁 done | 5/5')
+  await draw('m4', 'plain text with no header')
+  await draw('m3', 'ATLAS | 🏁 done | 5/5\n\nbody grown by streaming') // a re-draw of one message is still one message
+  expect(drawnHeaderTally()).toEqual({ ok: 3, total: 4 })
+  forgetDrawnHeaders()
+  expect(drawnHeaderTally()).toEqual({ ok: 0, total: 0 })
+})

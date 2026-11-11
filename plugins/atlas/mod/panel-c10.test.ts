@@ -69,8 +69,8 @@ describe('C2: the route and channel tabs keep the tab indent', () => {
       expect(rows.length).toBeGreaterThan(2);
       for (const l of rows) expect([cols, l.startsWith(' ')]).toEqual([cols, true]);
     });
-    test(`channel at ${cols}: the head row starts one cell in`, () => {
-      expect(text(panelWorld('channel', cols, mocha, { rows: 40 }))[0]).toMatch(/^ #\S/);
+    test(`channel at ${cols}: the head row starts in the name column, like every list row (critique 11: it sat one cell from the border)`, () => {
+      expect(text(panelWorld('channel', cols, mocha, { rows: 40 }))[0]).toMatch(/^ {4}#\S/);
     });
   }
 });

@@ -279,12 +279,17 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
 
 describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
   const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py', ctx: null, focus: false, ...o });
-  test('B5: the SUBAGENTS column header outlives the blank rows: the budgeted stack keeps it at 110 columns', () => {
+  test('B5 (critique 11): the blank between TODO and SUBAGENTS outlives the column header: the budgeted stack keeps the blank at 110 columns and drops the names first', () => {
     const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
-    const out = text(fitStack({ todos, agents: rows }, opts(110), 8)); // ribbon + 3 plan rows + ribbon + header + 2 agents: no room for the blank rows
+    const out = text(fitStack({ todos, agents: rows }, opts(110), 8)); // ribbon + 3 plan rows + blank + ribbon + 2 agents
     expect(out.length).toBe(8);
-    expect(out.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
+    expect(out[4]).toBe('');
+    expect(out[5]).toContain('SUBAGENTS');
+    expect(out.some((l) => /^ {4}AGENT +STATE/.test(l))).toBe(false);
+    const roomy = text(fitStack({ todos, agents: rows }, opts(110), 9)); // one more row: the names come back
+    expect(roomy.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
+    expect(roomy[4]).toBe('');
   });
   test('B4: a doubled verb draws once in the LAST column', () => {
     const out = text(agentRows([row({ name: 'alpha-explorer', task: 'read alpha.py', tool: 'read Read alpha.py' })], opts(110), full));
@@ -302,5 +307,38 @@ describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
     const out = text(agentRows([row({ name: 'alpha-explorer', state: 'done', task: 'read alpha.py', tool: 'read runs.ts:17' })], opts(110), full));
     expect(out[2]).toContain('done');
     expect(out[2]).toContain('read runs.ts:17');
+  });
+});
+
+describe('critique 11 C4: the TODO box', () => {
+  const live = (): TodoRow[] => [
+    { label: 'T1 read alpha.py (alpha-explorer)', state: 'done', detail: 'alpha-explorer', focus: false },
+    { label: 'T2 read beta.py (beta-explorer)', state: 'running', detail: 'beta-explorer', focus: true },
+    { label: 'T4 combine the three reports', state: 'queued', detail: 'wave one', focus: false },
+  ];
+  test('the owner is not printed twice: a detail the title already names is dropped (live-110-5d6a53ef-1 f0072 row 22)', () => {
+    const out = text(todoRows(live(), opts(110), full));
+    expect(out[1]).toContain('(alpha-explorer)');
+    expect(out[1]!.match(/alpha-explorer/g)!.length).toBe(1);
+    expect(out[2]!.match(/beta-explorer/g)!.length).toBe(1);
+    expect(out[3]).toContain('wave one'); // a detail the title does not say stays
+  });
+  test('the rule of the first row runs to the last cell, so the host\'s [-] ends it (live PNGs: [-] floated past a gap)', () => {
+    for (const cols of [80, 110, 150]) {
+      const first = fitStack({ todos: live(), agents: [] }, opts(cols), 10)[0]!;
+      expect(runsString(first)).toMatch(/━{3}$/);
+      expect(textWidth(runsString(first))).toBe(cols);
+    }
+    const second = fitStack({ todos: live(), agents: worldAgents() }, opts(110), 20).find((r) => runsString(r).includes('SUBAGENTS'))!;
+    expect(runsString(second)).toMatch(/ $/); // only the first row of the HUD is the host's marker row
+  });
+  test('the blank row between TODO and SUBAGENTS survives a 110 column budget of 11 rows (5 plan rows, the ribbons, 3 agents)', () => {
+    const todos: TodoRow[] = [1, 2, 3, 4, 5].map((i) => ({ label: `T${i} item`, state: 'queued', detail: '', focus: false }));
+    const agents = ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map((name): AgentRow => ({ name, state: 'done', model: 'haiku', tasks: [], tool: 'read x.py', ctx: null, focus: false }));
+    const out = text(fitStack({ todos, agents }, opts(110), 11));
+    expect(out.length).toBe(11);
+    expect(out[6]).toBe('');
+    expect(out[7]).toContain('SUBAGENTS');
+    expect(out.filter((l) => l.includes('queued')).length).toBe(5); // all five plan rows still show
   });
 });

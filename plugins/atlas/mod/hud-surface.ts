@@ -41,6 +41,8 @@ export const isRich = (o: SurfaceOpts): boolean => !!o.rich && o.cols >= 120;
 /** The leftmost the TODO state column may start at (a title of one cell, its glyph and gaps). */
 const MIN_STATE_AT = 6;
 const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
+/** A row's detail column text: empty when the title already says it (`T1 read alpha.py (alpha-explorer)` with the owner `alpha-explorer` printed again beside it). */
+const detailOf = (r: Pick<TodoRow, 'label' | 'detail'>): string => (r.detail !== '' && flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) ? '' : r.detail);
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
 const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
@@ -97,7 +99,7 @@ const todoWordW = (rows: readonly TodoRow[]): number => rows.reduce((n, r) => Ma
 function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich: boolean): number {
   const wordW = rich ? CHIP_W : todoWordW(rows); // `running` and `blocked` are the longest of the six words
   if (tier === 'min') return o.cols < MIN_STATE_AT + wordW ? 0 : Math.min(maxLen(rows.map((r) => flat(r.label))) + 2 + 4, o.cols - wordW);
-  const detail = tier === 'full' && rows.some((r) => r.detail !== '');
+  const detail = tier === 'full' && rows.some((r) => detailOf(r) !== '');
   const last = o.cols - wordW - (detail ? 14 + 16 : 0); // the leftmost the column may start at
   return Math.min(Math.max(tier === 'full' ? 30 : 26, maxLen(rows.map((r) => flat(r.label))) + 1 + 4), Math.max(last, 12));
 }
@@ -115,8 +117,9 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   const label = r.state === 'done' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
   if (stateAt === 0) return [...head, label];
   const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(r.word ?? r.state, rowWordTone(r.state, r.word))];
-  if (tier !== 'full' || r.detail === '') return row;
-  return [...toCol(row, metaAt), t(clip(flat(r.detail), Math.max(1, o.cols - metaAt)), 'sub')];
+  const detail = detailOf(r);
+  if (tier !== 'full' || detail === '') return row;
+  return [...toCol(row, metaAt), t(clip(flat(detail), Math.max(1, o.cols - metaAt)), 'sub')];
 }
 
 /** The numbered phase rail as one row: `● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build`. */
@@ -262,11 +265,28 @@ export const padRows = (rows: readonly Run[][], cols: number): Run[][] =>
 
 /** The design rows for `maxRows`: the full form, then no spacers, no rail or progress, then the tree windowed down to its ribbon, then the agents. A running agent keeps its row before the plan keeps its last. */
 export function fitStack(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
+  const rows = fitRows(s, o, maxRows);
+  return rows.length > 0 ? [ruleToEdge(rows[0]!, o.ui), ...rows.slice(1)] : rows;
+}
+
+/** The first row is a ribbon whose right end the host draws its `[-]` fold marker beside (outside the cells the mod owns). The rule runs on
+ * to the last cell, 3 cells past the count, so the marker reads as the end of the rule, not a stray token after a gap (critique 11). Width kept. */
+function ruleToEdge(row: Run[], ui: Ui): Run[] {
+  const ch = ui.ascii ? '-' : '━';
+  const last = row.at(-1);
+  const at = row.findIndex((x) => x.t.length >= 6 && [...x.t].every((c) => c === ch));
+  if (at < 0 || !last || last.t !== ' ') return row;
+  const fill = row[at]!;
+  return row.map((x, i) => (i === at ? { ...fill, t: ch.repeat(fill.t.length - 2) } : i === row.length - 1 ? { ...fill, t: ch.repeat(3) } : x));
+}
+
+function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
   const n = s.todos.length;
   const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean };
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: false, extras: true }, { spacers: false, extras: false }];
+  // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
+  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
   tries.push({ spacers: false, extras: false, header: false }); // the column-name row is the first row dropped: it never costs the plan a row or the band its summary row
   for (let cap = n - 1; cap >= 0; cap--) if (cap !== 1) tries.push({ spacers: false, extras: false, todoCap: cap, header: false });
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).

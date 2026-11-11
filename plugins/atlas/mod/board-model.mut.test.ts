@@ -74,11 +74,11 @@ describe('boardRow: the label tone', () => {
   });
 });
 
-describe('boardBody: the compact state column stops one cell short of the room the longest state word needs', () => {
-  test('at 60 columns with a long label the state word starts at column 52', () => {
+describe('boardBody: the compact state word ends on the last cell, as a value column does (critique 11: a title that fills the column glued to the word)', () => {
+  test('at 60 columns with a long label the state word starts at column 53', () => {
     const rows: BoardRow[] = [{ label: 'x'.repeat(70), state: 'running', owner: '', detail: '' }];
     const line = boardBody(rows, { cols: 60, ui })[0]!.runs.map((x) => x.t).join('');
-    expect(line.indexOf('running')).toBe(60 - 7 - 1);
+    expect(line.indexOf('running')).toBe(60 - 7);
   });
 });
 

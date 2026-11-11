@@ -7,7 +7,7 @@ import type { AtlasSnapshot, PhaseId } from './contract';
 import { endedAt, liveWorkers } from './data/live';
 import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
-import { clip, type Ui } from './atlas-ui';
+import { cells, clip, type Ui } from './atlas-ui';
 import { lookOf } from './look';
 import { noteToastText, toastText } from './panel-layout';
 import { formatDuration } from './theme';
@@ -26,23 +26,36 @@ const workersOf = (s: AtlasSnapshot): LiveWorker[] =>
 	liveWorkers({ activity: {}, comms: [], todoGroups: [], ...s, squad: (s.squad ?? []).filter((a) => a?.name) } as LiveSnapshot, s.now);
 
 
-/** Widest merged toast: a terminal row, so the host never has to wrap it. */
-export const TOAST_MAX = 100;
+/** Widest toast, in cells. The host draws a toast in a 44 cell box, 40 cells of it text, and wraps anything longer
+ * mid-phrase (critique 11: `after` / `11s  +1 more` in live-110-5d6a53ef-3/frames/f0090.ans:3-4). One row the host never wraps. */
+export const TOAST_MAX = 40;
 
-/** One toast for a turn's events: the first (most urgent) in full, the rest counted. A burst of separate toasts in
+/** A toast and its merge facts: `bare` is the same toast without its fact (used when the fact would not fit beside the count),
+ * `kind` groups toasts that a `+N more` may count (a burst of agents that finished, not every toast of the turn). */
+export type Toast = { text: string; bare?: string; kind?: string };
+
+/** One toast for a turn's events: the first in full, then ` +N more`. A burst of separate toasts in
  * one turn left the stack before the host drew them, and the host then printed
- * "$.ui.toast: a toast left the stack before it was ever drawn" into the transcript. */
-export function mergeToasts(texts: readonly string[]): string | null {
-	if (texts.length === 0) return null;
-	if (texts.length === 1) return texts[0]!;
-	const more = `  +${texts.length - 1} more`;
-	return `${clip(texts[0]!, TOAST_MAX - more.length)}${more}`;
+ * "$.ui.toast: a toast left the stack before it was ever drawn" into the transcript.
+ * N counts only the other toasts of the first one's kind (the other agents that finished in the same burst, never the todo or note toasts
+ * of that turn: `+8 more` for 3 agents); a toast with no kind counts every other. The row is at most TOAST_MAX cells: the fact goes
+ * first, then the name is clipped, never the count. */
+export function mergeToasts(items: readonly (string | Toast)[]): string | null {
+	if (items.length === 0) return null;
+	const all: Toast[] = items.map((i) => (typeof i === 'string' ? { text: i } : i));
+	const head = all[0]!;
+	const n = all.slice(1).filter((t) => head.kind === undefined || t.kind === head.kind).length;
+	const more = n > 0 ? ` +${n} more` : '';
+	const room = TOAST_MAX - cells(more);
+	for (const t of [head.text, head.bare]) if (t !== undefined && cells(t) <= room) return `${t}${more}`;
+	return `${clip(head.bare ?? head.text, room)}${more}`;
 }
 
 /** A toast reads bar, ATLAS mark, state, name, one fact: `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps`. No code, no full stop. The host
  * draws a toast as plain text, so the bar and the mark are characters; the omp and transcript painters colour the same runs. */
 const FACT_MAX = 40;
 export const stateToast = (state: Parameters<typeof toastText>[0], name: string, fact: string, ui: Ui): string => toastText(state, name, clip(fact.replace(/\s+/g, ' ').trim(), FACT_MAX), ui);
+const factToast = (kind: string, state: Parameters<typeof toastText>[0], name: string, fact: string, ui: Ui): Toast => ({ kind, text: stateToast(state, name, fact, ui), bare: stateToast(state, name, '', ui) });
 
 /** Pure diff of successive snapshots; null prev (first sight) yields nothing. Never throws. */
 export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): NotifyEvent[] {
@@ -123,22 +136,22 @@ export function registerNotify(
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
 						case 'agent-spawn':
-							texts.push(stateToast('running', ev.name, 'started', ui));
+							texts.push(factToast('agent-spawn', 'running', ev.name, 'started', ui));
 							break;
 						case 'agent-complete':
-							texts.push(stateToast('done', ev.name, ev.age ? `after ${ev.age}` : '', ui)); // duration only: the agent's last line is free text (a `1.`, half a path), never a toast fact
+							texts.push(factToast('agent-done', 'done', ev.name, ev.age ? `after ${ev.age}` : '', ui)); // duration only: the agent's last line is free text (a `1.`, half a path), never a toast fact
 							break;
 						case 'agent-fail':
-							texts.push(stateToast('failed', ev.name, '', ui));
+							texts.push(factToast('agent-fail', 'failed', ev.name, '', ui));
 							break;
 						case 'agent-blocked':
-							texts.push(stateToast('waiting', ev.name, 'needs a reply', ui));
+							texts.push(factToast('agent-blocked', 'waiting', ev.name, 'needs a reply', ui));
 							break;
 						case 'note':
 							texts.push(noteToastText(ev.sender, clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX), ui));
 							break;
 						case 'todo-done':
-							texts.push(stateToast('done', 'task', ev.text, ui));
+							texts.push(factToast('todo-done', 'done', 'task', ev.text, ui));
 							break;
 						case 'phase':
 							if (deps.soundEnabled()) {
