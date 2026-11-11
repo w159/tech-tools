@@ -4,8 +4,9 @@
  * capped by the line budget with `+N more`); `boardLines` is the whole surface with its ribbon. Each Run is painted in ANSI
  * from the shared tokens and every line is filled with the panel background to exactly `width` cells. Pure.
  */
-import { hostEnv, PALETTES, sgrColor, toneHex, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
+import { hostEnv, PALETTES, sgrColor, uiFromEnv, type Run, type Ui, runHex } from "../mod/atlas-ui";
 import { boardBody, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/board-model";
+import type { MotionCtx } from "../mod/motion";
 import { RST } from "./panel-paint";
 
 export interface PanelTodo extends BoardSource {
@@ -24,12 +25,14 @@ export interface TodoOpts {
 	now?: number;
 	ui?: Ui;
 	rich?: boolean;
+	/** Motion view (mod/motion.ts); absent: the resting render. */
+	motion?: MotionCtx | undefined;
 }
 
 /** One run in ANSI: bold/strike, the tone on the run's fill or the panel; NO_COLOR keeps bold and strike only. */
 const paintRun = (x: Run, ui: Ui): string => {
 	const p = PALETTES[ui.theme];
-	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(toneHex(x.tone, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
+	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(runHex(x, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
 	return sgr ? `\x1b[${sgr}m${x.t}${RST}` : x.t;
 };
 const fillOf = (ui: Ui): string => (ui.color === "none" ? "" : `\x1b[${sgrColor(PALETTES[ui.theme].panel, 48, ui.color)}m`);
@@ -53,14 +56,14 @@ const richEnv = (): boolean => hostEnv().ATLAS_BAND_RICH === "1";
 export function todoLines(todos: PanelTodo[], o: TodoOpts): string[] {
 	if (!todos.length || o.maxLines < 1 || !o.expanded) return [];
 	const ui = o.ui ?? uiFromEnv();
-	const body = boardBody(boardRowsOf(todos, o.now), { cols: o.width, ui, rich: o.rich ?? richEnv(), tick: o.tick });
+	const body = boardBody(boardRowsOf(todos, o.now), { cols: o.width, ui, rich: o.rich ?? richEnv(), tick: o.tick, motion: o.motion });
 	return cap(body, o.maxLines).map(l => paintLine(l, o.width, ui));
 }
 
 /** The whole board surface (ribbon, blank row, header, items) as ANSI lines of exactly `width` cells. */
-export function boardLines(todos: PanelTodo[], o: Pick<TodoOpts, "width" | "tick" | "now" | "ui" | "rich"> & { maxLines?: number }): string[] {
+export function boardLines(todos: PanelTodo[], o: Pick<TodoOpts, "width" | "tick" | "now" | "ui" | "rich" | "motion"> & { maxLines?: number }): string[] {
 	const ui = o.ui ?? uiFromEnv();
-	const at = { cols: o.width, ui, rich: o.rich ?? richEnv(), tick: o.tick };
+	const at = { cols: o.width, ui, rich: o.rich ?? richEnv(), tick: o.tick, motion: o.motion };
 	const lines = todos.length ? modelLines(boardRowsOf(todos, o.now), at) : [...modelLines([], at), { runs: [{ t: "  (no state)", tone: "muted" as const }] }];
 	return cap(lines, o.maxLines ?? lines.length).map(l => paintLine(l, o.width, ui));
 }

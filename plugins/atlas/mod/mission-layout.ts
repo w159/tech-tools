@@ -10,6 +10,7 @@
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
 import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, spinnerGlyph, stateRun, uiFromEnv, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { animateRow, BAND_OPTS, type MotionCtx, type MotionItem } from './motion';
 import { fitText, formatDuration, textWidth } from './theme';
 
 export type { Run, Tone };
@@ -75,6 +76,8 @@ export type MissionModel = {
   workersInHud?: boolean;
   /** Gauge values on screen while a figure glides (0..1); the labels keep the true figures. Absent: the figure itself. */
   eased?: { todo?: number; ctx?: number };
+  /** Motion view (mod/motion.ts): a count that changed is drawn mid-transition. Absent: the resting render. */
+  motion?: MotionCtx | undefined;
 };
 
 const MID = 80; // below this, only the band
@@ -129,10 +132,14 @@ const failedCount = (m: MissionModel): number => Math.max(m.workers.filter((w) =
 
 /** Agent counts by state, in the order the band shows them; zero counts are left out. `words`: `◐ 1 running`; otherwise glyph and
  * number (`◐1`), where queued gives way. `noun`: the basis, `agents`, in front (the todo count is tasks; the two are never mixed). */
+const countOf = (m: MissionModel, s: UiState): number => (s === 'failed' ? failedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
+/** What the Motion observes of the band: each state's agent count, so a count that moves is drawn mid-transition. */
+export const bandMotionItems = (m: MissionModel): MotionItem[] => COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) }));
+
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   '): Run[] {
-  const n = (s: UiState): number => (s === 'failed' ? failedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
+  const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || s === 'queued' || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
-  const parts = order.filter((s) => n(s) > 0).map((s): Run[] => (words ? countRuns(s, n(s), ui, m.tick) : [stateRun(s, ui, m.tick), r(`${n(s)}`)]));
+  const parts = order.filter((s) => n(s) > 0).map((s): Run[] => animateRow(words ? countRuns(s, n(s), ui, m.tick) : [stateRun(s, ui, m.tick), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS));
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
 }

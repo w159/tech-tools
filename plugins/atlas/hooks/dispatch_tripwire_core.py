@@ -980,9 +980,20 @@ _NAME_STOPWORDS = {
 
 def _name_base(role, description):
     """`<role>-<up to 3 words>` within AUTONAME_MAX, shortened at word boundaries.
-    A `label: text` description uses the text (the label usually echoes the role);
+    A `label: text` description whose label is one valid token (<= AUTONAME_MAX) that does
+    not echo the role is named by the label itself; otherwise it uses the text;
     a leading word echoing the role (explore/explorer/implement...) is dropped."""
     desc = str(description or "")
+    label, sep, tail = desc.partition(": ")
+    label = label.lower()
+    first = re.split(r"[-_]", label)[0]
+    if (
+        sep
+        and re.fullmatch(r"[a-z0-9_-]+", label)
+        and len(label) <= AUTONAME_MAX
+        and not first.startswith(role.lower()[:4])
+    ):
+        return re.sub(r"[^a-z0-9]+", "-", label).strip("-")
     _, sep, tail = desc.partition(":")
     if sep and re.search(r"[a-z0-9]", tail, re.I):
         desc = tail

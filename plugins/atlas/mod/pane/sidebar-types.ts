@@ -1,6 +1,7 @@
 // Shared sidebar model types and the one padding helper the section builders use.
 import type { CoreModel } from '../data/core';
 import type { Ui } from '../atlas-ui';
+import type { MotionCtx } from '../motion';
 import type { LiveSnapshot } from '../orchestra-types';
 import { textWidth } from '../theme';
 
@@ -19,6 +20,8 @@ export type SidebarModel = {
   rows: number;
   /** Spinner tick the render reads (never writes); animates working badges. */
   tick?: number;
+  /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
+  motion?: MotionCtx | undefined;
 };
 export type SidebarHandlers = {
   selectRecipient(name: string): void;

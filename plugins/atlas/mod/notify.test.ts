@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { AtlasSnapshot, ChannelNote, SquadAgent, TodoItem } from './contract';
 import type { EngineInterface, On } from 'claude-code';
 import { memState } from './test_helpers';
-import { diffSnapshots, mergeToasts, nextStepSuggestion, registerNotify, TOAST_MAX } from './notify';
+import { diffSnapshots, isOlder, mergeToasts, nextStepSuggestion, registerNotify, TOAST_MAX } from './notify';
 
 function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {
 	return {
@@ -177,6 +177,38 @@ describe('registerNotify', () => {
 		await hook($, {}, async (x) => x);
 		expect(toasts).toEqual(['▌ ◆ ATLAS  ■ failed  a']);
 		expect(suggested).toEqual(['research: build', 'research: build']);
+	});
+});
+
+describe('registerNotify ordering', () => {
+	test('a snapshot older than the last applied one (lower seq) is ignored: working -> done toasts once', async () => {
+		let hook: (d: unknown, e: unknown, n: (x?: unknown) => unknown) => Promise<unknown> = async () => undefined;
+		registerNotify(((_p: unknown, _m: unknown, h: typeof hook) => { hook = h; return { catch: () => undefined }; }) as unknown as On, { soundEnabled: () => false });
+		const toasts: string[] = [];
+		const mem = memState({ 'atlas/snapshot': null });
+		const $ = { state: mem, ui: { toast: (t: string) => toasts.push(t) }, prompt: { suggest: async () => ({ isShown: true }) } } as unknown as EngineInterface;
+		const put = (s: AtlasSnapshot) => (mem.set as (...a: unknown[]) => Promise<unknown>)({ plugin: 'atlas', key: 'snapshot' }, s);
+		const working = (seq: number) => snap({ squad: [agent('beta-explorer', 'running')], seq });
+		const done = (seq: number) => snap({ squad: [agent('beta-explorer', 'finished')], seq });
+		await put(working(1));
+		await hook($, {}, async (x) => x);
+		await put(done(2));
+		await hook($, {}, async (x) => x); // done toast
+		await put(working(1)); // a late, older write lands last
+		await hook($, {}, async (x) => x);
+		await put(done(2));
+		await hook($, {}, async (x) => x); // must not toast done a second time
+		expect(toasts.filter((t) => t.includes('done'))).toHaveLength(1);
+		expect(toasts.filter((t) => t.includes('beta-explorer'))).toHaveLength(1);
+	});
+
+	test('isOlder: only a lower seq than the applied one is older; unstamped snapshots are never older', () => {
+		expect(isOlder(snap({ seq: 5 }), snap({ seq: 4 }))).toBe(true);
+		expect(isOlder(snap({ seq: 5 }), snap({ seq: 5 }))).toBe(false);
+		expect(isOlder(snap({ seq: 5 }), snap({ seq: 6 }))).toBe(false);
+		expect(isOlder(snap({ seq: 5 }), snap())).toBe(false);
+		expect(isOlder(snap(), snap({ seq: 1 }))).toBe(false);
+		expect(isOlder(null, snap({ seq: 1 }))).toBe(false);
 	});
 });
 

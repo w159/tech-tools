@@ -26,14 +26,16 @@ import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
 import { headerPhaseOf, registerRestyle } from './restyle';
-import { mergeToasts, registerNotify, stateToast } from './notify';
+import { isOlder, mergeToasts, registerNotify, stateToast } from './notify';
 import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
 import { clearLook, lookOf } from './look';
+import { Motion, MotionDriver, reducedMotion } from './motion';
+import { motionFeed } from './motion-feed';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { LiveSnapshot, TeamTool } from './orchestra-types';
 import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
 
-const REBUILD_MS = 1500;
+const POLL_MS = 500; // the poll of the cheap stat fingerprint; a rebuild runs only when it moved
 const WT_MS = 5000;
 const MUX_MS = 5000;
 const HERDR_MS = 5000;
@@ -112,6 +114,9 @@ const headerTallyState = atom({ plugin: 'atlas', key: 'headerTally' } as const, 
 let builder: SnapshotBuilder | null = null;
 let herdrStdout = '';
 let lastFingerprint = '';
+let rebuildRun: Promise<void> | null = null; // the rebuild in flight (see rebuild)
+let rebuildFollow: Promise<void> | null = null; // the one queued run behind it
+let rebuildSeq = 0; // stamped on each snapshot; never reset, so a re-boot's snapshots stay newer than any late write
 let wtAt = -Infinity; // last atlas_wt.py status run (ms clock)
 let wtRows: WtRow[] = [];
 let lastRailPhase: string | null = null; // last phase the band lit, kept through a blocked reply
@@ -152,6 +157,19 @@ async function easeTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
 			}
 		})().catch(() => undefined);
 	});
+}
+
+// ---- motion (mod/motion.ts): row transitions and reveals ----------------------------------------------------------
+// The tick observes the snapshot (only when a rebuild produced a new one), the Motion keeps each row's window, and a timer
+// bumps the band's redraw atom only while a window is open: idle runs no timer and writes nothing. Renders read `motion.ctx`.
+let motion: Motion | null = null;
+let motionDriver: MotionDriver | null = null;
+async function motionTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
+	if (!motionDriver) {
+		motion = new Motion(!reducedMotion({ ATLAS_REDUCED_MOTION: await $.env.get('ATLAS_REDUCED_MOTION').catch(() => undefined), NO_COLOR: await $.env.get('NO_COLOR').catch(() => undefined) }));
+		motionDriver = new MotionDriver(motion, (ms, fn) => $.clock.every(ms, fn), async () => void (await update($, easeTickState, (n) => n + 1)), () => $.clock.now());
+	}
+	await motionDriver.step(snap, async () => motionFeed(snap, await gateGroups($), await read($, coreState), (await lookOf($)).ui));
 }
 /** A spawn-recorded agent the host list does not (yet) contain is only presumed gone after this long. */
 const SPAWN_GRACE_MS = 15_000;
@@ -416,9 +434,29 @@ async function worktrees($: EngineInterface, now: number): Promise<WtRow[]> {
 /** Snapshot root, '' when no board is in view. */
 const rootOf = (snap: AtlasSnapshot | null): string => snap?.root || '';
 
-/** Rebuild the snapshot from disk + live state; never throws. */
-async function rebuild($: EngineInterface): Promise<void> {
+/**
+ * Rebuild the snapshot from disk + live state; never throws. Serialized: one run in flight, every request that arrives
+ * meanwhile (rebuild, mux, herdr and core ticks, the file watcher) shares ONE follow-up run, so two runs never resolve out of
+ * order and the last write is always the newest build.
+ */
+export function rebuild($: EngineInterface): Promise<void> {
+	if (rebuildRun === null) {
+		const run: Promise<void> = rebuildOnce($).finally(() => {
+			if (rebuildRun === run) rebuildRun = null;
+		});
+		rebuildRun = run;
+		return run;
+	}
+	rebuildFollow ??= rebuildRun.then(() => {
+		rebuildFollow = null;
+		return rebuild($);
+	});
+	return rebuildFollow;
+}
+
+async function rebuildOnce($: EngineInterface): Promise<void> {
 	if (builder === null) return;
+	const seq = ++rebuildSeq;
 	let listed: { id: string; status: string }[] = [];
 	const names: Record<string, string> = {};
 	try {
@@ -463,8 +501,9 @@ async function rebuild($: EngineInterface): Promise<void> {
 			listed,
 			wt: await worktrees($, now),
 		});
-		// The snapshot write redraws the band, pane and restyles that read it.
-		await update($, snapshotState, () => snap);
+		// The snapshot write redraws the band, pane and restyles that read it. Stamped; an older build never replaces a newer one.
+		const stamped = { ...snap, seq };
+		await update($, snapshotState, (cur) => (cur && isOlder(cur, stamped) ? cur : stamped));
 		// The board keeps its last good rows; say why they may be stale.
 		if (builder.todoError !== undefined) reportFailure($, `atlas: todos.json is ${builder.todoError}, showing the last good board`);
 	} catch (err) {
@@ -481,8 +520,8 @@ export async function dockTick($: EngineInterface): Promise<void> {
 	void $.ui.open(PANE_DOCK).then(toastUnplaced($));
 }
 
-/** 1.5 s tick: rebuild only when the data files moved. */
-async function rebuildTick($: EngineInterface): Promise<void> {
+/** POLL_MS tick: rebuild only when the data files moved. */
+export async function rebuildTick($: EngineInterface): Promise<void> {
 	await dockTick($);
 	if (builder === null) return;
 	const fingerprint = await dataFingerprint($);
@@ -861,7 +900,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 				await $.command.register({ name: 'atlas-say', description: 'Post a note to the lead channel', argumentHint: '<message>' });
 				await $.command.register({ name: 'atlas-core', description: 'Show the Atlas core: contract, verdicts, offload, routes' });
 				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
-				$.clock.every(REBUILD_MS, () => {
+				$.clock.every(POLL_MS, () => {
 					void rebuildTick($);
 				});
 				$.clock.every(HERDR_MS, () => {
@@ -884,6 +923,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					const snap = await read($, snapshotState);
 					if (!snap) return;
 					await easeTick($, snap as LiveSnapshot);
+					await motionTick($, snap as LiveSnapshot);
 					if (activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
 				})().catch(() => undefined);
 			});
@@ -993,7 +1033,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
 		const look = await lookOf($);
 		const tick = await read($, spinnerTickState);
-		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now }; // the board's clock too: one `claimed_at`, one elapsed
+		const motionCtx = motion?.ctx(await $.clock.now());
+		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now, motion: motionCtx }; // the board's clock too: one `claimed_at`, one elapsed
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;
@@ -1004,7 +1045,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length : budget, lastPhase: lastRailPhase, core, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const hudCap = hudBudget(budget, hudCompactRows(hudIn, columns), BAND_MIN_ROWS, running);
 		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
 		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
@@ -1031,9 +1072,11 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const look = await lookOf($);
+		await read($, easeTickState); // a transition bumps it each frame: the pane redraws mid-transition too
+		const paneMotion = motion?.ctx(await $.clock.now());
 		if (e.requestId === BOARD_ID) {
 			return boardTree($.ui.resolve(e), withOwnerStates(ownTodos(snapshot.todos ?? [], snapshot.sessionId), workerStates(snapshot, liveWorkers(snapshot, snapshot.now))), {
-				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich,
+				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
 			});
 		}
 		return sidebarTree($.ui.resolve(e), {
@@ -1045,6 +1088,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
 			tick: await read($, spinnerTickState),
+			motion: paneMotion,
 		}, sidebarHandlers($, e.surface));
 	});
 

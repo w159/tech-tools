@@ -6,8 +6,9 @@ import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { itemState } from './board-model';
-import { hostEnv, LINGER_MS, PALETTES, toneHex, uiFromEnv, type Run, type Ui, type UiState } from './atlas-ui';
+import { hostEnv, LINGER_MS, PALETTES, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, tierOf, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
+import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
 
 /** One subagent as the HUD shows it. `state` is the LiveWorker state; only working/blocked count as running. */
@@ -60,11 +61,17 @@ export function agentName(name: string, role: string, task?: string): string {
   return GENERIC.has(role) && HOST_ID.test(name) ? name.slice(0, 6) : name;
 }
 
+/** The one canonical name every surface shows for an agent (HUD rows, both card formats, toasts): `agentName`, and the lead's per-session hash name (`lead-a3a3ab`) reads `lead`. */
+export const displayName = (name: string, role = '', task?: string): string => (/^lead-[0-9a-f]{6}$/i.test(name) ? 'lead' : agentName(name, role, task));
+
+/** An agent's task text for the TASK column: its dispatch description without the `name: ` prefix (`read alpha.py`). */
+const taskOf = (task: string | undefined): string => flat(task).replace(/^[a-z0-9]+(?:[-_.][a-z0-9]+)+:\s+/i, '');
+
 /** Band workers plus the squad's spawn model and task, in the HUD's shape; `queued` names dispatched workers the host does not list yet (data/live.ts queuedMembers). */
 export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[] = []): HudAgent[] {
   const listed = live.map((w) => {
     const s = squad.find((a) => a.name === w.name);
-    const name = agentName(w.name, w.role, s?.task);
+    const name = displayName(w.name, w.role, s?.task);
     return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
   return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
@@ -72,7 +79,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
 
 /** `root` (the project root) makes paths in a tool preview project-relative. `phases` feeds the rich rail. */
 export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | null; phases?: { ids: readonly string[]; active: number } };
-export type HudOpts = { cols: number; maxRows: number; ui?: Ui; rich?: boolean; tick?: number; now?: number };
+export type HudOpts = { cols: number; maxRows: number; ui?: Ui; rich?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 
 export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running' || a.state === 'queued';
 
@@ -96,7 +103,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const ev = flat(t.evidence);
     const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || flat(t.owner);
     const detail = ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base;
-    return { label: labelOf(t), state, detail, focus: false };
+    return { label: labelOf(t), state, detail, focus: false, ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
   const at = rows.findIndex((r) => r.state === 'running');
   const focus = at >= 0 ? at : rows.findIndex((r) => r.state !== 'done');
@@ -120,7 +127,7 @@ function lastAction(a: HudAgent, root?: string | null): string {
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const rows = agents.map((a): AgentRow => {
     const tasks = todos.flatMap((t, i) => (t.owner === a.name || (a.key !== undefined && t.owner === a.key) ? [i + 1] : []));
-    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false };
+    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -132,16 +139,26 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const plan = input.todos.filter(isPlanItem);
   // A finished agent shows while a wave runs, and with nothing running a done one stays LINGER_MS after it ended while a failed one stays until it is cleared (the band's rule).
   const running = input.agents.some(isRunning);
-  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && a.since !== undefined && opts.now !== undefined && opts.now - a.since <= LINGER_MS));
+  // The finished wave lingers as one: while its newest member is within LINGER_MS every done agent shows, so the header count and the rows keep matching the band.
+  const newestDone = input.agents.reduce((n, a) => (a.state === 'done' && a.since !== undefined ? Math.max(n, a.since) : n), -Infinity);
+  const waveLingers = opts.now !== undefined && opts.now - newestDone <= LINGER_MS;
+  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && waveLingers));
   const agents = shown.length > 0 ? agentModel(shown, plan, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
+  const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
-    s: { todos: todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.flatMap((a): [string, UiState][] => [[a.name, a.ui ?? workerUiState(a.state)], ...(a.key !== undefined ? [[a.key, a.ui ?? workerUiState(a.state)] as [string, UiState]] : [])]))), agents },
-    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}) },
+    s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.flatMap((a): [string, UiState][] => [[a.name, a.ui ?? workerUiState(a.state)], ...(a.key !== undefined ? [[a.key, a.ui ?? workerUiState(a.state)] as [string, UiState]] : [])]))), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
+    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}) },
   };
 }
 
 // ---- rows -------------------------------------------------------------------------------------------
+
+/** What the Motion observes of the HUD: each TODO row's and each agent row's key and state word (the rows `hudLines` can draw). */
+export function hudMotionItems(input: HudInput, opts: { now: number }): { todos: MotionItem[]; agents: MotionItem[] } {
+  const { s } = surfaces(input, { cols: 120, maxRows: 0, now: opts.now });
+  return { todos: s.todos.map((r) => ({ key: r.key!, state: r.state })), agents: s.agents.map((r) => ({ key: r.key!, state: r.state })) };
+}
 
 /** The HUD as design Runs, each row padded to the width: [] when there is nothing to show. */
 export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
@@ -154,7 +171,7 @@ export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
 export function segmentOf(x: Run, ui: Ui): Segment {
   const p = PALETTES[ui.theme];
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
-  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: toneHex(x.tone, ui.theme), bg: x.bg ? p[x.bg] : p.panel, ...style };
+  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme), bg: x.bg ? p[x.bg] : p.panel, ...style };
 }
 
 /** The HUD rows above the band: TODO tree and Subagents block; [] when there is nothing to show. */

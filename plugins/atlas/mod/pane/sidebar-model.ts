@@ -70,6 +70,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     expanded: m.ui.expanded, recipient: m.ui.recipient,
     phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos: todosOf(s, workers), workers, lead,
     gates, core: m.core,
+    ...(m.motion ? { motion: m.motion } : {}),
     channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: notes.map(noteOf),
   };
 }

@@ -5,9 +5,10 @@
 import type { RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from '../contract'
 import type { AgentState } from '../contract'
-import { PALETTES, toneHex, uiFromEnv, type Run as UiRun, type Ui, type UiState } from '../atlas-ui'
+import { PALETTES, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
 import { CARD_W, cardLines, toastRuns } from '../panel-layout'
-import { clip } from '../atlas-ui'
+import { clip, cells } from '../atlas-ui'
+import { displayName } from '../hud'
 import { fitText } from '../theme'
 
 export interface CallLike { tool: string; input: unknown; output?: unknown; isRunning: boolean; isErrored: boolean; isInterrupted: boolean }
@@ -67,7 +68,7 @@ const tierOf = (i: AgentInput): string => [i.model, i.effort].filter(Boolean).jo
 /** Run -> Text element on the rev 4 panel (or the run's own fill). */
 const cell = (x: UiRun, ui: Ui): RenderNode => {
  const p = PALETTES[ui.theme]
- return t({ ...(ui.color === 'none' ? {} : { color: toneHex(x.tone, ui.theme), backgroundColor: x.bg ? p[x.bg] : p.panel }), ...(x.bold ? { bold: true } : {}) }, x.t)
+ return t({ ...(ui.color === 'none' ? {} : { color: runHex(x, ui.theme), backgroundColor: x.bg ? p[x.bg] : p.panel }), ...(x.bold ? { bold: true } : {}) }, x.t)
 }
 const rowEl = (runs: UiRun[], ui: Ui): RenderElement => el('Box', { flexDirection: 'row', flexShrink: 0 }, ...runs.map((x) => cell(x, ui)))
 
@@ -105,8 +106,13 @@ export function workerCard(c: CallLike, state: AgentState, width = 0, name?: str
  const i = inputOf(c)
  const role = typeOf(i).slice('atlas:'.length)
  const phase = phaseOf(c, state, extra.ended)
+ const cardName = displayName(i.name ?? name ?? role, role, i.description)
+ const w = Math.max(20, Math.min(CARD_W, width > 0 ? width : CARD_W))
+ // The name is never cut while a model tag could go instead: the tag is dropped when title and tag do not both fit.
+ const tag = tierOf(i)
+ const cardModel = tag && 2 + phase.ui.length + 1 + cells(cardName) <= w - (cells(tag) + 1) - 8 ? tag : undefined
  const rows = cardLines({
-  state: phase.ui, name: i.name ?? name ?? role, model: tierOf(i) || undefined, goal: goalLine(i) || undefined,
+  state: phase.ui, name: cardName, model: cardModel, goal: goalLine(i) || undefined,
   last: lastOf(c, phase.ui === 'running', extra, word, Math.min(width > 0 ? width : CARD_W, CARD_W) - 10) || undefined, steps: extra.steps, ctx: extra.ctx, ui,
  }, width > 0 ? width : CARD_W)
  return el('Box', { flexDirection: 'column', flexShrink: 0 }, ...rows.map((r) => rowEl(r, ui)))
@@ -134,7 +140,7 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer  outcome` (state, name, role, outcome). */
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv()): RenderElement {
- const runs = toastRuns(failed ? 'failed' : 'done', name, clip([role, outcome].filter(Boolean).join('  '), 80), ui)
+ const runs = toastRuns(failed ? 'failed' : 'done', displayName(name, role), clip([role, outcome].filter(Boolean).join('  '), 80), ui)
  return rowEl(runs, ui)
 }
 

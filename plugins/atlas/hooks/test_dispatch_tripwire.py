@@ -2793,6 +2793,33 @@ class ColonyDenyTest(unittest.TestCase):
         )["name"]
         self.assertEqual(echo, "explorer-map-band-rows")
 
+    def test_label_prefix_becomes_the_name(self):
+        a = self._updated(self._unnamed(description="alpha-explorer: read alpha.py"))
+        b = self._updated(
+            self._unnamed(description="board-check: list open Atlas board items")
+        )
+        self.assertEqual(a["name"], "alpha-explorer")
+        self.assertEqual(b["name"], "board-check")
+
+    def test_label_name_repeat_gets_suffix(self):
+        d = "alpha-explorer: read alpha.py"
+        self._updated(self._unnamed(description=d))
+        self.assertEqual(
+            self._updated(self._unnamed(description=d))["name"], "alpha-explorer-2"
+        )
+
+    def test_unusable_label_keeps_role_plus_words(self):
+        none = self._updated(self._unnamed(description="Map band rows"))["name"]
+        spaced = self._updated(
+            self._unnamed(description="two words: scan cache dirs")
+        )["name"]
+        long = self._updated(
+            self._unnamed(description="a-label-that-is-way-too-long-here: map rows")
+        )["name"]
+        self.assertEqual(none, "explorer-map-band-rows")
+        self.assertEqual(spaced, "explorer-scan-cache-dirs")
+        self.assertEqual(long, "explorer-map-rows")
+
     def _no_report(self, **extra):
         return self._unnamed(
             prompt="\n".join(

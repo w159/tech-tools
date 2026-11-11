@@ -2,11 +2,12 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { cells, CHIP_W, COUNT_ORDER, clip, gauge, percent, ribbon, runsCells, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { animateRow, type MotionCtx } from './motion';
+import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, percent, ribbon, runsCells, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
-export type TodoRow = { label: string; state: UiState; detail: string; focus: boolean };
+export type TodoRow = { label: string; state: UiState; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
+export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
 export type SurfaceOpts = {
   cols: number;
   ui: Ui;
@@ -16,6 +17,10 @@ export type SurfaceOpts = {
   rich?: boolean;
   /** Phase ids and the 0-based lit phase for the rich rail. */
   phases?: { ids: readonly string[]; active: number };
+  /** Motion view (mod/motion.ts): a row with a key and an entry is drawn mid-transition. Absent: the resting render. */
+  motion?: MotionCtx | undefined;
+  /** The snapshot clock in epoch ms: a done row that completed within LINGER_MS of it ranks with running rows when the plan folds. */
+  now?: number | undefined;
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
 export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number };
@@ -38,14 +43,17 @@ export function stateCounts(states: readonly UiState[]): string {
   return COUNT_ORDER.map((s) => [s, states.filter((x) => x === s).length] as const).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${s}`).join(' · ');
 }
 
-/** Row slots by priority when the rows do not all fit: open work first (running, blocked, failed, waiting), then queued, then the newest done. */
+/** Row slots by priority when the rows do not all fit: open work first (running, blocked, failed, waiting), then queued, then the newest done.
+ * A row that completed within LINGER_MS of `now` ranks with running rows, so a task that just finished is not hidden behind the queue. */
 const PRIORITY = Object.fromEntries(COUNT_ORDER.map((s, i) => [s, i])) as Record<UiState, number>;
 
 /** The `slots` rows to draw, in their own order, and how many were left out. `slots` includes the overflow row when something is hidden. */
-export function windowRows<T extends { state: UiState }>(rows: readonly T[], slots: number | undefined): { shown: T[]; hidden: number } {
+export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: readonly T[], slots: number | undefined, now?: number): { shown: T[]; hidden: number } {
   if (slots === undefined || slots >= rows.length) return { shown: [...rows], hidden: 0 };
   const keep = Math.max(0, slots - 1);
-  const ranked = rows.map((row, i) => ({ row, i })).sort((a, b) => PRIORITY[a.row.state] - PRIORITY[b.row.state] || (a.row.state === 'done' ? b.i - a.i : a.i - b.i));
+  const fresh = (r: T): boolean => r.state === 'done' && now !== undefined && r.doneAt !== undefined && now - r.doneAt <= LINGER_MS;
+  const rank = (r: T): number => (fresh(r) ? PRIORITY.running : PRIORITY[r.state]);
+  const ranked = rows.map((row, i) => ({ row, i })).sort((a, b) => rank(a.row) - rank(b.row) || (a.row.state === 'done' ? (b.row.doneAt ?? 0) - (a.row.doneAt ?? 0) || b.i - a.i : a.i - b.i));
   const picked = new Set(ranked.slice(0, keep).map((x) => x.i));
   return { shown: rows.filter((_, i) => picked.has(i)), hidden: rows.length - picked.size };
 }
@@ -65,13 +73,13 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   if (b.cap === 0) return out;
   const frac = done / rows.length;
   // One layout at every width: ribbon, (rail), progress row, rows. No blank rows inside the block; the progress row sits right under the ribbon.
-  if (tier !== 'min' && b.extras) {
-    if (tier === 'full' && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
-    out.push([t('progress ', 'muted'), ...gauge(tier === 'full' ? 16 : 12, frac, ui), t(` ${done} of ${rows.length} · ${percent(frac)}`, 'sub')]);
+  if (tier === 'full' && b.extras) {
+    if (rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
+    out.push([t('progress ', 'muted'), ...gauge(16, frac, ui), t(` ${done} of ${rows.length} · ${percent(frac)}`, 'sub')]);
   }
   const stateAt = todoStateAt(rows, o, tier, rich);
   const metaAt = stateAt + 14;
-  const { shown, hidden } = windowRows(rows, b.cap);
+  const { shown, hidden } = windowRows(rows, b.cap, o.now);
   for (const r of shown) out.push(todoRow(r, o, tier, rich, stateAt, metaAt));
   if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'todo' : 'todos'));
   return out;
@@ -88,6 +96,11 @@ function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich:
 }
 
 function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
+  const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt);
+  return r.key === undefined ? runs : animateRow(runs, r.key, r.state, o.motion, o.ui);
+}
+
+function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
   const { ui } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, o.tick ?? 0), t(' ')];
   const labelW = tier === 'min' ? Math.max(1, o.cols - 4) : stateAt - 5;
@@ -187,6 +200,11 @@ function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, plan: Agent
 }
 
 function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
+  const runs = agentRowResting(r, o, rich, stateAt, nameW, plan);
+  return r.key === undefined ? runs : animateRow(runs, r.key, r.state, o.motion, o.ui);
+}
+
+function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const { ui, cols } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, o.tick ?? 0), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state)];

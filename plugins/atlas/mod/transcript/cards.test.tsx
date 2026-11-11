@@ -204,3 +204,17 @@ test('the notification row is state, name, role and outcome', () => {
   expect(text(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a {2}explorer STATUS: DONE/)
   expect(text(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ failed {2}wave-a/)
 })
+
+test('a boxed card shows the whole agent name: the model tag goes before the name is cut (L14)', () => {
+  const long = call({ input: { subagent_type: 'atlas:explorer', name: 'board-auditor-open-items', description: 'd', prompt: PROMPT, model: 'haiku', effort: 'low' } })
+  const out = text(workerCard(long, 'running')!)
+  expect(out).toContain('board-auditor-open-items')
+  expect(out).not.toContain('board-auditor-open-items...')
+})
+
+test('both card formats show the lead as `lead`, not its session hash name', () => {
+  expect(text(notificationTree('lead-a3a3ab', 'lead', 'ok', false))).toContain('lead')
+  expect(text(notificationTree('lead-a3a3ab', 'lead', 'ok', false))).not.toContain('a3a3ab')
+  const c = call({ input: { subagent_type: 'atlas:explorer', name: 'lead-a3a3ab', description: 'd', prompt: PROMPT } })
+  expect(text(workerCard(c, 'running')!)).not.toContain('a3a3ab')
+})
