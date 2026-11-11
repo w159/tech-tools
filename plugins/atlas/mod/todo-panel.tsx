@@ -9,7 +9,7 @@ import { rowOf, type Segment } from './runs';
 import { textWidth } from './theme';
 
 /** `tick` is the spinner frame of the running row; `now` (epoch seconds) times the running item; `ui` defaults to the environment. */
-export type TodoPanelOpts = { cols: number; tick: number; expanded: boolean; maxRows: number; now?: number; ui?: Ui; rich?: boolean; motion?: MotionCtx | undefined };
+export type TodoPanelOpts = { cols: number; tick: number; expanded: boolean; maxRows: number; now?: number; /** The snapshot clock in epoch ms (`now` is whole seconds): the spinner then turns the shared frame; absent: `tick`. */ nowMs?: number; ui?: Ui; rich?: boolean; motion?: MotionCtx | undefined };
 
 /** A run as a Segment on the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export const runSegment = (x: Run, ui: Ui): Segment => {
@@ -40,16 +40,16 @@ const moreLine = (n: number): BoardLine => ({ runs: [{ t: `  +${n} more`, tone: 
 export function todoRows(items: readonly BoardSource[], o: TodoPanelOpts): Segment[][] {
   if (!items.length || o.maxRows < 1 || !o.expanded) return [];
   const ui = o.ui ?? uiFromEnv();
-  const body = boardBody(boardRowsOf(items, o.now), { cols: o.cols, ui, rich: o.rich ?? richEnv(), tick: o.tick, motion: o.motion });
+  const body = boardBody(boardRowsOf(items, o.now), { cols: o.cols, ui, rich: o.rich ?? richEnv(), tick: o.tick, ...(o.nowMs !== undefined ? { nowMs: o.nowMs } : {}), motion: o.motion });
   return capRows(body, o.maxRows, moreLine).map((l) => rowOfLine(l, o.cols, ui));
 }
 
-export type BoardTreeOpts = { cols: number; rows: number; tick: number; now?: number; ui?: Ui; rich?: boolean; motion?: MotionCtx | undefined };
+export type BoardTreeOpts = { cols: number; rows: number; tick: number; now?: number; /** The snapshot clock in epoch ms (`now` is whole seconds): the spinner then turns the shared frame; absent: `tick`. */ nowMs?: number; ui?: Ui; rich?: boolean; motion?: MotionCtx | undefined };
 
 /** The board pane: the whole surface (ribbon, blank row, header, items), capped at `rows` with a `+N more` row. */
 export function boardTree(els: ClientElements, items: readonly BoardSource[], o: BoardTreeOpts): RenderElement {
   const ui = o.ui ?? uiFromEnv();
-  const at = { cols: o.cols, ui, rich: o.rich ?? richEnv(), tick: o.tick, motion: o.motion };
+  const at = { cols: o.cols, ui, rich: o.rich ?? richEnv(), tick: o.tick, ...(o.nowMs !== undefined ? { nowMs: o.nowMs } : {}), motion: o.motion };
   const lines = items.length ? boardLines(boardRowsOf(items, o.now), at) : [...boardLines([], at), { runs: [{ t: '  (no state)', tone: 'muted' as const }] }];
   const rows = capRows(lines, Math.max(1, o.rows), moreLine).map((l) => rowOf(els, rowOfLine(l, o.cols, ui), o.cols));
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: rows });

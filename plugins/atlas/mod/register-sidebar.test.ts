@@ -171,7 +171,7 @@ test('the band is still when no worker is live: no tick, no redraw difference', 
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   await clock.advance(1000); // the first gate run lands
   const before = await abovePromptText($, 30);
-  expect(before).toContain('blocked'); // the fixture's gate has a failing completion check, so the idle band reads blocked (A2)
+  expect(before).toContain('▲ BLOCKED'); // the fixture's gate has a failing completion check, so the idle band reads blocked (A2)
   for (let i = 0; i < 5; i++) {
     await clock.advance(1000);
     expect(await abovePromptText($, 30)).toBe(before);
@@ -211,7 +211,7 @@ test('narrow (70 columns) the HUD drops the Subagents block and the band is its 
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const shown = await abovePromptText($, 30, 70);
   expect(shown).not.toContain('SUBAGENTS');
-  expect(shown).toContain('ph 1/5');
+  expect(shown).toContain('phase 1/5');
   expect(shown).not.toContain('implementer');
 });
 

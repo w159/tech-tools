@@ -4,7 +4,7 @@
  * capped by the line budget with `+N more`); `boardLines` is the whole surface with its ribbon. Each Run is painted in ANSI
  * from the shared tokens and every line is filled with the panel background to exactly `width` cells. Pure.
  */
-import { hostEnv, PALETTES, sgrColor, uiFromEnv, type Run, type Ui, runHex } from "../mod/atlas-ui";
+import { hostEnv, paintAnsi, sgrColor, surfaceHex, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
 import { boardBody, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/board-model";
 import type { MotionCtx } from "../mod/motion";
 import { RST } from "./panel-paint";
@@ -31,11 +31,9 @@ export interface TodoOpts {
 
 /** One run in ANSI: bold/strike, the tone on the run's fill or the panel; NO_COLOR keeps bold and strike only. */
 const paintRun = (x: Run, ui: Ui): string => {
-	const p = PALETTES[ui.theme];
-	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(runHex(x, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
-	return sgr ? `\x1b[${sgr}m${x.t}${RST}` : x.t;
+	return paintAnsi(x, ui);
 };
-const fillOf = (ui: Ui): string => (ui.color === "none" ? "" : `\x1b[${sgrColor(PALETTES[ui.theme].panel, 48, ui.color)}m`);
+const fillOf = (ui: Ui): string => (ui.color === "none" ? "" : `\x1b[${sgrColor(surfaceHex("panel", ui), 48, ui.color)}m`);
 
 /** A line painted and padded with the panel fill to `width`. */
 function paintLine(l: BoardLine, width: number, ui: Ui): string {

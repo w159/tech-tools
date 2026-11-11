@@ -10,7 +10,7 @@ import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from '.
 import { ownTodos, planBasis, todoCounts } from './data/todos';
 import { blockedCount } from './board-model';
 import { gateTally, ranWorkers } from './data/runstate';
-import { hostEnv, LINGER_MS, PALETTES, toneHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
+import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
@@ -134,12 +134,11 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
 
 /** A run as a Segment: the live theme's tone colour on the run's own fill or the panel; with NO_COLOR only bold and strike remain. */
 const seg = (x: Run, ui: Ui): Segment => {
-  const p = PALETTES[ui.theme];
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
-  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme), bg: x.bg ? p[x.bg] : p.panel, ...style };
+  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme, ui.color), bg: surfaceHex(x.bg ?? 'panel', ui), ...style };
 };
 const segs = (l: Line, ui: Ui): Segment[] => l.runs.map((x) => seg(x, ui));
-const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : PALETTES[ui.theme].panel);
+const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : surfaceHex('panel', ui));
 
 /** The band rows alone (no workers, footer or board), plain text per row: what the tier goldens compare. */
 export function bandRows(m: MissionModel): string[] {
@@ -149,7 +148,7 @@ export function bandRows(m: MissionModel): string[] {
 /** The footer with its key buttons (a row of real clickable keys) and, when it fits, the focus hint after them. */
 function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui): RenderElement {
   const bg = panelBg(ui);
-  const mutedColor = ui.color === 'none' ? undefined : toneHex('muted', ui.theme);
+  const mutedColor = ui.color === 'none' ? undefined : runHex({ tone: 'muted' }, ui.theme, ui.color);
   const left = segs(l, ui);
   const used = left.reduce((n, x) => n + textWidth(x.t), 0);
   const hint = used + KEYS_W + textWidth(BAND_HINT) + 3 <= cols ? BAND_HINT : '';
@@ -203,7 +202,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   const rows: Row[] = lines.flatMap((l): Row[] => {
-    if (l.board) return todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), ui, rich: m.rich, motion: b.motion });
+    if (l.board) return todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), nowMs: b.snapshot.now, ui, rich: m.rich, motion: b.motion });
     if (l.keys && on) return [keysRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });
