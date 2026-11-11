@@ -30,7 +30,7 @@ const panel = (width: number, core: PanelModel["core"], workers = 0): PanelModel
 	core,
 	idle: workers ? undefined : { workers: 3, secs: 91, failed: 0 },
 });
-const coreRow = (rows: string[]) => rows.map(strip).find((r) => r.includes("contract  "));
+const coreRow = (rows: string[]) => rows.map(strip).find((r) => r.includes("verdicts  "));
 
 for (const cols of [160, 120] as const) {
 	test(`panel core row equals coreGolden[${cols}] after ANSI strip`, () => {
@@ -44,7 +44,7 @@ for (const cols of [160, 120] as const) {
 test("the core row sits right under the band and carries the last run when both fit the row", () => {
 	const rows = renderPanel(panel(160, fixtureModel())).map(strip);
 	expect(rows[0]).toContain("ATLAS");
-	expect(rows[1]).toContain("contract  ");
+	expect(rows[1]).toContain("verdicts  ");
 	expect(rows[1]).toContain("last run");
 });
 
@@ -55,7 +55,7 @@ test("a running panel keeps its rows for workers: no core row", () => {
 });
 
 test("labels are muted and only what is off takes colour (mocha hex as foreground)", () => {
-	const row = renderPanel(panel(160, fixtureModel())).find((r) => r.includes("contract  "))!;
+	const row = renderPanel(panel(160, fixtureModel())).find((r) => r.includes("verdicts  "))!;
 	expect(row).toContain("38;2;147;153;178"); // muted #9399b2 behind the labels
 	expect(row).toContain("38;2;243;139;168"); // bad #f38ba8: the refuted claim
 	expect(row).toContain("38;2;166;227;161"); // ok #a6e3a1: the verified claim

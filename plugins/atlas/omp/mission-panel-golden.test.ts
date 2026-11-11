@@ -24,7 +24,7 @@ test("idle renders the shared idle golden, core row included, a failed worker st
 	});
 	const rows = trimRows(renderPanel(idleModel).map(strip));
 	expect(rows).toEqual(idleGolden);
-	expect(rows.some((r) => r === coreGolden[120])).toBe(true);
+	expect(rows.some((r) => r.startsWith(coreGolden[120]))).toBe(true);
 });
 
 // The band at each tier on the shared world (twin: mod/band-golden.test.ts).

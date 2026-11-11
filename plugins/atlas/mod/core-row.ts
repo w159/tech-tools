@@ -28,10 +28,10 @@ const joinSep = (parts: Cell[]): Cell[] => parts.flatMap((p, i) => (i ? [sep, p]
  * `3/5 done items carry evidence`. */
 function contract(m: CoreModel, full: boolean, _ui: Ui, plan?: number): Cell[] {
   const e = m.contract.evidence;
-  if (e.total && !e.ok) return []; // done items, none carrying evidence: `contract 0/5 evidence` beside `todo 5/5` reads as a contradiction and tells the band nothing the gates tab (Evidence captured) does not (critique 11)
+  if (!e.ok) return []; // no done item carries evidence: `contract 0/5 evidence` or `contract no done items yet` beside `todo 5/5` or `todo 1/5` is a zero the band cannot explain, and the gates tab (Evidence captured) and the core tab (evidence n/m, with its reason) say it (critique 11, 12 B1)
   const total = plan && plan > 0 ? Math.max(plan, e.ok) : e.total;
   const of = `${e.ok}/${total}`;
-  return [label("contract"), c(e.total ? (full ? `${of} done items carry evidence` : `${of} evidence`) : "no done items yet", toneOf(e.ok, e.total))] // amber when a done item lacks evidence: the figure is over the plan, the tone over the done items;
+  return [label("contract"), c(full ? `${of} done items carry evidence` : `${of} evidence`, toneOf(e.ok, e.total))] // amber when a done item lacks evidence: the figure is over the plan, the tone over the done items;
 }
 
 /** `verdicts  1 verified · 1 refuted`; a refuted claim is red, open and unchecked ones amber. Full adds the claim

@@ -30,8 +30,8 @@ export const sidepanelDesign: Record<number, string[]> = {
   "",
   "r: route  t: team  c: channel  g: gates  k: core  o: board",
   "   ━━━━━",
-  " phase  research 2 of 4",
-  " gates  ● lint   ● test   ▲ doctor   2 of 3 green"
+  " phase  research 2/4",
+  " gates  ● lint   ● test   ▲ doctor   2/3 green"
  ],
  "120": [
   "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -39,8 +39,8 @@ export const sidepanelDesign: Record<number, string[]> = {
   "r: route  t: team  c: channel  g: gates  k: core  o: board",
   "   ━━━━━",
   "",
-  " phase  research   2 of 4",
-  " gates  ● lint   ● test   ▲ doctor   2 of 3 green"
+  " phase  research   2/4",
+  " gates  ● lint   ● test   ▲ doctor   2/3 green"
  ]
 };
 export const cardDesign: Record<number, string[]> = {
@@ -89,8 +89,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "   ━━━━━",
       "",
-      " phase  research   2 of 4",
-      " gates  ● lint   ● test   ▲ doctor   2 of 3 green",
+      " phase  research   2/4",
+      " gates  ● lint   ● test   ▲ doctor   2/3 green",
       " agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed",
       "    ● implementer-layout done    9 of 9 steps",
       "    ● implementer-gates  done    golden tests written",
@@ -98,7 +98,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    ◇ runner-land        queued  waits on implementer-live",
       "    ■ implementer-live   failed  tests red 3",
       "",
-      " todo   ████▎░░░░░ 3 of 7",
+      " todo   ████▎░░░░░ 3/7",
       "  ● Wire band to host     done    ran 03:10                                                           implementer-layout",
       "  ● Layout grid tiers     done    ran 02:41                                                           implementer-layout",
       "  ● Gate golden tests     done    ran 01:58                                                            implementer-gates",
@@ -112,8 +112,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "   ━━━━━",
-      " phase  research 2 of 4",
-      " gates  ● lint   ● test   ▲ doctor   2 of 3 green",
+      " phase  research 2/4",
+      " gates  ● lint   ● test   ▲ doctor   2/3 green",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
@@ -121,7 +121,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    ◇ runner-land        queued",
       "    ■ implementer-live   failed",
       "",
-      " todo   ████▎░░░░░ 3 of 7",
+      " todo   ████▎░░░░░ 3/7",
       "  ● Wire band to host     done                                implementer-layout",
       "  ● Layout grid tiers     done                                implementer-layout",
       "  ● Gate golden tests     done                                 implementer-gates",
@@ -135,8 +135,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "r: route t: team c: channel g: gates k: core o: board",
       "   ━━━━━",
-      " phase  research 2 of 4",
-      " gates  ● lint   ● test   ▲ doctor   2 of 3 green",
+      " phase  research 2/4",
+      " gates  ● lint   ● test   ▲ doctor   2/3 green",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
@@ -144,7 +144,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    ◇ runner-land        queued",
       "    ■ implementer-live   failed",
       "",
-      " todo   ████▎░░░░░ 3 of 7",
+      " todo   ████▎░░░░░ 3/7",
       "  ● Wire band to host     done        implementer-layout",
       "  ● Layout grid tiers     done        implementer-layout",
       "  ● Gate golden tests     done         implementer-gates",
@@ -283,7 +283,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ▲ doctor  warning                                                                                         0 of 1 green",
+      "  ▲ doctor  warning                                                                                            0/1 green",
       "  ▲   doctor"
     ],
     80: [
@@ -295,7 +295,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ▲ doctor  warning                                                 0 of 1 green",
+      "  ▲ doctor  warning                                                    0/1 green",
       "  ▲   doctor"
     ],
     56: [
@@ -307,7 +307,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ▲ doctor  warning                         0 of 1 green",
+      "  ▲ doctor  warning                            0/1 green",
       "  ▲   doctor"
     ]
   },

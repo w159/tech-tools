@@ -4,6 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { BIG_TURN_TOKENS, HEAVY_CHARS, HEAVY_LIMIT, TOAST_GAP_MS, factsLine, isVague, reinforceLine, registerDiscipline } from './discipline';
 import { memState } from './test_helpers';
+import { leadBusy } from './data/runstate';
 
 describe('reinforceLine', () => {
   test('carries the contract template and phase, never the regex', () => {
@@ -105,6 +106,23 @@ describe('heavy inline meter', () => {
     expect((await answer(GOOD)) as unknown).toBeDefined();
     expect((await submit('fix it')).context).toBeDefined();
     expect(rec.toasts).toEqual([]);
+  });
+});
+
+describe('critique 12 B5: a submitted prompt is a busy lead from the submit, not from the first model step', () => {
+  test('prompt.submit marks the lead thinking, so the band never reads idle while the host spinner shows (f0015)', async () => {
+    const { $, submit } = setup();
+    const lead = async () => ((await $.state.get({ plugin: 'atlas', key: 'orch' } as never)).value as { activity?: Record<string, { mood?: string }> } | undefined)?.activity?.lead;
+    expect(await lead()).toBeUndefined();
+    await submit('write the report');
+    expect((await lead())?.mood).toBe('thinking');
+    expect(leadBusy({ activity: { lead: await lead() } })).toBe(true);
+  });
+  test('a failing state read never blocks the prompt', async () => {
+    const hooks = new Map<string, Hook>();
+    registerDiscipline(((ev: string, a: unknown, b?: unknown) => hooks.set(ev, (b ?? a) as Hook)) as unknown as On, { reinforce: () => null });
+    const broken = { state: { get: async () => { throw new Error('boom'); } }, clock: { now: async () => { throw new Error('boom'); } } } as unknown as EngineInterface;
+    expect(await hooks.get('prompt.submit')!(broken, { text: 'go' }, async (i) => i)).toBeDefined();
   });
 });
 

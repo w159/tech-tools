@@ -148,7 +148,7 @@ describe('one row grammar on all five tabs', () => {
     expect(ch[0]).toMatch(/10:02$/);
     const gates = body('gates', 80, { gates: [{ id: 'doctor', title: 'doctor', lines: [{ id: 'd', label: 'doctor', ok: false, fix: 'run it' }] }] });
     expect(cells(gates[0]!)).toBe(80);
-    expect(gates[0]).toMatch(/0 of 1 green$/);
+    expect(gates[0]).toMatch(/0\/1 green$/);
   });
   test('rows never pass the panel width, in ASCII and both themes, 10 to 160 columns', () => {
     for (const ui of [mocha, latte, ascii]) for (const t of TABS) for (const cols of [10, 24, 38, 56, 80, 100, 120, 160])

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed (critique 12 B1): the band drops `contract no done items yet` (a zero it cannot explain beside `todo 1/5`); the core tab's `evidence 0/5` and `verified 0/5` now say why (`5 done without evidence`, `0 verified findings so far`), so the verified count against the plan shows in every frame with a plan (B6).
+- Fixed (critique 12 B2): one routing verdict. A dispatch route that ran off its plan fails the routing group (`withCoreTally`, mod/data/runstate.ts), so the band's `▲ routing`, the gates tab and the core row's `off plan` agree.
+- Fixed (critique 12 B3): the panel reads `n/m` everywhere (`2/4 green`, `phase research 2/4`, `todo 3/7`), no `2 of 4 green`; design goldens updated to match.
+- Fixed (critique 12 B4): `1 dispatch open` is not repeated beside `◐ 1 running` when the open dispatch row is the running worker.
+- Fixed (critique 12 B5): `prompt.submit` marks the lead thinking (mod/discipline.ts), so the band never reads `idle` from the submit to the first model step.
+
 ## 17.11.0 - 2026-11-11
 
 - Fixed (wave 13 follow-up): untracked the self-referencing `plugins/atlas/.claude-plugin/types` symlink that a wave 12 merge added, with a `.gitignore` rule (commit 8271cfc8).

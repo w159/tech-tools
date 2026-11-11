@@ -218,8 +218,8 @@ describe('route tab: blocked owner, phase position', () => {
   });
   test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {
     const phase = (p: string): string => body('route', 80, { phase: p, phases: ['research', 'theory', 'build', 'verify'] })[0]!;
-    expect(phase('build')).toBe(' phase  build 3 of 4');
+    expect(phase('build')).toBe(' phase  build 3/4');
     expect(phase('somewhere')).toBe(' phase  somewhere');
-    expect(phase('done')).toBe(' phase  done 4 of 4');
+    expect(phase('done')).toBe(' phase  done 4/4');
   });
 });

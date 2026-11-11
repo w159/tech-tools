@@ -34,7 +34,7 @@ describe('A3: header n of m and the Header contract row are one evaluation', () 
     const rows = text('gates', { gates: [headerPass] as never, core: core(6, 8) }).join('\n');
     expect(rows).toMatch(/▲ Header contract +warning/);
     expect(rows).not.toContain('Last reply header matched');
-    expect(rows).toContain('0 of 1 green');
+    expect(rows).toContain('0/1 green');
     const all = text('gates', { gates: [headerPass] as never, core: core(8, 8) }).join('\n');
     expect(all).not.toMatch(/Header contract +warning/);
     expect(all).toContain('Header contract');

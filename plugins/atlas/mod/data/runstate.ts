@@ -7,6 +7,7 @@ import { textWidth } from '../theme';
 import type { GateGroup } from '../pane/sidebar-types';
 import type { UiState } from '../atlas-ui';
 import { todoState } from './todos';
+import { plannedText, type Route } from './core';
 
 /** The lead is mid-turn: a plan row reads `running` (the HUD's TODO rule, todoState). One that only its returned owner keeps open does not count. First hit wins, no allocation. */
 export const planBusy = (items: readonly { status: string; owner?: string | null }[], owners: ReadonlyMap<string, UiState>): boolean =>
@@ -39,6 +40,20 @@ export function withHeaderTally<G extends { id: string; lines: readonly unknown[
   if (!header || header.total <= 0) return groups;
   const line = { id: 'header-matched', label: 'Replies with header matched', ok: header.ok >= header.total, detail: `${header.ok} of ${header.total}` };
   return groups.map((g) => (g.id === 'header' ? { ...g, lines: [line] } : g));
+}
+
+/** The id of the line the core's dispatch plan adds to the routing group. */
+export const DISPATCH_LINE = 'dispatch-plan';
+
+/** The core model's two verdicts as ONE evaluation for every gates figure (the band's checks row, the side panel's tab, the route tab, omp): the header contract (withHeaderTally)
+ * and the dispatch plan. A route that ran differently from its plan (the core row's red `off plan`) fails the routing group with a line that says how, so `■ 3x explorer off plan`
+ * beside `Tool routing passing` and `● routing` can not happen (critique 12 B2). A core without a drifted route changes nothing. */
+export function withCoreTally<G extends { id: string; lines: readonly unknown[] }>(groups: readonly G[], core: { contract: { header: { ok: number; total: number } }; routes: readonly Pick<Route, 'cls' | 'effort' | 'seats' | 'drift'>[] } | null | undefined): readonly G[] {
+  const withHeader = withHeaderTally(groups, core?.contract.header);
+  const drifted = [...(core?.routes ?? [])].reverse().find((rt) => rt.drift.length > 0); // the newest drifted route, the one the core row names
+  if (!drifted) return withHeader;
+  const line = { id: DISPATCH_LINE, label: 'Dispatches followed the plan', ok: false, detail: plannedText(drifted) };
+  return withHeader.map((g) => (g.id === 'routing' ? { ...g, lines: [...g.lines, line] } : g));
 }
 
 /** What a failing group is called in a reason: its first failing line lowercased (`team gate`) when that is short, else the group id. */

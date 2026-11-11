@@ -12,7 +12,7 @@ import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
-import { blockReasons, gateTally, STOP_LINE, withHeaderTally } from './data/runstate';
+import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runstate';
 import { displayName } from './hud';
 import { sortAgents } from './hud-surface';
 import type { GateGroup } from './pane/sidebar-types';
@@ -159,7 +159,7 @@ const mark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = '')
 
 /** The gates figure, from the one definition the band uses (mod/data/runstate.ts): a group with no data is neither green nor a check. */
 /** The gates as every row reads them: the header contract line comes from the core row's own tally (one evaluation). */
-const gatesOf = (m: Pick<PanelModel, 'gates' | 'core'>): readonly PanelGate[] => withHeaderTally(m.gates, m.core?.contract.header);
+const gatesOf = (m: Pick<PanelModel, 'gates' | 'core'>): readonly PanelGate[] => withCoreTally(m.gates, m.core);
 const tallyOf = (gs: readonly PanelGate[]) => gateTally(gs as unknown as readonly GateGroup[]);
 /** The groups the tally counts, in their order. */
 const countedGates = (gs: readonly PanelGate[]): PanelGate[] => {
@@ -230,15 +230,15 @@ const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).leng
 /** `phase   research   2/4`: the lit phase and its place on the rail. */
 function phaseRow(m: PanelModel): PanelLine {
   const rail = railOf(m.phases, m.phase); // the one rail (mod/rail.ts): the band, the HUD and omp read the same index
-  return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && (m.phase === 'done' || m.phases.includes(m.phase)) ? [r(`${m.cols >= 100 ? '   ' : ' '}${railNo(rail).replace('/', ' of ')}`)] : [])]);
+  return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && (m.phase === 'done' || m.phases.includes(m.phase)) ? [r(`${m.cols >= 100 ? '   ' : ' '}${railNo(rail)}`)] : [])]);
 }
 
-/** `gates   ● lint   ● test   ▲ doctor   2 of 3 green`; names that do not fit fold to the count alone. */
+/** `gates   ● lint   ● test   ▲ doctor   2/3 green`; names that do not fit fold to the count alone. `n/m` like the ribbon's figure (critique 12 B3). */
 function gatesRow(m: PanelModel): PanelLine | null {
   const t = tallyOf(gatesOf(m));
   const gs = countedGates(gatesOf(m));
   if (!t.total) return null;
-  const word = `${t.green} of ${t.total} green`;
+  const word = `${t.green}/${t.total} green`;
   const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), groupOk(g) ? mark('done', m) : { ...warnMark(m.ui), t: `${warnMark(m.ui).t} ` }, r(g.id)]);
   const full = [label('gates', m.cols), ...names, r(`   ${word}`)];
   if (rowWidth(full) <= m.cols) return line(full);
@@ -250,7 +250,7 @@ function todoCount(m: PanelModel): PanelLine {
   const total = m.todos.length;
   if (!total) return line([label('todo', m.cols), r('no tasks yet', 'muted')]);
   const g = m.cols >= 40 ? [...gauge(10, done / total, m.ui, 'ok', 'muted'), r(' ')] : []; // the ok tone fills and the muted tone is the track: quieter than any state word
-  return line([label('todo', m.cols), ...g, r(`${done} of ${total}`)]);
+  return line([label('todo', m.cols), ...g, r(`${done}/${total}`)]);
 }
 
 /** The agents row: one count per state; segments that do not fit wrap under the label instead of overflowing. */
@@ -549,8 +549,8 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
 }
 
 const GATE_WORD_W = 7; // `passing` and `warning`
-/** `2 of 3 green`: the group's checks that pass, the value column (the unit the tab ribbon uses); empty while the group passes. */
-const gateValue = (g: PanelGate): string => (groupFailing(g) ? `${g.lines.length - groupFailing(g)} of ${g.lines.length} green` : '');
+/** `2/3 green`: the group's checks that pass, the value column (the `n/m` the tab ribbon uses); empty while the group passes. */
+const gateValue = (g: PanelGate): string => (groupFailing(g) ? `${g.lines.length - groupFailing(g)}/${g.lines.length} green` : '');
 
 function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: boolean, all = false): PanelLine[] {
   const bad = groupFailing(g);
@@ -646,12 +646,16 @@ function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const { evidence: e, verifiedDone: v } = c.contract;
   const plan = m.todos.length;
   const over = (t: { total: number; ok: number }): number => (plan > 0 && t.total > 0 ? Math.max(plan, t.ok) : t.total); // the figure's denominator; the tone and mark read the done items (amber when one lacks evidence)
+  // A figure short of its plan says why, in the row: `evidence 0/5  5 done without evidence`, `verified 0/5  0 verified findings so far`. The verified row is present for every plan, so the
+  // gates and core tabs always carry the verified count against the plan denominator (critique 12 B1, B6: a bare zero beside `todo 5/5` read as a defect).
+  const why = (name: string, t: { ok: number; total: number }): string => (!t.total || t.ok === t.total ? '' : name === 'evidence' ? `${t.total - t.ok} done without evidence` : `${c.ledger.verified} verified finding${c.ledger.verified === 1 ? '' : 's'} so far`);
   const items: [string, { ok: number; total: number }][] = [['evidence', e], ['verified', v]];
   return [
     heading('contract', [], m),
     ...items.map(([name, t]) => line(fitRuns(gridRow({
       cols: m.cols, ui: m.ui, mark: stateRun(!t.total ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
       name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: tallyTone(t.ok, t.total) }, wordW: 8,
+      ...(why(name, t) ? { detail: { t: why(name, t) } } : {}),
     }), m.cols))),
   ];
 }
