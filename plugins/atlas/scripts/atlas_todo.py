@@ -49,7 +49,7 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_paths  # noqa: E402
@@ -248,6 +248,41 @@ def _for_session(items: List[dict], session_id: Optional[str]) -> List[dict]:
     return _active(items)
 
 
+def open_items(board: dict, session_id: Optional[str]) -> List[dict]:
+    """THE open-work rule: the rows Stop counts as `N open todo item(s)`. Active, not a
+    human's manual note, stamped with this session, not completed. The completion gate
+    (hooks/completion_gate_core._board_open_todos), the gates rows and `counts()["open"]`
+    all read it, so no surface can call open work done."""
+    return [
+        i
+        for i in _active(board.get("items", []))
+        if i.get("origin") != "manual"
+        and i.get("session_id") == session_id
+        and i.get("status") != "completed"
+    ]
+
+
+def plan_evidence(board: dict, session_id: Optional[str]) -> Tuple[int, int]:
+    """(done rows carrying evidence, done rows) over the plan the mod counts (mod/data/todos.ts
+    planBasis): this session's own rows (stamped with it or with none), no dispatch rows, advisor
+    notes, stubs or still-open carried rows. The `Evidence captured` gates row and the core tab's
+    `evidence n of m` both state this."""
+    done = [
+        i
+        for i in _active(board.get("items", []))
+        if i.get("origin") not in ("dispatch", "advisor")
+        and (i.get("origin") != "carried" or i.get("status") == "completed")
+        and str(i.get("content") or "").strip().lower() not in ("", "placeholder")
+        and (
+            not session_id
+            or not i.get("session_id")
+            or i.get("session_id") == session_id
+        )
+        and i.get("status") == "completed"
+    ]
+    return sum(1 for i in done if str(i.get("evidence") or "").strip()), len(done)
+
+
 def counts(board: dict, session_id: Optional[str] = None) -> dict:
     """needed / remaining / complete for the board (or one session's slice)."""
     items = _for_session(board.get("items", []), session_id)
@@ -255,15 +290,22 @@ def counts(board: dict, session_id: Optional[str] = None) -> dict:
     total = len(items)
     dispatches = sum(1 for i in items if i.get("origin") == "dispatch")
     plan = total - dispatches
+    # Stop's own open count (open_items); only meaningful for a session slice.
+    open_now = len(open_items(board, session_id)) if session_id else total - done
+    base = (
+        f"needed {plan} plan items, {dispatches} dispatches"
+        if dispatches
+        else f"needed {total} items"
+    )
     return {
         "needed": total,
         # `needed` (and the Stop gate's open count) stays strict over every item; the split says how many are the lead's plan
         # and how many are hook-added dispatch rows, which the Board tab folds into their plan rows.
         "plan": plan,
         "dispatches": dispatches,
-        "summary": f"needed {plan} plan items, {dispatches} dispatches"
-        if dispatches
-        else f"needed {total} items",
+        "open": open_now,
+        # the summary names the open rows, so a lead reading it sees what Stop will count
+        "summary": f"{base}; {open_now} open" if open_now else base,
         "remaining": total - done,
         "complete": done,
         "claimed": sum(

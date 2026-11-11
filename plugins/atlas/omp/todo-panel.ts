@@ -5,7 +5,7 @@
  * from the shared tokens and every line is filled with the panel background to exactly `width` cells. Pure.
  */
 import { hostEnv, paintAnsi, sgrColor, surfaceHex, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
-import { boardBody, boardFolded, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/board-model";
+import { boardBody, boardFolded, boardOpenFolded, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/board-model";
 import type { MotionCtx } from "../mod/motion";
 import { RST } from "./panel-paint";
 
@@ -62,6 +62,6 @@ export function todoLines(todos: PanelTodo[], o: TodoOpts): string[] {
 export function boardLines(todos: PanelTodo[], o: Pick<TodoOpts, "width" | "tick" | "now" | "ui" | "rich" | "motion"> & { maxLines?: number }): string[] {
 	const ui = o.ui ?? uiFromEnv();
 	const at = { cols: o.width, ui, rich: o.rich ?? richEnv(), tick: o.tick, motion: o.motion };
-	const lines = todos.length ? modelLines(boardRowsOf(todos, o.now), { ...at, folded: boardFolded(todos) }) : [...modelLines([], at), { runs: [{ t: "  (no state)", tone: "muted" as const }] }];
+	const lines = todos.length ? modelLines(boardRowsOf(todos, o.now), { ...at, folded: boardFolded(todos), openFolded: boardOpenFolded(todos) }) : [...modelLines([], at), { runs: [{ t: "  (no state)", tone: "muted" as const }] }];
 	return cap(lines, o.maxLines ?? lines.length).map(l => paintLine(l, o.width, ui));
 }

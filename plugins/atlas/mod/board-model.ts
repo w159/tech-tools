@@ -101,7 +101,13 @@ export const boardRowsOf = (items: readonly BoardSource[], nowSecs?: number): Bo
  * `needed 5 plan items, 3 dispatches` agree. */
 export const boardFolded = (items: readonly BoardSource[]): number => foldBoard(items).folded;
 
-function foldBoard(items: readonly BoardSource[]): { rows: BoardSource[]; folded: number } {
+/** How many of the folded dispatch rows the store still holds open (not completed). The fold never hides an open row: the footer names them
+ * (`5 items · 1 dispatch open`) and the plan row they fold into does not read done. */
+export const boardOpenFolded = (items: readonly BoardSource[]): number => foldBoard(items).open;
+
+const finished = (s: string): boolean => s === 'completed' || s === 'done';
+
+function foldBoard(items: readonly BoardSource[]): { rows: BoardSource[]; folded: number; open: number } {
   const plan = items.filter((i) => i.origin !== 'dispatch');
   const dispatch = items.filter((i) => i.origin === 'dispatch');
   const names = new Set(dispatch.map((i) => i.owner).filter((n): n is string => !!n));
@@ -111,16 +117,22 @@ function foldBoard(items: readonly BoardSource[]): { rows: BoardSource[]; folded
   const folded = owned.slice();
   const alone: BoardSource[] = [];
   let count = 0;
+  let open = 0;
   for (const d of dispatch) {
     const at = d.owner ? firstOf.get(d.owner) : undefined;
     if (at === undefined) { alone.push(d); continue; }
     count++;
     const p = folded[at]!;
-    if (p.status === 'completed' || p.status === 'done') continue; // a finished plan row stays finished
+    if (!finished(d.status)) open++;
+    if (finished(p.status)) {
+      // A finished plan row stays finished only while its worker's row is closed too; an open dispatch row (the store still counts it for Stop) re-opens the row's word.
+      if (!finished(d.status)) folded[at] = { ...p, status: foldStatus(d.status), claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
+      continue;
+    }
     const pick = (FOLD_RANK[d.status] ?? 0) > (FOLD_RANK[p.status] ?? 1) ? foldStatus(d.status) : p.status;
     folded[at] = { ...p, status: pick, claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
   }
-  return { rows: [...folded, ...alone], folded: count };
+  return { rows: [...folded, ...alone], folded: count, open };
 }
 
 /** A plan row names its worker in the title (`T1 read alpha.py (alpha-explorer)`) while the store holds no owner: when that
@@ -152,7 +164,7 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** `boardLines`: how many of those folded dispatch rows are still open in the store; the footer then reads `N items · K dispatch open`. */ openFolded?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= NARROW_MIN ? 'compact' : 'narrow');
 
@@ -242,7 +254,10 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
 export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const rib = ribbon(o.cols, 'BOARD', o.rich ? '' : `${rows.length} items`, o.ui);
   const n = o.folded ?? 0;
-  const footer: BoardLine[] = n > 0 && rows.length > 0 ? [{ runs: [r(`  ${rows.length} items · ${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted')] }] : [];
+  const k = o.openFolded ?? 0;
+  // An open folded dispatch row is what Stop counts: the footer names it instead of the quiet fold count.
+  const note = k > 0 ? r(`  ${rows.length} items · ${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : r(`  ${rows.length} items · ${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted');
+  const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }] : [];
   return [{ runs: rib }, { runs: [r(' ')] }, ...boardBody(rows, o), ...footer];
 }
 

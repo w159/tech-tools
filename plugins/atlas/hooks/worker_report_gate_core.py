@@ -305,7 +305,8 @@ def finish_member(p, msg=None, report=None):
                 reap_member(atlas_todo, root, who, msg, report)
                 return
         # No id/name hit (async launch gave no agentId): fall back to the one unfinished,
-        # unmapped member whose name is the agent type or starts "<type>-". Ambiguous = no-op.
+        # unmapped member whose name is the agent type, starts "<type>-" or ends "-<type>"
+        # (the "<slice>-<role>" shape, e.g. gamma-explorer). Ambiguous = no-op.
         tail = str(p.get("agent_type") or "").split(":")[-1].lower()
         if tail:
             cands = {
@@ -318,6 +319,7 @@ def finish_member(p, msg=None, report=None):
                 and (
                     m["name"].lower() == tail
                     or m["name"].lower().startswith(tail + "-")
+                    or m["name"].lower().endswith("-" + tail)
                 )
             }
             if len(cands) == 1:

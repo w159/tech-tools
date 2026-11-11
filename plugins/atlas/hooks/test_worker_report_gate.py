@@ -308,6 +308,38 @@ class WorkerReportGateTest(unittest.TestCase):
             )
         )
 
+    def test_stop_unmapped_slice_role_name_closes_dispatch_row(self):
+        # Live run 150-74d8931b-1: members are named "<slice>-<role>" (gamma-explorer), the
+        # launch recorded no agent_id for gamma, and its dispatch row stayed pending so Stop
+        # reported "1 open todo item(s)" while the Board showed everything done.
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        names = ["alpha-explorer", "beta-explorer", "gamma-explorer"]
+        todo.open_lead_channel(root, "lead-x", names)
+        todo.set_member_agent_id(root, "alpha-explorer", "a188a2adce5415989")
+        todo.set_member_agent_id(root, "beta-explorer", "a3010d2acc018187c")
+        for n in names:
+            todo.add(root, "read " + n, owner=n, origin="dispatch")
+        p = payload(
+            agent_id="aeccb696744ff698f",
+            agent_type="atlas:explorer",
+            cwd=root,
+            last_assistant_message=COMPLIANT,
+        )
+        self.run_hook(p)
+        rows = {i["owner"]: i["status"] for i in todo.load(root)["items"]}
+        self.assertEqual(rows["gamma-explorer"], "completed")
+        mem = {
+            m["name"]: m
+            for c in todo._reg_read(root)["channels"].values()
+            for m in c["members"]
+        }
+        self.assertEqual(mem["gamma-explorer"].get("exit_code"), 0)
+        self.assertNotIn("exit_code", mem["alpha-explorer"])
+
     def test_compliant_is_silent(self):
         r = self.run_hook(payload(last_assistant_message=COMPLIANT))
         self.assertEqual(r.returncode, 0)

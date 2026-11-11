@@ -98,6 +98,44 @@ class AtlasGatesTest(unittest.TestCase):
         (line,) = self._stop_line(doc)
         self.assertEqual(line["label"], "Last Stop allowed")
 
+    def _store(self, gamma_status="pending"):
+        fx = json.loads((HERE.parent / "contracts" / "open-work-store.json").read_text())
+        items = json.loads(json.dumps(fx["items"]).replace('"SESSION"', json.dumps(SESSION)))
+        for it in items:
+            if it["id"] == "t56c769ef":
+                it["status"] = gamma_status
+        run = self.root / ".atlas" / ".run"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "todos.json").write_text(json.dumps({"version": 1, "items": items}))
+        return fx["expect"]
+
+    def test_open_work_one_store_gates_stop_and_counts_agree(self):
+        # Live run 150-74d8931b-1: Stop said "1 open todo item(s)" while the gates rows read
+        # green. One store, one rule: Stop, the gates rows and the helper's counts all state it.
+        import atlas_todo
+        import completion_gate_core as cg
+
+        expect = self._store()
+        board = atlas_todo.load(str(self.root))
+        stop = cg._open_work_count("", self.root, SESSION)  # what Stop's (r) reports
+        self.assertEqual(stop, expect["open"])
+        self.assertEqual(atlas_todo.counts(board, SESSION)["open"], stop)
+        _, doc = _run(self.db, self.root)
+        comp = {l["id"]: l for l in next(g for g in doc["groups"] if g["id"] == "completion")["lines"]}
+        self.assertFalse(comp["i"]["ok"])
+        self.assertEqual(comp["i"]["detail"], f"{stop} open")
+        ev = expect["evidence"]
+        self.assertEqual(atlas_todo.plan_evidence(board, SESSION), (ev["ok"], ev["total"]))
+        self.assertFalse(comp["a"]["ok"])
+        self.assertEqual(comp["a"]["detail"], f"{ev['ok']} of {ev['total']} done with evidence")
+        # the open row closes: Stop's count and the Todos drained row go green together
+        self._store("completed")
+        self.assertEqual(cg._open_work_count("", self.root, SESSION), 0)
+        _, doc = _run(self.db, self.root)
+        comp = {l["id"]: l for l in next(g for g in doc["groups"] if g["id"] == "completion")["lines"]}
+        self.assertTrue(comp["i"]["ok"])
+        self.assertNotIn("detail", comp["i"])
+
     def test_no_stop_verdict_for_this_session_means_no_line(self):
         self._write_verdict("someone-else", True, ["s"])
         _, doc = _run(self.db, self.root)

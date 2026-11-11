@@ -49,6 +49,7 @@ class BoardBasics(unittest.TestCase):
                 "needed": 0,
                 "plan": 0,
                 "dispatches": 0,
+                "open": 0,
                 "summary": "needed 0 items",
                 "remaining": 0,
                 "complete": 0,
@@ -71,7 +72,34 @@ class BoardBasics(unittest.TestCase):
             (c["needed"], c["remaining"]), (3, 3)
         )  # the Stop gate's count stays strict
         self.assertEqual((c["plan"], c["dispatches"]), (2, 1))
-        self.assertEqual(c["summary"], "needed 2 plan items, 1 dispatches")
+        self.assertEqual(c["summary"], "needed 2 plan items, 1 dispatches; 3 open")
+
+    def test_open_items_is_stops_rule_and_summary_names_the_open_row(self):
+        # live run 150-74d8931b-1: every plan row done, one dispatch row open -> Stop said 1 open.
+        for text in ("T1 a", "T2 b"):
+            r = atlas_todo.add(self.root, text, session_id="s1", origin="session")
+            atlas_todo.set_status(self.root, r["item"]["id"], "completed")
+        d = atlas_todo.add(
+            self.root,
+            "dispatch gamma",
+            session_id="s1",
+            origin="dispatch",
+            owner="gamma",
+        )
+        atlas_todo.add(self.root, "human note", session_id="s1", origin="manual")
+        atlas_todo.add(self.root, "other session", session_id="s2", origin="session")
+        board = atlas_todo.load(self.root)
+        self.assertEqual(
+            [i["id"] for i in atlas_todo.open_items(board, "s1")], [d["item"]["id"]]
+        )
+        c = atlas_todo.counts(board, "s1")
+        self.assertEqual(c["open"], 1)
+        self.assertEqual(c["summary"], "needed 3 plan items, 1 dispatches; 1 open")
+        atlas_todo.set_status(self.root, d["item"]["id"], "completed")
+        c = atlas_todo.counts(atlas_todo.load(self.root), "s1")
+        self.assertEqual(
+            (c["open"], c["summary"]), (0, "needed 3 plan items, 1 dispatches")
+        )
 
     def test_add_and_counts(self):
         r = atlas_todo.add(self.root, "wire the gate", session_id="s1")

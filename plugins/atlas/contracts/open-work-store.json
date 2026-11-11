@@ -1,0 +1,15 @@
+{
+  "_about": "One todos.json store, the shape of live run 150-74d8931b-1: five plan rows all completed (no evidence, session ''), two dispatch rows completed with evidence, the gamma dispatch row still pending. Stop counts 1 open item. hooks/test_atlas_gates.py and mod/open-work.test.ts both load it; the gates rows, Stop, the core tab and the band must agree on it. SESSION is replaced by each test's session id.",
+  "version": 1,
+  "expect": { "open": 1, "evidence": { "ok": 0, "total": 5 }, "plan": { "done": 5, "total": 5 } },
+  "items": [
+    { "id": "tab2471ae", "content": "List the function names defined in alpha.py in the current directory.", "status": "completed", "owner": "alpha-explorer", "origin": "dispatch", "session_id": "SESSION", "evidence": "1. Read alpha.py -> first 3 lines", "archived": false },
+    { "id": "t9118a81f", "content": "List the function names defined in beta.py in the current directory.", "status": "completed", "owner": "beta-explorer", "origin": "dispatch", "session_id": "SESSION", "evidence": "1. Read beta.py -> line 1", "archived": false },
+    { "id": "t56c769ef", "content": "List the function names defined in gamma.py in the current directory.", "status": "pending", "owner": "gamma-explorer", "origin": "dispatch", "session_id": "SESSION", "evidence": null, "archived": false },
+    { "id": "t46f1b368", "content": "T1 read alpha.py (alpha-explorer)", "status": "completed", "owner": null, "origin": "session", "session_id": "", "evidence": null, "archived": false },
+    { "id": "tc3355fe1", "content": "T2 read beta.py (beta-explorer)", "status": "completed", "owner": null, "origin": "session", "session_id": "", "evidence": null, "archived": false },
+    { "id": "tf47e0fe8", "content": "T3 read gamma.py (gamma-explorer)", "status": "completed", "owner": null, "origin": "session", "session_id": "", "evidence": null, "archived": false },
+    { "id": "t91307dae", "content": "T4 combine the three reports", "status": "completed", "owner": null, "origin": "session", "session_id": "", "evidence": null, "archived": false },
+    { "id": "t9c906c1d", "content": "T5 write the final summary", "status": "completed", "owner": null, "origin": "session", "session_id": "", "evidence": null, "archived": false }
+  ]
+}

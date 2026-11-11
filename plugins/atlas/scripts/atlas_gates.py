@@ -78,13 +78,19 @@ def stop_verdict_line(session: str, root: Path):
     """The completion gate's last Stop verdict for `session`, as one informational line (ok is always
     true: it is a record, not a check). None when no verdict is stored. completion_gate_core writes it."""
     try:
-        rec = json.loads((Path(root) / ".atlas" / ".run" / "stop-verdict.json").read_text(encoding="utf-8"))["sessions"][session]
+        rec = json.loads(
+            (Path(root) / ".atlas" / ".run" / "stop-verdict.json").read_text(
+                encoding="utf-8"
+            )
+        )["sessions"][session]
         blocked = bool(rec["blocked"])
         names = [_LABELS.get(str(x), str(x)) for x in rec.get("letters") or []]
     except Exception:  # noqa: BLE001 -- no record, or an unreadable one, means no line
         return None
     if blocked:
-        return _line("stop-verdict", "Last Stop blocked", True, ", ".join(names) or "gate")
+        return _line(
+            "stop-verdict", "Last Stop blocked", True, ", ".join(names) or "gate"
+        )
     return _line("stop-verdict", "Last Stop allowed", True)
 
 
@@ -119,20 +125,42 @@ def _completion_group(session: str, root: Path, transcript: str) -> dict:
     ev = cg.evaluate(data, root, missing_delegation)
     # (s) is the Stop gate's own decision, not a copy of it: red exactly when Stop would block on it
     # (an advisory, a used-once marker, a read-only-only run or a team record all read green).
-    team_count, team_advisory = cg._team_gate(root, session, cg._run_started_at(session))
+    team_count, team_advisory = cg._team_gate(
+        root, session, cg._run_started_at(session)
+    )
     team_failing = bool(team_count) and not team_advisory
+    # `Todos drained` and `Evidence captured` read the same store and rule as Stop's open-item count
+    # and the mod's core tab, so a gates row can never read green over a row Stop counts open.
+    open_n = cg._open_work_count(transcript, root, session)
+    ev_ok, ev_total = _plan_evidence(root, session)
     for letter in sorted(_LABELS):
         failing = team_failing if letter == "s" else letter in ev["failed"]
+        detail = None
+        if letter == "i":
+            failing = failing or open_n > 0
+            detail = f"{open_n} open" if open_n else None
+        elif letter == "a":
+            failing = failing or ev_ok < ev_total
+            detail = f"{ev_ok} of {ev_total} done with evidence" if ev_total else None
         g["lines"].append(
             _line(
                 letter,
                 _LABELS[letter],
                 not failing,
-                None,
+                detail,
                 (cg._GISTS.get(letter) or _FIXES.get(letter)) if failing else None,
             )
         )
     return g
+
+
+def _plan_evidence(root: Path, session: str):
+    try:
+        import atlas_todo
+
+        return atlas_todo.plan_evidence(atlas_todo.load(str(root)), session)
+    except Exception:  # noqa: BLE001 -- an unreadable board is no evidence claim either way
+        return 0, 0
 
 
 def tripwire_group(session: str) -> dict:
@@ -154,7 +182,9 @@ def tripwire_group(session: str) -> dict:
         )
         # Informational: a session that is simply not orchestrating is not failing.
         g["lines"].append(
-            _line("armed", "Orchestration armed", True, "armed" if armed else "not armed")
+            _line(
+                "armed", "Orchestration armed", True, "armed" if armed else "not armed"
+            )
         )
         g["lines"].append(
             _line(
@@ -197,7 +227,10 @@ def _routed(root) -> bool:
 
         import dispatch_tripwire_core as dt
 
-        return bool(shutil.which("lean-ctx")) and dt._lean_ctx_server_key(Path(root)) is not None
+        return (
+            bool(shutil.which("lean-ctx"))
+            and dt._lean_ctx_server_key(Path(root)) is not None
+        )
     except Exception:  # noqa: BLE001
         return True
 
@@ -228,7 +261,9 @@ def routing_group(session: str, root=None) -> dict:
         if not routed:
             detail += "; lean-ctx is not configured here, so native is the route"
         g["lines"].append(
-            _line(f"native-{tool}", f"Native {tool} calls", n == 0 or not routed, detail)
+            _line(
+                f"native-{tool}", f"Native {tool} calls", n == 0 or not routed, detail
+            )
         )
     denies = sum(1 for r in rows if r[3])
     g["lines"].append(

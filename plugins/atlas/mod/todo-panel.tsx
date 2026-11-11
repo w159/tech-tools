@@ -4,7 +4,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx } from './motion';
-import { boardBody, boardFolded, boardLines, boardRowsOf, type BoardLine, type BoardSource } from './board-model';
+import { boardBody, boardFolded, boardOpenFolded, boardLines, boardRowsOf, type BoardLine, type BoardSource } from './board-model';
 import { rowOf, type Segment } from './runs';
 import { textWidth } from './theme';
 
@@ -51,7 +51,7 @@ export type BoardTreeOpts = { cols: number; rows: number; tick: number; now?: nu
 export function boardTree(els: ClientElements, items: readonly BoardSource[], o: BoardTreeOpts): RenderElement {
   const ui = o.ui ?? uiFromEnv();
   const at = { cols: o.cols, ui, rich: o.rich ?? richEnv(), tick: o.tick, ...(o.nowMs !== undefined ? { nowMs: o.nowMs } : {}), motion: o.motion };
-  const lines = items.length ? boardLines(boardRowsOf(items, o.now), { ...at, folded: boardFolded(items) }) : [...boardLines([], at), { runs: [{ t: '  (no state)', tone: 'muted' as const }] }];
+  const lines = items.length ? boardLines(boardRowsOf(items, o.now), { ...at, folded: boardFolded(items), openFolded: boardOpenFolded(items) }) : [...boardLines([], at), { runs: [{ t: '  (no state)', tone: 'muted' as const }] }];
   const rows = capRows(lines, Math.max(1, o.rows), moreLine).map((l) => rowOf(els, rowOfLine(l, o.cols, ui), o.cols));
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: rows });
 }

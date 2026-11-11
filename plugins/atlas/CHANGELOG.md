@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: one open-work truth (critique 9, slice A). A dispatch row closes when its agent ends even when the launch recorded no agent_id and the member is named `<slice>-<role>` (`gamma-explorer`): the unmapped-stop fallback now matches a `-<type>` suffix, so Stop no longer counts "1 open todo item(s)" over a Board that read done (`hooks/test_worker_report_gate.py`). The Board fold never hides an open dispatch row: the footer reads `5 items · 1 dispatch open` and the plan row it folds into re-opens (`mod/open-work.test.ts`). `atlas_todo.open_items` is the one rule Stop, the `Todos drained`/`Evidence captured` gates rows, `counts()["open"]` (now in the helper summary) and `coreModel().contract.open` share (`hooks/test_atlas_gates.py` on `contracts/open-work-store.json`).
+
 ## 17.9.0 - 2026-11-11
 
 - Fixed (critique 8 A1/A2): the band reads `BLOCKED` only when the lead declared it or the completion gate's last Stop verdict for the session refused the stop (`BLOCKED · stop: team gate`); a failing tripwire or other check with Stop allowed is `▲ <gate> warning` / `▲ <n> gates warning`. `completion_gate_core.py` records each Stop verdict in `.atlas/.run/stop-verdict.json` (per session), `atlas_gates.py` serves it as the completion group's `stop-verdict` line, and the team tab lead row reads the same verdict.

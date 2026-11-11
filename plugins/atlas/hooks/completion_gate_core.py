@@ -575,17 +575,21 @@ def _board_open_todos(root: Path, session_id: str) -> int:
     try:
         import atlas_todo
 
-        board = atlas_todo.load(str(root))
-        return sum(
-            1
-            for item in board.get("items", [])
-            if not item.get("archived")
-            and item.get("origin") != "manual"
-            and item.get("session_id") == session_id
-            and item.get("status") != "completed"
-        )
+        # the one open-work rule (atlas_todo.open_items): the gates rows and the todo helper's
+        # `open` count read the same function
+        return len(atlas_todo.open_items(atlas_todo.load(str(root)), session_id))
     except Exception:
         return 0
+
+
+def _open_work_count(transcript: str, root: Path, session: str) -> int:
+    """The open-item count Stop reports in `(r) ... N open todo item(s)`; the gates rows
+    (`Todos drained`) read this same function."""
+    return (
+        _open_todos(transcript)
+        or _board_open_todos(root, session)
+        or _ledger_open_todos(transcript)
+    )
 
 
 _LEDGER_RE = None
@@ -2570,11 +2574,7 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
             and str(t.get("status", "")).lower() not in _TERMINAL_TASK_STATUSES
         )
         transcript = str(data.get("transcript_path") or "")
-        open_todos = (
-            _open_todos(transcript)
-            or _board_open_todos(root, session)
-            or _ledger_open_todos(transcript)
-        )
+        open_todos = _open_work_count(transcript, root, session)
         if not running and not open_todos:
             return ""
         parts = []

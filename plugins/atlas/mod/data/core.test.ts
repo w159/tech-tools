@@ -190,7 +190,7 @@ describe('core model: context accounting and defaults', () => {
       openGates: 2,
       header: { ok: 1, total: 2 },
     }));
-    expect(m.contract).toEqual({ header: { ok: 1, total: 2 }, evidence: { ok: 1, total: 3 }, openGates: 2, verifiedDone: { ok: 1, total: 3 } });
+    expect(m.contract).toEqual({ header: { ok: 1, total: 2 }, evidence: { ok: 1, total: 3 }, open: 1, openGates: 2, verifiedDone: { ok: 1, total: 3 } });
   });
 
   test('offload ratio is kept/returned, null when either side is zero', () => {
