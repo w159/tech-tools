@@ -95,8 +95,12 @@ def completion_group(session: str, root: Path, transcript: str) -> dict:
         )
         return g
     ev = cg.evaluate(data, root, missing_delegation)
+    # (s) is the Stop gate's own decision, not a copy of it: red exactly when Stop would block on it
+    # (an advisory, a used-once marker, a read-only-only run or a team record all read green).
+    team_count, team_advisory = cg._team_gate(root, session, cg._run_started_at(session))
+    team_failing = bool(team_count) and not team_advisory
     for letter in sorted(_LABELS):
-        failing = letter in ev["failed"]
+        failing = team_failing if letter == "s" else letter in ev["failed"]
         g["lines"].append(
             _line(
                 letter,

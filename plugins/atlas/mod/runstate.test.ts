@@ -52,7 +52,10 @@ describe('runstate: blocked shows glyph, word and reason at every width', () => 
   });
   test('blockReasons', () => {
     expect(blockReasons(false, ['tripwire']).long).toBe('tripwire failing');
-    expect(blockReasons(false, ['a', 'b']).long).toBe('2 checks failing');
+    expect(blockReasons(false, ['a', 'b']).long).toBe('2 gates failing');
+    // one string at every width: the short form is the long form, never `tripwire` or `2 failing`
+    expect(blockReasons(false, ['tripwire']).short).toBe('tripwire failing');
+    expect(blockReasons(false, ['a', 'b']).short).toBe('2 gates failing');
     expect(blockReasons(true, ['a']).long).toBe('needs you');
   });
 });

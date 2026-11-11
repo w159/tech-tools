@@ -25,7 +25,7 @@ export const FULL_MIN = 100;
 export const COMPACT_MIN = 60;
 /** Below this the board is the label alone; from here to COMPACT_MIN the state (and, when it fits, the owner) still sit right of the label. */
 export const NARROW_MIN = 30;
-const LABEL_MIN = 15; // the least label room the narrow form keeps before it drops the owner column
+const LABEL_MIN = 16; // the least label room the narrow form keeps before it drops the owner column
 
 // ---- data: todo rows to board rows --------------------------------------------------------------------------------
 
@@ -86,12 +86,32 @@ export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
   return { ...base, detail };
 }
 
-/** Rows of `items` in board order (plan rows first, then the per-subagent dispatch rows). */
+/** How far a dispatch row's status says its worker got; the highest one of an owner's rows is folded into the plan row. A finished
+ * worker (`completed`) leaves the open plan row `ended`: the agent is gone, the lead has not closed the row. */
+const FOLD_RANK: Readonly<Record<string, number>> = { failed: 5, in_progress: 4, blocked: 3, waiting: 3, ended: 2, completed: 2, pending: 1 };
+const foldStatus = (s: string): string => (s === 'completed' ? 'ended' : s);
+
+/** Rows of `items` in board order: the plan rows, then the dispatch rows that no plan row owns. A dispatch row whose owner owns a plan
+ * row is that row's worker, not a second item: it is folded into the plan row (its state, claim time, estimate and evidence fill what the
+ * plan row lacks), so the board lists exactly the plan (5 items, 3 of them owned: 5 rows). */
 export const boardRowsOf = (items: readonly BoardSource[], nowSecs?: number): BoardRow[] => {
   const plan = items.filter((i) => i.origin !== 'dispatch');
   const dispatch = items.filter((i) => i.origin === 'dispatch');
   const names = new Set(dispatch.map((i) => i.owner).filter((n): n is string => !!n));
-  return [...plan, ...dispatch].map((i) => toBoardRow(withTitleOwner(i, names), nowSecs));
+  const owned = plan.map((i) => withTitleOwner(i, names));
+  const firstOf = new Map<string, number>(); // owner -> the first plan row that names it
+  owned.forEach((i, n) => { if (i.owner && !firstOf.has(i.owner)) firstOf.set(i.owner, n); });
+  const folded = owned.slice();
+  const alone: BoardSource[] = [];
+  for (const d of dispatch) {
+    const at = d.owner ? firstOf.get(d.owner) : undefined;
+    if (at === undefined) { alone.push(d); continue; }
+    const p = folded[at]!;
+    if (p.status === 'completed' || p.status === 'done') continue; // a finished plan row stays finished
+    const pick = (FOLD_RANK[d.status] ?? 0) > (FOLD_RANK[p.status] ?? 1) ? foldStatus(d.status) : p.status;
+    folded[at] = { ...p, status: pick, claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
+  }
+  return [...folded, ...alone].map((i) => toBoardRow(i, nowSecs));
 };
 
 /** A plan row names its worker in the title (`T1 read alpha.py (alpha-explorer)`) while the store holds no owner: when that
@@ -184,9 +204,9 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   const compact = form(o.cols) === 'compact';
   const ownerAll = compact ? Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(x.owner)))) : 0;
   // Under COMPACT_MIN the owner column only stays while the label keeps LABEL_MIN cells; it never pushes the state off the row.
-  const ownerFit = Math.min(ownerAll, o.cols - (LABEL_MIN + 5) - STATE_W - 2);
-  const ownerW = o.cols >= COMPACT_MIN ? ownerAll : ownerFit >= 5 ? ownerFit : 0; // a sliver of a name tells nothing
   const widest = Math.max(0, ...rows.map((x) => cells(x.label)));
+  const ownerFit = Math.min(ownerAll, o.cols - (Math.min(widest, LABEL_MIN) + 5) - STATE_W - 2); // a title shorter than LABEL_MIN needs only its own width
+  const ownerW = o.cols >= COMPACT_MIN ? ownerAll : ownerFit >= 5 ? ownerFit : 0; // a sliver of a name tells nothing
   // Compact: the owner column takes its width from the right, the state column slides left to make room (never under 26 at 60+, never past the widest label).
   const avail = o.cols - STATE_W - 1 - (ownerW ? ownerW + 1 : 0);
   const stateColC = compact ? Math.max(Math.min(COL.stateCompact, avail), Math.min(avail, widest + 7)) : undefined;

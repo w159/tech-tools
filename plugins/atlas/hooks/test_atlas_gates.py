@@ -137,7 +137,9 @@ class AtlasGatesTest(unittest.TestCase):
             exe.write_text("#!/bin/sh\n")
             exe.chmod(0o755)
             env["PATH"] = f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}"
-            Path(self.root, ".mcp.json").write_text(json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}))
+            Path(self.root, ".mcp.json").write_text(
+                json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
+            )
         _, doc = _run(self.db, self.root, env)
         routing = next(g for g in doc["groups"] if g["id"] == "routing")
         return {ln["id"]: ln["ok"] for ln in routing["lines"]}
@@ -222,10 +224,26 @@ class AtlasGatesInProcess(unittest.TestCase):
         import completion_gate as cg
 
         def group(failed):
-            with self.mock.patch.object(cg, "_delegation_state", return_value=(False, [], "")), self.mock.patch.object(
-                cg, "_session_is_orchestrating", return_value=True
-            ), self.mock.patch.object(cg, "evaluate", return_value={"failed": failed}):
-                return {ln["id"]: ln for ln in self.gates.completion_group(SESSION, Path(self.tmp.name), "")["lines"]}
+            with (
+                self.mock.patch.object(
+                    cg, "_delegation_state", return_value=(False, [], "")
+                ),
+                self.mock.patch.object(
+                    cg, "_session_is_orchestrating", return_value=True
+                ),
+                self.mock.patch.object(cg, "evaluate", return_value={"failed": failed}),
+                self.mock.patch.object(
+                    cg,
+                    "_team_gate",
+                    return_value=(2, False) if "s" in failed else (None, False),
+                ),
+            ):
+                return {
+                    ln["id"]: ln
+                    for ln in self.gates.completion_group(
+                        SESSION, Path(self.tmp.name), ""
+                    )["lines"]
+                }
 
         by_id = group(["s"])
         self.assertEqual(by_id["s"]["label"], "Team gate")
@@ -233,6 +251,36 @@ class AtlasGatesInProcess(unittest.TestCase):
         self.assertIn("spawn-team", by_id["s"]["fix"])  # a failing row says what to do
         self.assertNotIn("r", by_id)
         self.assertTrue(group([])["s"]["ok"])
+
+    def test_team_row_is_the_stop_gates_own_team_gate(self):
+        """Critique 7 A1: `Team gate` is red exactly when completion_gate._team_gate says Stop blocks on (s), whatever evaluate() lists."""
+        import completion_gate as cg
+
+        def row(failed, team):
+            with (
+                self.mock.patch.object(
+                    cg, "_delegation_state", return_value=(False, [], "")
+                ),
+                self.mock.patch.object(
+                    cg, "_session_is_orchestrating", return_value=True
+                ),
+                self.mock.patch.object(cg, "evaluate", return_value={"failed": failed}),
+                self.mock.patch.object(cg, "_team_gate", return_value=team) as tg,
+            ):
+                out = {
+                    ln["id"]: ln
+                    for ln in self.gates.completion_group(
+                        SESSION, Path(self.tmp.name), ""
+                    )["lines"]
+                }
+                self.assertEqual(tg.call_count, 1)
+                return out["s"]
+
+        self.assertFalse(row([], (2, False))["ok"])  # Stop would block on (s)
+        self.assertTrue(row(["s"], (None, False))["ok"])  # Stop would not
+        self.assertTrue(
+            row([], (2, True))["ok"]
+        )  # ATLAS_TEAM_GATE=off: advisory, not a block
 
     def test_armed_line_reports_state(self):
         line = self._tripwire()["armed"]
@@ -271,7 +319,10 @@ class AtlasGatesInProcess(unittest.TestCase):
         )
 
     def test_routing_counts_only_matching_kind_and_server(self):
-        self.conn.execute("INSERT INTO session_logs (session_id, agent) VALUES (?, 'claude')", (SESSION,))
+        self.conn.execute(
+            "INSERT INTO session_logs (session_id, agent) VALUES (?, 'claude')",
+            (SESSION,),
+        )
         calls = [
             ("mcp", "lean-ctx", "ctx_read", 1),
             ("mcp", "Lean_Ctx", "ctx_search", 0),
@@ -290,14 +341,21 @@ class AtlasGatesInProcess(unittest.TestCase):
         note = self.gates._ROUTING_NOTE
         self.assertEqual(lines["lean-ctx"]["detail"], f"2 {note}")
         self.assertEqual(lines["context-mode"]["detail"], f"0 {note}")
-        self.assertTrue(all(lines[n]["ok"] for n in ("lean-ctx", "context-mode", "claude-mem")))
+        self.assertTrue(
+            all(lines[n]["ok"] for n in ("lean-ctx", "context-mode", "claude-mem"))
+        )
         self.assertEqual(
             {k for k in lines if not k.startswith("native-")},
             {"lean-ctx", "context-mode", "claude-mem", "denied"},
         )
-        self.assertEqual((lines["native-Read"]["ok"], lines["native-Read"]["detail"]), (False, f"2 {note}"))
+        self.assertEqual(
+            (lines["native-Read"]["ok"], lines["native-Read"]["detail"]),
+            (False, f"2 {note}"),
+        )
         self.assertTrue(lines["native-Grep"]["ok"])
-        self.assertEqual((lines["denied"]["ok"], lines["denied"]["detail"]), (False, f"1 {note}"))
+        self.assertEqual(
+            (lines["denied"]["ok"], lines["denied"]["detail"]), (False, f"1 {note}")
+        )
 
     def test_routing_no_calls_all_ok(self):
         lines = self.gates.routing_group(SESSION)["lines"]
@@ -311,11 +369,19 @@ class AtlasGatesInProcess(unittest.TestCase):
         with self.mock.patch.object(self.gates.time, "time", return_value=1234.5):
             doc = self.gates.build(SESSION, self.tmp.name)
         self.assertEqual(doc["generatedAt"], 1234500)
-        with self.mock.patch.object(self.gates, "tripwire_group", side_effect=ValueError("bad")):
+        with self.mock.patch.object(
+            self.gates, "tripwire_group", side_effect=ValueError("bad")
+        ):
             doc = self.gates.build(SESSION, self.tmp.name)
         trip = doc["groups"][1]
         self.assertEqual(
-            trip, {"id": "tripwire", "title": "Dispatch tripwire", "lines": [], "error": "ValueError: bad"}
+            trip,
+            {
+                "id": "tripwire",
+                "title": "Dispatch tripwire",
+                "lines": [],
+                "error": "ValueError: bad",
+            },
         )
         self.assertEqual(len(doc["groups"][2]["lines"]) > 0, True)
 
@@ -323,18 +389,34 @@ class AtlasGatesInProcess(unittest.TestCase):
         import contextlib
         import io
 
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+        with (
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(SystemExit) as cm,
+        ):
             self.gates.main(["--session", SESSION, "--root", self.tmp.name])
         self.assertEqual(cm.exception.code, 2)
         for argv in (["--root", "/r", "--json"], ["--session", SESSION, "--json"]):
-            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as cm:
+            with (
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit) as cm,
+            ):
                 self.gates.main(argv)
             self.assertEqual(cm.exception.code, 2, argv)
         buf = io.StringIO()
-        with self.mock.patch.object(self.gates, "build", return_value={"groups": []}) as b:
+        with self.mock.patch.object(
+            self.gates, "build", return_value={"groups": []}
+        ) as b:
             with contextlib.redirect_stdout(buf):
                 rc = self.gates.main(
-                    ["--session", SESSION, "--root", "/r", "--transcript", "/t", "--json"]
+                    [
+                        "--session",
+                        SESSION,
+                        "--root",
+                        "/r",
+                        "--transcript",
+                        "/t",
+                        "--json",
+                    ]
                 )
         b.assert_called_once_with(SESSION, "/r", "/t")
         self.assertEqual((rc, json.loads(buf.getvalue())), (0, {"groups": []}))

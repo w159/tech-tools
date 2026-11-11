@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: one blocker evaluation (critique 7 A1/A2): the gates tab `Team gate` row now calls the Stop gate's own `_team_gate` (red exactly when Stop blocks on (s)), and the band reason is one string at every width, `<gate> failing` or `<n> gates failing`, never `tripwire` / `2 failing` / `2 checks failing`.
+- Fixed: the Board equals the plan (critique 7 A3): a dispatch row whose owner owns a plan row folds into it (5 plan items with 3 owned dispatches draw 5 rows, the worker's state folded in); under 60 cells the owner column goes before a title is cut below 16 cells.
 - Fixed: the Stop-time team gate (s) skips read-only roles (explorer, db-prober) exactly as the dispatch-time team deny does under D11: three in-process explorers no longer block Stop; `READ_ONLY_ROLES` in `completion_gate_core` mirrors `dispatch_tripwire_core` (a test asserts the sets match) and `_is_working_role` is unchanged for the delegation mandate.
 - Fixed: a dispatch row now closes when its agent ends even on the retry stop: `worker_report_gate_core.main` returned on `stop_hook_active` before it settled the member, so an explorer whose first report was blocked left its row pending and Stop counted "3 open todo item(s)" (live runs, S1); the retry stop completes the row on a valid report, else marks it blocked (`hooks/test_worker_report_gate.py`).
 - Fixed: the Board never draws an open store row as done: `settleDispatch` reads an open dispatch row whose agent has ended as `ended` (attention tone, `ended` in the state column and chip, detail `agent ended, row still open`), not `completed`; `done` and the green glyph are the store's word only (`mod/board.test.ts`).

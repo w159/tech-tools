@@ -30,8 +30,9 @@ export function gateTally(groups: readonly GateGroup[]): GateTally {
 /** Why a band is blocked: the lead declared it (`needs you`) or checks fail. `short` is the form for a crowded row. */
 export function blockReasons(declared: boolean, failing: readonly string[]): { long: string; short: string } {
   if (declared || failing.length === 0) return { long: 'needs you', short: 'needs you' };
-  if (failing.length === 1) return { long: `${failing[0]} failing`, short: failing[0]! };
-  return { long: `${failing.length} checks failing`, short: `${failing.length} failing` };
+  // One string at every width (a crowded row drops the reason whole, never rewords it): `team gate failing`, `2 gates failing`.
+  const one = failing.length === 1 ? `${failing[0]} failing` : `${failing.length} gates failing`;
+  return { long: one, short: one };
 }
 
 /** Workers that really ran: the host-listed ones plus every dispatch row's owner (the host forgets a finished worker). */

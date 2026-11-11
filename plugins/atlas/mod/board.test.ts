@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world, worldModel } from '../contracts/band-world';
 import { board_120, board_120_rich, board_80, worldBoardRows } from '../contracts/board-golden';
 import { band_120 } from '../contracts/band-world-golden';
-import { chipCount, contrast, NEED, PALETTES, runKind, toneHex, type Ui } from './atlas-ui';
+import { cells, chipCount, contrast, NEED, PALETTES, runKind, toneHex, type Ui } from './atlas-ui';
 import { bandLines, runsWidth } from './mission-layout';
 import type { UiState } from './atlas-ui';
 import { blockedCount, boardBody, boardCounts, boardLines, boardRowsOf, boardText, mmss, stateOfStatus, toBoardRow } from './board-model';
@@ -59,20 +59,48 @@ describe('board goldens', () => {
     expect(boardText(boardLines(worldBoardRows(), { cols: 40, ui: ui('mocha') })).slice(2)[3]).toMatch(/^▸ ◐ Subagents block +running +\S/);
   });
   test('A3: from 30 cells up every row keeps a state column, and an owner column wherever the label keeps its room; below 30 the label alone', () => {
+    // two plan rows with a title owner, one folded dispatch row (alpha), one dispatch row with no plan row (beta): three rows
     const rows = boardRowsOf([
       { content: 'T1 read alpha.py (alpha-explorer)', status: 'completed' },
+      { content: 'T2 read gamma.py', status: 'pending', owner: 'gamma-explorer' },
       { content: 'List the function names defined in alpha.py.', status: 'pending', origin: 'dispatch', owner: 'alpha-explorer' },
+      { content: 'Read beta.py and list its classes.', status: 'pending', origin: 'dispatch', owner: 'beta-explorer' },
     ]);
+    expect(rows.length).toBe(3);
     for (const cols of [38, 59, 60, 80, 99, 110, 150]) {
       const lines = boardText(boardBody(rows, { cols, ui: ui('mocha') })).filter((l) => /^[▸ ] [●◇▲◐] /.test(l));
-      expect(lines.length).toBe(2);
+      expect(lines.length).toBe(3);
       for (const l of lines) {
         expect([cols, /\b(done|queued)\b/.test(l)]).toEqual([cols, true]);
-        expect([cols, /alpha-(explorer|\.\.\.)/.test(l)]).toEqual([cols, true]); // the owner, the T row's included
-        expect([cols, l.includes('(alpha-explorer)')]).toEqual([cols, false]); // not left in the title
+        expect([cols, /(alpha|beta|gamma)(-|\.\.\.)/.test(l)]).toEqual([cols, true]); // the owner, the T row's included
+        expect([cols, l.includes('-explorer)')]).toEqual([cols, false]); // not left in the title
       }
     }
     expect(boardText(boardBody(rows, { cols: 28, ui: ui('mocha') })).every((l) => !/\b(done|queued)\b/.test(l))).toBe(true);
+  });
+  test('A3: a dispatch row whose owner owns a plan row folds into it: a 5-item plan with 3 owned dispatches is 5 rows', () => {
+    const plan = ['a', 'b', 'c', 'd', 'e'].map((n, i) => ({ content: `T${i + 1} read ${n}.py${i < 3 ? ` (w-${n})` : ''}`, status: 'pending' }));
+    const disp = (n: string, status: string) => ({ content: `Read ${n}.py and list its names.`, status, origin: 'dispatch', owner: `w-${n}` });
+    const rows = boardRowsOf([...plan, disp('a', 'in_progress'), disp('b', 'failed'), disp('c', 'completed')]);
+    expect(rows.length).toBe(5);
+    expect(rows.map((x) => x.label)).toEqual(['T1 read a.py', 'T2 read b.py', 'T3 read c.py', 'T4 read d.py', 'T5 read e.py']);
+    // the dispatch row's state is folded into the plan row: running, failed, and a finished worker leaves the open row `ended`
+    expect(rows.map((x) => x.state)).toEqual(['running', 'failed', 'blocked', 'queued', 'queued']);
+    expect(rows[2]!.word).toBe('ended');
+    expect(rows.map((x) => x.owner)).toEqual(['w-a', 'w-b', 'w-c', '', '']);
+    // a plan row already done stays done, whatever its worker's row says
+    expect(boardRowsOf([{ content: 'T1 x (w-a)', status: 'completed' }, disp('a', 'in_progress')]).map((x) => x.state)).toEqual(['done']);
+    // a dispatch row with no plan row stays, labelled by its own task text
+    const lone = boardRowsOf([...plan.slice(0, 1), disp('z', 'pending'), disp('y', 'pending')]);
+    expect(lone.map((x) => x.label)).toEqual(['T1 read a.py (w-a)', 'Read z.py and list its names.', 'Read y.py and list its names.']);
+  });
+  test('A3: below 60 cells the owner column goes before a title is cut under 16 cells', () => {
+    const rows = boardRowsOf([{ content: 'A long plan title that needs room to read', status: 'pending', owner: 'alpha-explorer' }]);
+    for (let cols = 30; cols < 60; cols++) {
+      const l = boardText(boardBody(rows, { cols, ui: ui('mocha') }))[0]!;
+      const label = /^[▸ ] [●◇▲◐] (.+?) +(queued|running|done)\b/.exec(l)?.[1] ?? '';
+      expect([cols, cells(label) >= 16]).toEqual([cols, true]);
+    }
   });
   test('A3: labels are cut at the end, never at the front, even when rows share a long head', () => {
     const rows = ['alpha', 'beta', 'gamma'].map((n) => ({ content: `List the function names defined in /mnt/project-files/${n}.py`, status: 'pending', origin: 'dispatch', owner: `${n}-explorer` }));
