@@ -124,7 +124,8 @@ failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
   (s) Team gate: when THIS RUN made two or more in-process working-role
       dispatches (`dispatches` rows of any agent type whose role, after an
       `atlas:`/`atlas-` prefix, is not planner, verifier, completeness-critic,
-      docs-curator or docs-auditor) and no team or crew record exists for the
+      docs-curator or docs-auditor, and not a read-only role: explorer or
+      db-prober, decision D11, matching the dispatch-time team deny) and no team or crew record exists for the
       session, block once and name the count and the spawn-team command.
       Skipped when tmux is missing; ATLAS_TEAM_GATE=off turns the block into
       a stderr advisory; ATLAS_GATE_COLONY=off skips it. Fails open.
@@ -2626,12 +2627,24 @@ def _phases_reason_part(missing: list, contract: dict | None, session_id: str) -
     )
 
 
-def _is_working_role(agent_type) -> bool:
+# D11: read-only roles (agent definitions disallow Write/Edit). Working for the
+# delegation mandate (`_is_working_role`) but neither counted nor blocked by (s),
+# exactly as the dispatch-time team deny skips them. Mirrors
+# dispatch_tripwire_core.READ_ONLY_ROLES; test_completion_gate asserts they match.
+READ_ONLY_ROLES = frozenset({"explorer", "db-prober"})
+
+
+def _role_name(agent_type) -> str:
     role = str(agent_type or "").strip()
     for prefix in ("atlas:", "atlas-"):
         if role.startswith(prefix):
             role = role[len(prefix):]
             break
+    return role
+
+
+def _is_working_role(agent_type) -> bool:
+    role = _role_name(agent_type)
     return bool(role) and role not in CLOSING_ROLES
 
 
@@ -2779,7 +2792,8 @@ def _colony_channel_used(root: Path, session_id: str, started: float | None) -> 
 
 def _inprocess_working_dispatches(session_id: str) -> int | None:
     """(s) In-process working-role dispatches of THIS RUN (`dispatches` rows of
-    any agent type, `_is_working_role`). None on any DB error or no run."""
+    any agent type, `_is_working_role`) minus read-only roles (D11,
+    `READ_ONLY_ROLES`). None on any DB error or no run."""
     conn = None
     try:
         import atlas_db
@@ -2793,7 +2807,11 @@ def _inprocess_working_dispatches(session_id: str) -> int | None:
         rows = conn.execute(
             "SELECT agent_type FROM dispatches WHERE run_id=?", (rid,)
         ).fetchall()
-        return sum(1 for (agent_type,) in rows if _is_working_role(agent_type))
+        return sum(
+            1
+            for (agent_type,) in rows
+            if _is_working_role(agent_type) and _role_name(agent_type) not in READ_ONLY_ROLES
+        )
     except Exception:
         return None
     finally:
@@ -2824,7 +2842,7 @@ def _tmux_available() -> bool:
 
 def _team_gate(root, session_id: str, started: float | None) -> tuple:
     """(s) `(count, advisory)`: count is the in-process working-role dispatch
-    count when the backstop fires (2+, no team or crew record, tmux present,
+    count (read-only roles excluded, D11) when the backstop fires (2+, no team or crew record, tmux present,
     not yet blocked this session), else None. advisory is True when
     ATLAS_TEAM_GATE=off turns the block into an advisory. Fail-open."""
     try:

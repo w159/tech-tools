@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: the Stop-time team gate (s) skips read-only roles (explorer, db-prober) exactly as the dispatch-time team deny does under D11: three in-process explorers no longer block Stop; `READ_ONLY_ROLES` in `completion_gate_core` mirrors `dispatch_tripwire_core` (a test asserts the sets match) and `_is_working_role` is unchanged for the delegation mandate.
 - Fixed: a dispatch row now closes when its agent ends even on the retry stop: `worker_report_gate_core.main` returned on `stop_hook_active` before it settled the member, so an explorer whose first report was blocked left its row pending and Stop counted "3 open todo item(s)" (live runs, S1); the retry stop completes the row on a valid report, else marks it blocked (`hooks/test_worker_report_gate.py`).
 - Fixed: the Board never draws an open store row as done: `settleDispatch` reads an open dispatch row whose agent has ended as `ended` (attention tone, `ended` in the state column and chip, detail `agent ended, row still open`), not `completed`; `done` and the green glyph are the store's word only (`mod/board.test.ts`).
 - Fixed: the Board keeps a state column from 30 cells up (the 38-cell side pane included) and an owner column wherever the label keeps 15 cells; a plan row that names its dispatched worker in the title (`T1 read alpha.py (alpha-explorer)`) shows it in the owner column; `labelCut` cuts every label at the end, never the front.

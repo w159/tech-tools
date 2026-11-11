@@ -4097,8 +4097,8 @@ class ContractVisibilityTest(unittest.TestCase):
             self._dispatch(agent_type)
 
     @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
-    def test_s_two_inprocess_explorers_without_team_blocks(self):
-        self._only_dispatches("atlas:explorer", "atlas:explorer")
+    def test_s_two_inprocess_workers_without_team_blocks(self):
+        self._only_dispatches("atlas:runner", "atlas:runner")
         out = self.say()
         self.assertIn('"decision": "block"', out)
         reason = json.loads(out)["reason"]
@@ -4110,7 +4110,7 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertEqual(self.say(), "")  # one-shot
 
     def test_s_team_record_with_member_board_line_passes(self):
-        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        self._only_dispatches("atlas:runner", "atlas:runner")
         self._two_workers()
         self._worker_note(owner="worker-a")
         self.assertEqual(self.say(), "")
@@ -4121,8 +4121,46 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertNotIn("(s)", out)
         self.assertNotIn("(p)", out)
 
+    @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
+    def test_s_read_only_roles_never_trip_d11(self):
+        # D11: explorer / db-prober cannot edit, so (s) neither counts nor blocks them.
+        for types in (
+            ("atlas:explorer",) * 3,
+            ("atlas-explorer", "atlas:db-prober", "atlas:explorer"),
+            ("atlas:db-prober",) * 2,
+        ):
+            self._only_dispatches(*types)
+            self.assertNotIn("(s) Team gate", self.say(), types)
+
+    @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
+    def test_s_two_inprocess_workers_still_block(self):
+        self._only_dispatches("atlas:runner", "atlas:runner")
+        reason = json.loads(self.say())["reason"]
+        self.assertIn("(s)", reason)
+        self.assertIn("2 in-process working-role dispatches", reason)
+
+    def test_s_mixed_run_counts_only_non_read_only(self):
+        self._only_dispatches("atlas:runner", "atlas:explorer", "atlas:explorer")
+        with mock.patch.dict(os.environ, {"ATLAS_DB": self.env["ATLAS_DB"]}):
+            self.assertEqual(
+                completion_gate._inprocess_working_dispatches(self.SID_A), 1
+            )
+            with mock.patch.object(completion_gate, "_tmux_available", return_value=True):
+                self.assertEqual(
+                    completion_gate._team_gate(Path(self.tmp), self.SID_A, None),
+                    (None, False),
+                )
+        self.assertNotIn("(s) Team gate", self.say())
+
+    def test_s_read_only_set_matches_dispatch_tripwire(self):
+        import dispatch_tripwire_core
+
+        self.assertEqual(
+            completion_gate.READ_ONLY_ROLES, dispatch_tripwire_core.READ_ONLY_ROLES
+        )
+
     def test_s_kill_switch_is_advisory(self):
-        self._only_dispatches("atlas:explorer", "Explore")
+        self._only_dispatches("atlas:runner", "Explore")
         self.env["ATLAS_TEAM_GATE"] = "off"
         res = self.gate({"last_assistant_message": self.OK})
         self.assertNotIn("(s)", res.stdout)
@@ -4131,7 +4169,7 @@ class ContractVisibilityTest(unittest.TestCase):
             self.assertIn("spawn-team", res.stderr)
 
     def test_s_stands_down_without_tmux(self):
-        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        self._only_dispatches("atlas:runner", "atlas:runner")
         with mock.patch.dict(os.environ, {"ATLAS_DB": self.env["ATLAS_DB"]}):
             with mock.patch.object(completion_gate, "_tmux_available", return_value=False):
                 self.assertEqual(
@@ -4189,19 +4227,19 @@ class ContractVisibilityTest(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
     def test_other_sessions_crew_does_not_suppress_s(self):
-        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        self._only_dispatches("atlas:runner", "atlas:runner")
         self._crew("crew-b", lead_session=self.SID_B)
         self._crew("crew-none")
         self.assertIn("(s)", self.say())
 
     @unittest.skipUnless(shutil.which("tmux"), "tmux missing: (s) stands down")
     def test_own_crew_suppresses_s(self):
-        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        self._only_dispatches("atlas:runner", "atlas:runner")
         crew = self._crew("crew-a", lead_session=self.SID_A)
         line = dict(seq=1, ts=time.time(), to="c", text="DONE")
         line["from"] = "w1"
         (crew / "irc" / "log.jsonl").write_text(json.dumps(line) + chr(10), encoding="utf-8")
-        self.assertEqual(self.say(), "")
+        self.assertNotIn("(s) Team gate", self.say())
 
     def test_worker_session_never_gets_p(self):
         self._two_workers()
@@ -4212,10 +4250,10 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertIn("(p)", self.say())
 
     def test_worker_session_never_gets_s(self):
-        self._only_dispatches("atlas:explorer", "atlas:explorer")
+        self._only_dispatches("atlas:runner", "atlas:runner")
         for var in ("ATLAS_WORKER_NAME", "ATLAS_CREW_WORKER"):
             self.env[var] = "w1"
-            self.assertNotIn("(s)", self.say(), var)
+            self.assertNotIn("(s) Team gate", self.say(), var)
             del self.env[var]
             env = dict(ATLAS_DB=self.env["ATLAS_DB"])
             env[var] = "w1"
