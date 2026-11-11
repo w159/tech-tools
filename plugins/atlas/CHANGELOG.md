@@ -13,6 +13,13 @@
 - Fixed: `last run N workers` counts every dispatch that ran, and dispatch rows close from the agent's own completion event (`endedOf(squad, orch)`), not only from the squad.
 - Not fixed: a hook error is not in the snapshot data, so the band cannot react to one; it reacts to the failed check once the gates refresh.
 - Fixed: the band says `phase` wherever it fits and `ph` only when it does not (60 cells now reads `phase 2/4`).
+- Fixed: the side panel tab strip never blanks a label; words go right to left to a two-letter word per key (`k: co`), then wrap (`mod/panel-layout.ts`, `mod/panel-finish.test.ts`).
+- Fixed: no middle ellipsis on gate, team, task or board names; rows drop the model, task tag and failing count before a name is end-cut, and a name with room is never cut.
+- Fixed: one `N of M <word>` unit on the route tab and Board (the phase row and gates row no longer read `2/4`, `2/3`).
+- Fixed: the route tab lists agents first and heads the task rows with `todo n of m`; loose agents carry an `agents` label.
+- Changed: the core tab reads in plain words (`reading`, `teams`), headings sit one cell in under the strip, and an empty ledger says `no verdicts yet` once.
+- Changed: team, gates and channel tabs put a blank row between items on a pane of 48 rows or more; contracts/panel-golden.ts, board-golden.ts and the sidebar fixture were rewritten for the new design.
+- Changed: the Board gains an owner column at 60 to 99 cells and keeps the distinguishing tail of labels that share a long head (`...alpha.py`).
 - Tests: seed-1105 second-pass mutation kills for the TS mods (`mod/band`, `board-model`, `hud`, `hud-surface`, `panel-layout`, `omp/mission-panel` `*.mut.test.ts`); four more survivors argued equivalent in the test headers.
 - Fixed: `types/index.d.ts` shared snapshot block now carries the optional `seq` field on `AtlasSnapshot`, so it is identical to `mod/contract.ts` again (`ModTypesContractSync`).
 - Tests: `test_completion_gate.py` is hermetic for the one-shot (o) phased-todo and (s) team-gate blocks (`GateOrchestrationTest` and `InProcessMainTest` use a per-test marker dir with both off) and the (n) continuation test resets the Stop-burst breaker per subtest, so the suite no longer depends on test order, xdist, tmux on PATH or machine load.

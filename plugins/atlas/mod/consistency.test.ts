@@ -159,10 +159,10 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
   const text = rows.join('\n');
   const f: Facts = {};
   if (tab === 'route') {
-    f.phase = /phase\s+\S+\s+(\d+\/\d+)/.exec(text)?.[1];
+    f.phase = /phase\s+\S+\s+(\d+) of (\d+)/.exec(text)?.slice(1, 3).join('/');
     f.todo = todoOf(/^todo .*$/m.exec(text)?.[0] ?? '');
     f.gates = gatePairs(/^gates .*$/m.exec(text)?.[0] ?? '');
-    f.gatesGreen = /(\d+\/\d+)\s*$/m.exec(/^gates .*$/m.exec(text)?.[0] ?? '')?.[1];
+    f.gatesGreen = /(\d+) of (\d+) green\s*$/m.exec(/^gates .*$/m.exec(text)?.[0] ?? '')?.slice(1, 3).join('/');
     f.agents = counts(/^agents .*$/m.exec(text)?.[0] ?? '');
     f.items = stateRows(rows, new RegExp(`^ {2}(${G}) (.+?)\\s{2,}(queued|running|done|failed|blocked|waiting)\\b`));
   }

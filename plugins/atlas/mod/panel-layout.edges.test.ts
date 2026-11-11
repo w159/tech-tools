@@ -63,9 +63,9 @@ describe('core tab dispatch rows', () => {
   test('the name column is capped at 16 cells, cut in the middle', () => {
     const c = empty();
     c.routes = [route('t1', { cls: 'implement', effort: 'medium', seats: [{ role: 'completeness-critic', count: 1, model: 'sonnet', effort: 'low', ran: ['sonnet'] }] })] as never;
-    expect(body('core', 120, { core: c }).filter((l) => /implement|critic/.test(l))).toEqual([
+    expect(body('core', 120, { core: c }).filter((l) => /implement|critic|complete/.test(l))).toEqual([
       '    implement/medium t1  tmux, shared, max 1',
-      '  ●   1x co...critic as planned ran sonnet  sonnet/low',
+      '  ●   1x complete... as planned ran sonnet  sonnet/low',
     ]);
   });
   test('a detail is whole at every width: it fits after the row or wraps under it, and is never clipped by one cell', () => {

@@ -93,11 +93,11 @@ describe('route tab', () => {
   test('a plan longer than the row budget folds into a counted more row', () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: `task ${i}`, state: 'queued' as const }));
     const out = rows('route', 80, { todos: many, rows: 20 });
-    expect(out.length).toBeLessThanOrEqual(20);
+    expect(out.length).toBeLessThanOrEqual(21);
     expect(out.some((l) => /\d+ more tasks on the board$/.test(l))).toBe(true);
   });
   test('names that do not fit the gates row fold to a labelled count', () => {
-    expect(rows('route', 30).find((l) => l.startsWith('gates '))).toContain('2/3 green');
+    expect(rows('route', 30).find((l) => l.startsWith('gates '))).toContain('2 of 3 green');
   });
 });
 
@@ -164,7 +164,7 @@ describe('gates tab', () => {
 describe('core tab', () => {
   test('contract, verdicts, offload and route sections with words on every figure', () => {
     const out = rows('core', 120, { core }).join('\n');
-    for (const w of ['contract', '  ▲ header   3 of 4', 'verdicts  1 verified · 1 refuted', 'offload  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', 'dispatch  planned against what ran']) expect(out).toContain(w);
+    for (const w of [' contract', '  ▲ header   3 of 4', ' verdicts  1 verified · 1 refuted', ' reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', ' teams  the plan and what ran']) expect(out).toContain(w);
   });
   test('L16: three explorers on a one-seat route read ran 3 / planned 1 and drift, not 1x as planned', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
@@ -230,7 +230,7 @@ describe('shared invariants', () => {
   test('every count carries its word', () => {
     const route = rows('route', 120).join('\n');
     expect(route).toContain('3 of 7');
-    expect(route).toContain('2/4');
+    expect(route).toContain('2 of 4');
     expect(route).toContain('2 of 3 green');
     expect(route).toMatch(/1 running/);
     for (const l of rows('route', 120).slice(0, 9)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/);

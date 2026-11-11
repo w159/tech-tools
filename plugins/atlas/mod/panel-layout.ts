@@ -6,8 +6,9 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, clip, clipMiddle, countRuns, gauge, GRID_LEAD, gridPlan, gridRow, percent, ribbon, stateGlyph, stateRun, stateWordTone, UI_STATES, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, percent, ribbon, stateGlyph, stateRun, stateWordTone, UI_STATES, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
+import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
 import { hasCore, tok, type CoreModel, type Verdict } from './data/core';
 
@@ -26,32 +27,35 @@ export const HOTKEY_W = 3;
 /** Cells between strip tabs. */
 export const STRIP_GAP = 2;
 
-/** A strip tab as drawn: its id, hotkey and the label of the form that fits (empty once its word is dropped: the key alone). */
+/** A strip tab as drawn: its id, hotkey and the label of the form that fits (two letters once its word is cut, never empty). */
 export type StripTab = { id: PanelTab | 'board'; key: string; label: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** Label forms of the strip, widest first: the words; `channel` shortened; then the words dropped from the right end, one tab at a
- * time, keeping the keys (`r: route  t: team  c: chan  g: gates  k:  o:`). The first form that fits the pane on one row is drawn. */
+/** Label forms of the strip, widest first: the words; `channel` shortened; then the words cut to two letters from the right end, one tab at a
+ * time (`r: route  t: team  c: chan  g: gates  k: co  o: bd`). The first form that fits the pane on one row is drawn. */
 const SHORT: Record<string, string> = { channel: 'chan' };
+/** The word a dropped tab keeps: two letters, so a key never stands alone (`k: co`). */
+const TINY: Record<string, string> = { route: 'rt', team: 'tm', channel: 'ch', gates: 'gt', core: 'co', board: 'bd' };
 type StripForm = { gap: number; label: (id: string, full: string) => string; drop: number };
 const STRIP_FORMS: readonly StripForm[] = [
   { gap: STRIP_GAP, label: (_, full) => full, drop: 0 },
   { gap: STRIP_GAP, label: (id, full) => SHORT[id] ?? full, drop: 0 },
   ...STRIP_TABS.map((_, i): StripForm => ({ gap: 1, label: (id, full) => SHORT[id] ?? full, drop: i })),
   { gap: 1, label: (id, full) => SHORT[id] ?? full, drop: STRIP_TABS.length },
+  { gap: 1, label: (id, full) => SHORT[id] ?? full, drop: STRIP_TABS.length + 1 }, // the lit tab too, rather than a second strip row
 ];
 const stripWidth = (tabs: readonly { label: string }[], gap: number): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + HOTKEY_W + cells(t.label), 0);
 
-/** The tabs of one form: the last `f.drop` tabs lose their word (the lit tab keeps its word, so the rule under it has a label to sit under). */
+/** The tabs of one form: the last `f.drop` tabs cut their word to two letters (the lit tab keeps its word, so the rule under it has a label to sit under). */
 function formTabs(f: StripForm, lit?: string): StripTab[] {
   let left = f.drop;
   const dropped = new Set<string>();
   for (let i = STRIP_TABS.length - 1; i >= 0 && left > 0; i--) {
-    if (STRIP_TABS[i]!.id === lit) continue;
+    if (STRIP_TABS[i]!.id === lit && f.drop <= STRIP_TABS.length) continue;
     dropped.add(STRIP_TABS[i]!.id);
     left--;
   }
-  return STRIP_TABS.map((t): StripTab => ({ ...t, label: dropped.has(t.id) ? '' : f.label(t.id, t.label) }));
+  return STRIP_TABS.map((t): StripTab => ({ ...t, label: dropped.has(t.id) ? (TINY[t.id] ?? t.label.slice(0, 2)) : f.label(t.id, t.label) }));
 }
 
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and `gap` cells between; the rest wrap. */
@@ -128,6 +132,8 @@ const moving = (runs: Run[], key: string, accent: UiState, m: Pick<PanelModel, '
 const rowWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 const pad = (t: string, n: number): string => t + ' '.repeat(Math.max(0, n - cells(t)));
 const cut = (t: string, n: number): string => pad(clip(t, n), n);
+/** The grammar row with every name cut at its end: a name is never cut in the middle on the panel. */
+const gridRow = (spec: Parameters<typeof gridRowAt>[0]): Run[] => gridRowAt({ nameCut: 'end', ...spec });
 const oneLine = (t: string | undefined | null): string => (t ?? '').replace(/\s+/g, ' ').trim();
 
 /** Runs cut to `cols` cells: the run that overflows is clipped with `...`, the rest dropped. */
@@ -213,7 +219,7 @@ const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).leng
 /** `phase   research   2/4`: the lit phase and its place on the rail. */
 function phaseRow(m: PanelModel): PanelLine {
   const rail = railOf(m.phases, m.phase); // the one rail (mod/rail.ts): the band, the HUD and omp read the same index
-  return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && (m.phase === 'done' || m.phases.includes(m.phase)) ? [r(`${m.cols >= 100 ? '   ' : ' '}${railNo(rail)}`)] : [])]);
+  return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && (m.phase === 'done' || m.phases.includes(m.phase)) ? [r(`${m.cols >= 100 ? '   ' : ' '}${railNo(rail).replace('/', ' of ')}`)] : [])]);
 }
 
 /** `gates   ● lint   ● test   ■ doctor   2 of 3 green`; names that do not fit fold to the count alone. */
@@ -221,11 +227,11 @@ function gatesRow(m: PanelModel): PanelLine | null {
   const gs = m.gates;
   if (!gs.length) return null;
   const green = gs.filter(groupOk).length;
-  const word = m.cols >= WIDE ? `${green} of ${gs.length} green` : `${green}/${gs.length}`;
+  const word = `${green} of ${gs.length} green`;
   const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), mark(groupOk(g) ? 'done' : 'failed', m), r(g.id)]);
   const full = [label('gates', m.cols), ...names, r(`   ${word}`)];
   if (rowWidth(full) <= m.cols) return line(full);
-  return line([label('gates', m.cols), r(`${green}/${gs.length} green`)]);
+  return line([label('gates', m.cols), r(word)]);
 }
 
 function todoCount(m: PanelModel): PanelLine {
@@ -264,17 +270,16 @@ const OWNER_W = 18;
 const TITLE_MIN_W = 21; // the title column's least width (the state word starts in cell 26 when every title is short, as in the design); it grows to the longest title the pane has room for
 
 /** The Board's compact form on the panel: `focus glyph title state [detail] owner`. Every task row shares one state column (cell 26) and one
- * right-aligned owner column (dropped when the panel is too narrow to keep a title of 8 cells); a title that does not fit is cut in the
- * middle; from 100 columns the reason (detail) fills the room between the state word and the owner. An open row adds its owner and detail,
+ * right-aligned owner column (dropped when the panel is too narrow to keep a title of 8 cells); a title that does not fit is cut at its end (labels that share a head keep their tail); from 100 columns the reason (detail) fills the room between the state word and the owner. An open row adds its owner and detail,
  * then its evidence. */
-function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number }): PanelLine[] {
+function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; shown?: string }): PanelLine[] {
   const key = `task:${t.id}`;
   const runs = gridRow({
     cols: m.cols, ui: m.ui, mark: stateRun(t.state, m.ui, m.tick),
-    name: { t: oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text' }, nameW: w.nameW, nameCut: 'end',
+    name: { t: w.shown ?? oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text' }, nameW: w.nameW, nameCut: 'end',
     word: { t: t.state, tone: stateWordTone2(t.state) }, wordW: WORD_W,
     ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
-    ...(w.valueW && t.owner ? { value: { t: clipMiddle(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
+    ...(w.valueW && t.owner ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
   });
   const open = m.expanded === key;
   const facts = [t.owner ? `owner ${oneLine(t.owner)}` : '', oneLine(t.detail)].filter(Boolean).join(` ${dot(m.ui)} `);
@@ -298,9 +303,9 @@ function routeBody(m: PanelModel): PanelLine[] {
   const rows: PanelLine[] = [phaseRow(m)];
   const gates = gatesRow(m);
   if (gates) rows.push(gates);
-  rows.push(todoCount(m));
   rows.push(...agentsRows(m));
   if (!m.todos.length) {
+    rows.push(todoCount(m));
     // Work may be running with no plan on the board: say so with the workers, never "nothing planned".
     const running = m.workers.filter((w) => w.state === 'running');
     const nameW = Math.min(18, Math.max(...running.map((w) => cells(w.name)), 1));
@@ -312,22 +317,23 @@ function routeBody(m: PanelModel): PanelLine[] {
   const owners = new Set(m.todos.map((t) => t.owner).filter((o): o is string => !!o));
   const loose = m.workers.filter((w) => w.state !== 'done' && w.state !== 'queued' && !owners.has(w.name));
   const looseShown = loose.slice(0, AGENT_ROWS);
-  const room = Math.max(1, bodyRows(m, rows.length) - (loose.length ? looseShown.length + 1 + (loose.length > looseShown.length ? 1 : 0) : 0));
+  const room = Math.max(1, bodyRows(m, rows.length + 1) - (loose.length ? looseShown.length + 1 + (loose.length > looseShown.length ? 1 : 0) : 0));
   const ordered = m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
-  const widest = Math.min(OWNER_W, Math.max(0, ...ordered.map((t) => cells(oneLine(t.owner)))));
+  const widest = Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.map((t) => cells(oneLine(t.owner)))));
   // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
   const plan = gridPlan(m.cols, { names: [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))], word: WORD_W, value: widest, optional: true, min: 8, max: m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols }); // from 100 columns the title leaves the reason a column
   const shown: PanelLine[] = [];
-  for (const t of ordered) {
-    const rs = todoRows(m, t, plan);
+  const shownTitles = labelCut(ordered.map((t) => oneLine(t.label)), plan.nameW);
+  for (const [i, t] of ordered.entries()) {
+    const rs = todoRows(m, t, { ...plan, shown: shownTitles[i]! });
     if (shown.length + rs.length > room) break;
     shown.push(...rs);
   }
   const hidden = ordered.length - ordered.filter((t) => shown.some((l) => l.press?.key === `task:${t.id}`)).length;
-  rows.push(BLANK, ...shown, ...(hidden > 0 ? [line([r(`    ${hidden} more ${hidden === 1 ? 'task' : 'tasks'} on the board`, 'muted')])] : []));
+  rows.push(BLANK, todoCount(m), ...shown, ...(hidden > 0 ? [line([r(`    ${hidden} more ${hidden === 1 ? 'task' : 'tasks'} on the board`, 'muted')])] : []));
   if (loose.length) {
     const nameW = Math.min(18, Math.max(...looseShown.map((w) => cells(w.name)), 1));
-    rows.push(BLANK, ...looseShown.map((w) => line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateRun(w.state, m.ui, m.tick), name: { t: w.name, bold: true }, nameW, word: { t: w.state, tone: w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub' }, wordW: WORD_W, ...(m.cols >= WIDE && w.detail ? { detail: { t: oneLine(w.detail) } } : {}) })], `worker:${w.name}`, w.state, m), m.cols))));
+    rows.push(BLANK, line([label('agents', m.cols)]), ...looseShown.map((w) => line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateRun(w.state, m.ui, m.tick), name: { t: w.name, bold: true }, nameW, word: { t: w.state, tone: w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub' }, wordW: WORD_W, ...(m.cols >= WIDE && w.detail ? { detail: { t: oneLine(w.detail) } } : {}) })], `worker:${w.name}`, w.state, m), m.cols))));
     if (loose.length > looseShown.length) rows.push(line([r(`    ${loose.length - looseShown.length} more on the team tab`, 'muted')]));
   }
   return rows;
@@ -341,7 +347,9 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
   const key = `worker:${w.name}`;
   const wide = m.cols >= WIDE;
   // Wide: the design's Subagents columns after the state word (model, task, what it is doing), shared with the HUD block.
-  const tail = wide ? [r(pad(w.model ?? '', 10), 'sub'), r(pad(w.task ?? '', 6), 'sub'), r(w.detail, 'muted')] : [];
+  // Dropped as the pane narrows: the model first, then the task tag; the detail is cut at its end last. The name never gives way to them.
+  const room = m.cols - GRID_LEAD - nameW - 2 - (wide ? 12 : 10) - 1;
+  const tail = wide ? [...(room >= 10 + 6 + 12 ? [r(pad(w.model ?? '', 10), 'sub')] : []), ...(room >= 6 + 12 ? [r(pad(w.task ?? '', 6), 'sub')] : []), r(w.detail, 'muted')] : [];
   const runs = gridRow({
     cols: m.cols, ui: m.ui, focus, mark: stateRun(w.state, m.ui, m.tick),
     name: { t: w.name, bold: true }, nameW, gap: 2,
@@ -366,7 +374,8 @@ function teamBody(m: PanelModel): PanelLine[] {
   const mates = m.mates ?? [];
   const everyone = [...(m.lead ? [m.lead] : []), ...m.workers, ...mates];
   if (!everyone.length) return [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])];
-  const nameW = Math.min(18, Math.max(6, ...everyone.map((w) => cells(w.name))));
+  const nameCap = Math.max(18, Math.min(40, m.cols - GRID_LEAD - 2 - (m.cols >= WIDE ? 12 : 10) - 1 - (m.cols >= WIDE ? 28 : 0)));
+  const nameW = Math.min(nameCap, Math.max(6, ...everyone.map((w) => cells(w.name))));
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : m.workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[]): PanelLine[] => ws.flatMap((w) => workerRows(m, w, Math.min(nameW, Math.max(6, m.cols - 14)), w.name === focusName));
   const hint = !m.workers.length && !mates.length ? [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])] : [];
@@ -437,14 +446,14 @@ const GATE_WORD_W = 7; // `passing` and `failing`
 /** `1 of 3 failing`: the group's failing count, the value column; empty while it passes. */
 const gateValue = (g: PanelGate): string => (groupFailing(g) ? `${groupFailing(g)} of ${g.lines.length} failing` : '');
 
-function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number): PanelLine[] {
+function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: boolean): PanelLine[] {
   const bad = groupFailing(g);
   const key = `group:${g.id}`;
   const first = g.lines.find((l) => !l.ok) ?? g.lines[0];
   const tail = g.error ? `unavailable: ${oneLine(g.error)}` : oneLine(bad ? first?.fix ?? first?.label : first?.detail);
   const word = bad || g.error ? 'failing' : 'passing';
   // The failing count is the right-aligned value; the first fix (or the first detail) follows the word when it fits whole, else wraps under.
-  const value = gateValue(g);
+  const value = showValue ? gateValue(g) : '';
   const fixed = GRID_LEAD + nameW + 2 + GATE_WORD_W + (value ? cells(value) + 1 : 0) + 1;
   const fits = !tail || cells(tail) <= m.cols - fixed;
   const open = m.expanded === key || g.lines.some((l) => m.expanded === `gate:${l.id}`);
@@ -455,6 +464,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number): PanelLine[] 
   });
   return [
     line(fitRuns(moving(runs, key, groupOk(g) ? 'done' : 'failed', m), m.cols), { kind: 'toggle', key }),
+    ...(!showValue && gateValue(g) ? [note(gateValue(g), m)] : []),
     ...(fits ? [] : wrap(tail, Math.max(8, m.cols - 6)).map((t) => note(t, m))),
     ...(open ? g.lines.flatMap((l) => gateLineRows(m, l)) : []),
   ];
@@ -463,21 +473,23 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number): PanelLine[] 
 function gatesBody(m: PanelModel): PanelLine[] {
   if (!m.gates.length) return [line([r('(no state)', 'muted'), r('  no gates reported yet', 'muted')])];
   const valueW = Math.max(0, ...m.gates.map((g) => cells(gateValue(g))));
-  const plan = gridPlan(m.cols, { names: m.gates.map((g) => oneLine(g.title)), word: GATE_WORD_W, gap: 2, value: valueW, min: 4, max: 24 });
+  const longest = Math.min(24, Math.max(1, ...m.gates.map((g) => cells(oneLine(g.title)))));
+  // The failing count is the first column to go: the name keeps its whole width, the count moves into the row below.
+  const plan = gridPlan(m.cols, { names: m.gates.map((g) => oneLine(g.title)), word: GATE_WORD_W, gap: 2, value: valueW, optional: true, min: longest, max: 24 });
   const nameW = plan.nameW;
-  return m.gates.flatMap((g) => gateGroupRows(m, g, nameW));
+  return m.gates.flatMap((g) => gateGroupRows(m, g, nameW, plan.valueW > 0));
 }
 
 // ---- core (contract, verdicts, offload, route) ------------------------------------------------------------------------------------
 
-const heading = (title: string, figures: Run[], m: PanelModel): PanelLine => line(fitRuns([r(title, 'muted', { bold: true }), ...(figures.length ? [r('  '), ...figures] : [])], m.cols));
+const heading = (title: string, figures: Run[], m: PanelModel): PanelLine => line(fitRuns([r(` ${title}`, 'muted', { bold: true }), ...(figures.length ? [r('  '), ...figures] : [])], m.cols));
 const tallyTone = (ok: number, total: number): Tone => (!total ? 'muted' : ok === total ? 'text' : 'warn');
 const joinSep = (parts: Run[], ui: Ui): Run[] => parts.flatMap((p, i) => (i ? [sep(ui), p] : [p]));
 
 /** A heading and its figures, wrapped by whole figure: a figure that does not fit moves to the next row (indented under the first), it is never cut. */
 function flowHeading(title: string, parts: readonly string[], m: PanelModel): PanelLine[] {
-  const indent = cells(title) + 2;
-  const rows: Run[][] = [[r(title, 'muted', { bold: true }), r('  ')]];
+  const indent = cells(title) + 3;
+  const rows: Run[][] = [[r(` ${title}`, 'muted', { bold: true }), r('  ')]];
   let used = indent;
   for (const p of parts) {
     const first = used === indent;
@@ -540,7 +552,7 @@ function verdictRows(c: CoreModel, m: PanelModel): PanelLine[] {
     cols: m.cols, ui: m.ui, mark: stateRun('blocked', m.ui), name: { t: x.owner }, nameW: plan.nameW,
     word: { t: 'unchecked', tone: 'warn' }, wordW: VERDICT_WORD_W, detail: { t: 'says done, no verdict yet' },
   }), m.cols)));
-  return [heading('verdicts', figures, m), ...(rows.length || unchecked.length ? [...rows, ...unchecked] : [line([r('    no verdict recorded yet', 'muted')])])];
+  return [heading('verdicts', figures, m), ...(rows.length || unchecked.length || none ? [...rows, ...unchecked] : [line([r('    no verdict recorded yet', 'muted')])])];
 }
 
 /** Offload in plain words: what each worker read, and what it returned to the lead. Figures keep their whole width; the name column gives way. */
@@ -548,7 +560,7 @@ function offloadRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const o = c.offload;
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
   const nothing = o.kept === 0 && o.returned === 0;
-  const head = flowHeading('offload', nothing ? ['workers have read and returned nothing yet'] : [`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
+  const head = flowHeading('reading', nothing ? ['workers have read and returned nothing yet'] : [`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
   const ws = o.workers.slice(-8);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);
@@ -585,7 +597,7 @@ const SEAT_WORD_W = 10; // `as planned`
 /** The dispatch plan against what ran: a row per team (class/effort, name, transport), a row per seat with the verdict `as planned`, `drift` or `not run`. */
 function dispatchRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const teams = c.routes.slice(-6).reverse();
-  const head = heading('dispatch', [r('planned against what ran', 'muted')], m);
+  const head = heading('teams', [r('the plan and what ran', 'muted')], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
   const names = teams.flatMap((rt) => [`${rt.cls}/${rt.effort}`, ...rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`)]);
@@ -627,7 +639,15 @@ function coreBody(m: PanelModel): PanelLine[] {
 const BODIES: Record<PanelTab, (m: PanelModel) => PanelLine[]> = { route: routeBody, team: teamBody, channel: channelBody, gates: gatesBody, core: coreBody };
 
 /** The active tab's body rows (no header). */
-export const bodyLines = (m: PanelModel): PanelLine[] => BODIES[m.tab](m);
+/** Room to spare on a tall pane: the team, gates and channel tabs put a blank row between items (an item is a pressable row with its detail rows, or one note) when the whole body still fits a pane of 48 rows or more (a short pane keeps its rows tight). */
+const AIRY: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'gates', 'channel']);
+function airy(m: PanelModel, lines: PanelLine[]): PanelLine[] {
+  const starts = (l: PanelLine, i: number): boolean => i > 0 && (m.tab === 'channel' ? true : !!l.press);
+  const gaps = lines.filter(starts).length;
+  if (m.rows < 48 || !AIRY.has(m.tab) || !gaps || lines.length + gaps > m.rows - headerRows(m).length - 1) return lines;
+  return lines.flatMap((l, i) => (starts(l, i) ? [BLANK, l] : [l]));
+}
+export const bodyLines = (m: PanelModel): PanelLine[] => airy(m, BODIES[m.tab](m));
 /** Every row of the panel: ribbon, blank, tab strip, rule, blank, then the active tab. */
 export const panelLines = (m: PanelModel): PanelLine[] =>
   [...headerRows(m), ...bodyLines(m)].map((l) => (rowWidth(l.runs) > m.cols ? { ...l, runs: fitRuns(l.runs, m.cols) } : l));
