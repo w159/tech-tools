@@ -157,8 +157,8 @@ describe('4. no fold marker', () => {
 
 describe('5. the plan row budget and the overflow row', () => {
   test('five todos and three agents: the compact form holds all five plan rows', () => {
-    // ribbon + 5 plan rows + agents ribbon + column header + 3 agents = 11 rows
-    expect(hudCompactRows(input, 88)).toBe(11);
+    // ribbon + 5 plan rows + agents ribbon + 3 agents = 10 rows (the column header is drawn only with a spare row)
+    expect(hudCompactRows(input, 88)).toBe(10);
     const rows = hudLines(input, view(88, hudBudget(13, hudCompactRows(input, 88), 7, true))).map(runsString);
     expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);

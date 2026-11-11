@@ -185,7 +185,7 @@ export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
 export const hudCompactRows = (input: HudInput, cols = 120): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined }).length;
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: false }).length; // the floor has no column-name row: it is drawn only when the budget also leaves the band its summary row
 };
 
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */

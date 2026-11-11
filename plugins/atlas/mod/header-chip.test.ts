@@ -2,11 +2,11 @@
 // The mod side has no delay: assistantTree decides from the text and the contract pattern alone. These tests pin that with the SHIPPED contract
 // pattern and the exact first lines the live runs showed raw for 3-5 frames (150-1 f0128-f0130, 150-3 f0123-f0127, 110-3 f0098-f0100).
 import { expect, test } from 'claude-code/testing';
-import { readFileSync } from 'node:fs';
+import contract from '../contracts/operating-contract.json';
 import { assistantTree } from './restyle';
 import type { AtlasSnapshot } from './contract';
 
-const pattern = (JSON.parse(readFileSync(new URL('../contracts/operating-contract.json', import.meta.url), 'utf8')) as { headerFirstLinePattern: string }).headerFirstLinePattern;
+const pattern = (contract as { headerFirstLinePattern: string }).headerFirstLinePattern;
 const snap = { contract: { headerFirstLinePattern: pattern } } as unknown as AtlasSnapshot;
 const chipped = (text: string): boolean => assistantTree(snap, { text, isFirstOfReply: true }, 100) !== null;
 

@@ -261,7 +261,8 @@ export function fitStack(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] 
   const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean };
   const tries: Try[] = [{ spacers: true, extras: true }, { spacers: false, extras: true }, { spacers: false, extras: false }];
-  for (let cap = n - 1; cap >= 0; cap--) if (cap !== 1) tries.push({ spacers: false, extras: false, todoCap: cap });
+  tries.push({ spacers: false, extras: false, header: false }); // the column-name row is the first row dropped: it never costs the plan a row or the band its summary row
+  for (let cap = n - 1; cap >= 0; cap--) if (cap !== 1) tries.push({ spacers: false, extras: false, todoCap: cap, header: false });
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).
   tries.push({ spacers: false, extras: false, hideTodo: true });
   for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, agentCap: cap });
