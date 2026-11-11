@@ -6,7 +6,7 @@ import type { AtlasSnapshot, ChannelNote, SquadAgent, TodoItem } from './contrac
 import type { EngineInterface, On } from 'claude-code';
 import { memState } from './test_helpers';
 import { cells } from './atlas-ui';
-import { diffSnapshots, isOlder, mergeToasts, nextStepSuggestion, registerNotify, TOAST_MAX } from './notify';
+import { diffSnapshots, isOlder, mergeToasts, nextStepSuggestion, registerNotify, TOAST_MAX, TOAST_MS } from './notify';
 
 function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {
 	return {
@@ -290,6 +290,38 @@ describe('registerNotify toasts', () => {
 		expect(toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  wait']);
 		expect(cells(toasts[0]!)).toBeLessThanOrEqual(TOAST_MAX);
 		expect(toasts[0]).not.toMatch(/[✓✗⏸▸]/u);
+	});
+	test('critique 12 C2: one routine toast is up at a time (two stacked boxes cut the 150 column transcript); a held one folds into the next, a failure never waits', async () => {
+		let hook: Hook = async () => undefined;
+		registerNotify(((_p: unknown, _m: unknown, h: Hook) => { hook = h; return { catch: () => undefined }; }) as unknown as On, { soundEnabled: () => false });
+		const shown: { text: string; opts: unknown }[] = [];
+		const mem = memState({ 'atlas/snapshot': null });
+		const $ = {
+			state: mem,
+			ui: { toast: (text: string, opts?: unknown) => shown.push({ text, opts }) },
+			prompt: { suggest: async () => ({ isShown: true }) },
+			audio: { play: () => Promise.resolve() },
+		} as unknown as EngineInterface;
+		const put = (s: AtlasSnapshot) => (mem.set as (...a: unknown[]) => Promise<unknown>)({ plugin: 'atlas', key: 'snapshot' }, s);
+		const names = ['alpha', 'beta', 'gamma', 'delta'];
+		const at = (now: number, states: string[], seq: number): AtlasSnapshot => ({
+			...withActivity({ now, squad: names.map((n, i) => agent(n, states[i] as never)) }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0 })]))),
+			seq,
+		});
+		const turn = async (s: AtlasSnapshot) => { await put(s); await hook($, {}, async (x) => x); };
+		await turn(at(0, ['running', 'running', 'running', 'running'], 1));
+		await turn(at(10_000, ['finished', 'running', 'running', 'running'], 2));
+		expect(shown.map((t) => t.text)).toHaveLength(1);
+		expect(shown[0]!.opts).toEqual({ timeoutMs: TOAST_MS });
+		await turn(at(12_000, ['finished', 'finished', 'running', 'running'], 3)); // 2s later: inside the gap, held
+		expect(shown).toHaveLength(1);
+		await turn(at(15_000, ['finished', 'finished', 'finished', 'running'], 4)); // past the gap: beta and gamma fold into one toast
+		expect(shown).toHaveLength(2);
+		expect(shown[1]!.text).toMatch(/beta.* \+1 more$/);
+		expect(cells(shown[1]!.text)).toBeLessThanOrEqual(TOAST_MAX);
+		await turn(at(16_000, ['finished', 'finished', 'finished', 'failed'], 5)); // 1s later but a failure: shown at once
+		expect(shown).toHaveLength(3);
+		expect(shown[2]!.text).toContain('failed');
 	});
 	test('trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare', async () => {
 		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running'), agent('c', 'running')] }, { a: act(), b: act(), c: act() });

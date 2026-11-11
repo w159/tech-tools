@@ -1,10 +1,10 @@
 // mod/motion-demo.ts: deterministic frames of a TODO row and an agent row going running -> done.
 import { describe, expect, test } from 'claude-code/testing';
 import { paintHud } from '../omp/hud-paint';
-import { uiFromEnv, type Ui } from './atlas-ui';
-import { hudLines } from './hud';
+import { fitHex, PALETTES, uiFromEnv, type Ui } from './atlas-ui';
+import { hudLines, hudMotionItems, type HudInput } from './hud';
 import { demoFrames, demoInput, demoMain, type DemoIo } from './motion-demo';
-import { MOTION_MS, MOTION_STEP_MS } from './motion';
+import { Motion, MOTION_MS, MOTION_STEP_MS } from './motion';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips SGR
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -35,6 +35,40 @@ describe('motion-demo frames', () => {
       expect(plain(files[`${s}-00-running.ans`]!)).toContain('◐');
     }
   });
+  test('critique 12: the ramp is visible for the whole 600 ms - every held step differs from its neighbour and from the resting row, in 24-bit and 256 colours', () => {
+    for (const color of ['truecolor', '256'] as const) {
+      const all = demoFrames(100, MOTION_STEP_MS, color);
+      for (const s of ['todo', 'agent']) {
+        const steps = Object.keys(all).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => all[n]!);
+        const rest = all[`${s}-99-done.ans`]!;
+        const ramp = steps.slice(0, -1); // t=0, 200, 400: the beats; the frame at 600 ms is the rest
+        expect(ramp).toHaveLength(MOTION_MS / MOTION_STEP_MS);
+        expect(steps.at(-1)).toBe(rest);
+        expect([color, s, new Set([...ramp, rest]).size]).toEqual([color, s, ramp.length + 1]); // no duplicate, and none equals the rest
+      }
+    }
+  });
+  test('critique 12: a `returned` glyph and word are one tone on every row at every frame, a row mid-transition included (live f0063: 183 beside a plain 189)', () => {
+    const ui256: Ui = { ...uiFromEnv({}), color: '256' };
+    const item = (id: string, owner: string) => ({ id, content: `${id.toUpperCase()} read ${owner}.py (${owner})`, status: 'in_progress', owner }) as never;
+    const at = (gamma: 'working' | 'done'): HudInput => ({
+      todos: [item('t2', 'beta'), item('t3', 'gamma')],
+      agents: [{ name: 'beta', role: 'explorer', state: 'done', model: 'sonnet', since: 1, lastLine: 'x' }, { name: 'gamma', role: 'explorer', state: gamma, model: 'sonnet', ...(gamma === 'working' ? { tool: 'read', target: 'g.py' } : { since: 1, lastLine: 'x' }) }] as never,
+    });
+    const m = new Motion(true);
+    m.observe('hud-todo', hudMotionItems(at('working'), { now: 0 }).todos, 0);
+    m.observe('hud-todo', hudMotionItems(at('done'), { now: 1000 }).todos, 1000);
+    for (const dt of [0, 200, 400, 600]) {
+      const rows = hudLines(at('done'), { cols: 100, maxRows: 20, ui: ui256, tick: 0, now: 1000 + dt, motion: m.ctx(1000 + dt)! }).filter((r) => r.some((x) => x.t === 'returned'));
+      expect(rows).toHaveLength(2);
+      for (const r of rows) {
+        const g = r.find((x) => x.t === '◃')!;
+        const w = r.find((x) => x.t === 'returned')!;
+        expect([dt, g.fg, w.fg]).toEqual([dt, w.fg, w.fg]); // glyph and word share a tone
+        expect([dt, w.fg === fitHex(PALETTES[ui256.theme].text, ui256.theme)]).toEqual([dt, false]); // and it is never the plain body tone
+      }
+    }
+  });
   test('critique 7: the agent row keeps its LAST column through done (it never goes blank at the change)', () => {
     for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans'))) expect([n, plain(files[n]!).includes('runs.ts:17')]).toEqual([n, true]);
   });
@@ -56,7 +90,7 @@ describe('the demo draws what the live HUD draws', () => {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
     expect(files['todo-99-done.ans']).toMatch(/\x1b\[9;38;2;\d+;\d+;\d+;48;2;[\d;]+mwire the gate/);
     // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
-    for (const f of Object.keys(files).filter((n) => /todo-\d\d-t/.test(n))) expect(files[f]).toMatch(/\x1b\[9;/);
+    for (const f of Object.keys(files).filter((n) => /todo-\d\d-t/.test(n))) expect(files[f]).toMatch(/\x1b\[(1;)?9;/); // the last beat of the window is bold: SGR `1;9;`
   });
   test('256-colour frames: palette indices only, the neutral panel (never navy 17), still at least 5 distinct frames', () => {
     const f256 = demoFrames(100, MOTION_STEP_MS, '256');

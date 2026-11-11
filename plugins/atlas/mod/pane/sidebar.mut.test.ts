@@ -27,9 +27,9 @@ const shown = (rows: string[]): number => (rows.join('\n').match(/item-\d+/g) ??
 
 describe('sidebar board tab', () => {
   const many = Array.from({ length: 12 }, (_, i) => todo(i));
-  test('the row cap is the pane height less four: the column header and the items, then the "more" row (no board ribbon inside the side panel)', () => {
-    expect(shown(board(many, { rows: 10 }))).toBe(4); // 6 rows: header, four items, "+N more"
-    expect(shown(board(many, { rows: 11 }))).toBe(5);
+  test('the row cap is the pane height less four: the one BOARD title row, the column header and the items, then the "more" row (no board ribbon inside the side panel)', () => {
+    expect(shown(board(many, { rows: 10 }))).toBe(3); // 6 rows: title, header, three items, "+N more"
+    expect(shown(board(many, { rows: 11 }))).toBe(4);
     expect(shown(board(many, { rows: 40 }))).toBe(12);
   });
   test('the board lists the snapshot todos, and none reads (no state)', () => {

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed (critique 12, C1): a new assistant message is chipped from the cached header pattern with no host state read (`restyle.tsx` `noteHeaderPattern`); the raw `● ATLAS | ...` frame is the host painting before the async hook answers.
+- Fixed (critique 12, C2): one routine toast is up at a time (4 s); toasts inside the gap fold into the next as `+N more`, failures, waits and notes never wait (`notify.ts`).
+- Fixed (critique 12, C3): the last beat of a ramp is held bold, so the 600 ms window shows three steps that each differ from rest; no step reads as the body tone (`motion.ts`).
+- Fixed (critique 12, C4/C5): the side-panel board opens with one `BOARD  5 items` row; a done agent row shows the evidence of its plan row; the team tab drops a `last` line that repeats `task`; a launch-code channel reads `this run`; the done gate gist reads `save proof that it works`.
+
 ## 17.11.0 - 2026-11-11
 
 - Fixed (wave 13 follow-up): untracked the self-referencing `plugins/atlas/.claude-plugin/types` symlink that a wave 12 merge added, with a `.gitignore` rule (commit 8271cfc8).

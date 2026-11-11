@@ -253,18 +253,21 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   return form(o.cols) === 'full' ? [{ runs: boardHeader() }, ...lines] : lines;
 }
 
-/** The whole surface: ribbon (`N items` on the right in the plain form), a blank row, then the body. */
+/** The whole surface: ribbon (`N items` on the right in the plain form), a blank row, then the body. Without the ribbon (the side panel, which has
+ * its own header) the surface opens with one title row, `BOARD  5 items`: the only mark that says which view this is (critique 12: with the chrome gone,
+ * nothing named the board and the capture script could not find it). That row says the count, so the footer carries only the folds. */
 export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const withRibbon = o.ribbon !== false;
   const rib = ribbon(o.cols, 'BOARD', o.rich ? '' : `${rows.length} items`, o.ui);
   const n = o.folded ?? 0;
   const k = o.openFolded ?? 0;
-  // The count is said once (critique 11: `5 items` in the ribbon and again in the footer): by the ribbon when it draws one, else by the footer.
-  const count = withRibbon && !o.rich ? '' : `${rows.length} items · `;
+  // The count is said once (critique 11: `5 items` in the ribbon and again in the footer): by the ribbon or the title row, else by the footer.
+  const count = !withRibbon || !o.rich ? '' : `${rows.length} items · `;
   // An open folded dispatch row is what Stop counts: the footer names it instead of the quiet fold count.
-  const note = k > 0 ? r(`  ${count}${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : n > 0 ? r(`  ${count}${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted') : r(`  ${rows.length} items`, 'muted');
-  const footer: BoardLine[] = (n > 0 || k > 0 || !withRibbon) && rows.length > 0 ? [{ runs: [note] }] : []; // no ribbon, no folds: the footer is the one place the count is said
-  return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : []), ...boardBody(rows, o), ...footer];
+  const note = k > 0 ? r(`  ${count}${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : r(`  ${count}${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted');
+  const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }] : [];
+  const title: BoardLine[] = withRibbon ? [] : [{ runs: [r('  BOARD', 'text', { bold: true }), ...(rows.length > 0 ? [r(`  ${rows.length} items`, 'muted')] : [])] }];
+  return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : title), ...boardBody(rows, o), ...footer];
 }
 
 /** Plain text of lines, trailing blanks trimmed: what the goldens compare. */

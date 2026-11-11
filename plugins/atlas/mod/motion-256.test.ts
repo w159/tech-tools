@@ -39,7 +39,12 @@ describe('256-colour ease', () => {
         }
       }
     }
-    expect(eased).toBeGreaterThanOrEqual(40);
+    expect(eased).toBeGreaterThanOrEqual(30); // 40 before critique 12: pairs whose only mid-steps read as the body tone now keep their resting tone instead
+    // Critique 12: no step is the body tone (189 on Mocha): a `returned` glyph and word at that step looked uncoloured beside the rows at rest.
+    for (const theme of THEMES) {
+      const p = PALETTES[theme];
+      for (const state of UI_STATES) for (const rest of RESTS) for (const c of easeSteps256(p[STATE_TOKEN[state]], p[rest], theme)) expect([theme, state, rest, deltaE(c, fitHex(p.text, theme)) >= MIN_STEP_DE]).toEqual([theme, state, rest, true]);
+    }
     // The tones the surfaces actually fade a done row to keep a staircase on Mocha; a pair with no two palette colours MIN_STEP_DE and
     // MIN_STEP_DL apart keeps its resting tone and only the glyph pops (Mocha body text, most of Latte).
     for (const rest of ['sub', 'muted', 'ok'] as const) expect([rest, easeSteps256(PALETTES.mocha.ok, PALETTES.mocha[rest], 'mocha').length >= MIN_STEPS_256]).toEqual([rest, true]);

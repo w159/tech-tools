@@ -25,7 +25,7 @@ import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data
 import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
-import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, registerRestyle } from './restyle';
+import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
 import { isOlder, mergeToasts, registerNotify, stateToast } from './notify';
 import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
 import { clearLook, lookOf } from './look';
@@ -518,6 +518,7 @@ async function rebuildOnce($: EngineInterface): Promise<void> {
 		// The snapshot write redraws the band, pane and restyles that read it. Stamped; an older build never replaces a newer one.
 		const stamped = { ...snap, seq };
 		await update($, snapshotState, (cur) => (cur && isOlder(cur, stamped) ? cur : stamped));
+		noteHeaderPattern(stamped.contract.headerFirstLinePattern); // the chip draws from this copy, with no state read (restyle.tsx)
 		// The board keeps its last good rows; say why they may be stale.
 		if (builder.todoError !== undefined) reportFailure($, `atlas: todos.json is ${builder.todoError}, showing the last good board`);
 	} catch (err) {

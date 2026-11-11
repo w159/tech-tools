@@ -11,11 +11,12 @@ const row = (label: string, owner = ''): BoardRow => ({ label, state: 'done', ow
 const live = (): BoardRow[] => [row('T1 read alpha.py', 'alpha-explorer'), row('T2 read beta.py', 'beta-explorer'), row('T3 read gamma.py', 'gamma-explorer'), row('T4 combine the three reports'), row('T5 write the final summary')];
 
 describe('the board inside the side panel', () => {
-  test('without its ribbon: no BOARD header, no blank row, and the footer says `5 items` once', () => {
+  test('critique 12: without its ribbon the board still has one title row (`BOARD  5 items`), no blank row, and the footer carries only the folds', () => {
     const t = boardText(boardLines(live(), { cols: 44, ui, folded: 3, openFolded: 0, ribbon: false }));
-    expect(t.join('\n')).not.toContain('BOARD');
-    expect(t[0]).toContain('T1 read alpha.py');
-    expect(t.at(-1)).toBe('  5 items · 3 dispatches folded');
+    expect(t[0]).toBe('  BOARD  5 items');
+    expect(t.join('\n').match(/BOARD/g)!.length).toBe(1); // one title, never nested
+    expect(t[1]).toContain('T1 read alpha.py');
+    expect(t.at(-1)).toBe('  3 dispatches folded');
     expect(t.join('\n').match(/5 items/g)!.length).toBe(1);
   });
   test('with its ribbon (the standalone pane) the count is in the ribbon and the footer does not repeat it', () => {

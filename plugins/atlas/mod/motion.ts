@@ -169,7 +169,8 @@ const visible = (a: string, b: string): boolean => { const de = deltaE(a, b); re
  * wore before the change, so the first frame already differs visibly; at most MAX_STEPS_256 of them (spread evenly). */
 function spaced(chain: readonly string[], target: string, from: string): string[] {
   const out: string[] = [];
-  for (const c of chain) if (out.length ? visible(out.at(-1)!, c) : deltaE(from, c) >= MIN_STEP_DE) out.push(c);
+  // Never a step that reads as the body tone `from`, at any position: a mid-step of 189 on a `returned` row looked uncoloured beside its resting neighbour (critique 12).
+  for (const c of chain) if (deltaE(from, c) >= MIN_STEP_DE && (out.length ? visible(out.at(-1)!, c) : true)) out.push(c);
   while (out.length && deltaE(out.at(-1)!, target) < MIN_STEP_DE) out.pop();
   if (out.length <= MAX_STEPS_256) return out;
   return [0, 1, 2].map((i) => out[Math.round((i * (out.length - 1)) / 2)]!);
@@ -260,6 +261,11 @@ export type AnimateOpts = {
   tint?: (run: Run, index: number) => boolean;
 };
 
+/** The last beat of the window: a run not already bold is drawn bold, in whatever tone it has. A 256-colour palette gives two distinct steps
+ * between a lead and a rest tone, so without this the third beat equalled the rest frame and the ramp read 400 ms, not 600 (critique 12:
+ * motion-8271cfc8/todo-strip.ans:2-5). Rests at the first frame past the window. */
+const held = (r: Run, beat: number): Run => (beat >= MAX_BEATS - 1 && r.bold !== true ? { ...r, bold: true } : r);
+
 /**
  * `runs` as drawn `ctx.now` ms into the row's window. `key` names the row's entry, `accent` is the state whose tone leads.
  * Returns `runs` itself (same reference) with no ctx, no entry, no colour, or past both windows: the resting render.
@@ -284,9 +290,10 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
         const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585b70') : palette[r.tone]);
         if (ui.color === '256') {
           const stairs = easeSteps256(palette[markToken(accent)], rest, ui.theme);
-          return beat < stairs.length ? { ...r, fg: stairs[beat]! } : r; // past its last step a run is at rest
+          if (beat < stairs.length) return { ...r, fg: stairs[beat]! };
+          return held(r, beat); // the palette ran out of steps before the window did: the rest tone, held bold, so the beat still differs from rest
         }
-        return { ...r, fg: mixHex(lead, rest, t) };
+        return held({ ...r, fg: mixHex(lead, rest, t) }, beat);
       });
     }
     if (o.pop !== false && accent === 'done' && e.state === 'done') {
