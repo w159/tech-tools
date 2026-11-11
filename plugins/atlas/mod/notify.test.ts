@@ -163,7 +163,7 @@ describe('nextStepSuggestion', () => {
 });
 
 describe('registerNotify', () => {
-	test('toasts a plain sentence for a failed worker and makes the single suggestion', async () => {
+	test('toasts state, name and fact for a failed worker and makes the single suggestion', async () => {
 		let hook: (d: unknown, e: unknown, n: (x?: unknown) => unknown) => Promise<unknown> = async () => undefined;
 		registerNotify(((_p: unknown, _m: unknown, h: typeof hook) => { hook = h; return { catch: () => undefined }; }) as unknown as On, { soundEnabled: () => false });
 		const toasts: string[] = [];
@@ -175,7 +175,7 @@ describe('registerNotify', () => {
 		await hook($, {}, async (x) => x);
 		await put(snap({ squad: [agent('a', 'failed')], todos: [todo('t1', 'in_progress', 'build')] }));
 		await hook($, {}, async (x) => x);
-		expect(toasts).toEqual(['a failed.']);
+		expect(toasts).toEqual(['■ failed  a']);
 		expect(suggested).toEqual(['research: build', 'research: build']);
 	});
 });
@@ -249,35 +249,36 @@ describe('registerNotify toasts', () => {
 		const { toasts } = await run(prev, next);
 		// One toast per turn: a burst of six left the stack undrawn and the host printed a notice into the transcript.
 		expect(toasts).toEqual([mergeToasts([
-			'wait is blocked: which path?',
-			'bad failed: boom.',
-			'new started.',
-			'done finished after 1m30s: all green.',
-			'Note from impl-auth: ship it.',
-			'Task done: build it.',
+			'◉ waiting  wait  which path?',
+			'■ failed  bad  boom',
+			'◐ running  new  started',
+			'● done  done  all green',
+			'note  impl-auth  ship it.',
+			'● done  task  build it',
 		])!]);
-		expect(toasts[0]!.startsWith('wait is blocked: which path? (5 more: bad failed: boom. new started.')).toBe(true);
+		expect(toasts[0]!.startsWith('◉ waiting  wait  which path?  +5 more')).toBe(true);
 		expect(toasts[0]).not.toMatch(/[✓✗⏸▸]/u);
 	});
 	test('trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare', async () => {
 		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running'), agent('c', 'running')] }, { a: act(), b: act(), c: act() });
 		const next = withActivity({ squad: [agent('a', 'failed'), agent('b', 'input'), agent('c', 'finished')] }, { a: act(), b: act({ mood: 'blocked' }), c: act() });
-		expect((await run(prev, next)).toasts).toEqual(['b is blocked. (2 more: a failed. c finished.)']);
+		expect((await run(prev, next)).toasts).toEqual(['◉ waiting  b  +2 more']);
 	});
 	test('mergeToasts: one passes through, many fold into one row of at most TOAST_MAX', () => {
 		expect(mergeToasts([])).toBeNull();
-		expect(mergeToasts(['a finished.'])).toBe('a finished.');
-		expect(mergeToasts(['x'.repeat(80), 'y'.repeat(80)])!.length).toBe(TOAST_MAX);
-		expect(mergeToasts(['x'.repeat(80), 'y'.repeat(80)])!.endsWith('…')).toBe(true);
+		expect(mergeToasts(['● done  a'])).toBe('● done  a');
+		expect(mergeToasts(['x'.repeat(120), 'y'.repeat(80)])!.length).toBe(TOAST_MAX);
+		expect(mergeToasts(['x'.repeat(120), 'y'.repeat(80)])!.endsWith('  +1 more')).toBe(true);
+		expect(mergeToasts(['a'.repeat(30), 'b'])).toBe(`${'a'.repeat(30)}  +1 more`);
 	});
-	test('the last line in a completion toast is cut at 40 cells with an ellipsis', async () => {
+	test('the fact in a completion toast is cut at 40 cells', async () => {
 		const at = async (line: string) => {
 			const prev = withActivity({ now: 0, squad: [agent('a', 'running')] }, { a: act({ startedAt: 0 }) });
 			const next = withActivity({ now: 0, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 0, lastLine: line }) });
 			return (await run(prev, next)).toasts[0]!;
 		};
-		expect(await at('y'.repeat(40))).toBe(`a finished: ${'y'.repeat(40)}.`);
-		expect(await at('y'.repeat(41))).toBe(`a finished: ${'y'.repeat(39)}…`);
+		expect(await at('y'.repeat(40))).toBe(`● done  a  ${'y'.repeat(40)}`);
+		expect(await at('y'.repeat(41))).toBe(`● done  a  ${'y'.repeat(37)}...`);
 	});
 	test('a phase advance plays the sound only when sound is on', async () => {
 		const prev = snap({ phase: 'research' });

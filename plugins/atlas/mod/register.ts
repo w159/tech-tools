@@ -15,6 +15,7 @@ import { hudAgents, hudBudget, hudCompactRows, hudRows, isRunning } from './hud'
 import { rowOf } from './runs';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
+import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos } from './data/todos';
@@ -24,7 +25,8 @@ import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
 import { headerPhaseOf, registerRestyle } from './restyle';
-import { mergeToasts, registerNotify } from './notify';
+import { mergeToasts, registerNotify, stateToast } from './notify';
+import { uiFromEnv } from './atlas-ui';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { TeamTool } from './orchestra-types';
 import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
@@ -39,6 +41,10 @@ const PANE_ID = 'atlas';
 // 12-row pane on demand, takes focus, and Esc closes it.
 const PANE_DOCK = { id: PANE_ID, title: 'Atlas', columns: 56 } as const;
 const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: true, focus: true } as const;
+// The Board (key `o` in the band and the sidebar): its own pane, so the key always has somewhere to draw (L19: the old key
+// only flipped an inline fold that needed spare band rows and drew nothing in a short slot).
+export const BOARD_ID = 'atlas-board';
+const PANE_BOARD = { id: BOARD_ID, title: 'Board', rows: 14, closeOnEscape: true, focus: true } as const;
 const TICK_MS = 250;
 const BAND_MIN_ROWS = 7; // the Mission Control band keeps at least this many rows; the HUD takes the rest of the budget
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
@@ -618,7 +624,7 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 		send: (text) => guarded(() => sendNote($, text)),
 		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
 		setView: (v) => guarded(() => update($, viewState, () => v)),
-		toggleTodos: () => guarded(async () => { const open = await todoExpanded($); await update($, todoExpandedState, () => !open); }),
+		toggleTodos: () => guarded(() => openBoard($)),
 		expand: (key) =>
 			guarded(async () => {
 				await update($, expandedState, () => key);
@@ -632,7 +638,13 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 	};
 }
 
-/** Band footer presses: open (or focus) the pane on a view, as /atlas-cc does, or fold the board. */
+/** Open (or retitle and focus) the Board pane; the press behind it is what the engine counts as asked, so it is placed at any width. */
+export async function openBoard($: EngineInterface): Promise<void> {
+	toastUnplaced($)(await $.ui.open(PANE_BOARD));
+	void rebuild($); // the board draws the snapshot; refresh it so a press never shows a stale list
+}
+
+/** Band footer presses: open (or focus) the pane on a view, as /atlas-cc does, or open the Board pane. */
 function bandHandlers($: EngineInterface): BandHandlers {
 	const guarded = guardedBy($);
 	return {
@@ -644,7 +656,7 @@ function bandHandlers($: EngineInterface): BandHandlers {
 				await update($, paneOpenedState, () => true);
 				toastUnplaced($)(await opened);
 			}),
-		toggleTodos: () => guarded(async () => { const open = await todoExpanded($); await update($, todoExpandedState, () => !open); }),
+		toggleTodos: () => guarded(() => openBoard($)),
 	};
 }
 
@@ -733,18 +745,19 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 }
 
 /** Toasts for what moved since the last read: new verdicts, workers whose offload finished. The first read toasts nothing.
- * Plain sentences, merged into one toast per read (notify.ts mergeToasts), no codes or glyph prefixes. */
+ * State first, then the name, then one fact (notify.ts stateToast), merged into one toast per read (mergeToasts). */
 function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null): void {
 	if (seen === null) return;
+	const ui = uiFromEnv();
 	const texts: string[] = [];
 	for (const v of m.verdicts) {
 		if (seen.has(`${v.id}:${v.status}`)) continue;
 		if (v.status === 'rejected') {
-			texts.push(`A verifier refuted ${v.id}: ${v.title}.`);
+			texts.push(stateToast('failed', v.id, `refuted: ${v.title}`, ui));
 			if (soundOn()) void $.audio.play({ asset: 'mod/fx/fail.wav' }).catch(() => {});
-		} else texts.push(v.status === 'verified' ? `A verifier confirmed ${v.id}: ${v.title}.` : `${v.id} needs evidence.`);
+		} else texts.push(v.status === 'verified' ? stateToast('done', v.id, `verified: ${v.title}`, ui) : stateToast('waiting', v.id, 'needs evidence', ui));
 	}
-	for (const w of m.offload.workers) if (w.finished && !coreFinished[w.name]) texts.push(`${w.name} finished: ${tok(w.kept)} kept in tmux, ${tok(w.returned)} came back.`);
+	for (const w of m.offload.workers) if (w.finished && !coreFinished[w.name]) texts.push(stateToast('done', w.name, `${tok(w.kept)} kept, ${tok(w.returned)} back`, ui));
 	const toast = mergeToasts(texts);
 	if (toast) $.ui.toast(toast);
 }
@@ -939,19 +952,20 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const columns = e.props.bodyColumns; // measured live: with the docked pane open, viewport.columns is the transcript's own width (143) and bodyColumns is that less the engine's five (138)
 		const live = liveWorkers(snapshot, Date.now());
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
-		// The HUD keeps the TODO tree only: the band's worker rows replace its Subagents block (agents: []).
+		// The HUD draws the TODO tree and the Subagents block (rev 4 design); below 80 columns the block gives way to the band's counts.
 		const agents = hudAgents(live, snapshot.squad);
-		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents: [], root: snapshot.root };
-		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents / Waiting rows
+		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root };
+		const hudView = { cols: columns, tick: await read($, spinnerTickState) };
+		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;
 		const report = await readStatuslineRows($, snapshot.root);
 		const slotRows = e.props.maxRows ?? 0;
 		const budget = e.props.maxRows === undefined ? 0 : effectiveRows(slotRows, e.viewport, report?.rows ?? null, runningCount); // no slot reported: nothing to cap
-		const hud = hudOn ? hudRows(hudIn, { cols: columns, maxRows: hudBudget(budget, hudCompactRows(hudIn), BAND_MIN_ROWS, running) }) : [];
-		const wanted = hudOn ? hudRows(hudIn, { cols: columns, maxRows: 1_000 }).length : 0;
-		const compact = hudCompactRows(hudIn);
-		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { cols: columns, maxRows: hudBudget(cap, compact, BAND_MIN_ROWS, running) }).length : 0;
+		const hud = hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudBudget(budget, hudCompactRows(hudIn, columns), BAND_MIN_ROWS, running) }) : [];
+		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
+		const compact = hudCompactRows(hudIn, columns);
+		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudBudget(cap, compact, BAND_MIN_ROWS, running) }).length : 0;
 		const inline = e.viewport !== undefined && e.viewport.isFullscreen !== true;
 		void publishHudState($, snapshot.root, {
 			maxRows: budget,
@@ -967,9 +981,14 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// The Atlas sidebar: a native tree, so its elements join the engine's focus ring.
 	on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-		if (e.surface !== 'terminal' || e.requestId !== PANE_ID || !(await read($, isModOn))) return next(e);
+		if (e.surface !== 'terminal' || (e.requestId !== PANE_ID && e.requestId !== BOARD_ID) || !(await read($, isModOn))) return next(e);
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
+		if (e.requestId === BOARD_ID) {
+			return boardTree($.ui.resolve(e), ownTodos(snapshot.todos ?? [], snapshot.sessionId), {
+				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000),
+			});
+		}
 		return sidebarTree($.ui.resolve(e), {
 			snapshot,
 			gates: await gateGroups($),

@@ -23,7 +23,7 @@ export const golden: string[] = [
 export const idleGolden: string[] = [
   "◖ ◆ ATLAS ◗  done · phase 6/6   todo ██████████ 6 of 6",
   " last run  3 workers · 1m31s · all ok",
-  " contract  header 3/4   verdicts  1 verified · 1 refuted   offload  17.9k → 608 (30x)   route  verify/low ✓",
+  " contract  header 3/4   verdicts  1 verified · 1 refuted   offload  17.9k kept, 608 back (30x)   route  verify/low ●",
   " checks  ● completion  ■ tripwire  ● routing"
 ];
 

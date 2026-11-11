@@ -3,7 +3,8 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../live_fixture';
-import { TONE_HEX } from '../mission-layout';
+import { PALETTES } from '../atlas-ui';
+import { stripRows } from './sidebar';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -36,46 +37,121 @@ const tree = (over: Partial<SidebarModel> = {}, view: SidebarModel['ui']['view']
     ui: { recipient: null, expanded: null, draft: '', view }, columns: 70, rows: 40, ...over,
   }, on) as unknown as Node;
 
+const TABS = ['route', 'team', 'channel', 'gates', 'core'] as const;
+const buttons = (root: Node): Node[] => all(root).filter((n) => n.kind === 'Button');
+const strip = (root: Node): Node[] => buttons(root).filter((b) => String(b.props.key).startsWith('tab:'));
+// The host draws a hotkey Button as `k: label`: width = 3 + label.
+const hostW = (b: Node): number => 3 + String(b.props.label).length;
+
 describe('sidebar shell', () => {
-  test('four plain hotkey tabs r/t/c/g with their labels, no glyphs', () => {
+  test('five plain hotkey tabs r t c g k with plain labels, no glyphs', () => {
     const t = tree();
-    const tabs = (['route', 'team', 'channel', 'gates'] as const).map((v) => tab(t, v).props);
-    expect(tabs.map((b) => b.hotkey)).toEqual(['r', 't', 'c', 'g']);
-    expect(tabs.map((b) => b.label)).toEqual(['route', 'team', 'channel', 'gates 1 failing']);
+    const tabs = TABS.map((v) => tab(t, v).props);
+    expect(tabs.map((b) => b.hotkey)).toEqual(['r', 't', 'c', 'g', 'k']);
+    expect(tabs.map((b) => b.label)).toEqual(['route', 'team', 'channel', 'gates', 'core']);
     expect(tabs.every((b) => b.plain === true)).toBe(true);
   });
 
-  test('the g tab reads plain gates when no gate is open', () => {
-    expect(tab(tree({}, 'team', []), 'gates').props.label).toBe('gates');
+  test('the board key o joins the strip only when the board is wired', () => {
+    expect(strip(tree()).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k']);
+    const wired = sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: open, ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns: 70, rows: 40 }, { ...on, toggleTodos: () => calls.push('board') }) as unknown as Node;
+    expect(strip(wired).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
+    tab(wired, 'todos').props.onPress();
+    expect(calls).toContain('board');
   });
 
-  test('the active tab is accent and bold, the others muted; pressing a tab sets that view', () => {
+  test('the lit tab is bold text, the others muted; pressing a tab sets that view', () => {
     const t = tree({}, 'channel');
     const head = (v: string) => kids(tab(t, v))[0]!.props;
-    expect(head('channel')).toMatchObject({ color: TONE_HEX.accent, bold: true });
-    expect(head('team')).toMatchObject({ color: TONE_HEX.muted, bold: false });
-    expect(head('route').color).toBe(TONE_HEX.muted);
-    expect(TONE_HEX.accent).toBe('#cba6f7');
-    expect(TONE_HEX.muted).toBe('#9399b2');
+    expect(head('channel').bold).toBe(true);
+    expect(head('team').bold).toBeFalsy();
+    expect(head('team').color).toBe(PALETTES.mocha.muted);
+    expect(head('channel').color).not.toBe(head('team').color);
     tab(t, 'route').props.onPress();
     expect(calls).toContain('view:route');
+    tab(t, 'core').props.onPress();
+    expect(calls).toContain('view:core');
   });
 
-  test('the hint shows only when the inner width is 60 or more', () => {
-    expect(textOf(tree({ columns: 90 }))).toContain('press r t c g · Tab ↑↓ · Esc closes');
-    expect(textOf(tree({ columns: 50 }))).not.toContain('press r t c g');
+  test('L21: at 110 columns the docked pane is 38 cells inner and no strip row overflows it', () => {
+    for (const columns of [110 / 3, 38, 39, 30, 56, 70]) {
+      const inner = Math.floor(columns) - 1;
+      const t = tree({ columns: Math.floor(columns) });
+      const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
+      expect(rowsOf.length).toBeGreaterThan(0);
+      for (const row of rowsOf) {
+        const w = kids(row).reduce((n, c) => n + (c.kind === 'Button' ? hostW(c) : String(c.props.children).length), 0);
+        expect(w).toBeLessThanOrEqual(inner);
+      }
+    }
+  });
+
+  test('L21: stripRows keeps every tab, in order, and wraps instead of overflowing', () => {
+    const items = [...'rtcgk'].map((k, i) => ({ id: TABS[i]!, key: k, label: TABS[i]! as string }));
+    for (const inner of [20, 29, 37, 45, 60]) {
+      const rows = stripRows(items, inner);
+      expect(rows.flat().map((x) => x.id)).toEqual([...TABS]);
+      for (const r of rows) expect(r.reduce((n, x, i) => n + (i ? 2 : 0) + 3 + x.label.length, 0)).toBeLessThanOrEqual(Math.max(inner, 3 + 7));
+    }
+    expect(stripRows(items, 60).length).toBe(1);
+    expect(stripRows(items, 37).length).toBe(2);
+  });
+
+  test('L21: a wrapped strip underlines the lit tab on its own row, aligned under its label', () => {
+    const t = tree({ columns: 38 }, 'gates');
+    const rowsOf = kids(t).filter((n) => n.kind === 'Box');
+    const idx = rowsOf.findIndex((r) => String(r.props.key) === 'tabs:1');
+    expect(idx).toBeGreaterThan(0);
+    const under = rowsOf[idx + 1]!;
+    const line = textOf(under);
+    expect(line.replace(/ /g, '')).toBe('━━━━━');
+    expect(line.indexOf('━')).toBe(3);
+    expect(textOf(rowsOf[idx - 1 - 1] ?? under)).not.toContain('━');
+  });
+
+  test('the panel paints the rev 4 panel token, never the legacy #11111b', () => {
+    const t = tree();
+    expect(t.props.backgroundColor).toBe('#181825');
+    expect(JSON.stringify(t)).not.toContain('"backgroundColor":"#11111b"');
   });
 
   test('plain column: no borderStyle at any width (the host pane draws the one frame)', () => {
     for (const columns of [30, 40, 120]) expect(tree({ columns }).props.borderStyle).toBeUndefined();
   });
 
+  test('the root is exactly as wide as the pane minus the host border cell', () => {
+    for (const columns of [30, 38, 70, 120]) expect(tree({ columns }).props.width).toBe(columns - 1);
+  });
+
   test('exactly one view body under the strip, and no advisor section', () => {
-    const t = tree();
-    expect(kids(t)[0]!.props.key).toBe('tabs');
-    for (const view of ['route', 'team', 'channel', 'gates'] as const) {
-      expect(kids(tree({}, view)).length).toBeGreaterThan(1);
+    for (const view of TABS) {
+      expect(kids(tree({}, view)).length).toBeGreaterThan(3);
       expect(textOf(tree({}, view))).not.toContain('Advisor notes');
     }
   });
+});
+
+describe('sidebar interactions', () => {
+  const pressable = (root: Node, key: string): Node => {
+    const b = buttons(root).find((n) => n.props.key === key);
+    if (!b) throw new Error(`no button ${key}`);
+    return b;
+  };
+  test('pressing a subagent row selects it as the recipient', () => {
+    const got: string[] = [];
+    const t = sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: open, ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns: 70, rows: 40 }, { ...on, selectRecipient: (n: string | null) => got.push(String(n)) }) as unknown as Node;
+    const row = buttons(t).find((b) => String(b.props.key).startsWith('worker:'));
+    expect(row).toBeDefined();
+    row!.props.onPress();
+    expect(got.length).toBe(1);
+  });
+  test('pressing a gate group toggles it', () => {
+    const got: string[] = [];
+    const t = sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: open, ui: { recipient: null, expanded: null, draft: '', view: 'gates' }, columns: 70, rows: 40 }, { ...on, toggle: (k: string) => got.push(k) }) as unknown as Node;
+    const row = buttons(t).find((b) => !String(b.props.key).startsWith('tab:'));
+    expect(row).toBeDefined();
+    row!.props.onPress();
+    expect(got.length).toBe(1);
+  });
+  void pressable;
 });

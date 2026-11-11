@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
-import { TODO_WIDGET_KEY, registerTodoFallback, roman, todoTreeLines } from "./todo-fallback";
+import { TODO_WIDGET_KEY, registerTodoFallback, todoTreeLines } from "./todo-fallback";
 
 function board(items: Array<{ content: string; status: string; session_id?: string }>) {
 	const root = mkdtempSync(join(tmpdir(), "todo-fb-"));
@@ -29,33 +29,31 @@ function harness(root: string, kind = "main") {
 	return { fire, widgets, view, tick: () => tick?.() };
 }
 
-const strip = (ls: string[]) => ls.join("\n");
+const strip = (ls: string[]) => ls.join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+const title = (c: string[] | undefined) => strip(c?.slice(0, 1) ?? []);
 
-test("tree: Research:/Implement: prefixes become roman-numbered phases with counts, active phase expanded", () => {
+test("tree: the rev 4 TODO surface, one row per plan item with its state word, the prefix dropped", () => {
 	const lines = todoTreeLines([
 		{ content: "Research: trace calc module", status: "completed" },
 		{ content: "Research: map call paths", status: "in_progress" },
 		{ content: "Implement: add mul", status: "pending" },
-		{ content: "Verify: run tests", status: "pending" },
-		{ content: "Docs: changelog", status: "pending" },
+		{ content: "Verify: run tests", status: "abandoned" },
+		{ content: "Docs: changelog", status: "blocked" },
 	]);
-	expect(lines).toEqual([
-		" TODO",
-		"  ├─ I. Research · 1/2",
-		"  │  ├─ ☑ trace calc module",
-		"  │  └─ ☐ map call paths",
-		"  ├─ II. Implement · 0/1",
-		"  ├─ III. Verify · 0/1",
-		"  ├─ IV. Docs · 0/1",
-		"  └─────",
-	]);
+	const rows = lines.slice(4);
+	expect(rows).toHaveLength(5);
+	const want: Array<[string, string]> = [["●", "trace calc module done"], ["◐", "map call paths running"], ["◇", "add mul queued"], ["■", "run tests failed"], ["▲", "changelog blocked"]];
+	rows.forEach((r, i) => expect(r.replace(/ +/g, " ").replace(/^[ ▸] ?/, "")).toBe(`${want[i]![0]} ${want[i]![1]}`));
+	expect(rows[1]!.startsWith("▸")).toBe(true);
+	expect(lines[2]).toMatch(/^progress .{16} 1 of 5 · 20%$/);
+	expect(lines[0]).toContain("▸ TODO");
+	expect(lines[0]).toContain("1 of 5 done");
 });
 
-test("tree: [label] prefix works and unprefixed items group under Tasks", () => {
-	const lines = strip(todoTreeLines([{ content: "[build] wire it", status: "in_progress" }, { content: "plain item", status: "pending" }]));
-	expect(lines).toContain("I. Build · 0/1");
-	expect(lines).toContain("II. Tasks · 0/1");
-	expect(lines).toContain("☐ wire it");
+test("a completed row stays in the tree and the board's evidence is its detail", () => {
+	const lines = strip(todoTreeLines([{ content: "[build] wire it", status: "completed", evidence: "tests green" }, { content: "plain item", status: "pending" }]).map(l => l));
+	expect(lines).toMatch(/● wire it +done +tests green/);
+	expect(lines).toMatch(/◇ plain item +queued/);
 });
 
 test("fallback widget appears for board items when no native todo has run", () => {
@@ -63,8 +61,8 @@ test("fallback widget appears for board items when no native todo has run", () =
 	const h = harness(b.root);
 	h.fire("before_agent_start");
 	const last = h.widgets.at(-1);
-	expect(last?.[0]).toBe(" TODO");
-	expect(strip(last ?? [])).toContain("I. Research · 0/1");
+	expect(title(last)).toContain("▸ TODO");
+	expect(strip(last ?? [])).toMatch(/▸ ◐ a +running/);
 });
 
 test("a successful native todo result removes the fallback and keeps it removed", () => {
@@ -84,7 +82,7 @@ test("a failed native todo result does not suppress the fallback; subagent sessi
 	const b = board([{ content: "Research: a", status: "in_progress" }]);
 	const h = harness(b.root);
 	h.fire("tool_result", { toolName: "todo", isError: true });
-	expect(h.widgets.at(-1)?.[0]).toBe(" TODO");
+	expect(title(h.widgets.at(-1))).toContain("▸ TODO");
 	const sub = harness(b.root, "sub");
 	sub.fire("before_agent_start");
 	expect(sub.widgets).toEqual([]);
@@ -165,7 +163,7 @@ test("an error todo result or a missing tool name keeps the fallback alive and p
 	t.fire("tool_result", { toolName: "todo", isError: true });
 	t.fire("tool_result", {});
 	expect(t.started.length).toBe(1);
-	expect(t.widgets.at(-1)?.[0]).toBe(" TODO");
+	expect(title(t.widgets.at(-1))).toContain("▸ TODO");
 });
 
 test("event handlers return undefined (they never veto or rewrite a tool result)", () => {
@@ -187,17 +185,5 @@ test("an unchanged board is not repainted; a changed one is", () => {
 	b.write([{ content: "Research: a", status: "completed" }]);
 	h.tick();
 	expect(h.widgets.length).toBe(2);
-	expect(strip(h.widgets.at(-1) ?? [])).toContain("Research · 1/1");
-});
-
-test("item text is cut at 100 chars with an ellipsis; exactly 100 is kept whole", () => {
-	const hundred = "x".repeat(100);
-	const lines = todoTreeLines([{ content: `Research: ${hundred}`, status: "in_progress" }, { content: `Research: ${hundred}y`, status: "in_progress" }]);
-	expect(lines).toContain(`  │  ├─ ☐ ${hundred}`);
-	expect(lines).toContain(`  │  └─ ☐ ${"x".repeat(99)}…`);
-});
-
-test("roman covers 4, 9, 14, 40, 49, 50, 90 and 99", () => {
-	const cases: Array<[number, string]> = [[4, "IV"], [9, "IX"], [14, "XIV"], [40, "XL"], [49, "XLIX"], [50, "L"], [90, "XC"], [99, "XCIX"]];
-	for (const [n, s] of cases) expect([n, roman(n)]).toEqual([n, s]);
+	expect(strip(h.widgets.at(-1) ?? [])).toContain("1 of 1 done");
 });

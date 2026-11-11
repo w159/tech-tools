@@ -104,7 +104,6 @@ test('deployment card for atlas persona Task rows', () => {
   expect(tree).not.toBeNull()
   const text = stringsOf(tree)
   expect(text).toContain('impl-auth')
-  expect(text).toContain('implementer')
   expect(text).toContain('sonnet·low')
   expect(text).toContain('running')
 })
@@ -321,26 +320,26 @@ const runAgent: AgentInfo[] = [{ id: 'a1', type: 'atlas:implementer', descriptio
 test('running worker card shows what it is doing: tool (mcp prefix cut), target, age, tool count', () => {
   const s = withActivity({ tool: 'mcp__lean-ctx__ctx_read', target: 'register.ts', since: 1000, startedAt: 500, toolCount: 9 })
   const text = stringsOf(toolUseTree(s, taskProps({ isRunning: true }), runAgent))
-  expect(text).toContain('ctx_read register.ts   ·   1m13s · 9 tools')
+  expect(text).toContain('ctx_read register.ts · 1m13s') // the 44-column card sheds the tool count rather than clip the age
 })
 
 test('worker card activity: last tool without a target, and no tool at all, still render the age', () => {
   const last = withActivity({ lastTool: 'Grep', since: 500, toolCount: 2 })
-  expect(stringsOf(toolUseTree(last, taskProps({ isRunning: true }), runAgent))).toContain('Grep   ·   1m13s · 2 tools')
+  expect(stringsOf(toolUseTree(last, taskProps({ isRunning: true }), runAgent))).toContain('Grep · 1m13s · 2 tools')
   const none = withActivity({ since: 500, toolCount: 0 })
   const text = stringsOf(toolUseTree(none, taskProps({ isRunning: true }), runAgent))
   expect(text).toContain('1m13s · 0 tools')
-  expect(text).not.toContain('   ·   ')
+  expect(text).not.toContain(' ·  · ')
 })
 
 test('with no listed agent the card status falls back from the call flags', () => {
   const s = snap()
   const label = (over: Record<string, unknown>) => stringsOf(toolUseTree(s, taskProps(over), []))
   expect(label({ isRunning: true })).toContain('running')
-  expect(label({ isErrored: true })).toContain('✗ impl-auth')
-  expect(label({ isInterrupted: true })).toContain('⏸ impl-auth')
+  expect(label({ isErrored: true })).toContain('failed impl-auth')
+  expect(label({ isInterrupted: true })).toContain('blocked impl-auth')
   expect(label({ output: undefined })).toContain('pending')
-  expect(label({ output: 'ok' })).toContain('✓ impl-auth')
+  expect(label({ output: 'ok' })).toContain('done impl-auth')
 })
 
 test('a listed agent is found by name, and its status wins over the call flags', () => {
@@ -424,8 +423,8 @@ test('ToolGroup: two atlas dispatches draw as a numbered wave, anything else sta
   const call = (id: string, name: string) => ({ tool: 'Task', tool_use_id: id, input: { subagentType: 'atlas:implementer', name }, ...callBase })
   const group = (calls: unknown[]) => regs[5]!.hook(live, fakeE('ToolGroup', { calls }), engineNext)
   const first = stringsOf(await group([call('t1', 'a'), call('t2', 'b')]))
-  expect(first).toContain('1')
-  expect(first).toContain('implementer')
+  expect(first).toContain('WAVE 1')
+  expect(first).toContain('done a')
   expect(await group([call('t3', 'a')])).toBe(SENTINEL)
   expect(await group([])).toBe(SENTINEL)
   const offRegs: Reg[] = []

@@ -1,93 +1,69 @@
-// Native-element sidebar: a tab bar (r route, t team, c channel, g gates) over exactly one view.
-// The active tab is accented, the others muted; the gates tab says how many checks fail, in words.
-// Plain column: the host pane draws the one frame.
+// Native-element sidebar: the SIDEPANEL ribbon, a tab strip (route, team, channel, gates, core) with the lit tab ruled, and
+// exactly one view under it. The rows come from the shared layout (mod/panel-layout.ts); this file adds the tab Buttons
+// (hotkeys r t c g k, o for the board when wired), which the host draws as `k: label`, so the strip budgets 3 cells a tab
+// and wraps onto a second row when it does not fit: it never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
-// Spec: docs/specs/2026-11-10_atlas-terminal-ui.md (Other surfaces).
 import type { ClientElements, RenderElement } from 'claude-code';
-import { openGateCount } from '../gates';
-import { TONE_HEX as T } from '../mission-layout';
-import { textWidth } from '../theme';
-import { channelRows } from './sidebar-channel';
-import { coreRows } from './sidebar-core';
-import { routeRows } from './sidebar-route';
-import { teamRows } from './sidebar-team';
+import { cells, uiFromEnv, type Ui } from '../atlas-ui';
+import { PANEL_TABS, ribbonRow, type PanelTab } from '../panel-layout';
+import { panelModelOf } from './sidebar-model';
+import { lineEl, panelBg, runEl, viewRows } from './sidebar-paint';
 import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
 
 export type { GateGroup, GateLine, SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
 
-const HINT_MIN_INNER = 60;
-const GAP = '  ';
-/** Only the keys the bar draws: r t c g always, o when the board toggle is wired. Hotkeys press while this pane holds the keyboard. */
-const hintFor = (on: SidebarHandlers): string => `press r t c g${on.toggleTodos ? ' o' : ''} · Tab ↑↓ · Esc closes`;
-
-type TabSpec = { v: SidebarView; key: string; name: string; failing: number };
-/** The failing part of a tab: `1 failing` in full, just the count when the bar is tight (the tab name stays beside it). */
-const failingText = (t: TabSpec, compact: boolean): string => (t.failing ? (compact ? ` ${t.failing}` : ` ${t.failing} failing`) : '');
-const labelOf = (t: TabSpec, compact: boolean): string => `${t.name}${failingText(t, compact)}`;
-/** The host draws a 3-cell `k: ` hotkey prefix before every button, so each tab costs its label plus HOTKEY_W. */
 const HOTKEY_W = 3;
-const stripWidth = (ts: TabSpec[], compact: boolean): number => ts.reduce((n, t) => n + textWidth(labelOf(t, compact)) + HOTKEY_W + textWidth(GAP), -textWidth(GAP));
+type Item = { id: PanelTab | 'board'; key: string; label: string };
 
-/** The four view tabs and whether the failing count folds to a bare number to fit a docked 56-column pane.
- * `used` is the bar's width so far (labels, hotkey prefixes, gaps); `boardW` the board button's full width. */
-function tabSpecs(open: number, inner: number, hasBoard: boolean): { tabs: TabSpec[]; compact: boolean; used: number; boardW: number } {
-  const tabs: TabSpec[] = [
-    { v: 'route', key: 'r', name: 'route', failing: 0 },
-    { v: 'team', key: 't', name: 'team', failing: 0 },
-    { v: 'channel', key: 'c', name: 'channel', failing: 0 },
-    { v: 'gates', key: 'g', name: 'gates', failing: open },
-  ];
-  const boardW = hasBoard ? textWidth(GAP) + HOTKEY_W + textWidth('board') : 0;
-  const compact = stripWidth(tabs, false) + boardW > inner;
-  return { tabs, compact, used: stripWidth(tabs, compact), boardW };
+/** Tabs per strip row: as many as fit in `inner` cells with a two-cell gap, each costing its label plus the host's `k: ` prefix. */
+export function stripRows(items: readonly Item[], inner: number): Item[][] {
+  const rows: Item[][] = [];
+  let used = 0;
+  for (const it of items) {
+    const w = HOTKEY_W + it.label.length;
+    if (!rows.length || (rows[rows.length - 1]!.length && used + 2 + w > inner)) { rows.push([]); used = 0; }
+    rows[rows.length - 1]!.push(it);
+    used += (rows[rows.length - 1]!.length > 1 ? 2 : 0) + w;
+  }
+  return rows;
 }
 
-/** The optional board toggle after the four tabs. */
-function todosTab(els: ClientElements, on: SidebarHandlers): RenderElement[] {
-  if (!on.toggleTodos) return [];
-  return [els.Text({ children: GAP }), els.Button({ key: 'tab:todos', plain: true, hotkey: 'o', children: [els.Text({ color: T.muted, children: 'board' })], label: 'board', onPress: on.toggleTodos })];
-}
-
-/** The right-aligned hint, only when the pane is wide enough and the gap fits. */
-function hintCells(els: ClientElements, inner: number, gap: number, hint: string): RenderElement[] {
-  if (inner < HINT_MIN_INNER || gap < 2) return [];
-  return [els.Text({ children: ' '.repeat(gap) }), els.Text({ color: T.dim, children: hint })];
-}
-
-function tabButtons(els: ClientElements, tabs: TabSpec[], compact: boolean, model: SidebarModel, on: SidebarHandlers): RenderElement[] {
-  const children: RenderElement[] = [];
-  tabs.forEach((t, i) => {
-    const cur = t.v === model.ui.view;
-    if (i) children.push(els.Text({ children: GAP }));
-    children.push(els.Button({
-      key: `tab:${t.v}`, plain: true, hotkey: t.key,
-      children: [
-        els.Text({ color: cur ? T.accent : T.muted, bold: cur, children: t.name }),
-        ...(t.failing ? [els.Text({ color: T.bad, bold: true, children: failingText(t, compact) })] : []),
-      ],
-      label: labelOf(t, compact), onPress: () => on.setView(t.v),
-    }));
+function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, ui: Ui): RenderElement[] {
+  const items: Item[] = [...PANEL_TABS, ...(on.toggleTodos ? [{ id: 'board' as const, key: 'o', label: 'board' }] : [])];
+  const bg = panelBg(ui);
+  const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
+  const rule = ui.ascii ? '-' : '━';
+  return stripRows(items, inner).flatMap((row, ri): RenderElement[] => {
+    const tabs = row.flatMap((it, i): RenderElement[] => {
+      const on_ = it.id === m.ui.view;
+      const press = it.id === 'board' ? () => on.toggleTodos?.() : () => on.setView(it.id as SidebarView);
+      // The lit tab is bold, the rest explicitly not: a host that restyles Buttons reads the flag, not its absence.
+      const label = { ...runEl(els, on_ ? { t: it.label, tone: 'text', bold: true } : { t: it.label, tone: 'muted' }, ui) } as RenderElement & { props: Record<string, unknown> };
+      label.props = { ...label.props, bold: on_ };
+      return [...(i ? [gap(2)] : []), els.Button({ key: it.id === 'board' ? 'tab:todos' : `tab:${it.id}`, plain: true, hotkey: it.key, children: [label], label: it.label, onPress: press })];
+    });
+    const under = row.flatMap((it, i): RenderElement[] => [
+      ...(i ? [gap(2)] : []), gap(HOTKEY_W),
+      it.id === m.ui.view ? runEl(els, { t: rule.repeat(cells(it.label)), tone: 'accent' }, ui) : gap(it.label.length),
+    ]);
+    const lit = row.some((it) => it.id === m.ui.view);
+    return [
+      els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: tabs }),
+      ...(lit ? [els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: under })] : []),
+    ];
   });
-  return children;
 }
-
-/** The tab bar: four plain hotkey Buttons (the active one accent and bold, the rest muted), then a dim hint pushed to the right edge when there is room. */
-function tabStrip(els: ClientElements, model: SidebarModel, on: SidebarHandlers, inner: number): RenderElement {
-  const { tabs, compact, used, boardW } = tabSpecs(openGateCount(model.gates), inner, !!on.toggleTodos);
-  const hint = hintFor(on);
-  const gap = inner - used - textWidth(hint) - boardW;
-  const children = [...tabButtons(els, tabs, compact, model, on), ...todosTab(els, on), ...hintCells(els, inner, gap, hint)];
-  return els.Box({ key: 'tabs', flexDirection: 'row', flexShrink: 0, children });
-}
-
-const VIEWS = { route: routeRows, team: teamRows, channel: channelRows, gates: coreRows } as const;
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
+  const ui = uiFromEnv();
   const cols = Math.max(10, model.columns - 1);
+  const pm = panelModelOf(model, ui, cols);
+  const blank = (): RenderElement => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, model, on, ui);
   return els.Box({
     flexDirection: 'column',
     flexShrink: 0,
     width: cols,
-    children: [tabStrip(els, model, on, cols), ...VIEWS[model.ui.view](els, model, on, cols)],
+    backgroundColor: panelBg(ui),
+    children: [lineEl(els, ribbonRow(pm), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), blank(), ...viewRows(model.ui.view, els, model, on, cols)],
   });
 }

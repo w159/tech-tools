@@ -285,9 +285,11 @@ describe('message and footer', () => {
 });
 
 describe('the board slot', () => {
-  test('expanded lists every item right under the band; folded costs nothing', () => {
+  test('expanded lists every item right under the band (header, then one row each); folded costs nothing', () => {
     const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }), todoExpanded: true, maxRows: 14 });
-    expect(rows.slice(1, 4).map((r) => r.trim().slice(0, 1))).toEqual(['✓', '◉', '○']);
+    expect(rows[1]!.trim()).toMatch(/^ITEM +STATE +OWNER +DETAIL$/);
+    expect(rows.slice(2, 5).map((r) => r.trim().replace(/^▸ /, '').slice(0, 1))).toEqual(['●', spinnerGlyph(3), '◇']); // the panel helper draws tick 3
+    expect(rows.slice(2, 5).map((r) => r.includes('done') || r.includes('running') || r.includes('queued'))).toEqual([true, true, true]);
   });
   test('a tight budget shrinks the board before it takes the footer or the attention workers', () => {
     const snapshot = busySnap({ todos: boardTodos as any });
@@ -296,8 +298,9 @@ describe('the board slot', () => {
     expect(rows.length).toBeLessThanOrEqual(8);
     expect(rows.some((r) => r.includes('runner-1'))).toBe(true);
     expect(rows.at(-1)).toContain('checks');
-    const boardRows = (rs: string[]) => rs.filter((r) => /^ (✓|◉|⏸|○) /.test(r) && !/(runner|impl-auth|explorer)-\d? {2}/.test(r)).length;
-    expect(boardRows(rows)).toBeLessThan(boardRows(roomy));
+    const boardRows = (rs: string[]) => rs.filter((r) => /^[ ▸] [●◐◓◑◒◇■▲] .* (done|running|queued|failed|blocked) /.test(r) && !/(runner|implementer|explorer) {2,}/.test(r)).length;
+    expect(boardRows(roomy)).toBe(3);
+    expect(boardRows(rows)).toBeLessThanOrEqual(boardRows(roomy)); // the board's header and three items fit in the 8 rows beside the attention worker and the footer
   });
   test('board text drops the [phase] / [label] prefix', () => {
     const todos = [{ id: 'x', content: '[research] Trace gate path', status: 'in_progress' }, { id: 'y', content: '[label] Other', status: 'pending' }];
@@ -305,11 +308,11 @@ describe('the board slot', () => {
     expect(open).toContain('Trace gate path');
     expect(open).not.toMatch(/\[(research|label)\]/);
   });
-  test('an in-progress board item is the still ◉ mark on every tick, as in omp', () => {
+  test('the running board item carries the spinner frame of the tick and its owner, as in omp', () => {
     const snapshot = busySnap({ todos: [{ id: 'b', content: '[research] edit auth middleware', status: 'in_progress', owner: 'impl-auth' }] as any });
-    const row = (tick: number) => panel(200, { snapshot, tick, todoExpanded: true }).rows[1]!;
-    expect(row(0)).toContain('◉ edit auth middleware · impl-auth');
-    expect(row(0)).not.toMatch(/[⠋-⠿]/);
+    const row = (tick: number) => panel(200, { snapshot, tick, todoExpanded: true }).rows[2]!;
+    expect(row(0)).toMatch(/^▸ ◐ edit auth middleware +running +impl-auth/);
+    expect(row(1)).toMatch(/^▸ ◓ edit auth middleware/);
     expect(row(4)).toBe(row(0));
   });
 });

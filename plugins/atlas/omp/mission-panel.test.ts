@@ -141,8 +141,9 @@ test("idle panel puts the board under the band and the last run, within maxLines
 	const r = rows(m);
 	expect(r[0]).toContain("ATLAS");
 	expect(r[1]).toContain("last run");
-	expect(r.length).toBe(2 + 3); // two head rows + the board's 3-row budget (2 items + "+4 more")
-	expect(r[r.length - 1]).toContain("+4 more");
+	expect(r.length).toBe(2 + 3); // two head rows + the board's 3-row budget (header, 1 item, "+5 more")
+	expect(r[2]).toMatch(/^ITEM +STATE +OWNER +DETAIL/);
+	expect(r[r.length - 1]).toContain("+5 more");
 });
 
 test("live panel keeps the workers when the expanded board is long", () => {
@@ -151,7 +152,7 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	const r = rows(m);
 	expect(r.length).toBeLessThanOrEqual(8);
 	expect(r.filter((x) => x.includes("implementer-000")).length).toBe(2);
-	expect(r.filter((x) => /item \d/.test(x)).length).toBe(3);
+	expect(r.filter((x) => /item \d/.test(x)).length).toBe(2); // the board slot holds the header, 2 items and the `+N more` row
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 

@@ -59,6 +59,7 @@ export interface PanelModel {
 	elapsedSecs?: number;
 	idle?: IdleWave;
 	todos?: PanelTodo[]; // the shared board; listed under the rail when expanded
+	nowSecs?: number; // epoch seconds: times the running board item
 	todosExpanded?: boolean; // ATLAS_TODO_EXPANDED=1: the list under the rail
 	core?: CoreModel | null; // the Atlas core row on the idle panel; absent or empty: no row
 	blocked?: boolean; // the lead's last reply declared the blocked phase
@@ -161,7 +162,7 @@ export function paintMission(mm: MissionModel, board: (rows: number) => string[]
 
 export function renderPanel(m: PanelModel): string[] {
 	const w = Math.max(20, m.width);
-	return paintMission(missionModel(m, w), rows => todoLines(m.todos ?? [], { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows }).map(s => fitLine(s, w)));
+	return paintMission(missionModel(m, w), rows => todoLines(m.todos ?? [], { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows, now: m.nowSecs }).map(s => fitLine(s, w)));
 }
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */
 export interface GatesCache {

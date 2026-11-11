@@ -166,11 +166,11 @@ const doingOf = (a: ActivityEntry): string => {
  return tool ? `${shortTool(tool)} ${a.target ?? ''}`.trim() : ''
 }
 
-/** What a live worker is doing, from the snapshot's activity: `ctx_read register.ts   ·   1m12s · 9 tools`. */
+/** What a live worker is doing, from the snapshot's activity: `ctx_read register.ts · 1m12s · 9 tools`. */
 function nowOf(snap: AtlasSnapshot, name?: string): string {
  const a = activityOf(snap, name)
  if (!a) return ''
- return [doingOf(a), `${formatDuration(snap.now - (a.startedAt ?? a.since))} · ${a.toolCount} tools`].filter(Boolean).join('   ·   ')
+ return [doingOf(a), `${formatDuration(snap.now - (a.startedAt ?? a.since))} · ${a.toolCount} tools`].filter(Boolean).join(' · ')
 }
 
 // ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----

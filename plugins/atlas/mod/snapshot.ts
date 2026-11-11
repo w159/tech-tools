@@ -7,7 +7,7 @@ import type {
 } from './contract';
 import { boardRoot, leadChannelName } from './data/root';
 import { readCrew } from './data/crew';
-import { computeCounts, currentPhase, groupTodos, readTodos, type TodosCache, type TodosError } from './data/todos';
+import { computeCounts, currentPhase, endedOf, groupTodos, readTodos, settleDispatch, type TodosCache, type TodosError } from './data/todos';
 import { NoteReader, readRoster } from './data/channels';
 import { loadContract, loadPersonas } from './data/personas';
 import { deriveOrchestration, EMPTY_ORCH, type Orch, type WtRow } from './data/orchestration';
@@ -146,20 +146,22 @@ export class SnapshotBuilder {
       ...crew.notes,
     ];
     const { panes } = parseHerdrStatus(live.herdrStdout ?? '');
-    const phase = currentPhase(read.items, live.headerPhase, this.sessionId);
     const squad = mergeSquad(this.members, notes, panes, [...crew.agents, ...live.taskAgents, ...(live.mux ?? [])], live.now);
+    // S1: a dispatch row follows its worker, so the band count, the board and the side panel agree once the worker ends.
+    const todos = settleDispatch(read.items, endedOf(squad));
+    const phase = currentPhase(todos, live.headerPhase, this.sessionId);
     return {
       ...orchestrate(notes, squad),
       ...passthrough,
       channel: this.channel,
-      todos: read.items,
-      counts: computeCounts(read.items, this.contract, this.sessionId),
+      todos,
+      counts: computeCounts(todos, this.contract, this.sessionId),
       phase: phase.phase,
       phaseSource: phase.source,
       notes,
       members: this.members,
       squad,
-      todoGroups: groupTodos(read.items, this.contract, this.sessionId),
+      todoGroups: groupTodos(todos, this.contract, this.sessionId),
     };
   }
 }

@@ -78,15 +78,13 @@ test('background launch card: live worker spins as running, never a stale comple
   expect(text).not.toContain('✓')
 })
 
-test('background launch card: ended worker shows a finished row: STATUS line · duration', async () => {
+test('background launch card: an ended worker reads done in the border, its STATUS line · duration in the last row', async () => {
   const e = launched('completed')
   const out = strings(await sites().ToolUse!(engine([e.agent]), e, next))
-  expect(out).toContain(' finished ')
-  expect(out).not.toContain(' done ')
-  expect(out).toContain('STATUS: DONE · 29s')
-  expect(out.match(/finished/g)).toEqual(['finished'])
-  const row = (JSON.parse(out) as { children: Array<{ children: Array<{ children: string[] }> }> }).children[2]!
-  expect(row.children.map((c) => c.children.join('')).join('').trimEnd()).toBe('▌ finished STATUS: DONE · 29s')
+  const rows = (JSON.parse(out) as { children: Array<{ children: Array<{ children: string[] }> }> }).children.map((r) => r.children.map((c) => c.children.join('')).join(''))
+  expect(rows[0]).toMatch(/^┌─ done wave-a /)
+  expect(rows.some((r) => /^│ last {2}STATUS: DONE · 29s +│$/.test(r))).toBe(true);
+  expect(out).not.toContain('finished');
 })
 
 test('a call still being written reads pending, not completed', async () => {

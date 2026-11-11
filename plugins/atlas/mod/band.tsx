@@ -29,7 +29,7 @@ const LINGER_MS = 15_000; // a finished worker keeps its row, ticked, this long
 const RAIL_SKIP = new Set(['validate', 'blocked']);
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
-/** Footer button presses: open (or focus) the Atlas pane on a view, or fold the board. Absent in fixtures that wire neither. */
+/** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
 export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void };
 /** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = [
@@ -180,7 +180,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   const rows: Row[] = lines.flatMap((l): Row[] => {
-    if (l.board) return todoRows(ownTodos(b.snapshot.todos, b.snapshot.sessionId), { cols, tick: b.tick, expanded: true, maxRows: l.board });
+    if (l.board) return todoRows(ownTodos(b.snapshot.todos, b.snapshot.sessionId), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), ui, rich: m.rich });
     if (l.keys && on) return [keysRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });

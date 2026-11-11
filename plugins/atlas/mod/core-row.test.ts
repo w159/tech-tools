@@ -20,8 +20,8 @@ describe('core row', () => {
   test('never wider than the columns, 40 to 200', () => {
     for (let cols = 40; cols <= 200; cols++) expect(cellsWidth(coreCells(model, cols))).toBeLessThanOrEqual(cols);
   });
-  test('a dim lowercase label leads each group', () => {
-    const labels = coreCells(model, 160).filter((c) => c.tone === 'dim' && c.t.trim() !== '·').map((c) => c.t.trim());
+  test('a muted lowercase label leads each group', () => {
+    const labels = coreCells(model, 160).filter((c) => c.tone === 'muted' && /^[a-z]+ {2}$/.test(c.t)).map((c) => c.t.trim());
     expect(labels).toEqual(['contract', 'verdicts', 'offload', 'route']);
   });
 });
@@ -98,8 +98,8 @@ describe('core row cells', () => {
     m.routes = [route({ seats: [seat()] }) as any];
     let narrow = 0;
     for (let cols = 20; cols < 300; cols++) if (coreCells(m, cols).some((x) => x.t === 'route  ')) { narrow = cols; break; }
-    expect(narrow).toBe(104);
-    expect(trim(cellsText(coreCells(m, narrow)))).toBe(' contract  header none   verdicts  1 verified · 0 refuted   offload  7.0k → 151 (46x)   route  fix/low …');
+    expect(narrow).toBe(113);
+    expect(trim(cellsText(coreCells(m, narrow)))).toBe(' contract  header none   verdicts  1 verified · 0 refuted   offload  7.0k kept, 151 back (46x)   route  fix/low ◇');
   });
   test('below the four compact groups: contract and verdict only, below that nothing', () => {
     const m = blank();
@@ -108,7 +108,7 @@ describe('core row cells', () => {
     let four = 0;
     for (let cols = 20; cols < 300; cols++) if (coreCells(m, cols).some((x) => x.t === 'route  ')) { four = cols; break; }
     const two = coreCells(m, four - 1);
-    expect(two.filter((x) => x.tone === 'dim' && x.t.trim() !== '·').map((x) => x.t.trim())).toEqual(['contract', 'verdicts']);
+    expect(two.filter((x) => x.tone === 'muted' && /^[a-z]+ {2}$/.test(x.t)).map((x) => x.t.trim())).toEqual(['contract', 'verdicts']);
     expect(cellsWidth(two)).toBeLessThanOrEqual(four - 1);
     expect(coreCells(m, cellsWidth(two) - 1)).toEqual([]);
     expect(coreCells(m, cellsWidth(two)).length).toBeGreaterThan(0);
@@ -121,7 +121,7 @@ describe('core row cells', () => {
     m.offload = { workers: [worker('a'), worker('b')] as any, kept: 14_000, returned: 302, ratio: 3.2 };
     m.routes = [route({ teamId: 't2' }), route({ seats: [seat({ count: 2 }), seat({ role: 'verifier', model: 'haiku' })] })] as any;
     expect(trim(cellsText(coreCells(m, 500)))).toBe(
-      ' contract  header 1/1 · evidence 1/1   verdicts  2 claims · 1 verified · 1 refuted · 1 open · 1 unchecked   offload  14.0k kept in 2 workers → 302 back (3.2x)   route  fix/low → 2× implementer sonnet, verifier haiku … +1 more',
+      ' contract  header 1/1 · evidence 1/1   verdicts  2 claims · 1 verified · 1 refuted · 1 open · 1 unchecked   offload  14.0k kept in 2 workers, 302 back (3.2x)   route  fix/low: 2× implementer sonnet, verifier haiku ◇ +1 more',
     );
   });
   test('claims and workers are singular for one', () => {
@@ -132,7 +132,7 @@ describe('core row cells', () => {
     const t = cellsText(coreCells(m, 500));
     expect(t).toContain('1 claim ·');
     expect(t).not.toContain('1 claims');
-    expect(t).toContain('7.0k kept in 1 worker →');
+    expect(t).toContain('7.0k kept in 1 worker,');
     expect(t).not.toContain('1 workers');
   });
   test('verdict figures are muted at zero and coloured when non-zero', () => {
@@ -156,10 +156,10 @@ describe('core row cells', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     const at = (r: unknown) => { m.routes = [r as any]; return cellsText(coreCells(m, 500)).split('route  ')[1]!.trim(); };
-    expect(at(route({ seats: [seat()], drift: ['x'] }))).toBe('fix/low → implementer sonnet ✗ drift');
-    expect(at(route({ seats: [seat({ ran: ['claude-sonnet-5-5'] })] }))).toBe('fix/low → implementer sonnet ✓');
-    expect(at(route({ seats: [seat()] }))).toBe('fix/low → implementer sonnet …');
-    expect(at(route())).toBe('fix/low → ? …');
+    expect(at(route({ seats: [seat()], drift: ['x'] }))).toBe('fix/low: implementer sonnet ■ drift');
+    expect(at(route({ seats: [seat({ ran: ['claude-sonnet-5-5'] })] }))).toBe('fix/low: implementer sonnet ●');
+    expect(at(route({ seats: [seat()] }))).toBe('fix/low: implementer sonnet ◇');
+    expect(at(route())).toBe('fix/low: ? ◇');
   });
 });
 

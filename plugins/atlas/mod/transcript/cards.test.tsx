@@ -1,7 +1,8 @@
 // Golden tests for transcript/cards.tsx: worker cards, wave strips, channel bubbles.
 import { expect, test } from 'claude-code/testing'
-import { fitText, stateColor, textWidth } from '../theme'
-import { bubbleTree, waveTree, workerCard, goalLine, resultLine, phaseOf } from './cards'
+import { fitText, textWidth } from '../theme'
+import { toneHex } from '../atlas-ui'
+import { bubbleTree, notificationTree, waveTree, workerCard, goalLine, resultLine, phaseOf } from './cards'
 import type { CallLike } from './cards'
 
 const leaf = (n: unknown): string => (typeof n === 'string' || typeof n === 'number' ? String(n) : '')
@@ -29,27 +30,36 @@ test('resultLine prefers the STATUS line', () => {
 })
 
 type El = { props: Record<string, unknown>; children: El[] }
-/** The `▌` stripe colour and the header chip of a card. */
-const stripe = (c: unknown): unknown => (c as El).children[0]!.children[0]!.props.color
-const chip = (c: unknown): El => (c as El).children[0]!.children[1]!
+/** The card as its plain rows. */
+const rowsOf = (c: unknown): string[] => (c as El).children.map((r) => text(r))
+const W = 44
 
-test('running card: filled panel, stripe, name chip, role · tier, goal and now rows', () => {
-  const c = workerCard(call(), 'running', 80, undefined, '', { mark: '⣾', now: 'Grep auth/ · 12s · 3 tools', wave: 2 })!
-  expect(props(c)).toMatchObject({ backgroundColor: '#11111b', width: 80 })
+test('running card: a closed box, the state word and name in the top border, goal and last rows', () => {
+  const c = workerCard(call(), 'running', 0, undefined, '', { now: 'Grep auth/ 12s', wave: 2 })!
+  const rows = rowsOf(c)
+  expect(rows[0]).toMatch(/^┌─ running impl-a ─+ sonnet ─┐$/u)
+  expect(rows.at(-1)).toMatch(/^└─+┘$/u)
+  expect(rows.some((r) => /^│ goal {2}ship the thing +│$/.test(r))).toBe(true)
+  expect(rows.some((r) => /^│ last {2}Grep auth\/ 12s +│$/.test(r))).toBe(true)
+  for (const r of rows) expect(textWidth(r)).toBe(W)
   expect(props(c).borderStyle).toBeUndefined()
-  expect(text(chip(c))).toBe(' ⣾ impl-a ')
-  expect(chip(c).props).toMatchObject({ backgroundColor: '#a6e3a1', color: '#1e1e2e', bold: true })
-  const t = text(c)
-  for (const s of ['▌', 'implementer · sonnet · wave 2', 'goal', 'ship the thing', 'now', 'Grep auth/ · 12s · 3 tools']) expect(t).toContain(s)
-  for (const row of (c as El).children) expect(text(row).length).toBe(80)
 })
 
-test('done card shows the result line; errored uses the fail colour', () => {
+test('the card frame takes the state hue: running, done and failed differ; the state word stays plain text', () => {
+  const frame = (c: unknown): unknown => (((c as El).children[0]!.children[0]!).props as Record<string, unknown>).color
+  const run = frame(workerCard(call(), 'running')!)
+  const done = frame(workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished')!)
+  const bad = frame(workerCard(call({ isRunning: false, isErrored: true }), 'failed')!)
+  expect(new Set([run, done, bad]).size).toBe(3)
+  expect(bad).toBe(toneHex('bad', 'mocha'))
+})
+
+test('done card shows the result line in the last row; errored reads failed in the border', () => {
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished')!
+  expect(rowsOf(done)[0]).toContain('done impl-a')
   expect(text(done)).toContain('STATUS: DONE')
   const bad = workerCard(call({ isRunning: false, isErrored: true }), 'failed')!
-  expect(stripe(bad)).toBe('#f38ba8')
-  expect(stripe(bad)).not.toBe(stripe(done))
+  expect(rowsOf(bad)[0]).toContain('failed impl-a')
 })
 
 test('non-atlas Agent call is left to the engine', () => {
@@ -74,12 +84,12 @@ test('bubble names sender and carries the text', () => {
   expect(bubbleTree('x', undefined)).toBeNull()
 })
 
-test('phaseOf: errored beats interrupted beats running; else finished', () => {
+test('phaseOf: errored beats interrupted beats running; else finished; the UI state is in the six-word vocabulary', () => {
   const s = (over: Partial<CallLike>) => phaseOf(call({ isRunning: false, ...over }), 'finished')
-  expect(s({ isErrored: true, isInterrupted: true }).state).toBe('failed')
-  expect(s({ isInterrupted: true }).state).toBe('dead')
-  expect(phaseOf(call(), 'finished').state).toBe('running')
-  expect(s({})).toMatchObject({ mark: '✓', state: 'finished' })
+  expect(s({ isErrored: true, isInterrupted: true })).toMatchObject({ state: 'failed', ui: 'failed' })
+  expect(s({ isInterrupted: true })).toMatchObject({ state: 'dead', ui: 'blocked' })
+  expect(phaseOf(call(), 'finished')).toMatchObject({ state: 'running', ui: 'running' })
+  expect(s({})).toMatchObject({ state: 'finished', ui: 'done' })
 })
 
 test('interrupted card says so; flatten walks nested output', () => {
@@ -92,15 +102,14 @@ test('narrow wave stacks cards', () => {
   expect(props((waveTree(calls, 2, 60) as { children: unknown[] }).children[1])).toMatchObject({ flexDirection: 'column' })
 })
 
-test('denied dispatch: `✖ denied` with the first sentence of the reason, no tier, goal from the GOAL: line only', () => {
+test('denied dispatch: failed in the border, the first sentence of the reason, goal from the GOAL: line only', () => {
   const prompt = 'GOAL: list files in /tmp. TOOLS: ToolSearch lean-ctx (ctx_tree). DELIVERABLE: list. SUCCESS CRITERIA: list returned.'
   const output = 'Error: PreToolUse:Agent hook error: DENY - this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line. Classify the task, then resolve its team:\n  python3 x'
-  const c = workerCard(call({ input: { subagent_type: 'atlas:explorer', prompt, model: 'sonnet', effort: 'low' }, isRunning: false, isErrored: true, output }), 'failed', 160)!
+  const c = workerCard(call({ input: { subagent_type: 'atlas:explorer', prompt, model: 'sonnet', effort: 'low' }, isRunning: false, isErrored: true, output }), 'failed', 120)!
   const t = text(c)
-  expect(t).toContain('✖ denied')
-  expect(t).toContain('this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line.')
+  expect(rowsOf(c)[0]).toContain('failed explorer')
+  expect(t).toContain('denied: this dispatch to atlas:')
   expect(t).not.toContain('Classify the task')
-  expect(t).not.toContain('sonnet')
   expect(t).toContain('list files in /tmp.')
   expect(t).not.toContain('TOOLS:')
   expect(t).not.toContain('DELIVERABLE')
@@ -110,24 +119,18 @@ test('goalLine stops at the next ALL-CAPS label on a one-line prompt', () => {
   expect(goalLine({ prompt: 'GOAL: do x. TOOLS: a. OUT OF SCOPE: b' })).toBe('do x.')
 })
 
-test('phaseOf colours a finished call by its worker state, not the idle fallback', () => {
-  const done = phaseOf(call({ isRunning: false }), 'dead')
-  expect(done.color).toBe(stateColor('dead'));
-  expect(done.color).not.toBe(stateColor('idle'));
-  expect(phaseOf(call({ isRunning: false }), 'finished').color).toBe(stateColor('finished'));
+test('phaseOf maps a finished call by its worker state, not the idle fallback', () => {
+  expect(phaseOf(call({ isRunning: false, isInterrupted: true }), 'dead').ui).toBe('blocked')
+  expect(phaseOf(call({ isRunning: false }), 'finished').ui).toBe('done')
+  expect(phaseOf(call({ isRunning: false, isErrored: true }), 'failed').ui).toBe('failed')
 })
 
-test('card rows are fixed-size boxes with 8-wide padded labels; a returned worker reads finished, never done', () => {
+test('card rows are fixed-size boxes; a returned worker reads done, never finished-as-done twice', () => {
   const running = workerCard(call(), 'running', 60, undefined, '', { now: 'x' })!
   for (const row of (running as El).children) expect(row.props.flexShrink).toBe(0)
-  const labelOf = (row: El): string => text(row.children[1])
-  const rows = (running as El).children
-  expect(labelOf(rows[1]!)).toBe(' goal     ')
-  expect(labelOf(rows[2]!)).toBe(' now      ')
+  expect(rowsOf(running)[0]).toMatch(/^┌─ running impl-a/u)
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished', 60)!
-  expect(labelOf((done as El).children[2]!)).toBe(' finished ')
-  const failed = workerCard(call({ isRunning: false, isErrored: true, output: 'boom' }), 'failed', 60)!
-  expect(labelOf((failed as El).children[2]!)).toBe(' fail     ')
+  expect(rowsOf(done)[0]).toContain('done impl-a')
 })
 
 test('bubble body lines are fitted to the columns less the 3-cell gutter', () => {
@@ -141,10 +144,9 @@ const LONG = 'word '.repeat(60).trim()
 const DENIED = `Error: PreToolUse:Agent hook error: DENY - ${LONG}.`
 const longCall = (over: Partial<CallLike> = {}): CallLike =>
   call({ input: { subagent_type: 'atlas:implementer', name: 'impl-a', prompt: `GOAL: ${LONG}`, model: 'sonnet' }, ...over })
-const rowWidths = (card: unknown): number[] => (card as El).children.map((row) => textWidth(text(row)))
 
-test('goal, now, deny and finished rows with long text never exceed the card width', () => {
-  for (const width of [40, 60, 80, 120]) {
+test('every card is a closed box as wide as asked up to the design 44, at 30 to 120 columns, every state, long text', () => {
+  for (const width of [30, 44, 60, 80, 120]) {
     const cards = [
       workerCard(longCall(), 'running', width, undefined, '', { now: LONG }),
       workerCard(longCall({ isRunning: false, isErrored: true, output: DENIED }), 'failed', width),
@@ -152,21 +154,31 @@ test('goal, now, deny and finished rows with long text never exceed the card wid
       workerCard(longCall({ isRunning: false, isErrored: true, output: LONG }), 'failed', width),
     ]
     for (const card of cards) {
-      expect((card as El).children.length).toBe(3)
-      for (const w of rowWidths(card)) expect([width, w]).toEqual([width, width])
+      const rows = rowsOf(card)
+      expect(rows[0]!.startsWith('┌')).toBe(true)
+      expect(rows[0]!.endsWith('┐')).toBe(true)
+      expect(rows.at(-1)!.startsWith('└')).toBe(true)
+      expect(rows.at(-1)!.endsWith('┘')).toBe(true)
+      for (const r of rows.slice(1, -1)) { expect(r.startsWith('│')).toBe(true); expect(r.endsWith('│')).toBe(true) }
+      for (const r of rows) expect([width, textWidth(r)]).toEqual([width, Math.min(width, W)]) // the design card is 44 wide at most
     }
   }
 })
 
-test('side-by-side wave cards with long text fit the columns between them', () => {
-  for (const columns of [80, 120, 160]) {
+test('a card with no width is the design 44 columns', () => {
+  for (const r of rowsOf(workerCard(call(), 'running')!)) expect(textWidth(r)).toBe(W)
+})
+
+test('side-by-side wave cards fit the columns between them; below two boxes of room they stack', () => {
+  for (const columns of [120, 160]) {
     const w = waveTree([longCall(), longCall({ isRunning: false, output: LONG })], 1, columns)!
     const strip = (w as El).children[1]!
     expect(strip.props.flexDirection).toBe('row')
-    const widest = strip.children.map((card) => Math.max(...rowWidths(card)))
+    const widest = strip.children.map((card) => Math.max(...rowsOf(card).map(textWidth)))
     expect(widest.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(columns)
-    strip.children.forEach((card, i) => expect(widest[i]).toBeLessThanOrEqual(card.props.width as number))
   }
+  const narrow = waveTree([longCall(), longCall()], 1, 80)!
+  expect(((narrow as El).children[1]!).props.flexDirection).toBe('column')
 })
 
 test('a wave whose workers all returned is headed finished, never done', () => {
@@ -175,21 +187,20 @@ test('a wave whose workers all returned is headed finished, never done', () => {
   expect(text((waveTree([call(), calls[0]!], 3, 160) as El).children[0])).toBe('WAVE 3 · 2 workers · 1 running')
 })
 
-test('the lifecycle word of a worker outcome is the row label, not repeated in the row text', () => {
+test('the outcome of a background worker is the last row, led by its label', () => {
   const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
-  const rowOf = (ended: string, outcome: string): string => text((workerCard(launch, 'finished', 60, undefined, '', { ended, outcome }) as El).children[2]).trimEnd()
-  expect(rowOf('finished', 'STATUS: DONE · 29s')).toBe('▌ finished STATUS: DONE · 29s')
-  expect(rowOf('killed', '')).toBe('▌ killed')
+  const lastRow = (ended: string, outcome: string): string => rowsOf(workerCard(launch, 'finished', 60, undefined, '', { ended, outcome })!).slice(1, -1).join('\n')
+  expect(lastRow('finished', 'STATUS: DONE · 29s')).toContain('last  STATUS: DONE · 29s')
 })
 
-test('a killed or failed background worker card has the failure mark and hue in its head; a finished one keeps the success mark', () => {
+test('a killed or failed background worker reads failed in the border; a finished one reads done', () => {
   const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
   const card = (ended: string) => workerCard(launch, 'finished', 60, undefined, '', { ended, outcome: '' })!
-  for (const ended of ['killed', 'failed']) {
-    expect([ended, text(chip(card(ended)))]).toEqual([ended, ' ✗ impl-a '])
-    expect([ended, chip(card(ended)).props.backgroundColor, stripe(card(ended))]).toEqual([ended, '#f38ba8', '#f38ba8'])
-    expect(text((card(ended) as El).children[2]).trimEnd()).toBe(`▌ ${ended}`)
-  }
-  expect(text(chip(card('finished')))).toBe(' ✓ impl-a ')
-  expect(stripe(card('finished'))).toBe('#94e2d5')
+  for (const ended of ['killed', 'failed']) expect([ended, rowsOf(card(ended))[0]!.includes('failed impl-a')]).toEqual([ended, true])
+  expect(rowsOf(card('finished'))[0]).toContain('done impl-a')
+})
+
+test('the notification row is state, name, role and outcome', () => {
+  expect(text(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^● done {2}wave-a {2}explorer STATUS: DONE/)
+  expect(text(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^■ failed {2}wave-a/)
 })

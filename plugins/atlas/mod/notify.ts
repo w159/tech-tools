@@ -7,6 +7,8 @@ import type { AtlasSnapshot, PhaseId } from './contract';
 import { liveWorkers } from './data/live';
 import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
+import { clip, uiFromEnv, type Ui } from './atlas-ui';
+import { toastText } from './panel-layout';
 import { formatDuration } from './theme';
 
 export type NotifyEvent =
@@ -22,23 +24,23 @@ export type NotifyEvent =
 const workersOf = (s: AtlasSnapshot): LiveWorker[] =>
 	liveWorkers({ activity: {}, comms: [], todoGroups: [], ...s, squad: (s.squad ?? []).filter((a) => a?.name) } as LiveSnapshot, s.now);
 
-const fit = (text: string, n: number): string => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
 /** Widest merged toast: a terminal row, so the host never has to wrap it. */
 export const TOAST_MAX = 100;
 
-/** One toast for a turn's events: the first (most urgent) in full, the rest folded in. A burst of separate toasts in
+/** One toast for a turn's events: the first (most urgent) in full, the rest counted. A burst of separate toasts in
  * one turn left the stack before the host drew them, and the host then printed
  * "$.ui.toast: a toast left the stack before it was ever drawn" into the transcript. */
 export function mergeToasts(texts: readonly string[]): string | null {
 	if (texts.length === 0) return null;
 	if (texts.length === 1) return texts[0]!;
-	return fit(`${texts[0]} (${texts.length - 1} more: ${texts.slice(1).join(' ')})`, TOAST_MAX);
+	const more = `  +${texts.length - 1} more`;
+	return `${clip(texts[0]!, TOAST_MAX - more.length)}${more}`;
 }
 
-/** A toast is a plain sentence: no glyph prefix, no code, one closing full stop. */
-const sentence = (text: string): string => (/[.!?…]$/.test(text) ? text : `${text}.`);
-const withLine = (head: string, line: string): string => sentence(line ? `${head}: ${line}` : head);
+/** A toast reads state, then name, then one fact: `● done  implementer-layout  9 of 9 steps`. No glyph prefix of its own, no code, no full stop. */
+const FACT_MAX = 40;
+export const stateToast = (state: Parameters<typeof toastText>[0], name: string, fact: string, ui: Ui): string => toastText(state, name, clip(fact.replace(/\s+/g, ' ').trim(), FACT_MAX), ui);
 
 /** Pure diff of successive snapshots; null prev (first sight) yields nothing. Never throws. */
 export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): NotifyEvent[] {
@@ -111,25 +113,26 @@ export function registerNotify(
 			const snap = await read($, snapshotState);
 			if (snap) {
 				const texts: string[] = [];
+				const ui = uiFromEnv();
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
 						case 'agent-spawn':
-							texts.push(sentence(`${ev.name} started`));
+							texts.push(stateToast('running', ev.name, 'started', ui));
 							break;
 						case 'agent-complete':
-							texts.push(withLine(`${ev.name} finished${ev.age ? ` after ${ev.age}` : ''}`, ev.lastLine ? fit(ev.lastLine, 40) : ''));
+							texts.push(stateToast('done', ev.name, ev.lastLine || (ev.age ? `after ${ev.age}` : ''), ui));
 							break;
 						case 'agent-fail':
-							texts.push(withLine(`${ev.name} failed`, ev.lastLine.trimEnd()));
+							texts.push(stateToast('failed', ev.name, ev.lastLine, ui));
 							break;
 						case 'agent-blocked':
-							texts.push(withLine(`${ev.name} is blocked`, ev.lastLine.trimEnd()));
+							texts.push(stateToast('waiting', ev.name, ev.lastLine, ui));
 							break;
 						case 'note':
-							texts.push(withLine(`Note from ${ev.sender}`, ev.preview));
+							texts.push(`note  ${ev.sender}  ${clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX)}`);
 							break;
 						case 'todo-done':
-							texts.push(withLine('Task done', ev.text));
+							texts.push(stateToast('done', 'task', ev.text, ui));
 							break;
 						case 'phase':
 							if (deps.soundEnabled()) {

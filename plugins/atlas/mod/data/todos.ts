@@ -250,3 +250,34 @@ export function routeCounts(groups: readonly TodoGroup[], _contract?: Contract, 
     .filter((it) => ownRow(it, sessionId) && it.origin !== 'dispatch');
   return { done: items.filter((i) => i.status === 'completed').length, total: items.length };
 }
+
+// ---- dispatch rows follow their worker (S1) -----------------------------------------------------------------------------
+
+/** How a dispatched worker ended. */
+export type Outcome = 'done' | 'failed';
+
+/** Who has ended, from the squad: `finished` is done, `failed` and `dead` are failed; running, parked and waiting workers are not ended. The lead is not a worker. */
+export function endedOf(squad: readonly { name: string; state: string }[]): Record<string, Outcome> {
+  const out: Record<string, Outcome> = {};
+  for (const a of squad) {
+    if (a.name === 'lead') continue;
+    if (a.state === 'finished') out[a.name] = 'done';
+    else if (a.state === 'failed' || a.state === 'dead') out[a.name] = 'failed';
+  }
+  return out;
+}
+
+/** The hook adds one `origin: dispatch` row per subagent and nothing marks it done when the worker ends (S1), so every
+ * surface read the row as pending and `0 of 3`. A pending or in_progress dispatch row whose owner has ended reads
+ * `completed` (done) or `failed`; any other row, and a dispatch row whose worker is still running, is returned as written
+ * (the very same array when no row changes). */
+export function settleDispatch<T extends { status: string; owner?: string; origin?: string }>(items: T[], ended: Readonly<Record<string, Outcome>>): T[] {
+  let changed = false;
+  const out = items.map((it) => {
+    const outcome = it.origin === 'dispatch' && it.owner !== undefined ? ended[it.owner] : undefined;
+    if (!outcome || (it.status !== 'pending' && it.status !== 'in_progress')) return it;
+    changed = true;
+    return { ...it, status: outcome === 'done' ? 'completed' : 'failed' };
+  });
+  return changed ? out : items; // the same array when nothing settled: the snapshot's todo cache keeps its identity
+}

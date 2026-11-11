@@ -1,213 +1,212 @@
-// omp-format HUD: the TODO tree, "Subagents · N running" block and "Waiting on ..." line above the band.
-// Golden fixture reproduces the omp screenshot scenario; every row's text is asserted exactly.
+// The HUD (TODO tree and Subagents block) in the rev 4 ATLAS design: the design goldens through the Claude Code adapter,
+// the live defects L1 (completed rows vanish), L2 ("... 3 more todos" hides the plan), L11 (unnamed agents), the restored
+// Subagents block, R5 (hardcoded check mark, bullet, ellipsis) and the row budget. omp/hud-paint.test.ts holds the parity half.
 import { describe, expect, test } from 'claude-code/testing';
-import type { ClientElements } from 'claude-code';
+import { world } from '../contracts/band-world';
+import { worldHudAgents, worldPhases, worldPlan as worldPlanOf } from '../contracts/hud-world';
+import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
 import type { TodoItem } from './contract';
-import { effectiveRows, inlineBelowRows } from './register';
-import { hudAgents, hudBudget, hudCompactRows, hudRows, modelLabel, roman, selectCollapsed, truncateMiddle, waitingText, type HudAgent } from './hud';
-import { detailOf } from './data/orchestration';
+import type { Ui } from './atlas-ui';
+import { PALETTES } from './atlas-ui';
+import { agentName, hudAgents, hudBudget, hudCompactRows, hudLines, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
 import { computeCounts, routeCounts } from './data/todos';
-import { rowOf, type Segment } from './runs';
-import { MOCHA as M, textWidth } from './theme';
+import { effectiveRows, inlineBelowRows } from './register';
+import type { Segment } from './runs';
+import { textWidth } from './theme';
 
+const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');
 const lines = (rows: Segment[][]): string[] => rows.map(text);
-const solid = (rows: Segment[][]): Segment[][] => rows.filter((r) => text(r) !== '');
-const solidLines = (rows: Segment[][]): string[] => lines(solid(rows));
-const todo = (id: string, content: string, status: string, phase?: string): TodoItem => ({ id, content, status, ...(phase ? { phase: phase as TodoItem['phase'] } : {}) });
+const trimmed = (rows: Segment[][]): string[] => lines(rows).map((l) => l.trimEnd());
+const todo = (id: string, content: string, status: string, extra: Partial<TodoItem> | string = {}): TodoItem => ({ id, content, status, ...(typeof extra === 'string' ? { phase: extra as TodoItem['phase'] } : extra) });
 
-const PLAN: TodoItem[] = [
-  todo('r1', 'Trace history load failure root cause', 'completed', 'research'),
-  todo('r2', 'Trace gate path and pre-gate costs', 'in_progress', 'research'),
-  todo('i1', 'Patch the gate stage order', 'completed', 'implement'),
-  todo('i2', 'Add scorer regression test', 'pending', 'implement'),
-  todo('i3', 'Wire the kill switch', 'pending', 'implement'),
-  todo('i4', 'Update the fixtures', 'pending', 'implement'),
-  todo('v1', 'Run the full suite', 'pending', 'verify'),
-  todo('v2', 'Run the type check', 'pending', 'verify'),
-  todo('v3', 'Run lint', 'pending', 'verify'),
-  todo('v4', 'Review the diff', 'pending', 'verify'),
-  todo('d1', '[docs] Document the stage order', 'pending'),
-  { ...todo('x1', 'Dispatch: verifier-eval', 'in_progress'), origin: 'dispatch' } as TodoItem,
-  { ...todo('x2', '[research] Dispatch: docs-curator-gate', 'pending'), origin: 'dispatch' } as TodoItem,
-];
+const worldPlan = worldPlanOf;
+const worldAgents = worldHudAgents;
+const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
+const phases = worldPhases();
 
-const AGENTS: HudAgent[] = [
-  { name: 'verifier-eval', role: 'verifier', model: 'ollama/minimax-m2.1-flash:cloud', task: 'Verify gate fix shows no scorer regression', state: 'working', lastTool: 'eval', detail: 'Comparing mtimes' },
-  { name: 'docs-curator-gate', role: 'docs-curator', model: 'anthropic/claude-sonnet-5', task: 'Update docs for gate stage order, fail-closed decision, backstop', state: 'working', lastTool: 'Read', detail: 'Read CHANGELOG style and top section' },
-];
-
-const GOLDEN = [
-  '',
-  'TODO',
-  ' ├─ I. Research · 1/2',
-  ' │  ├─ ☑ Trace history load failure root cause',
-  ' │  └─ ☐ Trace gate path and pre-gate costs',
-  ' ├─ II. Implement · 1/4',
-  ' ├─ III. Verify · 0/4',
-  ' ├─ IV. Docs · 0/1',
-  ' └─────',
-  '',
-  '',
-  'Subagents · 2 running',
-  ' ├─ • ◑ ollama/minima….1-flash:cloud verifier-eval [verifier]: Verify gate fix shows no scorer regression',
-  ' │  └ ✓ eval: Comparing mtimes',
-  ' └─ • ◑ anthropic/claude-sonnet-5 docs-curator-gate [docs-curator]: Update docs for gate stage order, fail-closed decision, backstop',
-  '    └ ✓ read: Read CHANGELOG style and top section',
-  '',
-  '⏳ Waiting on verifier and docs-curator agents',
-  '',
-];
-
-describe('hud golden', () => {
-  test('the omp screenshot scenario renders omp\'s exact rows', () => {
-    expect(lines(hudRows({ todos: PLAN, agents: AGENTS }, { cols: 140, maxRows: 40 }))).toEqual(GOLDEN);
+describe('hud goldens through the Claude Code adapter (rev 4)', () => {
+  test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
+    const input: HudInput = { todos: worldPlan(), agents: [], phases };
+    expect(trimmed(hudRows(input, view(120)))).toEqual([...todo_120]);
+    expect(trimmed(hudRows(input, view(120, true)))).toEqual([...todo_120_rich]);
+    expect(trimmed(hudRows(input, view(80)))).toEqual([...todo_80]);
+    expect(trimmed(hudRows(input, view(40)))).toEqual([...todo_40]);
+    expect(trimmed(hudRows(input, view(60))).slice(1)).toEqual(todo_40.slice(1));
   });
-
-  test('completed items are struck through and dim; the in-progress item takes the accent', () => {
-    const rows = hudRows({ todos: PLAN, agents: [] }, { cols: 140, maxRows: 40 });
-    const done = rows[3]!.find((s) => s.t === 'Trace history load failure root cause')!;
-    expect(done).toMatchObject({ strike: true, color: M.muted });
-    const active = rows[4]!.find((s) => s.t.includes('Trace gate path'))!;
-    expect(active.color).toBe(M.violet);
-    expect(active.strike).toBeUndefined();
+  test('SUBAGENTS at 120, 120 rich and 80 equals the design goldens; 60 and 40 draw none', () => {
+    const block = (cols: number, rich = false): string[] => {
+      const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents(), phases }, view(cols, rich)));
+      return rows.slice(rows.findIndex((l) => l.includes('SUBAGENTS')));
+    };
+    expect(block(120)).toEqual([...subagents_120]);
+    expect(block(120, true)).toEqual([...subagents_120_rich]);
+    expect(block(80)).toEqual([...subagents_80]);
+    for (const cols of [60, 40]) expect(trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))).join('\n')).not.toContain('SUBAGENTS');
+    expect(hudRows({ todos: [], agents: worldAgents() }, view(60))).toEqual([]);
   });
-
-  test('the spine fills with overall progress: accent cells then dim', () => {
-    const rows = hudRows({ todos: PLAN, agents: [] }, { cols: 140, maxRows: 40 });
-    expect(rows[2]![1]).toMatchObject({ t: '├─ ', color: M.violet });
-    expect(rows[7]![1]).toMatchObject({ t: '├─ ', color: M.grey });
-    expect(rows[8]!.map((s) => s.color)).toContain(M.grey); // the tail is not lit while work remains
+  test('both blocks stack as the TODO golden, a blank row, then the SUBAGENTS golden', () => {
+    const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)));
+    expect(rows).toEqual([...todo_120, '', ...subagents_120]);
+  });
+  test('every row is padded to the width and none is wider', () => {
+    for (const cols of [120, 80, 60, 40]) for (const r of hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))) expect(textWidth(text(r))).toBe(cols);
+  });
+  test('the rows carry the rev 4 panel background, never the legacy #11111b', () => {
+    const bgs = new Set(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)).flat().filter((s) => s.t.trim() !== '' || s.bg).map((s) => s.bg));
+    expect(bgs.has('#11111b')).toBe(false);
+    expect(bgs.has(PALETTES.mocha.panel)).toBe(true);
+  });
+  test('NO_COLOR keeps the words and drops every colour', () => {
+    const rows = hudRows({ todos: worldPlan(), agents: worldAgents() }, { ...view(120), ui: { ...ui, color: 'none' } });
+    expect(rows.flat().some((s) => s.color !== undefined || s.bg !== undefined)).toBe(false);
+    expect(lines(rows).join('\n')).toContain('running');
+  });
+  test('ASCII mode draws no glyph outside ASCII except the box rule', () => {
+    const rows = hudRows({ todos: worldPlan(), agents: worldAgents() }, { ...view(120), ui: { ...ui, ascii: true } });
+    expect(lines(rows).join('').replace(/[\u2500-\u257f]/g, '')).toMatch(/^[\x20-\x7e·]*$/);
   });
 });
 
-describe('hud todo tree', () => {
-  test('phases group in plan order, unphased items go under a final Other, a single phase has no numeral', () => {
-    const plan = [todo('a', 'docs first', 'pending', 'docs'), todo('b', 'then research', 'pending', 'research'), todo('c', 'loose', 'pending')];
-    expect(lines(hudRows({ todos: plan, agents: [] }, { cols: 80, maxRows: 20 })).filter((l) => l.includes('·'))).toEqual([' ├─ I. Docs · 0/1', ' ├─ II. Research · 0/1', ' ├─ III. Other · 0/1']);
-    expect(solidLines(hudRows({ todos: [todo('a', 'solo', 'pending', 'docs')], agents: [] }, { cols: 80, maxRows: 20 }))[1]).toBe(' ├─ Docs · 0/1');
+describe('L1: a completed plan row is shown as completed', () => {
+  const plan = [todo('a', 'Trace the failure', 'completed'), todo('b', 'Patch the gate', 'in_progress'), todo('c', 'Run the suite', 'pending')];
+  test('the done row stays in the tree with the done glyph, the word and a struck label', () => {
+    const rows = hudRows({ todos: plan, agents: [] }, view(120));
+    const row = rows.find((r) => text(r).includes('Trace the failure'))!;
+    expect(row).toBeDefined();
+    expect(text(row)).toMatch(/^ {2}● Trace the failure +done/);
+    expect(row.find((s) => s.t === 'Trace the failure')?.strike).toBe(true);
   });
-
-  test('the phase holding the in_progress item is expanded; with none, the first with an open item', () => {
-    const plan = [todo('a', 'done', 'completed', 'research'), todo('b', 'open b', 'pending', 'implement'), todo('c', 'working c', 'in_progress', 'verify')];
-    expect(lines(hudRows({ todos: plan, agents: [] }, { cols: 80, maxRows: 20 })).join('\n')).toContain('III. Verify · 0/1\n │  └─ ☐ working c');
-    const idle = lines(hudRows({ todos: plan.map((t) => (t.status === 'in_progress' ? { ...t, status: 'pending' } : t)), agents: [] }, { cols: 80, maxRows: 20 }));
-    expect(idle).toContain(' │  └─ ☐ open b');
+  test('when every row is done they all show, and the header says so', () => {
+    const rows = trimmed(hudRows({ todos: plan.map((t) => ({ ...t, status: 'completed' })), agents: [] }, view(120)));
+    expect(rows[0]).toContain('3 of 3 done');
+    expect(rows.filter((l) => l.includes('done') && l.includes('●'))).toHaveLength(3);
   });
-
-  test('a long active phase shows capped items and a "… N more todos" row', () => {
-    const plan = [todo('x0', 'now', 'in_progress', 'implement'), ...Array.from({ length: 8 }, (_, i) => todo(`x${i + 1}`, `later ${i + 1}`, 'pending', 'implement'))];
-    const out = solidLines(hudRows({ todos: plan, agents: [] }, { cols: 80, maxRows: 20 }));
-    expect(out.slice(1, 8)).toEqual([' ├─ Implement · 0/9', ' │  ├─ ☐ now', ' │  ├─ ☐ later 1', ' │  ├─ ☐ later 2', ' │  ├─ ☐ later 3', ' │  ├─ ☐ later 4', ' │  └─ … 4 more todos']);
-  });
-
-  test('the content phase prefix is not repeated in the row', () => {
-    const out = solidLines(hudRows({ todos: [todo('a', '[research] map auth', 'pending', 'research')], agents: [] }, { cols: 80, maxRows: 20 }));
-    expect(out[2]).toBe(' │  └─ ☐ map auth');
-  });
-
-  test('a fully done plan lights the whole path', () => {
-    const rows = hudRows({ todos: [todo('a', 'a', 'completed', 'research'), todo('b', 'b', 'completed', 'docs')], agents: [] }, { cols: 80, maxRows: 20 });
-    const spine = solid(rows).slice(1).map((r) => r[1]!); // the gutter cell of every tree row, and the tail
-    expect(spine.map((s) => s.color)).toEqual([M.violet, M.violet, M.violet]);
+  test('a plan row that completes appears in the next render with state done', () => {
+    const before = todoModel(plan, 0);
+    const after = todoModel(plan.map((t) => (t.id === 'b' ? { ...t, status: 'completed' } : t)), 0);
+    expect(before.map((r) => r.state)).toEqual(['done', 'running', 'queued']);
+    expect(after.map((r) => r.state)).toEqual(['done', 'done', 'queued']);
   });
 });
 
-describe('hud subagents', () => {
-  test('no agents running -> no Subagents block and no Waiting line', () => {
-    const idle: HudAgent = { ...AGENTS[0]!, state: 'done' };
-    const out = lines(hudRows({ todos: PLAN, agents: [idle] }, { cols: 140, maxRows: 40 }));
-    expect(out.join('\n')).not.toContain('Subagents');
-    expect(out.join('\n')).not.toContain('Waiting on');
+describe('L2: the plan is not cut to "... N more todos"', () => {
+  const big = Array.from({ length: 12 }, (_, i) => todo(`t${i}`, `Step ${i + 1}`, i < 2 ? 'completed' : i === 2 ? 'in_progress' : 'pending'));
+  test('a 12 row plan at a 45 row height shows all 12 rows and no more-todos row', () => {
+    const rows = trimmed(hudRows({ todos: big, agents: [] }, view(120, false, 45)));
+    for (let i = 1; i <= 12; i++) expect(rows.some((l) => new RegExp(`Step ${i}( |$)`).test(l))).toBe(true);
+    expect(rows.join('\n')).not.toMatch(/more todo/);
   });
-
-  test('agents without todos still draw the Subagents block and the Waiting line', () => {
-    const out = solidLines(hudRows({ todos: [], agents: [AGENTS[0]!] }, { cols: 140, maxRows: 40 }));
-    expect(out[0]).toBe('Subagents · 1 running');
-    expect(out[out.length - 1]).toBe('⏳ Waiting on verifier agent');
+  test('under a tight budget the hidden rows are counted exactly, never hidden silently', () => {
+    for (let h = 2; h <= 16; h++) {
+      const rows = trimmed(hudRows({ todos: big, agents: [] }, view(120, false, h)));
+      expect(rows.length).toBeLessThanOrEqual(h);
+      const shown = rows.filter((l) => /Step \d+/.test(l)).length;
+      const hidden = Number(/\.\.\. (\d+) more todos?/.exec(rows.join('\n'))?.[1] ?? 0);
+      if (rows.length > 1) expect(shown + hidden).toBe(12);
+    }
   });
-
-  test('a current tool call shows without the done mark; a missing model drops the badge', () => {
-    const a: HudAgent = { name: 'explorer-calc', role: 'explorer', state: 'working', tool: 'grep', target: 'hudRows', task: 'Find callers' };
-    expect(solidLines(hudRows({ todos: [], agents: [a] }, { cols: 80, maxRows: 10 })).slice(1, 3)).toEqual([' └─ • explorer-calc [explorer]: Find callers', '    └ grep: hudRows']);
+  test('the ribbon count stays the whole plan at every height', () => {
+    for (let h = 1; h <= 16; h++) expect(trimmed(hudRows({ todos: big, agents: [] }, view(120, false, h)))[0]).toContain('2 of 12 done');
   });
+});
 
-  test('more than three agents list three and count the rest', () => {
-    const many = Array.from({ length: 5 }, (_, i): HudAgent => ({ name: `w${i}`, role: 'explorer', state: 'working' }));
-    const out = solidLines(hudRows({ todos: [], agents: many }, { cols: 80, maxRows: 20 }));
-    expect(out[0]).toBe('Subagents · 5 running');
-    expect(out).toContain(' └─ … 2 more');
-    expect(out.filter((l) => l.includes('• w'))).toHaveLength(3);
+describe('L11: agents are named', () => {
+  test('the dispatch name wins', () => {
+    expect(agentName('explorer-calc', 'explorer', 'Map band row count')).toBe('explorer-calc');
   });
+  test('a host id falls back to the description prefix, then the role', () => {
+    expect(agentName('a6839f49ee72a2b14', 'explorer', 'readme-explorer: compare README and AGENTS')).toBe('readme-explorer');
+    expect(agentName('a6839f49ee72a2b14', 'explorer', 'Map band row count')).toBe('explorer');
+    expect(agentName('a6839f49ee72a2b14', 'unknown', undefined)).toBe('a6839f');
+  });
+  test('hudAgents carries the name through, and the block shows it', () => {
+    const live = [{ name: 'a6839f49ee72a2b14', role: 'explorer', state: 'working', tool: 'Read', lastTool: null, since: 0, startedAt: 0, target: 'mod/hud.ts', detail: null, lastLine: '', calls: [], scope: null }] as never;
+    const squad = [{ name: 'a6839f49ee72a2b14', persona: 'explorer', state: 'running', source: 'task', task: 'band-explorer: map the band rows', model: 'claude-sonnet-5' }] as never;
+    const [agent] = hudAgents(live, squad);
+    expect(agent).toMatchObject({ name: 'band-explorer', model: 'claude-sonnet-5' });
+    const out = trimmed(hudRows({ todos: [], agents: [agent!] }, view(120))).join('\n');
+    expect(out).toContain('band-explorer');
+    expect(out).toContain('sonnet-5');
+  });
+});
 
-  test('the Waiting line names the distinct roles', () => {
-    const run = (roles: string[]): HudAgent[] => roles.map((role, i) => ({ name: `n${i}`, role, state: 'working' }));
-    expect(waitingText(run(['explorer', 'docs-auditor']))).toBe('Waiting on explorer and docs-auditor agents');
-    expect(waitingText(run(['explorer', 'explorer']))).toBe('Waiting on explorer agents');
-    expect(waitingText(run(['a', 'b', 'c']))).toBe('Waiting on a, b and c agents');
-    expect(waitingText(run(['unknown']))).toBe('Waiting on n0 agent');
+describe('the Subagents block is back on Claude Code', () => {
+  const running: HudAgent = { name: 'impl-hud', role: 'implementer', state: 'working', model: 'claude-opus-5', tool: 'Read', target: 'mod/hud.ts:12' };
+  test('a running agent draws the SUBAGENTS ribbon with its name, state, model and last action', () => {
+    const rows = trimmed(hudRows({ todos: [], agents: [running] }, view(120)));
+    expect(rows[0]).toContain('SUBAGENTS');
+    expect(rows[0]).toContain('1 running');
+    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +opus-5 +read mod\/hud\.ts:12$/);
+  });
+  test('with nothing running the block is absent, even with finished agents', () => {
+    expect(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120))).toEqual([]);
+    expect(isRunning({ ...running, state: 'done' })).toBe(false);
+  });
+  test('a finished agent shows beside a running one, and the header counts every row', () => {
+    const rows = trimmed(hudRows({ todos: [], agents: [{ ...running, name: 'a-done', state: 'done', lastLine: '9 of 9 steps' }, running] }, view(120)));
+    expect(rows[0]).toContain('1 running');
+    expect(rows[0]).toContain('1 done');
+    expect(rows.filter((l) => /^[ ▸] [◐●] /.test(l))).toHaveLength(2);
+    expect(rows[2]).toContain('impl-hud'); // running first
+  });
+  test('the T column is the position of the plan row the agent owns', () => {
+    const plan = [todo('a', 'First', 'completed'), todo('b', 'Second', 'in_progress', { owner: 'impl-hud' })];
+    expect(trimmed(hudRows({ todos: plan, agents: [running] }, view(120))).join('\n')).toMatch(/impl-hud +running +opus-5 +T2 +read/);
+  });
+  test('shortModel drops the provider and claude- prefix and guesses nothing', () => {
+    expect(shortModel('anthropic/claude-sonnet-5')).toBe('sonnet-5');
+    expect(shortModel('opus')).toBe('opus');
+    expect(shortModel(undefined)).toBe('');
+  });
+});
+
+describe('R5: no hardcoded check mark, bullet or ellipsis', () => {
+  test('no ✓ • … ☐ ☑ ⏳ in any state', () => {
+    const everything = hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120, true)).concat(hudRows({ todos: Array.from({ length: 40 }, (_, i) => todo(`x${i}`, `Item ${i}`, 'pending')), agents: worldAgents() }, view(120, false, 8)));
+    expect(lines(everything).join('')).not.toMatch(/[✓•…☐☑⏳]/);
+  });
+  test('done rows use the state glyph ●', () => {
+    expect(trimmed(hudRows({ todos: [todo('a', 'x', 'completed')], agents: [] }, view(120))).join('\n')).toContain('● x');
+  });
+});
+
+describe('header counts equal the row sums', () => {
+  test('TODO and SUBAGENTS counts match the rows of the world', () => {
+    const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)));
+    expect(rows[0]).toContain(`${world.todos.filter((t) => t.state === 'done').length} of ${world.todos.length} done`);
+    const sub = rows.find((l) => l.includes('SUBAGENTS'))!;
+    for (const s of ['queued', 'running', 'done', 'failed'] as const) {
+      const n = world.workers.filter((w) => w.state === s).length;
+      expect(sub).toContain(`${n} ${s}`);
+    }
   });
 });
 
 describe('hud row budget', () => {
-  const rowsAt = (maxRows: number): string[] => lines(hudRows({ todos: PLAN, agents: AGENTS }, { cols: 140, maxRows }));
-
-  test('spacer rows go first under pressure, then previews, before any block is dropped', () => {
-    const noBlanks = GOLDEN.filter((l) => l !== '');
-    expect(rowsAt(GOLDEN.length)).toEqual(GOLDEN);
-    expect(rowsAt(GOLDEN.length - 1)).toEqual(noBlanks); // one row short: all spacers drop, nothing else
-    expect(rowsAt(noBlanks.length)).toEqual(noBlanks);
-    const out = rowsAt(noBlanks.length - 1); // one more row short: now the previews go
-    expect(out).toHaveLength(noBlanks.length - 2);
-    expect(out.join('\n')).not.toContain('✓ eval');
-    expect(out).toContain('Subagents · 2 running');
-    expect(out).toContain('⏳ Waiting on verifier and docs-curator agents');
-    expect(out).toContain(' ├─ IV. Docs · 0/1');
+  const plan = worldPlan();
+  const agents = worldAgents();
+  test('every budget is respected', () => {
+    for (let h = 0; h <= 30; h++) expect(hudRows({ todos: plan, agents }, view(120, false, h)).length).toBeLessThanOrEqual(h);
   });
-
-  test('every budget is respected and blocks drop last: waiting, then subagents, then the tree', () => {
-    for (let n = 0; n <= GOLDEN.length; n++) expect(rowsAt(n).length).toBeLessThanOrEqual(n);
-    const joined = (n: number): string => rowsAt(n).join('\n');
-    expect(joined(9)).toContain('TODO');
-    expect(joined(9)).toContain('Subagents');
-    expect(joined(2)).not.toContain('Waiting on');
-    expect(rowsAt(0)).toEqual([]);
+  test('a running agent keeps its row before the plan keeps its last row', () => {
+    for (let h = 3; h <= 8; h++) expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, h))).join('\n')).toContain('implementer-band');
   });
-
-  test('blank rows at the measured maxRows 18/14/10/6', () => {
-    const at = (n: number): string[] => lines(hudRows({ todos: PLAN, agents: AGENTS }, { cols: 140, maxRows: n }));
-    expect(at(19)).toEqual(GOLDEN); // room for every spacer
-    expect(at(18)).toEqual(GOLDEN.filter((l) => l !== '')); // 18 and 14: the five spacers drop first, content intact
-    expect(at(14)).toEqual(GOLDEN.filter((l) => l !== ''));
-    expect(at(10).filter((l) => l === '')).toEqual([]);
-    expect(at(10)).toHaveLength(10); // previews shed, never a spacer; the Waiting line rides along while a row is left
-    expect(at(6).filter((l) => l === '')).toEqual([]);
-    expect(at(6).length).toBeLessThanOrEqual(6);
+  test('one row is the Subagents ribbon while an agent runs, else the TODO ribbon', () => {
+    expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 1)))[0]).toContain('SUBAGENTS');
+    expect(trimmed(hudRows({ todos: plan, agents: [] }, view(120, false, 1)))[0]).toContain('TODO');
   });
-
-  test('empty input -> no rows', () => {
-    expect(hudRows({ todos: [], agents: [] }, { cols: 80, maxRows: 20 })).toEqual([]);
+  test('empty input -> no rows; dispatch rows are not plan rows', () => {
+    expect(hudRows({ todos: [], agents: [] }, view(120))).toEqual([]);
+    expect(hudRows({ todos: [{ ...todo('x', 'Dispatch row', 'in_progress'), origin: 'dispatch' }], agents: [] }, view(80, false, 20))).toEqual([]);
+    expect(hudLines({ todos: [], agents: [] }, view(120))).toEqual([]);
   });
-
-  test('no row is wider than the column budget', () => {
-    for (const cols of [20, 40, 60]) for (const r of hudRows({ todos: PLAN, agents: AGENTS }, { cols, maxRows: 40 })) expect(textWidth(text(r))).toBeLessThanOrEqual(cols);
-  });
-});
-
-describe('hud label phases and dispatch rows', () => {
-  const run = (todos: TodoItem[]): string[] => solidLines(hudRows({ todos, agents: [] }, { cols: 100, maxRows: 40 }));
-  test('a [label] prefix that is not a contract phase gets its own group, prefix stripped, in first-seen order', () => {
-    const plan = [todo('a', '[docs] write it', 'pending'), todo('b', '[research] look', 'pending', 'research'), todo('c', '[docs] ship it', 'completed'), todo('d', 'loose', 'pending')];
-    expect(run(plan).filter((l) => l.includes('·'))).toEqual([' ├─ I. Docs · 1/2', ' ├─ II. Research · 0/1', ' ├─ III. Other · 0/1']);
-    expect(run(plan).join('\n')).not.toContain('[docs]');
-  });
-  test('origin dispatch items are absent from the tree and its totals', () => {
-    const dispatch = { ...todo('x', 'Dispatch row', 'in_progress', 'verify'), origin: 'dispatch' } as TodoItem;
-    const out = run([todo('a', 'plan item', 'completed', 'research'), dispatch]);
-    expect(out.join('\n')).not.toContain('Dispatch row');
-    expect(out).toContain(' ├─ Research · 1/1');
-    expect(out.join('\n')).not.toContain('Verify');
-    expect(hudRows({ todos: [dispatch], agents: [] }, { cols: 80, maxRows: 20 })).toEqual([]);
+  test('hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows', () => {
+    expect(hudCompactRows({ todos: plan, agents })).toBe(5 + 4); // TODO ribbon, 3 rows and the overflow row; Subagents ribbon, 2 agents and the overflow row
+    for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
+    expect(hudBudget(1, 7, 7, true)).toBe(1);
+    expect(hudBudget(2, 7)).toBe(2);
+    expect(hudBudget(0, 7, 7, true)).toBe(0);
   });
 });
 
@@ -231,196 +230,23 @@ describe('hud counts', () => {
   });
 });
 
-describe('hud model label and tool preview', () => {
-  test('provider/model like omp: ids with a provider pass through, bare aliases and ids get anthropic/', () => {
-    expect(modelLabel('anthropic/claude-sonnet-5-5')).toBe('anthropic/claude-sonnet-5-5');
-    expect(modelLabel('claude-sonnet-5-5')).toBe('anthropic/claude-sonnet-5-5');
-    expect(modelLabel('sonnet')).toBe('anthropic/sonnet');
-    const a: HudAgent = { name: 'w', role: 'explorer', state: 'working', model: 'sonnet' };
-    expect(lines(hudRows({ todos: [], agents: [a] }, { cols: 80, maxRows: 10 }))[2]).toBe(' └─ • ◑ anthropic/sonnet w [explorer]');
-    const long: HudAgent = { ...a, model: 'ollama/minimax-m2.1-flash:cloud' };
-    expect(lines(hudRows({ todos: [], agents: [long] }, { cols: 80, maxRows: 10 }))[2]).toContain('ollama/minima….1-flash:cloud w');
-  });
-  test('detailOf: Bash -> description else command, Read -> relative-ready path with range, Grep/Glob -> pattern, others -> description', () => {
-    expect(detailOf('Bash', { command: 'ls -la', description: 'List files' })).toBe('List files');
-    expect(detailOf('Bash', { command: 'ls   -la\nfoo' })).toBe('ls -la foo');
-    expect(detailOf('Read', { file_path: '/p/a.ts' })).toBe('Read /p/a.ts');
-    expect(detailOf('Read', { file_path: '/p/a.ts', offset: 10, limit: 5 })).toBe('Read /p/a.ts:10-14');
-    expect(detailOf('Grep', { pattern: 'foo.*bar', path: '/p' })).toBe('foo.*bar');
-    expect(detailOf('Glob', { pattern: '**/*.ts' })).toBe('**/*.ts');
-    expect(detailOf('Agent', { description: 'Map auth', prompt: 'x' })).toBe('Map auth');
-    expect(detailOf('Edit', { file_path: '/p/a.ts', old_string: 'a' })).toBe('/p/a.ts');
-    expect(detailOf('Bash', {})).toBeUndefined();
-  });
-  test('the preview row lower-cases the tool, shows the detail, relativizes paths and fits cols', () => {
-    const a: HudAgent = { name: 'w', role: 'explorer', state: 'working', tool: 'Read', detail: 'Read /proj/mod/hud.ts:1-20' };
-    const out = (agent: HudAgent, cols = 80): string[] => lines(hudRows({ todos: [], agents: [agent], root: '/proj' }, { cols, maxRows: 10 }));
-    expect(out(a)[3]).toBe('    └ read: Read mod/hud.ts:1-20');
-    expect(out({ ...a, tool: null, lastTool: 'Bash', detail: 'Comparing mtimes' })[3]).toBe('    └ ✓ bash: Comparing mtimes');
-    expect(textWidth(out(a, 24)[3]!)).toBeLessThanOrEqual(24);
-    expect(out({ ...a, detail: undefined, target: 'hud.ts' })[3]).toBe('    └ read: hud.ts');
-  });
-  test('hudAgents carries the live detail', () => {
-    const live = [{ name: 'w', role: 'explorer', state: 'working', tool: 'Read', lastTool: null, since: 0, startedAt: 0, target: null, detail: 'Read x', lastLine: '', calls: [], scope: null }] as never;
-    expect(hudAgents(live, [{ name: 'w', persona: 'explorer', state: 'running', source: 'task', model: 'claude-sonnet-5-5' }])[0]).toMatchObject({ detail: 'Read x', model: 'claude-sonnet-5-5' });
-  });
-});
 
-describe('hud helpers', () => {
-  test('roman numerals', () => {
-    expect([1, 2, 3, 4, 9, 14].map(roman)).toEqual(['I', 'II', 'III', 'IV', 'IX', 'XIV']);
-  });
-  test('truncateMiddle keeps both ends', () => {
-    expect(truncateMiddle('abcdefghij', 7)).toBe('abc…hij');
-    expect(truncateMiddle('abc', 7)).toBe('abc');
-  });
-  test('selectCollapsed keeps the active item and one closed row of context', () => {
-    const tasks = [todo('a', 'a', 'completed'), todo('b', 'b', 'completed'), todo('c', 'c', 'in_progress'), ...['d', 'e', 'f', 'g'].map((x) => todo(x, x, 'pending'))];
-    expect(selectCollapsed(tasks, (t) => t.status === 'in_progress', 2)).toEqual({ items: [tasks[1], tasks[2], tasks[3]], summary: '… 3 more todos' });
-  });
-});
-
-describe('hud strikethrough element', () => {
-  type Node = { kind: string; props: Record<string, any> };
-  const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
-  const els = { Box: mk('Box'), Text: mk('Text') } as unknown as ClientElements;
-  test('Segment.strike reaches the Text strikethrough prop', () => {
-    const row = rowOf(els, [{ t: 'done', strike: true }, { t: 'open' }], 20) as unknown as Node;
-    expect((row.props.children as Node[]).map((n) => n.props.strikethrough)).toEqual([true, undefined]);
-  });
-});
-
-describe('hud budget at the measured AbovePrompt maxRows', () => {
-  // Live Claude Code 2.1.312, 200x55 terminal, docked pane: maxRows 18 idle, 15 and 14 with agents running, 10 while the
-  // lead works, 6 with the task list drawn. The compact form is TODO + active phase (2 items) + Subagents + 2 agents = 7 rows.
-  const input = { todos: PLAN, agents: AGENTS };
-  const compact = hudCompactRows(input);
-  test('the compact form is the TODO header, active phase rows, the Subagents header and one row per agent', () => {
-    expect(compact).toBe(8);
-    expect(lines(hudRows(input, { cols: 138, maxRows: compact }))).toEqual([
-      'TODO', ' ├─ I. Research · 1/2', ' │  ├─ ☑ Trace history load failure root cause', ' │  └─ ☐ Trace gate path and pre-gate costs',
-      'Subagents · 2 running', ' ├─ • ◑ ollama/minima….1-flash:cloud verifier-eval [verifier]: Verify gate fix shows no scorer regression', ' └─ • ◑ anthropic/claude-sonnet-5 docs-curator-gate [docs-curator]: Update docs for gate stage order, fail-closed decision, backstop',
-      '⏳ Waiting on verifier and docs-curator agents',
-    ]);
-  });
-  test('the band gives up rows first: the HUD keeps its compact form at every measured maxRows', () => {
-    const take = (maxRows: number): number => hudRows(input, { cols: 138, maxRows: hudBudget(maxRows, compact) }).length;
-    expect(take(18)).toBeGreaterThanOrEqual(compact);
-    expect(18 - take(18)).toBeGreaterThanOrEqual(7); // roomy: the band keeps its 7 rows
-    expect(take(15)).toBeGreaterThanOrEqual(compact);
-    expect(take(14)).toBeGreaterThanOrEqual(compact);
-    expect(10 - take(10)).toBe(2); // the band shrinks to title and rail: the Waiting line stays ahead of its lane
-    expect(take(10)).toBe(compact);
-    expect(take(6)).toBe(5); // compact (8) does not fit: the HUD takes the summary form, header, agents and Waiting line (5) and the band yields entirely
-    expect(hudBudget(4, 5)).toBe(4);
-  });
-  test('the Waiting line is kept ahead of any band row once the Subagents header is up and a row is left', () => {
-    const tail = (n: number): string[] => lines(hudRows(input, { cols: 138, maxRows: n }));
-    for (const n of [5, 6, 7, 8, 9, 10, 12]) expect([n, tail(n).some((l) => l.startsWith('⏳ Waiting'))]).toEqual([n, true]);
-    expect(tail(8).at(-1)).toBe('⏳ Waiting on verifier and docs-curator agents');
-    expect(tail(4).some((l) => l.startsWith('⏳'))).toBe(false); // no row left past the summary, header and agents: the line goes first
-  });
-  test('budget arithmetic', () => {
-    expect([18, 15, 14, 10, 6].map((n) => hudBudget(n, 8))).toEqual([11, 8, 8, 8, 6]);
-    expect(hudBudget(0, 7)).toBe(0);
-  });
-  test('a tight budget keeps the Subagents header and every agent, shrinking the tree to a one-row summary', () => {
-    const tight = lines(hudRows(input, { cols: 138, maxRows: 5 }));
-    expect(tight.length).toBeLessThanOrEqual(5);
-    expect(tight[0]).toBe('TODO · 2/11 · Trace gate path and pre-gate costs');
-    expect(tight[1]).toBe('Subagents · 2 running');
-    expect(tight.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate'))).toHaveLength(2);
-  });
-});
-
-describe('hud ladder keeps Subagents over the TODO tree', () => {
-  const phases = ['research', 'implement', 'verify', 'docs'];
-  const bigPlan: TodoItem[] = Array.from({ length: 11 }, (_, i) =>
-    todo(`b${i}`, `Item number ${i}`, i === 0 ? 'completed' : i === 1 ? 'in_progress' : 'pending', phases[Math.min(3, Math.floor(i / 3))]));
-  const two: HudAgent[] = [
-    { name: 'a-one', role: 'explorer', task: 'first task', state: 'working' },
-    { name: 'a-two', role: 'verifier', task: 'second task', state: 'working' },
-  ];
-
-  test('budgets 2..8 with two running agents always keep the Subagents header', () => {
-    for (let maxRows = 2; maxRows <= 8; maxRows++) {
-      const out = lines(hudRows({ todos: bigPlan, agents: two }, { cols: 100, maxRows }));
-      expect(out.length).toBeLessThanOrEqual(maxRows);
-      expect(out.some((l) => l.startsWith('Subagents'))).toBe(true);
-    }
-  });
-
-  test('a one-row TODO summary shows at small budgets, with the active item', () => {
-    const out = lines(hudRows({ todos: bigPlan, agents: two }, { cols: 100, maxRows: 4 }));
-    expect(out[0]).toBe('TODO · 1/11 · Item number 1');
-    expect(out.some((l) => l.startsWith('Subagents'))).toBe(true);
-    expect(out.filter((l) => l.includes('├─ I.'))).toEqual([]);
-  });
-
-  test('no running agents: the tree shrinks as before and never becomes a summary', () => {
-    for (let maxRows = 1; maxRows <= 8; maxRows++) {
-      const out = lines(hudRows({ todos: bigPlan, agents: [] }, { cols: 100, maxRows }));
-      expect(out.every((l) => !l.startsWith('TODO ·'))).toBe(true);
-    }
-    expect(lines(hudRows({ todos: bigPlan, agents: [] }, { cols: 100, maxRows: 2 }))).toEqual([]);
-  });
-
-  test('"Research: x" / "Implement: y" items group by phase and show without the prefix', () => {
-    const plan = [todo('a', 'Research: map the code', 'in_progress'), todo('b', 'Implement - patch it', 'pending'), todo('c', 'research: second look', 'pending')];
-    const out = solidLines(hudRows({ todos: plan, agents: [] }, { cols: 100, maxRows: 20 }));
-    expect(out).toContain(' ├─ I. Research · 0/2');
-    expect(out).toContain(' │  ├─ ☐ map the code');
-    expect(out.some((l) => l.includes('II. Implement · 0/1'))).toBe(true);
-    expect(out.join('\n')).not.toContain('Research:');
-  });
-
-  test('an unknown "Note: z" prefix stays under Other with its text intact; a stamped phase wins', () => {
-    const note = solidLines(hudRows({ todos: [todo('a', 'Note: z', 'pending')], agents: [] }, { cols: 100, maxRows: 20 }));
-    expect(note[1]).toBe(' ├─ Other · 0/1');
-    expect(note.some((l) => l.includes('☐ Note: z'))).toBe(true);
-    const stamped = solidLines(hudRows({ todos: [todo('b', 'Research: keep stamp', 'in_progress', 'verify')], agents: [] }, { cols: 100, maxRows: 20 }));
-    expect(stamped.some((l) => l.includes('Verify · 0/1'))).toBe(true);
-    expect(stamped.some((l) => l.includes('Research: keep stamp'))).toBe(true);
-  });
-});
-
-describe('hud never hides a running agent silently, nor draws an empty HUD at a tight slot', () => {
-  const plan: TodoItem[] = Array.from({ length: 11 }, (_, i) => todo(`c${i}`, `Step ${i}`, i === 1 ? 'in_progress' : 'pending', ['research', 'implement', 'verify', 'docs'][i % 4]));
-  const mk = (n: number): HudAgent[] => Array.from({ length: n }, (_, i) => ({ name: `ag-${i}`, role: 'explorer', task: `task ${i}`, state: 'working' as const }));
-  const shownAgents = (out: string[]): number => out.filter((l) => /ag-\d/.test(l)).length;
-  const moreCount = (out: string[]): number => Number(out.map((l) => /… (\d+) more$/.exec(l)?.[1]).find((n) => n !== undefined) ?? 0);
-
-  test('2 running agents at budgets 2..8: agent rows shown plus the "… N more" count equal the running count', () => {
-    for (const todos of [plan, []]) {
-      for (let maxRows = 2; maxRows <= 8; maxRows++) {
-        const out = lines(hudRows({ todos, agents: mk(2) }, { cols: 100, maxRows }));
-        expect(out.length).toBeLessThanOrEqual(maxRows);
-        expect(out.some((l) => l.startsWith('Subagents'))).toBe(true);
-        expect(shownAgents(out) + moreCount(out)).toBe(2);
-      }
-    }
-  });
-
-  test('hudRows at maxRows 1, 2, 3 with agents running', () => {
-    expect(lines(hudRows({ todos: plan, agents: mk(2) }, { cols: 100, maxRows: 1 }))).toEqual(['Subagents · 2 running']);
-    expect(lines(hudRows({ todos: plan, agents: mk(2) }, { cols: 100, maxRows: 2 }))).toEqual(['Subagents · 2 running', ' └─ … 2 more']);
-    expect(lines(hudRows({ todos: plan, agents: mk(1) }, { cols: 100, maxRows: 2 })).slice(0, 1)).toEqual(['Subagents · 1 running']);
-    for (const n of [1, 2, 3]) expect(hudRows({ todos: plan, agents: mk(n) }, { cols: 100, maxRows: 3 }).length).toBeGreaterThanOrEqual(2);
-  });
-
-  test('hudBudget gives a running agent at least 2 rows once maxRows >= 2', () => {
-    for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
-    expect(hudBudget(1, 7, 7, true)).toBe(1);
-    expect(hudBudget(2, 7)).toBe(2); // no agent running: the HUD still wins the whole short budget
-    expect(hudBudget(0, 7, 7, true)).toBe(0);
-  });
-});
+const PLAN: TodoItem[] = [
+  todo('r1', 'Trace history load failure root cause', 'completed'), todo('r2', 'Trace gate path and pre-gate costs', 'in_progress'),
+  todo('i1', 'Patch the gate stage order', 'completed'), todo('i2', 'Add scorer regression test', 'pending'), todo('i3', 'Wire the kill switch', 'pending'),
+  todo('i4', 'Update the fixtures', 'pending'), todo('v1', 'Run the full suite', 'pending'), todo('v2', 'Run the type check', 'pending'),
+  todo('v3', 'Run lint', 'pending'), todo('v4', 'Review the diff', 'pending'), todo('d1', 'Document the stage order', 'pending'),
+];
+const AGENTS: HudAgent[] = [
+  { name: 'verifier-eval', role: 'verifier', model: 'ollama/minimax-m2.1-flash:cloud', task: 'Verify gate fix shows no scorer regression', state: 'working', lastTool: 'eval', detail: 'Comparing mtimes' },
+  { name: 'docs-curator-gate', role: 'docs-curator', model: 'anthropic/claude-sonnet-5', task: 'Update docs for gate stage order', state: 'working', lastTool: 'Read', detail: 'Read CHANGELOG style' },
+];
 
 describe('inline renderer budget (viewport less the rows below the AbovePrompt slot)', () => {
   const input = { todos: PLAN, agents: AGENTS };
   const hudAt = (viewportRows: number, statusRows: number | null = 4): string[] => {
     const eff = effectiveRows(viewportRows, { rows: viewportRows, isFullscreen: false }, statusRows, 2); // the slot is the whole terminal
-    return lines(hudRows(input, { cols: 138, maxRows: hudBudget(eff, hudCompactRows(input), 7, true) }));
+    return lines(hudRows(input, { cols: 138, maxRows: hudBudget(eff, hudCompactRows(input), 7, true), ui }));
   };
   test('rows below the slot: prompt 3, status line, mode line and blank 2, the blank row above the prompt 1, agent list main + one per running agent', () => {
     expect(inlineBelowRows(4, 2)).toBe(3 + 4 + 2 + 3 + 1);
@@ -434,71 +260,28 @@ describe('inline renderer budget (viewport less the rows below the AbovePrompt s
     expect(effectiveRows(10, { rows: 60, isFullscreen: false }, 4, 2)).toBe(10);
     expect(effectiveRows(24, { rows: 8, isFullscreen: false }, 4, 2)).toBe(0);
   });
-  test('30 rows, 1 running agent, 6-item 3-phase plan: the blank row above the prompt is counted so the TODO header is not scrolled off', () => {
+  test('30 rows, 1 running agent, 6-item plan: the blank row above the prompt is counted so the TODO ribbon is not scrolled off', () => {
     const plan = [
-      todo('a1', 'Trace the failure', 'completed', 'research'),
-      todo('a2', 'Trace the gate', 'in_progress', 'research'),
-      todo('b1', 'Patch the gate', 'pending', 'implement'),
-      todo('b2', 'Add the test', 'pending', 'implement'),
-      todo('c1', 'Run the suite', 'pending', 'verify'),
-      todo('c2', 'Review the diff', 'pending', 'verify'),
+      todo('a1', 'Trace the failure', 'completed'), todo('a2', 'Trace the gate', 'in_progress'), todo('b1', 'Patch the gate', 'pending'),
+      todo('b2', 'Add the test', 'pending'), todo('c1', 'Run the suite', 'pending'), todo('c2', 'Review the diff', 'pending'),
     ];
     const one = AGENTS.slice(0, 1);
     const rows = 30;
     const eff = effectiveRows(rows, { rows, isFullscreen: false }, 4, 1);
     expect(eff).toBe(rows - (3 + 4 + 2 + 1 + 2));
-    const shown = lines(hudRows({ todos: plan, agents: one }, { cols: 138, maxRows: hudBudget(eff, hudCompactRows({ todos: plan, agents: one }), 7, true) }));
+    const shown = lines(hudRows({ todos: plan, agents: one }, { cols: 138, maxRows: hudBudget(eff, hudCompactRows({ todos: plan, agents: one }), 7, true), ui }));
     expect(shown.length).toBeLessThanOrEqual(eff);
-    expect(shown.some((l) => l.startsWith('TODO'))).toBe(true);
-    expect(shown.some((l) => l.startsWith('Subagents · 1 running'))).toBe(true);
+    expect(shown.some((l) => l.includes('TODO'))).toBe(true);
+    expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('1 running'))).toBe(true);
   });
-  test('24 and 30 rows with 2 running agents and a long todo list: the HUD fits, keeps the TODO, Subagents, agents and Waiting line', () => {
+  test('24 and 30 rows with 2 running agents and a long plan: the HUD fits and keeps the TODO, SUBAGENTS and both agents', () => {
     for (const rows of [24, 30]) {
       const eff = effectiveRows(rows, { rows, isFullscreen: false }, 4, 2);
       const shown = hudAt(rows);
       expect(shown.length).toBeLessThanOrEqual(eff);
-      expect(shown.some((l) => l.startsWith('TODO'))).toBe(true);
-      expect(shown.some((l) => l.startsWith('Subagents · 2 running'))).toBe(true);
+      expect(shown.some((l) => l.includes('TODO'))).toBe(true);
+      expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('2 running'))).toBe(true);
       expect(shown.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate'))).toHaveLength(2);
-      expect(shown.at(-1)?.startsWith('⏳ Waiting')).toBe(true);
     }
   });
-});
-
-describe('hud mutation guards', () => {
-  const two: HudAgent[] = [AGENTS[0]!, AGENTS[1]!];
-  test('selectCollapsed counts exactly two hidden items as plural "todos"', () => {
-    const tasks = ['a', 'b', 'c', 'd'].map((x) => todo(x, x, 'pending'));
-    expect(selectCollapsed(tasks, () => false, 2)).toEqual({ items: [tasks[0], tasks[1]], summary: '… 2 more todos' });
-  });
-
-  test('the one-row summary follows an agent-owned pending item, not a blocked or unowned one', () => {
-    const owned = (id: string, status: string, owner: string): TodoItem => ({ ...todo(id, `Item ${id}`, status), owner } as TodoItem);
-    const todos = [todo('u', 'Item u', 'pending'), owned('b', 'blocked', 'verifier-eval'), owned('p', 'pending', 'docs-curator-gate')];
-    const out = lines(hudRows({ todos, agents: two }, { cols: 100, maxRows: 4 }));
-    expect(out[0]).toBe('TODO · 0/3 · Item p');
-  });
-
-  test('a pending item owned by a running agent takes the accent in the tree', () => {
-    const owned = { ...todo('p', 'Owned work', 'pending'), owner: 'verifier-eval' } as TodoItem;
-    const rows = hudRows({ todos: [todo('a', 'First', 'in_progress'), owned], agents: [AGENTS[0]!] }, { cols: 120, maxRows: 40 });
-    const row = rows.find((r) => text(r).includes('Owned work'))!;
-    expect(row.find((s) => s.t.includes('Owned work'))!.color).toBe(M.violet);
-    const plain = hudRows({ todos: [todo('a', 'First', 'in_progress'), todo('p', 'Owned work', 'pending')], agents: [AGENTS[0]!] }, { cols: 120, maxRows: 40 });
-    expect(plain.find((r) => text(r).includes('Owned work'))!.find((s) => s.t.includes('Owned work'))!.color).toBe(M.grey);
-  });
-
-  test('the closing tail stays unlit while nothing is closed', () => {
-    const rows = hudRows({ todos: [todo('a', 'First', 'pending'), todo('b', 'Second', 'pending')], agents: [] }, { cols: 80, maxRows: 40 });
-    const tail = rows[rows.length - 1]!;
-    expect(tail.map((s) => s.color)).not.toContain(M.violet);
-    expect(text(tail)).toBe(' └─────');
-  });
-
-  test('the agent name is bold', () => {
-    const rows = hudRows({ todos: [], agents: [AGENTS[0]!] }, { cols: 140, maxRows: 40 });
-    const seg = rows.flat().find((s) => s.t === 'verifier-eval')!;
-    expect(seg.bold).toBe(true);
-  });
-
 });

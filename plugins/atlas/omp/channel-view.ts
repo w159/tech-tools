@@ -27,7 +27,7 @@ import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
 import { openGateCount } from "../mod/gates";
 import type { CoreModel } from "../mod/data/core";
-import { ownTodos, planCounts, planPhase } from "../mod/data/todos";
+import { ownTodos, planCounts, planPhase, settleDispatch, type Outcome } from "../mod/data/todos";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -384,7 +384,7 @@ export function registerLaneToolRecorder(pi: Pick<ExtensionAPI, "on">, env: Reco
  * This session's todo progress, scoped like the Claude mod (mod/data/todos.ts): other sessions' rows and advisor notes
  * never count. `phase` is the in_progress item's contract phase only (mod currentPhase); absent, the header decides.
  */
-export type BoardRow = { status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string; content?: string; owner?: string; evidence?: string };
+export type BoardRow = { status?: string; phase?: string; archived?: boolean; origin?: string; session_id?: string; content?: string; owner?: string; evidence?: string; claimed_at?: number | null; completed_at?: number | null };
 export function sessionTodos(root: string, sessionId?: string): BoardRow[] {
 	let items: BoardRow[] = [];
 	try {
@@ -403,9 +403,16 @@ export function todoSummary(root: string, sessionId?: string): { done: number; t
 	return { ...planCounts(items as { status: string }[], sessionId), phase: planPhase(items as { status?: string; phase?: string }[], sessionId) };
 }
 
-/** The same session slice as rows for the board panel. */
-const todoItems = (root: string, sessionId?: string): PanelTodo[] =>
-	sessionTodos(root, sessionId).map(i => ({ content: i.content ?? "", status: i.status ?? "pending", owner: i.owner ?? undefined, evidence: i.evidence ?? undefined, phase: i.phase ?? undefined, origin: i.origin }));
+/** The same session slice as rows for the board panel. A dispatch row whose worker has ended reads done (S1), like the mod's
+ * snapshot does through settleDispatch; claimed_at and completed_at carry the `ran m:ss` and elapsed details. */
+export const todoItems = (root: string, sessionId?: string, ended: Iterable<string> = []): PanelTodo[] => {
+	const gone: Record<string, Outcome> = {};
+	for (const n of ended) gone[n] = "done";
+	return settleDispatch(sessionTodos(root, sessionId).map(i => ({ ...i, status: i.status ?? "pending", owner: i.owner ?? undefined })), gone).map(i => ({
+		content: i.content ?? "", status: i.status, owner: i.owner, evidence: i.evidence ?? undefined, phase: i.phase ?? undefined, origin: i.origin,
+		claimed_at: i.claimed_at ?? null, completed_at: i.completed_at ?? null,
+	}));
+};
 
 /** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
 const PHASE_WORDS: Array<[string, RegExp]> = [
@@ -597,7 +604,8 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			team: team.team,
 			elapsedSecs: Math.max(0, Math.floor((now() - startedAt) / 1000)),
 			idle: idleWave(info, workers.length),
-			todos: todoItems(info.root, info.sessionId),
+			todos: todoItems(info.root, info.sessionId, fin),
+			nowSecs: Math.floor(now() / 1000),
 			todosExpanded: env.ATLAS_TODO_EXPANDED === "1",
 			core: coreOf(info),
 		});

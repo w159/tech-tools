@@ -39,6 +39,7 @@ const cases: Record<string, SidebarModel> = {
   route: v('route'),
   routeSpinning: v('route', { tick: 3 }),
   gates: v('gates'),
+  core: v('core'),
   gatesExpanded: v('gates', { ui: ui({ view: 'gates', expanded: 'gate:verify' }) }),
   cols38: v('team', { columns: 38 }),
   cols30: v('route', { columns: 30 }),
@@ -54,12 +55,16 @@ const cases: Record<string, SidebarModel> = {
 export const serializeGolden = (): string =>
   JSON.stringify(Object.fromEntries(Object.entries(cases).map(([k, m]) => [k, sidebarTree(els, m, on)])), null, 1);
 
-type Node = { kind: string; props: { flexDirection?: string; children?: unknown } };
+type Node = { kind: string; props: { flexDirection?: string; hotkey?: string; children?: unknown } };
 const kidsOf = (n: Node): Node[] => {
   const c = n.props.children;
   return (Array.isArray(c) ? c : c == null ? [] : [c]).filter((x): x is Node => typeof x === 'object' && x !== null);
 };
-const flat = (n: Node): string => (n.kind === 'Text' ? String(n.props.children ?? '') : kidsOf(n).map(flat).join(n.kind === 'Box' && n.props.flexDirection !== 'row' ? '\n' : ''));
+// A Button with a hotkey is drawn by the host as `k: label`; the text a terminal shows carries that prefix.
+const flat = (n: Node): string => (n.kind === 'Text' ? String(n.props.children ?? '') : (n.kind === 'Button' && n.props.hotkey ? `${String(n.props.hotkey)}: ` : '') + kidsOf(n).map(flat).join(n.kind === 'Box' && n.props.flexDirection !== 'row' ? '\n' : ''));
 
 /** One golden case as the plain text a terminal would show (rows joined by newlines). */
 export const goldenText = (name: string): string => flat(sidebarTree(els, cases[name]!, on) as unknown as Node);
+
+/** A golden case's model, for hosts that paint the same layout without the Claude tree (omp parity tests). */
+export const goldenModel = (name: string): SidebarModel => cases[name]!;
