@@ -164,7 +164,7 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** `boardLines`: how many of those folded dispatch rows are still open in the store; the footer then reads `N items · K dispatch open`. */ openFolded?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** `boardLines`: how many of those folded dispatch rows are still open in the store; the footer then reads `N items · K dispatch open`. */ openFolded?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Compact form: the state column's width (the longest word on the board; absent: 7). */ wordW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= NARROW_MIN ? 'compact' : 'narrow');
 
@@ -209,7 +209,7 @@ function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const stateCol = f === 'full' ? COL.state : (o.stateCol ?? COL.stateCompact);
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
   const word = row.word ?? row.state;
-  if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + STATE_W + 1), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
+  if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + (o.wordW ?? STATE_W) + 1), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
   const stateCell = o.rich ? (row.word ? chip(word, STATE_TOKEN[row.state], o.ui) : stateChip(row.state, o.ui)) : r(word);
   const withState = to([...withLabel, stateCell], COL.owner);
   const owner = to([...withState, ...(row.owner ? [r(clip(row.owner, OWNER_W), 'sub')] : [])], COL.detail);
@@ -234,19 +234,21 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   // The owner column drops before any title is cut (critique 8: `T4 combine th...` beside `alpha...`): it stays only while the widest title still shows
   // whole beside it (head 4 + title + gap, the state word, a gap), and so a title keeps at least LABEL_MIN cells before any owner cell shows.
   const widest = Math.max(0, ...rows.map((x) => cells(x.label)));
-  const ownerFit = Math.min(ownerAll, o.cols - Math.max(widest, LABEL_MIN) - 5 - STATE_W - 1 - 1);
+  // The state column is as wide as the longest word on this board (a board of `done` rows needs 4 cells, not the 7 of `running`), so a title keeps those cells.
+  const wordW = Math.min(STATE_W, Math.max(4, ...rows.map((x) => cells(x.word ?? x.state))));
+  const ownerFit = Math.min(ownerAll, o.cols - Math.max(widest, LABEL_MIN) - 5 - wordW - 1 - 1);
   // Titles the row cuts anyway keep the owner only when, without it, the cut titles would read the same (one shared head): the owner then tells the rows apart,
   // and the title keeps LABEL_MIN cells beside it (the old rule). Cut titles that stay distinct on their own never trade cells for an owner.
   const cutBare = rows.map((x) => clip(x.label, o.cols - 13));
   const apart = new Set(cutBare).size === cutBare.length;
-  const sharedHead = o.cols >= COMPACT_MIN ? ownerAll : Math.min(ownerAll, o.cols - (LABEL_MIN + 5) - STATE_W - 2);
+  const sharedHead = o.cols >= COMPACT_MIN ? ownerAll : Math.min(ownerAll, o.cols - (LABEL_MIN + 5) - wordW - 2);
   const ownerW = ownerFit >= 5 ? ownerFit : compact && !apart && sharedHead >= 5 ? sharedHead : 0; // a sliver of a name tells nothing
   // Compact: the owner column takes its width from the right, the state column slides left to make room (never under 26 at 60+, never past the widest label).
-  const avail = o.cols - STATE_W - 1 - (ownerW ? ownerW + 1 : 0);
+  const avail = o.cols - wordW - 1 - (ownerW ? ownerW + 1 : 0);
   const stateColC = compact ? Math.max(Math.min(COL.stateCompact, avail), Math.min(avail, widest + 7)) : undefined;
   const labelW = form(o.cols) === 'narrow' ? Math.max(1, o.cols - 4) : (stateColC ?? COL.state) - 5;
   const shown = labelCut(rows.map((x) => x.label), labelW);
-  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol: stateColC, shown: shown[i]!, ...(ownerW ? { ownerW } : {}), ...(o.motion ? { key: keys[i]! } : {}) }) }));
+  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol: stateColC, shown: shown[i]!, wordW, ...(ownerW ? { ownerW } : {}), ...(o.motion ? { key: keys[i]! } : {}) }) }));
   return form(o.cols) === 'full' ? [{ runs: boardHeader() }, ...lines] : lines;
 }
 

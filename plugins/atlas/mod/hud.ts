@@ -117,7 +117,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
 export const shortModel = (model: string | undefined): string => flat(model).replace(/^.*\//, '').replace(/^claude-/, '');
 
 /** The agent's current call (`read runs.ts:17`), else its last line, else its last call. */
-function lastAction(a: HudAgent, root?: string | null): string {
+export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, root?: string | null): string {
   const base = root ? `${root.replace(/\/+$/, '')}/` : '';
   const rel = (s: string): string => (base ? s.split(base).join('') : s);
   const target = rel(flat(a.target));

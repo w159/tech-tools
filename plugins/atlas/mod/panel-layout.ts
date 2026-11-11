@@ -14,6 +14,7 @@ import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/
 import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withHeaderTally } from './data/runstate';
 import { displayName } from './hud';
+import { sortAgents } from './hud-surface';
 import type { GateGroup } from './pane/sidebar-types';
 
 export type PanelTab = 'route' | 'team' | 'channel' | 'gates' | 'core';
@@ -31,18 +32,16 @@ export const HOTKEY_W = 3;
 /** Cells between strip tabs. */
 export const STRIP_GAP = 2;
 
-/** A strip tab as drawn: its id, hotkey and the label of the form that fits (always a whole word: `channel` may read `chan`, no word is cut to two letters). */
+/** A strip tab as drawn: its id, hotkey and its label (always the whole word, the same on every surface: no `chan`, no two-letter form). */
 export type StripTab = { id: PanelTab | 'board'; key: string; label: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** Label forms of the strip, widest first: the words; `channel` shortened; the same with one cell between tabs. The first form that fits the
- * pane on one row is drawn; none fitting, the words wrap onto a second row (never a two-letter `rt tm ch` form). */
-const SHORT: Record<string, string> = { channel: 'chan' };
+/** Forms of the strip, widest first: the words; the same with one cell between tabs. The first form that fits the pane on one row is drawn;
+ * none fitting, the words wrap onto a second row (never a shortened `chan` or a two-letter `rt tm ch` form). */
 type StripForm = { gap: number; label: (id: string, full: string) => string };
 const STRIP_FORMS: readonly StripForm[] = [
   { gap: STRIP_GAP, label: (_, full) => full },
-  { gap: STRIP_GAP, label: (id, full) => SHORT[id] ?? full },
-  { gap: 1, label: (id, full) => SHORT[id] ?? full },
+  { gap: 1, label: (_, full) => full },
 ];
 const stripWidth = (tabs: readonly { label: string }[], gap: number): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + HOTKEY_W + cells(t.label), 0);
 const formTabs = (f: StripForm): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t, label: f.label(t.id, t.label) }));
@@ -167,8 +166,8 @@ const countedGates = (gs: readonly PanelGate[]): PanelGate[] => {
   const ids = new Set(tallyOf(gs).checks.map((c) => c.id as string));
   return gs.filter((g) => ids.has(g.id)).map((g) => (g.lines.some((l) => l.id === STOP_LINE) ? { ...g, lines: g.lines.filter((l) => l.id !== STOP_LINE) } : g)); // the Stop verdict is a record, not a gate row
 };
-/** Label column: eight cells from 100 columns, seven below (design: `phase   research   2/4` at 120, `phase  research 2/4` at 80). */
-const label = (t: string, cols: number): Run => r(pad(t, cols >= 100 ? 8 : 7), 'muted');
+/** Label column: one cell in (the tab indent, like the strip and the headings) and eight cells wide at every width, so `agents` keeps a blank before its figure. */
+const label = (t: string, _cols: number): Run => r(pad(` ${t}`, 8), 'muted');
 const dot = (ui: Ui): string => (ui.ascii ? '|' : '·');
 const sep = (ui: Ui): Run => r(` ${dot(ui)} `, 'muted');
 const WIDE = 100;
@@ -196,7 +195,9 @@ export function ribbonRow(m: PanelModel): PanelLine {
   }
   const right = ribbonRight(m);
   const fitsRight = right && m.cols >= 40 + cells(right);
-  return line(ribbon(m.cols, 'SIDEPANEL', fitsRight ? right : '', m.ui));
+  // The gates figure never drops from the header: a pane too narrow for `17 of 18 green` reads it as `17/18`.
+  const short = m.tab === 'gates' ? right.replace(/^(\d+) of (\d+) green$/, '$1/$2') : '';
+  return line(ribbon(m.cols, 'SIDEPANEL', fitsRight ? right : short && short !== right && m.cols >= 32 + cells(short) ? short : '', m.ui));
 }
 
 /** The tab strip and the rule under the lit tab: `r: route  t: team  c: channel  g: gates  k: core  o: board`, `━━━━━` under the lit one. A
@@ -431,17 +432,24 @@ function leadOf(m: PanelModel): PanelWorker | undefined {
   return { ...lead, state: 'blocked', detail: blockReasons(declared, stop?.gates ?? ['gate']).long };
 }
 
+/** The workers in the HUD's order (hud-surface sortAgents): running first, then blocked, failed, waiting, queued and done; inside a state the worker that owns the
+ * earliest plan row (T1 before T2) first, those that own none after, then as given. The plan row number is its place in `m.todos` (the board's order). */
+export function workersByTask(m: Pick<PanelModel, 'todos' | 'workers'>): PanelWorker[] {
+  return sortAgents(m.workers.map((w) => ({ w, state: w.state, tasks: m.todos.flatMap((t, i) => (t.owner === w.name ? [i + 1] : [])) }))).map((x) => x.w);
+}
+
 function teamBody(m: PanelModel): PanelLine[] {
   const mates = m.mates ?? [];
   const lead = leadOf(m);
-  const everyone = [...(lead ? [lead] : []), ...m.workers, ...mates];
+  const workers = workersByTask(m);
+  const everyone = [...(lead ? [lead] : []), ...workers, ...mates];
   if (!everyone.length) return [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])];
   const cap = Math.max(18, Math.min(40, m.cols - GRID_LEAD - 2 - (m.cols >= WIDE ? 12 : 10) - 1 - (m.cols >= WIDE ? 28 : 0)));
   const nameW = Math.min(cap, Math.max(6, ...everyone.map((w) => cells(nameOf(w)))));
-  const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : m.workers.find((w) => w.state === 'running')?.name;
+  const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[], more: ReadonlySet<string>): PanelLine[] => ws.flatMap((w) => workerRows(m, w, Math.min(nameW, Math.max(6, m.cols - 14)), w.name === focusName, more.has(w.name)));
   const hint = !m.workers.length && !mates.length ? [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])] : [];
-  const build = (more: ReadonlySet<string>): PanelLine[] => [...(lead ? rows([lead], more) : []), ...hint, ...rows(m.workers, more), ...rows(mates, more), ...(m.lead ? [leadSummary(m)] : [])];
+  const build = (more: ReadonlySet<string>): PanelLine[] => [...(lead ? rows([lead], more) : []), ...hint, ...rows(workers, more), ...rows(mates, more), ...(m.lead ? [leadSummary(m)] : [])];
   const base = build(new Set());
   if (!tall(m)) return base;
   // A tall pane: the rows left go to per-agent detail, in roster order (the lead, then running first), each agent whole or not at all.
@@ -478,9 +486,10 @@ const NOTE_LINES = 4; // rows one message may take on a tall pane
 
 function channelBody(m: PanelModel): PanelLine[] {
   const head = line(fitRuns([
-    r(`#${m.channel ?? 'channel'}  `, 'text', { bold: true }),
+    r(` #${m.channel ?? 'channel'}  `, 'text', { bold: true }), // one cell in: the tab indent
     r(`${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`, 'muted'),
   ], m.cols));
+  if (!m.notes.length) return [head, BLANK, line(fitRuns([r(' no messages yet', 'muted')], m.cols)), ...wrap('workers post here when they hand off or block; type below to message the lead', Math.max(8, m.cols - 3), 3).map((t) => line(fitRuns([r(` ${t}`, 'muted')], m.cols)))];
   const log = m.notes.slice(-Math.max(1, tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4)); // a tall pane: the head, the log and the foot row make exactly the pane
   const hasKind = log.some((n) => n.kind === 'blocked' || n.kind === 'handoff' || n.kind === 'done');
   const timeW = m.cols >= 50 ? Math.max(0, ...log.map((n) => cells(n.at))) : 0;
@@ -600,6 +609,14 @@ function flowHeading(title: string, parts: readonly string[], m: PanelModel): Pa
   let used = indent;
   for (const p of parts) {
     const first = used === indent;
+    if (cells(p) > m.cols - indent) { // a figure wider than the row wraps on its words, it is never cut mid-phrase
+      const [head, ...rest] = wrap(p, Math.max(8, m.cols - indent), 3);
+      if (!first) rows.push([r(' '.repeat(indent))]);
+      rows[rows.length - 1]!.push(r(head ?? '', 'text'));
+      for (const t of rest) rows.push([r(' '.repeat(indent)), r(t, 'text')]);
+      used = m.cols;
+      continue;
+    }
     const w = cells(p) + (first ? 0 : 2);
     if (!first && used + w > m.cols) { rows.push([r(' '.repeat(indent))]); used = indent; }
     rows[rows.length - 1]!.push(r(used === indent ? p : `, ${p}`, 'text'));
@@ -715,7 +732,7 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
   const head = heading('teams', teams.length ? [r(`${teams.length} this session`, 'muted')] : [], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
-  const names = teams.flatMap((rt) => [`${rt.cls}/${rt.effort}`, ...rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`)]);
+  const names = teams.flatMap((rt) => rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`));
   const { nameW } = gridPlan(m.cols, { names, word: SEAT_WORD_W, min: 8, max: 16 });
   const withDetail = (runs: Run[], text: string): PanelLine[] => {
     const used = rowWidth(runs);
@@ -723,18 +740,18 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
     return [line(fitRuns(fits ? [...runs, r(` ${text}`, 'muted')] : runs, m.cols)), ...(fits ? [] : wrap(text, Math.max(8, m.cols - 6)).map((t) => note(`  ${t}`, m)))];
   };
   const rows = teams.flatMap((rt): PanelLine[] => {
-    const teamName = `${rt.cls}/${rt.effort}`;
-    // A team that ran differently says what happened, in words: `planned audit/low, ran 3 explorers` (data/core plannedText, the band's wording).
+    const teamName = `${rt.cls} team (${rt.effort} effort)`; // plain words, never the `class/effort` scope token
+    // A team that ran differently says what happened, in words: `planned audit team (low effort), ran 3 explorers` (data/core plannedText, the band's wording).
     const headName = rt.drift.length ? plannedText(rt) : teamName;
     const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('failed', m.ui) : null, name: { t: headName, bold: true }, nameW: Math.min(cells(headName), Math.max(1, m.cols - GRID_LEAD)) });
     const seats = rt.seats.flatMap((s): PanelLine[] => {
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');
       const over = s.ran.length > s.count;
       const used = [...new Set(s.ran.map((x) => x.replace(/^claude-/, '')))].join(', ');
-      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['failed', 'differs', 'bad'];
-      // Plain words: `3 explorers ran, 1 planned (haiku), plan haiku/low`; a seat that ran another model reads `ran on opus, plan haiku/low`.
-      const plan = `${s.model}/${s.effort}`;
-      const detail = !s.ran.length ? `not run yet  ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${used}), plan ${plan}` : same ? `ran ${used}  ${plan}` : `ran on ${used}, plan ${plan}`;
+      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['failed', 'off plan', 'bad'];
+      // Plain words, no `model/effort` token: `3 explorers ran, 1 planned (haiku, low effort)`; a seat that ran another model reads `ran on opus, planned haiku, low effort`.
+      const plan = `${s.model}, ${s.effort} effort`;
+      const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${plan})` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
       const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(st, m.ui), name: { t: `  ${seatCount(s)}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
       return withDetail(runs, detail);
     });
@@ -756,8 +773,8 @@ function coreBody(m: PanelModel): PanelLine[] {
   if (!tall(m) || (base.length <= room && spill <= 0)) return base;
   // A tall pane: the sections list as many rows as the pane holds. The same extra count for all three (negative: fewer than the default when the
   // default overflows; one row of each stays) by bisection, then one more row at a time to whichever section still has data and room.
-  const caps = (k: number): [number, number, number] => [VERDICT_CAP + k, OFFLOAD_CAP + k, TEAM_CAP + k];
-  let lo = 1 - Math.min(VERDICT_CAP, OFFLOAD_CAP, TEAM_CAP);
+  const caps = (k: number): [number, number, number] => [Math.max(1, VERDICT_CAP + k), Math.max(1, OFFLOAD_CAP + k), Math.max(1, TEAM_CAP + k)];
+  let lo = 1 - Math.max(VERDICT_CAP, OFFLOAD_CAP, TEAM_CAP); // down to one row of each section, however wrapped words lengthen the rest
   let hi = Math.max(0, spill);
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2);

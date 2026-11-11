@@ -98,7 +98,7 @@ describe('route tab', () => {
     expect(out.some((l) => /\d+ more tasks on the board$/.test(l))).toBe(true);
   });
   test('names that do not fit the gates row fold to a labelled count', () => {
-    expect(rows('route', 30).find((l) => l.startsWith('gates '))).toContain('2 of 3 green');
+    expect(rows('route', 30).find((l) => l.startsWith(' gates '))).toContain('2 of 3 green');
   });
 });
 
@@ -171,9 +171,9 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toContain('3 explorers ran, 1 planned (haiku), plan haiku/low'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
-    expect(out).toMatch(/■ {3}3x explorer +differs +3 explorers ran, 1 planned/);
-    expect(out).toContain('planned audit/low, ran 3 explorers');
+    expect(out).toContain('3 explorers ran, 1 planned (haiku, low effort)'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
+    expect(out).toMatch(/■ {3}3x explorer +off plan +3 explorers ran, 1 planned/);
+    expect(out).toContain('planned audit team (low effort), ran 3 explorers');
     expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
   });
@@ -181,7 +181,7 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 4, drift: ['explorer ran 4, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toMatch(/■ {3}4x explorer +differs +4 explorers ran, 1 planned/);
+    expect(out).toMatch(/■ {3}4x explorer +off plan +4 explorers ran, 1 planned/);
     expect(out).not.toContain('1x explorer');
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {
@@ -204,7 +204,7 @@ describe('core tab', () => {
 describe('channel tab', () => {
   test('header counts people and unread in words; blocked and handoff notes carry the state glyph and word', () => {
     const out = bodyLines(panelWorld('channel', 120, mocha)).map(lineText);
-    expect(out[0]).toBe('#atlas-board-mod  5 people · 2 unread');
+    expect(out[0]).toBe(' #atlas-board-mod  5 people · 2 unread');
     expect(out[2]).toMatch(/^ {2}▲ implementer-live +blocked /);
     expect(out[3]).toMatch(/^ {2}● implementer-layout +handoff /);
   });

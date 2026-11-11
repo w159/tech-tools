@@ -324,9 +324,9 @@ function seatsOf(
   }));
 }
 
-/** What a team that ran differently from its plan did, in plain words: `planned audit/low, ran 3 explorers`. The band and the core tab say it the same way. */
+/** What a team that ran differently from its plan did, in plain words: `planned audit team (low effort), ran 3 explorers`. The band and the core tab say it the same way. */
 export const plannedText = (rt: Pick<Route, 'cls' | 'effort' | 'seats'>): string =>
-  `planned ${rt.cls}/${rt.effort}, ran ${rt.seats.filter((s) => s.ran.length).map((s) => `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'}`).join(', ') || 'nothing'}`;
+  `planned ${rt.cls} team (${rt.effort} effort), ran ${rt.seats.filter((s) => s.ran.length).map((s) => `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'}`).join(', ') || 'nothing'}`;
 
 const driftOf = (seats: readonly Seat[]): string[] =>
   seats.flatMap((s) => [
