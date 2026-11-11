@@ -529,10 +529,10 @@ export async function dockTick($: EngineInterface): Promise<void> {
  * $ATLAS_HOME/atlas.db, else ~/.atlas/atlas.db) with its WAL, where the hooks record every check. */
 async function gatesSigOf($: EngineInterface, root: string): Promise<string> {
 	const run = `${root.replace(/\/+$/, '')}/.atlas/.run`;
-	const env = async (k: string): Promise<string | undefined> => (await $.env.get(k).catch(() => undefined)) || undefined;
-	const home = await env('ATLAS_HOME');
-	const user = await env('HOME');
-	const db = (await env('ATLAS_DB')) ?? (home ? `${home}/atlas.db` : user ? `${user}/.atlas/atlas.db` : '');
+	// $.env.get takes a literal name (the engine lists the variables a module reads), so each read is spelled out.
+	const home = (await $.env.get('ATLAS_HOME').catch(() => undefined)) || undefined;
+	const user = (await $.env.get('HOME').catch(() => undefined)) || undefined;
+	const db = (await $.env.get('ATLAS_DB').catch(() => undefined)) || (home ? `${home}/atlas.db` : user ? `${user}/.atlas/atlas.db` : '');
 	const paths = [`${run}/todos.json`, `${run}/findings.json`, ...(db ? [db, `${db}-wal`] : [])];
 	return (await Promise.all(paths.map((p) => statSig($, p)))).join('|');
 }
