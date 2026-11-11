@@ -58,7 +58,7 @@ export const todo_40 = [
 ];
 
 export const subagents_120 = [
-  "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1 queued · 1 running · 2 done · 1 failed",
+  "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1 running · 1 failed · 1 queued · 2 done",
   "    AGENT               STATE       MODEL     TASK  LAST",
   "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
   "  ■ implementer-live    failed      opus      T6    tests red 3",
@@ -78,12 +78,12 @@ export const subagents_120_rich = [
 ];
 
 export const subagents_80 = [
-  "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━ 1 queued · 1 running · 2 done · 1 failed",
-  "",
-  "▸ ◐ implementer-band    running",
-  "  ■ implementer-live    failed",
-  "  ◇ runner-land         queued",
-  "  ● implementer-layout  done",
-  "  ● implementer-gates   done"
+  "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━ 1 running · 1 failed · 1 queued · 2 done",
+  "    AGENT               STATE       MODEL     TASK  LAST",
+  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
+  "  ■ implementer-live    failed      opus      T6    tests red 3",
+  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
+  "  ● implementer-layout  done        opus      T1,T2 9 of 9 steps",
+  "  ● implementer-gates   done        sonnet    T3    golden tests written"
 ];
 

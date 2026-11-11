@@ -177,6 +177,14 @@ export function missionTree(els: ClientElements, m: MissionModel, todoRows: (row
   return panel(els, rows, m.cols, ui);
 }
 
+/** Breathing blanks the running band draws at `b.maxRows` (rows of spaces only; a board slot or the key footer never counts): the rows the HUD can have instead. */
+export function bandSpareRows(b: BandModel): number {
+  const maxRows = b.maxRows ?? 12;
+  if (maxRows < 1) return 0;
+  const m = missionModel({ ...b, maxRows, ui: b.ui ?? uiFromEnv() });
+  return missionLines(m).filter((l) => !l.board && !l.keys && l.runs.every((x) => x.t.trim() === '')).length;
+}
+
 export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): RenderElement {
   const cols = Math.max(1, b.columns);
   const maxRows = b.maxRows ?? 12;

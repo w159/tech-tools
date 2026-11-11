@@ -8,12 +8,16 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 describe('hostEnv', () => {
   test('is the live process environment, not an empty object', () => {
     const key = 'ATLAS_UI_EDGE_PROBE';
-    const g = globalThis as unknown as { process: { env: Record<string, string | undefined> } };
-    g.process.env[key] = 'on';
+    // The claude-code/testing kit has no `process` global; install a stand-in for the probe so the read is still exercised there.
+    const g = globalThis as unknown as { process?: { env: Record<string, string | undefined> } };
+    const hadProcess = g.process !== undefined;
+    if (!hadProcess) g.process = { env: {} };
+    g.process!.env[key] = 'on';
     try {
       expect(hostEnv()[key]).toBe('on');
     } finally {
-      delete g.process.env[key];
+      delete g.process!.env[key];
+      if (!hadProcess) delete g.process;
     }
     expect(hostEnv()[key]).toBeUndefined();
   });

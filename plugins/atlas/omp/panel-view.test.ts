@@ -4,6 +4,7 @@
 import { expect, test } from "bun:test";
 import { coreFixture, coreMatrix } from "../contracts/core-fixture";
 import { cardDesign, tabGolden, toastDesign } from "../contracts/panel-golden";
+import { padStrip } from "../mod/golden-pad";
 import { panelWorld, worldCard } from "../contracts/panel-world";
 import { type Ui } from "../mod/atlas-ui";
 import { coreModel } from "../mod/data/core";
@@ -21,7 +22,7 @@ const core = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: 
 for (const t of PANEL_TABS.map((x) => x.id)) {
 	for (const cols of [120, 80, 56]) {
 		test(`omp ${t} at ${cols} equals the golden the Claude pane is held to`, () => {
-			expect(paintPanel(panelWorld(t, cols, mocha, { core })).map((r) => plain(r).trimEnd())).toEqual(tabGolden[t]![cols]!);
+			expect(paintPanel(panelWorld(t, cols, mocha, { core })).map((r) => plain(r).trimEnd())).toEqual(padStrip(tabGolden[t]![cols]!));
 		});
 	}
 }

@@ -19,11 +19,11 @@ describe('sidebar golden text', () => {
       expect(r[0]).toContain('ATLAS');
       expect(r[0]).toContain('SIDEPANEL');
       expect(r[1]!.trim()).toBe('');
-      expect(r[2]).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
+      expect(r[2]).toBe(' r: route  t: team  c: channel  g: gates  k: core  o: board');
     }
   });
   test('the lit tab is ruled by a heavy line under its label only', () => {
-    expect(rows('route')[3]!.trimEnd()).toBe('   ━━━━━');
+    expect(rows('route')[3]!.trimEnd()).toBe('    ━━━━━');
     expect(rows('team')[3]!.trim()).toBe('━━━━');
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
@@ -47,9 +47,9 @@ describe('sidebar golden text', () => {
     expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/);
     expect(r[3]).toMatch(/^ {2}■ runner-1\s+failed/);
   });
-  test('team at 38 columns takes the two-letter strip on one row and keeps name and state', () => {
+  test('team at 38 columns keeps the keys, drops words from the right on one row and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]).toBe('r: rt t: tm c: ch g: gt k: co o: bd');
+    expect(r[2]!.trimEnd()).toBe(' r: route t: team c: chan g:  k:  o:');
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
   });

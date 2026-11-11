@@ -25,18 +25,33 @@ export const HOTKEY_W = 3;
 /** Cells between strip tabs. */
 export const STRIP_GAP = 2;
 
-/** A strip tab as drawn: its id, hotkey and the label of the form that fits. */
+/** A strip tab as drawn: its id, hotkey and the label of the form that fits (empty once its word is dropped: the key alone). */
 export type StripTab = { id: PanelTab | 'board'; key: string; label: string };
-/** Label forms of the strip, widest first: the words; `channel` shortened; two letters. The first form whose tabs fit the pane on one row is drawn. */
+/** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
+export const STRIP_PAD = 1;
+/** Label forms of the strip, widest first: the words; `channel` shortened; then the words dropped from the right end, one tab at a
+ * time, keeping the keys (`r: route  t: team  c: chan  g: gates  k:  o:`). The first form that fits the pane on one row is drawn. */
 const SHORT: Record<string, string> = { channel: 'chan' };
-const TINY: Record<string, string> = { route: 'rt', team: 'tm', channel: 'ch', gates: 'gt', core: 'co', board: 'bd' };
-const STRIP_FORMS: readonly { gap: number; label: (id: string, full: string) => string }[] = [
-  { gap: STRIP_GAP, label: (_, full) => full },
-  { gap: STRIP_GAP, label: (id, full) => SHORT[id] ?? full },
-  { gap: 1, label: (id, full) => SHORT[id] ?? full },
-  { gap: 1, label: (id) => TINY[id] ?? id },
+type StripForm = { gap: number; label: (id: string, full: string) => string; drop: number };
+const STRIP_FORMS: readonly StripForm[] = [
+  { gap: STRIP_GAP, label: (_, full) => full, drop: 0 },
+  { gap: STRIP_GAP, label: (id, full) => SHORT[id] ?? full, drop: 0 },
+  ...STRIP_TABS.map((_, i): StripForm => ({ gap: 1, label: (id, full) => SHORT[id] ?? full, drop: i })),
+  { gap: 1, label: (id, full) => SHORT[id] ?? full, drop: STRIP_TABS.length },
 ];
 const stripWidth = (tabs: readonly { label: string }[], gap: number): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + HOTKEY_W + cells(t.label), 0);
+
+/** The tabs of one form: the last `f.drop` tabs lose their word (the lit tab keeps its word, so the rule under it has a label to sit under). */
+function formTabs(f: StripForm, lit?: string): StripTab[] {
+  let left = f.drop;
+  const dropped = new Set<string>();
+  for (let i = STRIP_TABS.length - 1; i >= 0 && left > 0; i--) {
+    if (STRIP_TABS[i]!.id === lit) continue;
+    dropped.add(STRIP_TABS[i]!.id);
+    left--;
+  }
+  return STRIP_TABS.map((t): StripTab => ({ ...t, label: dropped.has(t.id) ? '' : f.label(t.id, t.label) }));
+}
 
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and `gap` cells between; the rest wrap. */
 export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = STRIP_GAP): T[][] {
@@ -51,16 +66,16 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
   return rows;
 }
 
-/** The strip both hosts draw at `inner` cells: the widest label form that fits one row, else the narrowest form wrapped. The rule under the lit tab is as wide as the drawn label. */
-export function stripLayout(inner: number): { rows: StripTab[][]; gap: number } {
-  let last = STRIP_FORMS[STRIP_FORMS.length - 1]!;
+/** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding: the widest label form that fits one row, else the
+ * narrowest form wrapped. `lit` is the lit tab, whose word is never dropped. The rule under the lit tab is as wide as the drawn label. */
+export function stripLayout(cols: number, lit?: string): { rows: StripTab[][]; gap: number } {
+  const inner = Math.max(1, cols - STRIP_PAD);
   for (const f of STRIP_FORMS) {
-    const tabs = STRIP_TABS.map((t): StripTab => ({ ...t, label: f.label(t.id, t.label) }));
-    last = f;
+    const tabs = formTabs(f, lit);
     if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap };
   }
-  const tabs = STRIP_TABS.map((t): StripTab => ({ ...t, label: last.label(t.id, t.label) }));
-  return { rows: stripRows(tabs, inner, last.gap), gap: last.gap };
+  const last = STRIP_FORMS[STRIP_FORMS.length - 1]!;
+  return { rows: stripRows(formTabs(last, lit), inner, last.gap), gap: last.gap };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; owner?: string; detail?: string; evidence?: string | null };
@@ -166,11 +181,12 @@ export function ribbonRow(m: PanelModel): PanelLine {
 /** The tab strip and the rule under the lit tab: `r: route  t: team  c: channel  g: gates  k: core  o: board`, `━━━━━` under the lit one. A
  * strip that does not fit wraps onto a second row (the rule sits under the row that holds the lit tab). */
 export function tabRows(m: PanelModel): PanelLine[] {
-  const { rows, gap: g } = stripLayout(m.cols);
+  const { rows, gap: g } = stripLayout(m.cols, m.tab);
   const gap = r(' '.repeat(g));
+  const lead = r(' '.repeat(STRIP_PAD));
   return rows.flatMap((row): PanelLine[] => {
-    const strip: Run[] = [];
-    const under: Run[] = [];
+    const strip: Run[] = [lead];
+    const under: Run[] = [lead];
     row.forEach((t, i) => {
       const on = t.id === m.tab;
       if (i) { strip.push(gap); under.push(gap); }
@@ -250,7 +266,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   const key = `task:${t.id}`;
   const runs = gridRow({
     cols: m.cols, ui: m.ui, mark: stateRun(t.state, m.ui, m.tick),
-    name: { t: oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text' }, nameW: w.nameW,
+    name: { t: oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text' }, nameW: w.nameW, nameCut: 'end',
     word: { t: t.state, tone: stateWordTone2(t.state) }, wordW: WORD_W,
     ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
     ...(w.valueW && t.owner ? { value: { t: clipMiddle(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
@@ -517,7 +533,8 @@ function verdictRows(c: CoreModel, m: PanelModel): PanelLine[] {
 function offloadRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const o = c.offload;
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
-  const head = flowHeading('offload', [`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
+  const nothing = o.kept === 0 && o.returned === 0;
+  const head = flowHeading('offload', nothing ? ['workers have read and returned nothing yet'] : [`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
   const ws = o.workers.slice(-8);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);
@@ -569,11 +586,15 @@ function dispatchRows(c: CoreModel, m: PanelModel): PanelLine[] {
       const over = s.ran.length > s.count;
       const used = [...new Set(s.ran.map((x) => x.replace(/^claude-/, '')))].join(', ');
       const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['failed', 'drift', 'bad'];
-      const ran = !s.ran.length ? 'not run yet' : over ? `ran ${s.ran.length} / planned ${s.count} (${used})` : `ran ${used}`;
+      // Plain words: `3 explorers ran, 1 planned (haiku), plan haiku/low`; a seat that ran another model reads `ran on opus, plan haiku/low`.
+      const plan = `${s.model}/${s.effort}`;
+      const detail = !s.ran.length ? `not run yet  ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${used}), plan ${plan}` : same ? `ran ${used}  ${plan}` : `ran on ${used}, plan ${plan}`;
       const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(st, m.ui), name: { t: `  ${s.count}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
-      return withDetail(runs, `${ran}  ${s.model}/${s.effort}`);
+      return withDetail(runs, detail);
     });
-    return [...withDetail(team, `${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`), ...seats];
+    // In-process routes have no team name or isolation to show: the sentence says how the workers ran.
+    const how = rt.transport === 'in-process' ? `workers ran in-process (no tmux team), up to ${rt.maxParallel} at once` : `${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`;
+    return [...withDetail(team, how), ...seats];
   });
   return [head, ...rows, ...inProcessNote()];
 }

@@ -25,6 +25,42 @@ describe('mission-layout: bold is opt-in', () => {
   });
 });
 
+describe('mission-layout: A3 the count order is the shared COUNT_ORDER', () => {
+  test('running, failed, waiting, queued: waiting reads before queued on every form', () => {
+    const ws = [w('q', 'queued'), w('wt', 'waiting'), w('f', 'failed'), w('r', 'running')];
+    const full = band(model({ workers: ws }));
+    expect(full.indexOf('running')).toBeLessThan(full.indexOf('failed'));
+    expect(full.indexOf('failed')).toBeLessThan(full.indexOf('waiting'));
+    expect(full.indexOf('waiting')).toBeLessThan(full.indexOf('queued'));
+  });
+});
+
+describe('mission-layout: A2 the header never reads idle or all ok beside a failing check', () => {
+  const bad = [{ id: 'completion', ok: true }, { id: 'routing', ok: false }];
+  const lastRun = { workers: 4, secs: 70, failed: 0 };
+  const all = (m: MissionModel): string => missionLines(m).map((l) => runsText(l.runs)).join('\n');
+  test('idle with a failing check reads blocked, in every width form', () => {
+    for (const cols of [160, 120, 100, 80, 60, 40]) {
+      const b = band(model({ cols, checks: bad, phase: 'verify', done: 3 }));
+      expect(b).not.toContain('idle');
+      expect(b).toContain('blocked');
+    }
+    expect(band(model({ checks: [{ id: 'routing', ok: true }] }))).toContain('idle');
+    expect(band(model({ checks: null }))).toContain('idle');
+  });
+  test('the rich band says blocked too', () => {
+    const b = runsText(bandLines(model({ cols: 160, rich: true, checks: bad }))[0]!.runs);
+    expect(b).not.toContain('idle');
+    expect(b).toContain('blocked');
+  });
+  test('last run does not say all ok while a check fails; it does when none fails', () => {
+    expect(all(model({ checks: bad, lastRun }))).not.toContain('all ok');
+    expect(all(model({ checks: bad, lastRun }))).toContain('last run');
+    expect(all(model({ checks: [{ id: 'routing', ok: true }], lastRun }))).toContain('all ok');
+    expect(all(model({ checks: bad, lastRun: { ...lastRun, failed: 1 } }))).toContain('1 failed');
+  });
+});
+
 describe('mission-layout: failure count on the band', () => {
   test('while a worker runs, the last wave\'s failures are not counted; with nothing listed failed there is no failed count', () => {
     expect(band(model({ workers: [w('a', 'running')], lastRun: { workers: 2, failed: 3 } }))).not.toContain('failed');

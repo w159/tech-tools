@@ -47,10 +47,11 @@ describe('change 6: the route tab is the Board compact form', () => {
       expect(at.every((n) => n > 0)).toBe(true);
       expect(new Set(at).size).toBe(1);
     });
-    test(`at ${cols} a long title is cut in the middle: its end survives and the state word is never pushed off`, () => {
+    // critique 4 (panel B2) replaces "cut in the middle, its end survives": the label is clipped at its end and the owner column stays whole.
+    test(`at ${cols} a long title is clipped at its end: its start survives, the state word is never pushed off`, () => {
       const row = taskRows(body('route', cols, { todos: plan }))[1]!;
-      expect(row).toContain('...');
-      expect(row).toContain('end');
+      expect(row).toMatch(/Wire the band .*\S\.\.\. +running/);
+      expect(row).not.toMatch(/\S\.\.\.\S/);
       expect(row).toContain('running');
     });
     test(`at ${cols} rows keep the Board's item order (no done-last reshuffle)`, () => {
@@ -65,6 +66,19 @@ describe('change 6: the route tab is the Board compact form', () => {
       expect(rows[3]).toMatch(/implementer-live$/);
     });
   }
+  test('B2: a label that carries its owner in brackets is clipped at the end, never in the middle', () => {
+    const todos = [{ id: 'T1', label: 'T1 read alphabetical.py and report every function in it, then compare the two lists line by line (alpha-explorer)', state: 'done' as const }];
+    for (const cols of [110, 80, 56, 40]) {
+      const row = taskRows(body('route', cols, { todos }))[0]!;
+      expect(row).toContain('T1 read alph');
+      expect(row).not.toMatch(/\S\.\.\.\S/);
+      expect(row).toMatch(/\.\.\. +done/);
+    }
+  });
+  test('B2: the owner column is whole whenever it was given room, at every width the column exists', () => {
+    const todos = [{ id: 'a', label: 'Wire the band to the host and verify every width of the layout until the end', state: 'running' as const, owner: 'implementer-band' }];
+    for (const cols of [120, 100, 80, 56]) expect(taskRows(body('route', cols, { todos }))[0]!).toMatch(/ implementer-band$/);
+  });
   test('the detail is one fixed column from 100 cells; below that it moves to the open row instead of a ragged third column', () => {
     const wide = taskRows(body('route', 120, { todos: plan })).filter((l) => l.includes('tests red 3') || l.includes('read runs.ts') || l.includes('blocked:'));
     expect(wide.length).toBeGreaterThan(0);

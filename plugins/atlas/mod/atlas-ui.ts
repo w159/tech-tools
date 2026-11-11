@@ -136,6 +136,8 @@ export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim(
 export type UiState = 'queued' | 'running' | 'done' | 'failed' | 'blocked' | 'waiting';
 /** The one vocabulary, in display order. Lowercase words; chips print them uppercase. */
 export const UI_STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
+/** The one order states are counted and ranked in on every surface (band, HUD, board): attention first, finished last. */
+export const COUNT_ORDER: readonly UiState[] = ['running', 'blocked', 'failed', 'waiting', 'queued', 'done'];
 export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '▲', waiting: '◉' };
 export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: '#', blocked: '!', waiting: '?' };
 export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'warn', waiting: 'info' };
@@ -249,6 +251,8 @@ export type GridRowSpec = {
   name: GridCell;
   /** Name column width: the name is cut in the middle to it and padded. */
   nameW: number;
+  /** `end` clips the name at its end (labels, whose start tells them apart); the default cuts the middle (ids, whose tail does). */
+  nameCut?: 'end' | 'middle';
   word?: GridCell;
   wordW?: number;
   /** Cells between the name and the word column (default 1). */
@@ -269,7 +273,7 @@ export function gridRow(o: GridRowSpec): Run[] {
     o.focus ? { t: o.ui.ascii ? '>' : '▸', tone: 'accent', bold: true } : { t: ' ', tone: 'text' }, { t: ' ', tone: 'text' },
     o.mark ? { ...o.mark } : { t: ' ', tone: 'text' }, { t: ' ', tone: 'text' },
   ];
-  const name = clipMiddle(o.name.t, Math.max(0, o.nameW));
+  const name = (o.nameCut === 'end' ? clip : clipMiddle)(o.name.t, Math.max(0, o.nameW));
   runs.push(cellRun(o.name, name + ' '.repeat(Math.max(0, o.nameW - cells(name))), 'text'));
   if (o.wordW) runs.push({ t: gap, tone: 'text' }, o.word ? cellRun(o.word, padEnd(clip(o.word.t, o.wordW), o.wordW), 'muted') : { t: ' '.repeat(o.wordW), tone: 'text' });
   if (o.tail) runs.push(...o.tail);

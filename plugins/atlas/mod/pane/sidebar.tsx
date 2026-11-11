@@ -5,7 +5,7 @@
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, uiFromEnv, type Ui } from '../atlas-ui';
-import { HOTKEY_W, ribbonRow, stripLayout, stripRows } from '../panel-layout';
+import { HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { boardTree } from '../todo-panel';
@@ -21,7 +21,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
   const bg = panelBg(ui);
   const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
   const rule = ui.ascii ? '-' : '━';
-  const { rows, gap: stripGap } = stripLayout(inner); // the widest label form that fits one row (mod/panel-layout.ts); the rule is as wide as the drawn label
+  const { rows, gap: stripGap } = stripLayout(inner, m.ui.view); // the widest label form that fits one row (mod/panel-layout.ts); the rule is as wide as the drawn label
   return rows.flatMap((row, ri): RenderElement[] => {
     const tabs = row.flatMap((it, i): RenderElement[] => {
       const on_ = it.id === m.ui.view;
@@ -31,13 +31,13 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
       label.props = { ...label.props, bold: on_ };
       return [...(i ? [gap(stripGap)] : []), els.Button({ key: it.id === 'board' ? 'tab:todos' : `tab:${it.id}`, plain: true, hotkey: it.key, children: [label], label: it.label, onPress: press })];
     });
-    const under = row.flatMap((it, i): RenderElement[] => [
+    const under = [gap(STRIP_PAD), ...row.flatMap((it, i): RenderElement[] => [
       ...(i ? [gap(stripGap)] : []), gap(HOTKEY_W),
       it.id === m.ui.view ? runEl(els, { t: rule.repeat(cells(it.label)), tone: 'accent' }, ui) : gap(cells(it.label)),
-    ]);
+    ])];
     const lit = row.some((it) => it.id === m.ui.view);
     return [
-      els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: tabs }),
+      els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: [gap(STRIP_PAD), ...tabs] }),
       ...(lit ? [els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: under })] : []),
     ];
   });

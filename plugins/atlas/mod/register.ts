@@ -10,10 +10,10 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code';
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
-import { bandTree, hudPhases, railPhase, type BandHandlers } from './band';
+import { bandSpareRows, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { allSettled, easedNow, gaugeTargets, retargetAll, type GaugeMoves } from './band-motion';
-import { hudAgents, hudBudget, hudCompactRows, hudListsAgents, hudRows, isRunning } from './hud';
-import { rowOf } from './runs';
+import { hudAgents, hudBudget, hudCompactRows, hudListsAgents, hudRows, isRunning, reclaimBlanks } from './hud';
+import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { boardTree } from './todo-panel';
@@ -1000,7 +1000,15 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const report = await readStatuslineRows($, snapshot.root);
 		const slotRows = e.props.maxRows ?? 0;
 		const budget = e.props.maxRows === undefined ? 0 : effectiveRows(slotRows, e.viewport, report?.rows ?? null, runningCount); // no slot reported: nothing to cap
-		const hud = hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudBudget(budget, hudCompactRows(hudIn, columns), BAND_MIN_ROWS, running) }) : [];
+		await read($, easeTickState); // a glide bumps it each frame: the band redraws with the value `easedNow` gives for this instant
+		const glide = await read($, gaugeState);
+		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
+		const core = await read($, coreState);
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length : budget, lastPhase: lastRailPhase, core, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const hudCap = hudBudget(budget, hudCompactRows(hudIn, columns), BAND_MIN_ROWS, running);
+		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
+		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
+		const hud = hudOn ? reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandIn(rows as Segment[][])), drawHud) as Segment[][] : [];
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
 		const compact = hudCompactRows(hudIn, columns);
 		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudBudget(cap, compact, BAND_MIN_ROWS, running) }).length : 0;
@@ -1013,10 +1021,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			// fullscreen: the status line shares the slot, so add back what its full grid would take; inline it sits below the slot, so judge with the full grid taken off the viewport
 			starved: inline ? shownAt(effectiveRows(slotRows, e.viewport, report?.fullRows ?? null, runningCount)) < wanted : hudStarvedAtFullLine(slotRows, wanted, shownAt, report),
 		});
-		await read($, easeTickState); // a glide bumps it each frame: the band redraws with the value `easedNow` gives for this instant
-		const glide = await read($, gaugeState);
-		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
-		const band = bandTree(els, { snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hud), eased, maxRows: e.props.maxRows === undefined ? undefined : hud.length > 0 ? budget - hud.length : budget, lastPhase: lastRailPhase, core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
+		const band = bandTree(els, bandIn(hud), bandHandlers($));
 		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
 	});
 

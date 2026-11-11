@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../contracts/core-fixture';
 import { panelWorld, worldCard } from '../contracts/panel-world';
+import { padStrip } from './golden-pad';
 import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } from '../contracts/panel-golden';
 import { world } from '../contracts/band-world';
 import { cells, runsString, stateWordTone, UI_STATES, type Ui } from './atlas-ui';
@@ -21,7 +22,7 @@ const card = (cols: number, ui: Ui = mocha): string[] => cardLines(worldCard(ui)
 describe('side panel design goldens', () => {
   for (const cols of [120, 80]) {
     test(`route head at ${cols} equals the design sidepanel golden`, () => {
-      expect(rows('route', cols).slice(0, sidepanelDesign[cols]!.length)).toEqual(sidepanelDesign[cols]!);
+      expect(rows('route', cols).slice(0, sidepanelDesign[cols]!.length)).toEqual(padStrip(sidepanelDesign[cols]!));
     });
     test(`team body at ${cols} equals the design subagents golden`, () => {
       expect(rows('team', cols).slice(cols >= 100 ? 5 : 4)).toEqual(subagentsDesign[cols]!);
@@ -33,7 +34,7 @@ describe('side panel design goldens', () => {
   for (const t of tabs) {
     for (const cols of [120, 80, 56]) {
       test(`${t} at ${cols} equals its golden`, () => {
-        expect(rows(t, cols, { core })).toEqual(tabGolden[t]![cols]!);
+        expect(rows(t, cols, { core })).toEqual(padStrip(tabGolden[t]![cols]!));
       });
     }
   }
@@ -169,8 +170,9 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toContain('ran 3 / planned 1 (haiku)');
-    expect(out).toMatch(/■ {3}1x explorer +drift +ran 3 \/ planned 1 \(haiku\)/);
+    expect(out).toContain('3 explorers ran, 1 planned (haiku), plan haiku/low'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
+    expect(out).toMatch(/■ {3}1x explorer +drift +3 explorers ran, 1 planned/);
+    expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {

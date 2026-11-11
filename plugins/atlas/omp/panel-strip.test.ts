@@ -31,7 +31,7 @@ const ccRows = (tab: PanelTab, cols: number): string[] => {
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '').trimEnd();
 
 describe('change 9: one tab strip on both hosts', () => {
-  const stripOf = (rows: readonly string[]): string[] => rows.filter((l) => /^(\w: \w+)( {1,2}\w: \w+)*$/.test(l.trim()));
+  const stripOf = (rows: readonly string[]): string[] => rows.filter((l) => /^ ?([rtcgko]:)( \w+)?( {1,2}[rtcgko]:( \w+)?)*$/.test(l.trimEnd()) && l.includes('r:'));
   test('the strip tabs are route team channel gates core board, keys r t c g k o', () => {
     const tabs = (L as unknown as { STRIP_TABS: { id: string; key: string; label: string }[] }).STRIP_TABS;
     expect(tabs.map((t) => `${t.key}:${t.label}`)).toEqual(['r:route', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
@@ -39,23 +39,41 @@ describe('change 9: one tab strip on both hosts', () => {
   test('the band buttons are the same set in the same order', () => {
     expect(BAND_BUTTONS.map((b) => `${b.key}:${b.label}`)).toEqual(['r:route', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
   });
-  for (const cols of [120, 80, 56, 38]) for (const tab of TABS) {
+  for (const cols of [120, 80, 60, 56, 40, 38, 30]) for (const tab of TABS) {
     test(`${tab} at ${cols}: the Claude Code strip and the omp strip print the same rows`, () => {
       const cc = stripOf(ccRows(tab, cols));
       const om = stripOf(paintPanel(panelWorld(tab, cols, mocha, { core })).map(plain));
       expect(cc.length).toBeGreaterThan(0);
       expect(om).toEqual(cc);
-      expect(cc.join(' ')).toContain(cols >= 56 ? 'k: core' : 'k: co'); // a narrow pane takes the two-letter labels (mod/panel-layout.ts stripLayout)
-      expect(cc.join(' ')).toContain(cols >= 56 ? 'o: board' : 'o: bd');
       expect(cc).toHaveLength(1); // one strip row at every width the pane has
-      expect(cc.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w))).toEqual(['r:', 't:', 'c:', 'g:', 'k:', 'o:']);
+      expect(cc[0]!).toMatch(/^ \S/); // one cell of padding from the left rule
+      expect(cc.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w))).toEqual(['r:', 't:', 'c:', 'g:', 'k:', 'o:']); // every key stays
+      expect(cc[0]!).not.toMatch(/\b(rt|tm|ch|gt|co|bd)\b/); // no two-letter forms
+      expect(cc[0]!).toContain(`${L.STRIP_TABS.find((t) => t.id === tab)!.key}: ${tab === 'channel' && cols < 60 ? 'chan' : tab}`); // the lit tab keeps its word
+      // words go from the right end only: once a tab shows its word, every tab to its left does too (the lit tab is the one exception)
+      const shown = L.STRIP_TABS.map((t) => new RegExp(`${t.key}: \\w`).test(cc[0]!));
+      const lit = TABS.indexOf(tab);
+      const firstDropped = shown.indexOf(false);
+      if (firstDropped >= 0) expect(shown.filter((x, i) => i > firstDropped && x && i !== lit)).toEqual([]);
     });
   }
+  test('at 30, 40 and 60 cells the strip is padded, whole and never wider than the pane', () => {
+    for (const cols of [30, 40, 60]) {
+      const { rows } = L.stripLayout(cols - 1, 'route');
+      expect(rows).toHaveLength(1);
+      const row = stripOf(ccRows('route', cols))[0]!;
+      expect([...row].length).toBeLessThanOrEqual(cols - 1);
+      expect(row.startsWith(' r: route')).toBe(true);
+    }
+    expect(stripOf(ccRows('route', 60))[0]!.trim()).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
+    expect(stripOf(ccRows('route', 30))[0]!.trim()).toBe('r: route t:  c:  g:  k:  o:');
+  });
   test('the rule sits under the lit tab on both hosts', () => {
     for (const tab of TABS) {
       const rows = panelText(panelWorld(tab, 120, mocha, { core }));
       const at = rows.findIndex((l) => l.includes('r: route'));
       expect(rows[at]!.indexOf(`: ${tab}`) + 2).toBe(rows[at + 1]!.indexOf('━'));
+      expect(rows[at]!.startsWith(' r: route')).toBe(true);
       expect(rows[at + 1]!.trim()).toBe('━'.repeat(tab.length));
     }
   });

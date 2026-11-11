@@ -249,20 +249,20 @@ describe('registerNotify toasts', () => {
 		const { toasts } = await run(prev, next);
 		// One toast per turn: a burst of six left the stack undrawn and the host printed a notice into the transcript.
 		expect(toasts).toEqual([mergeToasts([
-			'▌ ◆ ATLAS  ◉ waiting  wait  which path?',
-			'▌ ◆ ATLAS  ■ failed  bad  boom',
+			'▌ ◆ ATLAS  ◉ waiting  wait  needs a reply',
+			'▌ ◆ ATLAS  ■ failed  bad',
 			'▌ ◆ ATLAS  ◐ running  new  started',
-			'▌ ◆ ATLAS  ● done  done  all green',
+			'▌ ◆ ATLAS  ● done  done  after 1m30s',
 			'note  impl-auth  ship it.',
 			'▌ ◆ ATLAS  ● done  task  build it',
 		])!]);
-		expect(toasts[0]!.startsWith('▌ ◆ ATLAS  ◉ waiting  wait  which path?  +5 more')).toBe(true);
+		expect(toasts[0]!.startsWith('▌ ◆ ATLAS  ◉ waiting  wait  needs a reply  +5 more')).toBe(true);
 		expect(toasts[0]).not.toMatch(/[✓✗⏸▸]/u);
 	});
 	test('trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare', async () => {
 		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running'), agent('c', 'running')] }, { a: act(), b: act(), c: act() });
 		const next = withActivity({ squad: [agent('a', 'failed'), agent('b', 'input'), agent('c', 'finished')] }, { a: act(), b: act({ mood: 'blocked' }), c: act() });
-		expect((await run(prev, next)).toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  b  +2 more']);
+		expect((await run(prev, next)).toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  b  needs a reply  +2 more']);
 	});
 	test('mergeToasts: one passes through, many fold into one row of at most TOAST_MAX', () => {
 		expect(mergeToasts([])).toBeNull();
@@ -271,14 +271,21 @@ describe('registerNotify toasts', () => {
 		expect(mergeToasts(['x'.repeat(120), 'y'.repeat(80)])!.endsWith('  +1 more')).toBe(true);
 		expect(mergeToasts(['a'.repeat(30), 'b'])).toBe(`${'a'.repeat(30)}  +1 more`);
 	});
-	test('the fact in a completion toast is cut at 40 cells', async () => {
-		const at = async (line: string) => {
+	test('B5: the toast fact comes from structured data (duration, state), never from the agent\'s last line', async () => {
+		const at = async (line: string, now: number) => {
 			const prev = withActivity({ now: 0, squad: [agent('a', 'running')] }, { a: act({ startedAt: 0 }) });
-			const next = withActivity({ now: 0, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 0, lastLine: line }) });
+			const next = withActivity({ now, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 0, lastLine: line }) });
 			return (await run(prev, next)).toasts[0]!;
 		};
-		expect(await at('y'.repeat(40))).toBe(`▌ ◆ ATLAS  ● done  a  ${'y'.repeat(40)}`);
-		expect(await at('y'.repeat(41))).toBe(`▌ ◆ ATLAS  ● done  a  ${'y'.repeat(37)}...`);
+		expect(await at('1.', 252_000)).toBe('▌ ◆ ATLAS  ● done  a  after 4m12s');
+		expect(await at('Read /mnt/attach/project-files/atlas-ui-redesign/round2/aft', 90_000)).toBe('▌ ◆ ATLAS  ● done  a  after 1m30s');
+		expect(await at('y'.repeat(60), 0)).toBe('▌ ◆ ATLAS  ● done  a'); // no duration known: bare, still no free text
+	});
+	test('B5: a failed or blocked worker toast carries no free text either', async () => {
+		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running')] }, { a: act(), b: act() });
+		const next = withActivity({ squad: [agent('a', 'failed'), agent('b', 'input')] }, { a: act({ lastLine: 'Traceback (most recent call last)' }), b: act({ lastLine: 'which path?', mood: 'blocked' }) });
+		const t = (await run(prev, next)).toasts[0]!;
+		expect(t).not.toMatch(/Traceback|which path/);
 	});
 	test('a phase advance plays the sound only when sound is on', async () => {
 		const prev = snap({ phase: 'research' });

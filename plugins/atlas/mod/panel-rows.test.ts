@@ -145,8 +145,22 @@ describe('core tab: caps, notes and figures', () => {
     c.inProcess = true;
     c.routes = [route('in-process:fix/low', { name: 'in-process', transport: 'in-process', isolation: '', maxParallel: 2 })] as never;
     const out = core(c);
-    expect(out).toContain('    fix/low in-process  in-process, max 2');
+    expect(out).toContain('    fix/low workers ran in-process (no tmux team), up to 2 at once'); // B4: plain words, not `in-process  in-process, max 2`
     expect(out.join('\n')).not.toContain('not shown here');
+  });
+  test('B4: with nothing read or returned the offload line is a sentence, not `0 tokens read by workers`', () => {
+    const c = empty();
+    c.routes = [route('t1')] as never;
+    const line = core(c).find((l) => l.startsWith('offload'))!;
+    expect(line).toBe('offload  workers have read and returned nothing yet');
+    expect(line).not.toMatch(/\b0 tokens\b/);
+  });
+  test('B4: a seat that ran another model says so in words', () => {
+    const c = empty();
+    c.routes = [route('t1', { seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['opus'] }], drift: ['explorer ran opus'] })] as never;
+    const out = core(c).join('\n');
+    expect(out).toContain('ran on opus, plan haiku/low');
+    expect(out).not.toMatch(/ran opus {2}haiku\/low/);
   });
   test('B8: a route without a transport is not labelled tmux', () => {
     const c = empty();

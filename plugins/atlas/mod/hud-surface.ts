@@ -2,7 +2,7 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { cells, CHIP_W, clip, gauge, percent, ribbon, runsCells, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, COUNT_ORDER, clip, gauge, percent, ribbon, runsCells, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; state: UiState; detail: string; focus: boolean };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -33,14 +33,13 @@ const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? run
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
 const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
 
-const COUNT_ORDER: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 /** `1 queued · 1 running · 2 done · 1 failed`: only states that occur, so the header always equals the row sums. */
 export function stateCounts(states: readonly UiState[]): string {
   return COUNT_ORDER.map((s) => [s, states.filter((x) => x === s).length] as const).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${s}`).join(' · ');
 }
 
 /** Row slots by priority when the rows do not all fit: open work first (running, blocked, failed, waiting), then queued, then the newest done. */
-const PRIORITY: Record<UiState, number> = { running: 0, blocked: 1, failed: 2, waiting: 3, queued: 4, done: 5 };
+const PRIORITY = Object.fromEntries(COUNT_ORDER.map((s, i) => [s, i])) as Record<UiState, number>;
 
 /** The `slots` rows to draw, in their own order, and how many were left out. `slots` includes the overflow row when something is hidden. */
 export function windowRows<T extends { state: UiState }>(rows: readonly T[], slots: number | undefined): { shown: T[]; hidden: number } {
@@ -133,9 +132,9 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   if (b.cap === 0) return out;
   const stateAt = Math.max(20, Math.min(maxLen(rows.map((r) => r.name)) + 1, 29)) + 4;
   const taskW = taskWidth(rows);
-  if (b.spacers) out.push(tier === 'full' ? agentHeader(o, rich, stateAt, taskW) : BLANK); // the spacer row names the columns at 100 columns and up
+  if (b.spacers) out.push(agentHeader(o, rich, stateAt, taskW)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
   const { shown, hidden } = windowRows(rows, b.cap);
-  for (const r of shown) out.push(agentRow(r, o, tier, rich, stateAt, taskW));
+  for (const r of shown) out.push(agentRow(r, o, rich, stateAt, taskW));
   if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
   return out;
 }
@@ -159,11 +158,10 @@ function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, taskW: numb
   return row;
 }
 
-function agentRow(r: AgentRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, taskW: number): Run[] {
+function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, taskW: number): Run[] {
   const { ui, cols } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, o.tick ?? 0), t(' '), t(clip(flat(r.name), stateAt - 5), 'text', { bold: true })];
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state)];
-  if (tier === 'mid') return row;
   const cell = (text: string, at: number, width: number): void => {
     if (text !== '' && at < cols) row = [...toCol(row, at), t(clip(flat(text), Math.max(1, Math.min(width, cols - at))), 'sub')];
   };

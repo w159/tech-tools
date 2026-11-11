@@ -186,17 +186,20 @@ describe('gauge', () => {
     expect(gaugeText(10, 42 / 300)).toBe('█▍░░░░░░░░');
   });
   test('property: widths 1-40 and values 0-1, filled cells within 1/8 of value*width, width exact', () => {
+    // Violations are collected and asserted once: ~120k per-iteration expect() calls blew the kit's 5 s test timeout.
+    const bad: string[] = [];
     for (let w = 1; w <= 40; w++) {
       for (let k = 0; k <= 1000; k++) {
         const v = k / 1000;
         const e = gaugeEighths(w, v);
-        expect(Math.abs(e / 8 - v * w)).toBeLessThanOrEqual(0.125);
+        if (Math.abs(e / 8 - v * w) > 0.125) bad.push(`w=${w} v=${v} eighths=${e}`);
         const p = gaugeParts(w, v);
-        expect([...p.full + p.partial + p.track]).toHaveLength(w);
-        expect(p.full.length * 8 + (p.partial ? '▏▎▍▌▋▊▉'.indexOf(p.partial) + 1 : 0)).toBe(e);
+        if ([...p.full + p.partial + p.track].length !== w) bad.push(`w=${w} v=${v} width`);
+        if (p.full.length * 8 + (p.partial ? '▏▎▍▌▋▊▉'.indexOf(p.partial) + 1 : 0) !== e) bad.push(`w=${w} v=${v} parts`);
       }
-      for (const v of [3 / 7, 4 / 9, 42 / 300, 1 / 3, 2 / 3, 0.5]) expect(Math.abs(gaugeEighths(w, v) / 8 - v * w)).toBeLessThanOrEqual(0.125);
+      for (const v of [3 / 7, 4 / 9, 42 / 300, 1 / 3, 2 / 3, 0.5]) if (Math.abs(gaugeEighths(w, v) / 8 - v * w) > 0.125) bad.push(`w=${w} v=${v} spot`);
     }
+    expect(bad).toEqual([]);
   });
   test('clamps out-of-range and non-finite values; zero and full are exact', () => {
     expect(gaugeText(5, -3)).toBe('░░░░░');

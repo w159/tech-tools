@@ -122,13 +122,13 @@ export function registerNotify(
 							texts.push(stateToast('running', ev.name, 'started', ui));
 							break;
 						case 'agent-complete':
-							texts.push(stateToast('done', ev.name, ev.lastLine || (ev.age ? `after ${ev.age}` : ''), ui));
+							texts.push(stateToast('done', ev.name, ev.age ? `after ${ev.age}` : '', ui)); // duration only: the agent's last line is free text (a `1.`, half a path), never a toast fact
 							break;
 						case 'agent-fail':
-							texts.push(stateToast('failed', ev.name, ev.lastLine, ui));
+							texts.push(stateToast('failed', ev.name, '', ui));
 							break;
 						case 'agent-blocked':
-							texts.push(stateToast('waiting', ev.name, ev.lastLine, ui));
+							texts.push(stateToast('waiting', ev.name, 'needs a reply', ui));
 							break;
 						case 'note':
 							texts.push(noteToastText(ev.sender, clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX), ui));

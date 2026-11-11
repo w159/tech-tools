@@ -27,6 +27,8 @@ export type HudAgent = {
   ctx?: number | null;
   /** The state word every surface shares (liveState), when the adapter knows the worker's age; else it is derived from `state`. */
   ui?: UiState;
+  /** The name the worker is listed under when it differs from `name` (a hash id shown by its description): plan owners and board notes use this one. */
+  key?: string;
   /** When the worker last changed state (ms epoch; a finished worker's end time), so a done row can linger. */
   since?: number;
 };
@@ -35,17 +37,35 @@ const GENERIC = new Set(['unknown', 'general-purpose', 'task', '']);
 /** A host agent id (`a6839f49ee72a2b14`) or a bare hash: never a name. */
 const HOST_ID = /^[a-z]?[0-9a-f]{8,}$/i;
 
-/** The name the panel shows: the dispatch name, else the prefix of the Agent description (`readme-explorer: compare ...`), else the role. */
+/** `explorer-3fa9c1`: a type or dispatch stem plus a 6+ hex suffix that mixes digits and letters. `decade` and `2024` are words and years, not hashes. */
+const HEX_SUFFIX = /^(.*?)-?([0-9a-f]{6,})$/i;
+const hashTail = (name: string): string | undefined => {
+  const tail = HEX_SUFFIX.exec(name)?.[2];
+  return tail !== undefined && /[0-9]/.test(tail) && /[a-f]/i.test(tail) ? tail : undefined;
+};
+/** The first `n` words of an Agent description as a slug (`Map band row count` -> `map-band-row`). */
+const phrase = (task: string | undefined, n = 3): string => (task ?? '').toLowerCase().match(/[a-z0-9]+/g)?.slice(0, n).join('-') ?? '';
+
+/** The name the panel shows: the dispatch name, else (for a host id or a hash-suffixed name) the prefix of the Agent description
+ * (`readme-explorer: compare ...`), else the agent type and a short task phrase, else the type; the id is the last resort. */
 export function agentName(name: string, role: string, task?: string): string {
-  if (name !== '' && !HOST_ID.test(name)) return name;
-  return descriptionName(task) ?? (GENERIC.has(role) ? name.slice(0, 6) : role);
+  const hashed = name === '' || HOST_ID.test(name) || hashTail(name) !== undefined;
+  if (!hashed) return name;
+  const type = GENERIC.has(role) ? (name.replace(HEX_SUFFIX, '$1').replace(/-$/, '') || '') : role;
+  const said = descriptionName(task);
+  if (said) return said;
+  const slug = phrase(task);
+  if (type && slug) return `${type}-${slug}`;
+  if (type && HOST_ID.test(name)) return type;
+  return GENERIC.has(role) && HOST_ID.test(name) ? name.slice(0, 6) : name;
 }
 
 /** Band workers plus the squad's spawn model and task, in the HUD's shape; `queued` names dispatched workers the host does not list yet (data/live.ts queuedMembers). */
 export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[] = []): HudAgent[] {
   const listed = live.map((w) => {
     const s = squad.find((a) => a.name === w.name);
-    return { name: agentName(w.name, w.role, s?.task), role: w.role, state: w.state, ui: liveState(w), since: w.since, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    const name = agentName(w.name, w.role, s?.task);
+    return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
   return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
 }
@@ -99,7 +119,7 @@ function lastAction(a: HudAgent, root?: string | null): string {
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const rows = agents.map((a): AgentRow => {
-    const tasks = todos.flatMap((t, i) => (t.owner === a.name ? [i + 1] : []));
+    const tasks = todos.flatMap((t, i) => (t.owner === a.name || (a.key !== undefined && t.owner === a.key) ? [i + 1] : []));
     return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false };
   });
   const sorted = sortAgents(rows);
@@ -116,7 +136,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const agents = shown.length > 0 ? agentModel(shown, plan, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
   return {
-    s: { todos: todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.map((a): [string, UiState] => [a.name, a.ui ?? workerUiState(a.state)]))), agents },
+    s: { todos: todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.flatMap((a): [string, UiState][] => [[a.name, a.ui ?? workerUiState(a.state)], ...(a.key !== undefined ? [[a.key, a.ui ?? workerUiState(a.state)] as [string, UiState]] : [])]))), agents },
     o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}) },
   };
 }
@@ -157,6 +177,16 @@ export const hudBudget = (maxRows: number, compact: number, bandRows = 7, runnin
   const budget = compact <= maxRows - 3 ? Math.max(room, compact) : Math.max(room, Math.min(compact, maxRows));
   return running ? Math.max(budget, Math.min(2, maxRows)) : budget; // a running agent keeps its Subagents header and one row: the band gives up rows first
 };
+
+/** Hands the band's breathing blanks to the HUD: the plan is cut to "N more todos not shown" only when its rows truly do not fit, never while the band spends rows on blanks.
+ * `hud`: the rows drawn at `cap`; `spareOf`: the band's blank rows beside those HUD rows; `draw`: the HUD at a given row budget; `budget`: the slot, which the HUD never exceeds. */
+export function reclaimBlanks<R>(hud: readonly R[], cap: number, budget: number, spareOf: (hud: readonly R[]) => number, draw: (maxRows: number) => R[]): readonly R[] {
+  if (hud.length === 0) return hud;
+  const spare = spareOf(hud);
+  if (spare <= 0) return hud;
+  const grown = draw(Math.min(budget, cap + spare));
+  return grown.length > hud.length ? grown : hud;
+}
 
 /** Whether the rows list agents: the Subagents ribbon with at least one row under it. A ribbon alone (a starved slot) carries
  * the counts only, and then the band must list the workers itself. */

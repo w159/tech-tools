@@ -6,6 +6,15 @@
 
 - The HUD Subagents block keeps agents that just finished visible for the band's 15 s linger window (`LINGER_MS`, now shared from `mod/atlas-ui.ts`) when nothing is running (a failed agent stays until cleared), instead of vanishing the moment a wave ends (`mod/hud.ts`).
 - Board labels in the 60 to 99 cell form (the shown side pane) are no longer cut at 18 cells: the state column slides right to fit the widest label (`mod/board-model.ts`, shared with omp).
+- HUD row budget: the band's breathing blank rows go to the TODO block before it is folded to "N more todos not shown" (`reclaimBlanks` in `mod/hud.ts`, `bandSpareRows` in `mod/band.tsx`, wired in `mod/register.ts`).
+- Band header never reads `idle` (or the last run `all ok`) beside a failing check: an idle band with a failing check reads `blocked` (`mod/mission-layout.ts`).
+- One count order on every surface, attention first: running, blocked, failed, waiting, queued, done (`COUNT_ORDER` in `mod/atlas-ui.ts`, used by the band counts and the HUD ribbon).
+- HUD Subagents rows at 80 to 99 columns (a wide terminal with the pane docked) show the AGENT STATE MODEL TASK LAST columns the 100 column form shows (`mod/hud-surface.ts`).
+- HUD agent names: a hash-suffixed name (`explorer-3fa9c1`) or host id reads as the description's name prefix, else the agent type and a short task phrase (`agentName` in `mod/hud.ts`); plan owners still match the raw name.
+- Side panel tab strip: one cell of padding from the left rule, and a narrow pane keeps the `r: route` style keys and drops the words from the right end (`k:  o:`) instead of collapsing to `rt tm ch gt co bd`; the lit tab keeps its word (`mod/panel-layout.ts`, `mod/pane/sidebar.tsx`, shared with omp).
+- Route tab task rows clip the label at its end instead of the middle, so a bracketed owner or the label's start is never eaten (`mod/atlas-ui.ts` `nameCut`, `mod/panel-layout.ts`).
+- Core tab plain words: `workers ran in-process (no tmux team), up to N at once`, `3 explorers ran, 1 planned (haiku), plan haiku/low`, `ran on opus, plan haiku/low`, and `workers have read and returned nothing yet` replace the `in-process  in-process, max N`, `ran N / planned M` and `0 tokens read by workers` lines (`mod/panel-layout.ts`).
+- Host toast facts come from structured data only: a done toast reads `after 4m12s`, a blocked one `needs a reply`, a failed one just the name; the agent's last free-text line (`1.`, half a path) no longer reaches a toast (`mod/notify.ts`).
 
 ### Added
 

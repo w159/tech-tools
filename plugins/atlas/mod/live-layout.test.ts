@@ -9,11 +9,11 @@ import { worldCard } from '../contracts/panel-world';
 import { paintHud } from '../omp/hud-paint';
 import { paintPanel } from '../omp/panel-view';
 import { runsString, type Ui } from './atlas-ui';
-import { bandTree } from './band';
+import { bandSpareRows, bandTree } from './band';
 import type { TodoItem } from './contract';
 import { coreModel } from './data/core';
 import { liveWorkers } from './data/live';
-import { hudBudget, hudCompactRows, hudLines, type HudAgent, type HudInput } from './hud';
+import { hudBudget, hudCompactRows, hudLines, reclaimBlanks, type HudAgent, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
 import { cardLines, lineText, panelLines, STRIP_TABS, tabRows, type PanelModel, type PanelTab } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
@@ -169,6 +169,43 @@ describe('5. the plan row budget and the overflow row', () => {
     const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));
     const rows = hudLines({ todos: many, agents: [] }, view(88, hudCompactRows({ todos: many, agents: [] }, 88))).map(runsString);
     expect(rows.some((r) => /\d+ more todos not shown/.test(r))).toBe(true);
+  });
+});
+
+describe('5b. A1: the band blanks go to the plan before the plan is folded', () => {
+  const doneAgent = (name: string): HudAgent => ({ name, role: 'explorer', state: 'done', model: 'haiku', ui: 'done', since: NOW });
+  const planDone = PLAN.map((t) => ({ ...t, status: 'completed' }));
+  const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
+  const hudIn: HudInput = { todos: planDone, agents };
+  const budget = 14; // the live frame: 15 slot rows less the host's line
+  const snapshot = busySnap();
+  const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
+  const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));
+
+  test('the band at the live budget spends rows on blanks while the plan is cut', () => {
+    const cap = hudBudget(budget, hudCompactRows(hudIn, 88), 7, true);
+    const first = draw(cap);
+    expect(first.map(runsString).some((r) => /\d+ more todos not shown/.test(r))).toBe(true); // the defect
+    expect(bandSpareRows(bandModel(budget - first.length))).toBeGreaterThan(0);
+  });
+  test('reclaimBlanks shows every plan row once the blanks are handed over, and the band loses only blanks', () => {
+    const cap = hudBudget(budget, hudCompactRows(hudIn, 88), 7, true);
+    const first = draw(cap);
+    const hud = reclaimBlanks(first, cap, budget, (h) => bandSpareRows(bandModel(budget - h.length)), draw);
+    const rows = hud.map(runsString);
+    expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
+    expect(rows.some((r) => /more todos? not shown/.test(r))).toBe(false);
+    expect(hud.length).toBeLessThanOrEqual(budget);
+    // the band keeps its content: the same non-blank rows before and after
+    const body = (maxRows: number): string[] => (bandTree(els, bandModel(maxRows)) as unknown as Node).props.children.map(text).filter((r: string) => r.trim() !== '');
+    expect(body(budget - hud.length)).toEqual(body(budget - first.length));
+  });
+  test('a HUD that already fits, or a band with no blanks, is returned as it was', () => {
+    const all = draw(30);
+    expect(reclaimBlanks(all, 30, 30, () => 3, draw)).toBe(all);
+    const cut = draw(8);
+    expect(reclaimBlanks(cut, 8, 14, () => 0, draw)).toBe(cut);
+    expect(reclaimBlanks([], 8, 14, () => 3, draw)).toEqual([]);
   });
 });
 

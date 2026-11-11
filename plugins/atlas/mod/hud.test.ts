@@ -117,8 +117,27 @@ describe('L11: agents are named', () => {
   });
   test('a host id falls back to the description prefix, then the role', () => {
     expect(agentName('a6839f49ee72a2b14', 'explorer', 'readme-explorer: compare README and AGENTS')).toBe('readme-explorer');
-    expect(agentName('a6839f49ee72a2b14', 'explorer', 'Map band row count')).toBe('explorer');
+    expect(agentName('a6839f49ee72a2b14', 'explorer', 'Map band row count')).toBe('explorer-map-band-row'); // A5: the type and a short task phrase
+    expect(agentName('a6839f49ee72a2b14', 'explorer', undefined)).toBe('explorer');
     expect(agentName('a6839f49ee72a2b14', 'unknown', undefined)).toBe('a6839f');
+  });
+  test('A5: a type-plus-hex name (explorer-3fa9c1) or a bare 6-hex id reads as the description name, else type and task; the id is the last resort', () => {
+    expect(agentName('explorer-3fa9c1', 'explorer', 'readme-explorer: compare README and AGENTS')).toBe('readme-explorer');
+    expect(agentName('explorer-3fa9c1', 'explorer', 'Map band row count')).toBe('explorer-map-band-row');
+    expect(agentName('3fa9c1', 'implementer', 'Fix the gate order')).toBe('implementer-fix-the-gate');
+    expect(agentName('explorer-3fa9c1', 'explorer', undefined)).toBe('explorer-3fa9c1'); // nothing better is known
+    expect(agentName('3fa9c1', 'unknown', undefined)).toBe('3fa9c1');
+    // a real dispatch name that merely ends in hex-looking letters is not a hash
+    expect(agentName('explorer-decade', 'explorer', 'Map it')).toBe('explorer-decade');
+    expect(agentName('team-2024', 'explorer', 'Map it')).toBe('team-2024');
+    expect(agentName('impl-hud', 'implementer', 'Fix it')).toBe('impl-hud');
+  });
+  test('A5: an agent renamed for display still owns the plan rows its raw name owns', () => {
+    const live = [{ name: 'explorer-3fa9c1', role: 'explorer', state: 'working', tool: 'Read', lastTool: null, since: 0, startedAt: 0, target: 'a.py', detail: null, lastLine: '', calls: [], scope: null }] as never;
+    const squad = [{ name: 'explorer-3fa9c1', persona: 'explorer', state: 'running', source: 'task', task: 'alpha-explorer: read alpha.py' }] as never;
+    const agents = hudAgents(live, squad);
+    const rows = trimmed(hudRows({ todos: [{ ...todo('t1', 'T1 read alpha.py', 'in_progress'), owner: 'explorer-3fa9c1' }], agents }, view(120)));
+    expect(rows.join('\n')).toMatch(/▸ ◐ alpha-explorer +running +\S* *T1 /);
   });
   test('hudAgents carries the name through, and the block shows it', () => {
     const live = [{ name: 'a6839f49ee72a2b14', role: 'explorer', state: 'working', tool: 'Read', lastTool: null, since: 0, startedAt: 0, target: 'mod/hud.ts', detail: null, lastLine: '', calls: [], scope: null }] as never;

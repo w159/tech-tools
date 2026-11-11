@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, capsule, clip, countRuns, gauge, padEnd, PALETTES, percent, rail, spinnerGlyph, stateRun, uiFromEnv, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, spinnerGlyph, stateRun, uiFromEnv, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { fitText, formatDuration, textWidth } from './theme';
 
 export type { Run, Tone };
@@ -118,6 +118,8 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n =
 
 const isRunning = (m: MissionModel): boolean => m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
 const uiOf = (m: MissionModel): Ui => m.ui ?? uiFromEnv();
+/** Checks that fail or err: with any, an idle band is not idle, it needs a look (the header says blocked, the last run is not `all ok`). */
+const failingChecks = (m: MissionModel): number => (m.checks ?? []).filter((c) => !c.ok).length;
 
 /** A mission worker's place in the six-word vocabulary. */
 export const uiStateOf = (s: WorkerState): UiState => (s === 'thinking' ? 'running' : s);
@@ -129,7 +131,7 @@ const failedCount = (m: MissionModel): number => Math.max(m.workers.filter((w) =
  * number (`◐1`), where queued gives way. `noun`: the basis, `agents`, in front (the todo count is tasks; the two are never mixed). */
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   '): Run[] {
   const n = (s: UiState): number => (s === 'failed' ? failedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
-  const order: UiState[] = words ? ['running', 'failed', 'queued', 'waiting'] : ['running', 'failed', 'waiting'];
+  const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || s === 'queued' || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
   const parts = order.filter((s) => n(s) > 0).map((s): Run[] => (words ? countRuns(s, n(s), ui, m.tick) : [stateRun(s, ui, m.tick), r(`${n(s)}`)]));
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
@@ -160,10 +162,14 @@ function standardForms(m: MissionModel, ui: Ui): Run[][] {
   const idx = phaseIndex(m);
   const n = m.phases.length;
   const phaseNo = `${Math.min(idx + 1, n)}/${n}`;
-  const idle = !m.blocked && !isRunning(m);
+  const quiet = !m.blocked && !isRunning(m);
+  const stuck = quiet && failingChecks(m) > 0; // idle in every way but a failing check: the header says so
+  const idle = quiet && !stuck;
   const name: Run[] = m.blocked
     ? [stateRun('blocked', ui), r(' blocked', 'text', true), r(' · needs you', 'sub')]
+    : stuck ? [stateRun('blocked', ui), r(' blocked', 'text', true), r(` · phase ${phaseNo}`, 'sub')]
     : idle ? [r('idle', 'text', true), r(` · phase ${phaseNo}`, 'sub')] : [r(m.phase, 'text', true), r(` · phase ${phaseNo}`, 'sub')];
+  const lead = stuck ? 'blocked · ' : idle ? 'idle · ' : '';
   const todo = m.total ? `${m.done}/${m.total}` : '';
   const blockedWords = blockedRuns(m, ui, true);
   const blockedTiny = blockedRuns(m, ui, false);
@@ -179,16 +185,17 @@ function standardForms(m: MissionModel, ui: Ui): Run[][] {
   const counts = bandCounts(m, ui, true);
   const tiny = bandCounts(m, ui, false);
   const midTodo = `${todo ? ` · todo ${todo}` : ''}`;
-  const mid: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}phase ${phaseNo}`}${midTodo}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(counts.length ? [r(' · ', 'sub'), ...counts] : [])];
-  const short: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}ph ${phaseNo}`}${midTodo}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
-  const small: Run[] = [...cap, r(`${m.blocked ? ' blocked' : idle ? ' idle' : ''}${todo ? `${m.blocked || idle ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
+  const mid: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${lead}phase ${phaseNo}`}${midTodo}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(counts.length ? [r(' · ', 'sub'), ...counts] : [])];
+  const short: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${lead}ph ${phaseNo}`}${midTodo}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
+  const small: Run[] = [...cap, r(`${m.blocked || stuck ? ' blocked' : idle ? ' idle' : ''}${todo ? `${m.blocked || quiet ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
   return [full(true, true, '   '), full(true, false, '  ', 8), full(false, true, '   '), full(false, false, '  ', 8), mid, short, small];
 }
 
 /** The rich band: the capsule and the numbered phase rail, a blank row, then the todo and ctx gauges and the counts. */
 function richBand(m: MissionModel, ui: Ui): Line[] {
-  const idle = !m.blocked && !isRunning(m);
-  const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(idle ? [r('   '), r('idle', 'text', true)] : [])];
+  const quiet = !m.blocked && !isRunning(m);
+  const stuck = quiet && failingChecks(m) > 0;
+  const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(stuck ? [r('   '), stateRun('blocked', ui), r(' blocked', 'text', true)] : quiet ? [r('   '), r('idle', 'text', true)] : [])];
   const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done} of ${m.total} · ${percent(m.done / m.total)}`, 'sub')] : [];
   const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxBar(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
   const counts = bandCounts(m, ui, true, true);
@@ -215,11 +222,12 @@ export function bandLines(m: MissionModel): Line[] {
   return [{ runs: fitRuns(row, m.cols) }];
 }
 
-function lastRunRuns(l: LastRun | undefined): Run[] {
+function lastRunRuns(l: LastRun | undefined, checksFail = false): Run[] {
   if (!l || !l.workers) return [];
   const parts: Run[] = [r(' last run  ', 'muted'), r(plural(l.workers, 'worker'), 'sub')];
   if (l.secs !== undefined) parts.push(r(' · ', 'sub'), r(formatDuration(l.secs * 1000), 'sub'));
-  parts.push(r(' · ', 'sub'), l.failed ? r(`${l.failed} failed`, 'text', true) : r('all ok', 'sub'));
+  if (l.failed) parts.push(r(' · ', 'sub'), r(`${l.failed} failed`, 'text', true));
+  else if (!checksFail) parts.push(r(' · ', 'sub'), r('all ok', 'sub')); // never `all ok` above a failing check
   return [...parts, r(' ')];
 }
 
@@ -336,7 +344,7 @@ const blank = (cols: number): Line => ({ runs: [r(' '.repeat(cols))] });
 
 function idleLines(m: MissionModel): Line[] {
   const band = bandLines(m);
-  const last = lastRunRuns(m.lastRun);
+  const last = lastRunRuns(m.lastRun, failingChecks(m) > 0);
   const lastRow: Line[] = last.length && m.maxRows > band.length ? [{ runs: last }] : [];
   const head = [...band, ...lastRow];
   const foot = footerLine(m);

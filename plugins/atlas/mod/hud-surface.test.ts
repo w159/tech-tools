@@ -3,6 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
 import { chipCount, runsString, type Run, type Ui } from './atlas-ui';
+import { COUNT_ORDER, type UiState } from './atlas-ui';
 import { agentRows, fitStack, padRows, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -64,13 +65,30 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
       expect(text(agentRows(worldAgents(), opts(cols, rich), full))).toEqual([...golden]);
     });
   }
+  test('A4: 80 to 99 columns (a wide terminal with the pane docked) show model, task and last line, as 104 does', () => {
+    for (const cols of [80, 88, 99]) {
+      const rows = text(agentRows(worldAgents(), opts(cols), full));
+      expect(rows[1]).toMatch(/AGENT +STATE +MODEL +TASK +LAST/);
+      expect(rows[2]).toMatch(/implementer-band +running +opus +T4 +read runs\.ts:17/);
+      expect(rows[4]).toMatch(/runner-land +queued +opus +T5 +waits on implementer-live/);
+      for (const r of agentRows(worldAgents(), opts(cols), full)) expect(runsString(r).length).toBeLessThanOrEqual(cols);
+    }
+    // nothing a narrow terminal shows is missing from a wide one: the 104 column row carries the same cells
+    const cells = (cols: number) => (text(agentRows(worldAgents(), opts(cols), full))[2] ?? '').split(/\s+/).filter(Boolean);
+    expect(cells(88)).toEqual(cells(104));
+  });
   test('60 and 40 columns draw no Subagents block (the band counts carry it)', () => {
     for (const cols of [60, 40]) expect(agentRows(worldAgents(), opts(cols), full)).toEqual([]);
   });
   test('header counts equal the row sums', () => {
     const agents = worldAgents();
-    expect(stateCounts(agents.map((a) => a.state))).toBe('1 queued · 1 running · 2 done · 1 failed');
-    expect(text(agentRows(agents, opts(120), full))[0]).toContain('1 queued · 1 running · 2 done · 1 failed');
+    expect(stateCounts(agents.map((a) => a.state))).toBe('1 running · 1 failed · 1 queued · 2 done');
+    expect(text(agentRows(agents, opts(120), full))[0]).toContain('1 running · 1 failed · 1 queued · 2 done');
+  });
+  test('A3: one count order everywhere, attention first (the shared COUNT_ORDER)', () => {
+    const all: UiState[] = ['done', 'queued', 'waiting', 'failed', 'blocked', 'running'];
+    expect(stateCounts(all)).toBe('1 running · 1 blocked · 1 failed · 1 waiting · 1 queued · 1 done');
+    expect(stateCounts(all)).toBe(COUNT_ORDER.map((s) => `1 ${s}`).join(' · '));
   });
   test('a long name widens the name column instead of being cut, up to 28 cells', () => {
     const rows = text(agentRows([{ ...worldAgents()[0]!, name: 'implementer-capture-harness' }], opts(120), full));
@@ -128,7 +146,7 @@ describe('SUBAGENTS task column (critique-3 change 8)', () => {
   test('the full form names its columns in the spacer row: AGENT STATE MODEL TASK LAST (rich: CTX instead of TASK)', () => {
     expect(text(agentRows([row('a', [1])], opts(120), full))[1]).toMatch(/^ {4}AGENT +STATE +MODEL +TASK +LAST$/);
     expect(text(agentRows([row('a', [1])], opts(120, true), full))[1]).toMatch(/^ {4}AGENT +STATE +CTX +MODEL +LAST$/);
-    expect(text(agentRows([row('a', [1])], opts(80), full))[1]).toBe(''); // below 100 columns the spacer stays blank
+    expect(text(agentRows([row('a', [1])], opts(80), full))[1]).toMatch(/^ {4}AGENT +STATE +MODEL +TASK +LAST$/); // A4: 80 columns names them too (it was blank below 100)
   });
 });
 
