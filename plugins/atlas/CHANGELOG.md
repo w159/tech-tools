@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: `types/index.d.ts` shared snapshot block now carries the optional `seq` field on `AtlasSnapshot`, so it is identical to `mod/contract.ts` again (`ModTypesContractSync`).
+- Tests: `test_completion_gate.py` is hermetic for the one-shot (o) phased-todo and (s) team-gate blocks (`GateOrchestrationTest` and `InProcessMainTest` use a per-test marker dir with both off) and the (n) continuation test resets the Stop-burst breaker per subtest, so the suite no longer depends on test order, xdist, tmux on PATH or machine load.
 - Fixed: the dispatch hook's auto-name for an unnamed `atlas:*` dispatch now uses the description's own `label:` prefix when it is one valid token (letters, digits, `-`, `_`, <= 24 chars) that does not echo the role (`alpha-explorer: read alpha.py` -> `alpha-explorer`); otherwise the role-plus-words rule is unchanged (`_name_base`, `hooks/dispatch_tripwire_core.py`).
 - Fixed: the HUD plan is no longer folded to "N more todos not shown" while the idle band leaves allotted rows undrawn (`bandSpareRows` now returns undrawn rows as well as blanks, so `reclaimBlanks` hands them to the TODO block).
 - Fixed: when the plan folds, a row that completed within `LINGER_MS` ranks with running rows and done rows sort newest first (`windowRows` takes `now`; `TodoRow.doneAt` comes from the item's `completed_at`), so a task that just finished is no longer hidden behind queued rows.
