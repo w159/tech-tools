@@ -12,6 +12,7 @@ import { runsString, type Ui } from './atlas-ui';
 import { bandSpareRows, bandTree } from './band';
 import type { TodoItem } from './contract';
 import { coreModel } from './data/core';
+import { ownTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { hudBudget, hudCompactRows, hudLines, reclaimBlanks, type HudAgent, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
@@ -31,7 +32,9 @@ const PLAN = [
   todo('t4', 'T4 combine the three reports', 'pending'), todo('t5', 'T5 write the final two sentence summary', 'pending'),
 ];
 const agent = (name: string): HudAgent => ({ name, role: 'explorer', state: 'working', model: 'haiku', ui: 'running' });
-const input: HudInput = { todos: PLAN, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(agent) };
+/** The board as the store holds it: the plan plus one hook-added dispatch row per explorer; the HUD gets it through ownTodos, which names each title's worker. */
+const DISPATCH = ['alpha', 'beta', 'gamma'].map((n, i) => ({ ...todo(`d${i}`, `dispatch ${n}-explorer`, 'pending'), owner: `${n}-explorer`, origin: 'dispatch' }));
+const input: HudInput = { todos: ownTodos([...PLAN, ...DISPATCH]), agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(agent) };
 const view = (cols: number, maxRows: number) => ({ cols, maxRows, ui, rich: false, now: 0 });
 /** HUD columns the live host handed the hook: bodyColumns, the transcript less the engine's five (88 beside the 56-column pane at 150, 104 at 110). */
 const HUD_WIDTHS = [88, 104, 138];
@@ -41,14 +44,16 @@ describe('1. titles use the width the row has', () => {
   for (const cols of HUD_WIDTHS) {
     test(`HUD TODO at ${cols} columns: every title shows whole, the state word has its column`, () => {
       const rows = hudLines(input, view(cols, 30)).map(runsString);
-      const todoRows = rows.filter((r) => /T\d /.test(r));
+      const todoRows = rows.filter((r) => /T\d /.test(r) && !r.includes('haiku')); // the agent rows (with a model) now also name their T1
       expect(todoRows).toHaveLength(5);
       expect(todoRows[0]).toContain('T1 read alpha.py (alpha-explorer)');
       expect(todoRows[2]).toContain('T3 read gamma.py (gamma-explorer)');
       expect(todoRows[4]).toContain('T5 write the final two sentence summary');
       expect(todoRows.some((r) => r.includes('...'))).toBe(false);
       // one state column: the word starts in the same cell on every row
-      expect(new Set(todoRows.map((r) => r.indexOf('queued'))).size).toBe(1);
+      expect(new Set(todoRows.map((r) => r.search(/queued|running/))).size).toBe(1);
+      // B3: a row whose owner agent runs reads running (critique 8: T1-T3 read queued while the three explorers ran); the unowned rows stay queued
+      expect(todoRows.map((r) => (/running/.test(r) ? 'running' : /queued/.test(r) ? 'queued' : '?'))).toEqual(['running', 'running', 'running', 'queued', 'queued']);
     });
   }
   test('a title that cannot fit is cut with ... and the state word stays whole', () => {
@@ -160,7 +165,7 @@ describe('5. the plan row budget and the overflow row', () => {
     // ribbon + 5 plan rows + agents ribbon + 3 agents = 10 rows (the column header is drawn only with a spare row)
     expect(hudCompactRows(input, 88)).toBe(10);
     const rows = hudLines(input, view(88, hudBudget(13, hudCompactRows(input, 88), 7, true))).map(runsString);
-    expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
+    expect(rows.filter((r) => /T\d /.test(r) && !r.includes('haiku'))).toHaveLength(5);
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
   });
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {

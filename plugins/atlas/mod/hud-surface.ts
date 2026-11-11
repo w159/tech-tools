@@ -106,7 +106,7 @@ function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt:
 
 function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
   const { ui } = o;
-  const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.owner || r.label)), t(' ')];
+  const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), stateRun(r.state, ui, spinOf(o, r.owner || r.label)), t(' ')]; // the cursor marks work in hand, never a queued row
   const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
   const text = clip(flat(r.label), labelW);
   const label = r.state === 'done' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });

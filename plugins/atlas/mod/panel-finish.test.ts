@@ -121,8 +121,11 @@ describe('7: the Board', () => {
   for (const cols of [60, 80, 99]) {
     test(`at ${cols}: an owner and a state column, rows told apart`, () => {
       const text = boardText(boardBody(rows, { cols, ui }));
-      expect(text.some((l) => l.includes('alpha-explorer'))).toBe(true);
-      expect(text.some((l) => l.includes('gamma-explorer'))).toBe(true);
+      // B2: the owner column drops before a title is cut. At 60 the 63-cell titles are cut either way and share a head, so the owner tells them apart;
+      // at 80 the titles show whole without it, and an owner beside them would cut them; at 99 both fit.
+      expect(text.some((l) => l.includes('alpha-explorer'))).toBe(cols !== 80);
+      expect(text.some((l) => l.includes('gamma-explorer'))).toBe(cols !== 80);
+      if (cols >= 80) expect(text.some((l) => l.includes('...'))).toBe(false); // 80 and 99: no title is cut
       const bodyRows = text.filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] /.test(l));
       const labels = bodyRows.map((l) => l.replace(/\s+(done|running|queued|failed|blocked|waiting)\s.*$/, ''));
       // Labels are cut at the end only, so the long rows share one head; the owner column is what tells them apart.

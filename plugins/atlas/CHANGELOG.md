@@ -5,6 +5,10 @@
 - Fixed (critique 8 A1/A2): the band reads `BLOCKED` only when the lead declared it or the completion gate's last Stop verdict for the session refused the stop (`BLOCKED · stop: team gate`); a failing tripwire or other check with Stop allowed is `▲ <gate> warning` / `▲ <n> gates warning`. `completion_gate_core.py` records each Stop verdict in `.atlas/.run/stop-verdict.json` (per session), `atlas_gates.py` serves it as the completion group's `stop-verdict` line, and the team tab lead row reads the same verdict.
 - Fixed (critique 8 A3): the core row's `header n of m` is the one header evaluation; the gates tab `Header contract` line takes its pass or fail from it (`withHeaderTally`).
 - Fixed (critique 8 A4): with a plan the band drops `phase n/m` (the plan count is the progress figure), so `phase 1/5 · todo 4/5` cannot appear; without a plan the phase position stays.
+- Fixed (critique 8 B1): `atlas_todo.py counts` adds `plan`, `dispatches` and `summary` (`needed 5 plan items, 3 dispatches`) beside the unchanged strict `needed`/`remaining`/`complete`; the Board tab footer names the folded dispatches (`5 items · 3 dispatches folded`) (`board-model.ts` `boardFolded`).
+- Fixed (critique 8 B2): the Board's owner column drops before a title is cut; it stays only when every title fits beside it, or when the cut titles would share one head (`board-model.ts` `boardBody`).
+- Fixed (critique 8 B3): a queued row whose owner agent runs reads `running` on the Board, the TODO block and omp; `ownTodos` names the worker a plan title carries (`board-model.ts` `itemState`/`titleOwner`, `data/todos.ts`).
+- Fixed (critique 8 B4): the `▸` cursor is never drawn on a queued TODO row (`hud-surface.ts`).
 
 ## 17.8.0 - 2026-11-11
 

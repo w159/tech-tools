@@ -45,8 +45,33 @@ class BoardBasics(unittest.TestCase):
         self.assertEqual(board["items"], [])
         self.assertEqual(
             atlas_todo.counts(board),
-            {"needed": 0, "remaining": 0, "complete": 0, "claimed": 0},
+            {
+                "needed": 0,
+                "plan": 0,
+                "dispatches": 0,
+                "summary": "needed 0 items",
+                "remaining": 0,
+                "complete": 0,
+                "claimed": 0,
+            },
         )
+
+    def test_counts_report_plan_and_dispatch_rows_apart(self):
+        for text in ("T1 a", "T2 b"):
+            atlas_todo.add(self.root, text, session_id="s1", origin="session")
+        atlas_todo.add(
+            self.root,
+            "dispatch alpha",
+            session_id="s1",
+            origin="dispatch",
+            owner="alpha",
+        )
+        c = atlas_todo.counts(atlas_todo.load(self.root), "s1")
+        self.assertEqual(
+            (c["needed"], c["remaining"]), (3, 3)
+        )  # the Stop gate's count stays strict
+        self.assertEqual((c["plan"], c["dispatches"]), (2, 1))
+        self.assertEqual(c["summary"], "needed 2 plan items, 1 dispatches")
 
     def test_add_and_counts(self):
         r = atlas_todo.add(self.root, "wire the gate", session_id="s1")
@@ -54,7 +79,6 @@ class BoardBasics(unittest.TestCase):
         board = atlas_todo.load(self.root)
         self.assertEqual(len(board["items"]), 1)
         self.assertEqual(atlas_todo.counts(board, "s1")["needed"], 1)
-
 
     def test_upsert_work_state_keeps_identity_and_clears_metadata(self):
         first = atlas_todo.upsert_work_state(
@@ -72,7 +96,9 @@ class BoardBasics(unittest.TestCase):
         self.assertEqual(second["id"], first["id"])
         self.assertEqual(second["status"], "completed")
         self.assertNotIn("details", second)
-        self.assertFalse(atlas_todo.upsert_work_state(self.root, "release", [], "s1")["ok"])
+        self.assertFalse(
+            atlas_todo.upsert_work_state(self.root, "release", [], "s1")["ok"]
+        )
 
     def test_mirror_replaces_session_items_and_keeps_manual(self):
         atlas_todo.add(self.root, "human note", origin="manual")
@@ -204,7 +230,10 @@ class BoardBasics(unittest.TestCase):
     def test_rotate_archive_moves_old_archived_items_and_list_hides_them(self):
         atlas_todo.mirror(
             self.root,
-            [{"content": "a", "status": "pending"}, {"content": "b", "status": "pending"}],
+            [
+                {"content": "a", "status": "pending"},
+                {"content": "b", "status": "pending"},
+            ],
             "s1",
         )
         atlas_todo.archive_item(
@@ -212,10 +241,16 @@ class BoardBasics(unittest.TestCase):
         )
         self._age("a", archived_at=time.time() - 8 * 86400)
         self.assertEqual(atlas_todo.rotate_archive(self.root), 1)
-        self.assertEqual([i["content"] for i in atlas_todo.load(self.root)["items"]], ["b"])
-        files = list((atlas_todo.board_path(self.root).parent / "archive").glob("todos-*.jsonl"))
+        self.assertEqual(
+            [i["content"] for i in atlas_todo.load(self.root)["items"]], ["b"]
+        )
+        files = list(
+            (atlas_todo.board_path(self.root).parent / "archive").glob("todos-*.jsonl")
+        )
         self.assertEqual(len(files), 1)
-        self.assertEqual(json.loads(files[0].read_text().splitlines()[0])["content"], "a")
+        self.assertEqual(
+            json.loads(files[0].read_text().splitlines()[0])["content"], "a"
+        )
         atlas_todo.archive_item(
             self.root, atlas_todo.load(self.root)["items"][0]["id"], "test"
         )
@@ -986,7 +1021,9 @@ class ChannelHarness(unittest.TestCase):
         self.assertEqual(chan.get("harness", ""), "")
         again = atlas_todo.get_channel(self.root, chan["name"])
         assert again is not None
-        self.assertEqual(again["members"][0]["role"], "lead")  # legacy record shape intact
+        self.assertEqual(
+            again["members"][0]["role"], "lead"
+        )  # legacy record shape intact
 
     def test_open_lead_channel_records_lead_pid_and_overwrites(self):
         with mock.patch.object(atlas_todo, "_lead_pid", return_value=4321):
@@ -1008,24 +1045,59 @@ class SessionStartChannelGate(unittest.TestCase):
         os.makedirs(self.root)
 
     def test_non_project_dir_is_skipped_and_left_untouched(self):
-        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "", "--only-project")
+        rc, data = cli(
+            "channel-open",
+            "--root",
+            self.root,
+            "--lead",
+            "lead-abcdef",
+            "--members",
+            "",
+            "--only-project",
+        )
         self.assertEqual((rc, data.get("skipped")), (0, "not_a_project"))
         self.assertEqual(os.listdir(self.root), [])
 
     def test_plain_git_repo_is_skipped_too(self):
         os.makedirs(os.path.join(self.root, ".git"))
-        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "", "--only-project")
+        rc, data = cli(
+            "channel-open",
+            "--root",
+            self.root,
+            "--lead",
+            "lead-abcdef",
+            "--members",
+            "",
+            "--only-project",
+        )
         self.assertEqual((rc, data.get("skipped")), (0, "not_a_project"))
         self.assertEqual(os.listdir(self.root), [".git"])
 
     def test_existing_atlas_board_gets_the_lead_channel(self):
         os.makedirs(os.path.join(self.root, ".atlas", ".run"))
-        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "", "--only-project")
+        rc, data = cli(
+            "channel-open",
+            "--root",
+            self.root,
+            "--lead",
+            "lead-abcdef",
+            "--members",
+            "",
+            "--only-project",
+        )
         self.assertEqual(rc, 0)
         self.assertTrue(data["channel"]["name"].endswith("/lead-abcdef"))
 
     def test_dispatch_open_without_the_flag_is_unchanged(self):
-        rc, data = cli("channel-open", "--root", self.root, "--lead", "lead-abcdef", "--members", "w1")
+        rc, data = cli(
+            "channel-open",
+            "--root",
+            self.root,
+            "--lead",
+            "lead-abcdef",
+            "--members",
+            "w1",
+        )
         self.assertEqual(rc, 0)
         self.assertIn("w1", data["briefs"])
 
@@ -1035,7 +1107,9 @@ class LeadPidWalk(unittest.TestCase):
         def run():
             r = mock.Mock()
             r.returncode = returncode
-            r.stdout = "".join(f"{pid} {ppid} {comm}\n" for pid, (ppid, comm) in rows.items())
+            r.stdout = "".join(
+                f"{pid} {ppid} {comm}\n" for pid, (ppid, comm) in rows.items()
+            )
             return r
 
         return run
@@ -1061,7 +1135,9 @@ class LeadPidWalk(unittest.TestCase):
         me = os.getpid()
         rows = {}
         pid = me
-        for i in range(12):  # 12 shell ancestors: the harness beyond the cap is not found
+        for i in range(
+            12
+        ):  # 12 shell ancestors: the harness beyond the cap is not found
             nxt = 1000 + i
             rows[pid] = (nxt, "/bin/zsh")
             pid = nxt
@@ -1077,7 +1153,11 @@ class LeadPidWalk(unittest.TestCase):
 class CliHelp(unittest.TestCase):
     def _run(self, *args):
         return subprocess.run(
-            [sys.executable, os.path.join(os.path.dirname(__file__), "atlas_todo.py"), *args],
+            [
+                sys.executable,
+                os.path.join(os.path.dirname(__file__), "atlas_todo.py"),
+                *args,
+            ],
             capture_output=True,
             text=True,
         )
@@ -1146,9 +1226,7 @@ class NoteLimits(unittest.TestCase):
     def test_cap_counts_bytes_and_report_notes_keep_their_tail(self):
         with self.assertRaises(atlas_todo.NoteTooLarge):
             atlas_todo.note(self.root, "a", "\u00e9" * 5000)  # 5000 chars, 10000 bytes
-        rec = atlas_todo.note(
-            self.root, "w", "log\n" * 5000 + "exit 0", kind="report"
-        )
+        rec = atlas_todo.note(self.root, "w", "log\n" * 5000 + "exit 0", kind="report")
         self.assertLessEqual(len(rec["text"].encode()), 8192)
         self.assertTrue(rec["text"].startswith("[truncated"))
         self.assertTrue(rec["text"].endswith("exit 0"))

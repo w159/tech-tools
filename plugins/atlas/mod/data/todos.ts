@@ -5,6 +5,7 @@
 import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } from '../contract';
 import type { TodoGroup } from '../orchestra-types';
 import { contractGlyph } from '../theme';
+import { titleOwner } from '../board-model';
 
 /** Phase -> department label (the single copy; pane/board.tsx imports it). */
 export const DEPT: Record<string, string> = {
@@ -127,7 +128,18 @@ const ownRow = (it: object, sessionId?: string): boolean => {
 };
 
 /** This session's rows as the board lists them (dispatch rows included; open carried and other sessions' rows left out). */
-export const ownTodos = <T extends object>(items: readonly T[], sessionId?: string): T[] => items.filter((it) => ownRow(it, sessionId));
+export const ownTodos = <T extends object>(items: readonly T[], sessionId?: string): T[] => {
+  const own = items.filter((it) => ownRow(it, sessionId));
+  // A plan row that names its worker in the title (`T1 read alpha.py (alpha-explorer)`) while the store holds no owner gets that worker as its owner when a
+  // dispatch row of this board is the worker's: the HUD, band and side panel then match owner to agent as the Board fold does. The title is left as written.
+  const workers = new Set(own.map((it) => it as { origin?: string; owner?: string }).filter((it) => it.origin === 'dispatch' && it.owner).map((it) => it.owner!));
+  if (workers.size === 0) return own;
+  return own.map((it) => {
+    const r = it as { origin?: string; owner?: string; content?: unknown };
+    const m = r.origin !== 'dispatch' && !r.owner && typeof r.content === 'string' ? titleOwner(r.content, workers) : undefined;
+    return m ? { ...it, owner: m.name } : it;
+  });
+};
 
 /** The one count basis: this session's plan items. Every surface (band, HUD, board, side panel, snapshot.counts) counts this set. */
 export const planBasis = <T extends object>(items: readonly T[], sessionId?: string): T[] =>
