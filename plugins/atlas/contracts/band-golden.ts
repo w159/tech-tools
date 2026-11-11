@@ -27,7 +27,8 @@ export const golden: string[] = [
  * too), then the core row (core-golden.ts) and the footer. The Claude band adds its key buttons to the footer only when handlers are wired. */
 export const idleGolden: string[] = [
   "◖ ◆ ATLAS ◗  ▲ doctor warning   todo ██████████ 7/7   ctx █████░░░ 62%   agents ■ 1 failed",
-  " verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked    last run  1 worker · 42s · 1 failed",
+  " last run  1 worker · 42s · 1 failed",
+  " verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked",
   " checks  ● lint  ● test  ▲ doctor  2 of 3 green"
 ];
 
