@@ -210,6 +210,14 @@ export const hudCompactRows = (input: HudInput, cols = 120): number => {
   return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: false }).length; // the floor has no column-name row: it is drawn only when the budget also leaves the band its summary row
 };
 
+/** Rows of the compact form WITH the Subagents column names and the blank between the blocks: what the register gives the HUD when the slot can hold them
+ * and the band still keeps its title row (register.ts hudSlotCap). `now`: the draw's clock, so a lingering finished wave counts (hudCompactRows has none and leaves it out). */
+export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number => {
+  const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
+  const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length;
+};
+
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */
 export const hudBudget = (maxRows: number, compact: number, bandRows = 7, running = false): number => {
   if (maxRows <= 0) return 0;

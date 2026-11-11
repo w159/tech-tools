@@ -43,7 +43,7 @@ const STRIP_FORMS: readonly StripForm[] = [
   { gap: STRIP_GAP, label: (_, full) => full },
   { gap: 1, label: (_, full) => full },
 ];
-const stripWidth = (tabs: readonly { label: string }[], gap: number): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + HOTKEY_W + cells(t.label), 0);
+const stripWidth = (tabs: readonly { label: string }[], gap: number, prefix: number = HOTKEY_W): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + prefix + cells(t.label), 0);
 const formTabs = (f: StripForm): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t, label: f.label(t.id, t.label) }));
 
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and `gap` cells between; the rest wrap. */
@@ -61,14 +61,16 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
 
 /** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding: the widest label form that fits one row, else the
  * full words wrapped onto a second row. The rule under the lit tab is as wide as the drawn label. */
-export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number } {
+export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number; /** True when the `k: ` prefix is not drawn (the keys stay bound; see mod/pane/sidebar.tsx): the words alone fit one row where the prefixed forms do not. */ bare: boolean } {
   const inner = Math.max(1, cols - STRIP_PAD);
   for (const f of STRIP_FORMS) {
     const tabs = formTabs(f);
-    if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap };
+    if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap, bare: false };
   }
+  const bareTabs = formTabs(STRIP_FORMS[1]!);
+  if (stripWidth(bareTabs, 1, 0) <= inner) return { rows: [bareTabs], gap: 1, bare: true };
   const wide = STRIP_FORMS[0]!;
-  return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap };
+  return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap, bare: false };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
@@ -206,7 +208,7 @@ export function ribbonRow(m: PanelModel): PanelLine {
 /** The tab strip and the rule under the lit tab: `r: route  t: team  c: channel  g: gates  k: core  o: board`, `━━━━━` under the lit one. A
  * strip that does not fit wraps onto a second row (the rule sits under the row that holds the lit tab). */
 export function tabRows(m: PanelModel): PanelLine[] {
-  const { rows, gap: g } = stripLayout(m.cols, m.tab);
+  const { rows, gap: g, bare } = stripLayout(m.cols, m.tab);
   const gap = r(' '.repeat(g));
   const lead = r(' '.repeat(STRIP_PAD));
   return rows.flatMap((row): PanelLine[] => {
@@ -215,8 +217,8 @@ export function tabRows(m: PanelModel): PanelLine[] {
     row.forEach((t, i) => {
       const on = t.id === m.tab;
       if (i) { strip.push(gap); under.push(gap); }
-      strip.push(r(`${t.key}: `, 'muted'), on ? r(t.label, 'text', { bold: true }) : r(t.label, 'muted'));
-      under.push(r(' '.repeat(HOTKEY_W)), on ? r((m.ui.ascii ? '-' : '━').repeat(cells(t.label)), 'accent') : r(' '.repeat(cells(t.label))));
+      strip.push(...(bare ? [] : [r(`${t.key}: `, 'muted')]), on ? r(t.label, 'text', { bold: true }) : r(t.label, 'muted'));
+      under.push(...(bare ? [] : [r(' '.repeat(HOTKEY_W))]), on ? r((m.ui.ascii ? '-' : '━').repeat(cells(t.label)), 'accent') : r(' '.repeat(cells(t.label))));
     });
     return [line(fitRuns(strip, m.cols)), ...(row.some((t) => t.id === m.tab) ? [line(fitRuns(under, m.cols))] : [])];
   });
@@ -288,19 +290,48 @@ const TITLE_MIN_W = 21; // the title column's least width (the state word starts
 /** A task row prints its owner in the right-hand column unless its title already names that owner. */
 const ownerColumn = (t: PanelTodo): boolean => !!t.owner && !oneLine(t.label).includes(oneLine(t.owner));
 
+const TODO_GAP = 2; // cells between a title and its state word where the title spills (critique 14: `...(alpha... done` had one); the one-row grammar keeps its single cell
+const SPILL_BELOW = 50; // panes narrower than this (the 110-column pane is 37) draw a title that cannot sit beside its state whole, state under it
+
 function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; wordW: number; shown?: string }): PanelLine[] {
   const key = `task:${t.id}`;
-  const runs = gridRow({
-    cols: m.cols, ui: m.ui, mark: stateMark(markOf(t.state, t.word), m, t.owner || t.id),
-    name: { t: w.shown ?? oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text', ...(t.state === 'done' ? { strike: true } : {}) }, nameW: w.nameW, nameCut: 'end', // a done title is struck through, as in the HUD (critique 11)
-    word: { t: t.word ?? t.state, tone: rowWordTone(t.state, t.word) }, wordW: w.wordW,
-    ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
-    ...(w.valueW && ownerColumn(t) ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
-  });
+  const full = oneLine(t.label);
+  const wordRun = { t: t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
+  const nameCell = { tone: t.state === 'done' ? 'sub' as const : 'text' as const, ...(t.state === 'done' ? { strike: true } : {}) }; // a done title is struck through, as in the HUD (critique 11)
+  const accent = markOf(t.state, t.word);
+  const glyph = stateMark(accent, m, t.owner || t.id);
+  // A title that does not fit beside its state word is drawn whole and its state follows it (critique 14, the 110-column pane: `T1 read alpha.py (alpha...` was cut
+  // while the title fit the pane). A pane from SPILL_BELOW columns keeps the one-row form: it has the room.
+  const room = m.cols - GRID_LEAD - (w.wordW + 1) - (w.valueW ? w.valueW + 1 : 0); // the title column's widest possible width
+  const spill = m.cols < SPILL_BELOW && (cells(full) > w.nameW || (cells(full) === w.nameW && w.nameW >= room)); // too long, or filling the column and jammed against the word
+  let rows: PanelLine[];
+  if (spill) {
+    const width = Math.max(8, m.cols - GRID_LEAD);
+    const lines = cells(full) <= width ? [full] : wrap(full, width, 3);
+    const head = gridRow({ cols: m.cols, ui: m.ui, mark: glyph, name: { t: lines[0]!, ...nameCell }, nameW: Math.min(width, cells(lines[0]!)), nameCut: 'end' });
+    const wordTail = [r(' '.repeat(TODO_GAP)), r(wordRun.t, wordRun.tone)];
+    const lastW = cells(lines[lines.length - 1]!);
+    const inline = lastW + TODO_GAP + cells(wordRun.t) <= width;
+    const owner = w.valueW && ownerColumn(t) ? clip(oneLine(t.owner), w.valueW) : '';
+    const ownerTail = (used: number): Run[] => (owner && used + TODO_GAP + cells(owner) <= width ? [r(' '.repeat(TODO_GAP)), r(owner, 'sub')] : []);
+    const cont = lines.slice(1).map((l, i, a): Run[] => [r(' '.repeat(GRID_LEAD)), r(l, nameCell.tone, nameCell.strike ? { strike: true } : {}), ...(inline && i === a.length - 1 ? wordTail : [])]);
+    const tail: Run[][] = inline ? [] : [[r(' '.repeat(GRID_LEAD)), r(wordRun.t, wordRun.tone), ...ownerTail(cells(wordRun.t))]];
+    const firstRuns = [...head, ...(inline && lines.length === 1 ? wordTail : [])];
+    rows = [moving(firstRuns, key, accent, m), ...cont, ...tail].map((runs, i) => line(fitRuns(runs, m.cols), i === 0 ? { kind: 'toggle', key } : undefined));
+  } else {
+    const runs = gridRow({
+      cols: m.cols, ui: m.ui, mark: glyph,
+      name: { t: w.shown ?? full, ...nameCell }, nameW: w.nameW, nameCut: 'end',
+      word: wordRun, wordW: w.wordW,
+      ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
+      ...(w.valueW && ownerColumn(t) ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
+    });
+    rows = [line(fitRuns(moving(runs, key, accent, m), m.cols), { kind: 'toggle', key })];
+  }
   const open = m.expanded === key;
   const facts = [t.owner ? `owner ${oneLine(t.owner)}` : '', oneLine(t.detail)].filter(Boolean).join(` ${dot(m.ui)} `);
   const extra = open ? [...(facts ? [facts] : []), t.evidence ? `evidence: ${oneLine(t.evidence)}` : 'no evidence yet'] : [];
-  return [line(fitRuns(moving(runs, key, markOf(t.state, t.word), m), m.cols), { kind: 'toggle', key }), ...extra.map((x) => line(fitRuns([r(`    ${x}`, 'muted')], m.cols)))];
+  return [...rows, ...extra.map((x) => line(fitRuns([r(`    ${x}`, 'muted')], m.cols)))];
 }
 
 /** What the Motion observes of the panel: each plan task, worker, gate group and gate line (key and state word), the rows `bodyLines` can move. */
@@ -653,6 +684,17 @@ const VERDICT_CAP = 8;
 const OFFLOAD_CAP = 8;
 const TEAM_CAP = 6;
 
+/** The first of `forms` (richest first) that fits `room` cells, else the last: a sentence is shortened on purpose before it is cut or wrapped (critique 14, the 110-column pane). */
+const pickForm = (forms: readonly string[], room: number): string => forms.find((f) => cells(f) <= room) ?? forms[forms.length - 1]!;
+
+/** A row and the sentence that follows it: beside the row when the whole sentence fits the cells left, else wrapped on its words onto the rows under it, indented
+ * (critique 14, the 110-column pane: `5 done withou...` was cut while the sentence fits a row of its own). Nothing is ever cut with `...`. */
+function withRoom(runs: Run[], text: string, m: PanelModel): PanelLine[] {
+  if (!text) return [line(fitRuns(runs, m.cols))];
+  if (cells(text) + 1 <= m.cols - rowWidth(runs)) return [line(fitRuns([...runs, r(` ${text}`, 'muted')], m.cols))];
+  return [line(fitRuns(runs, m.cols)), ...wrap(text, Math.max(8, m.cols - GRID_LEAD - 1), 4).map((t) => line(fitRuns([r(`${' '.repeat(GRID_LEAD)}${t}`, 'muted')], m.cols)))];
+}
+
 /** `contract`: `evidence` and `verified`, each `glyph name  n/m` over the plan's items (the denominator of the band's `todo n/m`; the done items when the pane has no
  * plan). The header tally counts replies, a different unit: it lives on the gates tab (Header contract), not here. */
 function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
@@ -665,11 +707,13 @@ function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const items: [string, { ok: number; total: number }][] = [['evidence', e], ['verified', v]];
   return [
     heading('contract', [], m),
-    ...items.map(([name, t]) => line(fitRuns(gridRow({
-      cols: m.cols, ui: m.ui, mark: stateRun(!t.total ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
-      name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: tallyTone(t.ok, t.total) }, wordW: 8,
-      ...(why(name, t) ? { detail: { t: why(name, t) } } : {}),
-    }), m.cols))),
+    ...items.flatMap(([name, t]): PanelLine[] => {
+      const runs = gridRow({
+        cols: m.cols, ui: m.ui, mark: stateRun(!t.total ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
+        name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: tallyTone(t.ok, t.total) }, wordW: 8,
+      });
+      return withRoom(runs, why(name, t), m);
+    }),
   ];
 }
 
@@ -691,11 +735,15 @@ function verdictRows(c: CoreModel, m: PanelModel, cap = VERDICT_CAP): PanelLine[
     const checked = c.claims.find((x) => x.matched === v.id);
     const open = m.expanded === key;
     const detail = open ? [checked ? `checks the done claim of ${checked.owner}` : 'no worker claim before it', `by ${v.by}`, `evidence: ${oneLine(v.evidence) || 'none recorded'}`] : [];
+    const verdictRow = (withTitle: boolean): Run[] => gridRow({
+      cols: m.cols, ui: m.ui, mark: stateRun(look.s, m.ui), name: { t: oneLine(v.id) }, nameW: plan.nameW,
+      word: { t: look.word, tone: look.tone, bold: v.status === 'rejected' }, wordW: VERDICT_WORD_W, ...(withTitle ? { detail: { t: oneLine(v.title) } } : {}),
+    });
+    // A pane narrower than SPILL_BELOW (the 110-column pane) puts the title beside the verdict when it fits, else on the rows under it: never cut with `...`.
+    const head = m.cols < SPILL_BELOW ? withRoom(verdictRow(false), oneLine(v.title), m) : [line(fitRuns(verdictRow(true), m.cols))];
     return [
-      line(fitRuns(gridRow({
-        cols: m.cols, ui: m.ui, mark: stateRun(look.s, m.ui), name: { t: oneLine(v.id) }, nameW: plan.nameW,
-        word: { t: look.word, tone: look.tone, bold: v.status === 'rejected' }, wordW: VERDICT_WORD_W, detail: { t: oneLine(v.title) },
-      }), m.cols), { kind: 'toggle', key }),
+      { ...head[0]!, press: { kind: 'toggle', key } },
+      ...head.slice(1),
       ...detail.map((t) => line(fitRuns([r(`    ${t}`, 'muted')], m.cols))),
     ];
   });
@@ -712,7 +760,7 @@ function offloadRows(c: CoreModel, m: PanelModel, cap = OFFLOAD_CAP): PanelLine[
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
   const nothing = o.kept === 0 && o.returned === 0;
   const gone = m.workers.filter((w) => w.state === 'done' || w.state === 'failed').length; // in-process workers keep no token log: they returned, the figure is absent
-  const head = flowHeading('reading', nothing ? [gone ? `${gone} worker${gone === 1 ? '' : 's'} returned, no token figures kept` : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
+  const head = flowHeading('reading', nothing ? [gone ? pickForm([`${gone} worker${gone === 1 ? '' : 's'} returned, no token figures kept`, `${gone} returned, no token figures kept`, `${gone} returned, no token log`], m.cols - cells('reading') - 3) : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
   const ws = o.workers.slice(-cap);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);
@@ -757,8 +805,10 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
   const names = teams.flatMap((rt) => rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`));
   const { nameW } = gridPlan(m.cols, { names, word: SEAT_WORD_W, min: 8, max: 16 });
-  const withDetail = (runs: Run[], text: string): PanelLine[] => {
+  const withDetail = (runs: Run[], forms: string | readonly string[]): PanelLine[] => {
     const used = rowWidth(runs);
+    const all = typeof forms === 'string' ? [forms] : forms;
+    const text = all.find((f) => cells(f) + 1 <= m.cols - used) ?? pickForm(all, m.cols - 6); // beside the row when a form fits, else the form that fits a row of its own
     const fits = cells(text) + 1 <= m.cols - used;
     return [line(fitRuns(fits ? [...runs, r(` ${text}`, 'muted')] : runs, m.cols)), ...(fits ? [] : wrap(text, Math.max(8, m.cols - 6)).map((t) => note(`  ${t}`, m)))];
   };
@@ -766,7 +816,9 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
     const teamName = `${rt.cls} team (${rt.effort} effort)`; // plain words, never the `class/effort` scope token
     // A team that ran differently says what happened, in words: `planned audit team (low effort), ran 3 explorers` (data/core plannedText, the band's wording).
     const headName = rt.drift.length ? plannedText(rt) : teamName;
-    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('failed', m.ui) : null, name: { t: headName, bold: true }, nameW: Math.min(cells(headName), Math.max(1, m.cols - GRID_LEAD)) });
+    const headLines = cells(headName) <= m.cols - GRID_LEAD ? [headName] : wrap(headName, Math.max(8, m.cols - GRID_LEAD), 3); // a name wider than the pane wraps on its words, it is never cut
+    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('failed', m.ui) : null, name: { t: headLines[0]!, bold: true }, nameW: Math.min(cells(headLines[0]!), Math.max(1, m.cols - GRID_LEAD)) });
+    const headMore = headLines.slice(1).map((t) => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(t, 'text', { bold: true })], m.cols)));
     const seats = rt.seats.flatMap((s): PanelLine[] => {
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');
       const over = s.ran.length > s.count;
@@ -776,11 +828,12 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
       const plan = `${s.model}, ${s.effort} effort`;
       const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${plan})` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
       const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(st, m.ui), name: { t: `  ${seatCount(s)}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
-      return withDetail(runs, detail);
+      return withDetail(runs, over ? [detail, `${s.ran.length} ran, ${s.count} planned (${s.model})`] : detail);
     });
     // In-process routes have no team name or isolation to show: the sentence says how the workers ran.
-    const how = rt.transport === 'in-process' ? `workers ran in-process (no tmux team), up to ${rt.maxParallel} at once` : `${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`;
-    return [...withDetail(team, how), ...seats];
+    const how = rt.transport === 'in-process' ? [`workers ran in-process (no tmux team), up to ${rt.maxParallel} at once`, `ran in-process, up to ${rt.maxParallel} at once`] : `${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`;
+    const howRows = wrap(pickForm(typeof how === 'string' ? [how] : how, m.cols - 6), Math.max(8, m.cols - 6)).map((t) => note(`  ${t}`, m));
+    return [...(headMore.length ? [line(fitRuns(team, m.cols)), ...headMore, ...howRows] : withDetail(team, how)), ...seats];
   });
   return [head, ...rows, ...inProcessNote()];
 }

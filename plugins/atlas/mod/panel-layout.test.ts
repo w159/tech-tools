@@ -9,7 +9,7 @@ import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } 
 import { world } from '../contracts/band-world';
 import { cells, runsString, stateWordTone, UI_STATES, type Ui } from './atlas-ui';
 import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, cardLines, headerRows, lineText, PANEL_TABS, panelText, STRIP_TABS, toastText, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, cardLines, headerRows, lineText, PANEL_TABS, panelText, STRIP_TABS, stripLayout, toastText, type PanelModel, type PanelTab } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
@@ -54,9 +54,11 @@ describe('tab strip', () => {
   });
   test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (it wraps)', () => {
     for (let cols = 29; cols <= 140; cols++) {
-      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => /^\w: /.test(l.trim()));
+      const bare = stripLayout(cols, 'route').bare; // A1: the words alone on one row, no `k: ` (the keys stay bound by the host layer)
+      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => (bare ? /^ (route|team)/.test(l) : /^\w: /.test(l.trim())));
       for (const l of rowsOut) expect(cells(l)).toBeLessThanOrEqual(cols);
-      expect(rowsOut.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w)).join('')).toBe(STRIP_TABS.map((t) => `${t.key}:`).join(''));
+      if (bare) expect(rowsOut.map((l) => l.trim())).toEqual(['route team channel gates core board']);
+      else expect(rowsOut.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w)).join('')).toBe(STRIP_TABS.map((t) => `${t.key}:`).join(''));
     }
   });
 });
@@ -363,12 +365,14 @@ describe('critique 12 A2: the route tab drops the owner column before it cuts a 
     expect(out[1]).toContain('T2 read beta.py (beta-explorer)');
     for (const l of out) { expect(cells(l)).toBeLessThanOrEqual(55); expect(l.match(/alpha-explorer|beta-explorer/g)?.length ?? 0).toBeLessThanOrEqual(1); }
   });
-  test('at 37 columns (the 110-column pane) a title is cut only by the pane width: no `read ...`, no owner column', () => {
-    const out = taskRows(37);
-    for (const l of out) expect(cells(l)).toBeLessThanOrEqual(37);
-    expect(out[0]).toMatch(/T1 read alpha\.py \(\S+\.\.\.\s+done/);
-    expect(out[0]).not.toMatch(/read \.\.\./);
-    expect(out.join('\n')).not.toMatch(/done\s+\S*-explorer/);
+  test('at 37 columns (the 110-column pane) every title is whole (its state under it where it does not fit), no `...`, no owner column', () => {
+    const all = rows('route', 37, { todos: plan, workers: [] });
+    for (const l of all) expect(cells(l)).toBeLessThanOrEqual(37);
+    const text = all.join('\n');
+    expect(text).toContain('T1 read alpha.py (alpha-explorer)');
+    expect(text).toContain('T2 read beta.py (beta-explorer)');
+    expect(text).not.toContain('...');
+    expect(text).not.toMatch(/done\s+\S*-explorer/);
   });
   test('a row whose title does not name its owner keeps the owner column; one that does never prints it twice, at any width', () => {
     const mixed = [...plan.slice(0, 1), { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const, owner: 'lead-agent' }];

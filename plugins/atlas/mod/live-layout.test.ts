@@ -90,7 +90,9 @@ describe('2. the tab strip fits the pane and the rule sits under the lit tab', (
         // the cells under the rule are the lit tab's drawn label, whole, right after its `k: ` hotkey and before the gap
         const entry = STRIP_TABS.find((t) => t.id === tab)!;
         const lit = strip.slice(at, at + [...rule.trim()].length);
-        expect(strip.slice(at - 3, at)).toBe(`${entry.key}: `);
+        const bare = !/\b[rtcgko]: /.test(strip); // A1: a pane too narrow for `k: ` drops it and keeps one row of bare words
+        if (!bare) expect(strip.slice(at - 3, at)).toBe(`${entry.key}: `);
+        else expect(rows.filter((r) => r !== rule)).toHaveLength(1);
         expect(strip.slice(at + lit.length, at + lit.length + 1)).toMatch(/^ ?$/); // a gap, or the end of the row
         expect(['route', 'team', 'channel', 'gates', 'core']).toContain(lit);
         if (cols >= 55) expect(lit).toBe(entry.label);

@@ -110,6 +110,53 @@ describe('sidebar open requests', () => {
     expect(opens).toHaveLength(1); // docked once: a pane the person closed stays closed
   });
 
+  // A2 (critique 14): the engine places an UNASKED pane from 144 columns, but an open made behind the person's prompt is "asked" and
+  // docks from 110 (types UiOpenResult). The first prompt of a run at 110 fullscreen opens the pane, once, and never after a by-hand close.
+  describe('A2: the first prompt opens the pane at 110 columns', () => {
+    const at = (columns: number, isFullscreen = true) => ({ surface: 'terminal', viewport: { columns, rows: 40, isFullscreen }, props: { hasSurvey: false, bodyColumns: columns } });
+    async function session(columns: number, isFullscreen = true) {
+      const { on, pick } = captureOn();
+      const { engine, opens } = stubEngine();
+      await register(on, {});
+      await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
+      const draw = async (c = columns) => { guard.rendering = true; await pick('ui.render|AbovePrompt')(engine, at(c, isFullscreen), noopNext).catch(() => undefined); guard.rendering = false; await dockTick(engine); };
+      const submit = () => pick('prompt.submit')(engine, { text: 'go' }, noopNext);
+      return { engine, opens, pick, draw, submit };
+    }
+    test('110 fullscreen: the prompt opens the docked pane once, with no focus', async () => {
+      const s = await session(110);
+      await s.draw();
+      expect(s.opens).toEqual([]); // the render alone asks nothing at 110
+      await s.submit();
+      expect(s.opens).toEqual([{ id: 'atlas', title: 'Atlas', columns: 56 }]);
+      await s.submit();
+      expect(s.opens).toHaveLength(1);
+    });
+    test('never below 110, never inline, never when the pane is already docked at 150', async () => {
+      for (const [columns, full] of [[100, true], [110, false], [109, true]] as const) { const s = await session(columns, full); await s.draw(); await s.submit(); expect(s.opens).toEqual([]); }
+      const wide = await session(150);
+      await wide.draw();
+      expect(wide.opens).toHaveLength(1); // docked by dockTick
+      await wide.submit();
+      expect(wide.opens).toHaveLength(1);
+    });
+    test('a pane the person closed by hand is not opened again by a later prompt', async () => {
+      const s = await session(110);
+      await s.draw();
+      await s.submit();
+      await s.pick('ui.close')(s.engine, { id: 'atlas', origin: { kind: 'person' } }, noopNext);
+      await s.submit();
+      expect(s.opens).toHaveLength(1);
+    });
+    test('the open is made before any await (the engine counts it asked only while the prompt is behind it)', async () => {
+      const s = await session(110);
+      await s.draw();
+      const p = s.submit();
+      expect(s.opens).toHaveLength(1); // synchronous: recorded before the hook's first await settles
+      await p;
+    });
+  });
+
   test('the band render writes no $.state (the engine skips a render hook that does)', async () => {
     expect((await renderBand({ columns: 160, rows: 40, isFullscreen: true })).denied).toBe(0);
   });

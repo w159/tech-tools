@@ -47,10 +47,10 @@ describe('sidebar golden text', () => {
     expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
     expect(r[3]).toMatch(/^ {2}■ runner-1\s+failed/);
   });
-  test('team at 38 columns keeps the keys and whole words on a second strip row, and keeps name and state', () => {
+  test('team at 38 columns (the 110-column pane) draws the whole words on one row with no `k: `, and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]!.trimEnd()).toBe(' r: route  t: team  c: channel');
-    expect(r[4]!.trimEnd()).toBe(' g: gates  k: core  o: board'); // r[3] is the rule under the lit team tab
+    expect(r[2]!.trimEnd()).toBe(' route team channel gates core board'); // the keys stay bound on a zero-width layer, drawn as nothing
+    expect(r[3]!.trimEnd()).toBe('       ━━━━'); // the rule under the lit team tab
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
   });

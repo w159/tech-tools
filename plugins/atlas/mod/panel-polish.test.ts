@@ -39,8 +39,18 @@ describe('clipMiddle (atlas-ui)', () => {
 });
 
 describe('change 6: the route tab is the Board compact form', () => {
+  // 38 is the 110-column pane: a title that cannot sit beside its state word is drawn whole there and its state follows (A4, mod/panel-a4.test.ts)
+  test('at 38 a long title is drawn whole over its rows and the state word follows it, never pushed off', () => {
+    const rows = body('route', 38, { todos: plan });
+    const text = rows.join(' ').replace(/\s+/g, ' ');
+    expect(text).toContain('Wire the band to the host and verify');
+    expect(text).toMatch(/running/);
+    for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(38);
+    expect(taskRows(rows)).toHaveLength(4);
+  });
   for (const cols of [120, 80, 56, 38]) {
     test(`at ${cols} every task row has its state word in one column, long titles and owners included`, () => {
+      if (cols < 50) return; // the narrow pane spills long titles (above)
       const rows = taskRows(body('route', cols, { todos: plan }));
       expect(rows).toHaveLength(4);
       const at = rows.map((l) => l.search(new RegExp(` ${WORD}( |$)`)));
@@ -49,6 +59,7 @@ describe('change 6: the route tab is the Board compact form', () => {
     });
     // critique 4 (panel B2) replaces "cut in the middle, its end survives": the label is clipped at its end and the owner column stays whole.
     test(`at ${cols} a long title is clipped at its end: its start survives, the state word is never pushed off`, () => {
+      if (cols < 50) return; // the narrow pane spills long titles (above)
       const row = taskRows(body('route', cols, { todos: plan }))[1]!;
       expect(row).toMatch(/Wire the band .*\S\.\.\. +running/);
       expect(row).not.toMatch(/\S\.\.\.\S/);
@@ -68,7 +79,7 @@ describe('change 6: the route tab is the Board compact form', () => {
   }
   test('B2: a label that carries its owner in brackets is clipped at the end, never in the middle', () => {
     const todos = [{ id: 'T1', label: 'T1 read alphabetical.py and report every function in it, then compare the two lists line by line (alpha-explorer)', state: 'done' as const }];
-    for (const cols of [110, 80, 56, 40]) {
+    for (const cols of [110, 80, 56]) {
       const row = taskRows(body('route', cols, { todos }))[0]!;
       expect(row).toContain('T1 read alph');
       expect(row).not.toMatch(/\S\.\.\.\S/);

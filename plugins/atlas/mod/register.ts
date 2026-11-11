@@ -12,7 +12,8 @@ import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
 import { bandSpareRows, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { allSettled, easedNow, gaugeTargets, retargetAll, type GaugeMoves } from './band-motion';
-import { hudAgents, hudBudget, hudCompactRows, hudListsAgents, hudRows, isRunning, reclaimBlanks } from './hud';
+import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, isRunning, reclaimBlanks, segmentOf } from './hud';
+import { tierOf } from './hud-surface';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -54,9 +55,13 @@ const TICK_MS = SPINNER_MS; // one spinner frame per tick (design rev 4: 100 ms)
 const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
 const BAND_MIN_ROWS = 7; // the Mission Control band keeps at least this many rows; the HUD takes the rest of the budget
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
+const DOCK_ASKED_MIN_COLUMNS = 110; // an open made behind the person's prompt is "asked": the engine docks it beside a fullscreen transcript from 110 columns
 
 /** The pane opens by itself only docked: a fullscreen terminal wide enough to leave the transcript its room. */
 export const shouldDock = (v: { isFullscreen?: boolean; columns: number }): boolean => v.isFullscreen === true && v.columns >= DOCK_MIN_COLUMNS;
+
+/** The pane the first prompt of a run may open: fullscreen and at least 110 columns wide (narrower, an asked pane would sit inline above the prompt). */
+export const shouldDockAsked = (v: { isFullscreen?: boolean; columns: number } | undefined): boolean => v !== undefined && v.isFullscreen === true && v.columns >= DOCK_ASKED_MIN_COLUMNS;
 
 /** Toast why a pane waits undrawn, once per open call. */
 const toastUnplaced = ($: EngineInterface) => (r: { isPlaced: boolean; reason?: string }): void => {
@@ -136,6 +141,10 @@ let verdictSig = ''; // stat signature of stop-verdict.json at the last poll
 let gatesRunAt = -Infinity; // ms clock of the last gate run
 let pendingDrift: string[] = [];
 let paneChecked = false; // the unasked pane open is decided once per session
+let lastViewport: { isFullscreen?: boolean; columns: number } | undefined; // the last viewport the band render saw: the prompt hook has none of its own
+let promptDockDone = false; // the first prompt of the session asked for the docked pane (once)
+let paneClosedByPerson = false; // the person closed the pane by hand: no later prompt reopens it
+let modOnNow = false; // isModOn, mirrored for a hook that must open the pane before any await
 let dockWanted = false; // set by the first AbovePrompt render with a viewport, acted on by dockTick (renders may not write)
 let coreSeen: Set<string> | null = null; // verdict `id:status` seen by the last coreTick; null until its first (baseline) read
 let coreFinished: Record<string, boolean> = {}; // worker -> its offload had finished at the last coreTick
@@ -378,6 +387,23 @@ export function effectiveRows(maxRows: number, viewport: { rows: number; isFulls
 	if (viewport === undefined || viewport.isFullscreen === true || !Number.isFinite(viewport.rows)) return maxRows;
 	return Math.max(0, Math.min(maxRows, viewport.rows - inlineBelowRows(statusRows, running)));
 }
+/** Rows the band keeps once the HUD has taken the SUBAGENTS column names and the blank under the agents: its title row. */
+const BAND_KEEP_ROWS = 1;
+
+/** Rows the HUD may take of `budget`. `hudBudget` gives the compact floor (the plan, the agents, no column names); where the slot can also hold the
+ * SUBAGENTS column-name row, the blank between the plan and the agents, one blank under the agents and the band's title row, the floor
+ * is raised to hold them (critique 14: the header was in 3 of 33 frames at 110 columns and went missing mid-run at 150). */
+export function hudSlotCap(budget: number, compact: number, floor: number, bandRows: number, running: boolean, agentsListed: boolean): number {
+	const base = hudBudget(budget, compact, bandRows, running);
+	if (!agentsListed) return base;
+	return budget - floor - 1 >= BAND_KEEP_ROWS ? Math.max(base, floor) : base; // floor: hudFloorRows, the compact form with the column names and the blank between the blocks
+}
+
+/** Blank rows between the last agent row and the band: one, while the band keeps its title row. */
+export function hudGapRows(listsAgents: boolean, hudRowCount: number, budget: number): number {
+	return listsAgents && budget - hudRowCount - 1 >= BAND_KEEP_ROWS ? 1 : 0;
+}
+
 const HUD_STATE_REFRESH_MS = 5000; // while starved the file is rewritten at least this often so the status line's freshness check holds
 let lastHudSig: string | undefined;
 let lastHudWriteMs = 0;
@@ -937,6 +963,9 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		await update($, paneOpenedState, () => false);
 		paneChecked = false;
 		dockWanted = false;
+		promptDockDone = false;
+		paneClosedByPerson = false;
+		modOnNow = modOn;
 		clearLook();
 		easeTimer?.cancel();
 		easeTimer = null;
@@ -1038,6 +1067,23 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return next(e);
 	});
 
+	// The first prompt of a run opens the docked pane where the engine would not (unasked it waits for 144 columns; an open behind the
+	// person's prompt is asked and docks from 110). Once per session, never after a by-hand close, never when the band's own dock
+	// check already docked it (150), never below 110 or inline. `ui.open` is called before any await: only then is the prompt behind it.
+	on('prompt.submit', async ($, e, next) => {
+		if (booted?.interactive === true && modOnNow && !promptDockDone && !paneClosedByPerson && !paneChecked && shouldDockAsked(lastViewport)) {
+			promptDockDone = true;
+			const opened = $.ui.open(PANE_DOCK);
+			try {
+				await update($, paneOpenedState, () => true);
+				toastUnplaced($)(await opened);
+			} catch (err) {
+				reportFailure($, `atlas: opening the pane failed: ${String(err)}`);
+			}
+		}
+		return next(e);
+	});
+
 	// Usage figures (tokens / context fill), pushed after each turn.
 	on('session.measure', async ($, e, next) => {
 		if (await read($, isModOn)) {
@@ -1083,6 +1129,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// skipped and the band never draws). The render only notes the wish; dockTick opens the pane.
 		// A terminal that starts below the floor (110 columns) and is widened later docks at the render that first fits;
 		// the check ends once it docked, so a pane the person closed stays closed.
+		lastViewport = e.viewport ? { isFullscreen: e.viewport.isFullscreen, columns: e.viewport.columns } : undefined;
 		if (!paneChecked && e.viewport) {
 			dockWanted = shouldDock(e.viewport);
 			paneChecked = dockWanted;
@@ -1112,14 +1159,16 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
-		const hudCap = hudBudget(budget, hudCompactRows(hudIn, columns), BAND_MIN_ROWS, running);
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const agentsListed = agents.length > 0 && tierOf(columns) !== 'min';
+		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed);
 		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
 		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
 		const hud = hudOn ? reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandIn(rows as Segment[][])), drawHud) as Segment[][] : [];
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
 		const compact = hudCompactRows(hudIn, columns);
-		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudBudget(cap, compact, BAND_MIN_ROWS, running) }).length : 0;
+		const floor = hudFloorRows(hudIn, columns, snapshot.now);
+		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudSlotCap(cap, compact, floor, BAND_MIN_ROWS, running, agentsListed) }).length : 0;
 		const inline = e.viewport !== undefined && e.viewport.isFullscreen !== true;
 		void publishHudState($, snapshot.root, {
 			maxRows: budget,
@@ -1130,7 +1179,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			starved: inline ? shownAt(effectiveRows(slotRows, e.viewport, report?.fullRows ?? null, runningCount)) < wanted : hudStarvedAtFullLine(slotRows, wanted, shownAt, report),
 		});
 		const band = bandTree(els, bandIn(hud), bandHandlers($));
-		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
+		// One blank row between the last agent row and the band (A3), in the HUD's own panel fill.
+		const gapRow = hudGapRows(hudListsAgents(hud), hud.length, budget) > 0 ? [rowOf(els, [segmentOf({ t: ' '.repeat(columns), tone: 'text' }, look.ui)], columns)] : [];
+		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: [...hud.map((r) => rowOf(els, r, columns)), ...gapRow] })] : []), band, await next(e)] });
 	});
 
 	// The Atlas sidebar: a native tree, so its elements join the engine's focus ring.
@@ -1191,6 +1242,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// The person closed the pane (Esc or the close mark): /atlas-cc opens it again next time.
 	on('ui.close', async ($, e, next) => {
 		if (e.id === PANE_ID) {
+			if (e.origin?.kind === 'person') paneClosedByPerson = true; // a close by hand is final for the session: the prompt hook never reopens it
 			await update($, paneOpenedState, () => false);
 			await update($, viewState, () => 'route'); // reopen on the first tab, not the last one used
 		}
