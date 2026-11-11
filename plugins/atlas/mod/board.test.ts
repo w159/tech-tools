@@ -72,10 +72,14 @@ describe('board goldens', () => {
       expect(lines.length).toBe(3);
       for (const l of lines) {
         expect([cols, /\b(done|queued)\b/.test(l)]).toEqual([cols, true]);
-        expect([cols, /(alpha|beta|gamma)(-|\.\.\.)/.test(l)]).toEqual([cols, true]); // the owner, the T row's included
+        // B2: the owner column drops before a title is cut; it shows from 59 up here, where the 34-cell title fits beside it or the cut titles would share a head
+        if (cols >= 59) expect([cols, /(alpha|beta|gamma)(-|\.\.\.)/.test(l)]).toEqual([cols, true]); // the owner, the T row's included
         expect([cols, l.includes('-explorer)')]).toEqual([cols, false]); // not left in the title
       }
     }
+    // narrow: no owner cell, and no title cut shorter than it has to be
+    const narrow = boardText(boardBody(rows, { cols: 38, ui: ui('mocha') })).filter((l) => /^[▸ ] [●◇▲◐] /.test(l));
+    expect(narrow.some((l) => /(alpha|beta|gamma)(-|\.\.\.)/.test(l))).toBe(false);
     expect(boardText(boardBody(rows, { cols: 28, ui: ui('mocha') })).every((l) => !/\b(done|queued)\b/.test(l))).toBe(true);
   });
   test('A3: a dispatch row whose owner owns a plan row folds into it: a 5-item plan with 3 owned dispatches is 5 rows', () => {

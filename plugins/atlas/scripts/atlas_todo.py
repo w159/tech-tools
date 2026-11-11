@@ -253,8 +253,17 @@ def counts(board: dict, session_id: Optional[str] = None) -> dict:
     items = _for_session(board.get("items", []), session_id)
     done = sum(1 for i in items if i.get("status") == "completed")
     total = len(items)
+    dispatches = sum(1 for i in items if i.get("origin") == "dispatch")
+    plan = total - dispatches
     return {
         "needed": total,
+        # `needed` (and the Stop gate's open count) stays strict over every item; the split says how many are the lead's plan
+        # and how many are hook-added dispatch rows, which the Board tab folds into their plan rows.
+        "plan": plan,
+        "dispatches": dispatches,
+        "summary": f"needed {plan} plan items, {dispatches} dispatches"
+        if dispatches
+        else f"needed {total} items",
         "remaining": total - done,
         "complete": done,
         "claimed": sum(
@@ -649,14 +658,18 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
             if item.get("status") == "completed":
                 item["archived"] = True
                 archived += 1
-            elif not (item.get("launch") and _launch_live(item)) and (
-                # a recently updated item is live work (reap ticks pass another
-                # session id): carry it on, never expire it
-                now - float(item.get("updated_at") or 0) >= _CARRY_FRESH_S
-            ) and (
-                now - float(item.get("created_at") or item.get("updated_at") or now)
-                > _CARRY_MAX_AGE_S
-                or int(item.get("carries") or 0) >= _CARRY_MAX_CARRIES
+            elif (
+                not (item.get("launch") and _launch_live(item))
+                and (
+                    # a recently updated item is live work (reap ticks pass another
+                    # session id): carry it on, never expire it
+                    now - float(item.get("updated_at") or 0) >= _CARRY_FRESH_S
+                )
+                and (
+                    now - float(item.get("created_at") or item.get("updated_at") or now)
+                    > _CARRY_MAX_AGE_S
+                    or int(item.get("carries") or 0) >= _CARRY_MAX_CARRIES
+                )
             ):
                 # stale backlog from dead sessions: archive (restorable), never re-surface
                 item["archived"] = True
@@ -694,7 +707,9 @@ def rotate_archive(root: Optional[str], max_age_s: float = _ARCHIVE_AGE_S) -> in
         keep, old = [], []
         for item in board.get("items", []):
             at = float(item.get("archived_at") or item.get("updated_at") or 0)
-            (old if item.get("archived") and now - at > max_age_s else keep).append(item)
+            (old if item.get("archived") and now - at > max_age_s else keep).append(
+                item
+            )
         if not old:
             return 0
         adir = board_path(root).parent / "archive"
@@ -829,7 +844,9 @@ def sweep(root: Optional[str], ttl_s: int = 86400) -> int:
 NOTES_SUBDIR = "board"
 NOTE_FILE_SUFFIX = ".jsonl"
 _NOTE_NAME_BAD = re.compile(r"[^A-Za-z0-9_.-]")
-NOTES_ARCHIVE_SUBDIR = "archive"  # sibling of the owner files; readers glob *.jsonl non-recursively
+NOTES_ARCHIVE_SUBDIR = (
+    "archive"  # sibling of the owner files; readers glob *.jsonl non-recursively
+)
 NOTE_ARCHIVE_DEFAULT_DAYS = 14
 # Cutoffs are read per call so an operator (or a test) can override them via env.
 NOTE_MAX_BYTES = 8192
@@ -869,7 +886,7 @@ def _fit_note_text(text: str, kind: str) -> str:
     if kind not in _NOTE_TRUNCATE_KINDS:
         raise NoteTooLarge(len(raw), limit)
     marker = f"[truncated {len(raw) - limit} bytes]\n"
-    keep = raw[-(limit - len(marker.encode())):]
+    keep = raw[-(limit - len(marker.encode())) :]
     return marker + keep.decode("utf-8", errors="ignore")
 
 
@@ -906,7 +923,9 @@ def _owner_secret(root: Optional[str]) -> bytes:
 
 
 def _owner_token(root: Optional[str], name: str) -> str:
-    return hmac.new(_owner_secret(root), name.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(
+        _owner_secret(root), name.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
 
 
 def _issued_marker(root: Optional[str], name: str) -> Path:
@@ -1000,7 +1019,9 @@ def note(
         record["ts"] = time.time()
         line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
         path = target / f"{name}{NOTE_FILE_SUFFIX}"
-        if _ends_mid_line(path):  # a crash mid-append: don't glue this note onto the torn tail
+        if _ends_mid_line(
+            path
+        ):  # a crash mid-append: don't glue this note onto the torn tail
             line = b"\n" + line
         fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
         try:
@@ -1008,7 +1029,9 @@ def note(
         finally:
             os.close(fd)
         with contextlib.suppress(OSError):
-            if path.stat().st_size > _env_int("ATLAS_NOTE_ARCHIVE_BYTES", NOTE_ARCHIVE_BYTES):
+            if path.stat().st_size > _env_int(
+                "ATLAS_NOTE_ARCHIVE_BYTES", NOTE_ARCHIVE_BYTES
+            ):
                 _archive_owner_file(target, path, NOTE_ARCHIVE_DEFAULT_DAYS * 86400)
     return record
 
@@ -1026,7 +1049,9 @@ def _ends_mid_line(path: Path) -> bool:
         return False
 
 
-def _archive_owner_file(target: Path, path: Path, max_age_s: float, now: Optional[float] = None) -> int:
+def _archive_owner_file(
+    target: Path, path: Path, max_age_s: float, now: Optional[float] = None
+) -> int:
     """Move notes older than `max_age_s` from one owner file into
     `archive/<owner>-<YYYYMMDD>.jsonl`. The caller holds the notes lock. The owner file
     is rewritten via tmp + os.replace, so it shrinks and gets a new inode: the worker
@@ -1055,7 +1080,9 @@ def _archive_owner_file(target: Path, path: Path, max_age_s: float, now: Optiona
     adir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d", time.gmtime(now))
     with open(adir / f"{path.stem}-{stamp}{NOTE_FILE_SUFFIX}", "ab") as fh:
-        fh.write(b"\n".join(old) + b"\n")  # archive first: a crash here duplicates, never loses
+        fh.write(
+            b"\n".join(old) + b"\n"
+        )  # archive first: a crash here duplicates, never loses
         fh.flush()
         os.fsync(fh.fileno())
     tmp = path.with_suffix(".jsonl.tmp")
@@ -1345,7 +1372,9 @@ def _reg_read(root: Optional[str], strict: bool = False) -> dict:
         data = json.loads(raw)
         if isinstance(data, dict) and isinstance(data.get("channels"), dict):
             return data
-        reason: BaseException = ValueError("registry is not an object with a channels map")
+        reason: BaseException = ValueError(
+            "registry is not an object with a channels map"
+        )
     except ValueError as exc:
         reason = exc
     if strict:
@@ -1353,7 +1382,9 @@ def _reg_read(root: Optional[str], strict: bool = False) -> dict:
     return {"version": 1, "channels": {}}
 
 
-def _quarantine_registry(root: Optional[str], path: Path, raw: str, reason: BaseException) -> ChannelRegistryCorrupt:
+def _quarantine_registry(
+    root: Optional[str], path: Path, raw: str, reason: BaseException
+) -> ChannelRegistryCorrupt:
     """Keep a copy as channels.json.corrupt-<epoch ms> (skipped when the newest copy is
     identical, so a persistent fault does not pile up copies), record a fault, and
     return the error for the caller to raise."""
@@ -1560,7 +1591,9 @@ _PS_RUN = subprocess.run
 def _ps_ancestor_table():
     return _PS_RUN(
         ["ps", "-A", "-o", "pid=,ppid=,comm="],
-        capture_output=True, text=True, timeout=2,
+        capture_output=True,
+        text=True,
+        timeout=2,
     )
 
 
@@ -1605,7 +1638,9 @@ def _lead_pid(run=None) -> Optional[int]:
             return None
         table: dict[int, tuple[int, str]] = {}
         for line in r.stdout.splitlines():
-            parts = line.strip().split(None, 2)  # comm may contain spaces (macOS full paths)
+            parts = line.strip().split(
+                None, 2
+            )  # comm may contain spaces (macOS full paths)
             if len(parts) != 3 or not parts[0].isdigit() or not parts[1].isdigit():
                 continue
             table[int(parts[0])] = (int(parts[1]), os.path.basename(parts[2].strip()))
@@ -1638,7 +1673,9 @@ def open_lead_channel(
     base = _resolve_base(root)
     main, branch = _main_parts(base)
     lead = _sanitize_owner(lead_name)
-    lp = _lead_pid()  # outside the registry lock: a slow `ps` must not extend lock hold time
+    lp = (
+        _lead_pid()
+    )  # outside the registry lock: a slow `ps` must not extend lock hold time
 
     def fn(reg: dict) -> dict:
         mchan = _upsert(reg, main, "main", None, None, base, branch)
@@ -2112,8 +2149,7 @@ def channel_brief(
             + f'Inbox: {base} inbox --root "{rt}" --owner {name}'
         )
     return (
-        head
-        + f'Post: {base} note --root "{rt}" --channel "{channel}" --owner {name} '
+        head + f'Post: {base} note --root "{rt}" --channel "{channel}" --owner {name} '
         f'--to <sibling|{lead}|all> "<text>" (to=all reaches the whole channel).\n'
         f"Posting is REQUIRED, one short line each: (1) on start, your intent to {lead}; "
         f"(2) on any cross-file or shared-contract change, notify the affected sibling; "
@@ -2243,7 +2279,14 @@ def _cli(argv: Optional[List[str]] = None) -> int:
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
-        elif a in ("--force", "--unique", "--json", "--dry-run", "--only-project", "--all"):
+        elif a in (
+            "--force",
+            "--unique",
+            "--json",
+            "--dry-run",
+            "--only-project",
+            "--all",
+        ):
             flags[a[2:]] = "1"
             i += 1
         else:
@@ -2259,7 +2302,9 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             return 0
         stray = [p for p in positional[1:] if p.startswith("--")]
         if stray:
-            sys.stderr.write("atlas_todo.py add: unknown flag %s\n%s" % (stray[0], _USAGE))
+            sys.stderr.write(
+                "atlas_todo.py add: unknown flag %s\n%s" % (stray[0], _USAGE)
+            )
             return 2
     out: Dict[str, Any]
     try:
@@ -2396,7 +2441,11 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             elif owner_token_issued(root, owner) and not verify_owner_token(
                 root,
                 owner,
-                (flags.get("owner-token") or os.environ.get("ATLAS_OWNER_TOKEN") or "").strip(),
+                (
+                    flags.get("owner-token")
+                    or os.environ.get("ATLAS_OWNER_TOKEN")
+                    or ""
+                ).strip(),
             ):
                 given = flags.get("owner-token") or os.environ.get("ATLAS_OWNER_TOKEN")
                 out = {

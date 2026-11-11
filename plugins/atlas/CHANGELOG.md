@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed (critique 8 B1): `atlas_todo.py counts` adds `plan`, `dispatches` and `summary` (`needed 5 plan items, 3 dispatches`) beside the unchanged strict `needed`/`remaining`/`complete`; the Board tab footer names the folded dispatches (`5 items · 3 dispatches folded`) (`board-model.ts` `boardFolded`).
+- Fixed (critique 8 B2): the Board's owner column drops before a title is cut; it stays only when every title fits beside it, or when the cut titles would share one head (`board-model.ts` `boardBody`).
+- Fixed (critique 8 B3): a queued row whose owner agent runs reads `running` on the Board, the TODO block and omp; `ownTodos` names the worker a plan title carries (`board-model.ts` `itemState`/`titleOwner`, `data/todos.ts`).
+- Fixed (critique 8 B4): the `▸` cursor is never drawn on a queued TODO row (`hud-surface.ts`).
+
 ## 17.8.0 - 2026-11-11
 
 - Fixed: one blocker evaluation (critique 7 A1/A2): the gates tab `Team gate` row now calls the Stop gate's own `_team_gate` (red exactly when Stop blocks on (s)), and the band reason is one string at every width, `<gate> failing` or `<n> gates failing`, never `tripwire` / `2 failing` / `2 checks failing`.

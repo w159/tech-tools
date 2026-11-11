@@ -59,6 +59,7 @@ const cleanEvidence = (e: string | undefined): string => (e ?? '').replace(/^\s*
 export function itemState(status: string, ownerState?: UiState): UiState {
   const own = stateOfStatus(status);
   if (own === 'done') return own;
+  if (own === 'queued' && ownerState === 'running') return 'running'; // the owner is at work: a row still reading queued says running
   if (ownerState === 'failed') return 'failed';
   if (ownerState === 'waiting' || ownerState === 'blocked') return 'blocked';
   return own;
@@ -94,7 +95,13 @@ const foldStatus = (s: string): string => (s === 'completed' ? 'ended' : s);
 /** Rows of `items` in board order: the plan rows, then the dispatch rows that no plan row owns. A dispatch row whose owner owns a plan
  * row is that row's worker, not a second item: it is folded into the plan row (its state, claim time, estimate and evidence fill what the
  * plan row lacks), so the board lists exactly the plan (5 items, 3 of them owned: 5 rows). */
-export const boardRowsOf = (items: readonly BoardSource[], nowSecs?: number): BoardRow[] => {
+export const boardRowsOf = (items: readonly BoardSource[], nowSecs?: number): BoardRow[] => foldBoard(items).rows.map((i) => toBoardRow(i, nowSecs));
+
+/** How many dispatch rows `boardRowsOf` folded into plan rows: the footer names them (`5 items · 3 dispatches folded`), so the tab and the helper's
+ * `needed 5 plan items, 3 dispatches` agree. */
+export const boardFolded = (items: readonly BoardSource[]): number => foldBoard(items).folded;
+
+function foldBoard(items: readonly BoardSource[]): { rows: BoardSource[]; folded: number } {
   const plan = items.filter((i) => i.origin !== 'dispatch');
   const dispatch = items.filter((i) => i.origin === 'dispatch');
   const names = new Set(dispatch.map((i) => i.owner).filter((n): n is string => !!n));
@@ -103,23 +110,32 @@ export const boardRowsOf = (items: readonly BoardSource[], nowSecs?: number): Bo
   owned.forEach((i, n) => { if (i.owner && !firstOf.has(i.owner)) firstOf.set(i.owner, n); });
   const folded = owned.slice();
   const alone: BoardSource[] = [];
+  let count = 0;
   for (const d of dispatch) {
     const at = d.owner ? firstOf.get(d.owner) : undefined;
     if (at === undefined) { alone.push(d); continue; }
+    count++;
     const p = folded[at]!;
     if (p.status === 'completed' || p.status === 'done') continue; // a finished plan row stays finished
     const pick = (FOLD_RANK[d.status] ?? 0) > (FOLD_RANK[p.status] ?? 1) ? foldStatus(d.status) : p.status;
     folded[at] = { ...p, status: pick, claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
   }
-  return [...folded, ...alone].map((i) => toBoardRow(i, nowSecs));
-};
+  return { rows: [...folded, ...alone], folded: count };
+}
 
 /** A plan row names its worker in the title (`T1 read alpha.py (alpha-explorer)`) while the store holds no owner: when that
  * trailing parenthesis is one of the dispatched workers, the name moves to the owner column and leaves the label. */
 function withTitleOwner(it: BoardSource, workers: ReadonlySet<string>): BoardSource {
-  if (it.owner || workers.size === 0) return it;
-  const m = /\s*\(([^()\s]+)\)\s*$/.exec(it.content);
-  return m && workers.has(m[1]!) ? { ...it, content: it.content.slice(0, m.index), owner: m[1]! } : it;
+  if (workers.size === 0) return it;
+  const m = titleOwner(it.content, workers);
+  return m && (!it.owner || it.owner === m.name) ? { ...it, content: it.content.slice(0, m.at), owner: m.name } : it; // an owner already set from the title (ownTodos) still leaves the label
+}
+
+/** The worker named by a title's trailing parenthesis (`T1 read alpha.py (alpha-explorer)`) when it is one of `workers`, and where that parenthesis starts.
+ * The one rule every surface uses to match a plan row to its agent: the Board fold, the HUD TODO rows. */
+export function titleOwner(content: string, workers: { has(name: string): boolean }): { name: string; at: number } | undefined {
+  const m = /\s*\(([^()\s]+)\)\s*$/.exec(content);
+  return m && workers.has(m[1]!) ? { name: m[1]!, at: m.index } : undefined;
 }
 
 /** Counts of a board by state, plus done and total: the numbers the ribbon and the band both state. */
@@ -136,7 +152,7 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= NARROW_MIN ? 'compact' : 'narrow');
 
@@ -203,10 +219,16 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   const keys = o.motion ? boardKeys(rows) : [];
   const compact = form(o.cols) === 'compact';
   const ownerAll = compact ? Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(x.owner)))) : 0;
-  // Under COMPACT_MIN the owner column only stays while the label keeps LABEL_MIN cells; it never pushes the state off the row.
+  // The owner column drops before any title is cut (critique 8: `T4 combine th...` beside `alpha...`): it stays only while the widest title still shows
+  // whole beside it (head 4 + title + gap, the state word, a gap), and so a title keeps at least LABEL_MIN cells before any owner cell shows.
   const widest = Math.max(0, ...rows.map((x) => cells(x.label)));
-  const ownerFit = Math.min(ownerAll, o.cols - (Math.min(widest, LABEL_MIN) + 5) - STATE_W - 2); // a title shorter than LABEL_MIN needs only its own width
-  const ownerW = o.cols >= COMPACT_MIN ? ownerAll : ownerFit >= 5 ? ownerFit : 0; // a sliver of a name tells nothing
+  const ownerFit = Math.min(ownerAll, o.cols - Math.max(widest, LABEL_MIN) - 5 - STATE_W - 1 - 1);
+  // Titles the row cuts anyway keep the owner only when, without it, the cut titles would read the same (one shared head): the owner then tells the rows apart,
+  // and the title keeps LABEL_MIN cells beside it (the old rule). Cut titles that stay distinct on their own never trade cells for an owner.
+  const cutBare = rows.map((x) => clip(x.label, o.cols - 13));
+  const apart = new Set(cutBare).size === cutBare.length;
+  const sharedHead = o.cols >= COMPACT_MIN ? ownerAll : Math.min(ownerAll, o.cols - (LABEL_MIN + 5) - STATE_W - 2);
+  const ownerW = ownerFit >= 5 ? ownerFit : compact && !apart && sharedHead >= 5 ? sharedHead : 0; // a sliver of a name tells nothing
   // Compact: the owner column takes its width from the right, the state column slides left to make room (never under 26 at 60+, never past the widest label).
   const avail = o.cols - STATE_W - 1 - (ownerW ? ownerW + 1 : 0);
   const stateColC = compact ? Math.max(Math.min(COL.stateCompact, avail), Math.min(avail, widest + 7)) : undefined;
@@ -219,7 +241,9 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
 /** The whole surface: ribbon (`N items` on the right in the plain form), a blank row, then the body. */
 export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const rib = ribbon(o.cols, 'BOARD', o.rich ? '' : `${rows.length} items`, o.ui);
-  return [{ runs: rib }, { runs: [r(' ')] }, ...boardBody(rows, o)];
+  const n = o.folded ?? 0;
+  const footer: BoardLine[] = n > 0 && rows.length > 0 ? [{ runs: [r(`  ${rows.length} items · ${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted')] }] : [];
+  return [{ runs: rib }, { runs: [r(' ')] }, ...boardBody(rows, o), ...footer];
 }
 
 /** Plain text of lines, trailing blanks trimmed: what the goldens compare. */
