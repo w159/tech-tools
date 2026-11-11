@@ -19,7 +19,7 @@ export const golden: string[] = [
   " ● implementer-layout  implementer  finished                                                                      5m51s",
   " ● implementer-gates   implementer  finished                                                                      1m58s",
   "",
-  " implementer-layout to lead   T1 and T2 merged                                                                    10:07",
+  " implementer-layout to lead   sent a message                                                                      10:07",
   " checks  ● lint  ● test  ■ doctor"
 ];
 
