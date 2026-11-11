@@ -566,3 +566,6 @@ plugins/atlas/**/.claude/.atlas_nudge
 **/*.jceks
 **/*.keytab
 **/*.p7b
+
+# host-generated plugin types (a dir or a symlink; never tracked)
+plugins/atlas/.claude-plugin/types
