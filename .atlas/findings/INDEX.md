@@ -64,6 +64,10 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-11 | vb-L2-L11-R5-S1-L19 | verified | L2, L11, R5, S1, L19 tests fail on old code and pass on new | [2026-11-11_vb-l2-l11-r5-s1-l19.md](2026-11-11_vb-l2-l11-r5-s1-l19.md) |
+| 2026-11-11 | vb-L13 | rejected | L13 not fixed: HUD running vs band queued for same worker | [2026-11-11_vb-l13.md](2026-11-11_vb-l13.md) |
+| 2026-11-11 | vb-L1 | rejected | L1: old hudRows kept the completed row; test fails on old for format only | [2026-11-11_vb-l1.md](2026-11-11_vb-l1.md) |
+| 2026-11-11 | vb-gates | rejected | Gates: bun/tsc green but kit has 3 real failures (register-sidebar) absent at f4e6c29c | [2026-11-11_vb-gates.md](2026-11-11_vb-gates.md) |
 | 2026-11-10 | verify-be89-release | rejected | 17.5.0 tree: 10 tests fail on tree but pass on HEAD (stale tests/codex hooks json/crew.md TOC); live checks 1-4,6,8 pass | [2026-11-10_verify-be89-release.md](2026-11-10_verify-be89-release.md) |
 | 2026-11-10 | v7480-resolutions | verified | 59 conflict rows all resolved; 42 superseded/already-present rows confirmed | [2026-11-10_v7480-resolutions.md](2026-11-10_v7480-resolutions.md) |
 | 2026-11-10 | v7480-mktdesc | rejected | marketplace atlas description differs from plugin.json (contract test fails) | [2026-11-10_v7480-mktdesc.md](2026-11-10_v7480-mktdesc.md) |
@@ -85,6 +89,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-10 | port-verify-29a8 | verified | Port: resolutions, conflicts, suites, armada 2.3.0 verified; 3 new dup ids and crew.ts gw-docs state noted | [2026-11-10_port-verify-29a8.md](2026-11-10_port-verify-29a8.md) |
 | 2026-11-10 | port-gateway-branch-resolutions | verified | Port of 28 unported gateway-branch commits: every commit/file pair applied, present or resolved with a verdict | [2026-11-10_port-gateway-branch-resolutions.md](2026-11-10_port-gateway-branch-resolutions.md) |
 | 2026-11-10 | mod-crew-reader-live-shape | rejected | Mod crew reader: dead pid without exit file shows a worker as running | [2026-11-10_mod-crew-reader-live-shape.md](2026-11-10_mod-crew-reader-live-shape.md) |
+| 2026-11-10 | fixwave-f4e6c29c | verified | f4e6c29c: D1,D2(note),D3,D4,D6,D7,D11 and mod D1-D9 reproduced; D2 notes-read gap and omp/mod legacy-row mismatch found | [2026-11-10_fixwave-f4e6c29c.md](2026-11-10_fixwave-f4e6c29c.md) |
 | 2026-11-10 | colony-routing-S2 | verified | tripwire: 2nd explorer denied dispatch_denied team; impl->ver allowed; no tmux advisory; run resets per prompt | [2026-11-10_colony-routing-s2.md](2026-11-10_colony-routing-s2.md) |
 | 2026-11-10 | colony-routing-S1 | verified | prompt_optimizer: nudge max 383B<700, multi-file build -> atlas_crew.py run | [2026-11-10_colony-routing-s1.md](2026-11-10_colony-routing-s1.md) |
 | 2026-11-10 | colony-routing-17.4.3-suites | verified | Colony routing change: full suites green on the 17.4.2 worktree after fix round 2 | [2026-11-10_colony-routing-17-4-3-suites.md](2026-11-10_colony-routing-17-4-3-suites.md) |

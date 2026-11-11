@@ -69,6 +69,10 @@ export type MissionModel = {
   rich?: boolean;
   /** Theme, ASCII and colour mode; absent reads the environment. */
   ui?: Ui;
+  /** The HUD's Subagents block lists the workers: the band keeps the counts and draws no worker rows. */
+  workersInHud?: boolean;
+  /** Gauge values on screen while a figure glides (0..1); the labels keep the true figures. Absent: the figure itself. */
+  eased?: { todo?: number; ctx?: number };
 };
 
 const MID = 80; // below this, only the band
@@ -130,7 +134,8 @@ function phaseIndex(m: MissionModel): number {
   return Math.max(0, m.phases.indexOf(m.phase));
 }
 
-const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.total ? Math.min(1, m.done / m.total) : 0, ui);
+const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.todo ?? (m.total ? Math.min(1, m.done / m.total) : 0), ui);
+const ctxGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
 
 /** Narrowest width (columns) of each standard form: the 120, 80, 60 and 40 column mocks. A form also has to fit. */
 const TIER_MIN = [100, 80, 50, 0] as const;
@@ -141,29 +146,31 @@ function standardForms(m: MissionModel, ui: Ui): Run[][] {
   const idx = phaseIndex(m);
   const n = m.phases.length;
   const phaseNo = `${Math.min(idx + 1, n)}/${n}`;
+  const idle = !m.blocked && !isRunning(m);
   const name: Run[] = m.blocked
     ? [stateRun('blocked', ui), r(' blocked', 'text', true), r(' · needs you', 'sub')]
-    : [r(m.phase, 'text', true), r(` · phase ${phaseNo}`, 'sub')];
+    : idle ? [r('idle', 'text', true), r(` · phase ${phaseNo}`, 'sub')] : [r(m.phase, 'text', true), r(` · phase ${phaseNo}`, 'sub')];
   const todo = m.total ? `${m.done}/${m.total}` : '';
   const counts = bandCounts(m, ui, false);
   const tiny = bandCounts(m, ui, true);
   const full: Run[] = [
     ...cap, r('  '), ...name,
     ...(m.total ? [r('   todo '), ...todoGauge(m, ui, 10), r(` ${m.done} of ${m.total}`, 'sub')] : []),
-    ...(m.ctx !== undefined ? [r('   ctx '), ...gauge(8, m.ctx, ui), r(` ${percent(m.ctx)}`, 'sub')] : []),
+    ...(m.ctx !== undefined ? [r('   ctx '), ...ctxGauge(m, ui, 8), r(` ${percent(m.ctx)}`, 'sub')] : []),
     ...(counts.length ? [r('   '), ...counts] : []),
   ];
-  const mid: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `phase ${phaseNo}`}${todo ? ` · todo ${todo}` : ''}`, 'sub'), ...(counts.length ? [r(' · ', 'sub'), ...counts] : [])];
-  const short: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `ph ${phaseNo}`}${todo ? ` · todo ${todo}` : ''}`, 'sub'), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
-  const small: Run[] = [...cap, r(todo ? ` todo ${todo}` : m.blocked ? ' blocked' : '', 'sub'), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
+  const mid: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}phase ${phaseNo}`}${todo ? ` · todo ${todo}` : ''}`, 'sub'), ...(counts.length ? [r(' · ', 'sub'), ...counts] : [])];
+  const short: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}ph ${phaseNo}`}${todo ? ` · todo ${todo}` : ''}`, 'sub'), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
+  const small: Run[] = [...cap, r(`${m.blocked ? ' blocked' : idle ? ' idle' : ''}${todo ? `${m.blocked || idle ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
   return [full, mid, short, small];
 }
 
 /** The rich band: the capsule and the numbered phase rail, a blank row, then the todo and ctx gauges and the counts. */
 function richBand(m: MissionModel, ui: Ui): Line[] {
-  const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui)];
+  const idle = !m.blocked && !isRunning(m);
+  const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(idle ? [r('   '), r('idle', 'text', true)] : [])];
   const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done} of ${m.total} · ${percent(m.done / m.total)}`, 'sub')] : [];
-  const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...gauge(10, m.ctx, ui), r(` ${percent(m.ctx)}`, 'sub')] : [];
+  const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxGauge(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
   const counts = bandCounts(m, ui, false);
   const to = (row: Run[], col: number): Run[] => (row.length ? atColumn(row, col) : [r(' '.repeat(col))]);
   let row = todo;
@@ -318,7 +325,7 @@ function idleLines(m: MissionModel): Line[] {
 }
 
 function runningLines(m: MissionModel): Line[] {
-  const shown = byAttention(m.workers);
+  const shown = m.workersInHud ? [] : byAttention(m.workers); // the HUD's Subagents block lists them; the band keeps the counts
   const foot = footerLine(m);
   const band = bandLines(m);
   const boardWant = m.boardRows ?? 0;

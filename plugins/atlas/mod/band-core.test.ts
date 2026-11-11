@@ -25,7 +25,7 @@ describe('band core row', () => {
   test('idle: the core row sits directly under the band, with muted labels and plain figures', () => {
     for (const columns of [120, 160]) {
       const rows = rowsOf(columns, 12, true);
-      expect(rows[0]).toContain('implement');
+      expect(rows[0]).toContain('idle');
       expect(rows[1]).toContain('contract  ');
       expect(rows[1]).toContain('verdicts  ');
       expect(rows.filter((r) => r.includes('contract  '))).toHaveLength(1);

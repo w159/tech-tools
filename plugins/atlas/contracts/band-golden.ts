@@ -21,7 +21,7 @@ export const golden: string[] = [
 /** Idle: the run is closed, the band reads done, the last run follows, then the core row (core-golden.ts) and the footer.
  * The Claude band adds its key buttons to the footer only when handlers are wired; the golden test wires none. */
 export const idleGolden: string[] = [
-  "◖ ◆ ATLAS ◗  done · phase 6/6   todo ██████████ 6 of 6",
+  "◖ ◆ ATLAS ◗  idle · phase 6/6   todo ██████████ 6 of 6",
   " last run  3 workers · 1m31s · all ok",
   " contract  header 3/4   verdicts  1 verified · 1 refuted   offload  17.9k kept, 608 back (30x)   route  verify/low ●",
   " checks  ● completion  ■ tripwire  ● routing"

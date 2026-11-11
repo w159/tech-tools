@@ -10,8 +10,9 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code';
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
-import { bandTree, railPhase, type BandHandlers } from './band';
-import { hudAgents, hudBudget, hudCompactRows, hudRows, isRunning } from './hud';
+import { bandTree, hudPhases, railPhase, type BandHandlers } from './band';
+import { allSettled, easedNow, gaugeTargets, retargetAll, type GaugeMoves } from './band-motion';
+import { hudAgents, hudBudget, hudCompactRows, hudListsAgents, hudRows, isRunning } from './hud';
 import { rowOf } from './runs';
 import { activeCount, liveWorkers } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -26,9 +27,9 @@ import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
 import { headerPhaseOf, registerRestyle } from './restyle';
 import { mergeToasts, registerNotify, stateToast } from './notify';
-import { uiFromEnv } from './atlas-ui';
+import { EASE_FRAMES, EASE_MS, hostEnv, SPINNER_MS, uiFromEnv, type Ui } from './atlas-ui';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
-import type { TeamTool } from './orchestra-types';
+import type { LiveSnapshot, TeamTool } from './orchestra-types';
 import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
 
 const REBUILD_MS = 1500;
@@ -45,7 +46,8 @@ const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: t
 // only flipped an inline fold that needed spare band rows and drew nothing in a short slot).
 export const BOARD_ID = 'atlas-board';
 const PANE_BOARD = { id: BOARD_ID, title: 'Board', rows: 14, closeOnEscape: true, focus: true } as const;
-const TICK_MS = 250;
+const TICK_MS = SPINNER_MS; // one spinner frame per tick (design rev 4: 100 ms), written only while a worker is live
+const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
 const BAND_MIN_ROWS = 7; // the Mission Control band keeps at least this many rows; the HUD takes the rest of the budget
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
 
@@ -93,6 +95,8 @@ const recipientState = atom({ plugin: 'atlas', key: 'sidebarRecipient' } as cons
 const expandedState = atom({ plugin: 'atlas', key: 'sidebarExpanded' } as const, null);
 const draftState = atom({ plugin: 'atlas', key: 'sidebarDraft' } as const, '');
 const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
+const gaugeState = atom({ plugin: 'atlas', key: 'bandGauges' } as const, null as GaugeMoves | null); // the band gauges' glide, retargeted by the tick when a figure moves
+const easeTickState = atom({ plugin: 'atlas', key: 'easeTick' } as const, 0); // bumped by the ease timer so the band redraws each frame of a glide
 const lastHeaderState = atom({ plugin: 'atlas', key: 'lastHeader' } as const, null);
 const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
 const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // docs and the tab strip list route first
@@ -130,6 +134,43 @@ let coreTouched = new Set<string>(); // paths read by the build in progress; the
 let coreFindingsOk = true; // findings.json was readable in the last buildCore
 let soundOn: () => boolean = () => false;
 let tickTimer: { cancel(): void } | null = null;
+let easeTimer: { cancel(): void } | null = null; // running only while a gauge glides
+/** Theme, ASCII, colour depth and the rich switch as the live host reports them: its hooks have no `process`, so the environment is read through `$.env`, once per session. */
+let hostLook: { ui: Ui; rich: boolean } | null = null;
+async function lookOf($: EngineInterface): Promise<{ ui: Ui; rich: boolean }> {
+	if (hostLook) return hostLook;
+	// $.env.get takes a literal name (the engine lists the variables a module reads), so each read is spelled out.
+	const [theme, fgbg, ascii, lcAll, lcCtype, lang, noColor, colorterm, term, rich] = await Promise.all([
+		$.env.get('ATLAS_THEME').catch(() => undefined), $.env.get('COLORFGBG').catch(() => undefined), $.env.get('ATLAS_ASCII').catch(() => undefined),
+		$.env.get('LC_ALL').catch(() => undefined), $.env.get('LC_CTYPE').catch(() => undefined), $.env.get('LANG').catch(() => undefined),
+		$.env.get('NO_COLOR').catch(() => undefined), $.env.get('COLORTERM').catch(() => undefined), $.env.get('TERM').catch(() => undefined),
+		$.env.get('ATLAS_BAND_RICH').catch(() => undefined),
+	]);
+	const env: Record<string, string | undefined> = { ...hostEnv() };
+	for (const [k, v] of Object.entries({ ATLAS_THEME: theme, COLORFGBG: fgbg, ATLAS_ASCII: ascii, LC_ALL: lcAll, LC_CTYPE: lcCtype, LANG: lang, NO_COLOR: noColor, COLORTERM: colorterm, TERM: term, ATLAS_BAND_RICH: rich })) if (typeof v === 'string') env[k] = v;
+	hostLook = { ui: uiFromEnv(env), rich: env.ATLAS_BAND_RICH === '1' };
+	return hostLook;
+}
+
+/** Retarget the band gauges to the snapshot's figures; when one moved, start the glide timer (it stops itself on landing). */
+async function easeTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
+	const now = await $.clock.now();
+	const cur = await read($, gaugeState);
+	const next = retargetAll(cur, gaugeTargets(snap), now);
+	if (next === cur) return;
+	await update($, gaugeState, () => next);
+	if (cur === null || easeTimer) return; // a first sight does not glide
+	easeTimer = $.clock.every(EASE_STEP_MS, () => {
+		void (async () => {
+			const g = await read($, gaugeState);
+			await update($, easeTickState, (n) => n + 1);
+			if (!g || allSettled(g, await $.clock.now())) {
+				easeTimer?.cancel();
+				easeTimer = null;
+			}
+		})().catch(() => undefined);
+	});
+}
 /** A spawn-recorded agent the host list does not (yet) contain is only presumed gone after this long. */
 const SPAWN_GRACE_MS = 15_000;
 
@@ -748,7 +789,7 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
  * State first, then the name, then one fact (notify.ts stateToast), merged into one toast per read (mergeToasts). */
 function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null): void {
 	if (seen === null) return;
-	const ui = uiFromEnv();
+	const ui = hostLook?.ui ?? uiFromEnv();
 	const texts: string[] = [];
 	for (const v of m.verdicts) {
 		if (seen.has(`${v.id}:${v.status}`)) continue;
@@ -805,6 +846,10 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		await update($, paneOpenedState, () => false);
 		paneChecked = false;
 		dockWanted = false;
+		hostLook = null;
+		easeTimer?.cancel();
+		easeTimer = null;
+		await update($, gaugeState, () => null);
 		if (!modOn) return;
 		await update($, isInteractive, () => interactive);
 		builder = new SnapshotBuilder(engineFs($), $.plugin.root);
@@ -848,7 +893,9 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 			tickTimer = $.clock.every(TICK_MS, () => {
 				void (async () => {
 					const snap = await read($, snapshotState);
-					if (snap && activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
+					if (!snap) return;
+					await easeTick($, snap as LiveSnapshot);
+					if (activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
 				})().catch(() => undefined);
 			});
 		}
@@ -954,8 +1001,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		// The HUD draws the TODO tree and the Subagents block (rev 4 design); below 80 columns the block gives way to the band's counts.
 		const agents = hudAgents(live, snapshot.squad);
-		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root };
-		const hudView = { cols: columns, tick: await read($, spinnerTickState) };
+		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
+		const look = await lookOf($);
+		const tick = await read($, spinnerTickState);
+		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich };
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;
@@ -975,7 +1024,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			// fullscreen: the status line shares the slot, so add back what its full grid would take; inline it sits below the slot, so judge with the full grid taken off the viewport
 			starved: inline ? shownAt(effectiveRows(slotRows, e.viewport, report?.fullRows ?? null, runningCount)) < wanted : hudStarvedAtFullLine(slotRows, wanted, shownAt, report),
 		});
-		const band = bandTree(els, { snapshot, live, gates, columns, tick: await read($, spinnerTickState), maxRows: e.props.maxRows === undefined ? undefined : hud.length > 0 ? budget - hud.length : budget, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
+		await read($, easeTickState); // a glide bumps it each frame: the band redraws with the value `easedNow` gives for this instant
+		const glide = await read($, gaugeState);
+		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
+		const band = bandTree(els, { snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hud), eased, maxRows: e.props.maxRows === undefined ? undefined : hud.length > 0 ? budget - hud.length : budget, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
 		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
 	});
 
@@ -1020,10 +1072,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return { text: coreReport(hasCore(model) ? model : null) };
 	});
 
-	// Session over: the spinner clock stops.
+	// Session over: the spinner clock and any gauge glide stop.
 	on('session.end', (_$, e, next) => {
 		tickTimer?.cancel();
 		tickTimer = null;
+		easeTimer?.cancel();
+		easeTimer = null;
 		return next(e);
 	});
 

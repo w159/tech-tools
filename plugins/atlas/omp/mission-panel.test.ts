@@ -123,10 +123,10 @@ test("footer: checks only, no key hints or buttons on omp", () => {
 	expect(r.join("\n")).not.toMatch(/r: route|ctrl\+x/);
 });
 
-test("idle panel: the band reads done, the last run follows, a failed count is bold text", () => {
+test("idle panel: the band reads idle, the last run follows, a failed count is bold text", () => {
 	const idle = (failed: number) => model({ idle: { workers: 3, secs: 70, failed }, workers: [], phase: "done", done: 6, total: 6, maxLines: 6 });
 	const ok = rows(idle(0));
-	expect(ok[0]).toContain("done · phase 6/6");
+	expect(ok[0]).toContain("idle · phase 6/6");
 	expect(ok[0]).toContain("6 of 6");
 	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	expect(rows(idle(2))[1]).toContain("2 failed");

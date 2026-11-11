@@ -147,3 +147,10 @@ export const hudBudget = (maxRows: number, compact: number, bandRows = 7, runnin
   const budget = compact <= maxRows - 3 ? Math.max(room, compact) : Math.max(room, Math.min(compact, maxRows));
   return running ? Math.max(budget, Math.min(2, maxRows)) : budget; // a running agent keeps its Subagents header and one row: the band gives up rows first
 };
+
+/** Whether the rows list agents: the Subagents ribbon with at least one row under it. A ribbon alone (a starved slot) carries
+ * the counts only, and then the band must list the workers itself. */
+export const hudListsAgents = (rows: readonly (readonly Segment[])[]): boolean => {
+  const at = rows.findIndex((r) => r.some((x) => x.t === 'SUBAGENTS'));
+  return at >= 0 && at < rows.length - 1;
+};

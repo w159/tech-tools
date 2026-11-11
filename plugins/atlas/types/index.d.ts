@@ -169,6 +169,8 @@ declare module 'claude-code' {
 			isInteractive: boolean;
 			paneOpened: boolean;
 			spinnerTick: SpinnerTick;
+			bandGauges: { todo: { from: number; to: number; at: number }; ctx: { from: number; to: number; at: number } | null } | null;
+			easeTick: number;
 			discipline: { heavy: number; delegated: boolean; hint: string; toastAt: number };
 			orch: Orch;
 			sidebarRecipient: string | null;

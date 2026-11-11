@@ -19,10 +19,12 @@ import { textWidth } from './theme';
 export { planRows } from './mission-layout';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean };
+export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; eased?: { todo?: number; ctx?: number } };
 // `team` (omp: the team record's `<class>/<effort>`) is the header's scope label; `leadName` (omp: `lead-<sid6>`)
 // names the lead in the message row. Both absent: not shown / `lead`. `ui` (theme, ASCII, colour depth) defaults to the
-// environment; `rich` (ATLAS_BAND_RICH=1) draws the tall band when the rows allow.
+// environment; `rich` (ATLAS_BAND_RICH=1) draws the tall band when the rows allow. `workersInHud`: the HUD's Subagents
+// block is on screen, so the band keeps its counts and lists no worker (a working worker with no tool yet counts as
+// running there, as it does in the block). `eased`: the gauge values on screen while a figure glides (band-motion.ts).
 
 const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 const LINGER_MS = 15_000; // a finished worker keeps its row, ticked, this long
@@ -45,6 +47,13 @@ const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
 export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
 
 const railIds = (s: LiveSnapshot): string[] => s.contract.phases.map((p) => p.id as string).filter((id) => !RAIL_SKIP.has(id));
+
+/** `HudInput.phases`: the rail ids and the lit index (`ids.length` once the run is done), the band's own rail for the HUD's rich form. */
+export function hudPhases(s: LiveSnapshot, lastPhase?: string | null): { ids: string[]; active: number } {
+  const ids = railIds(s);
+  const phase = railPhase(s, lastPhase);
+  return { ids, active: phase === 'done' ? ids.length : Math.max(0, ids.indexOf(phase)) };
+}
 
 /** The lit step: the snapshot phase when it is on the rail; for `blocked` (or any off-rail phase) the last rail phase
  * the caller saw, else the first, so a blocked reply never leaves the rail with nothing lit. */
@@ -75,8 +84,9 @@ function workerState(w: LiveWorker): WorkerState {
   return w.state === 'blocked' ? 'waiting' : w.state === 'failed' ? 'failed' : 'done';
 }
 
-function missionWorker(w: LiveWorker, now: number): MissionWorker {
-  const state = workerState(w);
+function missionWorker(w: LiveWorker, now: number, inHud: boolean): MissionWorker {
+  const was = workerState(w);
+  const state = inHud && was === 'starting' ? 'thinking' : was; // the Subagents block calls every working agent running; the counts must agree with it
   const tool = w.tool ?? w.lastTool;
   const end = state === 'done' || state === 'failed' ? w.since : now;
   return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.round((end - w.startedAt) / 1000)) };
@@ -109,7 +119,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     project: boardOf(s), scope: b.team,
     phases: railIds(s), phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked',
     done, total,
-    workers: shown.map((w) => missionWorker(w, now)),
+    workers: shown.map((w) => missionWorker(w, now, !!b.workersInHud)),
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
     checks: gates.length ? gates.map((g) => ({ id: g.id, ok: !groupOpenCount(g) && !g.error })) : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
@@ -119,6 +129,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     ctx: s.contextPct > 0 ? Math.min(1, s.contextPct / 100) : undefined,
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
+    workersInHud: b.workersInHud, eased: b.eased,
   };
 }
 

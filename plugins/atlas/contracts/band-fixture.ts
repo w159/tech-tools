@@ -8,7 +8,7 @@
 //   workers  state glyph (the six-word vocabulary), name, role (100+ columns), activity in words, elapsed. Failed and waiting first.
 //   message  `from to   text   hh:mm`, the newest channel message only; the lead reads as `lead-<sid6>`.
 //   footer   `checks  ● completion  ■ tripwire  ● routing`.
-//   idle     the band reads `done · phase 6/6`, then ` last run  N workers · 1m31s · all ok`, the core row
+//   idle     the band reads `idle · phase 6/6`, then ` last run  N workers · 1m31s · all ok`, the core row
 //            (contracts/core-golden.ts), then the footer.
 //
 // Excluded from the compared rows (shown in one harness only, see each test):

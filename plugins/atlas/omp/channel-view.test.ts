@@ -360,10 +360,10 @@ test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers int
 	expect(five).toContain("checks");
 });
 
-test("panel idle: the band reads done and the last run follows, the whole thing is two rows", () => {
+test("panel idle: the band reads idle and the last run follows, the whole thing is two rows", () => {
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}done · phase 6\/6 {3}todo █████▌░░░░ 5 of 9 +$/);
+	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle · phase 6\/6 {3}todo █████▌░░░░ 5 of 9 +$/);
 	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
 	expect(failed).toContain("last run  2 workers · 9s · 1 failed");
