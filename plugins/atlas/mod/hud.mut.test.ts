@@ -27,11 +27,12 @@ describe('hud surfaces: defaults', () => {
     expect(at(0)).toEqual(at());
     expect(at(3)).not.toEqual(at(0));
   });
-  test('with a clock the spinner turns spinFrameOf(now, owner) and the tick is ignored', () => {
+  test('with a clock the spinner turns spinFrameOf(spinClock(now, tick), owner): the tick moves the shared clock, as in the side panel', () => {
     const at = (now: number, tick: number) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, now, tick })).join('\n');
-    expect(at(0, 0)).toEqual(at(0, 3));
+    expect(at(0, 3)).toEqual(at(300, 0)); // three ticks are 300 ms of the clock
     expect(at(0, 0)).toContain(`${spinnerGlyph(spinFrameOf(0, 'implementer-band'))} Subagents block`);
     expect(at(100, 0)).toContain(`${spinnerGlyph(spinFrameOf(100, 'implementer-band'))} Subagents block`);
+    expect(at(0, 3)).toContain(`${spinnerGlyph(spinFrameOf(300, 'implementer-band'))} Subagents block`);
   });
   test('rich unset follows ATLAS_BAND_RICH, an explicit rich wins over it', () => {
     const draw = (rich?: boolean) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, now: 0, ...(rich === undefined ? {} : { rich }) }));

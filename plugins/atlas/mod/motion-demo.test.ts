@@ -1,9 +1,9 @@
 // mod/motion-demo.ts: deterministic frames of a TODO row and an agent row going running -> done.
 import { describe, expect, test } from 'claude-code/testing';
 import { paintHud } from '../omp/hud-paint';
-import { spinFrameOf, uiFromEnv, type Ui } from './atlas-ui';
+import { uiFromEnv, type Ui } from './atlas-ui';
 import { hudLines } from './hud';
-import { DEMO_AGENT, demoFrames, demoInput, demoMain, type DemoIo } from './motion-demo';
+import { demoFrames, demoInput, demoMain, type DemoIo } from './motion-demo';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips SGR
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -27,12 +27,15 @@ describe('motion-demo frames', () => {
       const frames = Object.keys(files).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => files[n]!);
       expect(new Set(frames).size).toBeGreaterThanOrEqual(5);
       const row = (f: string): string => plain(f).trimEnd().split('\n').at(-1)!;
-      expect(row(frames[0]!)).toContain('░'); // the light-shade cell: no state's own mark, and not the host's `·` separator
+      expect(row(frames[0]!)).toContain('◌'); // the dotted ring: no state's own mark, no bar track, and not the host's `·` separator
       for (const f of frames) expect(['◇', '◆'].some((g) => row(f).includes(g))).toBe(false); // queued and the capsule keep their glyphs
       expect(frames.at(-1)).toBe(files[`${s}-99-done.ans`]);
       expect(plain(files[`${s}-99-done.ans`]!)).toContain('●');
       expect(plain(files[`${s}-00-running.ans`]!)).toContain('◐');
     }
+  });
+  test('critique 7: the agent row keeps its LAST column through done (it never goes blank at the change)', () => {
+    for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans'))) expect([n, plain(files[n]!).includes('runs.ts:17')]).toEqual([n, true]);
   });
   test('every row is exactly the width', () => {
     for (const [n, t] of Object.entries(files)) if (!n.endsWith('strip.ans')) for (const l of t.trimEnd().split('\n')) expect([...plain(l)].length).toBe(100);
@@ -42,7 +45,7 @@ describe('motion-demo frames', () => {
 describe('the demo draws what the live HUD draws', () => {
   const files = demoFrames(100, 100);
   const mocha: Ui = { ...uiFromEnv({}), color: 'truecolor' };
-  const live = (surface: 'todo' | 'agent', now: number): string => `${paintHud(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui: mocha, tick: spinFrameOf(now, DEMO_AGENT), now }).join('\n')}\n`;
+  const live = (surface: 'todo' | 'agent', now: number): string => `${paintHud(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui: mocha, tick: 0, now }).join('\n')}\n`;
   test('the resting done frame is the live builder output byte for byte, strike included', () => {
     for (const s of ['todo', 'agent'] as const) expect(files[`${s}-99-done.ans`]).toBe(live(s, 1900));
   });

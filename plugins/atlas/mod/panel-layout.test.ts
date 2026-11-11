@@ -165,14 +165,15 @@ describe('gates tab', () => {
 describe('core tab', () => {
   test('contract, verdicts, offload and route sections with words on every figure', () => {
     const out = rows('core', 120, { core }).join('\n');
-    for (const w of [' contract', '  ▲ header   3 of 4', ' verdicts  1 verified · 1 refuted', ' reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', ' teams  the plan and what ran']) expect(out).toContain(w);
+    for (const w of [' contract', '  ▲ header   3 of 4', ' verdicts  1 verified · 1 refuted', ' reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', ' teams  3 this session']) expect(out).toContain(w);
   });
   test('L16: three explorers on a one-seat route read ran 3 / planned 1 and drift, not 1x as planned', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
     expect(out).toContain('3 explorers ran, 1 planned (haiku), plan haiku/low'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
-    expect(out).toMatch(/■ {3}3x explorer +drift +3 explorers ran, 1 planned/);
+    expect(out).toMatch(/■ {3}3x explorer +differs +3 explorers ran, 1 planned/);
+    expect(out).toContain('planned audit/low, ran 3 explorers');
     expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
   });
@@ -180,7 +181,7 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 4, drift: ['explorer ran 4, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toMatch(/■ {3}4x explorer +drift +4 explorers ran, 1 planned/);
+    expect(out).toMatch(/■ {3}4x explorer +differs +4 explorers ran, 1 planned/);
     expect(out).not.toContain('1x explorer');
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {

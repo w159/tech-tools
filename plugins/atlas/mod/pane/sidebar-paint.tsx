@@ -2,7 +2,7 @@
 // run is painted in the live theme's tone on the rev 4 panel token, so the pane meets the band without a seam.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { surfaceHex, uiFromEnv, type Run, type Ui, runHex } from '../atlas-ui';
-import { bodyLines, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
+import { bodyLines, fillRows, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
@@ -43,5 +43,7 @@ export const inputEl = (els: ClientElements, m: SidebarModel, on: SidebarHandler
 export function viewRows(tab: PanelTab, els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, pm?: PanelModel): RenderElement[] {
   const ui = m.look ?? uiFromEnv();
   const model = pm ?? panelModelOf({ ...m, ui: { ...m.ui, view: tab } }, ui, inner);
-  return [...bodyLines(model).map((l) => lineEl(els, l, m, on, ui)), ...(tab === 'team' || tab === 'channel' ? [inputEl(els, m, on)] : [])];
+  const body = bodyLines(model);
+  const fill = fillRows(model, body.length).map(() => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, m, on, ui)); // the panel surface down to the foot row
+  return [...body.map((l) => lineEl(els, l, m, on, ui)), ...fill, ...(tab === 'team' || tab === 'channel' ? [inputEl(els, m, on)] : [])];
 }

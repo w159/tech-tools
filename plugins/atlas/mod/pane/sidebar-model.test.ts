@@ -23,7 +23,7 @@ describe('team rows from the live snapshot', () => {
     const s = world({ squad: [sq('a', 'running'), sq('b', 'finished')], activity: { a: act({ mood: 'working', tool: 'Grep', toolCount: 2 }) } as never });
     const out = team(s, 80);
     expect(out[0]).toMatch(/^ {2}[◐◓◑◒] lead {4}running/);
-    expect(out.at(-1)).toBe('lead  1 running · 1 done');
+    expect(out.at(-1)).toBe('    lead  1 running · 1 done');
     expect(out.some((l) => /^ ?[▸ ] ?[◐◓◑◒] a +running/.test(l))).toBe(true);
     expect(out.some((l) => /● b +done/.test(l))).toBe(true);
   });

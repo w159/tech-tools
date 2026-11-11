@@ -3,7 +3,7 @@
 // panel fill is the neutral grey of the host's tone family (the raw hex reached the terminal as navy 17).
 import { describe, expect, test } from 'claude-code/testing';
 import { contrast, emittedPairs, fitHex, hexTo256, hostTo256, luminance, PALETTES, runsString, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, surfaceHex, UI_STATES, xtermHex, type Run, type ThemeName, type Token, type Ui } from './atlas-ui';
-import { animateRow, easeSteps256, MIN_STEPS_256, Motion, MOTION_MS, POP_ASCII, POP_UNICODE } from './motion';
+import { animateRow, deltaE, easeSteps256, MAX_STEPS_256, MIN_STEPS_256, MIN_STEP_DE, Motion, MOTION_MS, POP_ASCII, POP_UNICODE } from './motion';
 
 const RESTS: readonly Token[] = ['text', 'sub', 'muted', 'line', 'ok', 'run', 'warn', 'bad', 'info', 'accent'];
 const THEMES: readonly ThemeName[] = ['mocha', 'latte'];
@@ -22,7 +22,11 @@ describe('256-colour ease', () => {
           if (steps.length === 0) { skipped.push(`${theme}/${state}/${rest}`); continue; }
           eased++;
           expect(steps.length).toBeGreaterThanOrEqual(MIN_STEPS_256);
+          expect(steps.length).toBeLessThanOrEqual(MAX_STEPS_256);
           const target = fitHex(p[rest], theme);
+          // C2: neighbours differ visibly (not 194, 193, 187): at least MIN_STEP_DE apart, the last step too from the resting tone.
+          const seq = [...steps, target];
+          for (let i = 1; i < seq.length; i++) expect([theme, state, rest, i, deltaE(seq[i - 1]!, seq[i]!) >= MIN_STEP_DE]).toEqual([theme, state, rest, i, true]);
           const dir = Math.sign(luminance(target) - luminance(steps[0]!));
           expect(dir).not.toBe(0);
           const chain = [...steps, target];
@@ -35,8 +39,12 @@ describe('256-colour ease', () => {
         }
       }
     }
-    expect(eased).toBeGreaterThanOrEqual(110);
-    expect(skipped.every((k) => k.startsWith('mocha/') && k.endsWith('/text'))).toBe(true); // only the near-white body text has no room above it
+    expect(eased).toBeGreaterThanOrEqual(100);
+    // Mocha: only the near-white body text has no room above it. Latte: the lead tones of running, blocked and waiting have no two palette
+    // colours MIN_STEP_DE apart between them and the rest; those rows keep their resting tone and only the glyph pops.
+    expect(skipped.every((k) => (k.startsWith('mocha/') && k.endsWith('/text')) || (k.startsWith('latte/') && /\/(running|blocked|waiting)\//.test(k)))).toBe(true);
+    expect(skipped.filter((k) => k.startsWith('latte/')).length).toBeLessThanOrEqual(14);
+    for (const state of ['done', 'failed', 'queued']) expect(easeSteps256(PALETTES.mocha[STATE_TOKEN[state as 'done']], PALETTES.mocha.ok, 'mocha').length).toBeGreaterThanOrEqual(2);
   });
 
   test('a done row in 256 colours: the title and detail pass through at least 3 distinct indices, the same on both downsamplers, and settle on rest', () => {
@@ -59,14 +67,22 @@ describe('256-colour ease', () => {
     expect(animateRow(resting, 'todo:a', 'done', m.ctx(1000 + MOTION_MS), ui)).toBe(resting);
   });
 
-  test('a tone with no room for the staircase keeps its resting colour and only the glyph pops', () => {
-    const ui: Ui = { theme: 'mocha', ascii: false, color: '256' };
+  test('a tone with no room for the staircase keeps its resting colour (Latte running: no two palette colours MIN_STEP_DE apart)', () => {
+    const ui: Ui = { theme: 'latte', ascii: false, color: '256' };
+    const m = new Motion(true);
+    m.observe('todo', [{ key: 'todo:a', state: 'queued' }], 0);
+    m.observe('todo', [{ key: 'todo:a', state: 'running' }], 1000);
+    const text: Run[] = [{ t: '◐', tone: 'text' }, { t: ' wire', tone: 'text' }];
+    const f = animateRow(text, 'todo:a', 'running', m.ctx(1100), ui);
+    expect(f.some((r) => r.fg !== undefined)).toBe(false);
+  });
+  test('a done row in Latte 256 colours pops the dotted ring over a staircase of at least MIN_STEPS_256', () => {
+    const ui: Ui = { theme: 'latte', ascii: false, color: '256' };
+    expect(easeSteps256(PALETTES.latte.ok, PALETTES.latte.text, 'latte').length).toBeGreaterThanOrEqual(MIN_STEPS_256);
     const m = new Motion(true);
     m.observe('todo', [{ key: 'todo:a', state: 'running' }], 0);
     m.observe('todo', [{ key: 'todo:a', state: 'done' }], 1000);
-    const text: Run[] = [{ t: '●', tone: 'text' }, { t: ' wire', tone: 'text' }];
-    const f = animateRow(text, 'todo:a', 'done', m.ctx(1100), ui);
-    expect(f.some((r) => r.fg !== undefined)).toBe(false);
+    const f = animateRow([{ t: '●', tone: 'text' }, { t: ' wire', tone: 'text' }], 'todo:a', 'done', m.ctx(1100), ui);
     expect(runsString(f)[0]).toBe(POP_UNICODE[0]);
   });
 });

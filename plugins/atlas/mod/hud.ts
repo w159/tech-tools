@@ -129,7 +129,7 @@ function lastAction(a: HudAgent, root?: string | null): string {
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const rows = agents.map((a): AgentRow => {
     const tasks = todos.flatMap((t, i) => (t.owner === a.name || (a.key !== undefined && t.owner === a.key) ? [i + 1] : []));
-    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
+    return { name: a.name, id: a.key ?? a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');

@@ -110,15 +110,43 @@ export function mixHex(a: string, b: string, t: number): string {
 export const easeProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.changed) / MOTION_MS));
 export const revealProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.born) / REVEAL_MS));
 
-/** The glyph pop: a light-shade cell for the first two thirds of the window, then the state's own disc lands. The cell is no state's mark on
- * any surface (queued is the open diamond, the capsule is the filled diamond) and not the middle dot, which is the host's own separator
- * (`1 running · 2 done`), so no frame ever reads as another state or as a separator. ASCII: `+`. */
-export const POP_UNICODE = ['░', '░'] as const;
-export const POP_ASCII = ['+', '+'] as const;
+/** The glyph pop: a dotted ring, then a half-filled one, across the first two thirds of the window, then the state's own disc lands. No
+ * frame is drawn anywhere else in Atlas or the host: not a state mark, a spinner frame, a bar track (`░`), the focus mark, the capsule,
+ * a role eye or the middle dot (the host's separator), so it never reads as another state, a gauge or a separator
+ * (mod/glyph-unique.test.ts lists every table). ASCII: `@` (not a state mark, spinner frame, gauge character or box corner). */
+export const POP_UNICODE = ['◌', '◍'] as const;
+export const POP_ASCII = ['@', '@'] as const;
 
 /** Whole steps of the 256-colour ease. A 24-bit ease is smooth; in 256 colours the palette is coarse, so the ease is a staircase of
  * palette colours that both Atlas's and the host's downsampler map to the same index, at least this many before the resting tone. */
-export const MIN_STEPS_256 = 3;
+export const MIN_STEPS_256 = 2;
+/** At most this many steps: more only crowd the 900 ms window with neighbours the eye cannot tell apart. */
+export const MAX_STEPS_256 = 3;
+/** Least CIE76 distance between two neighbours of the staircase (and from the last step to the resting tone). Palette neighbours such
+ * as 194, 193, 187 are under 6 apart and read as one colour on the panel; 157, 114, 151 are well over this. */
+export const MIN_STEP_DE = 12;
+
+const lab = (hex: string): [number, number, number] => {
+  const lin = rgb(hex).map((v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }) as [number, number, number];
+  const [x, y, z] = [
+    (0.4124564 * lin[0] + 0.3575761 * lin[1] + 0.1804375 * lin[2]) / 0.95047,
+    0.2126729 * lin[0] + 0.7151522 * lin[1] + 0.072175 * lin[2],
+    (0.0193339 * lin[0] + 0.119192 * lin[1] + 0.9503041 * lin[2]) / 1.08883,
+  ];
+  const f = (t: number): number => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
+};
+/** CIE76 distance between two #rrggbb colours: about 2.3 is a just-noticeable difference, 12 is plainly different. */
+export const deltaE = (a: string, b: string): number => { const [p, q] = [lab(a), lab(b)]; return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
+
+/** `chain` thinned to steps that are MIN_STEP_DE apart from each other and from `target`, at most MAX_STEPS_256 of them (spread evenly). */
+function spaced(chain: readonly string[], target: string): string[] {
+  const out: string[] = [];
+  for (const c of chain) if (!out.length || deltaE(out.at(-1)!, c) >= MIN_STEP_DE) out.push(c);
+  while (out.length && deltaE(out.at(-1)!, target) < MIN_STEP_DE) out.pop();
+  if (out.length <= MAX_STEPS_256) return out;
+  return [0, 1, 2].map((i) => out[Math.round((i * (out.length - 1)) / 2)]!);
+}
 const LEAD_TRIES = [LEAD_WHITE, 0.6, 0.85, 0, 0.15] as const;
 const stepsCache = new Map<string, readonly string[]>();
 
@@ -148,7 +176,8 @@ export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): 
       if (c === prev || (prev && dir(prev, c) !== d) || dir(c, target) !== d) continue;
       out.push(c);
     }
-    if (out.length > best.length) best = out;
+    const apart = spaced(out, target);
+    if (apart.length > best.length) best = apart;
     if (best.length >= MIN_STEPS_256) break;
   }
   const steps = best.length >= MIN_STEPS_256 ? best : [];
