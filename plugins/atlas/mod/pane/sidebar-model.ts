@@ -1,19 +1,18 @@
 // sidebar-model.ts: the Claude Code SidebarModel as the host-free PanelModel (mod/panel-layout.ts).
 import type { ChannelNote } from '../contract';
 import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
-import { planBasis, todoState } from '../data/todos';
+import { ownPlan, todoState } from '../data/todos';
 import { spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
-import { lastAction } from '../hud';
+import { hudAgents, lastAction, ownerStatesOf } from '../hud';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
 import type { SidebarModel } from './sidebar-types';
 
 const isLead = isLeadName;
 const one = (t: string | null | undefined): string => scrub(t ?? '').replace(/\s+/g, ' ').trim();
-const RANK: Record<UiState, number> = { running: 0, blocked: 1, waiting: 2, failed: 3, queued: 4, done: 5 };
 
 /** One worker in the six-word vocabulary: a worker that waits on the lead reads waiting, parked reads queued. */
 function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
@@ -28,13 +27,15 @@ function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   };
 }
 
-/** The board's plan rows as todos; a row whose owner is blocked or failed says so. */
+/** The board's plan rows as todos, from the rows and the owner states the HUD uses (data/todos ownPlan, hud ownerStatesOf): a row whose worker is named only in its
+ * title reads that worker's state here too, and a row whose owner is blocked or failed says so. */
 function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] {
-  const rows = s.todos.length ? planBasis(s.todos, s.sessionId) : s.todoGroups.flatMap((g) => g.items);
+  const rows = s.todos.length ? ownPlan(s.todos, s.sessionId) : s.todoGroups.flatMap((g) => g.items);
+  const owners = ownerStatesOf(hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)));
   return rows.map((it): PanelTodo => {
     const owner = it.owner ?? undefined;
     const w = owner ? workers.find((x) => x.name === owner) : undefined;
-    const { state, word } = todoState(it.status, w?.state); // the one rule (data/todos todoState), the same as the HUD's: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
+    const { state, word } = todoState(it.status, owner ? owners.get(owner) : undefined); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
     const detail = state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
     return { id: it.id, label: one(it.content), state, ...(word ? { word } : {}), owner: owner ? one(owner) : undefined, detail, evidence: it.evidence ?? null };
   });
@@ -55,7 +56,8 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   // Other sessions' leads and workers that rested more than two hours ago are not on this team (the roster rules of sidebar-roster.ts).
   const left = new Set(s.squad.filter((a) => isLeadName(a.name) || isStale(a, s.now)).map((a) => a.name));
   const queued = queuedMembers(s).map((name): PanelWorker => ({ name: one(name), role: 'unknown', state: 'queued', detail: 'dispatched, not listed yet' })); // the host does not list them: queued
-  const workers = [...liveWorkers(s, s.now).filter((w) => !left.has(w.name)).map((w) => workerOf(s, w)), ...queued].sort((a, b) => RANK[a.state] - RANK[b.state]);
+  const startAt = (name: string): number => s.squad.findIndex((a) => a.name === name); // start order, not liveWorkers' urgency order: a row never moves when a worker's state changes
+  const workers = [...liveWorkers(s, s.now).sort((a, b) => startAt(a.name) - startAt(b.name)).filter((w) => !left.has(w.name)).map((w) => workerOf(s, w)), ...queued]; // start order: the layout orders them by task (panel-layout workersByTask)
   const [leadMate] = mates(s);
   const lead: PanelWorker = { name: 'lead', role: 'lead', state: MOOD_STATE[leadMate!.mood], detail: leadMate!.text };
 

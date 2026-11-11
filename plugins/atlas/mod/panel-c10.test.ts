@@ -28,9 +28,9 @@ describe('C1: team rows follow the plan (T1, T2, T3), like the HUD', () => {
     const m = panelWorld('team', 100, mocha, { todos, workers: [worker('gamma-explorer'), worker('alpha-explorer'), worker('beta-explorer')] });
     expect(order(text(m), ['alpha-explorer', 'beta-explorer', 'gamma-explorer'])).toEqual(['alpha-explorer', 'beta-explorer', 'gamma-explorer']);
   });
-  test('the state order still leads: a running worker stays above a done one that owns an earlier row', () => {
+  test('critique 11 A3: the state does not move a row: a running worker stays below a done one that owns an earlier row', () => {
     const m = panelWorld('team', 100, mocha, { todos, workers: [worker('alpha-explorer'), worker('gamma-explorer', { state: 'running' })] });
-    expect(order(text(m), ['alpha-explorer', 'gamma-explorer'])).toEqual(['gamma-explorer', 'alpha-explorer']);
+    expect(order(text(m), ['alpha-explorer', 'gamma-explorer'])).toEqual(['alpha-explorer', 'gamma-explorer']);
   });
   test('a worker that owns no plan row follows the ones that do, in the order given', () => {
     const m = panelWorld('team', 100, mocha, { todos, workers: [worker('loose-one'), worker('beta-explorer'), worker('alpha-explorer')] });

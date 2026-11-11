@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fixed (critique 11, slice A1/A2): the side panel's route tab reads a plan row's state from the same rows and owner map as the HUD (`ownPlan` in `mod/data/todos.ts`, `ownerStatesOf` in `mod/hud.ts`). The live store holds no owner on plan rows (the worker is only in the title), and the panel skipped the title-owner mapping the HUD applies, so it read `queued` beside the HUD's `running`/`returned` and beside its own `3 done` agents (`mod/pane/sidebar-live-truth.test.ts`).
+- Changed (critique 11, slice A3): agent rows keep one order by task (T1 before T2, then agents without a task in start order) on the HUD, the route tab and the team tab, whatever their state; `sortAgents` no longer sorts by state, so a row never moves when a worker finishes. Goldens reordered.
+- Fixed (critique 11, slice A4): the team tab names the lead once (the tally row reads `workers  0 running · 3 done`), and the core tab heading counts in-process dispatch groups apart from tmux teams (`dispatches 1 this session` beside `workers ran in-process (no tmux team)`).
 - Fixed (wave 12 integration): a Board row whose agent ended while the store row stays open reads `returned` with the hollow `◃` mark in the accent tone (markOf/markToken), never the amber `▲`; `planned ... team (low effort), ran ...` replaces the `audit/low` scope token on the band and core tab.
 - Fixed (critique 10, slice A1): the HUD and the side panel draw one tick for the same TODO and agent row. `register.ts` hands both surfaces the motion driver's frame clock (`Motion.stamp`/`ctx()`) instead of two separate `$.clock.now()` reads, so the pop frame and fade colour never differ by a render; the HUD spinner for an unowned item turns the item id's phase, as the panel does (`mod/phase-sync.test.ts`).
 - Changed (critique 10, slice A2): `returned` has its own mark, `◃` (`<` in ASCII) in the accent tone, never the amber `▲`; `rowWordTone` is the one tone of a state word on the HUD and the panel.

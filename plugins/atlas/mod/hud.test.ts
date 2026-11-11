@@ -189,7 +189,8 @@ describe('the Subagents block is back on Claude Code', () => {
     expect(rows[0]).toContain('1 running');
     expect(rows[0]).toContain('1 done');
     expect(rows.filter((l) => /^[ ▸] [◐●] /.test(l))).toHaveLength(2);
-    expect(rows[2]).toContain('impl-hud'); // running first
+    expect(rows[2]).toContain('a-done'); // critique 11 A3: one stable order (start order without tasks), the state is the row's word, not its place
+    expect(rows[3]).toContain('impl-hud');
   });
   test('the T column is the position of the plan row the agent owns', () => {
     const plan = [todo('a', 'First', 'completed'), todo('b', 'Second', 'in_progress', { owner: 'impl-hud' })];

@@ -59,13 +59,14 @@ describe('C5: the route progress bar is quieter than a state', () => {
 });
 
 describe('C6: the team footer keeps the tab indent', () => {
-  test('"lead 0 running · 3 done" starts in the name column, like the lead row above it', () => {
+  test('"workers 0 running · 3 done" starts in the name column, like the lead row above it (the lead is named once, critique 11 A4)', () => {
     const lead = { name: 'lead', role: 'lead', state: 'waiting' as const, detail: 'waiting for you' };
     const workers = panelWorld('team', 80, mocha).workers.slice(0, 3).map((w) => ({ ...w, state: 'done' as const }));
     const rows = body('team', 80, { lead, workers, rows: 24 });
     const foot = rows.at(-1)!;
-    expect(foot).toBe('    lead  0 running · 3 done');
-    expect(foot.indexOf('lead')).toBe(GRID_LEAD);
-    expect(rows.find((l) => /\blead\b +waiting/.test(l))!.indexOf('lead')).toBe(foot.indexOf('lead')); // the lead's own row names it in the same column
+    expect(foot).toBe('    workers  0 running · 3 done');
+    expect(foot.indexOf('workers')).toBe(GRID_LEAD);
+    expect(rows.find((l) => /\blead\b +waiting/.test(l))!.indexOf('lead')).toBe(foot.indexOf('workers')); // the lead's own row starts in the same column
+    expect(rows.filter((l) => /\blead\b/.test(l))).toHaveLength(1);
   });
 });

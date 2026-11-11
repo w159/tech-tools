@@ -51,30 +51,30 @@ export const todo_40 = [
 export const subagents_120 = [
   "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1 running · 1 failed · 1 queued · 2 done",
   "    AGENT               STATE       MODEL     TASK  LAST",
-  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
-  "  ■ implementer-live    failed      opus      T6    tests red 3",
-  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
   "  ● implementer-layout  done        opus      T1,T2 9 of 9 steps",
-  "  ● implementer-gates   done        sonnet    T3    golden tests written"
+  "  ● implementer-gates   done        sonnet    T3    golden tests written",
+  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
+  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
+  "  ■ implementer-live    failed      opus      T6    tests red 3"
 ];
 
 export const subagents_120_rich = [
   "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
   "    AGENT               STATE         CTX                 MODEL   LAST",
-  "▸ ◐ implementer-band     RUNNING      ctx █████░░░ 62%    opus    read runs.ts:17",
-  "  ■ implementer-live     FAILED       ctx ████████ 100%   opus    tests red 3",
-  "  ◇ runner-land          QUEUED                           opus    waits on implementer-live",
   "  ● implementer-layout   DONE                             opus    9 of 9 steps",
-  "  ● implementer-gates    DONE                             sonnet  golden tests written"
+  "  ● implementer-gates    DONE                             sonnet  golden tests written",
+  "▸ ◐ implementer-band     RUNNING      ctx █████░░░ 62%    opus    read runs.ts:17",
+  "  ◇ runner-land          QUEUED                           opus    waits on implementer-live",
+  "  ■ implementer-live     FAILED       ctx ████████ 100%   opus    tests red 3"
 ];
 
 export const subagents_80 = [
   "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━ 1 running · 1 failed · 1 queued · 2 done",
   "    AGENT               STATE       MODEL     TASK  LAST",
-  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
-  "  ■ implementer-live    failed      opus      T6    tests red 3",
-  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
   "  ● implementer-layout  done        opus      T1,T2 9 of 9 steps",
-  "  ● implementer-gates   done        sonnet    T3    golden tests written"
+  "  ● implementer-gates   done        sonnet    T3    golden tests written",
+  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
+  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
+  "  ■ implementer-live    failed      opus      T6    tests red 3"
 ];
 
