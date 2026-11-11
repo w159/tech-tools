@@ -4,7 +4,7 @@
 // column-word header row in the spacer slot (critique-3 change 8) and every owned task id (`T1,T2` for implementer-layout, who owns plan rows 1 and 2).
 
 export const todo_120 = [
-  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3 of 7 done",
+  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3/7",
   "  ● Wire band to host         done          ran 03:10",
   "  ● Layout grid tiers         done          ran 02:41",
   "  ● Gate golden tests         done          ran 01:58",
@@ -15,7 +15,7 @@ export const todo_120 = [
 ];
 
 export const todo_120_rich = [
-  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3 of 7 done",
+  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3/7",
   "● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify",
   "  ● Wire band to host          DONE         ran 03:10",
   "  ● Layout grid tiers          DONE         ran 02:41",
@@ -27,7 +27,7 @@ export const todo_120_rich = [
 ];
 
 export const todo_80 = [
-  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3 of 7 done",
+  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3/7",
   "  ● Wire band to host     done",
   "  ● Layout grid tiers     done",
   "  ● Gate golden tests     done",
@@ -38,7 +38,7 @@ export const todo_80 = [
 ];
 
 export const todo_40 = [
-  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━ 3 of 7 done",
+  "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━ 3/7",
   "  ● Wire band to host  done",
   "  ● Layout grid tiers  done",
   "  ● Gate golden tests  done",

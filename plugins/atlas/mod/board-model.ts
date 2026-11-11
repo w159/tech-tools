@@ -254,7 +254,7 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
 }
 
 /** The whole surface: ribbon (`N items` on the right in the plain form), a blank row, then the body. Without the ribbon (the side panel, which has
- * its own header) the surface opens with one title row, `BOARD  5 items`: the only mark that says which view this is (critique 12: with the chrome gone,
+ * its own header) the surface opens with one title row, `▸ BOARD  5 items` (the ribbon's own marker, so one search finds the board in either form): the only mark that says which view this is (critique 12: with the chrome gone,
  * nothing named the board and the capture script could not find it). That row says the count, so the footer carries only the folds. */
 export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const withRibbon = o.ribbon !== false;
@@ -266,7 +266,7 @@ export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[]
   // An open folded dispatch row is what Stop counts: the footer names it instead of the quiet fold count.
   const note = k > 0 ? r(`  ${count}${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : r(`  ${count}${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted');
   const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }] : [];
-  const title: BoardLine[] = withRibbon ? [] : [{ runs: [r('  BOARD', 'text', { bold: true }), ...(rows.length > 0 ? [r(`  ${rows.length} items`, 'muted')] : [])] }];
+  const title: BoardLine[] = withRibbon ? [] : [{ runs: [r(o.ui.ascii ? '  > ' : '  ▸ ', 'muted'), r('BOARD', 'text', { bold: true }), ...(rows.length > 0 ? [r(`  ${rows.length} items`, 'muted')] : [])] }];
   return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : title), ...boardBody(rows, o), ...footer];
 }
 

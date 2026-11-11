@@ -165,11 +165,11 @@ describe('core tab: caps, notes and figures', () => {
   test('B4: with nothing read or returned the offload line is a sentence, not `0 tokens read by workers`', () => {
     const c = empty();
     c.routes = [route('t1')] as never;
-    const line = body('core', 120, { core: c, workers: [] }).find((l) => l.startsWith(' reading'))!; // no worker has returned either
-    expect(line).toBe(' reading  workers have read and returned nothing yet');
+    const line = body('core', 120, { core: c, workers: [] }).find((l) => l.startsWith('    reading'))!; // no worker has returned either
+    expect(line).toBe('    reading  workers have read and returned nothing yet');
     expect(line).not.toMatch(/\b0 tokens\b/);
     // critique 6: workers that did return are never said to have returned nothing; in-process workers keep no token log
-    expect(core(c).find((l) => l.startsWith(' reading'))).toBe(' reading  3 workers returned, no token figures kept');
+    expect(core(c).find((l) => l.startsWith('    reading'))).toBe('    reading  3 workers returned, no token figures kept');
   });
   test('B4: a seat that ran another model says so in words', () => {
     const c = empty();
@@ -189,9 +189,9 @@ describe('core tab: caps, notes and figures', () => {
     const c = empty();
     c.verdicts = [verdict('v')] as never;
     c.ledger = { claimed: 1, verified: 1, refuted: 0, pending: 0, unchecked: 0 } as never;
-    expect(core(c).find((l) => l.startsWith(' verdicts'))).toBe(' verdicts  1 verified · 0 refuted');
+    expect(core(c).find((l) => l.startsWith('    verdicts'))).toBe('    verdicts  1 verified · 0 refuted');
     c.ledger = { claimed: 2, verified: 1, refuted: 1, pending: 3, unchecked: 4 } as never;
-    expect(core(c).find((l) => l.startsWith(' verdicts'))).toBe(' verdicts  1 verified · 1 refuted · 3 open · 4 unchecked');
+    expect(core(c).find((l) => l.startsWith('    verdicts'))).toBe('    verdicts  1 verified · 1 refuted · 3 open · 4 unchecked');
   });
   test('a DONE claim with no verdict gets a warning row; a matched or non-DONE one does not', () => {
     const c = empty();
@@ -206,15 +206,15 @@ describe('core tab: caps, notes and figures', () => {
     const c = empty();
     c.offload = { workers: [{ name: 'w1', model: null, peak: 58_800, kept: 7000, returned: 151, costUsd: null, finished: false }], kept: 7000, returned: 151, ratio: 46.4 } as never;
     const out = core(c);
-    expect(out.find((l) => l.startsWith(' reading'))).toBe(' reading  7.0k tokens read by workers, 151 returned to the lead, 2% of what they read');
+    expect(out.find((l) => l.startsWith('    reading'))).toBe('    reading  7.0k tokens read by workers, 151 returned to the lead, 2% of what they read');
     expect(out.find((l) => l.startsWith('    w1'))).toBe(`    w1 ?${' '.repeat(77)}peak 58.8k  read 7.0k  returned 151`); // figures right-aligned, no cost when unknown
   });
   test('the offload share is a whole percent of what the workers read, and only when it can not pass 100', () => {
     const c = empty();
     c.offload = { workers: [worker('w')], kept: 15, returned: 10, ratio: 1.5 } as never;
-    expect(core(c).find((l) => l.startsWith(' reading'))).toBe(' reading  15 tokens read by workers, 10 returned to the lead, 67% of what they read');
+    expect(core(c).find((l) => l.startsWith('    reading'))).toBe('    reading  15 tokens read by workers, 10 returned to the lead, 67% of what they read');
     c.offload = { workers: [worker('w')], kept: 10, returned: 15, ratio: 0.7 } as never;
-    expect(core(c).find((l) => l.startsWith(' reading'))).not.toContain('%');
+    expect(core(c).find((l) => l.startsWith('    reading'))).not.toContain('%');
   });
 });
 

@@ -78,7 +78,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const tier = tierOf(cols);
   const rich = isRich(o);
   const done = rows.filter((r) => r.state === 'done').length;
-  const out: Run[][] = [ribbon(cols, 'TODO', `${done} of ${rows.length} done`, ui)]; // one count format at every width (the band, board and panel say `N of M`)
+  const out: Run[][] = [ribbon(cols, 'TODO', `${done}/${rows.length}`, ui)]; // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
   if (b.cap === 0) return out;
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));

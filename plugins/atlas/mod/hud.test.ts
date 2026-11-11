@@ -28,7 +28,7 @@ const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui,
 const phases = worldPhases();
 
 // The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the count and 3 after it.
-const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(━{6,})( \d+ of \d+ done)$/, (_m, f: string, c: string) => `${f.slice(2)}${c} ━━━`), ...rows.slice(1)];
+const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(━{6,})( \d+\/\d+)$/, (_m, f: string, c: string) => `${f.slice(2)}${c} ━━━`), ...rows.slice(1)];
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
     const input: HudInput = { todos: worldPlan(), agents: [], phases };
@@ -77,8 +77,10 @@ describe('critique 12: a done agent row shows its outcome, as its done plan row 
   const agent = { name: 'impl', role: 'implementer', state: 'done', model: 'opus', lastTool: 'read', target: 'runs.ts:17', since: 1 } as unknown as HudAgent;
   test('the evidence of the plan row it owns replaces its last call', () => {
     expect(agentModel([agent], [todo({ evidence: 'tests green' })])[0]!.tool).toBe('tests green');
-    expect(agentModel([agent], [todo({})])[0]!.tool).toBe('read runs.ts:17'); // no evidence: the last call stays
-    expect(agentModel([agent], [todo({ evidence: 'ran 03:10' })])[0]!.tool).toBe('read runs.ts:17'); // a duration is not an outcome
+    expect(agentModel([agent], [todo({})])[0]!.tool).toBe('report returned'); // no evidence: the outcome, not its last call (critique 14)
+    expect(agentModel([agent], [todo({ evidence: 'ran 03:10' })])[0]!.tool).toBe('report returned'); // a duration is not an outcome
+    expect(agentModel([agent], [])[0]!.tool).toBe('report returned'); // owns no row: still the outcome, not the call
+    expect(agentModel([{ ...agent, lastTool: null, target: null, lastLine: '9 of 9 steps' } as unknown as HudAgent], [])[0]!.tool).toBe('9 of 9 steps'); // no call made: the closing line stays
   });
   test('a running agent keeps its current call whatever its row carries', () => {
     const running = { ...agent, state: 'working', tool: 'edit', target: 'a.ts' } as unknown as HudAgent;
@@ -97,7 +99,7 @@ describe('L1: a completed plan row is shown as completed', () => {
   });
   test('when every row is done they all show, and the header says so', () => {
     const rows = trimmed(hudRows({ todos: plan.map((t) => ({ ...t, status: 'completed' })), agents: [] }, view(120)));
-    expect(rows[0]).toContain('3 of 3 done');
+    expect(rows[0]).toContain('3/3');
     expect(rows.filter((l) => l.includes('done') && l.includes('●'))).toHaveLength(3);
   });
   test('a plan row that completes appears in the next render with state done', () => {
@@ -125,7 +127,7 @@ describe('L2: the plan is not cut to "N more todos not shown"', () => {
     }
   });
   test('the ribbon count stays the whole plan at every height', () => {
-    for (let h = 1; h <= 16; h++) expect(trimmed(hudRows({ todos: big, agents: [] }, view(120, false, h)))[0]).toContain('2 of 12 done');
+    for (let h = 1; h <= 16; h++) expect(trimmed(hudRows({ todos: big, agents: [] }, view(120, false, h)))[0]).toContain('2/12');
   });
 });
 
@@ -198,7 +200,7 @@ describe('the Subagents block is back on Claude Code', () => {
   test('LAST is the agent\'s last tool and target, not its free-text report (critique 8: three rows read the same posting step)', () => {
     const done = (name: string, lastTool: string, target: string | null, detail: string, lastLine: string): HudAgent => ({ name, role: 'explorer', state: 'done', ui: 'done', tool: null, lastTool, target, detail, lastLine });
     const rows = agentModel([done('alpha', 'Read', 'alpha.py', 'Read /r/alpha.py', 'Read alpha.py -> first 3 lines: 1 def'), done('beta', 'Grep', null, 'def main', ''), done('gamma', '', null, '', 'all green')], []);
-    expect(rows.map((r) => r.tool)).toEqual(['read alpha.py', 'grep def main', 'all green']); // call first, the report only when there is no call
+    expect(rows.map((r) => r.tool)).toEqual(['report returned', 'report returned', 'all green']); // a done worker that made calls reports the outcome (critique 14); the closing line only when there was no call
   });
   test('a finished agent shows beside a running one, and the header counts every row', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [{ ...running, name: 'a-done', state: 'done', lastLine: '9 of 9 steps' }, running] }, view(120)));
@@ -232,7 +234,7 @@ describe('R5: no hardcoded check mark, bullet or ellipsis', () => {
 describe('header counts equal the row sums', () => {
   test('TODO and SUBAGENTS counts match the rows of the world', () => {
     const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)));
-    expect(rows[0]).toContain(`${world.todos.filter((t) => t.state === 'done').length} of ${world.todos.length} done`);
+    expect(rows[0]).toContain(`${world.todos.filter((t) => t.state === 'done').length}/${world.todos.length}`);
     const sub = rows.find((l) => l.includes('SUBAGENTS'))!;
     for (const s of ['queued', 'running', 'done', 'failed'] as const) {
       const n = world.workers.filter((w) => w.state === s).length;

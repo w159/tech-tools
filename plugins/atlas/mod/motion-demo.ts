@@ -2,7 +2,7 @@
 // Deterministic: the clock is injected (no Date.now), the rows are fixed, so two runs write byte-identical files.
 //   bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 200] [--color truecolor|256]   (default: the terminal's depth, see colorMode)
 // Writes, per surface (todo, agent): `<surface>-00-running.ans` (the resting row before the change), `<surface>-01-t0000ms.ans` ...
-// one file per frame of the 600 ms window, `<surface>-99-done.ans` (the resting row after), and `<surface>-strip.ans` (all of them,
+// one file per frame of the 800 ms window, `<surface>-99-done.ans` (the resting row after), and `<surface>-strip.ans` (all of them,
 // one per line, `cat` it in a terminal). Each file is the ribbon and the row exactly as the live HUD draws them (24-bit ANSI, or xterm-256 with --color 256).
 // The frames are built by `demoFrames` (pure: file name -> text); only the CLI at the bottom touches the disk, through dynamic imports
 // that the mod's tsconfig (which has no node types) never resolves.
@@ -21,11 +21,11 @@ const NAME = DEMO_AGENT;
 const TODO = (state: 'running' | 'done', now: number): TodoItem => ({
   id: 't1', content: 'wire the gate', status: state === 'done' ? 'completed' : 'in_progress', owner: NAME, ...(state === 'done' ? { evidence: 'tests green', completed_at: now / 1000 } : { claimed_at: now / 1000 - 72 }),
 } as TodoItem);
-const AGENT = (state: 'running' | 'done', now: number): HudAgent => ({ name: NAME, role: 'implementer', state: state === 'done' ? 'done' : 'working', model: 'opus', ...(state === 'running' ? { tool: 'read', target: 'runs.ts:17' } : { since: now, lastLine: 'read runs.ts:17' }) }); // a finished agent keeps its last call: the LAST column stays through done
+const AGENT = (state: 'running' | 'done', now: number): HudAgent => ({ name: NAME, role: 'implementer', state: state === 'done' ? 'done' : 'working', model: 'opus', ...(state === 'running' ? { tool: 'read', target: 'runs.ts:17' } : { since: now, lastLine: 'read runs.ts:17' }) }); // a finished agent's LAST column turns to the outcome of the plan row it owns (critique 14)
 
 type Shown = 'running' | 'done';
 /** The HUD input of a surface: `todo` shows the plan row, `agent` the Subagents row. */
-export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number): HudInput => (surface === 'todo' ? { todos: [TODO(state, now)], agents: [] } : { todos: [], agents: [AGENT(state, now)] });
+export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number): HudInput => (surface === 'todo' ? { todos: [TODO(state, now)], agents: [] } : { todos: [TODO(state, now)], agents: [AGENT(state, now)] }); // the agent owns the plan row: its done LAST column is the outcome that row carries
 const FEED = { 'todo': 'hud-todo', 'agent': 'hud-agents' } as const;
 
 /** File name -> text of every frame of both rows, for colour depth `color` (default truecolor). */

@@ -25,7 +25,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const rows = text(todoRows(worldTodos(), opts(60), full));
     expect(rows.slice(1)).toEqual(todo_40.slice(1));
     expect(rows[0]!.length).toBe(60 - 2); // the ribbon is 60 cells; the two trailing spaces are trimmed
-    expect(rows[0]!.endsWith('3 of 7 done')).toBe(true);
+    expect(rows[0]!.endsWith('3/7')).toBe(true);
   });
   test('completed rows are drawn as done: the done glyph, the word and a struck label', () => {
     const rows = todoRows(worldTodos(), opts(120), full);
@@ -40,7 +40,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const rows = worldTodos();
     const out = text(todoRows(rows, opts(120), full));
     const done = rows.filter((r) => r.state === 'done').length;
-    expect(out[0]).toContain(`${done} of ${rows.length} done`);
+    expect(out[0]).toContain(`${done}/${rows.length}`);
     expect(out.some((l) => /^progress |· \d+%/.test(l))).toBe(false); // one count, in the ribbon
     expect(out.filter((l) => /^[ ▸] [●◐◇■▲◉] /.test(l))).toHaveLength(rows.length);
   });

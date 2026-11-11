@@ -17,11 +17,12 @@ export const MOTION_FRAME_MS = 100;
 /** The beats a transition draws. Every beat is a held step of its own: a 256-colour run steps one palette colour per beat (at most
  * MAX_STEPS_256) and is at rest after its last, the glyph pops one frame per beat, and a 24-bit ease gets five distinct colours. No two
  * neighbouring frames of a ramp are alike (critique 10: a 900 ms window held 231 for five frames and 193 for four). */
-const MAX_BEATS = 3;
+const MAX_BEATS = 4;
 /** How long one beat is held (critique 11: a 200 ms ramp against a 0.5 s capture period showed on 15 of 51 live frames). Each of the
  * MAX_BEATS steps of the staircase and of the glyph pop stays on screen this long, so a capture or an eye sees every step. */
 export const MOTION_STEP_MS = 200;
-/** A state change eases back to rest over this long (MAX_BEATS held steps: at least 600 ms). */
+/** A state change eases back to rest over this long: MAX_BEATS held steps, 800 ms. The frame sampled at 600 ms is still a beat of the ramp, so it differs from
+ * the resting row (critique 14: with a 600 ms window the 600 ms frame equalled the final frame). */
 export const MOTION_MS = MAX_BEATS * MOTION_STEP_MS;
 /** A new row reveals left to right over this long. */
 export const REVEAL_MS = 300;
@@ -291,7 +292,9 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
         if (ui.color === '256') {
           const stairs = easeSteps256(palette[markToken(accent)], rest, ui.theme);
           if (beat < stairs.length) return { ...r, fg: stairs[beat]! };
-          return held(r, beat); // the palette ran out of steps before the window did: the rest tone, held bold, so the beat still differs from rest
+          // The palette ran out of steps before the window did: its last step held bold, then the rest tone held bold on the last beat, so every beat still differs from its neighbours and from rest.
+          const tail = stairs.at(-1);
+          return tail !== undefined && beat < MAX_BEATS - 1 && r.bold !== true ? { ...r, fg: tail, bold: true } : held(r, beat);
         }
         return held({ ...r, fg: mixHex(lead, rest, t) }, beat);
       });

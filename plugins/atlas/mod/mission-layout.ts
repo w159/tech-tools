@@ -194,7 +194,8 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const blocked = !!m.blocked || stopGates.length > 0;
   const quiet = !blocked && !isRunning(m) && !m.busy;
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
-  const warn = quiet && failing.length > 0 ? warningText(failing) : undefined; // idle in every way but a failing check: a warning, not a block
+  // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber ▲).
+  const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? warningText(failing) : undefined;
   return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates) };
 }
 
@@ -425,7 +426,7 @@ const blank = (cols: number): Line => ({ runs: [r(' '.repeat(cols))] });
 
 function idleLines(m: MissionModel): Line[] {
   const band = bandLines(m);
-  const last = lastRunRuns(m.lastRun, runStateOf(m).flagged); // `all ok` never sits under a BLOCKED header, declared or from a failing check
+  const last = lastRunRuns(m.lastRun, runStateOf(m).flagged || (m.checks ?? []).some((c) => !c.ok)); // `all ok` never sits under a BLOCKED header, nor beside a failing check, busy lead or not
   const foot = footerLines(m);
   // The last run rides the core row when both fit one row (`verdicts ... last run 3 workers`), so a 110 and a 150 band draw the same rows (critique 11: 110 had no last-run row).
   // "Fit" is a fixed width (JOIN_MAX), not `cols`: the 110 body (105) and the docked 150 body (93) joined or split the same snapshot differently (critique 12 A3).
