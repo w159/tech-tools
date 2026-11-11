@@ -64,8 +64,8 @@ describe('core tab dispatch rows', () => {
     const c = empty();
     c.routes = [route('t1', { cls: 'implement', effort: 'medium', seats: [{ role: 'completeness-critic', count: 1, model: 'sonnet', effort: 'low', ran: ['sonnet'] }] })] as never;
     expect(body('core', 120, { core: c }).filter((l) => /implement|critic|complete/.test(l))).toEqual([
-      '    implement/medium t1  tmux, shared, max 1',
-      '  ●   1x complete... as planned ran sonnet  sonnet/low',
+      '    implement team (medium effort) t1  tmux, shared, max 1',
+      '  ●   1x complete... as planned ran sonnet, low effort',
     ]);
   });
   test('a detail is whole at every width: it fits after the row or wraps under it, and is never clipped by one cell', () => {
@@ -74,7 +74,7 @@ describe('core tab dispatch rows', () => {
     for (let cols = 30; cols <= 140; cols++) {
       const text = body('core', cols, { core: c }).join(' ');
       expect([cols, /rt-zq\s+tmux,\s+worktree,\s+max\s+7/.test(text)]).toEqual([cols, true]);
-      expect([cols, /not run yet\s+model-zz\/xhigh/.test(text)]).toEqual([cols, true]);
+      expect([cols, /not run yet,\s+planned\s+model-zz,\s+xhigh\s+effort/.test(text)]).toEqual([cols, true]);
     }
   });
 });

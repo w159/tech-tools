@@ -52,11 +52,11 @@ describe('gates figure: the band and the side panel read gateTally', () => {
     expect(tally.total).toBe(3); // the empty group is not counted
     expect(bandFigure()).toEqual([tally.green, tally.total]);
     expect(figure(panel('gates')[0]!)).toEqual([tally.green, tally.total]);
-    expect(figure(panel('route').find((l) => l.startsWith('gates'))!)).toEqual([tally.green, tally.total]);
+    expect(figure(panel('route').find((l) => l.startsWith(' gates'))!)).toEqual([tally.green, tally.total]);
   });
 
   test('a group with no data is not listed as a gate on the route row', () => {
-    const row = panel('route').find((l) => l.startsWith('gates'))!;
+    const row = panel('route').find((l) => l.startsWith(' gates'))!;
     expect(row).not.toContain('header');
   });
 
@@ -204,8 +204,8 @@ describe('route tab: the agents row heads agents', () => {
     const done = ['implementer-band', 'implementer-live', 'runner-land', 'implementer-layout'].map((n) => worker(n, { state: 'done', detail: 'finished' }));
     const todos = ['T1', 'T2', 'T3'].map((id, i) => ({ id, label: `Plan item ${id}`, state: 'done' as UiState, owner: done[i]!.name }));
     const rows = body(panelWorld('route', 100, ui, { todos, workers: done, rows: 36 }));
-    const at = rows.findIndex((l) => l.startsWith('agents'));
-    const next = rows.findIndex((l, i) => i > at && l.startsWith('todo'));
+    const at = rows.findIndex((l) => l.startsWith(' agents'));
+    const next = rows.findIndex((l, i) => i > at && l.startsWith(' todo'));
     expect(at).toBeGreaterThanOrEqual(0);
     const under = rows.slice(at + 1, next).join('\n');
     for (const d of done) expect(under).toContain(d.name);
@@ -215,7 +215,7 @@ describe('route tab: the agents row heads agents', () => {
   test('a short pane keeps the counts alone', () => {
     const done = [worker('implementer-band', { state: 'done', detail: 'finished' })];
     const rows = body(panelWorld('route', 100, ui, { todos: [], workers: done, rows: 24 }));
-    const at = rows.findIndex((l) => l.startsWith('agents'));
+    const at = rows.findIndex((l) => l.startsWith(' agents'));
     expect(rows[at + 1] ?? '').not.toContain('implementer-band');
   });
 });

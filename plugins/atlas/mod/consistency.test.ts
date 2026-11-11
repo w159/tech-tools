@@ -160,14 +160,14 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
   const f: Facts = {};
   if (tab === 'route') {
     f.phase = /phase\s+\S+\s+(\d+) of (\d+)/.exec(text)?.slice(1, 3).join('/');
-    f.todo = todoOf(/^todo .*$/m.exec(text)?.[0] ?? '');
-    f.gates = gatePairs(/^gates .*$/m.exec(text)?.[0] ?? '');
-    f.gatesGreen = /(\d+) of (\d+) green\s*$/m.exec(/^gates .*$/m.exec(text)?.[0] ?? '')?.slice(1, 3).join('/');
-    f.agents = counts(/^agents .*$/m.exec(text)?.[0] ?? '');
+    f.todo = todoOf(/^ todo .*$/m.exec(text)?.[0] ?? ''); // the labels sit one cell in (the tab indent)
+    f.gates = gatePairs(/^ gates .*$/m.exec(text)?.[0] ?? '');
+    f.gatesGreen = /(\d+) of (\d+) green\s*$/m.exec(/^ gates .*$/m.exec(text)?.[0] ?? '')?.slice(1, 3).join('/');
+    f.agents = counts(/^ agents .*$/m.exec(text)?.[0] ?? '');
     f.items = stateRows(rows, new RegExp(`^ {2}(${G}) (.+?)\\s{2,}(queued|running|done|failed|blocked|waiting)\\b`));
   }
   if (tab === 'team') f.workers = stateRows(rows.filter((r: string) => !/^ {2}◉ lead\b/.test(r)), new RegExp(`^[▸ ] ?(${G}) (\\S+)\\s+(queued|running|done|failed|blocked|waiting)\\b`));
-  if (tab === 'channel') { const m = /^#\S+\s+(\d+) people(?: · (\d+) unread)?/m.exec(text); if (m) f.channel = { people: Number(m[1]), unread: Number(m[2] ?? 0) }; }
+  if (tab === 'channel') { const m = /^ #\S+\s+(\d+) people(?: · (\d+) unread)?/m.exec(text); if (m) f.channel = { people: Number(m[1]), unread: Number(m[2] ?? 0) }; }
   if (tab === 'gates') {
     f.gates = gatePairs(text);
     f.gatesGreen = /(\d+) of (\d+) green/.exec(text)?.slice(1, 3).join('/');

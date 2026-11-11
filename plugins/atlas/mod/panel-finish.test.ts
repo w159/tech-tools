@@ -56,19 +56,19 @@ describe('3: one unit, `N of M word`', () => {
     test(`no bare n/m on the route tab at ${cols}`, () => {
       const rows = body('route', cols);
       expect(rows.join('\n')).not.toMatch(/\b\d+\/\d+\b/);
-      expect(rows.find((l) => l.startsWith('gates'))).toMatch(/\d of \d green/);
+      expect(rows.find((l) => l.startsWith(' gates'))).toMatch(/\d of \d green/);
     });
   }
   test('the phase row reads `n of m`', () => {
-    expect(body('route', 80).find((l) => l.startsWith('phase'))).toMatch(/\d of \d$/);
+    expect(body('route', 80).find((l) => l.startsWith(' phase'))).toMatch(/\d of \d$/);
   });
 });
 
 describe('4: each route section is labelled by what it lists', () => {
   test('the agents row comes before the tasks and a todo row heads the tasks', () => {
     const rows = body('route', 100);
-    const agents = rows.findIndex((l) => l.startsWith('agents'));
-    const todo = rows.findIndex((l) => l.startsWith('todo'));
+    const agents = rows.findIndex((l) => l.startsWith(' agents'));
+    const todo = rows.findIndex((l) => l.startsWith(' todo'));
     const first = rows.findIndex((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] /.test(l));
     expect(agents).toBeGreaterThan(-1);
     expect(agents).toBeLessThan(todo);
@@ -93,7 +93,7 @@ describe('5: the core tab is plain language', () => {
   test('every fact survives: token counts and the team plan', () => {
     const text = body('core', 150).join('\n');
     expect(text).toMatch(/tokens read by workers/);
-    expect(text).toMatch(/verify\/low/);
+    expect(text).toMatch(/verify team \(low effort\)/);
   });
 });
 

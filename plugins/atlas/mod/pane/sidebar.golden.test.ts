@@ -28,10 +28,10 @@ describe('sidebar golden text', () => {
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
-    expect(r).toContain('phase  implement 4 of 5');
-    expect(r.some((l) => l.startsWith('gates ') && l.endsWith('0 of 2 green'))).toBe(true); // the tool-routing group holds no data: it is not a third gate (gateTally)
-    expect(r.some((l) => l.startsWith('todo ') && l.includes('1 of 7'))).toBe(true);
-    expect(r.some((l) => l.startsWith('agents ') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);
+    expect(r).toContain(' phase  implement 4 of 5');
+    expect(r.some((l) => l.startsWith(' gates ') && l.endsWith('0 of 2 green'))).toBe(true); // the tool-routing group holds no data: it is not a third gate (gateTally)
+    expect(r.some((l) => l.startsWith(' todo ') && l.includes('1 of 7'))).toBe(true);
+    expect(r.some((l) => l.startsWith(' agents ') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);
   });
   test('route lists every plan task with its state word, not only the current phase', () => {
     const r = rows('route').join('\n');
@@ -44,8 +44,8 @@ describe('sidebar golden text', () => {
     const r = rows('team').slice(4).filter((l) => !/^ {4}\S/.test(l)).slice(0, 4); // the detail rows a tall pane adds sit under their agent
     expect(r[0]).toMatch(/^ {2}[◐◓◑◒] lead\s+running/);
     expect(r[1]).toMatch(/^▸ [◐◓◑◒] explorer-1\s+running/);
-    expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/);
-    expect(r[3]).toMatch(/^ {2}■ runner-1\s+failed/);
+    expect(r[2]).toMatch(/^ {2}■ runner-1\s+failed/); // the HUD's state order (hud-surface sortAgents): failed before waiting
+    expect(r[3]).toMatch(/^ {2}◉ impl-auth\s+waiting/);
   });
   test('team at 38 columns keeps the keys and whole words on a second strip row, and keeps name and state', () => {
     const r = rows('cols38');

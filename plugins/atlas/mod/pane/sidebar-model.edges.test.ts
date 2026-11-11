@@ -35,9 +35,10 @@ describe('worker detail per state', () => {
     } as never,
   });
   test('running reads the tool and target, the bare tool, the last tool or plain thinking', () => {
-    expect(byName(s, 'run-tool')).toMatchObject({ state: 'running', detail: 'Grep src/a.ts' });
-    expect(byName(s, 'run-bare')).toMatchObject({ state: 'running', detail: 'Bash' });
-    expect(byName(s, 'run-last')).toMatchObject({ state: 'running', detail: 'thinking, last Edit' });
+    // The HUD's LAST form (hud.ts lastAction): the call in lower case, its target after it; between calls the last call.
+    expect(byName(s, 'run-tool')).toMatchObject({ state: 'running', detail: 'grep src/a.ts' });
+    expect(byName(s, 'run-bare')).toMatchObject({ state: 'running', detail: 'bash' });
+    expect(byName(s, 'run-last')).toMatchObject({ state: 'running', detail: 'edit' });
     expect(byName(s, 'run-idle')).toMatchObject({ state: 'running', detail: 'thinking' });
   });
   test('failed and done read the last line on one line, else the state word', () => {

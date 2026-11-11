@@ -6,6 +6,7 @@ import { spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
+import { lastAction } from '../hud';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
 import type { SidebarModel } from './sidebar-types';
@@ -18,8 +19,8 @@ const RANK: Record<UiState, number> = { running: 0, blocked: 1, waiting: 2, fail
 function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const a = s.squad.find((x) => x.name === w.name);
   const state: UiState = liveState(w);
-  const doing = w.tool ? one(w.target ? `${w.tool} ${w.target}` : w.tool) : w.lastTool ? `thinking, last ${w.lastTool}` : 'thinking';
-  const detail = state === 'failed' ? one(w.lastLine) || 'failed' : state === 'waiting' ? 'waiting for lead reply' : state === 'done' ? one(w.lastLine) || 'finished' : state === 'queued' ? 'parked' : doing;
+  const call = one(lastAction(w)); // the HUD's LAST (`read gamma.py`): the call, never the result text that followed it
+  const detail = state === 'failed' ? one(w.lastLine) || 'failed' : state === 'waiting' ? 'waiting for lead reply' : state === 'done' ? call || 'finished' : state === 'queued' ? 'parked' : call || 'thinking';
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),

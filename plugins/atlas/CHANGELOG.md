@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed (critique 10, slice C): team tab rows follow the plan like the HUD (`workersByTask` over hud-surface `sortAgents`, state order then T row) and the team LAST is the HUD's short call (`read gamma.py`, hud.ts `lastAction`) instead of the raw result text; the route labels and the channel head sit one cell in like every other tab; `channel` is never shortened to `chan` (the narrow strip is words at gap 1, then wraps); an empty channel says `no messages yet` in plain words; Board titles keep their cells when every row reads done (the state column is as wide as the longest word on the board, `done` 4 not 7); the narrow gates header keeps its count as `1/2`; the core tab reads `audit team (low effort)`, `off plan`, `ran sonnet-5-5, medium effort` (no `audit/low`, `differs`, `haiku/low`) and wraps a long `reading` sentence on its words (`mod/panel-c10.test.ts`).
+
 ## 17.10.0 - 2026-11-11
 
 - Fixed (wave 11 integration): the band shows Stop's open count beside the plan (`todo 5/5 · 1 open`) when store rows the plan does not carry are open, so a full plan never reads as all done while Stop would refuse (`openWork` on the mission model, from the core row's contract.open).

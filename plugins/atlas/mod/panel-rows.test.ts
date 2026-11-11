@@ -40,7 +40,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain('agents  ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
+    expect(route).toContain(' agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
     expect(body('team', 120, { lead, mates }).some((l) => /^ {2}◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {
@@ -61,15 +61,15 @@ describe('team tab: lead row, roster rows, lead tally', () => {
 describe('channel tab: header, columns and marks', () => {
   const note = (over: Partial<PanelNote> = {}): PanelNote => ({ at: '10:02', from: 'lead', text: 'hello', ...over });
   test('one person is singular, more are plural', () => {
-    expect(body('channel', 80, { people: 1, unread: 0, notes: [] })[0]).toBe('#atlas-board-mod  1 person');
-    expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe('#atlas-board-mod  2 people');
+    expect(body('channel', 80, { people: 1, unread: 0, notes: [] })[0]).toBe(' #atlas-board-mod  1 person');
+    expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe(' #atlas-board-mod  2 people');
   });
   test('a missing channel name reads #channel', () => {
-    expect(body('channel', 80, { channel: undefined, people: 3, unread: 0, notes: [] })[0]).toBe('#channel  3 people');
+    expect(body('channel', 80, { channel: undefined, people: 3, unread: 0, notes: [] })[0]).toBe(' #channel  3 people');
   });
   test('unread is shown only when not zero, with its word', () => {
-    expect(body('channel', 80, { unread: 4, notes: [] })[0]).toBe('#atlas-board-mod  5 people · 4 unread');
-    expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe('#atlas-board-mod  5 people');
+    expect(body('channel', 80, { unread: 4, notes: [] })[0]).toBe(' #atlas-board-mod  5 people · 4 unread');
+    expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe(' #atlas-board-mod  5 people');
   });
   test('the time column starts at 50 cells', () => {
     expect(body('channel', 50, { notes: [note()] })[1]).toBe('    lead hello                               10:02'); // the right-aligned value column
@@ -136,7 +136,7 @@ describe('core tab: caps, notes and figures', () => {
   test('only the last 6 routes show, newest first', () => {
     const c = empty();
     c.routes = Array.from({ length: 7 }, (_, i) => route(`r${i}`)) as never;
-    const names = core(c).filter((l) => /^ {4}fix\/low/.test(l)).map((l) => l.split(/\s+/)[2]);
+    const names = core(c).filter((l) => /^ {4}fix team \(low effort\)/.test(l)).map((l) => l.split(/\s+/)[5]);
     expect(names).toEqual(['r6', 'r5', 'r4', 'r3', 'r2', 'r1']);
   });
   test('without in-process rows the tab says they are not shown; with them it shows the transport and no note', () => {
@@ -146,7 +146,7 @@ describe('core tab: caps, notes and figures', () => {
     c.inProcess = true;
     c.routes = [route('in-process:fix/low', { name: 'in-process', transport: 'in-process', isolation: '', maxParallel: 2 })] as never;
     const out = core(c);
-    expect(out).toContain('    fix/low workers ran in-process (no tmux team), up to 2 at once'); // B4: plain words, not `in-process  in-process, max 2`
+    expect(out).toContain('    fix team (low effort) workers ran in-process (no tmux team), up to 2 at once'); // B4: plain words, not `in-process  in-process, max 2`
     expect(out.join('\n')).not.toContain('not shown here');
   });
   test('B4: with nothing read or returned the offload line is a sentence, not `0 tokens read by workers`', () => {
@@ -162,14 +162,14 @@ describe('core tab: caps, notes and figures', () => {
     const c = empty();
     c.routes = [route('t1', { seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['opus'] }], drift: ['explorer ran opus'] })] as never;
     const out = core(c).join('\n');
-    expect(out).toContain('ran on opus, plan haiku/low');
+    expect(out).toContain('ran on opus, planned haiku, low effort');
     expect(out).not.toMatch(/ran opus {2}haiku\/low/);
   });
   test('B8: a route without a transport is not labelled tmux', () => {
     const c = empty();
     c.routes = [route('t1', { transport: undefined })] as never;
-    const line = core(c).find((l) => l.startsWith('    fix/low'))!;
-    expect(line).toBe('    fix/low t1  transport unknown, shared, max 1');
+    const line = core(c).find((l) => l.startsWith('    fix team (low effort)'))!;
+    expect(line).toBe('    fix team (low effort) t1  transport unknown, shared, max 1');
     expect(line).not.toContain('tmux');
   });
   test('the ledger drops open and unchecked counts of zero and says what is off', () => {
@@ -218,8 +218,8 @@ describe('route tab: blocked owner, phase position', () => {
   });
   test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {
     const phase = (p: string): string => body('route', 80, { phase: p, phases: ['research', 'theory', 'build', 'verify'] })[0]!;
-    expect(phase('build')).toBe('phase  build 3 of 4');
-    expect(phase('somewhere')).toBe('phase  somewhere');
-    expect(phase('done')).toBe('phase  done 4 of 4');
+    expect(phase('build')).toBe(' phase  build 3 of 4');
+    expect(phase('somewhere')).toBe(' phase  somewhere');
+    expect(phase('done')).toBe(' phase  done 4 of 4');
   });
 });
