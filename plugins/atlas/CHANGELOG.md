@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tests: new `*.mut.test.ts` files pin the seed-1105 mutation survivors of band, board-model, hud, mission-layout, sidebar and panel-layout (no source change); the equivalent mutants are explained in the test headers.
+
 ## 17.6.0 - 2026-11-11
 
 ### Fixed
