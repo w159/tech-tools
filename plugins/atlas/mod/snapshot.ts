@@ -148,7 +148,7 @@ export class SnapshotBuilder {
     const { panes } = parseHerdrStatus(live.herdrStdout ?? '');
     const squad = mergeSquad(this.members, notes, panes, [...crew.agents, ...live.taskAgents, ...(live.mux ?? [])], live.now);
     // S1: a dispatch row follows its worker, so the band count, the board and the side panel agree once the worker ends.
-    const todos = settleDispatch(read.items, endedOf(squad));
+    const todos = settleDispatch(read.items, endedOf(squad, live.orch));
     const phase = currentPhase(todos, live.headerPhase, this.sessionId);
     return {
       ...orchestrate(notes, squad),

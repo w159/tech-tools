@@ -257,8 +257,13 @@ export function routeCounts(groups: readonly TodoGroup[], _contract?: Contract, 
 export type Outcome = 'done' | 'failed';
 
 /** Who has ended, from the squad: `finished` is done, `failed` and `dead` are failed; running, parked and waiting workers are not ended. The lead is not a worker. */
-export function endedOf(squad: readonly { name: string; state: string }[]): Record<string, Outcome> {
+export function endedOf(squad: readonly { name: string; state: string }[], orch?: { stage: Record<string, string>; meta: Record<string, { name?: string }>; activity: Record<string, { mood?: string }> }): Record<string, Outcome> {
   const out: Record<string, Outcome> = {};
+  // The agent's own completion event (stage `reported`) closes its row even when the squad no longer lists it.
+  for (const [id, stage] of Object.entries(orch?.stage ?? {})) {
+    const name = orch?.meta[id]?.name;
+    if (stage === 'reported' && name && name !== 'lead') out[name] = orch?.activity[id]?.mood === 'failed' ? 'failed' : 'done';
+  }
   for (const a of squad) {
     if (a.name === 'lead') continue;
     if (a.state === 'finished') out[a.name] = 'done';

@@ -159,17 +159,17 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ ph 4/5 · todo 1/4 · ◐1`", () => {
+test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ◐1`", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ph 4/5 · todo 1/4 · ◐1");
+	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ◐1");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 
-test("blocked: `▲ blocked · needs you` with the warn glyph instead of the phase", () => {
+test("blocked: `▲ BLOCKED · needs you` with the warn glyph instead of the phase", () => {
 	const m = model({ blocked: true, team: "fix/low", workers: [] });
-	expect(head(m)).toContain("▲ blocked · needs you");
+	expect(head(m)).toContain("▲ BLOCKED · needs you");
 	expect(renderPanel(m)[0]).toContain("38;2;249;226;175");
 });
 

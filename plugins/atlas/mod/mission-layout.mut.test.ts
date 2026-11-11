@@ -32,7 +32,7 @@ describe('richBand: the idle and blocked words are bold', () => {
     expect(word?.bold).toBe(true);
   });
   test('blocked by a failing check', () => {
-    const word = bandLines(rich({ checks: [{ id: 'routing', ok: false }] }))[0]!.runs.find((x) => x.t === ' blocked');
+    const word = bandLines(rich({ checks: [{ id: 'routing', ok: false }] }))[0]!.runs.find((x) => x.t === ' BLOCKED');
     expect(word?.bold).toBe(true);
   });
 });
