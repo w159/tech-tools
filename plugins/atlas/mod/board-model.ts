@@ -103,7 +103,7 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; stateCol?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; stateCol?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= COMPACT_MIN ? 'compact' : 'narrow');
 
@@ -129,18 +129,41 @@ const boardKeys = (rows: readonly BoardRow[]): string[] => keysOf('board', rows.
 /** What the Motion observes of a board: each row's key and state word. */
 export const boardMotionItems = (rows: readonly BoardRow[]): MotionItem[] => boardKeys(rows).map((key, i) => ({ key, state: rows[i]!.state }));
 
+/** Labels cut to `w` cells for one list: a label that fits stays whole; when the labels share a long head (`List the function names defined in ...`)
+ * the cut keeps the end of the label (the file name) behind a leading `...`, else the end is cut. Never a middle cut. */
+export function labelCut(labels: readonly string[], w: number): string[] {
+  const endCut = (l: string): string => clip(l, w);
+  const over = labels.filter((l) => cells(l) > w);
+  if (over.length < 2) return labels.map(endCut);
+  let head = over[0]!;
+  for (const l of over) while (!l.startsWith(head)) head = head.slice(0, -1);
+  if (cells(head.slice(0, head.search(/\S*$/))) < 10) return labels.map(endCut);
+  return labels.map((l) => {
+    if (cells(l) <= w || w <= 6) return endCut(l);
+    const cs = [...l];
+    let at = cs.length;
+    let used = 0;
+    while (at > 0 && used + cells(cs[at - 1]!) <= w - 3) used += cells(cs[--at]!);
+    let tail = cs.slice(at);
+    const brk = tail.findIndex((c) => c === ' ' || c === '/');
+    if (brk >= 0 && brk < 6 && brk < tail.length - 1) tail = tail.slice(brk + 1);
+    return `...${tail.join('')}`;
+  });
+}
+
 /** One row at rest. `focus` marks the row the marker `▸` points at. */
 function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const f = form(o.cols);
   const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), stateRun(row.state, o.ui, o.tick ?? 0), r(' ')];
   // Full form: done struck in sub, the focus bold. The 80 mock draws labels plain (text), the 40 mock dims a done one (sub).
+  const text = o.shown ?? row.label;
   const labelRun = (w: number): Run =>
-    f === 'full' ? (row.state === 'done' ? r(clip(row.label, w), 'sub', { strike: true }) : r(clip(row.label, w), 'text', { bold: focus }))
-      : r(clip(row.label, w), f === 'narrow' && row.state === 'done' ? 'sub' : 'text');
+    f === 'full' ? (row.state === 'done' ? r(clip(text, w), 'sub', { strike: true }) : r(clip(text, w), 'text', { bold: focus }))
+      : r(clip(text, w), f === 'narrow' && row.state === 'done' ? 'sub' : 'text');
   if (f === 'narrow') return [...head, labelRun(Math.max(1, o.cols - 4))];
   const stateCol = f === 'full' ? COL.state : (o.stateCol ?? COL.stateCompact);
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
-  if (f === 'compact') return [...withLabel, r(row.state)];
+  if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(row.state)], stateCol + STATE_W + 1), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(row.state)];
   const stateCell = o.rich ? stateChip(row.state, o.ui) : r(row.state);
   const withState = to([...withLabel, stateCell], COL.owner);
   const owner = to([...withState, ...(row.owner ? [r(clip(row.owner, OWNER_W), 'sub')] : [])], COL.detail);
@@ -159,9 +182,15 @@ export type BoardLine = { runs: Run[] };
 export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const focus = rows.findIndex((x) => x.focus ?? x.state === 'running');
   // Compact form: the state column slides right to fit the widest label, never past the room the longest state word needs.
-  const stateCol = form(o.cols) === 'compact' ? Math.max(COL.stateCompact, Math.min(o.cols - STATE_W - 1, Math.max(0, ...rows.map((x) => cells(x.label))) + 7)) : undefined;
   const keys = o.motion ? boardKeys(rows) : [];
-  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol, ...(o.motion ? { key: keys[i]! } : {}) }) }));
+  const compact = form(o.cols) === 'compact';
+  const ownerW = compact ? Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(x.owner)))) : 0;
+  const widest = Math.max(0, ...rows.map((x) => cells(x.label)));
+  // Compact: the owner column takes its width from the right, the state column slides left to make room (never under 26, never past the widest label).
+  const stateColC = compact ? Math.max(COL.stateCompact, Math.min(o.cols - STATE_W - 1 - (ownerW ? ownerW + 1 : 0), widest + 7)) : undefined;
+  const labelW = form(o.cols) === 'narrow' ? Math.max(1, o.cols - 4) : (stateColC ?? COL.state) - 5;
+  const shown = labelCut(rows.map((x) => x.label), labelW);
+  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol: stateColC, shown: shown[i]!, ...(ownerW ? { ownerW } : {}), ...(o.motion ? { key: keys[i]! } : {}) }) }));
   return form(o.cols) === 'full' ? [{ runs: boardHeader() }, ...lines] : lines;
 }
 

@@ -28,8 +28,8 @@ describe('sidebar golden text', () => {
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
-    expect(r).toContain('phase  implement 4/5');
-    expect(r.some((l) => l.startsWith('gates ') && l.endsWith('1/3'))).toBe(true);
+    expect(r).toContain('phase  implement 4 of 5');
+    expect(r.some((l) => l.startsWith('gates ') && l.endsWith('1 of 3 green'))).toBe(true);
     expect(r.some((l) => l.startsWith('todo ') && l.includes('1 of 7'))).toBe(true);
     expect(r.some((l) => l.startsWith('agents ') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);
   });
@@ -49,7 +49,7 @@ describe('sidebar golden text', () => {
   });
   test('team at 38 columns keeps the keys, drops words from the right on one row and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]!.trimEnd()).toBe(' r: route t: team c: chan g:  k:  o:');
+    expect(r[2]!.trimEnd()).toBe(' r: rt t: tm c: ch g: gt k: co o: bd');
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
   });

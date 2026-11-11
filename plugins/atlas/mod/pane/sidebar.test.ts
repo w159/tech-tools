@@ -101,7 +101,7 @@ describe('sidebar shell', () => {
   });
 
   test('L21: the strip takes a shorter label form in a narrow pane and rules the lit tab under its drawn label', () => {
-    for (const [columns, label] of [[38, 'gates'], [56, 'gates']] as const) {
+    for (const [columns, label] of [[38, 'gt'], [56, 'gates']] as const) {
       const t = tree({ columns }, 'gates');
       const rowsOf = kids(t).filter((n) => n.kind === 'Box');
       expect(rowsOf.filter((r) => String(r.props.key ?? '').startsWith('tabs:'))).toHaveLength(0); // one strip row: no wrapped second row

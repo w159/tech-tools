@@ -111,10 +111,10 @@ describe('change 7: the core tab in plain words, numbers whole', () => {
       for (const l of worker) expect(l).toMatch(/\b\d+(\.\d)?k?\b/);
     });
   }
-  test('at 38 a worker name is cut in the middle, its figures stay whole', () => {
-    const row = body('core', 38).find((l) => /impl.*278|implementer-0278/.test(l))!;
+  test('at 38 a worker name is cut at its end, its figures stay whole', () => {
+    const row = body('core', 38).find((l) => /impl/.test(l) && /\d\.\dk|\$0/.test(l))!;
     expect(row).toBeDefined();
-    expect(row).toMatch(/\S\.\.\.\S/);
+    expect(row).toMatch(/impl\S*\.\.\./);
   });
   test('the figures are the right-aligned value column', () => {
     for (const cols of [120, 80]) {
@@ -134,7 +134,7 @@ describe('one row grammar on all five tabs', () => {
         team: body('team', cols).filter((l) => /^[▸ ] /.test(l)),
         channel: body('channel', cols).slice(1),
         gates: body('gates', cols, { gates: [{ id: 'lint', title: 'lint', lines: [{ id: 'l', label: 'lint', ok: true }] }, { id: 'doctor', title: 'doctor', lines: [{ id: 'd', label: 'doctor', ok: false, fix: 'run the doctor' }] }] }),
-        core: body('core', cols).filter((l) => l && !/^\S/.test(l)),
+        core: body('core', cols).filter((l) => l && !/^\S/.test(l) && !/^ \S/.test(l)),
       };
       for (const t of TABS) {
         expect(pick[t].length).toBeGreaterThan(0);

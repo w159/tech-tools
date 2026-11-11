@@ -85,6 +85,11 @@ describe('5: the core tab is plain language', () => {
       expect((text.match(/no verdicts? (recorded )?yet/g) ?? []).length).toBeLessThanOrEqual(1);
     });
   }
+  test('an empty ledger says so once', () => {
+    const none = { ...core, verdicts: [], claims: [], ledger: { verified: 0, refuted: 0, pending: 0, claimed: 0, unchecked: 0 } } as typeof core;
+    const text = body('core', 80, { core: none }).join('\n');
+    expect((text.match(/no verdicts? (recorded )?yet/g) ?? []).length).toBe(1);
+  });
   test('every fact survives: token counts and the team plan', () => {
     const text = body('core', 150).join('\n');
     expect(text).toMatch(/tokens read by workers/);
@@ -98,10 +103,10 @@ describe('6: height and indent', () => {
   });
   for (const t of ['team', 'gates', 'channel', 'route'] as PanelTab[]) {
     test(`${t} uses more of a tall pane than a short one, and fits it`, () => {
-      const tall = panelText(model(t, 80, { rows: 40 }));
+      const tall = panelText(model(t, 80, { rows: 60 }));
       const short = panelText(model(t, 80, { rows: 14 }));
       expect(tall.length).toBeGreaterThan(short.length);
-      expect(tall.length).toBeLessThanOrEqual(40);
+      expect(tall.length).toBeLessThanOrEqual(60);
     });
   }
 });

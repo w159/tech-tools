@@ -77,9 +77,9 @@ describe('channel tab: header, columns and marks', () => {
   test('the nick column is 4 cells at least, 10 at most below 100 columns, 18 from 100, cut with an ellipsis', () => {
     const first = (cols: number, from: string): string => body('channel', cols, { notes: [note({ from })] })[1]!.replace(/ +10:02$/, '');
     expect(first(80, 'ab')).toBe('    ab hello');
-    expect(first(80, 'implementer-band')).toBe('    imple...band hello'); // cut in the middle, the tail that tells workers apart stays
+    expect(first(80, 'implementer-band')).toBe('    implement... hello'); // cut at its end, never in the middle
     expect(first(120, 'implementer-band')).toBe('    implementer-band hello');
-    expect(first(120, 'x'.repeat(30))).toBe(`    ${'x'.repeat(11)}...${'x'.repeat(10)} hello`);
+    expect(first(120, 'x'.repeat(30))).toBe(`    ${'x'.repeat(21)}... hello`);
   });
   test('the nick column is as wide as the widest nick shown in the log', () => {
     const out = body('channel', 80, { notes: [note({ from: 'ab' }), note({ from: 'abcdefg', text: 'two' })] });
@@ -151,8 +151,8 @@ describe('core tab: caps, notes and figures', () => {
   test('B4: with nothing read or returned the offload line is a sentence, not `0 tokens read by workers`', () => {
     const c = empty();
     c.routes = [route('t1')] as never;
-    const line = core(c).find((l) => l.startsWith('offload'))!;
-    expect(line).toBe('offload  workers have read and returned nothing yet');
+    const line = core(c).find((l) => l.startsWith(' reading'))!;
+    expect(line).toBe(' reading  workers have read and returned nothing yet');
     expect(line).not.toMatch(/\b0 tokens\b/);
   });
   test('B4: a seat that ran another model says so in words', () => {
@@ -173,9 +173,9 @@ describe('core tab: caps, notes and figures', () => {
     const c = empty();
     c.verdicts = [verdict('v')] as never;
     c.ledger = { claimed: 1, verified: 1, refuted: 0, pending: 0, unchecked: 0 } as never;
-    expect(core(c).find((l) => l.startsWith('verdicts'))).toBe('verdicts  1 verified · 0 refuted');
+    expect(core(c).find((l) => l.startsWith(' verdicts'))).toBe(' verdicts  1 verified · 0 refuted');
     c.ledger = { claimed: 2, verified: 1, refuted: 1, pending: 3, unchecked: 4 } as never;
-    expect(core(c).find((l) => l.startsWith('verdicts'))).toBe('verdicts  1 verified · 1 refuted · 3 open · 4 unchecked');
+    expect(core(c).find((l) => l.startsWith(' verdicts'))).toBe(' verdicts  1 verified · 1 refuted · 3 open · 4 unchecked');
   });
   test('a DONE claim with no verdict gets a warning row; a matched or non-DONE one does not', () => {
     const c = empty();
@@ -190,15 +190,15 @@ describe('core tab: caps, notes and figures', () => {
     const c = empty();
     c.offload = { workers: [{ name: 'w1', model: null, peak: 58_800, kept: 7000, returned: 151, costUsd: null, finished: false }], kept: 7000, returned: 151, ratio: 46.4 } as never;
     const out = core(c);
-    expect(out.find((l) => l.startsWith('offload'))).toBe('offload  7.0k tokens read by workers, 151 returned to the lead, 2% of what they read');
+    expect(out.find((l) => l.startsWith(' reading'))).toBe(' reading  7.0k tokens read by workers, 151 returned to the lead, 2% of what they read');
     expect(out.find((l) => l.startsWith('    w1'))).toBe(`    w1 ?${' '.repeat(77)}peak 58.8k  read 7.0k  returned 151`); // figures right-aligned, no cost when unknown
   });
   test('the offload share is a whole percent of what the workers read, and only when it can not pass 100', () => {
     const c = empty();
     c.offload = { workers: [worker('w')], kept: 15, returned: 10, ratio: 1.5 } as never;
-    expect(core(c).find((l) => l.startsWith('offload'))).toBe('offload  15 tokens read by workers, 10 returned to the lead, 67% of what they read');
+    expect(core(c).find((l) => l.startsWith(' reading'))).toBe(' reading  15 tokens read by workers, 10 returned to the lead, 67% of what they read');
     c.offload = { workers: [worker('w')], kept: 10, returned: 15, ratio: 0.7 } as never;
-    expect(core(c).find((l) => l.startsWith('offload'))).not.toContain('%');
+    expect(core(c).find((l) => l.startsWith(' reading'))).not.toContain('%');
   });
 });
 
@@ -215,8 +215,8 @@ describe('route tab: blocked owner, phase position', () => {
   });
   test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {
     const phase = (p: string): string => body('route', 80, { phase: p, phases: ['research', 'theory', 'build', 'verify'] })[0]!;
-    expect(phase('build')).toBe('phase  build 3/4');
+    expect(phase('build')).toBe('phase  build 3 of 4');
     expect(phase('somewhere')).toBe('phase  somewhere');
-    expect(phase('done')).toBe('phase  done 4/4');
+    expect(phase('done')).toBe('phase  done 4 of 4');
   });
 });
