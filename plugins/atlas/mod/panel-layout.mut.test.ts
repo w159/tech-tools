@@ -70,3 +70,12 @@ describe('offload model column', () => {
     expect(lineOf(null)).toContain('?');
   });
 });
+
+describe('dispatch rows: the in-process note wraps four cells inside the panel', () => {
+  test('at 30 columns the note breaks at 26 cells', () => {
+    const c = core({ inProcess: false } as never);
+    const lines = bodyLines(panelWorld('core', 30, mocha, { core: c })).map((l) => l.runs.map((x) => x.t).join('').trim());
+    const at = lines.findIndex((t) => t.startsWith('in-process'));
+    expect(lines.slice(at, at + 2)).toEqual(['in-process dispatches are', 'not shown here']);
+  });
+});

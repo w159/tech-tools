@@ -77,3 +77,11 @@ describe('boardBody: the compact state column stops one cell short of the room t
     expect(line.indexOf('running')).toBe(60 - 7 - 1);
   });
 });
+
+describe('boardRow: the narrow form spends every cell after its four-cell head on the label', () => {
+  test('a long label fills exactly the width', () => {
+    const row: BoardRow = { label: 'x'.repeat(80), state: 'running', owner: 'o', detail: '' };
+    const w = boardRow(row, false, { cols: 30, ui }).map((x) => x.t).join('').length;
+    expect(w).toBe(30);
+  });
+});

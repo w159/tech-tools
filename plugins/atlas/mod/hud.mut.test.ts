@@ -6,6 +6,8 @@
 //    (line 91: max(26|30, maxLen + 5); line 133: max(20, min(maxLen + 1, 29))), so 0 and 1 give the same column.
 //  - data/crew.ts:26 parse `return undefined` -> `return undefined`: the mutator (atlas_mutate.py:227) swaps the expression for the
 //    identifier `undefined`, which is already what the line returns, so the mutant text equals the original.
+//  - hud.ts hudMotionItems `cols: 120` -> `121` (second pass): surfaces() builds `s` (todoModel, agentModel) from the input and `now` alone; cols
+//    only reaches `o`, which hudMotionItems discards.
 import { describe, expect, test } from 'claude-code/testing';
 import { worldHudAgents, worldPhases, worldPlan } from '../contracts/hud-world';
 import { hudRows, reclaimBlanks, segmentOf, todoModel, type HudInput } from './hud';
@@ -94,5 +96,17 @@ describe('segmentOf', () => {
   test('with NO_COLOR only bold and strike remain', () => {
     const none: Ui = { ...ui, color: 'none' };
     expect(segmentOf({ t: 'x', tone: 'accent', bold: true, strike: true }, none)).toEqual({ t: 'x', bold: true, strike: true });
+  });
+});
+
+describe('todoModel: second counts to milliseconds', () => {
+  const item = (over: Record<string, unknown>) => ({ content: 'ship it', status: 'in_progress', ...over }) as Parameters<typeof todoModel>[0][number];
+  test('a running item reads elapsed from claimed_at seconds, and its estimate in whole seconds', () => {
+    const [row] = todoModel([item({ claimed_at: 1000, estimate_s: 1000 })], 1_005_000);
+    expect(row!.detail).toBe('elapsed 00:05 of 16:40');
+  });
+  test('a done item carries its completion in epoch ms', () => {
+    const [row] = todoModel([item({ status: 'completed', completed_at: 190 })], 0);
+    expect(row!.doneAt).toBe(190_000);
   });
 });
