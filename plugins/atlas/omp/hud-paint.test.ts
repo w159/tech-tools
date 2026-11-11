@@ -18,7 +18,7 @@ const phases = worldPhases();
 const block = (rows: string[]) => rows.slice(rows.findIndex(l => l.includes("SUBAGENTS")));
 
 // The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the count and 3 after it.
-const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(━{6,})( \d+ of \d+ done)$/, (_m, f: string, c: string) => `${f.slice(2)}${c} ━━━`), ...rows.slice(1)];
+const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(━{6,})( \d+\/\d+)$/, (_m, f: string, c: string) => `${f.slice(2)}${c} ━━━`), ...rows.slice(1)];
 test("omp TODO surface equals the design goldens at 120, 120 rich, 80 and 40; 60 uses the 40 form", () => {
 	const input = { todos: worldPlan(), agents: [], phases };
 	expect(hudText(input, opts(120))).toEqual(edge(todo_120));

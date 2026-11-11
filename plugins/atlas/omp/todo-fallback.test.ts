@@ -47,7 +47,7 @@ test("tree: the rev 4 TODO surface, one row per plan item with its state word, t
 	expect(rows[1]!.startsWith("▸")).toBe(true);
 	expect(lines.some((l) => /^progress /.test(l))).toBe(false); // one count: the ribbon's
 	expect(lines[0]).toContain("▸ TODO");
-	expect(lines[0]).toContain("1 of 5 done");
+	expect(lines[0]).toContain("1/5");
 });
 
 test("a completed row stays in the tree and the board's evidence is its detail", () => {
@@ -185,7 +185,7 @@ test("an unchanged board is not repainted; a changed one is", () => {
 	b.write([{ content: "Research: a", status: "completed" }]);
 	h.tick();
 	expect(h.widgets.length).toBe(2);
-	expect(strip(h.widgets.at(-1) ?? [])).toContain("1 of 1 done");
+	expect(strip(h.widgets.at(-1) ?? [])).toContain("1/1");
 });
 
 test("long item text is clipped with `...` inside the row width, and short text is kept whole", () => {

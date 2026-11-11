@@ -151,7 +151,9 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     // A finished worker's LAST column is its outcome, as its done plan row switches to one (critique 12: `tests green` beside `read runs.ts:17`): the evidence
     // its plan row carries; the last call when it left none (its free-text closing line is never shown: critique 8).
     const outcome = state === 'done' ? flat(owned.find((t) => flat(t.evidence) && !/^ran\s+[\d:]+$/.test(flat(t.evidence)))?.evidence) : ''; // a bare `ran 03:10` is a duration, not an outcome
-    return { name: a.name, id: a.key ?? a.name, state, model: shortModel(a.model), tasks, tool: outcome || lastAction(a, root), ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
+    // With none, a finished worker that made calls reports `report returned`: an outcome, never its last tool call (critique 14: `read alpha.py` beside `done`). Its closing line, when it made no call, stays.
+    const last = outcome || (state === 'done' && a.lastTool ? 'report returned' : lastAction(a, root));
+    return { name: a.name, id: a.key ?? a.name, state, model: shortModel(a.model), tasks, tool: last, ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');

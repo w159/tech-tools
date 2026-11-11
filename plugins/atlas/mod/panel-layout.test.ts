@@ -84,7 +84,7 @@ describe('route tab', () => {
     expect(text).not.toContain('(no state)');
   });
   test('an empty board and nobody running is the design empty state', () => {
-    expect(rows('route', 120, { todos: [], workers: [], gates: [] })).toContain('(no state)  no tasks yet · add one with /todo add');
+    expect(rows('route', 120, { todos: [], workers: [], gates: [] })).toContain('(no state)  add one with /todo add'); // critique 14: the `todo` row above says `no tasks yet`; the hint does not say it twice
   });
   test('an open task row shows its evidence line, or says there is none', () => {
     const done = { id: 'd1', label: 'wire it', state: 'done' as const, evidence: 'tests green' };
@@ -172,14 +172,14 @@ describe('gates tab', () => {
 describe('core tab', () => {
   test('contract, verdicts, offload and route sections with words on every figure', () => {
     const out = rows('core', 120, { core }).join('\n');
-    for (const w of [' contract', ' verdicts  1 verified · 1 refuted', ' reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', ' teams  3 this session']) expect(out).toContain(w);
+    for (const w of ['    contract', '    verdicts  1 verified · 1 refuted', '    reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', '    teams  3 this session']) expect(out).toContain(w);
   });
   test('L16: three explorers on a one-seat route read ran 3 / planned 1 and drift, not 1x as planned', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
     expect(out).toContain('3 explorers ran, 1 planned (haiku, low effort)'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
-    expect(out).toMatch(/■ {3}3x explorer +off plan +3 explorers ran, 1 planned/);
+    expect(out).toMatch(/▲ {3}3x explorer +off plan +3 explorers ran, 1 planned/);
     expect(out).toContain('planned audit team (low effort), ran 3 explorers');
     expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
@@ -188,7 +188,7 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 4, drift: ['explorer ran 4, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toMatch(/■ {3}4x explorer +off plan +4 explorers ran, 1 planned/);
+    expect(out).toMatch(/▲ {3}4x explorer +off plan +4 explorers ran, 1 planned/);
     expect(out).not.toContain('1x explorer');
   });
   // critique 12 B1/B6: live-150-8271cfc8-1 core tab: the plan is 5/5 done, the rows carry no evidence and no finding verifies them

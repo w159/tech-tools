@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Band never reads `idle` under a running spinner: the AbovePrompt `isWorking` prop (true from Enter, before any hook fires; the first prompt waits on SessionStart hooks) now feeds the band's busy state (critique 14 C1).
+- Band: `last run ... all ok` no longer sits beside a failing check while the lead is busy, and phase `done` becomes a `▲ <check> warning` while a check fails (critique 14 C1).
+- Gates: the header contract counts as a pending check from the first frame, so `3/3` no longer becomes `x/4`; `Evidence captured` follows Stop's own (a) and is green for a run that changed no code (critique 14 C2).
+- Core tab: an off-plan team is amber like the gates tab, `evidence`/`verified` follow their gates lines (`not required for this run`), and the section labels sit in the name column (critique 14 C3, C5).
+- Motion: the ramp window is 800 ms (four beats), so the 600 ms frame still differs from the final frame; the 256-colour tail holds its last step bold (critique 14 C4).
+- Polish: done agent rows read `report returned`, the team tab states its tally once, the TODO ribbon reads `5/5`, the route tab says `no tasks yet` once, the board title is `▸ BOARD`, and the gate labels `Team channel used`, `Team mode`, `Lead's own calls since last dispatch` replace the jargon (critique 14 C5).
+
 ## 17.12.0 - 2026-11-11
 
 - Band checks row counts `n/m green` (`2/3 green`) like the panel and gates tab, replacing `2 of 3 green` (critiques 12 and 13: one count format); band goldens and tests updated.

@@ -26,7 +26,7 @@ const worker = (name: string, over: Partial<PanelWorker> = {}): PanelWorker => (
 // ---- 1. one gates figure --------------------------------------------------------------------------------------------
 
 describe('gates figure: the band and the side panel read gateTally', () => {
-  // The world's three groups plus the header contract group, which holds no data yet: it is neither green nor a check.
+  // The world's three groups plus the header contract group, which holds no reply yet: it is a pending check from the first frame (critique 14: `3/3` never becomes `x/4`), never a failure.
   const groups: GateGroup[] = [...worldGates(), { id: 'header', title: 'header', lines: [] }];
   const snap = worldSnapshot();
 
@@ -49,15 +49,15 @@ describe('gates figure: the band and the side panel read gateTally', () => {
 
   test('the band, the gates tab ribbon and the route tab say the same N of M for one snapshot', () => {
     const tally = gateTally(groups);
-    expect(tally.total).toBe(3); // the empty group is not counted
+    expect(tally.total).toBe(4); // the header group with no reply yet counts, pending
     expect(bandFigure()).toEqual([tally.green, tally.total]);
     expect(figure(panel('gates')[0]!)).toEqual([tally.green, tally.total]);
     expect(figure(panel('route').find((l) => l.startsWith(' gates'))!)).toEqual([tally.green, tally.total]);
   });
 
-  test('a group with no data is not listed as a gate on the route row', () => {
+  test('a pending header group is listed on the route row as a passing gate, so the names add up to the figure', () => {
     const row = panel('route').find((l) => l.startsWith(' gates'))!;
-    expect(row).not.toContain('header');
+    expect(row).toContain('● header');
   });
 
   test('every gate group with an error is a failing check, not a green one', () => {

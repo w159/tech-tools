@@ -31,7 +31,8 @@ export type GateTally = { total: number; green: number; failing: string[]; names
 /** The id of the informational line that carries the Stop verdict: a record, never a check or a gate. */
 export const STOP_LINE = 'stop-verdict';
 
-const hasData = (g: GateGroup): boolean => g.lines.some((l) => l.id !== STOP_LINE) || !!g.error;
+/** The header contract is a check from the first frame, before any reply has been matched: it is pending then (never a failure), so a `3/3` never becomes `x/4` (critique 14). */
+const hasData = (g: GateGroup): boolean => g.lines.some((l) => l.id !== STOP_LINE) || !!g.error || g.id === 'header';
 
 const NAME_MAX = 16;
 /** The header contract as ONE evaluation: the core row's `n of m` replies that opened with the ATLAS header (the transcript's tally) also decides the gates tab's

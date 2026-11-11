@@ -69,8 +69,10 @@ describe('motion-demo frames', () => {
       }
     }
   });
-  test('critique 7: the agent row keeps its LAST column through done (it never goes blank at the change)', () => {
-    for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans'))) expect([n, plain(files[n]!).includes('runs.ts:17')]).toEqual([n, true]);
+  test('critique 7/14: the agent row keeps its LAST column through done (it never goes blank at the change): the call while it runs, the outcome of its plan row after', () => {
+    const agentRow = (n: string): string => plain(files[n]!).trimEnd().split('\n').at(-1)!;
+    expect(agentRow('agent-00-running.ans')).toContain('runs.ts:17');
+    for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans') && !k.includes('running'))) expect([n, agentRow(n).includes('tests green'), agentRow(n).includes('runs.ts:17')]).toEqual([n, true, false]);
   });
   test('every row is exactly the width', () => {
     for (const [n, t] of Object.entries(files)) if (!n.endsWith('strip.ans')) for (const l of t.trimEnd().split('\n')) expect([...plain(l)].length).toBe(100);
@@ -108,6 +110,21 @@ describe('the demo draws what the live HUD draws', () => {
       for (let i = 1; i < ramp.length; i++) expect([s, i, ramp[i] === ramp[i - 1]]).toEqual([s, i, false]);
     }
     expect(f256['todo-99-done.ans']).toContain('\x1b[9;');
+  });
+});
+
+describe('critique 14: the 600 ms frame is still the ramp', () => {
+  test('the window outlasts 600 ms, and the frame sampled at 600 ms differs from the final frame and from the 400 ms frame, in truecolor and 256 colours', () => {
+    expect(MOTION_MS).toBeGreaterThan(600);
+    for (const color of ['truecolor', '256'] as const) {
+      const all = demoFrames(100, MOTION_STEP_MS, color);
+      for (const s of ['todo', 'agent']) {
+        const at = (ms: number): string => all[`${s}-${String(ms / MOTION_STEP_MS + 1).padStart(2, '0')}-t${String(ms).padStart(4, '0')}ms.ans`]!;
+        expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, false]);
+        expect([color, s, at(600) === at(400)]).toEqual([color, s, false]);
+        for (let ms = 200; ms <= MOTION_MS; ms += MOTION_STEP_MS) expect([color, s, ms, at(ms) === at(ms - MOTION_STEP_MS)]).toEqual([color, s, ms, false]);
+      }
+    }
   });
 });
 

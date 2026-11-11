@@ -13,7 +13,7 @@ const live = (): BoardRow[] => [row('T1 read alpha.py', 'alpha-explorer'), row('
 describe('the board inside the side panel', () => {
   test('critique 12: without its ribbon the board still has one title row (`BOARD  5 items`), no blank row, and the footer carries only the folds', () => {
     const t = boardText(boardLines(live(), { cols: 44, ui, folded: 3, openFolded: 0, ribbon: false }));
-    expect(t[0]).toBe('  BOARD  5 items');
+    expect(t[0]).toBe('  ▸ BOARD  5 items'); // critique 14: the same `▸ BOARD` marker the ribbon has
     expect(t.join('\n').match(/BOARD/g)!.length).toBe(1); // one title, never nested
     expect(t[1]).toContain('T1 read alpha.py');
     expect(t.at(-1)).toBe('  3 dispatches folded');

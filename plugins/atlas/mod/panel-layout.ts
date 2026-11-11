@@ -184,7 +184,7 @@ export const channelLabel = (name: string | undefined, fallback = 'channel'): st
 
 /** The ribbon's right-hand text: what the active tab counts, always with its word. */
 function ribbonRight(m: PanelModel): string {
-  if (m.tab === 'team') return m.workers.length ? countWords(m.workers, m.ui) : '';
+  if (m.tab === 'team') return m.lead ? '' : m.workers.length ? countWords(m.workers, m.ui) : ''; // with a lead the tally is the `workers` row under it: once, at every width (critique 14: `3 done` twice)
   if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green}/${t.total}` : ''; } // `n/m` at every width: `2/4` at 110 and `1 of 4 green` at 150 was one figure in two formats (critique 11)
   if (m.tab === 'channel') return m.channel ? channelLabel(m.channel) : '';
   return '';
@@ -350,7 +350,7 @@ function routeBody(m: PanelModel): PanelLine[] {
     const running = listed.length ? [] : team.filter((w) => w.state === 'running');
     const nameW = Math.min(nameCap(m.cols), Math.max(...running.map((w) => cells(nameOf(w))), 1));
     if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
-    else if (!m.workers.length) rows.push(BLANK, line([r('(no state)', 'muted'), r(`  no tasks yet ${dot(m.ui)} add one with /todo add`, 'muted')]));
+    else if (!m.workers.length) rows.push(BLANK, line([r('(no state)', 'muted'), r('  add one with /todo add', 'muted')])); // the `todo` row above already says `no tasks yet`
     return rows;
   }
   // Agents that work but hold no plan row (the plan rows carry no owner while the agents are host-spawned): a group under the plan names them, in the HUD Subagents state words.
@@ -614,14 +614,14 @@ function gatesBody(m: PanelModel): PanelLine[] {
 
 // ---- core (contract, verdicts, offload, route) ------------------------------------------------------------------------------------
 
-const heading = (title: string, figures: Run[], m: PanelModel): PanelLine => line(fitRuns([r(` ${title}`, 'muted', { bold: true }), ...(figures.length ? [r('  '), ...figures] : [])], m.cols));
+const heading = (title: string, figures: Run[], m: PanelModel): PanelLine => line(fitRuns([r(`${' '.repeat(GRID_LEAD)}${title}`, 'muted', { bold: true }), ...(figures.length ? [r('  '), ...figures] : [])], m.cols));
 const tallyTone = (ok: number, total: number): Tone => (!total ? 'muted' : ok === total ? 'text' : 'warn');
 const joinSep = (parts: Run[], ui: Ui): Run[] => parts.flatMap((p, i) => (i ? [sep(ui), p] : [p]));
 
 /** A heading and its figures, wrapped by whole figure: a figure that does not fit moves to the next row (indented under the first), it is never cut. */
 function flowHeading(title: string, parts: readonly string[], m: PanelModel): PanelLine[] {
-  const indent = cells(title) + 3;
-  const rows: Run[][] = [[r(` ${title}`, 'muted', { bold: true }), r('  ')]];
+  const indent = GRID_LEAD + cells(title) + 2; // the heading sits in the name column like every other tab's rows (critique 14: flush against the border)
+  const rows: Run[][] = [[r(`${' '.repeat(GRID_LEAD)}${title}`, 'muted', { bold: true }), r('  ')]];
   let used = indent;
   for (const p of parts) {
     const first = used === indent;
@@ -662,14 +662,20 @@ function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
   // A figure short of its plan says why, in the row: `evidence 0/5  5 done without evidence`, `verified 0/5  0 verified findings so far`. The verified row is present for every plan, so the
   // gates and core tabs always carry the verified count against the plan denominator (critique 12 B1, B6: a bare zero beside `todo 5/5` read as a defect).
   const why = (name: string, t: { ok: number; total: number }): string => (!t.total || t.ok === t.total ? '' : name === 'evidence' ? `${t.total - t.ok} done without evidence` : `${c.ledger.verified} verified finding${c.ledger.verified === 1 ? '' : 's'} so far`);
-  const items: [string, { ok: number; total: number }][] = [['evidence', e], ['verified', v]];
+  const items: [string, { ok: number; total: number }, string][] = [['evidence', e, 'a'], ['verified', v, 'b']];
+  // One verdict per fact: the gates tab's own line (`Evidence captured`, `Verified finding recorded`) decides whether a short figure is a defect. A gate that passes
+  // says the run needs no more (Stop allowed it), so the row reads quiet instead of amber beside a green line (critique 14).
+  const gateOk = (id: string): boolean => m.gates.some((g) => g.lines.some((l) => l.id === id && l.ok));
   return [
     heading('contract', [], m),
-    ...items.map(([name, t]) => line(fitRuns(gridRow({
-      cols: m.cols, ui: m.ui, mark: stateRun(!t.total ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
-      name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: tallyTone(t.ok, t.total) }, wordW: 8,
-      ...(why(name, t) ? { detail: { t: why(name, t) } } : {}),
-    }), m.cols))),
+    ...items.map(([name, t, gate]) => {
+      const waived = t.total > 0 && t.ok < t.total && gateOk(gate);
+      return line(fitRuns(gridRow({
+        cols: m.cols, ui: m.ui, mark: stateRun(!t.total || waived ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
+        name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: waived ? 'muted' : tallyTone(t.ok, t.total) }, wordW: 8,
+        ...(waived ? { detail: { t: 'not required for this run' } } : why(name, t) ? { detail: { t: why(name, t) } } : {}),
+      }), m.cols));
+    }),
   ];
 }
 
@@ -766,12 +772,12 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
     const teamName = `${rt.cls} team (${rt.effort} effort)`; // plain words, never the `class/effort` scope token
     // A team that ran differently says what happened, in words: `planned audit team (low effort), ran 3 explorers` (data/core plannedText, the band's wording).
     const headName = rt.drift.length ? plannedText(rt) : teamName;
-    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('failed', m.ui) : null, name: { t: headName, bold: true }, nameW: Math.min(cells(headName), Math.max(1, m.cols - GRID_LEAD)) });
+    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('blocked', m.ui) : null, name: { t: headName, bold: true }, nameW: Math.min(cells(headName), Math.max(1, m.cols - GRID_LEAD)) });
     const seats = rt.seats.flatMap((s): PanelLine[] => {
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');
       const over = s.ran.length > s.count;
       const used = [...new Set(s.ran.map((x) => x.replace(/^claude-/, '')))].join(', ');
-      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['failed', 'off plan', 'bad'];
+      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['blocked', 'off plan', 'warn']; // amber like the gates tab's routing warning: a team that ran differently is a warning, not a failure (critique 14)
       // Plain words, no `model/effort` token: `3 explorers ran, 1 planned (haiku, low effort)`; a seat that ran another model reads `ran on opus, planned haiku, low effort`.
       const plan = `${s.model}, ${s.effort} effort`;
       const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${plan})` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;

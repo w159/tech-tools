@@ -23,8 +23,8 @@ const runs = (c: CoreModel, cols = 120, over: Partial<PanelModel> = {}) => bodyL
 describe('core headings', () => {
   test('contract and dispatch titles are bold', () => {
     const rs = runs(core());
-    expect(rs.find((x) => x.t === ' contract')?.bold).toBe(true);
-    expect(rs.find((x) => x.t === ' teams')?.bold).toBe(true);
+    expect(rs.find((x) => x.t === '    contract')?.bold).toBe(true);
+    expect(rs.find((x) => x.t === '    teams')?.bold).toBe(true);
   });
 });
 

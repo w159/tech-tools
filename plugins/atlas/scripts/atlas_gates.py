@@ -39,7 +39,7 @@ _LABELS = {
     "m": "Code changes delegated",
     "n": "Status header shown",
     "o": "Required phases marked",
-    "p": "Colony channel used",
+    "p": "Team channel used",
     "q": "Worker branches merged",
     "s": "Team gate",
 }
@@ -140,6 +140,7 @@ def _completion_group(session: str, root: Path, transcript: str) -> dict:
     # and the mod's core tab, so a gates row can never read green over a row Stop counts open.
     open_n = cg._open_work_count(transcript, root, session)
     ev_ok, ev_total = _plan_evidence(root, session)
+    code_changed = _code_changed(cg, session, root)
     for letter in sorted(_LABELS):
         failing = team_failing if letter == "s" else letter in ev["failed"]
         detail = None
@@ -147,7 +148,9 @@ def _completion_group(session: str, root: Path, transcript: str) -> dict:
             failing = failing or open_n > 0
             detail = f"{open_n} open" if open_n else None
         elif letter == "a":
-            failing = failing or ev_ok < ev_total
+            # Stop's own (a) applies once the run changed non-docs code; a read-only run whose plan rows carry
+            # no evidence is not failing here (an amber row beside a Stop that allowed). The figure stays in the detail.
+            failing = failing or (ev_ok < ev_total and code_changed)
             detail = f"{ev_ok} of {ev_total} done with evidence" if ev_total else None
         g["lines"].append(
             _line(
@@ -159,6 +162,17 @@ def _completion_group(session: str, root: Path, transcript: str) -> dict:
             )
         )
     return g
+
+
+def _code_changed(cg, session: str, root: Path) -> bool:
+    """True when this run changed non-docs code, as completion_gate_core.evaluate() decides it for (a)/(b).
+    An unreadable record fails toward True (the strict reading)."""
+    try:
+        paths = list(cg._run_written_paths(session, root))
+        paths += [p for p in cg._shell_changed_code(root, session) if p not in paths]
+        return bool(cg._nondocs_changed(paths))
+    except Exception:  # noqa: BLE001
+        return True
 
 
 def _plan_evidence(root: Path, session: str):
@@ -190,12 +204,15 @@ def tripwire_group(session: str) -> dict:
         # Informational: a session that is simply not orchestrating is not failing.
         g["lines"].append(
             _line(
-                "armed", "Orchestration armed", True, "armed" if armed else "not armed"
+                "armed", "Team mode", True, "on" if armed else "off"
             )
         )
         g["lines"].append(
             _line(
-                "inline", "Inline ops since last dispatch", n < limit, f"{n} of {limit}"
+                "inline",
+                "Lead's own calls since last dispatch",
+                n < limit,
+                f"{n} of {limit}",
             )
         )
         rows = conn.execute(

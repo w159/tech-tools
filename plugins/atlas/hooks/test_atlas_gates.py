@@ -135,8 +135,12 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertEqual(line["label"], "Last Stop allowed")
 
     def _store(self, gamma_status="pending"):
-        fx = json.loads((HERE.parent / "contracts" / "open-work-store.json").read_text())
-        items = json.loads(json.dumps(fx["items"]).replace('"SESSION"', json.dumps(SESSION)))
+        fx = json.loads(
+            (HERE.parent / "contracts" / "open-work-store.json").read_text()
+        )
+        items = json.loads(
+            json.dumps(fx["items"]).replace('"SESSION"', json.dumps(SESSION))
+        )
         for it in items:
             if it["id"] == "t56c769ef":
                 it["status"] = gamma_status
@@ -157,18 +161,29 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertEqual(stop, expect["open"])
         self.assertEqual(atlas_todo.counts(board, SESSION)["open"], stop)
         _, doc = _run(self.db, self.root)
-        comp = {l["id"]: l for l in next(g for g in doc["groups"] if g["id"] == "completion")["lines"]}
+        comp = {
+            l["id"]: l
+            for l in next(g for g in doc["groups"] if g["id"] == "completion")["lines"]
+        }
         self.assertFalse(comp["i"]["ok"])
         self.assertEqual(comp["i"]["detail"], f"{stop} open")
         ev = expect["evidence"]
-        self.assertEqual(atlas_todo.plan_evidence(board, SESSION), (ev["ok"], ev["total"]))
-        self.assertFalse(comp["a"]["ok"])
-        self.assertEqual(comp["a"]["detail"], f"{ev['ok']} of {ev['total']} done with evidence")
+        self.assertEqual(
+            atlas_todo.plan_evidence(board, SESSION), (ev["ok"], ev["total"])
+        )
+        # No code changed in this run: Stop's own (a) does not apply, so the row is green (critique 14: an amber row beside a Stop that allowed), and still says the figure.
+        self.assertTrue(comp["a"]["ok"])
+        self.assertEqual(
+            comp["a"]["detail"], f"{ev['ok']} of {ev['total']} done with evidence"
+        )
         # the open row closes: Stop's count and the Todos drained row go green together
         self._store("completed")
         self.assertEqual(cg._open_work_count("", self.root, SESSION), 0)
         _, doc = _run(self.db, self.root)
-        comp = {l["id"]: l for l in next(g for g in doc["groups"] if g["id"] == "completion")["lines"]}
+        comp = {
+            l["id"]: l
+            for l in next(g for g in doc["groups"] if g["id"] == "completion")["lines"]
+        }
         self.assertTrue(comp["i"]["ok"])
         self.assertNotIn("detail", comp["i"])
 
@@ -356,6 +371,45 @@ class AtlasGatesInProcess(unittest.TestCase):
         self.assertNotIn("r", by_id)
         self.assertTrue(group([])["s"]["ok"])
 
+    def test_evidence_row_follows_stop_when_the_run_changed_no_code(self):
+        """Critique 14: `Evidence captured` is amber only where Stop's own (a) applies (the run changed non-docs code); a read-only run with plan rows lacking evidence is green, its figure kept."""
+        import completion_gate as cg
+
+        def row(code_changed):
+            with (
+                self.mock.patch.object(
+                    cg, "_delegation_state", return_value=(False, [], "")
+                ),
+                self.mock.patch.object(
+                    cg, "_session_is_orchestrating", return_value=True
+                ),
+                self.mock.patch.object(cg, "evaluate", return_value={"failed": []}),
+                self.mock.patch.object(cg, "_team_gate", return_value=(None, False)),
+                self.mock.patch.object(
+                    self.gates, "_plan_evidence", return_value=(0, 5)
+                ),
+                self.mock.patch.object(
+                    self.gates, "_code_changed", return_value=code_changed
+                ),
+            ):
+                lines = self.gates.completion_group(SESSION, Path(self.tmp.name), "")[
+                    "lines"
+                ]
+                return next(ln for ln in lines if ln["id"] == "a")
+
+        self.assertTrue(row(False)["ok"])
+        self.assertEqual(row(False)["detail"], "0 of 5 done with evidence")
+        self.assertFalse(row(True)["ok"])
+
+    def test_gate_labels_are_plain_words(self):
+        """Critique 14: no `Colony channel used`, `Inline ops since last dispatch` or `Orchestration armed` on the tab."""
+        self.assertEqual(self.gates._LABELS["p"], "Team channel used")
+        line = self._tripwire()
+        self.assertEqual(line["armed"]["label"], "Team mode")
+        self.assertEqual(
+            line["inline"]["label"], "Lead's own calls since last dispatch"
+        )
+
     def test_team_row_is_the_stop_gates_own_team_gate(self):
         """Critique 7 A1: `Team gate` is red exactly when completion_gate._team_gate says Stop blocks on (s), whatever evaluate() lists."""
         import completion_gate as cg
@@ -388,11 +442,11 @@ class AtlasGatesInProcess(unittest.TestCase):
 
     def test_armed_line_reports_state(self):
         line = self._tripwire()["armed"]
-        self.assertEqual((line["ok"], line["detail"]), (True, "armed"))
+        self.assertEqual((line["ok"], line["detail"]), (True, "on"))
         self.conn.execute("UPDATE runs SET orchestrating=0")
         self.conn.commit()
         line = self._tripwire()["armed"]
-        self.assertEqual((line["ok"], line["detail"]), (True, "not armed"))
+        self.assertEqual((line["ok"], line["detail"]), (True, "off"))
 
     def test_denial_age_uses_seconds_then_minutes_and_truncates_snippet(self):
         now = 10_000.0
