@@ -6,7 +6,7 @@ import { cells, CHIP_W, COUNT_ORDER, clip, gauge, percent, ribbon, runsCells, st
 
 export type TodoRow = { label: string; state: UiState; detail: string; focus: boolean };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean };
+export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
 export type SurfaceOpts = {
   cols: number;
   ui: Ui;
@@ -64,14 +64,10 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const out: Run[][] = [ribbon(cols, 'TODO', tier === 'full' ? `${done} of ${rows.length} done` : `${done}/${rows.length}`, ui)];
   if (b.cap === 0) return out;
   const frac = done / rows.length;
-  if (b.spacers) out.push(BLANK);
-  if (tier === 'full' && b.extras) {
-    if (rich && o.phases && o.phases.ids.length > 0) {
-      out.push(railRow(o.phases.ids, o.phases.active, ui));
-      if (b.spacers) out.push(BLANK);
-    }
-    out.push([t('progress ', 'muted'), ...gauge(16, frac, ui), t(` ${done} of ${rows.length} · ${percent(frac)}`, 'sub')]);
-    if (b.spacers) out.push(BLANK);
+  // One layout at every width: ribbon, (rail), progress row, rows. No blank rows inside the block; the progress row sits right under the ribbon.
+  if (tier !== 'min' && b.extras) {
+    if (tier === 'full' && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
+    out.push([t('progress ', 'muted'), ...gauge(tier === 'full' ? 16 : 12, frac, ui), t(` ${done} of ${rows.length} · ${percent(frac)}`, 'sub')]);
   }
   const stateAt = todoStateAt(rows, o, tier, rich);
   const metaAt = stateAt + 14;
@@ -126,54 +122,81 @@ export const sortAgents = <T extends { state: UiState }>(rows: readonly T[]): T[
 export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
   if (rows.length === 0 || tierOf(o.cols) === 'min') return [];
   const { ui, cols } = o;
-  const tier = tierOf(cols);
   const rich = isRich(o);
   const out: Run[][] = [ribbon(cols, 'SUBAGENTS', rich ? '' : stateCounts(rows.map((r) => r.state)), ui)];
   if (b.cap === 0) return out;
-  const stateAt = Math.max(20, Math.min(maxLen(rows.map((r) => r.name)) + 1, 29)) + 4;
-  const taskW = taskWidth(rows);
-  if (b.spacers) out.push(agentHeader(o, rich, stateAt, taskW)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
+  const wordW = rich ? CHIP_W : 7;
+  // The name column holds the longest name whole (19 cells at least, for alignment); only a name that alone overflows the row is end-clipped.
+  const nameW = Math.max(1, Math.min(Math.max(19, maxLen(rows.map((r) => flat(r.name)))), cols - 5 - wordW));
+  const stateAt = nameW + 5;
+  const plan = agentCols(rows, o, rich, stateAt);
+  if (b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
   const { shown, hidden } = windowRows(rows, b.cap);
-  for (const r of shown) out.push(agentRow(r, o, rich, stateAt, taskW));
+  for (const r of shown) out.push(agentRow(r, o, rich, stateAt, nameW, plan));
   if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
   return out;
 }
 
 const TASK_W = 5; // `T1,T2`: the task column's width when every agent's ids fit
+const TASK_MAX = 18;
 /** Every owned id (`T1,T2`) when they fit `width`, else the count (`3 tasks`); an agent that owns none shows nothing. */
 export const taskCell = (tasks: readonly number[], width: number = TASK_W): string => {
   const ids = tasks.map((n) => `T${n}`).join(',');
   return tasks.length === 0 ? '' : ids.length <= width ? ids : `${tasks.length} tasks`;
 };
-/** The task column's width: wide enough for the longest cell (a count when an agent's ids do not fit). */
-const taskWidth = (rows: readonly AgentRow[]): number => rows.reduce((n, r) => Math.max(n, taskCell(r.tasks).length), TASK_W);
+/** The TASK cell of a row: its plan ids, else the agent's own task text (the dispatch description). */
+const taskText = (r: AgentRow): string => (r.tasks.length > 0 ? taskCell(r.tasks) : flat(r.task ?? ''));
+/** The task column's width: wide enough for the longest cell, at most TASK_MAX. */
+const taskWidth = (rows: readonly AgentRow[]): number => Math.min(TASK_MAX, rows.reduce((n, r) => Math.max(n, cells(taskText(r))), TASK_W));
 
-/** `AGENT  STATE  MODEL  TASK  LAST`: the column words of the full form, in the spacer row under the ribbon. */
-function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, taskW: number): Run[] {
-  const h = (text: string, at: number): void => { if (at < o.cols) row = [...toCol(row, at), t(text, 'muted')]; };
+/** Which optional columns fit, and where they start. A narrow row drops columns in this order: last text, task, model. A model or task cell is never cut; the last text end-clips from LAST_MIN cells. */
+type AgentCols = { model?: number; modelW: number; task?: number; taskW: number; last?: number; ctx?: number };
+const LAST_MIN = 8;
+function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number): AgentCols {
+  const { cols } = o;
+  const modelW = Math.max(rich ? 8 : 9, ...rows.map((r) => cells(r.model) + (rich ? 1 : 0))); // rich: the cell includes its gap
+  const plan: AgentCols = { modelW, taskW: taskWidth(rows) };
+  if (rich) {
+    if (stateAt + 14 + 4 + 8 + 5 <= cols) plan.ctx = stateAt + 14;
+    const modelAt = stateAt + 34;
+    if (modelAt + modelW - 1 <= cols) {
+      plan.model = modelAt;
+      if (modelAt + modelW + LAST_MIN <= cols) plan.last = modelAt + modelW;
+    }
+    return plan;
+  }
+  const modelAt = stateAt + 12;
+  if (modelAt + modelW > cols) return plan;
+  plan.model = modelAt;
+  const taskAt = modelAt + modelW + 1;
+  if (taskAt + plan.taskW > cols) return plan;
+  plan.task = taskAt;
+  const lastAt = taskAt + plan.taskW + 1;
+  if (lastAt + LAST_MIN <= cols) plan.last = lastAt;
+  return plan;
+}
+
+/** `AGENT  STATE  MODEL  TASK  LAST`: the column words of the full form, in the spacer row under the ribbon; only the columns the rows show. */
+function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, plan: AgentCols): Run[] {
+  const h = (text: string, at: number | undefined): void => { if (at !== undefined && at < o.cols) row = [...toCol(row, at), t(text, 'muted')]; };
   let row: Run[] = [t(' ', 'muted')];
   h('AGENT', 4);
   h('STATE', stateAt);
-  if (rich) { h('CTX', stateAt + 14); h('MODEL', stateAt + 34); h('LAST', stateAt + 42); } else { h('MODEL', stateAt + 12); h('TASK', stateAt + 22); h('LAST', stateAt + 23 + taskW); }
+  if (rich) { h('CTX', plan.ctx); h('MODEL', plan.model); h('LAST', plan.last); } else { h('MODEL', plan.model); h('TASK', plan.task); h('LAST', plan.last); }
   return row;
 }
 
-function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, taskW: number): Run[] {
+function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const { ui, cols } = o;
-  const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, o.tick ?? 0), t(' '), t(clip(flat(r.name), stateAt - 5), 'text', { bold: true })];
+  const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, o.tick ?? 0), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state)];
-  const cell = (text: string, at: number, width: number): void => {
-    if (text !== '' && at < cols) row = [...toCol(row, at), t(clip(flat(text), Math.max(1, Math.min(width, cols - at))), 'sub')];
+  const cell = (text: string, at: number | undefined, width: number): void => {
+    if (text !== '' && at !== undefined) row = [...toCol(row, at), t(clip(flat(text), Math.max(1, Math.min(width, cols - at))), 'sub')];
   };
-  if (rich) {
-    if (r.ctx !== null) row = [...toCol(row, stateAt + 14), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
-    cell(r.model, stateAt + 34, 8);
-    cell(r.tool, stateAt + 42, cols);
-  } else {
-    cell(r.model, stateAt + 12, 9);
-    cell(taskCell(r.tasks, TASK_W), stateAt + 22, taskW);
-    cell(r.tool, stateAt + 23 + taskW, cols);
-  }
+  if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
+  cell(r.model, plan.model, plan.modelW);
+  if (!rich) cell(taskText(r), plan.task, plan.taskW);
+  cell(r.tool, plan.last, cols);
   return row;
 }
 
