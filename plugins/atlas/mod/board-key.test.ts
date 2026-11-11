@@ -101,7 +101,7 @@ const livePanes = (on: On): void => {
 };
 const sidePane = (view: object = {}) => ({ plugin: 'atlas', surface: 'terminal', component: 'Pane', requestId: 'atlas', props: { title: 'Atlas', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view } as never }) as const;
 
-test('live host: `o` in the shown Atlas pane draws the board in that pane (▸ BOARD ribbon), and `o` again returns to the route', async ($, on) => {
+test('live host: `o` in the shown Atlas pane draws the board in that pane (no nested BOARD ribbon, the count once), and `o` again returns to the route', async ($, on) => {
   const opens: Opened[] = [];
   await boot(on, opens);
   livePanes(on);
@@ -114,8 +114,9 @@ test('live host: `o` in the shown Atlas pane draws the board in that pane (▸ B
   expect(opens.filter((o) => o.id === 'atlas-board')).toHaveLength(0); // a hidden tab is not a board the person can see
   const again = await $.ui.mount(sidePane());
   const text = await drawn(again);
-  for (const want of ['BOARD', '4 items', 'Wire band to host', 'Subagents block', 'Ship board mod']) expect(text).toContain(want);
+  for (const want of ['4 items', 'Wire band to host', 'Subagents block', 'Ship board mod']) expect(text).toContain(want);
   expect(text).not.toContain('Completion gate');
+  expect(text).not.toContain('▸ BOARD'); // the pane has its own header (critique 11 C5)
   await again.press({ key: 'tab:todos' });
   await settle();
   await again.unmount();

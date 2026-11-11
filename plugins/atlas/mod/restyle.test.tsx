@@ -5,6 +5,8 @@ import { expect, test } from 'claude-code/testing'
 import type { AgentInfo, EngineInterface, On, RenderElement } from 'claude-code'
 import {
   noisyTree,
+  drawnHeaderTally,
+  forgetDrawnHeaders,
   assistantTree,
   durationTree,
   PHASE_RE,
@@ -448,7 +450,6 @@ test('PHASE_RE picks a whole phase word and ignores substrings', () => {
 })
 
 test('critique 11: the header tally counts every assistant text the transcript drew (a chip per text block), not one answer per turn', async () => {
-  const { drawnHeaderTally, forgetDrawnHeaders } = await import('./restyle')
   forgetDrawnHeaders()
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))

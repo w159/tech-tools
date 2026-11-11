@@ -131,7 +131,7 @@ export function registerNotify(
 		try {
 			const snap = await read($, snapshotState);
 			if (snap && !isOlder(lastSnapshot, snap)) {
-				const texts: string[] = [];
+				const texts: (string | Toast)[] = [];
 				const ui = (await lookOf($)).ui;
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {

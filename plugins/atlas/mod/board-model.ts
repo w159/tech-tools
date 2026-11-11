@@ -262,8 +262,8 @@ export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[]
   // The count is said once (critique 11: `5 items` in the ribbon and again in the footer): by the ribbon when it draws one, else by the footer.
   const count = withRibbon && !o.rich ? '' : `${rows.length} items · `;
   // An open folded dispatch row is what Stop counts: the footer names it instead of the quiet fold count.
-  const note = k > 0 ? r(`  ${count}${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : r(`  ${count}${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted');
-  const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }] : [];
+  const note = k > 0 ? r(`  ${count}${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : n > 0 ? r(`  ${count}${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted') : r(`  ${rows.length} items`, 'muted');
+  const footer: BoardLine[] = (n > 0 || k > 0 || !withRibbon) && rows.length > 0 ? [{ runs: [note] }] : []; // no ribbon, no folds: the footer is the one place the count is said
   return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : []), ...boardBody(rows, o), ...footer];
 }
 

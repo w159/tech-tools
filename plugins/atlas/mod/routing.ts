@@ -24,6 +24,12 @@ const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
 const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
 const orchState = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH);
 
+/** Drop a provisional row (a denied Agent call): its task agent and its spawn-time stamp. Never touches a real agent id. Top-level: the host loader follows `$` only into top-level functions. */
+async function dropProvisional($: EngineInterface, name: string): Promise<void> {
+  await update($, taskAgentsState, (agents) => agents.filter((a) => a.name !== name));
+  await update($, orchState, (o) => (o.meta[name] === undefined ? o : { ...o, meta: Object.fromEntries(Object.entries(o.meta).filter(([k]) => k !== name)) }));
+}
+
 export interface RoutingDeps {
   /** Personas of the snapshot read from $.state (null before the first build). */
   getPersonas: (snapshot: AtlasSnapshot | null) => Persona[];
@@ -72,15 +78,6 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
   // tool_use_id -> the display name of the provisional row the Agent call drew before its agent.spawn (the mod learns the agentId only after the host returns it).
   const provisional = new Map<string, string>();
 
-  /** Drop a provisional row: its task agent and its spawn-time stamp. Never touches a real agent id. */
-  const dropProvisional = async ($: EngineInterface, toolUseId: string): Promise<void> => {
-    const name = provisional.get(toolUseId);
-    if (name === undefined) return;
-    provisional.delete(toolUseId);
-    await update($, taskAgentsState, (agents) => agents.filter((a) => a.name !== name));
-    await update($, orchState, (o) => (o.meta[name] === undefined ? o : { ...o, meta: Object.fromEntries(Object.entries(o.meta).filter(([k]) => k !== name)) }));
-  };
-
   on('tool.call', { tool: /^(Agent|Task)$/ }, async ($, e, next) => {
     const str = (v: unknown): string => (typeof v === 'string' ? v : '');
     const a = e as unknown as Record<string, unknown>; // SAFETY: a RegExp matcher cannot narrow e; Agent/Task args are an open string-keyed bag, every read goes through str()
@@ -105,7 +102,9 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
       return await next(e);
     } catch (err) {
       try {
-        await dropProvisional($, toolUseId);
+        const held = provisional.get(toolUseId);
+        provisional.delete(toolUseId);
+        if (held !== undefined) await dropProvisional($, held);
       } catch {
         // cleanup never masks the denial
       }
