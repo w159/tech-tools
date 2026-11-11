@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing';
 import { busySnap, NOW } from '../live_fixture';
-import { activeCount, callBuckets, liveWorkers } from './live';
+import { activeCount, callBuckets, isStarting, liveWorkers } from './live';
 
 test('liveWorkers orders blocked, failed, working, done and drops the lead', () => {
   const s = busySnap();
@@ -62,9 +62,15 @@ test('liveWorkers copies every activity field and falls back to since / now / nu
   s.activity['full'] = { mood: 'working', tool: 'Read', lastTool: 'Grep', since: NOW - 10, startedAt: NOW - 99, target: 'a.ts', detail: 'reading', lastLine: 'hello', calls: [NOW - 1, NOW - 2], scope: 'audit/medium', toolCount: 1, tokens: 5 } as (typeof s.activity)[string];
   s.activity['nostart'] = { mood: 'working', tool: null, since: NOW - 7, toolCount: 0, tokens: null, lastLine: '' } as (typeof s.activity)[string];
   const by = Object.fromEntries(liveWorkers(s, NOW + 500).map((w) => [w.name, w]));
-  expect(by['full']).toEqual({ name: 'full', role: 'explorer', state: 'working', tool: 'Read', lastTool: 'Grep', since: NOW - 10, startedAt: NOW - 99, target: 'a.ts', detail: 'reading', lastLine: 'hello', calls: [NOW - 1, NOW - 2], scope: 'audit/medium' });
-  expect(by['bare']).toEqual({ name: 'bare', role: 'runner', state: 'working', tool: null, lastTool: null, since: NOW + 500, startedAt: NOW + 500, target: null, detail: null, lastLine: '', calls: [], scope: null });
+  expect(by['full']).toEqual({ name: 'full', role: 'explorer', state: 'working', tool: 'Read', lastTool: 'Grep', since: NOW - 10, startedAt: NOW - 99, target: 'a.ts', detail: 'reading', lastLine: 'hello', calls: [NOW - 1, NOW - 2], scope: 'audit/medium', seen: true });
+  expect(by['bare']).toEqual({ name: 'bare', role: 'runner', state: 'working', tool: null, lastTool: null, since: NOW + 500, startedAt: NOW + 500, target: null, detail: null, lastLine: '', calls: [], scope: null, seen: false });
   expect(by['nostart']?.startedAt).toBe(NOW - 7);
+  // A worker the host lists with no activity ever seen has an unknown start: it is never `starting`, whatever the clock.
+  expect(isStarting(by['bare']!, NOW + 500)).toBe(false);
+  expect(isStarting(by['nostart']!, NOW + 500)).toBe(false); // no startedAt recorded: unknown start
+  expect(isStarting(by['full']!, NOW - 99 + 50)).toBe(false); // it holds a tool
+  expect(isStarting({ ...by['bare']!, seen: true, startedAt: NOW }, NOW + 90_000)).toBe(true);
+  expect(isStarting({ ...by['bare']!, seen: true, startedAt: NOW }, NOW + 90_001)).toBe(false);
 });
 
 test('callBuckets: 12 slots of 5s by default, oldest first, edges and out-of-range', () => {

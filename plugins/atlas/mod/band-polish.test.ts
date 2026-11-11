@@ -39,15 +39,17 @@ describe('band beside the Subagents block: counts only', () => {
     expect(rows[0]).toContain('1 failed');
     expect(rows.length).toBeLessThan(rowsOf(160, { snapshot: busySnap({ comms: [] }) }).length);
   });
-  test('the band counts equal the HUD block: a working worker with no tool yet is running in both', () => {
+  test('the band counts equal the HUD block: a worker before its first call is queued in both, and running once 90 s have passed', () => {
     const base = liveWorkers(busySnap(), NOW);
-    const fresh = base.map((w) => ({ ...w, state: 'working', tool: null, lastTool: null })) as LiveWorker[];
-    const hud = hudRows({ todos: [], agents: hudAgents(fresh, []) }, { cols: 160, maxRows: 20, ui: UI }).map((r) => r.map((x) => x.t).join('')).join('\n');
-    const inHud = rowsOf(160, { live: fresh, workersInHud: true })[0]!;
-    expect(hud).toContain(`${fresh.length} running`);
-    expect(inHud).toContain(`${fresh.length} running`);
-    expect(inHud).not.toContain('queued');
+    const fresh = base.map((w) => ({ ...w, state: 'working', tool: null, lastTool: null, startedAt: NOW - 5_000, seen: true })) as LiveWorker[];
+    const text = (rs: readonly (readonly { t: string }[])[]): string => rs.map((r) => r.map((x) => x.t).join('')).join('\n');
+    const hud = text(hudRows({ todos: [], agents: hudAgents(fresh, [], NOW) }, { cols: 160, maxRows: 20, ui: UI }));
+    expect(hud).toContain(`${fresh.length} queued`);
+    expect(rowsOf(160, { live: fresh, workersInHud: true })[0]).toContain(`${fresh.length} queued`);
     expect(rowsOf(160, { live: fresh })[0]).toContain(`${fresh.length} queued`); // listed: the row says starting
+    const aged = fresh.map((w) => ({ ...w, startedAt: NOW - 91_000 })) as LiveWorker[];
+    expect(text(hudRows({ todos: [], agents: hudAgents(aged, [], NOW) }, { cols: 160, maxRows: 20, ui: UI }))).toContain(`${aged.length} running`);
+    expect(rowsOf(160, { live: aged, workersInHud: true })[0]).toContain(`${aged.length} running`);
   });
   test('narrow bands list nothing either way (the single row)', () => {
     expect(rowsOf(60, { workersInHud: true })).toHaveLength(1);

@@ -2,7 +2,7 @@
 // run is painted in the live theme's tone on the rev 4 panel token, so the pane meets the band without a seam.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { PALETTES, toneHex, uiFromEnv, type Run, type Ui } from '../atlas-ui';
-import { bodyLines, type PanelLine, type PanelTab } from '../panel-layout';
+import { bodyLines, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
@@ -39,9 +39,10 @@ export const inputEl = (els: ClientElements, m: SidebarModel, on: SidebarHandler
   onSubmit: (v: string) => on.send(v),
 });
 
-/** One tab's body as elements (no strip): the rows, then the message field on team and channel. */
-export function viewRows(tab: PanelTab, els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number): RenderElement[] {
-  const ui = uiFromEnv();
-  const pm = { ...panelModelOf({ ...m, ui: { ...m.ui, view: tab } }, ui, inner) };
-  return [...bodyLines(pm).map((l) => lineEl(els, l, m, on, ui)), ...(tab === 'team' || tab === 'channel' ? [inputEl(els, m, on)] : [])];
+/** One tab's body as elements (no strip): the rows, then the message field on team and channel. `pm` is the panel model the
+ * caller already built for this frame (sidebarTree builds it once for the ribbon and the body); without it the model is built here. */
+export function viewRows(tab: PanelTab, els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, pm?: PanelModel): RenderElement[] {
+  const ui = m.look ?? uiFromEnv();
+  const model = pm ?? panelModelOf({ ...m, ui: { ...m.ui, view: tab } }, ui, inner);
+  return [...bodyLines(model).map((l) => lineEl(els, l, m, on, ui)), ...(tab === 'team' || tab === 'channel' ? [inputEl(els, m, on)] : [])];
 }

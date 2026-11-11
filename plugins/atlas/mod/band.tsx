@@ -6,7 +6,7 @@ import type { ClientElements, RenderElement } from 'claude-code';
 import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
-import type { LiveWorker } from './data/live';
+import { isStarting, type LiveWorker } from './data/live';
 import { ownTodos, todoCounts } from './data/todos';
 import { groupOpenCount } from './gates';
 import { hostEnv, PALETTES, toneHex, uiFromEnv, type Ui } from './atlas-ui';
@@ -79,14 +79,13 @@ function waves(ws: readonly LiveWorker[]): LiveWorker[][] {
 const boardOf = (s: LiveSnapshot): string => (s.channel ? s.channel.split('/')[0]! : (s.root ?? '').replace(/\/+$/, '').split('/').pop() || 'atlas');
 
 /** A working worker reads running with a tool in flight, thinking between calls, starting before its first tool. */
-function workerState(w: LiveWorker): WorkerState {
-  if (w.state === 'working') return w.tool ? 'running' : w.lastTool ? 'thinking' : 'starting';
+function workerState(w: LiveWorker, now: number): WorkerState {
+  if (w.state === 'working') return w.tool ? 'running' : isStarting(w, now) ? 'starting' : 'thinking';
   return w.state === 'blocked' ? 'waiting' : w.state === 'failed' ? 'failed' : 'done';
 }
 
-function missionWorker(w: LiveWorker, now: number, inHud: boolean): MissionWorker {
-  const was = workerState(w);
-  const state = inHud && was === 'starting' ? 'thinking' : was; // the Subagents block calls every working agent running; the counts must agree with it
+function missionWorker(w: LiveWorker, now: number): MissionWorker {
+  const state = workerState(w, now);
   const tool = w.tool ?? w.lastTool;
   const end = state === 'done' || state === 'failed' ? w.since : now;
   return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.round((end - w.startedAt) / 1000)) };
@@ -119,12 +118,12 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     project: boardOf(s), scope: b.team,
     phases: railIds(s), phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked',
     done, total,
-    workers: shown.map((w) => missionWorker(w, now, !!b.workersInHud)),
+    workers: shown.map((w) => missionWorker(w, now)),
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
     checks: gates.length ? gates.map((g) => ({ id: g.id, ok: !groupOpenCount(g) && !g.error })) : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
     lastRun: lastRun(all, now),
-    core: coreCells(b.core, Math.max(1, b.columns)),
+    core: coreCells(b.core, Math.max(1, b.columns), b.ui),
     boardRows: b.todoExpanded && ownTodos(s.todos, s.sessionId).length ? ownTodos(s.todos, s.sessionId).length + 1 : 0,
     ctx: s.contextPct > 0 ? Math.min(1, s.contextPct / 100) : undefined,
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',

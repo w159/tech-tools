@@ -1,23 +1,24 @@
 // sidebar-model.ts: the Claude Code SidebarModel as the host-free PanelModel (mod/panel-layout.ts).
 import type { ChannelNote } from '../contract';
-import { liveWorkers, type LiveWorker } from '../data/live';
+import { isStarting, liveState, liveWorkers, type LiveWorker } from '../data/live';
 import { planBasis } from '../data/todos';
 import { uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
-import type { LiveSnapshot } from '../orchestra-types';
+import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { scrub } from './chrome';
+import { isLeadName, isStale, mates } from './sidebar-roster';
 import type { SidebarModel } from './sidebar-types';
 
-const isLead = (n: string | undefined): boolean => !!n && (n === 'lead' || n.startsWith('lead-'));
+const isLead = isLeadName;
 const one = (t: string | null | undefined): string => scrub(t ?? '').replace(/\s+/g, ' ').trim();
 const RANK: Record<UiState, number> = { running: 0, blocked: 1, waiting: 2, failed: 3, queued: 4, done: 5 };
 
 /** One worker in the six-word vocabulary: a worker that waits on the lead reads waiting, parked reads queued. */
 function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const a = s.squad.find((x) => x.name === w.name);
-  const state: UiState = w.state === 'failed' ? 'failed' : w.state === 'blocked' ? 'waiting' : w.state === 'done' ? 'done' : w.state === 'parked' ? 'queued' : 'running';
+  const state: UiState = liveState(w, s.now);
   const doing = w.tool ? one(w.target ? `${w.tool} ${w.target}` : w.tool) : w.lastTool ? `thinking, last ${w.lastTool}` : 'thinking';
-  const detail = state === 'failed' ? one(w.lastLine) || 'failed' : state === 'waiting' ? 'waiting for lead reply' : state === 'done' ? one(w.lastLine) || 'finished' : state === 'queued' ? 'parked' : doing;
+  const detail = state === 'failed' ? one(w.lastLine) || 'failed' : state === 'waiting' ? 'waiting for lead reply' : state === 'done' ? one(w.lastLine) || 'finished' : state === 'queued' ? (isStarting(w, s.now) ? 'starting' : 'parked') : doing;
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item,
@@ -50,18 +51,28 @@ const noteOf = (n: ChannelNote): PanelNote => ({ at: hhmm(n.ts), from: n.owner, 
 /** Phase names of the rail as the side panel lists them (the off-rail `done` phase reads past the last). */
 const railOf = (s: LiveSnapshot): string[] => s.contract.todoPhases.map(String);
 
+const MOOD_STATE: Record<Mood, UiState> = { working: 'running', thinking: 'running', blocked: 'blocked', failed: 'failed', done: 'done', celebrate: 'done', idle: 'waiting' };
+
 export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number = Math.max(10, m.columns - 1)): PanelModel {
   const s = m.snapshot;
-  const workers = liveWorkers(s, s.now).map((w) => workerOf(s, w)).sort((a, b) => RANK[a.state] - RANK[b.state]);
+  // Other sessions' leads and workers that rested more than two hours ago are not on this team (the roster rules of sidebar-roster.ts).
+  const left = new Set(s.squad.filter((a) => isLeadName(a.name) || isStale(a, s.now)).map((a) => a.name));
+  const workers = liveWorkers(s, s.now).filter((w) => !left.has(w.name)).map((w) => workerOf(s, w)).sort((a, b) => RANK[a.state] - RANK[b.state]);
+  const [leadMate, ...others] = mates(s);
+  const lead: PanelWorker = { name: 'lead', role: 'lead', state: MOOD_STATE[leadMate!.mood], detail: leadMate!.text };
+  const strangers = others.filter((x) => !workers.some((w) => w.name === x.name) && !s.squad.some((a) => a.name === x.name));
+
   const live = workers.filter((w) => w.state !== 'done').map((w) => w.name);
   const notes = s.notes;
   const lastLead = notes.map((n) => isLead(n.owner)).lastIndexOf(true);
   const people = new Set([...notes.map((n) => n.owner), ...s.members.filter((x) => !x.ended_at).map((x) => x.name), ...live]).size;
-  const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: g.title, error: g.error, lines: g.lines.map((l) => ({ id: l.id, label: l.label, ok: l.ok, detail: l.detail, fix: l.fix })) }));
+  const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
+  const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
     cols, rows: m.rows, ui, tab: m.ui.view, tick: m.tick ?? 0,
     expanded: m.ui.expanded, recipient: m.ui.recipient,
-    phases: railOf(s), phase: s.phase, todos: todosOf(s, workers), workers, gates, core: m.core,
+    phases: railOf(s), phase: s.phase, todos: todosOf(s, workers), workers, lead,
+    mates: strangers.map((x): PanelWorker => ({ name: one(x.name), role: x.persona, state: 'queued', detail: x.line })), gates, core: m.core,
     channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: notes.map(noteOf),
   };
 }

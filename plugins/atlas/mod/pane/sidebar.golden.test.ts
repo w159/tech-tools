@@ -1,4 +1,4 @@
-// Characterization: sidebarTree over representative models serializes identically across refactors.
+// Characterization (NOT design evidence; the design mocks are in contracts/panel-golden.ts): sidebarTree over representative models serializes identically across refactors.
 // Regenerate the fixture only on an intended visual change (see sidebar.golden-cases.ts).
 import { describe, expect, test } from 'claude-code/testing';
 import { goldenText, serializeGolden } from './sidebar.golden-cases';
@@ -40,11 +40,12 @@ describe('sidebar golden text', () => {
   test('route with a tick turns the spinner glyph', () => {
     expect(rows('route')).not.toEqual(rows('routeSpinning'));
   });
-  test('team: every subagent by name with its state word, running first', () => {
-    const r = rows('team').slice(5, 8);
-    expect(r[0]).toMatch(/^▸ [◐◓◑◒] explorer-1\s+running/);
-    expect(r[1]).toMatch(/^ {2}◉ impl-auth\s+waiting/);
-    expect(r[2]).toMatch(/^ {2}■ runner-1\s+failed/);
+  test('team: the lead row first, then every subagent by name with its state word, running first', () => {
+    const r = rows('team').slice(5, 9);
+    expect(r[0]).toMatch(/^ {2}[◐◓◑◒] lead\s+running/);
+    expect(r[1]).toMatch(/^▸ [◐◓◑◒] explorer-1\s+running/);
+    expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/);
+    expect(r[3]).toMatch(/^ {2}■ runner-1\s+failed/);
   });
   test('team at 38 columns wraps the strip to a second row and keeps name and state', () => {
     const r = rows('cols38');

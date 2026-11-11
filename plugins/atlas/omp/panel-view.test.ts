@@ -1,5 +1,6 @@
-// omp parity for the ATLAS side panel, worker card and toast: the painter draws the shared layout (mod/panel-layout.ts), so
-// its plain text must equal the same goldens the Claude Code pane is held to (mod/panel-layout.test.ts, mod/pane/*).
+// Painter parity for the ATLAS side panel, worker card and toast. NOT surface evidence: `paintPanel`, `paintCard` and `paintToast`
+// are unmounted in omp (omp/panel-view.ts says why), and both sides of every comparison here are one layout function
+// (mod/panel-layout.ts), so the text is equal by construction. The design-sourced check is mod/panel-layout.test.ts.
 import { expect, test } from "bun:test";
 import { coreFixture, coreMatrix } from "../contracts/core-fixture";
 import { cardDesign, tabGolden, toastDesign } from "../contracts/panel-golden";

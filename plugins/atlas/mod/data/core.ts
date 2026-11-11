@@ -55,7 +55,7 @@ export type Route = {
   maxParallel: number;
   seats: Seat[];
   drift: string[];
-  /** Always set by this module; optional only so older persisted CoreState rows (no field) still type as Route (read as tmux). */
+  /** Always set by this module; optional only so older persisted CoreState rows (no field) still type as Route. A row without it reads `transport unknown`, never tmux. */
   transport?: Transport;
 };
 export type Tally = { ok: number; total: number };

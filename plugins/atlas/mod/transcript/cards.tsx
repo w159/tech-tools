@@ -80,7 +80,7 @@ const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : r
  * `failed`, `killed`), `now` what a running worker is doing (tool, target, age), `wave` the strip number it was
  * dispatched in, `steps` and `ctx` the worker's plan progress and context held (rows appear only when known).
  * `mark` is accepted for older callers and ignored: the border's state word replaces the spinner chip. */
-export interface CardExtra { mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
+export interface CardExtra { ui?: Ui; mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
 
 /** First sentence of a PreToolUse hook's DENY text, null when the call was not denied: a denied dispatch never ran. */
 function denyReason(c: CallLike): string | null {
@@ -100,7 +100,7 @@ function lastOf(c: CallLike, running: boolean, extra: CardExtra, word: string, r
 
 /** Closed worker card for an atlas:* dispatch (the border carries the state word, the name and the model tier); null leaves
  * non-atlas calls to the engine. `width` is the room the card has (0 = unknown): the card is `min(44, width)` wide. */
-export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, word = '', extra: CardExtra = {}, ui: Ui = uiFromEnv()): RenderElement | null {
+export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, word = '', extra: CardExtra = {}, ui: Ui = extra.ui ?? uiFromEnv()): RenderElement | null {
  if (!isAtlasWorker(c)) return null
  const i = inputOf(c)
  const role = typeOf(i).slice('atlas:'.length)
@@ -124,10 +124,10 @@ const waveHeader = (calls: ReadonlyArray<CallLike>, n: number) => {
 }
 
 /** WAVE strip: 2+ calls, all atlas Agent/Task. */
-export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: number): RenderElement | null {
+export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: number, ui?: Ui): RenderElement | null {
  if (calls.length < 2 || !calls.every(isAtlasWorker)) return null
  const { side, w } = waveLayout(columns, calls.length)
- const cards = calls.map((c) => workerCard(c, phaseOf(c, 'finished').state, w, undefined, '', { wave: n }) as RenderElement)
+ const cards = calls.map((c) => workerCard(c, phaseOf(c, 'finished').state, w, undefined, '', { wave: n, ...(ui ? { ui } : {}) }) as RenderElement)
  return el('Box', { flexDirection: 'column' }, waveHeader(calls, n),
   el('Box', { flexDirection: side ? 'row' : 'column', flexWrap: 'wrap' }, ...cards))
 }

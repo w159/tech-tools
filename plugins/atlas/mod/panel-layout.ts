@@ -36,6 +36,10 @@ export type PanelModel = {
   phase: string;
   todos: readonly PanelTodo[];
   workers: readonly PanelWorker[];
+  /** The lead's own row (the Team tab lists it first); absent where the host has no lead to show (the design world). */
+  lead?: PanelWorker;
+  /** Roster members the squad does not list: shown after the workers, never counted in the ribbon or the agents row. */
+  mates?: readonly PanelWorker[];
   gates: readonly PanelGate[];
   core?: CoreModel | null;
   channel?: string;
@@ -254,16 +258,27 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
   const out = [line(fitRuns(runs, m.cols), { kind: 'worker', key, name: w.name })];
   if (m.expanded === key) {
     out.push(line(fitRuns([r(`      ${w.detail || w.state}`, 'muted')], m.cols)));
-    out.push(line(fitRuns([r(`      running ${shortAge(w.secs ?? 0)}${w.tools !== undefined ? ` ${dot(m.ui)} ${w.tools} tool calls` : ''}`, 'muted')], m.cols)));
+    if (w.secs !== undefined) out.push(line(fitRuns([r(`      running ${shortAge(w.secs)}${w.tools !== undefined ? ` ${dot(m.ui)} ${w.tools} tool calls` : ''}`, 'muted')], m.cols)));
   }
   return out;
 }
 
+/** `lead  1 running · 2 done`: the lead's tally of its workers. Running always reads; the other states only when not zero. */
+function leadSummary(m: PanelModel): PanelLine {
+  const n = (s: UiState): number => m.workers.filter((w) => w.state === s).length;
+  const parts = UI_STATES.filter((s) => s === 'running' || n(s)).map((s) => `${n(s)} ${s}`);
+  return line(fitRuns([r('lead  ', 'text', { bold: true }), r(parts.join(` ${dot(m.ui)} `), 'muted')], m.cols));
+}
+
 function teamBody(m: PanelModel): PanelLine[] {
-  if (!m.workers.length) return [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])];
-  const nameW = Math.min(18, Math.max(6, ...m.workers.map((w) => cells(w.name))));
-  const focusName = m.recipient && m.workers.some((w) => w.name === m.recipient) ? m.recipient : m.workers.find((w) => w.state === 'running')?.name;
-  return m.workers.flatMap((w) => workerRows(m, w, Math.min(nameW, Math.max(6, m.cols - 14)), w.name === focusName));
+  const mates = m.mates ?? [];
+  const everyone = [...(m.lead ? [m.lead] : []), ...m.workers, ...mates];
+  if (!everyone.length) return [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])];
+  const nameW = Math.min(18, Math.max(6, ...everyone.map((w) => cells(w.name))));
+  const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : m.workers.find((w) => w.state === 'running')?.name;
+  const rows = (ws: readonly PanelWorker[]): PanelLine[] => ws.flatMap((w) => workerRows(m, w, Math.min(nameW, Math.max(6, m.cols - 14)), w.name === focusName));
+  const hint = !m.workers.length && !mates.length ? [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])] : [];
+  return [...(m.lead ? rows([m.lead]) : []), ...hint, ...rows(m.workers), ...rows(mates), ...(m.lead ? [leadSummary(m)] : [])];
 }
 
 // ---- channel ------------------------------------------------------------------------------------------------------------------
@@ -392,7 +407,7 @@ function verdictRows(c: CoreModel, m: PanelModel): PanelLine[] {
 
 function offloadRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const o = c.offload;
-  const ratio = o.ratio === null ? '' : ` (${o.ratio >= 10 ? Math.round(o.ratio) : o.ratio.toFixed(1)}x)`;
+  const ratio = o.ratio === null ? '' : ` (${Math.round(o.ratio * 10) / 10 >= 10 ? Math.round(o.ratio) : o.ratio.toFixed(1)}x)`;
   const rows = o.workers.slice(-8).map((w) => line(fitRuns([
     r('  '), r(pad(clip(w.name, 18), 18)), r(pad(clip((w.model ?? '?').replace(/^claude-/, ''), 12), 12), 'muted'),
     r(`${tok(w.peak).padStart(6)} held ${tok(w.kept).padStart(6)} kept ${tok(w.returned).padStart(6)} back`),
@@ -414,7 +429,7 @@ function routeRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const rows = c.routes.slice(-6).reverse().flatMap((rt): PanelLine[] => [
     line(fitRuns([
       r('  '), r(`${rt.cls}/${rt.effort}`, 'text', { bold: true }),
-      r(`  ${rt.name || rt.teamId}  ${[rt.transport ?? 'tmux', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`, 'muted'),
+      r(`  ${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`, 'muted'),
       ...(rt.drift.length ? [r('  '), mark('failed', m), r('drift', 'bad')] : []),
     ], m.cols)),
     ...rt.seats.map((s) => line(fitRuns([r(`    ${m.ui.ascii ? '>' : '▸'} `, 'muted'), r(`${s.count}x ${s.role} `), r(`${s.model}/${s.effort}`), ...ranRuns(s, m)], m.cols))),

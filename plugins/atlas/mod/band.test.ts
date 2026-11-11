@@ -188,7 +188,7 @@ describe('workers: a row each, in words', () => {
   });
   test('starting: a hollow dot and the word, before the first tool', () => {
     const snapshot = busySnap();
-    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: null } as never;
+    snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: null, startedAt: NOW - 5_000 } as never;
     const row = rowOf(panel(160, { snapshot, live: liveWorkers(snapshot, NOW) }).rowNodes, 'explorer-1');
     expect(text(row)).toMatch(/◇ explorer-1 +explorer +starting/);
   });

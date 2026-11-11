@@ -55,7 +55,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
 }
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
-  const ui = uiFromEnv();
+  const ui = model.look ?? uiFromEnv(); // the host's one read (register.ts); the process environment only where a fixture sets none
   const cols = Math.max(10, model.columns - 1);
   const pm = panelModelOf(model, ui, cols);
   const blank = (): RenderElement => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, model, on, ui);
@@ -64,6 +64,6 @@ export function sidebarTree(els: ClientElements, model: SidebarModel, on: Sideba
     flexShrink: 0,
     width: cols,
     backgroundColor: panelBg(ui),
-    children: [lineEl(els, ribbonRow(pm), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), blank(), ...viewRows(model.ui.view, els, model, on, cols)],
+    children: [lineEl(els, ribbonRow(pm), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), blank(), ...viewRows(model.ui.view, els, model, on, cols, pm)],
   });
 }

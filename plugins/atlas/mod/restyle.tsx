@@ -16,6 +16,7 @@ import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
+import { lookOf } from './look'
 import type { Outcome } from './transcript/outcome'
 
 // The live snapshot is read from $.state while drawing, so a snapshot write redraws
@@ -277,7 +278,7 @@ export function registerRestyle(on: On): void {
    const snap = await ready($, cache)
    if (!snap) return next(e)
    const agents = await $.agent.list().catch(() => [] as AgentInfo[])
-   const extra = e.props.tool === 'Agent' || e.props.tool === 'Task' ? await cardExtra($, e.props.output, agents, outcomes) : {}
+   const extra = { ...(e.props.tool === 'Agent' || e.props.tool === 'Task' ? await cardExtra($, e.props.output, agents, outcomes) : {}), ui: (await lookOf($)).ui }
    return toolUseTree(snap, e.props, agents, e.viewport?.columns ?? 0, extra) ?? next(e)
   } catch { return next(e) }
  })
@@ -314,7 +315,7 @@ export function registerRestyle(on: On): void {
    const calls = (e.props.calls ?? []) as ReadonlyArray<ToolUsePropsLike & { tool_use_id?: string }>
    const key = calls[0]?.tool_use_id ?? String(waves.size)
    if (!waves.has(key)) waves.set(key, waves.size + 1)
-   return waveTree(calls, waves.get(key) ?? 1, e.viewport?.columns ?? 0) ?? next(e)
+   return waveTree(calls, waves.get(key) ?? 1, e.viewport?.columns ?? 0, (await lookOf($)).ui) ?? next(e)
   } catch { return next(e) }
  })
 

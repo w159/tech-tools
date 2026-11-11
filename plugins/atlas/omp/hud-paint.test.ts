@@ -1,5 +1,7 @@
 // omp draws the TODO and SUBAGENTS surfaces from the same rows as Claude Code: the rev 4 design goldens, and a parity
-// assert that both hosts produce identical text for the fixture world at every width and in both forms.
+// assert that both hosts produce identical text for the fixture world at every width and in both forms. Mounted: the TODO rows only
+// (omp/todo-fallback.ts, no agents); the SUBAGENTS rows are not drawn by any omp surface (omp has its own native Subagents widget),
+// so the SUBAGENTS cases check the shared layout against the design goldens, not an omp surface.
 import { expect, test } from "bun:test";
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from "../contracts/hud-golden";
 import { worldHudAgents, worldPhases, worldPlan } from "../contracts/hud-world";

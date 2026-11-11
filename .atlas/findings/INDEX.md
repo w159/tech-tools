@@ -68,6 +68,8 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-11 | vb-L13 | rejected | L13 not fixed: HUD running vs band queued for same worker | [2026-11-11_vb-l13.md](2026-11-11_vb-l13.md) |
 | 2026-11-11 | vb-L1 | rejected | L1: old hudRows kept the completed row; test fails on old for format only | [2026-11-11_vb-l1.md](2026-11-11_vb-l1.md) |
 | 2026-11-11 | vb-gates | rejected | Gates: bun/tsc green but kit has 3 real failures (register-sidebar) absent at f4e6c29c | [2026-11-11_vb-gates.md](2026-11-11_vb-gates.md) |
+| 2026-11-11 | critic3-ui-score | rejected | Rebuilt Atlas surfaces are NOT expert grade: after mean 6.2 vs baseline 3.5; 13 cross-surface disagreements | [2026-11-11_critic3-ui-score.md](2026-11-11_critic3-ui-score.md) |
+| 2026-11-11 | band-polish-a929c761 | verified | band polish: kit 976 pass 0 real fail, bun 1838/0, tsc clean | [2026-11-11_band-polish-a929c761.md](2026-11-11_band-polish-a929c761.md) |
 | 2026-11-10 | verify-be89-release | rejected | 17.5.0 tree: 10 tests fail on tree but pass on HEAD (stale tests/codex hooks json/crew.md TOC); live checks 1-4,6,8 pass | [2026-11-10_verify-be89-release.md](2026-11-10_verify-be89-release.md) |
 | 2026-11-10 | v7480-resolutions | verified | 59 conflict rows all resolved; 42 superseded/already-present rows confirmed | [2026-11-10_v7480-resolutions.md](2026-11-10_v7480-resolutions.md) |
 | 2026-11-10 | v7480-mktdesc | rejected | marketplace atlas description differs from plugin.json (contract test fails) | [2026-11-10_v7480-mktdesc.md](2026-11-10_v7480-mktdesc.md) |

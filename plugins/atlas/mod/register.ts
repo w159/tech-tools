@@ -27,7 +27,8 @@ import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
 import { headerPhaseOf, registerRestyle } from './restyle';
 import { mergeToasts, registerNotify, stateToast } from './notify';
-import { EASE_FRAMES, EASE_MS, hostEnv, SPINNER_MS, uiFromEnv, type Ui } from './atlas-ui';
+import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
+import { clearLook, lookOf } from './look';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { LiveSnapshot, TeamTool } from './orchestra-types';
 import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
@@ -100,10 +101,8 @@ const easeTickState = atom({ plugin: 'atlas', key: 'easeTick' } as const, 0); //
 const lastHeaderState = atom({ plugin: 'atlas', key: 'lastHeader' } as const, null);
 const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
 const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // docs and the tab strip list route first
-const todoExpandedState = atom({ plugin: 'atlas', key: 'todoExpanded' } as const, null as boolean | null); // pane key `o` override; null follows ATLAS_TODO_EXPANDED
 const coreState = atom({ plugin: 'atlas', key: 'core' } as const, null); // CoreModel or null; written by coreTick, read by the band and pane renders
 const headerTallyState = atom({ plugin: 'atlas', key: 'headerTally' } as const, { ok: 0, total: 0 }); // main-agent answers that opened with the ATLAS header, of all answers
-const todoExpanded = async ($: EngineInterface): Promise<boolean> => (await read($, todoExpandedState)) ?? (await $.env.get('ATLAS_TODO_EXPANDED').catch(() => undefined)) === '1';
 
 // ---- module caches left out of $.state ---------------------------------------
 // builder: a class instance with methods, not JSON (a reload leaves it null until
@@ -135,23 +134,6 @@ let coreFindingsOk = true; // findings.json was readable in the last buildCore
 let soundOn: () => boolean = () => false;
 let tickTimer: { cancel(): void } | null = null;
 let easeTimer: { cancel(): void } | null = null; // running only while a gauge glides
-/** Theme, ASCII, colour depth and the rich switch as the live host reports them: its hooks have no `process`, so the environment is read through `$.env`, once per session. */
-let hostLook: { ui: Ui; rich: boolean } | null = null;
-async function lookOf($: EngineInterface): Promise<{ ui: Ui; rich: boolean }> {
-	if (hostLook) return hostLook;
-	// $.env.get takes a literal name (the engine lists the variables a module reads), so each read is spelled out.
-	const [theme, fgbg, ascii, lcAll, lcCtype, lang, noColor, colorterm, term, rich] = await Promise.all([
-		$.env.get('ATLAS_THEME').catch(() => undefined), $.env.get('COLORFGBG').catch(() => undefined), $.env.get('ATLAS_ASCII').catch(() => undefined),
-		$.env.get('LC_ALL').catch(() => undefined), $.env.get('LC_CTYPE').catch(() => undefined), $.env.get('LANG').catch(() => undefined),
-		$.env.get('NO_COLOR').catch(() => undefined), $.env.get('COLORTERM').catch(() => undefined), $.env.get('TERM').catch(() => undefined),
-		$.env.get('ATLAS_BAND_RICH').catch(() => undefined),
-	]);
-	const env: Record<string, string | undefined> = { ...hostEnv() };
-	for (const [k, v] of Object.entries({ ATLAS_THEME: theme, COLORFGBG: fgbg, ATLAS_ASCII: ascii, LC_ALL: lcAll, LC_CTYPE: lcCtype, LANG: lang, NO_COLOR: noColor, COLORTERM: colorterm, TERM: term, ATLAS_BAND_RICH: rich })) if (typeof v === 'string') env[k] = v;
-	hostLook = { ui: uiFromEnv(env), rich: env.ATLAS_BAND_RICH === '1' };
-	return hostLook;
-}
-
 /** Retarget the band gauges to the snapshot's figures; when one moved, start the glide timer (it stops itself on landing). */
 async function easeTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
 	const now = await $.clock.now();
@@ -787,9 +769,8 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 
 /** Toasts for what moved since the last read: new verdicts, workers whose offload finished. The first read toasts nothing.
  * State first, then the name, then one fact (notify.ts stateToast), merged into one toast per read (mergeToasts). */
-function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null): void {
+function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null, ui: Ui): void {
 	if (seen === null) return;
-	const ui = hostLook?.ui ?? uiFromEnv();
 	const texts: string[] = [];
 	for (const v of m.verdicts) {
 		if (seen.has(`${v.id}:${v.status}`)) continue;
@@ -810,7 +791,7 @@ export async function coreTick($: EngineInterface): Promise<void> {
 		const built = await buildCore($);
 		if (built === null) return;
 		const first = coreSeen === null;
-		coreToasts($, built, coreSeen);
+		coreToasts($, built, coreSeen, (await lookOf($)).ui);
 		if (coreFindingsOk) coreSeen = new Set(built.verdicts.map((v) => `${v.id}:${v.status}`)); // a missing findings.json keeps the seen set
 		coreFinished = Object.fromEntries(built.offload.workers.map((w) => [w.name, w.finished]));
 		const model = hasCore(built) ? built : null;
@@ -846,7 +827,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		await update($, paneOpenedState, () => false);
 		paneChecked = false;
 		dockWanted = false;
-		hostLook = null;
+		clearLook();
 		easeTimer?.cancel();
 		easeTimer = null;
 		await update($, gaugeState, () => null);
@@ -997,14 +978,14 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		lastRailPhase = railPhase(snapshot, lastRailPhase); // a blocked reply keeps the phase lit before it
 		const els = $.ui.resolve(e);
 		const columns = e.props.bodyColumns; // measured live: with the docked pane open, viewport.columns is the transcript's own width (143) and bodyColumns is that less the engine's five (138)
-		const live = liveWorkers(snapshot, Date.now());
+		const live = liveWorkers(snapshot, snapshot.now); // one clock for the band, the HUD, the board and the pane
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		// The HUD draws the TODO tree and the Subagents block (rev 4 design); below 80 columns the block gives way to the band's counts.
-		const agents = hudAgents(live, snapshot.squad);
+		const agents = hudAgents(live, snapshot.squad, snapshot.now);
 		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
 		const look = await lookOf($);
 		const tick = await read($, spinnerTickState);
-		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich };
+		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now }; // the board's clock too: one `claimed_at`, one elapsed
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;
@@ -1027,7 +1008,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		await read($, easeTickState); // a glide bumps it each frame: the band redraws with the value `easedNow` gives for this instant
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
-		const band = bandTree(els, { snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hud), eased, maxRows: e.props.maxRows === undefined ? undefined : hud.length > 0 ? budget - hud.length : budget, lastPhase: lastRailPhase, todoExpanded: await todoExpanded($), core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
+		const band = bandTree(els, { snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hud), eased, maxRows: e.props.maxRows === undefined ? undefined : hud.length > 0 ? budget - hud.length : budget, lastPhase: lastRailPhase, core: await read($, coreState), leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined }, bandHandlers($));
 		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: hud.map((r) => rowOf(els, r, columns)) })] : []), band, await next(e)] });
 	});
 
@@ -1036,13 +1017,15 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (e.surface !== 'terminal' || (e.requestId !== PANE_ID && e.requestId !== BOARD_ID) || !(await read($, isModOn))) return next(e);
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
+		const look = await lookOf($);
 		if (e.requestId === BOARD_ID) {
 			return boardTree($.ui.resolve(e), ownTodos(snapshot.todos ?? [], snapshot.sessionId), {
-				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000),
+				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich,
 			});
 		}
 		return sidebarTree($.ui.resolve(e), {
 			snapshot,
+			look: look.ui,
 			gates: await gateGroups($),
 			core: await read($, coreState),
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },

@@ -7,7 +7,8 @@ import type { AtlasSnapshot, PhaseId } from './contract';
 import { liveWorkers } from './data/live';
 import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
-import { clip, uiFromEnv, type Ui } from './atlas-ui';
+import { clip, type Ui } from './atlas-ui';
+import { lookOf } from './look';
 import { toastText } from './panel-layout';
 import { formatDuration } from './theme';
 
@@ -113,7 +114,7 @@ export function registerNotify(
 			const snap = await read($, snapshotState);
 			if (snap) {
 				const texts: string[] = [];
-				const ui = uiFromEnv();
+				const ui = (await lookOf($)).ui;
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {
 					switch (ev.type) {
 						case 'agent-spawn':

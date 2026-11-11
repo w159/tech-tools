@@ -1,5 +1,6 @@
 // Shared sidebar model types and the one padding helper the section builders use.
 import type { CoreModel } from '../data/core';
+import type { Ui } from '../atlas-ui';
 import type { LiveSnapshot } from '../orchestra-types';
 import { textWidth } from '../theme';
 
@@ -12,6 +13,8 @@ export type SidebarModel = {
   /** The Atlas core (contract, verdicts, offload, routes); the g view draws it above the gate groups. */
   core?: CoreModel | null;
   ui: { recipient: string | null; expanded: string | null; draft: string; view: SidebarView };
+  /** Theme, ASCII and colour depth as the host reported them once (mod/look.ts); absent in fixtures, which read the host environment. */
+  look?: Ui;
   columns: number;
   rows: number;
   /** Spinner tick the render reads (never writes); animates working badges. */

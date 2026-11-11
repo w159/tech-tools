@@ -187,3 +187,13 @@ test("an unchanged board is not repainted; a changed one is", () => {
 	expect(h.widgets.length).toBe(2);
 	expect(strip(h.widgets.at(-1) ?? [])).toContain("1 of 1 done");
 });
+
+test("long item text is clipped with `...` inside the row width, and short text is kept whole", () => {
+	const long = "x".repeat(300);
+	const lines = todoTreeLines([{ content: `Research: ${long}`, status: "in_progress" }, { content: "Research: short one", status: "pending" }]).map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
+	const rows = lines.slice(4);
+	expect(rows[0]).toMatch(/^▸ ◐ x+\.\.\./);
+	expect(rows[0]!.length).toBeLessThan(200);
+	expect(rows[0]).not.toContain("x".repeat(250));
+	expect(rows[1]).toMatch(/◇ short one +queued/);
+});

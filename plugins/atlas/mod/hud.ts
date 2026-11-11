@@ -2,8 +2,8 @@
 // the host-free layout; omp/hud-paint.ts paints the same rows for omp). This file adapts the board and the squad to those
 // rows, fits them to the row budget and paints Runs as Claude Code Segments. Pure: todos and agents in, Segment rows out.
 import type { SquadAgent, TodoItem } from './contract';
-import type { LiveWorker } from './data/live';
 import { descriptionName } from './data/orchestration';
+import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { hostEnv, PALETTES, toneHex, uiFromEnv, type Run, type Ui, type UiState } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, tierOf, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
@@ -24,6 +24,8 @@ export type HudAgent = {
   lastLine?: string;
   /** Context used, 0..1, when the host knows it (the rich form draws a gauge). */
   ctx?: number | null;
+  /** The state word every surface shares (liveState), when the adapter knows the worker's age; else it is derived from `state`. */
+  ui?: UiState;
 };
 
 const GENERIC = new Set(['unknown', 'general-purpose', 'task', '']);
@@ -37,10 +39,10 @@ export function agentName(name: string, role: string, task?: string): string {
 }
 
 /** Band workers plus the squad's spawn model and task, in the HUD's shape. */
-export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[]): HudAgent[] {
+export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], now = Date.now()): HudAgent[] {
   return live.map((w) => {
     const s = squad.find((a) => a.name === w.name);
-    return { name: agentName(w.name, w.role, s?.task), role: w.role, state: w.state, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    return { name: agentName(w.name, w.role, s?.task), role: w.role, state: w.state, ui: liveState(w, now), tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
 }
 
@@ -53,7 +55,6 @@ export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.st
 // ---- adapters ---------------------------------------------------------------------------------------
 
 const TODO_STATE: Record<string, UiState> = { completed: 'done', in_progress: 'running', blocked: 'blocked', abandoned: 'failed', pending: 'queued' };
-const AGENT_STATE: Record<string, UiState> = { working: 'running', running: 'running', blocked: 'blocked', failed: 'failed', parked: 'waiting', waiting: 'waiting', queued: 'queued', done: 'done' };
 
 const flat = (s: string | null | undefined): string => (s ?? '').replace(/\s+/g, ' ').trim();
 const LABEL_PREFIX = /^\[([A-Za-z][\w-]*)\]\s+/;
@@ -92,7 +93,7 @@ function lastAction(a: HudAgent, root?: string | null): string {
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const rows = agents.map((a): AgentRow => {
     const owned = todos.findIndex((t) => t.owner === a.name);
-    return { name: a.name, state: AGENT_STATE[a.state] ?? 'running', model: shortModel(a.model), task: owned >= 0 ? `T${owned + 1}` : '', tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false };
+    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), task: owned >= 0 ? `T${owned + 1}` : '', tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');

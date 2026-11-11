@@ -7,6 +7,7 @@ import type { AgentInfo, EngineInterface, RenderElement } from 'claude-code'
 import { EMPTY_ORCH } from '../data/orchestration'
 import { formatDuration, spin } from '../theme'
 import { notificationTree, resultLine } from './cards'
+import { lookOf } from '../look'
 import type { CardExtra } from './cards'
 
 // Read-only views of register.ts's atoms (same plugin/key): the spinner clock and spawn metadata.
@@ -100,7 +101,7 @@ export async function notificationRow($: EngineInterface, task: { id?: string; s
  const who = await whoIs($, task.id ?? '', await $.agent.list().catch(() => [] as AgentInfo[]))
  if (!who) return null
  const o = await workerOutcome($, { ...who, status: firstOf(task.status, who.status) }, memo, task.durationMs)
- return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status))
+ return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui)
 }
 const FAILED = new Set(['failed', 'killed'])
 

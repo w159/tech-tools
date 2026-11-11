@@ -303,3 +303,23 @@ test('register hands the HUD the live phase rail: the rich TODO block draws it a
   await ui.unmount();
   expect(rows.some((t) => t.startsWith('▸ 1 research'))).toBe(true); // a row that is the rail alone: the HUD's, not the band's (that one follows the capsule)
 });
+
+/** The Team tab's text for impl-a. */
+async function teamRow($: Engine): Promise<string> {
+  const ui = await $.ui.mount({ plugin: 'atlas', surface: 'terminal', component: 'Pane', requestId: 'atlas', props: { title: 'Atlas', isFocused: true, bodyColumns: 120, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } as never });
+  await ui.press({ key: 'tab:team' });
+  const text = (await ui.find({ key: 'worker:impl-a' }))?.text ?? '';
+  await ui.unmount();
+  return text;
+}
+
+test('L13 the HUD, the band and the side panel say the same state word for a worker in the same frame', async ($, on) => {
+  await boot(on, [AGENT]);
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: 'prompt' }) as never);
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  const above = await abovePromptText($, 30);
+  expect(above).toMatch(/impl-a[^"]*running/); // the HUD row
+  expect(above).toMatch(/[◐◓◑◒] 1 running/); // the band's count
+  expect(await teamRow($)).toMatch(/[◐◓◑◒] impl-a\s+running/); // the side panel row
+  for (const text of [above, await teamRow($)]) expect(text).not.toContain('queued');
+});
