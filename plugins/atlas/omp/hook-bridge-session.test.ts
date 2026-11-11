@@ -373,9 +373,14 @@ async function thresholdScenario(leanCtx: boolean) {
 	});
 }
 
-// Each REAL test spawns python3 hook processes (dozens for the threshold scenario). bun's 5 s default timed out
-// under load (pytest -n 8 beside bun: 2 of 27 failed, the same file alone passed). The per-test timeout is explicit
-// so a loaded host cannot fail it, and `bun test --timeout N` cannot lower it; the assertions are unchanged.
+// Why these tests are slow under load (D6, measured on a 4-core host, bun test omp/hook-bridge-session.test.ts):
+// the cause is environmental, not plugin code. A REAL hook is a python3 process (about 55 ms each when idle: the
+// python startup is 16 ms and dispatch_tripwire's imports 10 ms), the bridge runs every hook the contract lists for
+// an event one after another (contracts/hook-bridge.json), and thresholdScenario fires ~30 tool calls, so one run is
+// dozens of sequential process spawns. Alone: threshold scenario 2.3 s and 2.1 s, the other REAL tests 0.2-0.5 s,
+// file total 5.9 s. With 8 CPU-bound processes on the 4 cores (what `pytest -n 8` beside bun does): threshold
+// scenario 3.3 s per test, file total 8.8 s. bun's 5 s default per-test timeout then sits inside the load noise
+// (the verifier saw 2 of 27 fail at --timeout 1500), so the timeout is explicit; assertions are unchanged.
 const REAL_HOOK_TEST_TIMEOUT_MS = 60_000;
 
 for (const leanCtx of [false, true]) {

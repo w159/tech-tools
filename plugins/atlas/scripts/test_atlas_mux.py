@@ -2205,6 +2205,7 @@ class ClaudeBgTests(Base):
 
         base = ["Bash(python3 *atlas_todo.py*)", "mcp__claude_mem_mcp_search"]
         note_rule = f"Bash(python3 {atlas_mux._todo_script()} note *)"
+        notes_rule = f"Bash(python3 {atlas_mux._todo_script()} notes --to *)"
         allow = self._bg_allow("--tools-profile", "exec")
         for rule in base + ["Bash(pytest *)", "Read", "mcp__lean-ctx__*"]:
             self.assertIn(rule, allow)
@@ -2213,7 +2214,7 @@ class ClaudeBgTests(Base):
         allow = self._bg_allow()
         for rule in base + ["mcp__lean-ctx__*"]:
             self.assertIn(rule, allow)
-        self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base + [note_rule]], allow)
+        self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base + [note_rule, notes_rule]], allow)
         self.assertNotIn("Read", allow)
         # the navigation list names only installed servers: no symbol-tool rules for an uninstalled MCP server
         self.assertFalse([r for r in allow if "symbol" in r.lower()], allow)
@@ -3904,7 +3905,8 @@ class WorkerToolsProfileAllowTests(unittest.TestCase):
         import atlas_mux
 
         # the only Bash rule a read worker gets is the board-note command (D2)
-        self.assertEqual([f"Bash(python3 {atlas_mux._todo_script()} note *)"], [t for t in allow if t.startswith("Bash")], allow)
+        todo = atlas_mux._todo_script()
+        self.assertEqual([f"Bash(python3 {todo} note *)", f"Bash(python3 {todo} notes --to *)"], [t for t in allow if t.startswith("Bash")], allow)
         for tool in ("Edit", "Write", "MultiEdit"):
             self.assertNotIn(tool, allow)
 
@@ -3953,7 +3955,8 @@ class WorkerToolsProfileAllowTests(unittest.TestCase):
         import atlas_mux
 
         self.assertEqual(
-            [*atlas_mux.WORKER_MCP_ALLOW, f"Bash(python3 {atlas_mux._todo_script()} note *)"], self.allow(None)
+            [*atlas_mux.WORKER_MCP_ALLOW, f"Bash(python3 {atlas_mux._todo_script()} note *)", f"Bash(python3 {atlas_mux._todo_script()} notes --to *)"],
+            self.allow(None),
         )
 
     def test_run_worker_and_spawn_accept_a_tools_profile_flag(self):
@@ -4425,7 +4428,8 @@ class ReliabilityBaselineTests(unittest.TestCase):
         for profile in (None, "read", "edit", "exec"):
             self.assertIn(rule, atlas_mux.worker_allow(profile), profile)
         read = atlas_mux.worker_allow("read")
-        self.assertFalse([r for r in read if r.startswith("Bash(") and r != rule], read)
+        read_rule = f"Bash(python3 {atlas_mux._todo_script()} notes --to *)"
+        self.assertFalse([r for r in read if r.startswith("Bash(") and r not in (rule, read_rule)], read)
 
     def _wait(self, notes):
         import atlas_mux
@@ -4488,6 +4492,68 @@ class ReliabilityBaselineTests(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertIn("atlas:", out["error"])
         self.assertIn("--plugin-dir", out["error"])
+
+    def test_r1_every_atlas_todo_command_in_the_worker_brief_is_allowed_and_nothing_wider(self):
+        """The brief tells a worker to post with `note` and read peer replies with `notes --to <me>`. The D2 rule covered
+        only `note *`, so the read was denied and workers never saw a reply."""
+        import fnmatch
+
+        import atlas_mux
+
+        rec = atlas_mux.build_team("audit", "medium", None, "t", "tr1")
+        brief = atlas_mux.team_brief(rec, rec["members"][0], "/r", "c", "lead")
+        todo = str(atlas_mux._todo_script())
+        cmds = [ln.split(": ", 1)[1] if ": " in ln else ln for ln in brief.splitlines() if f"python3 {todo} " in ln]
+        cmds = [c[c.index("python3 "):].replace("<who>", "lead").replace("'<text>'", "'x'") for c in cmds]
+        self.assertEqual({"note", "notes"}, {c.split(todo + " ", 1)[1].split()[0] for c in cmds}, cmds)
+        for profile in (None, "read", "edit", "exec"):
+            rules = [r[5:-1] for r in atlas_mux.worker_allow(profile) if r.startswith("Bash(python3 ")]
+            for c in cmds:
+                self.assertTrue(any(fnmatch.fnmatchcase(c, r) for r in rules), (profile, c, rules))
+            if profile in ("edit", "exec"):
+                continue  # these profiles carry the generic `python3 *` run rule by design
+            for wider in ("complete --id x", "claim --id x", "add --content x", "notes --root /elsewhere", "note --x; touch f"):
+                if wider.endswith("touch f"):
+                    continue  # compound commands are split by claude and every part must be allowed
+                full = f"python3 {todo} {wider}"
+                self.assertFalse(any(fnmatch.fnmatchcase(full, r) for r in rules), (profile, full, rules))
+
+    def test_r6_dry_run_runs_the_plugin_preflight(self):
+        """--dry-run returned ok:true on a host where the real spawn fails with "claude workers cannot load atlas:<role>"."""
+        import atlas_mux
+
+        buf = io.StringIO()
+        with tempfile.TemporaryDirectory() as bare, mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": bare, "CLAUDE_PLUGIN_ROOT": bare}), \
+                contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "audit", "--effort", "low", "--task", "t",
+                                   "--team-id", "tr6dry", "--dry-run", "--root", tempfile.mkdtemp()])
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertEqual(1, code)
+        self.assertFalse(out["ok"])
+        self.assertIn("claude workers cannot load", out["error"])
+
+    def test_r6_a_disabled_install_is_not_installed(self):
+        """settings.json enabledPlugins {"atlas@tech-tools": false} (user or project scope) turns the install off: the worker
+        would not resolve atlas:<role> from it, so the preflight must fall back to --plugin-dir or fail."""
+        import atlas_mux
+
+        with tempfile.TemporaryDirectory() as cfg, tempfile.TemporaryDirectory() as proj, \
+                mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": cfg}):
+            pathlib.Path(cfg, "plugins").mkdir()
+            pathlib.Path(cfg, "plugins", "installed_plugins.json").write_text(
+                json.dumps({"version": 2, "plugins": {"atlas@tech-tools": [{"scope": "user"}]}}))
+            self.assertIsNone(atlas_mux.worker_plugin_dir(proj))
+            user = pathlib.Path(cfg, "settings.json")
+            user.write_text(json.dumps({"enabledPlugins": {"atlas@tech-tools": False}}))
+            self.assertTrue(atlas_mux.worker_plugin_dir(proj))  # falls back to the plugin tree
+            user.write_text(json.dumps({"enabledPlugins": {"atlas@tech-tools": True}}))
+            self.assertIsNone(atlas_mux.worker_plugin_dir(proj))
+            pathlib.Path(proj, ".claude").mkdir()
+            pathlib.Path(proj, ".claude", "settings.local.json").write_text(json.dumps({"enabledPlugins": {"atlas@tech-tools": False}}))
+            self.assertTrue(atlas_mux.worker_plugin_dir(proj))
+            with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": cfg}):
+                with self.assertRaises(atlas_mux.PluginNotLoadable):
+                    atlas_mux.worker_plugin_dir(proj)
 
     def test_d4_agent_not_found_output_is_classified_with_a_clear_reason(self):
         import atlas_mux

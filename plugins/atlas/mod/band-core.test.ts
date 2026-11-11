@@ -1,4 +1,4 @@
-// The Atlas core row in the band: idle only, directly under the stepper, inside maxRows. A running band spends its
+// The Atlas core row in the band: idle only, directly under the band, inside maxRows. A running band spends its
 // rows on workers (spec: docs/specs/2026-11-10_atlas-terminal-ui.md, Core (idle)).
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
@@ -22,18 +22,18 @@ const rowsOf = (columns: number, maxRows: number, idle: boolean, withCore = true
 };
 
 describe('band core row', () => {
-  test('idle: the core row sits directly under the stepper, with dim labels and plain figures', () => {
+  test('idle: the core row sits directly under the band, with muted labels and plain figures', () => {
     for (const columns of [120, 160]) {
       const rows = rowsOf(columns, 12, true);
-      expect(rows[1]).toContain('implement');
-      expect(rows[2]).toContain('contract  ');
-      expect(rows[2]).toContain('verdicts  ');
+      expect(rows[0]).toContain('implement');
+      expect(rows[1]).toContain('contract  ');
+      expect(rows[1]).toContain('verdicts  ');
       expect(rows.filter((r) => r.includes('contract  '))).toHaveLength(1);
     }
   });
   test('idle at 120 columns prints the shared core golden', () => {
-    expect(rowsOf(120, 12, true)[2]!.trimEnd()).toBe(coreGolden[120]);
-    expect(rowsOf(160, 12, true)[2]!.trimEnd()).toBe(coreGolden[160]);
+    expect(rowsOf(120, 12, true)[1]!.trimEnd()).toBe(coreGolden[120]);
+    expect(rowsOf(160, 12, true)[1]!.trimEnd()).toBe(coreGolden[160]);
   });
   test('a running band shows no core row: its rows go to workers', () => {
     for (const columns of [80, 120, 160]) expect(rowsOf(columns, 12, false).some((r) => r.includes('contract  '))).toBe(false);
@@ -49,9 +49,9 @@ describe('band core row', () => {
     expect(without.some((r) => r.includes('contract  '))).toBe(false);
     expect(rowsOf(160, 12, true)).toHaveLength(without.length + 1);
   });
-  test('idle: the core row waits for room (header, stepper, then core at 3 rows)', () => {
-    expect(rowsOf(160, 2, true).some((r) => r.includes('contract  '))).toBe(false);
-    expect(rowsOf(160, 3, true).some((r) => r.includes('contract  '))).toBe(true);
+  test('idle: the core row waits for room (the band, then core at 2 rows)', () => {
+    expect(rowsOf(160, 1, true).some((r) => r.includes('contract  '))).toBe(false);
+    expect(rowsOf(160, 2, true).some((r) => r.includes('contract  '))).toBe(true);
   });
   test('narrow bands (under 80 columns) show no core row', () => {
     expect(rowsOf(70, 12, true).some((r) => r.includes('contract  '))).toBe(false);

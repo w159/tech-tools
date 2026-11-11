@@ -162,10 +162,12 @@ def worker_allow(tools_profile=None) -> tuple:
     run commands and edit tools widen with the member's tools_profile. An unknown or unset profile keeps only
     those two.
 
-    The note rule is the narrowest that covers the worker protocol line (`python3 <atlas_todo.py> note ...`):
-    one script path, one subcommand. Without it a read-profile worker had no python3 rule, `claude -p` denied the
+    The two board rules are the narrowest that cover the worker protocol lines in team_brief (post:
+    `python3 <atlas_todo.py> note ...`, read: `python3 <atlas_todo.py> notes --to <me> ...`): one script path, one
+    subcommand each, the read pinned to `--to`. Without the note rule a read-profile worker had no python3 rule, `claude -p` denied the
     protocol note ("This command requires approval") and the worker never posted to the board."""
-    allow = WORKER_MCP_ALLOW + (f"Bash(python3 {_todo_script()} note *)",)
+    todo = _todo_script()
+    allow = WORKER_MCP_ALLOW + (f"Bash(python3 {todo} note *)", f"Bash(python3 {todo} notes --to *)")
     if tools_profile in ("read", "edit", "exec"):
         allow += WORKER_READ_ALLOW
     if tools_profile in ("edit", "exec"):
@@ -705,20 +707,38 @@ class PluginNotLoadable(RuntimeError):
     """A claude worker would start `--agent atlas:<role>` with no atlas plugin to resolve it."""
 
 
-def _installed_plugin_names() -> set:
-    cfg = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+def _claude_config_dir() -> str:
+    return os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+
+
+def _installed_plugin_names(root: str | None = None) -> set:
+    """Installed AND enabled plugin names. Claude Code marks a disabled plugin in settings `enabledPlugins`
+    {"<name>@<marketplace>": false}; the install record stays in installed_plugins.json, but `--agent atlas:<role>`
+    no longer resolves from it. Scopes merge user < project < local, the later one wins."""
+    cfg = _claude_config_dir()
     try:
         data = json.loads(Path(cfg, "plugins", "installed_plugins.json").read_text(encoding="utf-8"))
-        return set((data.get("plugins") or {}).keys())
+        names = set((data.get("plugins") or {}).keys())
     except (OSError, ValueError, AttributeError):
         return set()
+    base = Path(root or os.getcwd())
+    enabled: dict = {}
+    for f in (Path(cfg, "settings.json"), base / ".claude" / "settings.json", base / ".claude" / "settings.local.json"):
+        try:
+            flags = json.loads(f.read_text(encoding="utf-8")).get("enabledPlugins")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(flags, dict):
+            enabled.update(flags)
+    return {n for n in names if enabled.get(n) is not False}
 
 
-def worker_plugin_dir() -> str | None:
-    """Directory to pass a claude worker as --plugin-dir, or None when atlas is installed (the worker loads the
-    install). Raises PluginNotLoadable when atlas is neither installed nor reachable as a plugin tree: the worker
-    would exit 1 with "--agent 'atlas:<role>' not found" while spawn-team reported ok (baseline D4)."""
-    if any(n.split("@", 1)[0] == "atlas" for n in _installed_plugin_names()):
+def worker_plugin_dir(root: str | None = None) -> str | None:
+    """Directory to pass a claude worker as --plugin-dir, or None when atlas is installed and enabled (the worker loads
+    the install). Raises PluginNotLoadable when atlas is neither installed nor reachable as a plugin tree: the worker
+    would exit 1 with "--agent 'atlas:<role>' not found" while spawn-team reported ok (baseline D4). A disabled
+    install counts as not installed."""
+    if any(n.split("@", 1)[0] == "atlas" for n in _installed_plugin_names(root)):
         return None
     root = Path(os.environ.get("CLAUDE_PLUGIN_ROOT") or Path(__file__).resolve().parent.parent)
     if (root / ".claude-plugin" / "plugin.json").is_file():
@@ -2444,15 +2464,16 @@ def cmd_spawn_team(args) -> int:
             )
         rec["name"] = team_name
     rec["worktrees"] = worktree_plan(rec, root)
-    if args.dry_run:
-        return _emit({"ok": True, "dry_run": True, "team": rec}, brief=_brief_for(args, _brief_spawn_team))
+    # the plugin preflight runs for a dry run too: a plan that the real spawn would refuse must not read ok
     if getattr(args, "harness", "claude") == "claude" and not (
         getattr(args, "command_override", None) or os.environ.get("ATLAS_MUX_WORKER_CMD")
     ):
         try:
-            worker_plugin_dir()
+            worker_plugin_dir(root)
         except PluginNotLoadable as exc:
             return _emit({"ok": False, "error": str(exc)}, 1)
+    if args.dry_run:
+        return _emit({"ok": True, "dry_run": True, "team": rec}, brief=_brief_for(args, _brief_spawn_team))
     path = _team_dir(root) / f"{rec['team_id']}.json"
     if path.exists():
         return _emit(

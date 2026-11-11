@@ -486,9 +486,9 @@ describe('D3 phase after completion', () => {
   test('D3: a stale header cannot pull a finished run back', () => {
     expect(currentPhase([done('a', 'implement')], 'research').phase).toBe('done');
   });
-  test('D3: nothing in progress, work pending, no header => the last completed row\'s phase, not research', () => {
+  test('D3/R4: nothing in progress, work pending, no header => the earliest open row\'s phase, not the stale last-completed one', () => {
     const items = [done('a', 'research'), done('c', 'implement'), { ...item({ id: 'b', status: 'pending' }), phase: 'verify' } as TodoItem];
-    expect(currentPhase(items, null)).toEqual({ phase: 'implement', source: 'todo' });
+    expect(currentPhase(items, null)).toEqual({ phase: 'verify', source: 'todo' });
   });
   test('D3: dispatch and stub rows do not hold a finished run open', () => {
     const items = [done('a', 'verify'), row({ id: 'd', origin: 'dispatch', status: 'in_progress' }), row({ id: 'p', content: 'placeholder' })];
@@ -502,5 +502,54 @@ describe('D9 one glyph path', () => {
     const g = groupTodos([row({ id: 'a', phase: 'implement' }), row({ id: 'b', phase: 'verify' })], c, 's1');
     expect(g.map(x => x.glyph)).toEqual([contractGlyph('🔧'), contractGlyph('✅')]);
     expect(g[1]!.glyph).toBe('✓');
+  });
+});
+
+describe('regression fixes R3 R4 R7 (f4e6c29c verifier)', () => {
+  const r = (over: Record<string, unknown>) => ({ id: 'x', content: 'real work', status: 'pending', session_id: 'S', ...over }) as any;
+  test('R3: a carried row completed this session counts as done; a still-pending carried row stays out', () => {
+    const carriedDone = r({ id: 'c', origin: 'carried', status: 'completed' });
+    expect(planCounts([carriedDone, r({ id: 'n' })], 'S')).toEqual({ done: 1, total: 2 });
+    expect(planCounts([r({ id: 'p', origin: 'carried' }), r({ id: 'n' })], 'S')).toEqual({ done: 0, total: 1 });
+    expect(computeCounts([carriedDone, r({ id: 'n' })], CONTRACT, 'S')).toMatchObject({ done: 1, total: 2 });
+  });
+  test('R4: [verify completed, implement pending] reads implement; an in_progress row still wins', () => {
+    const rows = [r({ id: 'v', status: 'completed', phase: 'verify' }), r({ id: 'i', phase: 'implement' })];
+    expect(currentPhase(rows, null)).toEqual({ phase: 'implement', source: 'todo' });
+    expect((todosMod as any).planPhase(rows, 'S')).toBe('implement');
+    const withActive = [...rows, r({ id: 't', status: 'in_progress', phase: 'test' })];
+    expect(currentPhase(withActive, null).phase).toBe('test');
+  });
+  test('R7: the groups-only count fallback scopes like planCounts: other sessions and pending carried rows leave, completed carried rows count', () => {
+    const items = [
+      r({ id: 'a', status: 'completed', phase: 'implement' }),
+      r({ id: 'b', phase: 'implement' }),
+      r({ id: 'other', session_id: 'older', phase: 'implement' }),
+      r({ id: 'cp', origin: 'carried', phase: 'implement' }),
+      r({ id: 'cd', origin: 'carried', status: 'completed', phase: 'implement' }),
+    ];
+    const withRows = { todos: items, todoGroups: groupTodos(items, CONTRACT, 'S'), sessionId: 'S' };
+    const groupsOnly = { todos: [], todoGroups: withRows.todoGroups, sessionId: 'S' };
+    expect(planCounts(items, 'S')).toEqual({ done: 2, total: 3 });
+    expect((todosMod as any).todoCounts(groupsOnly)).toEqual((todosMod as any).todoCounts(withRows));
+  });
+});
+
+describe('R8 plan rows written by `atlas_todo.py set` without --session', () => {
+  // verbatim row shape of mirror(root, todos, '') (cmd set with no --session flag): origin session, session_id ''
+  const setRow = (id: string, status: string) => ({
+    id, content: `T ${id}`, status, owner: null, claimed_at: null, origin: 'session', session_id: '',
+    created_at: 1, updated_at: 1, evidence: null, completed_at: null, archived: false,
+  }) as unknown as TodoItem;
+  const rows = [setRow('a', 'completed'), setRow('b', 'in_progress'), setRow('c', 'pending')];
+  const dispatch = { ...setRow('d', 'pending'), origin: 'dispatch', session_id: 'S' } as unknown as TodoItem;
+  test('R8: they survive readTodos, count, and render as groups next to dispatch rows', async () => {
+    const { fs } = memFs(board([...rows, dispatch]));
+    const { items } = await readTodos(fs, '/r', 'S', [], CONTRACT);
+    expect(items.map(i => i.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(planCounts(items, 'S')).toEqual({ done: 1, total: 3 });
+    expect(computeCounts(items, CONTRACT, 'S')).toMatchObject({ done: 1, total: 3 });
+    const groups = groupTodos(items, CONTRACT, 'S');
+    expect(groups.flatMap(g => g.items).filter(i => i.id !== 'd').length).toBe(3);
   });
 });

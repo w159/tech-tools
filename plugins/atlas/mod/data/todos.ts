@@ -87,7 +87,7 @@ export async function readTodos(
   // Unphased items stay unphased (grouped as 'unsorted'); never defaulted to a real phase.
   const items = parsed
     .filter(it => !it.archived)
-    .filter(it => it.session_id === sessionId ||
+    .filter(it => it.session_id === sessionId || it.session_id === '' ||
       it.status === 'pending' || it.status === 'in_progress')
     .map(it => ({ ...it, phase: resolvePhase(it, contract) }));
   const next: TodosCache = { mtimeMs: st ? st.mtimeMs : 0, items };
@@ -98,7 +98,7 @@ export async function readTodos(
 type BoardItem = TodoItem & { origin?: string; created_at?: number | string };
 const createdAt = (it: BoardItem): number => Number(it.created_at) || 0;
 const isLive = (it: BoardItem, sessionId: string): boolean =>
-  it.session_id === sessionId || (it.status !== 'completed' && it.origin !== 'carried');
+  it.session_id === sessionId || it.session_id === '' || (it.status !== 'completed' && it.origin !== 'carried');
 
 /** A stub row carries no work: empty content, or the literal `placeholder` some boards hold. It never counts. */
 export const isStubRow = (it: object): boolean => {
@@ -116,14 +116,17 @@ export const isPlanItem = (it: object): boolean => {
 };
 
 /** This session's own rows: carried rows are re-stamped with the session id at boot yet belong to an earlier plan, and
- * another session's rows (a different session id; the open backlog readTodos keeps for the board) are not this run's work. Without a session id
- * the caller has already scoped the rows. */
+ * another session's rows (a different session id; the open backlog readTodos keeps for the board) are not this run's work.
+ * A carried row completed since boot is this session's finished work and counts (carry_over archives older completed
+ * ones, so a completed carried row is always this session's). Without a session id the caller has already scoped the rows. */
 const ownRow = (it: object, sessionId?: string): boolean => {
-  const r = it as { origin?: string; session_id?: string };
-  return r.origin !== 'carried' && (sessionId === undefined || r.session_id === undefined || r.session_id === sessionId);
+  const r = it as { origin?: string; session_id?: string; status?: string };
+  const carriedDone = r.origin === 'carried' && r.status === 'completed';
+  // session_id '' is a plan written by `atlas_todo.py set` with no --session: the lead's own rows (carry_over re-stamps stale ones at boot)
+  return (r.origin !== 'carried' || carriedDone) && (sessionId === undefined || !r.session_id || r.session_id === sessionId);
 };
 
-/** This session's rows as the board lists them (dispatch rows included; carried and other sessions' rows left out). */
+/** This session's rows as the board lists them (dispatch rows included; open carried and other sessions' rows left out). */
 export const ownTodos = <T extends object>(items: readonly T[], sessionId?: string): T[] => items.filter((it) => ownRow(it, sessionId));
 
 /** The one count basis: this session's plan items. Every surface (band, HUD, board, side panel, snapshot.counts) counts this set. */
@@ -133,10 +136,10 @@ export const planBasis = <T extends object>(items: readonly T[], sessionId?: str
 /** Advisor notes are not operating-contract work: they never join phase groups or progress. */
 const isAdvisor = (it: BoardItem): boolean => it.origin === 'advisor';
 /** Carried rows are re-stamped with the new session id at boot (atlas_todo.carry) yet belong to an earlier plan. */
-const notOwn = (it: BoardItem): boolean => it.origin === 'advisor' || it.origin === 'carried';
+const notOwn = (it: BoardItem): boolean => it.origin === 'advisor' || (it.origin === 'carried' && it.status !== 'completed'); // a carried row finished this session is its own work (ownRow)
 /** Session-origin (explicit, or legacy rows without origin owned by this session). */
 const isSessionOrigin = (it: BoardItem, sessionId: string): boolean =>
-  it.origin === 'session' || (it.origin === undefined && it.session_id === sessionId);
+  it.origin === 'session' || (it.origin === undefined && (it.session_id === sessionId || it.session_id === ''));
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -150,6 +153,8 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
   const row = (it: BoardItem) => ({
     id: it.id, content: clip(it.content, 160), status: it.status, owner: it.owner ?? null, evidence: it.evidence ? clip(it.evidence, 200) : null,
     live: isLive(it, sessionId), ...(it.origin ? { origin: it.origin } : {}),
+    // another session's open backlog row: marked so the groups-only count (routeCounts) can leave it out like planCounts does
+    ...(it.session_id && it.session_id !== sessionId ? { session_id: it.session_id } : {}),
   });
   const contractItems = items.filter(it => !notOwn(it) && !isStubRow(it)); // a stub row holds no work: no group shows it
   const groups: TodoGroup[] = [];
@@ -196,17 +201,19 @@ export function computeCounts(all: TodoItem[], contract: Contract, sessionId?: s
   return { done, total, byPhase };
 }
 
-/** Phase of the plan itself: the in_progress row's phase; every plan row completed => 'done'; else the last completed
- * row's phase (the run has moved past it). undefined when the plan names no phase. Shared with omp. */
+/** Phase of the plan itself: the in_progress row's phase; every plan row completed => 'done'; else the earliest open
+ * row's phase (the work still to do); else the last completed row's phase. undefined when the plan names no phase.
+ * Shared with omp. */
 export function planPhase<T extends { status?: string; phase?: string }>(items: readonly T[], sessionId?: string): string | undefined {
   const plan = planBasis(items, sessionId);
   const active = plan.find((it) => it.status === 'in_progress');
   if (active) return active.phase;
   if (plan.length > 0 && plan.every((it) => it.status === 'completed')) return 'done';
-  return [...plan].reverse().find((it) => it.status === 'completed' && it.phase)?.phase;
+  return plan.find((it) => it.status !== 'completed' && it.phase)?.phase
+    ?? [...plan].reverse().find((it) => it.status === 'completed' && it.phase)?.phase;
 }
 
-/** Current phase: the active todo > a finished plan (`done`) > the reply header > the last completed row's phase > 'research' (nothing has run). */
+/** Current phase: the active todo > a finished plan (`done`) > the reply header > the earliest open row's phase > the last completed row's phase > 'research' (nothing has run). */
 export function currentPhase(
   items: TodoItem[],
   headerPhase: PhaseId | null,
@@ -233,11 +240,13 @@ export function planCounts(items: readonly { status: string }[], sessionId?: str
 
 /** The snapshot's count: planCounts over its todos; a snapshot that carries only groups (no flat rows) counts the groups. */
 export function todoCounts(s: { todos: readonly { status: string }[]; todoGroups: readonly TodoGroup[]; sessionId?: string }): { done: number; total: number } {
-  return s.todos.length ? planCounts(s.todos, s.sessionId) : routeCounts(s.todoGroups);
+  return s.todos.length ? planCounts(s.todos, s.sessionId) : routeCounts(s.todoGroups, undefined, s.sessionId);
 }
 
-/** done/total over group rows (groupTodos already left stubs and advisor notes out; dispatch rows are skipped here). */
-export function routeCounts(groups: readonly TodoGroup[], _contract?: Contract): { done: number; total: number } {
-  const items = groups.filter((g) => g.phase !== 'advisor').flatMap((g) => g.items).filter((it) => it.origin !== 'dispatch');
+/** done/total over group rows, on the same basis as planCounts (ownRow: groupTodos already left stubs and advisor notes
+ * out; dispatch rows, other sessions' rows (marked `session_id` by groupTodos) and open carried rows are skipped here). */
+export function routeCounts(groups: readonly TodoGroup[], _contract?: Contract, sessionId?: string): { done: number; total: number } {
+  const items = groups.filter((g) => g.phase !== 'advisor').flatMap((g) => g.items)
+    .filter((it) => ownRow(it, sessionId) && it.origin !== 'dispatch');
   return { done: items.filter((i) => i.status === 'completed').length, total: items.length };
 }

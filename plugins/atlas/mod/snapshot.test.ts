@@ -136,7 +136,7 @@ describe('SnapshotBuilder', () => {
     expect(withHeader.phaseSource).toBe('header');
     const fallback = await b.build(live({ headerPhase: null }));
     expect(fallback.phase).toBe('research');
-    expect(fallback.phaseSource).toBe('default');
+    expect(fallback.phaseSource).toBe('todo'); // R4: no header, no in_progress => the earliest open row's phase (was the default)
     expect(fallback.counts.total).toBe(1);
   });
 

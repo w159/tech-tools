@@ -3,9 +3,11 @@
 import { describe, expect, test } from "claude-code/testing";
 import type { ClientElements } from "claude-code";
 import { fx, idleFx, trimRows } from "../contracts/band-fixture";
-import { golden, idleGolden, railGolden } from "../contracts/band-golden";
+import { golden, idleGolden, tierGolden } from "../contracts/band-golden";
+import { worldModel } from "../contracts/band-world";
 import { coreFixture, coreMatrix } from "../contracts/core-fixture";
-import { bandTree, railRow } from "./band";
+import { bandTree, missionTree } from "./band";
+import type { Ui } from "./atlas-ui";
 import { coreModel } from "./data/core";
 import { liveWorkers } from "./data/live";
 import { busySnap } from "./live_fixture";
@@ -126,13 +128,15 @@ describe("band golden rows", () => {
   });
 });
 
-describe("band rail tiers", () => {
-  // The stepper keeps the widest form that fits: full names, three letters, then marks (twin: omp mission-panel-golden).
-  for (const [cols, want] of Object.entries(railGolden)) {
-    test(`${cols} columns`, () => {
-      // The stepper itself: below 80 columns the band folds to one summary row, while omp keeps its layout.
-      const rail = railRow(snapshot(), fx.phase, 0, Number(cols), true).map((r) => r.t).join("").trimEnd();
-      expect(rail).toBe(want);
+describe("band tiers on the shared world (design evidence goldens)", () => {
+  const ui: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
+  // The width each tier is drawn at, and whether it is the rich (three row) band.
+  const tiers: [string, number, boolean][] = [["120", 120, false], ["120-rich", 120, true], ["80", 80, false], ["60", 60, false], ["40", 40, false]];
+  for (const [name, columns, rich] of tiers) {
+    test(`${name} columns: ${rich ? "rich band" : "one row"} equals the golden`, () => {
+      const tree = missionTree(els, worldModel(columns, ui, { rich, maxRows: rich ? 3 : 1 })) as unknown as Node;
+      expect(rowsOf(tree)).toEqual(tierGolden[name]!);
+      for (const row of tree.props.children as Node[]) expect(text(row).length).toBe(columns); // every row fills its columns
     });
   }
 });

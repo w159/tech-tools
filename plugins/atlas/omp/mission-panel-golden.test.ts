@@ -2,11 +2,12 @@
 // Twin: mod/band-golden.test.ts. Both compare against contracts/band-golden.ts, blank spacer rows included.
 import { expect, test } from "bun:test";
 import { fx, idleFx, trimRows } from "../contracts/band-fixture";
-import { golden, idleGolden, railGolden } from "../contracts/band-golden";
+import { golden, idleGolden, tierGolden } from "../contracts/band-golden";
+import { worldModel } from "../contracts/band-world";
 import { coreGolden } from "../contracts/core-golden";
 import { coreFixture, coreMatrix } from "../contracts/core-fixture";
 import { coreModel } from "../mod/data/core";
-import { type PanelModel, railText, renderPanel } from "./mission-panel";
+import { paintMission, type PanelModel, renderPanel } from "./mission-panel";
 
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
@@ -64,9 +65,12 @@ test("idle renders the shared idle golden, core row included", () => {
 	expect(rows[2]).toBe(coreGolden[120]);
 });
 
-// The stepper keeps the widest form that fits (twin: mod/band-golden.test.ts).
-for (const [cols, want] of Object.entries(railGolden)) {
-	test(`rail tier at ${cols} columns`, () => {
-		expect(railText(model, Number(cols))).toBe(want);
+// The band at each tier on the shared world (twin: mod/band-golden.test.ts).
+const ui = { theme: "mocha", ascii: false, color: "truecolor" } as const;
+for (const [name, columns, rich] of [["120", 120, false], ["120-rich", 120, true], ["80", 80, false], ["60", 60, false], ["40", 40, false]] as const) {
+	test(`band tier ${name} equals the golden`, () => {
+		const rows = paintMission(worldModel(columns, ui, { rich, maxRows: rich ? 3 : 1 }));
+		expect(trimRows(rows.map(strip))).toEqual(tierGolden[name]!);
+		for (const row of rows) expect([...strip(row)].length).toBe(columns);
 	});
 }

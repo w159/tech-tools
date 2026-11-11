@@ -115,7 +115,7 @@ export interface TodoGroup {
   phase: PhaseId | 'unsorted' | 'advisor';
   dept: string;
   glyph: string;
-  items: { id: string; content: string; status: string; owner: string | null; evidence: string | null; live: boolean; origin?: string }[];
+  items: { id: string; content: string; status: string; owner: string | null; evidence: string | null; live: boolean; origin?: string; session_id?: string }[];
   done: number;
   total: number;
 }

@@ -3,14 +3,12 @@
 // `golden` from band-golden.ts exactly. A .ts module because the mod test host loads only code files (no fs).
 //
 // The text comes from mod/mission-layout.ts, which both adapters call, so parity is structural; the goldens pin it.
-// Rows (docs/specs/2026-11-10_atlas-terminal-ui.md):
-//   header   `◆ ATLAS   <project>@<branch>  ·  <scope>` left, `N of M tasks <bar>   mm:ss` right.
-//   stepper  `✓ research ─ ✓ theory ─ ✓ test ─ ⠋ implement ─ ○ verify ─ ○ done`; the spinner is spin(tick).
-//   workers  status mark, name, role (100+ columns), activity in words (`Grep  src/auth`, `thinking   last Edit ...`),
-//            elapsed. Failed and waiting sort first.
-//   message  `from → to   text   hh:mm`, the newest channel message only; the lead reads as `lead-<sid6>`.
-//   footer   `checks  ✓ completion  ✗ tripwire  ✓ routing`.
-//   idle     header reads `idle`, the stepper carries `last run  N workers · 1m31s · all ok`, the core row follows
+// Rows (design rev 4, mod/mission-layout.ts):
+//   band     `◖ ◆ ATLAS ◗  implement · phase 4/6   todo <gauge> 1 of 6   ◐ 2 running` (one row at 120 columns), then a blank row.
+//   workers  state glyph (the six-word vocabulary), name, role (100+ columns), activity in words, elapsed. Failed and waiting first.
+//   message  `from to   text   hh:mm`, the newest channel message only; the lead reads as `lead-<sid6>`.
+//   footer   `checks  ● completion  ■ tripwire  ● routing`.
+//   idle     the band reads `done · phase 6/6`, then ` last run  N workers · 1m31s · all ok`, the core row
 //            (contracts/core-golden.ts), then the footer.
 //
 // Excluded from the compared rows (shown in one harness only, see each test):

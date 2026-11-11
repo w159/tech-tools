@@ -27,7 +27,7 @@ import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
 import { openGateCount } from "../mod/gates";
 import type { CoreModel } from "../mod/data/core";
-import { planCounts, planPhase } from "../mod/data/todos";
+import { ownTodos, planCounts, planPhase } from "../mod/data/todos";
 
 export const WIDGET_KEY = "atlas-channel";
 const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + footer, collapsed by renderPanel
@@ -392,7 +392,9 @@ export function sessionTodos(root: string, sessionId?: string): BoardRow[] {
 	} catch {
 		// no board yet: zeroes
 	}
-	return items.filter(i => !i.archived && i.origin !== "advisor" && i.origin !== "carried" && (!sessionId || i.session_id === sessionId));
+	// one basis with the mod: ownTodos (mod/data/todos.ts) keeps rows without a session_id as the session's own,
+	// leaves open carried rows and other sessions' rows out, and keeps a carried row completed this session
+	return ownTodos(items.filter(i => !i.archived && i.origin !== "advisor"), sessionId || undefined);
 }
 
 export function todoSummary(root: string, sessionId?: string): { done: number; total: number; phase?: string } {

@@ -66,7 +66,7 @@ describe('band footer buttons', () => {
     for (const columns of [80, 120, 160]) {
       const t = bandTree(els, { snapshot, live: [], gates, columns, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
       const foot = kids(t).at(-1)!;
-      expect(textOf(foot)).toContain('checks  ✗ tripwire');
+      expect(textOf(foot)).toContain('checks  ■ tripwire');
       const width = kids(foot).reduce((n, k) => n + (k.kind === 'Button' ? 3 + String(k.props.label).length : [...String(k.props.children ?? '')].length), 0);
       expect(width).toBe(columns);
     }

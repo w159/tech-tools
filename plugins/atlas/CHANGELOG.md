@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- ATLAS design system rev 4 primitives and the redesigned Mission Control band, identical on Claude Code (`mod/band.tsx`) and omp (`omp/mission-panel.ts`):
+  - `mod/atlas-ui.ts`: Mocha and Latte tokens with theme selection (`ATLAS_THEME`, `COLORFGBG`), 256-colour and `NO_COLOR` output, `ATLAS_ASCII` / non-UTF-8 ASCII mode, WCAG contrast helpers, the six-word state vocabulary (queued, running, done, failed, blocked, waiting), the `◖ ◆ ATLAS ◗` brand capsule (`[ATLAS]` in ASCII), ribbon, numbered phase rail, eighth-quantised gauge, fixed 11-cell chip, sparkline, spinner and eased-gauge frame functions.
+  - `contracts/band-world.ts` is the single fixture world (port of the design `world.json`); band goldens per tier (120, 120 rich, 80, 60, 40) in `contracts/band-world-golden.ts`; `ATLAS_BAND_RICH=1` opts into the three-row band.
+  - Tests: `mod/atlas-ui.test.ts` (primitives, gauge property test over widths 1-40, WCAG over every emittable pair), `mod/band-design.test.ts` (goldens in both themes, WCAG on rendered runs, one chip per row, counts and gauges equal the data), glyph allowlist in `mod/theme.test.ts` checked against DejaVu Sans Mono (`mod/fixtures/check_glyph_cmap.py`).
+
+### Changed
+
+- `mod/mission-layout.ts` builds the band from the primitives; `railRow`, `railText`, `stepperRuns` and `RAISED_BG` are removed. `Run.tone` now includes the rev 4 tokens, and `TONE_HEX` is the Mocha palette plus `dim`.
+
 ### Fixed
 
 - Reliability baseline (17.5.0) fixes, each with a test that fails on the old code:
@@ -14,9 +25,18 @@
   - `omp/hook-bridge-session.test.ts`: the REAL-hook tests carry an explicit 60 s timeout, so a loaded host (pytest -n 8 beside bun) no longer times them out at bun's 5 s default.
 - Mod data layer (UI root causes D1-D9), each with a test that fails on the old code:
   - One count basis: `planBasis`/`planCounts`/`todoCounts` (`mod/data/todos.ts`) count this session's plan rows; stub (`placeholder`/empty), dispatch, advisor, carried and other-session rows leave it. Band, HUD, board, side panel, `snapshot.counts` and omp `todoSummary` all read it (D1, D2).
-  - Phase after the last item completes reads `done`, not `research`; with work left and no header it keeps the last completed row's phase (D3).
+  - Phase after the last item completes reads `done`, not `research` (D3); with work left and no header it reads the earliest open row's phase (R4).
   - Route drift compares the ran count with the seat count: `ran 3 / planned 1 ✗ drift`, never `as planned` (D4). Duplicate subagent labels read `alpha-explorer #2`, not a host-id suffix (D5).
   - An empty verdict ledger reads `no verdicts yet`, not `0 verified · 0 refuted` (D7). Long gate text wraps onto a second row instead of cutting to `Subagent…` (D8). One done glyph, `DONE_GLYPH` in `mod/theme.ts`, and group glyphs go through `contractGlyph` (D9).
+- Regressions the hostile verifier found in the fix wave, each with a test that fails on `f4e6c29c`:
+  - R8: plan rows written by `atlas_todo.py set` with no `--session` carry `session_id: ""`; the new session scoping dropped them, so the band read `0 of 3` and no TODO block rendered. An empty `session_id` now counts as the session's own in `readTodos`, `ownRow` (every count surface and omp) and `isLive` (`mod/data/todos.ts`).
+  - R1: the worker brief's read command is allowed: `worker_allow` carries `Bash(python3 <atlas_todo.py> notes --to *)` beside the `note *` rule, nothing wider (`scripts/atlas_mux.py`).
+  - R2: omp `sessionTodos` (`omp/channel-view.ts`) uses the mod's `ownTodos` basis, so rows without a `session_id` count in both; parity test runs both on the same rows.
+  - R3: a carried row completed this session counts as done (`planCounts`, `computeCounts`, `routeCounts`, groups).
+  - R4: with no in_progress row the phase is the earliest open row's phase, not the stale last-completed one (`planPhase`, `currentPhase`).
+  - R7: the groups-only fallback (`routeCounts`) applies the session and carried scoping; `groupTodos` marks other sessions' backlog rows with `session_id`.
+  - D6: `omp/hook-bridge-session.test.ts` documents why the REAL-hook tests are slow under load: dozens of sequential python3 hook spawns (about 55 ms each), 2.3 s alone and 3.3 s with 8 busy processes on 4 cores; the cause is environmental, so the explicit 60 s timeout stays.
+  - R6: `spawn-team --dry-run` runs the plugin preflight, and a plugin disabled in `enabledPlugins` (user, project or local settings) counts as not installed (`worker_plugin_dir`).
 
 ## 17.5.0 - 2026-11-10
 

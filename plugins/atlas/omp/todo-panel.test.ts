@@ -125,9 +125,9 @@ test("renderPanel places the board under the rail within the width and line budg
 		const lines = renderPanel(model({ todosExpanded }));
 		expect(lines.length).toBeLessThanOrEqual(10);
 		expect(lines.every(l => visibleWidth(l) === 100)).toBe(true);
-		// Folded, the board costs no row: the header carries `N of M tasks` and row 2 is the breathing blank.
-		expect(strip(lines[2]!)).toMatch(todosExpanded ? /^ ✓ / : /^ *$/);
-		expect(strip(lines[0]!)).toContain("1 of 4 tasks");
+		// Folded, the board costs no row: the band carries `N of M` and row 1 is the breathing blank.
+		expect(strip(lines[1]!)).toMatch(todosExpanded ? /^ ✓ / : /^ *$/);
+		expect(strip(lines[0]!)).toContain("1 of 4");
 	}
 });
 

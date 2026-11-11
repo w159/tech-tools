@@ -9,9 +9,10 @@
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
-import { isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, PANEL_BG, RAISED_BG, runsText, stepperRuns, TONE_HEX, type WorkerState } from "../mod/mission-layout";
+import { hostEnv, PALETTES, sgrColor, toneHex, type Ui, uiFromEnv } from "../mod/atlas-ui";
+import { bandLines, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
-import { RST, bg, fg, hx, visibleWidth } from "./panel-paint";
+import { RST, bg, PANEL, visibleWidth } from "./panel-paint";
 import { type PanelTodo, todoLines } from "./todo-panel";
 
 export { visibleWidth };
@@ -61,6 +62,9 @@ export interface PanelModel {
 	todosExpanded?: boolean; // ATLAS_TODO_EXPANDED=1: the list under the rail
 	core?: CoreModel | null; // the Atlas core row on the idle panel; absent or empty: no row
 	blocked?: boolean; // the lead's last reply declared the blocked phase
+	ctx?: number; // lead context used, 0..1; absent hides the ctx gauge
+	rich?: boolean; // the tall band; absent reads ATLAS_BAND_RICH=1
+	ui?: Ui; // theme, ASCII and colour depth; absent reads the environment
 }
 /** The last wave the idle panel summarizes: member count, first join to last finish, non-zero exits. */
 export interface IdleWave {
@@ -70,10 +74,9 @@ export interface IdleWave {
 }
 
 const ANSI_SPLIT = /(\x1b\[[0-9;]*m)/;
-const PANEL = hx(PANEL_BG);
 
-/** Cut to `w` columns between escape sequences, then fill the rest with the panel background. */
-function fitLine(s: string, w: number, fill = PANEL): string {
+/** Cut to `w` columns between escape sequences, then fill the rest with `fillSeq` (an SGR background; empty: no colour). */
+function fitLine(s: string, w: number, fillSeq: string = bg(PANEL)): string {
 	let out = "";
 	let n = 0;
 	for (const part of s.split(ANSI_SPLIT)) {
@@ -84,7 +87,7 @@ function fitLine(s: string, w: number, fill = PANEL): string {
 			n += take.length;
 		}
 	}
-	return out + RST + (n < w ? `${bg(fill)}${" ".repeat(w - n)}${RST}` : "");
+	return out + RST + (n < w ? `${fillSeq}${" ".repeat(w - n)}${RST}` : "");
 }
 
 const p2 = (n: number) => String(n).padStart(2, "0");
@@ -136,24 +139,29 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		lastRun: m.idle,
 		core: coreCells(m.core, w),
 		boardRows: m.todosExpanded && m.todos?.length ? m.todos.length + 1 : 0,
+		ctx: m.ctx,
+		rich: m.rich ?? hostEnv().ATLAS_BAND_RICH === "1",
+		ui: m.ui ?? uiFromEnv(),
 	};
 }
 
-const RGB = Object.fromEntries(Object.entries(TONE_HEX).map(([k, v]) => [k, hx(v)])) as Record<keyof typeof TONE_HEX, ReturnType<typeof hx>>;
-const RAISED = hx(RAISED_BG);
-
-/** One run in ANSI: bold, tone foreground, the line's background. */
-const paintRun = (x: Run, back: ReturnType<typeof hx>): string => `${x.bold ? "\x1b[1m" : ""}${fg(RGB[x.tone])}${bg(back)}${x.t}${RST}`;
-const paintLine = (l: Line, w: number): string => {
-	const back = l.raised ? RAISED : PANEL;
-	return fitLine(l.runs.map(x => paintRun(x, back)).join(""), w, back);
+/** One run in ANSI: bold/strike, the tone foreground on the run's fill or the panel; NO_COLOR keeps bold and strike only. */
+const paintRun = (x: Run, ui: Ui): string => {
+	const p = PALETTES[ui.theme];
+	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(toneHex(x.tone, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
+	return sgr ? `\x1b[${sgr}m${x.t}${RST}` : x.t;
 };
+const fillOf = (ui: Ui): string => (ui.color === "none" ? "" : `\x1b[${sgrColor(PALETTES[ui.theme].panel, 48, ui.color)}m`);
+
+/** A MissionModel as ANSI rows; `board(rows)` fills the todo slot (omitted: no slot rows). */
+export function paintMission(mm: MissionModel, board: (rows: number) => string[] = () => []): string[] {
+	const ui = mm.ui ?? uiFromEnv();
+	return missionLines(mm).flatMap(l => (l.board ? board(l.board) : [fitLine(l.runs.map(x => paintRun(x, ui)).join(""), mm.cols, fillOf(ui))]));
+}
 
 export function renderPanel(m: PanelModel): string[] {
 	const w = Math.max(20, m.width);
-	return missionLines(missionModel(m, w)).flatMap(l =>
-		l.board ? todoLines(m.todos ?? [], { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: l.board }).map(s => fitLine(s, w)) : [paintLine(l, w)],
-	);
+	return paintMission(missionModel(m, w), rows => todoLines(m.todos ?? [], { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows }).map(s => fitLine(s, w)));
 }
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */
 export interface GatesCache {
@@ -190,7 +198,8 @@ export async function spawnText(argv: string[]): Promise<string> {
 	return out;
 }
 
-/** The stepper row alone, for the tier goldens: below 80 columns the panel folds to one summary row. */
-export function railText(m: PanelModel, width: number): string {
-	return runsText(stepperRuns(missionModel(m, Math.max(20, width)), Math.max(20, width), true)).trimEnd();
+/** The band rows alone (plain text, trailing spaces trimmed), for the tier goldens: one row in the widest form that fits, three when rich. */
+export function bandText(m: PanelModel, width: number): string[] {
+	const w = Math.max(20, width);
+	return bandLines(missionModel(m, w)).map(l => runsText(l.runs).trimEnd());
 }

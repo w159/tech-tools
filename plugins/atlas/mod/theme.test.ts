@@ -1,5 +1,7 @@
 // Self-check for the band's theme helpers (run: claude plugin test <dir>).
 import { expect, test } from 'claude-code/testing';
+import { ATLAS_GLYPHS, capsule, gauge, rail, ribbon, runsString, sparkline, stateRun, UI_STATES } from './atlas-ui';
+import { DEJAVU_SANS_MONO_HAS } from './fixtures/dejavu-sans-mono-glyphs';
 import { bar, barParts, blink, contractGlyph, dim, glyph, textWidth, lerp, meterColor, phaseColor, STATE_GLYPH, stateColor } from './theme';
 
 test('bar clamps and rounds', () => {
@@ -62,6 +64,17 @@ test('every glyph and state glyph is exactly 1 cell wide', () => {
   }
   expect(cellWidth(String.fromCodePoint(0x2b22))).toBe(2);
   expect(cellWidth(String.fromCodePoint(0x25e2))).toBe(2);
+});
+
+test('ATLAS design glyph set: one cell each, all in DejaVu Sans Mono, and nothing else is emitted', () => {
+  for (const ch of ATLAS_GLYPHS) {
+    expect([ch, cellWidth(ch)]).toEqual([ch, 1]);
+    expect([ch, DEJAVU_SANS_MONO_HAS.includes(ch)]).toEqual([ch, true]);
+  }
+  const ui = { theme: 'mocha', ascii: false, color: 'truecolor' } as const;
+  const text = [capsule(ui), ribbon(80, 'BOARD', '7 items', ui), rail(['plan', 'build'], 1, ui), gauge(12, 0.4, ui), ...UI_STATES.map((s) => [stateRun(s, ui)])]
+    .map(runsString).join('') + sparkline([0, 30, 60, 90, 120, 150, 180, 20], 180);
+  for (const ch of new Set([...text])) expect([ch, ch.charCodeAt(0) < 0x7f || ATLAS_GLYPHS.includes(ch)]).toEqual([ch, true]);
 });
 
 test('blink domain', () => {
