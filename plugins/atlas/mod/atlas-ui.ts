@@ -17,7 +17,7 @@ export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' 
 /** A run's role. `dim` is the legacy tone (mission-layout TONE_HEX before rev 4); it has no token and paints as `line`. */
 export type Tone = Token | 'dim';
 /** One styled piece of a row. `bg` overrides the row surface (chips, the capsule); `chip` marks a fill (one per row). */
-export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; chip?: boolean };
+export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; chip?: boolean; /** Motion override: a #rrggbb foreground that replaces the tone's colour for this frame (mod/motion.ts). */ fg?: string };
 
 /** Catppuccin Mocha and Latte (https://raw.githubusercontent.com/catppuccin/palette/main/palette.json). */
 export const PALETTES: Record<ThemeName, Record<Token, string>> = {
@@ -36,6 +36,9 @@ export function toneHex(tone: Tone, theme: ThemeName = 'mocha'): string {
   if (tone === 'dim') return theme === 'latte' ? PALETTES.latte.muted : '#585b70';
   return PALETTES[theme][tone];
 }
+
+/** The foreground a painter uses for a run: the motion override when one is set, else the tone's colour. */
+export const runHex = (x: Pick<Run, 'tone' | 'fg'>, theme: ThemeName = 'mocha'): string => x.fg ?? toneHex(x.tone, theme);
 
 // ---- environment ------------------------------------------------------------------------
 

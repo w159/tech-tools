@@ -6,13 +6,14 @@
  * panel background, so no line is wider than `width` and no escape is ever cut. Pure: renderPanel(model) -> lines.
  * Gate status comes from a throttled async cache over atlas_gates.py.
  */
+import type { MotionCtx, MotionItem } from "../mod/motion";
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
-import { hostEnv, PALETTES, sgrColor, toneHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
-import { bandLines, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
+import { hostEnv, PALETTES, sgrColor, type Ui, type UiState, uiFromEnv, runHex } from "../mod/atlas-ui";
+import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
-import { blockedCount } from "../mod/board-model";
+import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/board-model";
 import { withOwnerStates } from "../mod/data/live";
 import { railIds, railOf } from "../mod/rail";
 import { RST, bg, PANEL, visibleWidth } from "./panel-paint";
@@ -53,6 +54,8 @@ export interface PanelModel {
 	spin: string; // kept for callers; the layout picks its own spinner frame from `tick`
 	laneSpin: string; // the todo list's in-progress glyph
 	tick: number;
+	/** Motion view (mod/motion.ts); absent: the resting render. */
+	motion?: MotionCtx | undefined;
 	done: number;
 	total: number;
 	workers: PanelWorker[];
@@ -152,13 +155,14 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		ctx: m.ctx,
 		rich: m.rich ?? hostEnv().ATLAS_BAND_RICH === "1",
 		ui: m.ui ?? uiFromEnv(),
+		...(m.motion ? { motion: m.motion } : {}),
 	};
 }
 
 /** One run in ANSI: bold/strike, the tone foreground on the run's fill or the panel; NO_COLOR keeps bold and strike only. */
 const paintRun = (x: Run, ui: Ui): string => {
 	const p = PALETTES[ui.theme];
-	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(toneHex(x.tone, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
+	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(runHex(x, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
 	return sgr ? `\x1b[${sgr}m${x.t}${RST}` : x.t;
 };
 const fillOf = (ui: Ui): string => (ui.color === "none" ? "" : `\x1b[${sgrColor(PALETTES[ui.theme].panel, 48, ui.color)}m`);
@@ -169,9 +173,14 @@ export function paintMission(mm: MissionModel, board: (rows: number) => string[]
 	return missionLines(mm).flatMap(l => (l.board ? board(l.board) : [fitLine(l.runs.map(x => paintRun(x, ui)).join(""), mm.cols, fillOf(ui))]));
 }
 
+/** What the Motion observes of the omp panel: the board rows (todo slot) and the band's agent counts, from the models renderPanel draws. */
+export function panelMotionOf(m: PanelModel): { board: MotionItem[]; band: MotionItem[] } {
+	return { board: boardMotionItems(boardRowsOf(withOwnerStates(m.todos ?? [], ownerStates(m)), m.nowSecs)), band: bandMotionItems(missionModel(m, Math.max(20, m.width))) };
+}
+
 export function renderPanel(m: PanelModel): string[] {
 	const w = Math.max(20, m.width);
-	return paintMission(missionModel(m, w), rows => todoLines(withOwnerStates(m.todos ?? [], ownerStates(m)), { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows, now: m.nowSecs }).map(s => fitLine(s, w)));
+	return paintMission(missionModel(m, w), rows => todoLines(withOwnerStates(m.todos ?? [], ownerStates(m)), { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows, now: m.nowSecs, motion: m.motion }).map(s => fitLine(s, w)));
 }
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */
 export interface GatesCache {

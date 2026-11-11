@@ -34,7 +34,7 @@ function fixture() {
 function harness(env: Record<string, string | undefined> = {}) {
 	const calls: Array<string[] | undefined> = [];
 	const ui = { setWidget: (_k: string, c: string[] | undefined) => void calls.push(c) };
-	const timers = { iv: undefined as (() => void) | undefined, to: undefined as (() => void) | undefined, clock: 0 };
+	const timers = { iv: undefined as (() => void) | undefined, to: undefined as (() => void) | undefined, frame: undefined as (() => void) | undefined, clock: 0 };
 	const deps = {
 		env,
 		now: () => timers.clock,
@@ -42,6 +42,8 @@ function harness(env: Record<string, string | undefined> = {}) {
 		clearInterval: () => void (timers.iv = undefined),
 		setTimeout: (fn: () => void) => ((timers.to = fn), "to"),
 		clearTimeout: () => void (timers.to = undefined),
+		setFrame: (fn: () => void) => ((timers.frame = fn), "frame"),
+		clearFrame: () => void (timers.frame = undefined),
 	};
 	return { calls, ui, timers, deps, view: createChannelView(deps) };
 }

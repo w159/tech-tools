@@ -11,6 +11,7 @@
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
 import { cells, clip, gauge, ribbon, runsCells, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */
@@ -102,7 +103,7 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; stateCol?: number };
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; stateCol?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= COMPACT_MIN ? 'compact' : 'narrow');
 
@@ -117,8 +118,19 @@ function detailRuns(row: BoardRow, o: BoardOpts, room: number): Run[] {
   return row.detail ? [r(clip(row.detail, room), 'sub')] : [];
 }
 
-/** One row. `focus` marks the row the marker `▸` points at. */
+/** One row, mid-transition when `o.motion` holds an entry for `o.key`. */
 export function boardRow(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
+  const runs = boardRowResting(row, focus, o);
+  return o.key === undefined ? runs : animateRow(runs, o.key, row.state, o.motion, o.ui);
+}
+
+/** The motion keys of `rows`, one per row, a repeated label numbered. */
+const boardKeys = (rows: readonly BoardRow[]): string[] => keysOf('board', rows.map((x) => x.label));
+/** What the Motion observes of a board: each row's key and state word. */
+export const boardMotionItems = (rows: readonly BoardRow[]): MotionItem[] => boardKeys(rows).map((key, i) => ({ key, state: rows[i]!.state }));
+
+/** One row at rest. `focus` marks the row the marker `▸` points at. */
+function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const f = form(o.cols);
   const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), stateRun(row.state, o.ui, o.tick ?? 0), r(' ')];
   // Full form: done struck in sub, the focus bold. The 80 mock draws labels plain (text), the 40 mock dims a done one (sub).
@@ -148,7 +160,8 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   const focus = rows.findIndex((x) => x.focus ?? x.state === 'running');
   // Compact form: the state column slides right to fit the widest label, never past the room the longest state word needs.
   const stateCol = form(o.cols) === 'compact' ? Math.max(COL.stateCompact, Math.min(o.cols - STATE_W - 1, Math.max(0, ...rows.map((x) => cells(x.label))) + 7)) : undefined;
-  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol }) }));
+  const keys = o.motion ? boardKeys(rows) : [];
+  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol, ...(o.motion ? { key: keys[i]! } : {}) }) }));
   return form(o.cols) === 'full' ? [{ runs: boardHeader() }, ...lines] : lines;
 }
 
