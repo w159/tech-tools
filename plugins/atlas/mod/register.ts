@@ -19,7 +19,7 @@ import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sideba
 import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
-import { ownTodos } from './data/todos';
+import { ownTodos, planBasis } from './data/todos';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -189,6 +189,14 @@ function folderOf(cwd: string): string {
 
 // The one header parser lives in restyle.tsx; re-exported so existing importers keep working.
 export { headerPhaseOf };
+
+/** The header tally as the transcript draws it: every assistant text that opens with the ATLAS header renders a chip, not only the turn's final
+ * answer (the one `turn.complete` carries). `msgs` is the lead transcript; `answer` counts once even when the host has not appended it yet. */
+export function headerTallyOf(msgs: readonly { role: string; text: string }[], answer: string, snapshot: AtlasSnapshot | null): { ok: number; total: number } {
+	const texts = msgs.filter((m) => m.role === 'assistant' && typeof m.text === 'string' && m.text.trim() !== '').map((m) => m.text);
+	if (answer.trim() !== '' && texts.at(-1)?.trim() !== answer.trim()) texts.push(answer);
+	return { ok: texts.filter((t) => headerPhaseOf(t, snapshot) !== null).length, total: texts.length };
+}
 
 /** AgentStatus (d.ts EngineInterface $.agent.list) -> band AgentState. */
 const LIST_STATE: Record<string, AgentState> = {
@@ -817,6 +825,16 @@ function reportsOf(text: string): ReportNote[] {
 	});
 }
 
+/** The lead's transcript rows; empty when the host gives none. */
+async function leadMessages($: EngineInterface): Promise<{ role: string; text: string }[]> {
+	try {
+		const rows = await $.session.messages();
+		return Array.isArray(rows) ? (rows as { role: string; text: string }[]) : [];
+	} catch {
+		return [];
+	}
+}
+
 /** The core model from the run scratch under the snapshot root; null without a board root. Reads only. */
 export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	const snap = await read($, snapshotState);
@@ -840,7 +858,7 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 		matrix,
 		logs,
 		reports,
-		todos: snap.todos ?? [],
+		todos: planBasis(snap.todos ?? [], snap.sessionId), // the plan the band counts: no dispatch rows, advisor notes or other sessions' rows
 		header: await read($, headerTallyState),
 		openGates: openGateCount(await gateGroups($)),
 			// same channels teamsOf gets in muxRuns; dispatches are the orchestration spawn rows this mod already holds
@@ -1031,7 +1049,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			if (e.agentId === undefined) {
 				const phase = headerPhaseOf(e.answer, await read($, snapshotState));
 				await update($, headerPhaseState, () => phase);
-				await update($, headerTallyState, (t) => ({ ok: t.ok + +(phase !== null), total: t.total + 1 }));
+				const seen = headerTallyOf(await leadMessages($), e.answer, await read($, snapshotState));
+				await update($, headerTallyState, (t) => ({ ok: Math.max(seen.ok, t.ok + +(phase !== null)), total: Math.max(seen.total, t.total + 1) })); // never below the per-turn count: a compacted transcript only shrinks `seen`
 				void runGates($);
 			} else {
 				const agentId = e.agentId;

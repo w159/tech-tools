@@ -26,7 +26,8 @@ export type SurfaceOpts = {
   now?: number | undefined;
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
-export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number };
+/** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so it outlives the blank rows. */
+export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean };
 
 const t = (text: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run => ({ t: text, tone, ...extra });
 const BLANK: Run[] = [];
@@ -145,7 +146,7 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const nameW = Math.max(1, Math.min(Math.max(19, maxLen(rows.map((r) => flat(r.name)))), cols - 5 - wordW));
   const stateAt = nameW + 5;
   const plan = agentCols(rows, o, rich, stateAt);
-  if (b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
+  if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
   const { shown, hidden } = windowRows(rows, b.cap);
   for (const r of shown) out.push(agentRow(r, o, rich, stateAt, nameW, plan));
   if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
@@ -168,8 +169,14 @@ const taskWidth = (rows: readonly AgentRow[]): number => rows.reduce((n, r) => M
 type AgentCols = { model?: number; modelW: number; task?: number; taskW: number; last?: number; ctx?: number };
 const LAST_MIN = 8;
 function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number): AgentCols {
+  const loose = agentColsAt(rows, o, rich, stateAt, rich ? 8 : 9);
+  // Spare columns first: a LAST text that does not fit takes the model column's slack (down to the header word) before it is cut.
+  const clipped = rows.some((r) => { const w = cells(lastText(r.tool)); return w > 0 && (loose.last === undefined || w > o.cols - loose.last); });
+  return clipped ? agentColsAt(rows, o, rich, stateAt, rich ? 6 : 5) : loose;
+}
+function agentColsAt(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number, modelMin: number): AgentCols {
   const { cols } = o;
-  const modelW = Math.max(rich ? 8 : 9, ...rows.map((r) => cells(r.model) + (rich ? 1 : 0))); // rich: the cell includes its gap
+  const modelW = Math.max(modelMin, ...rows.map((r) => cells(r.model) + (rich ? 1 : 0))); // rich: the cell includes its gap
   const plan: AgentCols = { modelW, taskW: taskWidth(rows) };
   if (rich) {
     if (stateAt + 14 + 4 + 8 + 5 <= cols) plan.ctx = stateAt + 14;
@@ -233,9 +240,9 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
 export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] };
 
 /** Both blocks stacked (a blank between them when `spacers`). */
-export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number }): Run[][] {
+export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean }): Run[][] {
   const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap });
-  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap });
+  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
   return [...todo, ...(b.spacers && todo.length > 0 && agents.length > 0 ? [BLANK] : []), ...agents];
 }
 
@@ -251,12 +258,15 @@ export function fitStack(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] 
   if (maxRows <= 0) return [];
   const n = s.todos.length;
   const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
-  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean };
+  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean };
   const tries: Try[] = [{ spacers: true, extras: true }, { spacers: false, extras: true }, { spacers: false, extras: false }];
   for (let cap = n - 1; cap >= 0; cap--) if (cap !== 1) tries.push({ spacers: false, extras: false, todoCap: cap });
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).
   tries.push({ spacers: false, extras: false, hideTodo: true });
   for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, agentCap: cap });
+  // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
+  tries.push({ spacers: false, extras: false, hideTodo: true, header: false });
+  for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, header: false, agentCap: cap });
   tries.push({ spacers: false, extras: false, todoCap: 0, agentCap: 0 });
   const ss = { todos: s.todos, agents: m > 0 ? s.agents : [] };
   for (const tr of tries) {

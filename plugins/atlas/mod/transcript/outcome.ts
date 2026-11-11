@@ -6,7 +6,7 @@ import { atom, read } from 'claude-code'
 import type { AgentInfo, EngineInterface, RenderElement } from 'claude-code'
 import { EMPTY_ORCH } from '../data/orchestration'
 import { formatDuration, spin } from '../theme'
-import { notificationTree, resultLine } from './cards'
+import { notificationTree, resultLine, stripStatus } from './cards'
 import { lookOf } from '../look'
 import { agentName } from '../hud'
 import type { CardExtra } from './cards'
@@ -52,8 +52,8 @@ export function outcomeText(o: Outcome): string {
 }
 /** The lifecycle word, owned here: the notification row leads with it, the card uses it as its row label. */
 const endedWord = (o: Outcome): string => (o.status === 'completed' || o.status === 'idle' ? 'finished' : o.status)
-/** `STATUS: DONE · 29s`: the report line and duration, without the lifecycle word. */
-const outcomeDetail = (o: Outcome): string => [o.line, o.durationMs !== undefined ? formatDuration(o.durationMs) : ''].filter(Boolean).join(' · ')
+/** `29s`: the report line (its `STATUS: DONE` shout cut: the state word says it) and duration, without the lifecycle word. */
+const outcomeDetail = (o: Outcome): string => [stripStatus(o.line), o.durationMs !== undefined ? formatDuration(o.durationMs) : ''].filter(Boolean).join(' · ')
 
 const rows = (r: unknown): Msg[] => (Array.isArray(r) ? (r as Msg[]) : [])
 

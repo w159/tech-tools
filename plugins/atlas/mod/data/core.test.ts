@@ -64,6 +64,14 @@ describe('core model on the captured run', () => {
 });
 
 describe('core model edges', () => {
+  test('B2: done-with-evidence counts the plan items only, the denominator the band todo count uses', () => {
+    const row = (id: string, over: Record<string, unknown>) => ({ id, content: `item ${id}`, status: 'completed', evidence: 'ran it', ...over }) as unknown as TodoItem;
+    const todos = [row('T1', { origin: 'session' }), row('T2', { origin: 'session', evidence: '' }), row('d1', { origin: 'dispatch' }), row('d2', { origin: 'dispatch' }), row('a1', { origin: 'advisor' }), row('s1', { content: 'placeholder' })];
+    const m = coreModel(input({ todos }));
+    expect(m.contract.evidence).toEqual({ ok: 1, total: 2 });
+    expect(m.contract.verifiedDone.total).toBe(2);
+  });
+
   test('a seat whose worker ran another model reads as drift', () => {
     const m = coreModel(input({
       findings: '[]',

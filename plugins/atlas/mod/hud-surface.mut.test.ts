@@ -60,20 +60,27 @@ describe('agentRows columns', () => {
   });
 
   test('a cell whose column was dropped draws nothing', () => {
-    // nameW 40 -> stateAt 45, model 57, task 67, last would start at 73 and need 8 more cells: 81 > 80.
-    const out = agentRows([agent({ name: 'n'.repeat(40), tool: 'bashtool' })], { cols: 80, ui }, plain);
+    // nameW 45 -> stateAt 50; even with the model column at its tight width (modelAt 62, task 68) last would start at 74 and need 8 more cells: 82 > 80.
+    const out = agentRows([agent({ name: 'n'.repeat(45), tool: 'bashtool' })], { cols: 80, ui }, plain);
     expect(runsString(out[1]!)).not.toContain('bashtool');
     expect(runsCells(out[1]!)).toBeLessThanOrEqual(80);
   });
 });
 
 describe('fitStack with the plan hidden', () => {
-  test('the agents-only try draws no column header', () => {
+  test('B5: the agents-only try keeps the column header and windows the agents instead', () => {
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
     const text = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r));
     expect(text.length).toBe(4);
+    expect(text.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+    expect(text.filter((l) => /agent\d/.test(l)).length).toBe(1);
+    expect(text.some((l) => /2 more agents not shown/.test(l))).toBe(true);
+  });
+  test('B5: only a budget with no room for the header and one agent drops the header, never the agent', () => {
+    const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
+    const text = fitStack({ todos: [], agents }, { cols: 100, ui }, 3).map((r) => runsString(r));
     expect(text.some((l) => /AGENT\s+STATE/.test(l))).toBe(false);
-    expect(text.filter((l) => /agent\d/.test(l)).length).toBe(3);
+    expect(text.filter((l) => /agent\d/.test(l)).length).toBe(1);
   });
 });

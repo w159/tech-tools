@@ -45,6 +45,17 @@ export function resultLine(output: unknown): string {
  return (/^\s*STATUS:.+$/m.exec(s)?.[0] ?? s.split('\n').find((l) => l.trim()) ?? '').trim()
 }
 
+/** `STATUS: DONE` is the agent's own shout of a state the card's border already names: a done-like word (DONE, OK, COMPLETE...) is cut, any other
+ * caps word (BLOCKED, FAILED) stays as a lowercase word, and what follows it (`STATUS: DONE - read a.py`) is kept. */
+const DONE_WORDS: ReadonlySet<string> = new Set(['DONE', 'OK', 'COMPLETE', 'COMPLETED', 'SUCCESS', 'PASS'])
+export function stripStatus(line: string): string {
+ const m = /^\s*STATUS:\s*([A-Z][A-Z_]*)\b[\s:.,;·-]*([\s\S]*)$/.exec(line)
+ if (!m) return line
+ const word = DONE_WORDS.has(m[1]!) ? '' : m[1]!.toLowerCase()
+ const rest = (m[2] ?? '').trim()
+ return word && rest ? `${word}: ${rest}` : word || rest
+}
+
 /** Worker states that are still live after the Agent call itself returned (a background launch). */
 const LIVE: ReadonlySet<AgentState> = new Set<AgentState>(['running', 'spawning', 'input'])
 const isLive = (c: CallLike, s: AgentState): boolean => c.isRunning || LIVE.has(s)
@@ -73,7 +84,7 @@ const rowEl = (runs: UiRun[], ui: Ui): RenderElement => el('Box', { flexDirectio
 
 /** Result text: the worker's outcome when known, else the call's own result; '' while running. */
 // The outcome carries no lifecycle word: the border's state word is the only place that says done / failed / blocked.
-const resultText = (c: CallLike, outcome = ''): string => (c.isRunning ? '' : outcome || callResult(c))
+const resultText = (c: CallLike, outcome = ''): string => (c.isRunning ? '' : stripStatus(outcome || callResult(c)))
 const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : resultLine(c.output))
 
 /** Card extras: `outcome` is the worker's result line without its lifecycle word, `ended` its end word (`finished`,
@@ -139,7 +150,7 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer  outcome` (state, name, role, outcome). */
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv()): RenderElement {
- const runs = toastRuns(failed ? 'failed' : 'done', displayName(name, role), clip([role, outcome].filter(Boolean).join('  '), 80), ui)
+ const runs = toastRuns(failed ? 'failed' : 'done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui)
  return rowEl(runs, ui)
 }
 

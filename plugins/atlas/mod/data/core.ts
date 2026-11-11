@@ -7,6 +7,7 @@
 // Pure: strings in, plain values out (no `$`, no Node), so the Claude band, the pane, /atlas-core and the omp
 // mission panel all render the same numbers. Plan: docs/plans/2026-10-27_atlas-core-mods.md.
 import type { TodoItem } from "../contract";
+import { planBasis } from "./todos";
 
 export type VerdictStatus = "verified" | "rejected" | "needs-evidence";
 export type Verdict = {
@@ -438,7 +439,8 @@ export function coreModel(input: CoreInput): CoreModel {
     );
   const kept = workers.reduce((n, w) => n + w.kept, 0);
   const returned = workers.reduce((n, w) => n + w.returned, 0);
-  const done = input.todos.filter((t) => t.status === "completed");
+  // the plan the band counts (planBasis): dispatch rows, advisor notes and stub rows are not done work to hold evidence
+  const done = planBasis(input.todos).filter((t) => t.status === "completed");
   const verifiedIds = new Set(
     verdicts.filter((v) => v.status === "verified").map((v) => v.id),
   );
