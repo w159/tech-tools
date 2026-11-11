@@ -71,6 +71,7 @@ export interface PanelModel {
 	todosExpanded?: boolean; // the list under the rail
 	core?: CoreModel | null; // the Atlas core row on the idle panel; absent or empty: no row
 	blocked?: boolean; // the lead's last reply declared the blocked phase
+	leadBusy?: boolean; // the lead's own tool runs or it is thinking (mod/data/runstate leadBusy): the band never reads idle then
 	ctx?: number; // lead context used, 0..1; absent hides the ctx gauge
 	rich?: boolean; // the tall band; absent reads ATLAS_BAND_RICH=1
 	ui?: Ui; // theme, ASCII and colour depth; absent reads the environment
@@ -150,7 +151,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		total: m.total,
 		openWork: m.core?.contract.open,
 		todoBlocked: blockedCount(m.todos ?? [], owners),
-		busy: planBusy(m.todos ?? [], owners),
+		busy: !!m.leadBusy || planBusy(m.todos ?? [], owners),
 		workers,
 		note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
 		checks: tally.total ? tally.checks : null,

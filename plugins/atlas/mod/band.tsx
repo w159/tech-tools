@@ -7,9 +7,10 @@ import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
-import { ownTodos, planBasis, todoCounts } from './data/todos';
+import { isPlanItem, ownTodos, planBasis, todoCounts } from './data/todos';
+import { openWork } from './data/core';
 import { blockedCount } from './board-model';
-import { gateTally, planBusy, ranWorkers, withHeaderTally } from './data/runstate';
+import { gateTally, leadBusy, planBusy, ranWorkers, withHeaderTally } from './data/runstate';
 import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -98,6 +99,14 @@ function lastRun(all: readonly LiveWorker[], now: number, owners: readonly strin
   return { workers: ran.length, secs: Math.max(0, Math.round((end - Math.min(...wave.map((w) => w.startedAt))) / 1000)), failed: all.filter((w) => w.state === 'failed').length }; // a failure of an earlier wave still counts: idle never reads `all ok` over a failed worker
 }
 
+/** Stop's open rows that the plan count does not carry, read from the snapshot the plan count reads (never the core model, which is rebuilt on its own slower tick and
+ * trailed the plan: `5/5 · 1 open` under a full plan, critique 11). The core model only ever held plan rows, so it could not see the dispatch rows Stop counts. */
+function openRows(s: LiveSnapshot): { openWork: number; openDispatch: number } {
+  const rows = s.todos ?? [];
+  const planOpen = planBasis(rows, s.sessionId).filter((it) => it.status !== 'completed').length;
+  return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(rows.filter((it) => (it as { origin?: string }).origin === 'dispatch'), s.sessionId) };
+}
+
 function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const s = b.snapshot;
   const now = s.now;
@@ -117,8 +126,8 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now,
     project: boardOf(s), scope: b.team,
     phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
-    done, total, openWork: b.core?.contract.open, todoBlocked: blockedCount(plan, owners),
-    busy: planBusy(plan, owners),
+    done, total, ...openRows(s), todoBlocked: blockedCount(plan, owners),
+    busy: leadBusy(s) || planBusy(plan, owners),
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,

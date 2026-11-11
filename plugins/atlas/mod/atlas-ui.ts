@@ -251,6 +251,9 @@ export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
   const g = s === 'running' ? spinnerGlyph(spinFrame, ui.ascii) : stateGlyph(s, ui);
   return { t: g, tone: ui.ascii ? 'text' : glyphTone(markToken(s), ui.theme) };
 }
+/** THE mark of a `warning` (a failing check while Stop did not refuse): the amber attention triangle on the band head, the checks row and the gates tab alike.
+ * Red `■` stays the mark of a failed worker or task; a warning is never red (critique 11: amber `▲` on the band, red `■` on the checks row and the gates tab). */
+export const warnMark = (ui: Ui): Run => stateRun('blocked', ui);
 /** Tone of a state WORD (text, 4.5:1): the state's token where it reaches 4.5:1 on the panel, else `text`; `text` in ASCII mode. */
 export function stateWordTone(s: UiState, ui: Pick<Ui, 'ascii' | 'theme'>): Token {
   if (ui.ascii) return 'text';

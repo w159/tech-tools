@@ -65,7 +65,7 @@ describe('band footer buttons', () => {
     for (const columns of [80, 120, 160]) { // the checks have the whole row now, so they show at 80 too
       const t = bandTree(els, { snapshot, live: [], gates, columns, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
       const [checksRow, keysRow] = kids(t).slice(-2) as [Node, Node];
-      expect(textOf(checksRow)).toContain('checks  ■ tripwire');
+      expect(textOf(checksRow)).toContain('checks  ▲ tripwire');
       expect(buttons(checksRow)).toHaveLength(0);
       expect(textOf(keysRow)).not.toContain('checks');
       expect(buttons(keysRow)).toHaveLength(6);

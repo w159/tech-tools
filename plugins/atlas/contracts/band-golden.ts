@@ -20,16 +20,16 @@ export const golden: string[] = [
   " ● implementer-gates   implementer  finished                                                                      1m58s",
   "",
   " implementer-layout to lead   sent a message                                                                      10:07",
-  " checks  ● lint  ● test  ■ doctor  2 of 3 green"
+  " checks  ● lint  ● test  ▲ doctor  2 of 3 green"
 ];
 
-/** Idle with a failing check (`■ doctor`): the run is closed, every plan row done, the band reads a warning (never idle beside a failing check, and never BLOCKED unless Stop refused) and keeps the failed worker, the last run follows (it counts the failure
+/** Idle with a failing check (`▲ doctor`): the run is closed, every plan row done, the band reads a warning (never idle beside a failing check, and never BLOCKED unless Stop refused) and keeps the failed worker, the last run follows (it counts the failure
  * too), then the core row (core-golden.ts) and the footer. The Claude band adds its key buttons to the footer only when handlers are wired. */
 export const idleGolden: string[] = [
   "◖ ◆ ATLAS ◗  ▲ doctor warning   todo ██████████ 7/7   ctx █████░░░ 62%   agents ■ 1 failed",
   " last run  1 worker · 42s · 1 failed",
   " contract  no done items yet   verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked",
-  " checks  ● lint  ● test  ■ doctor  2 of 3 green"
+  " checks  ● lint  ● test  ▲ doctor  2 of 3 green"
 ];
 
 /** The shared-world band at each tier (columns -> rows): 120 and 80 and 60 and 40, and the rich band at 120. */

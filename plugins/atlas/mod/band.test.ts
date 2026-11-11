@@ -264,9 +264,9 @@ describe('message and footer', () => {
   test('checks name each group with a mark and a word; failures take the text tone', () => {
     const { rows, rowNodes } = panel(160, { gates: [gate, okGate] });
     const foot = rows.at(-1)!;
-    expect(foot).toContain('checks  ■ completion  ● routing');
+    expect(foot).toContain('checks  ▲ completion  ● routing');
     const row = rowNodes.at(-1)!;
-    expect(cellOf(row, '■').props.color).toBe(TONE_HEX.bad);
+    expect(cellOf(row, '▲').props.color).toBe(TONE_HEX.warn); // a warning is the amber triangle on the checks row, as on the band head and the gates tab (critique 11)
     expect(cellOf(row, ' completion').props.color).toBe(TONE_HEX.text);
     expect(cellOf(row, '●').props.color).toBe(TONE_HEX.ok);
     expect(cellOf(row, ' routing').props.color).toBe(TONE_HEX.sub);
@@ -284,10 +284,10 @@ describe('message and footer', () => {
   test('when tight the footer keeps only failures, then a bare mark', () => {
     const groups = ['completion', 'tripwire', 'routing', 'verdict'].map((id, i) => ({ id, title: id, lines: [{ ok: i !== 1, label: id }] })) as any;
     const foot = (columns: number) => panel(columns, { gates: groups, snapshot: idleSnap(), live: [] }).rows.at(-1)!.trim();
-    expect(foot(100)).toBe('checks  ● completion  ■ tripwire  ● routing  ● verdict  3 of 4 green'); // the gates tab's own n of m unit
-    expect(foot(80)).toBe('checks  ● completion  ■ tripwire  ● routing  ● verdict  3 of 4 green');
+    expect(foot(100)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3 of 4 green'); // the gates tab's own n of m unit
+    expect(foot(80)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3 of 4 green');
     const none = (columns: number) => panel(columns, { gates: groups, snapshot: idleSnap(), live: [], core: undefined }).rows.at(-1)!.trim();
-    expect(none(80)).toContain('■ tripwire');
+    expect(none(80)).toContain('▲ tripwire');
   });
   test('no checks reported yet: no footer row', () => {
     expect(panel(160, { gates: [] }).rows.some((r) => r.includes('checks'))).toBe(false);

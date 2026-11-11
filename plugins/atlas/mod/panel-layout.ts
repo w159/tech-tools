@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, percent, ribbon, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, percent, ribbon, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
@@ -182,7 +182,7 @@ const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
 /** The ribbon's right-hand text: what the active tab counts, always with its word. */
 function ribbonRight(m: PanelModel): string {
   if (m.tab === 'team') return m.workers.length ? countWords(m.workers, m.ui) : '';
-  if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green} of ${t.total} green` : ''; }
+  if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green}/${t.total}` : ''; } // `n/m` at every width: `2/4` at 110 and `1 of 4 green` at 150 was one figure in two formats (critique 11)
   if (m.tab === 'channel') return m.channel ? `#${m.channel}` : '';
   return '';
 }
@@ -195,9 +195,9 @@ export function ribbonRow(m: PanelModel): PanelLine {
   }
   const right = ribbonRight(m);
   const fitsRight = right && m.cols >= 40 + cells(right);
-  // The gates figure never drops from the header: a pane too narrow for `17 of 18 green` reads it as `17/18`.
-  const short = m.tab === 'gates' ? right.replace(/^(\d+) of (\d+) green$/, '$1/$2') : '';
-  return line(ribbon(m.cols, 'SIDEPANEL', fitsRight ? right : short && short !== right && m.cols >= 32 + cells(short) ? short : '', m.ui));
+  // The gates figure (`17/18`) never drops from the header while the capsule and title fit beside it.
+  const keep = m.tab === 'gates' && !!right && m.cols >= 32 + cells(right);
+  return line(ribbon(m.cols, 'SIDEPANEL', fitsRight || keep ? right : '', m.ui));
 }
 
 /** The tab strip and the rule under the lit tab: `r: route  t: team  c: channel  g: gates  k: core  o: board`, `━━━━━` under the lit one. A
@@ -540,7 +540,7 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
   const [first = '', ...more] = wrap(oneLine(ln.label), Math.max(8, m.cols - 6));
   const extra = open ? [ln.detail, ln.fix ? `fix: ${ln.fix} (press to copy)` : undefined].filter((x): x is string => !!x) : [];
   return [
-    line(moving(gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(ln.ok ? 'done' : 'failed', m.ui), name: { t: `  ${first}` }, nameW: cells(first) + 2 }), key, ln.ok ? 'done' : 'failed', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
+    line(moving(gridRow({ cols: m.cols, ui: m.ui, mark: ln.ok ? stateRun('done', m.ui) : warnMark(m.ui), name: { t: `  ${first}` }, nameW: cells(first) + 2 }), key, ln.ok ? 'done' : 'blocked', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
     ...more.map((t) => note(`  ${t}`, m)), ...extra.map((t) => note(`  ${oneLine(t)}`, m)),
   ];
 }
@@ -563,12 +563,12 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
   const fixed = GRID_LEAD + nameW + 2 + GATE_WORD_W + (value ? cells(value) + 1 : 0) + 1;
   const fits = !tail || cells(tail) <= m.cols - fixed;
   const runs = gridRow({
-    cols: m.cols, ui: m.ui, mark: stateRun(groupOk(g) ? 'done' : 'failed', m.ui),
-    name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'bad' : 'ok' }, wordW: GATE_WORD_W,
-    ...(fits && tail ? { detail: { t: tail } } : {}), ...(value ? { value: { t: value, tone: 'bad' as const } } : {}),
+    cols: m.cols, ui: m.ui, mark: groupOk(g) ? stateRun('done', m.ui) : warnMark(m.ui),
+    name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'warn' : 'ok' }, wordW: GATE_WORD_W,
+    ...(fits && tail ? { detail: { t: tail } } : {}), ...(value ? { value: { t: value, tone: 'warn' as const } } : {}),
   });
   return [
-    line(fitRuns(moving(runs, key, groupOk(g) ? 'done' : 'failed', m), m.cols), { kind: 'toggle', key }),
+    line(fitRuns(moving(runs, key, groupOk(g) ? 'done' : 'blocked', m), m.cols), { kind: 'toggle', key }),
     ...(!showValue && gateValue(g) ? [note(gateValue(g), m)] : []),
     ...(fits ? [] : wrap(tail, Math.max(8, m.cols - 6)).map((t) => note(t, m))),
     ...(open ? g.lines.flatMap((l) => gateLineRows(m, l)) : []),

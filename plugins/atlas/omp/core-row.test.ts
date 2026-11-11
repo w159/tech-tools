@@ -35,16 +35,17 @@ const coreRow = (rows: string[]) => rows.map(strip).find((r) => r.includes("cont
 for (const cols of [160, 120] as const) {
 	test(`panel core row equals coreGolden[${cols}] after ANSI strip`, () => {
 		const rows = renderPanel(panel(cols, fixtureModel()));
-		expect(coreRow(rows)?.trimEnd()).toBe(coreGolden[cols]);
+		const row = coreRow(rows)?.trimEnd() ?? "";
+		expect(row.startsWith(coreGolden[cols])).toBe(true); // at 160 the last run rides the same row (critique 11), after the golden
 		expect(rows.length).toBeLessThanOrEqual(10);
 	});
 }
 
-test("the core row sits right under the band and the last run on the idle panel", () => {
+test("the core row sits right under the band and carries the last run when both fit the row", () => {
 	const rows = renderPanel(panel(160, fixtureModel())).map(strip);
 	expect(rows[0]).toContain("ATLAS");
+	expect(rows[1]).toContain("contract  ");
 	expect(rows[1]).toContain("last run");
-	expect(rows[2]).toContain("contract  ");
 });
 
 test("a running panel keeps its rows for workers: no core row", () => {
