@@ -81,12 +81,12 @@ describe('core row cells', () => {
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     m.contract = { header: { ok: 0, total: 0 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 0 };
     const empty = coreCells(m, 300);
-    expect(toneOf(empty, 'header none')).toBe('muted');
-    expect(toneOf(empty, 'evidence 2/2')).toBe('text');
+    expect(toneOf(empty, 'no headers yet')).toBe('muted');
+    expect(toneOf(empty, '2 of 2 done items carry evidence')).toBe('text');
     m.contract = { header: { ok: 1, total: 3 }, evidence: { ok: 0, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 2 };
     const part = coreCells(m, 300);
-    expect(toneOf(part, 'header 1/3')).toBe('warn');
-    expect(toneOf(part, 'evidence 0/2')).toBe('warn');
+    expect(toneOf(part, '1 of 3 replies opened with the ATLAS header')).toBe('warn');
+    expect(toneOf(part, '0 of 2 done items carry evidence')).toBe('warn');
     expect(cellsText(part)).not.toMatch(/gates/); // the footer's checks row owns gate results
   });
   test('compact forms at the narrowest width that fits all four groups', () => {
@@ -98,8 +98,8 @@ describe('core row cells', () => {
     m.routes = [route({ seats: [seat()] }) as any];
     let narrow = 0;
     for (let cols = 20; cols < 300; cols++) if (coreCells(m, cols).some((x) => x.t === 'route  ')) { narrow = cols; break; }
-    expect(narrow).toBe(113);
-    expect(trim(cellsText(coreCells(m, narrow)))).toBe(' contract  header none   verdicts  1 verified · 0 refuted   offload  7.0k kept, 151 back (46x)   route  fix/low ◇');
+    expect(narrow).toBe(116);
+    expect(trim(cellsText(coreCells(m, narrow)))).toBe(' contract  no headers yet   verdicts  1 verified · 0 refuted   offload  7.0k kept, 151 back (46x)   route  fix/low ◇');
   });
   test('below the four compact groups: contract and verdict only, below that nothing', () => {
     const m = blank();
@@ -121,7 +121,7 @@ describe('core row cells', () => {
     m.offload = { workers: [worker('a'), worker('b')] as any, kept: 14_000, returned: 302, ratio: 3.2 };
     m.routes = [route({ teamId: 't2' }), route({ seats: [seat({ count: 2 }), seat({ role: 'verifier', model: 'haiku' })] })] as any;
     expect(trim(cellsText(coreCells(m, 500)))).toBe(
-      ' contract  header 1/1 · evidence 1/1   verdicts  2 claims · 1 verified · 1 refuted · 1 open · 1 unchecked   offload  14.0k kept in 2 workers, 302 back (3.2x)   route  fix/low: 2× implementer sonnet, verifier haiku ◇ +1 more',
+      ' contract  1 of 1 replies opened with the ATLAS header · 1 of 1 done items carry evidence   verdicts  2 claims · 1 verified · 1 refuted · 1 open · 1 unchecked   offload  14.0k kept in 2 workers, 302 back (3.2x)   route  fix/low: 2× implementer sonnet, verifier haiku ◇ +1 more',
     );
   });
   test('claims and workers are singular for one', () => {

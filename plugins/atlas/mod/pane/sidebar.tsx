@@ -1,11 +1,11 @@
 // Native-element sidebar: the SIDEPANEL ribbon, a tab strip (route, team, channel, gates, core) with the lit tab ruled, and
 // exactly one view under it. The rows come from the shared layout (mod/panel-layout.ts); this file adds the tab Buttons
 // (hotkeys r t c g k o, the six of STRIP_TABS in mod/panel-layout.ts that the omp painter prints too), which the host draws as
-// `k: label`, so the strip budgets 3 cells a tab and wraps onto a second row when it does not fit: it never overflows into the neighbouring pane.
+// `k: label`, so the strip budgets 3 cells a tab, takes a shorter label form (`chan`, then two letters) when the pane is narrow and wraps only below that: it never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, uiFromEnv, type Ui } from '../atlas-ui';
-import { HOTKEY_W, ribbonRow, STRIP_GAP, STRIP_TABS, stripRows } from '../panel-layout';
+import { HOTKEY_W, ribbonRow, stripLayout, stripRows } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import { lineEl, panelBg, runEl, viewRows } from './sidebar-paint';
 import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
@@ -18,18 +18,19 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
   const bg = panelBg(ui);
   const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
   const rule = ui.ascii ? '-' : '━';
-  return stripRows(STRIP_TABS, inner).flatMap((row, ri): RenderElement[] => {
+  const { rows, gap: stripGap } = stripLayout(inner); // the widest label form that fits one row (mod/panel-layout.ts); the rule is as wide as the drawn label
+  return rows.flatMap((row, ri): RenderElement[] => {
     const tabs = row.flatMap((it, i): RenderElement[] => {
       const on_ = it.id === m.ui.view;
       const press = it.id === 'board' ? () => on.toggleTodos?.() : () => on.setView(it.id as SidebarView);
       // The lit tab is bold, the rest explicitly not: a host that restyles Buttons reads the flag, not its absence.
       const label = { ...runEl(els, on_ ? { t: it.label, tone: 'text', bold: true } : { t: it.label, tone: 'muted' }, ui) } as RenderElement & { props: Record<string, unknown> };
       label.props = { ...label.props, bold: on_ };
-      return [...(i ? [gap(STRIP_GAP)] : []), els.Button({ key: it.id === 'board' ? 'tab:todos' : `tab:${it.id}`, plain: true, hotkey: it.key, children: [label], label: it.label, onPress: press })];
+      return [...(i ? [gap(stripGap)] : []), els.Button({ key: it.id === 'board' ? 'tab:todos' : `tab:${it.id}`, plain: true, hotkey: it.key, children: [label], label: it.label, onPress: press })];
     });
     const under = row.flatMap((it, i): RenderElement[] => [
-      ...(i ? [gap(STRIP_GAP)] : []), gap(HOTKEY_W),
-      it.id === m.ui.view ? runEl(els, { t: rule.repeat(cells(it.label)), tone: 'accent' }, ui) : gap(it.label.length),
+      ...(i ? [gap(stripGap)] : []), gap(HOTKEY_W),
+      it.id === m.ui.view ? runEl(els, { t: rule.repeat(cells(it.label)), tone: 'accent' }, ui) : gap(cells(it.label)),
     ]);
     const lit = row.some((it) => it.id === m.ui.view);
     return [

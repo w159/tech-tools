@@ -1,0 +1,185 @@
+// Layout defects of the live Claude Code capture (round2/after/live-150, live-110; commit cd8daa09): HUD and side panel titles cut far
+// below the row's width, a tab strip that wraps and rules the wrong cell, rows whose cell width is not the slot's, a stale `[-]`, a
+// two-row plan cut while rows were free, and a jargon footer. Every surface is rendered at the widths the live host gave it and every
+// row is measured in terminal cells the way the host measures (Bun.stringWidth: East Asian Wide and emoji = 2, ambiguous = 1).
+import { describe, expect, test } from 'claude-code/testing';
+import type { ClientElements } from 'claude-code';
+import { coreFixture, coreMatrix } from '../contracts/core-fixture';
+import { worldCard } from '../contracts/panel-world';
+import { paintHud } from '../omp/hud-paint';
+import { paintPanel } from '../omp/panel-view';
+import { runsString, type Ui } from './atlas-ui';
+import { bandTree } from './band';
+import type { TodoItem } from './contract';
+import { coreModel } from './data/core';
+import { liveWorkers } from './data/live';
+import { hudBudget, hudCompactRows, hudLines, type HudAgent, type HudInput } from './hud';
+import { busySnap, NOW } from './live_fixture';
+import { cardLines, lineText, panelLines, STRIP_TABS, tabRows, type PanelModel, type PanelTab } from './panel-layout';
+import { panelWorld } from '../contracts/panel-world';
+import { textWidth } from './theme';
+
+const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+const ANSI = /\x1b\[[0-9;?]*[a-zA-Z]/g;
+/** The host's cell width of a string: Bun.stringWidth where it exists, else the mod's own table (same semantics for these glyphs). */
+const hostW = (s: string): number => (globalThis as { Bun?: { stringWidth: (s: string) => number } }).Bun?.stringWidth(s.replace(ANSI, '')) ?? textWidth(s.replace(ANSI, ''));
+
+// ---- the live plan: five todos named as the capture's, three explorers running -----------------------------------------------------------
+const todo = (id: string, content: string, status: string): TodoItem => ({ id, content, status });
+const PLAN = [
+  todo('t1', 'T1 read alpha.py (alpha-explorer)', 'pending'), todo('t2', 'T2 read beta.py (beta-explorer)', 'pending'), todo('t3', 'T3 read gamma.py (gamma-explorer)', 'pending'),
+  todo('t4', 'T4 combine the three reports', 'pending'), todo('t5', 'T5 write the final two sentence summary', 'pending'),
+];
+const agent = (name: string): HudAgent => ({ name, role: 'explorer', state: 'working', model: 'haiku', ui: 'running' });
+const input: HudInput = { todos: PLAN, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(agent) };
+const view = (cols: number, maxRows: number) => ({ cols, maxRows, ui, rich: false, now: 0 });
+/** HUD columns the live host handed the hook: bodyColumns, the transcript less the engine's five (88 beside the 56-column pane at 150, 104 at 110). */
+const HUD_WIDTHS = [88, 104, 138];
+const PANE_WIDTHS = [55, 43, 37];
+
+describe('1. titles use the width the row has', () => {
+  for (const cols of HUD_WIDTHS) {
+    test(`HUD TODO at ${cols} columns: every title shows whole, the state word has its column`, () => {
+      const rows = hudLines(input, view(cols, 30)).map(runsString);
+      const todoRows = rows.filter((r) => /T\d /.test(r));
+      expect(todoRows).toHaveLength(5);
+      expect(todoRows[0]).toContain('T1 read alpha.py (alpha-explorer)');
+      expect(todoRows[2]).toContain('T3 read gamma.py (gamma-explorer)');
+      expect(todoRows[4]).toContain('T5 write the final two sentence summary');
+      expect(todoRows.some((r) => r.includes('...'))).toBe(false);
+      // one state column: the word starts in the same cell on every row
+      expect(new Set(todoRows.map((r) => r.indexOf('queued'))).size).toBe(1);
+    });
+  }
+  test('a title that cannot fit is cut with ... and the state word stays whole', () => {
+    const long = [todo('t1', `T1 ${'very long title '.repeat(10)}`, 'pending')];
+    const rows = hudLines({ todos: long, agents: [] }, view(88, 30)).map(runsString);
+    const row = rows.find((r) => r.includes('very long'))!;
+    expect(row).toContain('...');
+    expect(row.trimEnd().endsWith('queued')).toBe(true);
+  });
+  test('the pane route tab at 55 columns shows whole titles, owners aside', () => {
+    const m = panelWorld('route', 55, ui, { todos: PLAN.map((t) => ({ id: t.id, label: t.content, state: 'queued' as const })), workers: [] });
+    const rows = panelLines(m).map(lineText);
+    expect(rows.some((r) => r.includes('T1 read alpha.py (alpha-explorer) '))).toBe(true);
+    expect(rows.some((r) => r.includes('T5 write the final two sentence summary'))).toBe(true);
+    expect(rows.filter((r) => /T\d /.test(r)).some((r) => r.includes('...'))).toBe(false);
+  });
+});
+
+describe('2. the tab strip fits the pane and the rule sits under the lit tab', () => {
+  const tabs = ['route', 'team', 'channel', 'gates', 'core'] as const;
+  for (const cols of PANE_WIDTHS) {
+    for (const tab of tabs) {
+      test(`pane ${cols}, ${tab} lit: one strip row, the rule under the lit label`, () => {
+        const rows = tabRows(panelWorld(tab as PanelTab, cols, ui)).map(lineText);
+        expect(rows).toHaveLength(2); // the strip and its rule; no wrapped second strip row
+        const [strip, rule] = rows as [string, string];
+        expect(hostW(strip.trimEnd())).toBeLessThanOrEqual(cols);
+        const at = rule.indexOf('━');
+        expect(rule.replace(/ /g, '')).toMatch(/^━+$/);
+        // the cells under the rule are the lit tab's drawn label, whole, right after its `k: ` hotkey and before the gap
+        const entry = STRIP_TABS.find((t) => t.id === tab)!;
+        const lit = strip.slice(at, at + [...rule.trim()].length);
+        expect(strip.slice(at - 3, at)).toBe(`${entry.key}: `);
+        expect(strip.slice(at + lit.length, at + lit.length + 1)).toBe(' ');
+        expect(['route', 'team', 'channel', 'chan', 'gates', 'core', 'rt', 'tm', 'ch', 'gt', 'co']).toContain(lit);
+        if (cols >= 55) expect(lit).toBe(entry.label === 'channel' ? 'chan' : entry.label);
+      });
+    }
+  }
+});
+
+describe('3. every row of every surface is exactly its slot wide in terminal cells', () => {
+  for (const cols of HUD_WIDTHS) {
+    test(`HUD at ${cols}: every row is ${cols} cells`, () => {
+      for (const maxRows of [30, 12, 9, 6, 3]) {
+        const rows = paintHud(input, view(cols, maxRows));
+        expect(rows.length).toBeGreaterThan(0);
+        for (const r of rows) expect(hostW(r)).toBe(cols);
+      }
+    });
+  }
+  const states = ['running', 'done', 'failed', 'blocked', 'waiting', 'queued'] as const;
+  for (const cols of PANE_WIDTHS) {
+    for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as const) {
+      test(`side panel ${tab} at ${cols}: every painted row is ${cols} cells`, () => {
+        const todos = PLAN.map((t, i) => ({ id: t.id, label: t.content, state: states[i % states.length]! }));
+        const m: PanelModel = panelWorld(tab, cols, ui, { todos, tick: 1 });
+        for (const row of paintPanel(m)) expect(hostW(row)).toBe(cols);
+        for (const l of panelLines(m)) expect(hostW(lineText(l))).toBeLessThanOrEqual(cols);
+      });
+    }
+  }
+  test('a wide character in a title (CJK, emoji) counts two cells and never overflows a slot', () => {
+    const wide = [todo('t1', 'T1 読み取り alpha.py 🔍 summary of the results so far', 'pending'), todo('t2', 'T2 ascii row', 'pending')];
+    for (const cols of [88, 40]) for (const r of paintHud({ todos: wide, agents: [] }, view(cols, 10))) expect(hostW(r)).toBe(cols);
+    const m = panelWorld('route', 43, ui, { todos: wide.map((t) => ({ id: t.id, label: t.content, state: 'queued' as const })), workers: [] });
+    for (const row of paintPanel(m)) expect(hostW(row)).toBe(43);
+  });
+  test('the worker card is a closed box: every row has the same cell width', () => {
+    const rows = cardLines(worldCard(ui), 120).map((r) => hostW(runsString(r)));
+    expect(new Set(rows).size).toBe(1);
+  });
+});
+
+type Node = { kind: string; props: Record<string, any> };
+const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
+const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button') } as unknown as ClientElements;
+const text = (row: Node): string => (row.props.children as Node[]).map((t) => (t.kind === 'Text' ? String(t.props.children ?? '') : '')).join('');
+const core = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 1, total: 1 }, openGates: 0 });
+const bandRows = (columns: number, idle: boolean): string[] => {
+  const snapshot = idle ? busySnap({ squad: [], activity: {}, comms: [] }) : busySnap();
+  const node = bandTree(els, { snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns, tick: 3, maxRows: 12, core }) as unknown as Node;
+  return (node.props.children as Node[]).map(text);
+};
+
+describe('3b. the band rows fit their slot', () => {
+  for (const columns of [88, 104, 138]) {
+    test(`band at ${columns}, idle and running: no row is wider than the slot`, () => {
+      for (const idle of [true, false]) for (const r of bandRows(columns, idle)) expect(hostW(r)).toBeLessThanOrEqual(columns);
+    });
+  }
+});
+
+describe('4. no fold marker', () => {
+  test('no HUD or band row carries a [-] or [+] marker (the host draws its own beside the first row)', () => {
+    for (const cols of HUD_WIDTHS) {
+      for (const r of hudLines(input, view(cols, 30)).map(runsString)) expect(r).not.toMatch(/\[[-+]\]/);
+    }
+    for (const r of bandRows(104, true)) expect(r).not.toMatch(/\[[-+]\]/);
+  });
+});
+
+describe('5. the plan row budget and the overflow row', () => {
+  test('five todos and three agents: the compact form holds all five plan rows', () => {
+    // ribbon + 5 plan rows + agents ribbon + 3 agents = 10 rows
+    expect(hudCompactRows(input, 88)).toBe(10);
+    const rows = hudLines(input, view(88, hudBudget(13, hudCompactRows(input, 88), 7, true))).map(runsString);
+    expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
+    expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
+  });
+  test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
+    const rows = hudLines(input, view(88, 8)).map(runsString);
+    const more = rows.find((r) => /\d+ more todos?/.test(r))!;
+    expect(more.trim()).toMatch(/^\d+ more todos? not shown$/);
+    expect(more).not.toContain('...');
+  });
+  test('a plan longer than five still keeps its window and counts the rest', () => {
+    const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));
+    const rows = hudLines({ todos: many, agents: [] }, view(88, hudCompactRows({ todos: many, agents: [] }, 88))).map(runsString);
+    expect(rows.some((r) => /\d+ more todos not shown/.test(r))).toBe(true);
+  });
+});
+
+describe('6. the band footer says it in plain words', () => {
+  test('idle band: no header n/m or evidence n/m tally', () => {
+    for (const columns of [104, 138]) {
+      const row = bandRows(columns, true).find((r) => r.includes('contract'))!;
+      expect(row).toBeDefined();
+      expect(row).not.toMatch(/header \d+\/\d+/);
+      expect(row).not.toMatch(/evidence \d+\/\d+/);
+      expect(row).toMatch(/\d+ of \d+/);
+    }
+  });
+});

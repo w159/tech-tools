@@ -2,7 +2,7 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { clip, gauge, percent, ribbon, runsCells, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, clip, gauge, percent, ribbon, runsCells, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; state: UiState; detail: string; focus: boolean };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -30,7 +30,7 @@ export const isRich = (o: SurfaceOpts): boolean => !!o.rich && o.cols >= 120;
 
 const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
-const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, [...x].length), 0);
+const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
 const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
 
 const COUNT_ORDER: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
@@ -51,7 +51,8 @@ export function windowRows<T extends { state: UiState }>(rows: readonly T[], slo
   return { shown: rows.filter((_, i) => picked.has(i)), hidden: rows.length - picked.size };
 }
 
-const more = (n: number, what: string): Run[] => [t(`  ... ${n} more ${what}`, 'sub')];
+/** The overflow row, in plain words: `  2 more todos not shown`. */
+const more = (n: number, what: string): Run[] => [t(`  ${n} more ${what} not shown`, 'sub')];
 
 // ---- TODO ------------------------------------------------------------------------------------------------
 
@@ -73,12 +74,22 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
     out.push([t('progress ', 'muted'), ...gauge(16, frac, ui), t(` ${done} of ${rows.length} · ${percent(frac)}`, 'sub')]);
     if (b.spacers) out.push(BLANK);
   }
-  const stateAt = tier === 'full' ? Math.max(26, Math.min(maxLen(rows.map((r) => r.label)) + 1, 50)) + 4 : 26;
+  const stateAt = todoStateAt(rows, o, tier, rich);
   const metaAt = stateAt + 14;
   const { shown, hidden } = windowRows(rows, b.cap);
   for (const r of shown) out.push(todoRow(r, o, tier, rich, stateAt, metaAt));
   if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'todo' : 'todos'));
   return out;
+}
+
+/** The state column: just past the longest title, so every title shows whole; never past the last cell a state word (or chip) still fits,
+ * and, where a detail column follows (100 columns and up), never so far that the detail has under 16 cells. The 40 form has no state column. */
+function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich: boolean): number {
+  if (tier === 'min') return 0;
+  const wordW = rich ? CHIP_W : 7; // `running` and `blocked` are the longest of the six words
+  const detail = tier === 'full' && rows.some((r) => r.detail !== '');
+  const last = o.cols - wordW - (detail ? 14 + 16 : 0); // the leftmost the column may start at
+  return Math.min(Math.max(tier === 'full' ? 30 : 26, maxLen(rows.map((r) => flat(r.label))) + 1 + 4), Math.max(last, 12));
 }
 
 function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {

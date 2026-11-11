@@ -31,7 +31,7 @@ const ccRows = (tab: PanelTab, cols: number): string[] => {
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '').trimEnd();
 
 describe('change 9: one tab strip on both hosts', () => {
-  const stripOf = (rows: readonly string[]): string[] => rows.filter((l) => /^(\w: \w+)( {2}\w: \w+)*$/.test(l.trim()));
+  const stripOf = (rows: readonly string[]): string[] => rows.filter((l) => /^(\w: \w+)( {1,2}\w: \w+)*$/.test(l.trim()));
   test('the strip tabs are route team channel gates core board, keys r t c g k o', () => {
     const tabs = (L as unknown as { STRIP_TABS: { id: string; key: string; label: string }[] }).STRIP_TABS;
     expect(tabs.map((t) => `${t.key}:${t.label}`)).toEqual(['r:route', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
@@ -45,8 +45,9 @@ describe('change 9: one tab strip on both hosts', () => {
       const om = stripOf(paintPanel(panelWorld(tab, cols, mocha, { core })).map(plain));
       expect(cc.length).toBeGreaterThan(0);
       expect(om).toEqual(cc);
-      expect(cc.join(' ')).toContain('k: core');
-      expect(cc.join(' ')).toContain('o: board');
+      expect(cc.join(' ')).toContain(cols >= 56 ? 'k: core' : 'k: co'); // a narrow pane takes the two-letter labels (mod/panel-layout.ts stripLayout)
+      expect(cc.join(' ')).toContain(cols >= 56 ? 'o: board' : 'o: bd');
+      expect(cc).toHaveLength(1); // one strip row at every width the pane has
       expect(cc.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w))).toEqual(['r:', 't:', 'c:', 'g:', 'k:', 'o:']);
     });
   }

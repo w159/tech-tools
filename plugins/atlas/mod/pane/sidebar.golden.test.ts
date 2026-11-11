@@ -47,10 +47,9 @@ describe('sidebar golden text', () => {
     expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/);
     expect(r[3]).toMatch(/^ {2}■ runner-1\s+failed/);
   });
-  test('team at 38 columns wraps the strip to a second row and keeps name and state', () => {
+  test('team at 38 columns takes the two-letter strip on one row and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]).toBe('r: route  t: team  c: channel');
-    expect(r[4]).toBe('g: gates  k: core  o: board');
+    expect(r[2]).toBe('r: rt t: tm c: ch g: gt k: co o: bd');
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
   });

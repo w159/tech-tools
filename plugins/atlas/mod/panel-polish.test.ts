@@ -22,7 +22,7 @@ const taskRows = (rows: readonly string[]): string[] => rows.filter((l) => new R
 
 const plan = [
   { id: 'd', label: 'Shipped first on purpose', state: 'done' as const, owner: 'implementer-layout' },
-  { id: 'a', label: 'Wire the band to the host and verify every width of the layout end', state: 'running' as const, owner: 'implementer-band', detail: 'read runs.ts:17' },
+  { id: 'a', label: 'Wire the band to the host and verify every width of the layout from the narrowest pane to the widest terminal until the very end', state: 'running' as const, owner: 'implementer-band', detail: 'read runs.ts:17' },
   { id: 'b', label: 'Gate tests', state: 'queued' as const, owner: 'runner-land-with-a-very-long-owner-name', detail: 'after Subagents block' },
   { id: 'c', label: 'Changelog', state: 'failed' as const, owner: 'implementer-live', detail: 'tests red 3' },
 ];

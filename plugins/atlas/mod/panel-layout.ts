@@ -25,17 +25,42 @@ export const HOTKEY_W = 3;
 /** Cells between strip tabs. */
 export const STRIP_GAP = 2;
 
-/** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and a two-cell gap; the rest wrap. */
-export function stripRows<T extends { label: string }>(items: readonly T[], inner: number): T[][] {
+/** A strip tab as drawn: its id, hotkey and the label of the form that fits. */
+export type StripTab = { id: PanelTab | 'board'; key: string; label: string };
+/** Label forms of the strip, widest first: the words; `channel` shortened; two letters. The first form whose tabs fit the pane on one row is drawn. */
+const SHORT: Record<string, string> = { channel: 'chan' };
+const TINY: Record<string, string> = { route: 'rt', team: 'tm', channel: 'ch', gates: 'gt', core: 'co', board: 'bd' };
+const STRIP_FORMS: readonly { gap: number; label: (id: string, full: string) => string }[] = [
+  { gap: STRIP_GAP, label: (_, full) => full },
+  { gap: STRIP_GAP, label: (id, full) => SHORT[id] ?? full },
+  { gap: 1, label: (id, full) => SHORT[id] ?? full },
+  { gap: 1, label: (id) => TINY[id] ?? id },
+];
+const stripWidth = (tabs: readonly { label: string }[], gap: number): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + HOTKEY_W + cells(t.label), 0);
+
+/** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and `gap` cells between; the rest wrap. */
+export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = STRIP_GAP): T[][] {
   const rows: T[][] = [];
   let used = 0;
   for (const it of items) {
-    const w = HOTKEY_W + it.label.length;
-    if (!rows.length || (rows[rows.length - 1]!.length && used + STRIP_GAP + w > inner)) { rows.push([]); used = 0; }
+    const w = HOTKEY_W + cells(it.label);
+    if (!rows.length || (rows[rows.length - 1]!.length && used + gap + w > inner)) { rows.push([]); used = 0; }
     rows[rows.length - 1]!.push(it);
-    used += (rows[rows.length - 1]!.length > 1 ? STRIP_GAP : 0) + w;
+    used += (rows[rows.length - 1]!.length > 1 ? gap : 0) + w;
   }
   return rows;
+}
+
+/** The strip both hosts draw at `inner` cells: the widest label form that fits one row, else the narrowest form wrapped. The rule under the lit tab is as wide as the drawn label. */
+export function stripLayout(inner: number): { rows: StripTab[][]; gap: number } {
+  let last = STRIP_FORMS[STRIP_FORMS.length - 1]!;
+  for (const f of STRIP_FORMS) {
+    const tabs = STRIP_TABS.map((t): StripTab => ({ ...t, label: f.label(t.id, t.label) }));
+    last = f;
+    if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap };
+  }
+  const tabs = STRIP_TABS.map((t): StripTab => ({ ...t, label: last.label(t.id, t.label) }));
+  return { rows: stripRows(tabs, inner, last.gap), gap: last.gap };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; owner?: string; detail?: string; evidence?: string | null };
@@ -141,15 +166,16 @@ export function ribbonRow(m: PanelModel): PanelLine {
 /** The tab strip and the rule under the lit tab: `r: route  t: team  c: channel  g: gates  k: core  o: board`, `━━━━━` under the lit one. A
  * strip that does not fit wraps onto a second row (the rule sits under the row that holds the lit tab). */
 export function tabRows(m: PanelModel): PanelLine[] {
-  const gap = r(' '.repeat(STRIP_GAP));
-  return stripRows(STRIP_TABS, m.cols).flatMap((row): PanelLine[] => {
+  const { rows, gap: g } = stripLayout(m.cols);
+  const gap = r(' '.repeat(g));
+  return rows.flatMap((row): PanelLine[] => {
     const strip: Run[] = [];
     const under: Run[] = [];
     row.forEach((t, i) => {
       const on = t.id === m.tab;
       if (i) { strip.push(gap); under.push(gap); }
       strip.push(r(`${t.key}: `, 'muted'), on ? r(t.label, 'text', { bold: true }) : r(t.label, 'muted'));
-      under.push(r(' '.repeat(HOTKEY_W)), on ? r((m.ui.ascii ? '-' : '━').repeat(t.label.length), 'accent') : r(' '.repeat(t.label.length)));
+      under.push(r(' '.repeat(HOTKEY_W)), on ? r((m.ui.ascii ? '-' : '━').repeat(cells(t.label)), 'accent') : r(' '.repeat(cells(t.label))));
     });
     return [line(fitRuns(strip, m.cols)), ...(row.some((t) => t.id === m.tab) ? [line(fitRuns(under, m.cols))] : [])];
   });
@@ -213,7 +239,7 @@ function agentsRows(m: PanelModel): PanelLine[] {
 const WORD_W = 7; // `running` and `blocked` are the longest of the six state words
 const stateWordTone2 = (s: UiState): Tone => (s === 'failed' ? 'bad' : s === 'blocked' ? 'warn' : 'sub');
 const OWNER_W = 18;
-const BOARD_TITLE_W = 21; // mod/board-model.ts COL.stateCompact (26) less the four lead cells and the blank before the state word
+const TITLE_MIN_W = 21; // the title column's least width (the state word starts in cell 26 when every title is short, as in the design); it grows to the longest title the pane has room for
 
 /** The Board's compact form on the panel: `focus glyph title state [detail] owner`. Every task row shares one state column (cell 26) and one
  * right-aligned owner column (dropped when the panel is too narrow to keep a title of 8 cells); a title that does not fit is cut in the
@@ -254,8 +280,8 @@ function routeBody(m: PanelModel): PanelLine[] {
   const room = bodyRows(m, rows.length);
   const ordered = m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
   const widest = Math.min(OWNER_W, Math.max(0, ...ordered.map((t) => cells(oneLine(t.owner)))));
-  // The Board compact form's title column: 21 cells, so the state word starts in cell 26 on every row; a longer title is cut in the middle.
-  const plan = gridPlan(m.cols, { names: [' '.repeat(BOARD_TITLE_W)], word: WORD_W, value: widest, optional: true, min: 8, max: BOARD_TITLE_W });
+  // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
+  const plan = gridPlan(m.cols, { names: [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))], word: WORD_W, value: widest, optional: true, min: 8, max: m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols }); // from 100 columns the title leaves the reason a column
   const shown: PanelLine[] = [];
   for (const t of ordered) {
     const rs = todoRows(m, t, plan);

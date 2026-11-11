@@ -101,11 +101,11 @@ describe('sidebar hotkeys', () => {
   test('no view repeats a hotkey', () => {
     for (const v of ['route', 'team', 'channel', 'gates'] as const) expect(new Set(hotkeys(tree(v))).size).toBe(hotkeys(tree(v)).length);
   });
-  test('six buttons fit a docked 56-column pane: the strip wraps onto rows that each fit (L21)', () => {
+  test('six buttons fit a docked 56-column pane on one strip row (L21)', () => {
     const t = sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'route' }, columns: 56, rows: 40 }, side) as unknown as Node;
     expect(buttons(t).filter((b) => b.props.hotkey).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
     const rows = (t.props.children as Node[]).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
-    expect(rows.length).toBeGreaterThan(1);
+    expect(rows).toHaveLength(1); // `chan` for `channel` makes the whole strip 55 cells: no wrapped second row
     for (const row of rows) {
       const kidsOf = row.props.children as Node[];
       const w = kidsOf.reduce((n, c) => n + (c.kind === 'Button' ? 3 + [...String(c.props.label)].length : String(c.props.children).length), 0); // `k: label` plus the gaps

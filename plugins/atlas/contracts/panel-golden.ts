@@ -116,9 +116,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core",
+      "r: route  t: team  c: chan  g: gates  k: core  o: board",
       "   ━━━━━",
-      "o: board",
       "phase  research 2/4",
       "gates  ● lint   ● test   ■ doctor   2/3",
       "todo   ████▎░░░░░ 3 of 7",
@@ -160,9 +159,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core",
+      "r: route  t: team  c: chan  g: gates  k: core  o: board",
       "             ━━━━",
-      "o: board",
       "▸ ◐ implementer-band    running",
       "  ■ implementer-live    failed",
       "  ◇ runner-land         queued",
@@ -195,9 +193,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━ #atlas-board-mod",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core",
-      "                      ━━━━━━━",
-      "o: board",
+      "r: route  t: team  c: chan  g: gates  k: core  o: board",
+      "                      ━━━━",
       "#atlas-board-mod  5 people · 2 unread",
       "    lead                  ▸ implementer-band ta... 10:02",
       "  ▲ imple...live  blocked tests red 3, need a d... 10:05",
@@ -227,9 +224,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━ 2 of 3 green",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core",
-      "                                  ━━━━━",
-      "o: board",
+      "r: route  t: team  c: chan  g: gates  k: core  o: board",
+      "                               ━━━━━",
       "  ● lint    passing",
       "  ● test    passing",
       "  ■ doctor  failing doctor                1 of 1 failing"
@@ -297,9 +293,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core",
-      "                                            ━━━━",
-      "o: board",
+      "r: route  t: team  c: chan  g: gates  k: core  o: board",
+      "                                         ━━━━",
       "contract",
       "  ▲ header   3 of 4",
       "  ◇ evidence none yet",

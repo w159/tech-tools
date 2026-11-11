@@ -26,11 +26,14 @@ const tally = (ok: number, total: number): string => (total ? `${ok}/${total}` :
 const toneOf = (ok: number, total: number): Tone => (!total ? "muted" : ok === total ? "text" : "warn");
 const joinSep = (parts: Cell[]): Cell[] => parts.flatMap((p, i) => (i ? [sep, p] : [p]));
 
-/** `contract  header 3/4 · evidence 7/7`; compact drops the evidence tally when nothing carries evidence yet. */
+/** `contract  3 of 4 headers · 7 of 7 done with evidence` in words: the replies that opened with the ATLAS header and the done items that carry
+ * evidence. Full reads `3 of 4 replies opened with the ATLAS header · 7 of 7 done items carry evidence` (the /atlas-core report's wording);
+ * compact drops the evidence tally when no done item exists yet. */
 function contract(m: CoreModel, full: boolean): Cell[] {
   const { header: h, evidence: e } = m.contract;
-  const parts = [c(`header ${tally(h.ok, h.total)}`, toneOf(h.ok, h.total))];
-  if (full || e.total) parts.push(c(`evidence ${tally(e.ok, e.total)}`, toneOf(e.ok, e.total)));
+  const of = (ok: number, total: number): string => `${ok} of ${total}`;
+  const parts = [c(h.total ? (full ? `${of(h.ok, h.total)} replies opened with the ATLAS header` : `${of(h.ok, h.total)} headers`) : "no headers yet", toneOf(h.ok, h.total))];
+  if (full || e.total) parts.push(c(e.total ? (full ? `${of(e.ok, e.total)} done items carry evidence` : `${of(e.ok, e.total)} done with evidence`) : "no done items yet", toneOf(e.ok, e.total)));
   return [label("contract"), ...joinSep(parts)];
 }
 

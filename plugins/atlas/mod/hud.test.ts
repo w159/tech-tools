@@ -1,5 +1,5 @@
 // The HUD (TODO tree and Subagents block) in the rev 4 ATLAS design: the design goldens through the Claude Code adapter,
-// the live defects L1 (completed rows vanish), L2 ("... 3 more todos" hides the plan), L11 (unnamed agents), the restored
+// the live defects L1 (completed rows vanish), L2 ("3 more todos not shown" hides the plan), L11 (unnamed agents), the restored
 // Subagents block, R5 (hardcoded check mark, bullet, ellipsis) and the row budget. omp/hud-paint.test.ts holds the parity half.
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
@@ -90,7 +90,7 @@ describe('L1: a completed plan row is shown as completed', () => {
   });
 });
 
-describe('L2: the plan is not cut to "... N more todos"', () => {
+describe('L2: the plan is not cut to "N more todos not shown"', () => {
   const big = Array.from({ length: 12 }, (_, i) => todo(`t${i}`, `Step ${i + 1}`, i < 2 ? 'completed' : i === 2 ? 'in_progress' : 'pending'));
   test('a 12 row plan at a 45 row height shows all 12 rows and no more-todos row', () => {
     const rows = trimmed(hudRows({ todos: big, agents: [] }, view(120, false, 45)));
@@ -102,7 +102,7 @@ describe('L2: the plan is not cut to "... N more todos"', () => {
       const rows = trimmed(hudRows({ todos: big, agents: [] }, view(120, false, h)));
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => /Step \d+/.test(l)).length;
-      const hidden = Number(/\.\.\. (\d+) more todos?/.exec(rows.join('\n'))?.[1] ?? 0);
+      const hidden = Number(/(\d+) more todos?/.exec(rows.join('\n'))?.[1] ?? 0);
       if (rows.length > 1) expect(shown + hidden).toBe(12);
     }
   });
@@ -202,7 +202,7 @@ describe('hud row budget', () => {
     expect(hudLines({ todos: [], agents: [] }, view(120))).toEqual([]);
   });
   test('hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows', () => {
-    expect(hudCompactRows({ todos: plan, agents })).toBe(5 + 4); // TODO ribbon, 3 rows and the overflow row; Subagents ribbon, 2 agents and the overflow row
+    expect(hudCompactRows({ todos: plan, agents })).toBe(6 + 4); // TODO ribbon, 4 rows and the overflow row (a plan of five shows whole); Subagents ribbon, 2 agents and the overflow row
     for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
     expect(hudBudget(1, 7, 7, true)).toBe(1);
     expect(hudBudget(2, 7)).toBe(2);

@@ -7,6 +7,8 @@
 // vocabulary, the brand capsule, ribbon, phase rail, eighth-quantised gauge, fixed-width chip, sparkline, spinner and
 // eased gauge. Source of truth for strings, widths and colours: docs design rev 4 (round2/design/evidence/gen4.py).
 
+import { textWidth } from './theme';
+
 // ---- tokens ---------------------------------------------------------------------------
 
 export type ThemeName = 'mocha' | 'latte';
@@ -153,27 +155,46 @@ export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0): Run[] =
 
 // ---- width and clipping -------------------------------------------------------------------------
 
-/** Cell width: every glyph in this module is one cell (the allowlist in theme.test.ts), so length in code points. */
-export const cells = (s: string): number => [...s].length;
+/** Terminal cell width the way the host counts it (mod/theme.ts textWidth): East Asian Wide and emoji are two cells, combining and zero-width marks none,
+ * every glyph this module draws one. Rows are budgeted in cells, never in code points, so a title with a CJK or emoji character cannot overflow its slot. */
+export const cells = (s: string): number => textWidth(s);
 export const runsCells = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 export const runsString = (runs: readonly Run[]): string => runs.map((x) => x.t).join('');
+/** The longest prefix of `cs` (code points) within `n` cells, and its width. */
+function prefixCells(cs: readonly string[], n: number): { text: string; width: number } {
+  let width = 0;
+  let text = '';
+  for (const c of cs) {
+    const w = cells(c);
+    if (width + w > n) break;
+    width += w;
+    text += c;
+  }
+  return { text, width };
+}
+/** The longest suffix of `cs` within `n` cells. */
+function suffixCells(cs: readonly string[], n: number): string {
+  let width = 0;
+  let at = cs.length;
+  while (at > 0 && width + cells(cs[at - 1]!) <= n) width += cells(cs[--at]!);
+  return cs.slice(at).join('');
+}
 /** Cut to n cells, `...` marking a cut (the ellipsis character is outside the one-cell allowlist). */
 export function clip(text: string, n: number): string {
   if (n <= 0) return '';
+  if (cells(text) <= n) return text;
   const cs = [...text];
-  if (cs.length <= n) return text;
-  return n <= 3 ? cs.slice(0, n).join('') : `${cs.slice(0, n - 3).join('')}...`;
+  return n <= 3 ? prefixCells(cs, n).text : `${prefixCells(cs, n - 3).text}...`;
 }
 /** Cut to n cells keeping both ends, `...` in the middle (`implem...0278`): for names whose tail tells them apart. n of 3 or less is a plain cut. */
 export function clipMiddle(text: string, n: number): string {
   if (n <= 0) return '';
+  if (cells(text) <= n) return text;
   const cs = [...text];
-  if (cs.length <= n) return text;
-  if (n <= 3) return cs.slice(0, n).join('');
+  if (n <= 3) return prefixCells(cs, n).text;
   const room = n - 3;
   const tail = Math.floor(room / 2);
-  const head = room - tail;
-  return `${cs.slice(0, head).join('')}...${cs.slice(cs.length - tail).join('')}`;
+  return `${prefixCells(cs, room - tail).text}...${suffixCells(cs, tail)}`;
 }
 export const padEnd = (text: string, n: number): string => text + ' '.repeat(Math.max(0, n - cells(text)));
 /** Pad `runs` with spaces to reach cell `col`; when the cursor is already past it, two spaces separate. */

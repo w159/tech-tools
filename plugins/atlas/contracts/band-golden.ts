@@ -28,7 +28,7 @@ export const golden: string[] = [
 export const idleGolden: string[] = [
   "◖ ◆ ATLAS ◗  idle · phase 4/4   todo ██████████ 7 of 7   ctx █████░░░ 62%   agents ■ 1 failed",
   " last run  1 worker · 42s · 1 failed",
-  " contract  header 3/4   verdicts  1 verified · 1 refuted   offload  17.9k kept, 608 back (30x)   route  verify/low ●",
+  " contract  3 of 4 headers   verdicts  1 verified · 1 refuted   offload  17.9k kept, 608 back (30x)   route  verify/low ●",
   " checks  ● lint  ● test  ■ doctor"
 ];
 

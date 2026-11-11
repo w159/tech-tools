@@ -97,18 +97,20 @@ describe('sidebar shell', () => {
     }
     expect(stripRows(items, 60).length).toBe(1);
     expect(stripRows(items, 37).length).toBe(2);
+    expect(stripRows(items, 37, 1).length).toBe(2);
   });
 
-  test('L21: a wrapped strip underlines the lit tab on its own row, aligned under its label', () => {
-    const t = tree({ columns: 38 }, 'gates');
-    const rowsOf = kids(t).filter((n) => n.kind === 'Box');
-    const idx = rowsOf.findIndex((r) => String(r.props.key) === 'tabs:1');
-    expect(idx).toBeGreaterThan(0);
-    const under = rowsOf[idx + 1]!;
-    const line = textOf(under);
-    expect(line.replace(/ /g, '')).toBe('━━━━━');
-    expect(line.indexOf('━')).toBe(3);
-    expect(textOf(rowsOf[idx - 1 - 1] ?? under)).not.toContain('━');
+  test('L21: the strip takes a shorter label form in a narrow pane and rules the lit tab under its drawn label', () => {
+    for (const [columns, label] of [[38, 'gt'], [56, 'gates']] as const) {
+      const t = tree({ columns }, 'gates');
+      const rowsOf = kids(t).filter((n) => n.kind === 'Box');
+      expect(rowsOf.filter((r) => String(r.props.key ?? '').startsWith('tabs:'))).toHaveLength(0); // one strip row: no wrapped second row
+      const strip = rowsOf.find((r) => String(r.props.key) === 'tabs')!;
+      const rule = textOf(rowsOf[rowsOf.indexOf(strip) + 1]!);
+      expect(rule.replace(/ /g, '')).toBe('━'.repeat(label.length));
+      const drawn = kids(strip).map((c) => (c.kind === 'Button' ? `${c.props.hotkey}: ${c.props.label}` : String(c.props.children))).join('');
+      expect(drawn.slice(rule.indexOf('━'), rule.indexOf('━') + label.length)).toBe(label);
+    }
   });
 
   test('the panel paints the rev 4 panel token, never the legacy #11111b', () => {
