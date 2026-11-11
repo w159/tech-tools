@@ -220,9 +220,25 @@ Colocated `*.test.ts` files use the `claude-code/testing` kit. `scripts/sprite_r
 
 ## Changes in 12.4.0
 
-- **Band controls.** The band footer is a row of clickable Buttons `r: route  t: team  c: channel  g: gates  o: board`. route, team, channel and gates open the pane on that view; board toggles the todo panel. The hint reads "click or ctrl+x Tab, then r t c g o" (the engine needs ctrl+x then Tab). The pane hint lists only existing keys. Verified under tmux with `CLAUDE_CODE_NO_FLICKER=1`; not yet verified in the default inline mode.
+- **Band controls.** The band footer is a row of clickable Buttons `r: route  t: team  c: channel  g: gates  o: board`. route, team, channel and gates open the pane on that view; board toggles the todo panel. The hint reads "click or ctrl+x Tab, then r t c g o" (the engine needs ctrl+x then Tab). The pane hint lists only existing keys. Verified under tmux with `CLAUDE_CODE_NO_FLICKER=1`; not yet verified in the default inline mode. Superseded in rev 4 (2026-11-11): the footer is six buttons from `STRIP_TABS` (`r t c g k o`, see "Rev 4" below) and `o` opens the board.
 - **Role characters.** Each role has a 3-cell face (role eyes, state mouth). running cycles 5 frames, thinking 3, done, failed and blocked one frame. Faces draw in Claude band lanes, omp lanes and the tmux pane header (4 Hz redraw). A Python mirror test guards drift.
-- **Board panel.** Collapsed: one animated violet-to-teal progress bar row with done/total and the active item. Expanded: one row per item (state glyph, owner, evidence, "+N more"). Toggle with `o` or the board button; on Claude Code the HUD always shows the TODO tree and the board has its own pane. Each atlas dispatch creates a board item; a valid `STATUS: DONE` report completes it with its evidence; `BLOCKED` or `FAILED` marks it `blocked` (new status).
+- **Board panel.** Collapsed: one animated violet-to-teal progress bar row with done/total and the active item. Expanded: one row per item (state glyph, owner, evidence, "+N more"). Toggle with `o` or the board button; on Claude Code the HUD always shows the TODO tree and the board has its own pane. Each atlas dispatch creates a board item; a valid `STATUS: DONE` report completes it with its evidence; `BLOCKED` or `FAILED` marks it `blocked` (new status). Superseded in rev 4 (2026-11-11): the board is the rev 4 Board (`mod/board-model.ts`), and `o` draws it inside the shown Atlas pane or opens the `atlas-board` pane.
 - **Look (theme, colour, ASCII).** Every surface (HUD, band, side panel, board, toasts, cards, notifications) gets its `Ui` from the one `$.env` read in `mod/look.ts` (`lookOf($)`: `ATLAS_THEME`, `COLORFGBG`, `ATLAS_ASCII`, locale, `NO_COLOR`, `COLORTERM`, `TERM`, `ATLAS_BAND_RICH`), computed once and cached until `clearLook()` at boot. The process-env `hostEnv()` is only the fallback for a bun/omp host that has no `$`. `mod/register-look.test.ts` proves `NO_COLOR` and `ATLAS_ASCII` reach the side panel and the board under the kit, where no process global exists.
 - **Cost.** No dollar cost appears in the band title, idle summary, turn receipt or omp panel.
 
+## Rev 4 terminal UI (2026-11-11)
+
+Matches the code at HEAD; the design record is `docs/specs/2026-11-10_atlas-terminal-ui.md`. Where an older section above
+disagrees (the one-row band, `mission-layout.ts` runs, a fixed 26-cell board state column, the `starting` worker state),
+this section wins. Paths are under `plugins/atlas/`.
+
+- One phase rail: `mod/rail.ts` (`railIds`, `railOf`, `railNo`; `RAIL_SKIP` drops `validate`, `blocked`, `done`) is used by the band (`mod/band.tsx`), the side panel model (`mod/pane/sidebar-model.ts`), `mod/panel-layout.ts` and the omp mission panel (`omp/mission-panel.ts`).
+- Gauges: `of mm:ss` and the elapsed gauge are drawn only for an item with `estimate_s` (`mod/board-model.ts`, `mod/hud.ts`); otherwise `elapsed 00:42`, no gauge.
+- Tab strip: `STRIP_TABS` in `mod/panel-layout.ts` (route, team, channel, gates, core, board; keys `r t c g k o`) feeds the Claude Code strip (`mod/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band buttons (`BAND_BUTTONS`, `mod/band.tsx`).
+- Board key `o`: `openBoard` (`mod/register.ts`) draws the board inside the Atlas pane when it is shown (view `board`, a second press returns to the route); otherwise it opens the `atlas-board` pane.
+- Compact board (60 to 99 cells): the state column fits the widest label (`stateCol`, `mod/board-model.ts`).
+- HUD Subagents block (`mod/hud.ts`): with nothing running, a done agent stays `LINGER_MS` (15 s, exported from `mod/atlas-ui.ts`, shared with the band); a failed agent stays until cleared.
+- Channel roster (`mod/data/channels.ts`): when no candidate key matches the lead, it falls back to the project's main channel key (`<folder>` or `<folder>@<ref>`). The Route tab lists running agents that own no plan row (`mod/panel-layout.ts`).
+- Widths are terminal cells: `cells`, `clip` and `clipMiddle` (`mod/atlas-ui.ts`) use `textWidth` (`mod/theme.ts`), so wide characters count as two.
+- The `[-]` beside the TODO block is the host's collapse mark (`bodyColumns` reserves its cells). The plugin cannot remove it.
+- omp `paintPanel`, `paintCard` and `paintToast` (`omp/panel-view.ts`) are UNMOUNTED: nothing in omp calls them.

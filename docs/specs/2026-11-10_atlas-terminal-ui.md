@@ -1,4 +1,8 @@
-# Atlas terminal UI (2026-11-10, Atlas 17.4.0)
+# Atlas terminal UI (2026-11-10, Atlas 17.4.0; revision 4, 2026-11-11)
+
+Revision 4 (2026-11-11) updates the sections below marked "Rev 4" to the code at HEAD. Where the older layout text (the
+`mission-layout.ts` runs, the `starting` state, the `Subagents block is dropped` note) disagrees with the Rev 4 sections,
+the Rev 4 sections win.
 
 The Mission Control band (Claude Code), the mission panel (omp), the sidebar, toasts and the doctor report. This spec
 replaces the 17.3.0 display, which the owner found confusing.
@@ -86,6 +90,38 @@ Catppuccin Mocha. Tones: text `#cdd6f4`, muted `#9399b2`, dim `#585b70`, accent 
 - Toasts: plain sentences, one per turn.
 - Doctor: `Atlas doctor  ·  atlas`, then failures and warnings with wrapped details, one line for passing checks,
   one for checks that do not apply, and a verdict line. Colour only on a TTY and never with `NO_COLOR` set.
+
+## Rev 4 (2026-11-11): what the code at HEAD does
+
+Every statement below is backed by the file named beside it (paths under `plugins/atlas/`).
+
+- One phase rail. `mod/rail.ts` (`railIds`, `railOf`, `railNo`) is the only place a rail is cut from the contract phases
+  (`RAIL_SKIP` drops `validate`, `blocked`, `done`). The band (`mod/band.tsx`), the side panel model
+  (`mod/pane/sidebar-model.ts`), the panel layout (`mod/panel-layout.ts`) and the omp mission panel
+  (`omp/mission-panel.ts`) all ask it, so a phase reads the same number (`4/5` for `implement`) everywhere.
+- Gauges need an estimate. The Board and the HUD TODO draw `of mm:ss` and the elapsed gauge only for an item that carries
+  `estimate_s` (`mod/board-model.ts` line 78 and `mod/hud.ts` line 73). Any other running item reads
+  `elapsed 00:42` with no gauge; there is no default budget.
+- One tab list. `STRIP_TABS` (`mod/panel-layout.ts`: route, team, channel, gates, core, board; keys `r t c g k o`) is
+  the list the Claude Code side panel strip (`mod/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band
+  footer buttons (`BAND_BUTTONS` in `mod/band.tsx`) all draw.
+- Board key. `o` runs `openBoard` (`mod/register.ts`). When the Atlas pane is shown, the board is drawn inside that pane
+  (view `board`) and a second `o` returns to the route; otherwise it opens the `atlas-board` pane.
+- Compact board. At 60 to 99 cells the state column is set from the widest label, not fixed at 26, so a label is not cut
+  (`stateCol` in `mod/board-model.ts`, shared with omp).
+- HUD Subagents block. It is back on Claude Code (the older note above that it is dropped no longer holds). With nothing
+  running, a done agent stays for `LINGER_MS` (15 s, exported from `mod/atlas-ui.ts`, the band's own window) and a failed
+  agent stays until it is cleared (`mod/hud.ts` lines 113 to 115).
+- Channel tab. The roster falls back to the project's main channel key (`<folder>` or `<folder>@<ref>`) when no candidate
+  key matches the lead's session (`mod/data/channels.ts`).
+- Route tab. Running agents that own no plan row are listed under the plan, in the HUD Subagents state words
+  (`mod/panel-layout.ts`, comment at "Agents that work but hold no plan row").
+- Widths are terminal cells. `cells`, `clip` and `clipMiddle` in `mod/atlas-ui.ts` count wide characters as two cells
+  through `textWidth` (`mod/theme.ts`).
+- The `[-]` beside the first HUD row is the host's own collapse mark in the five cells it reserves (`bodyColumns`). The
+  plugin cannot remove it.
+- Unmounted omp painters. `paintPanel`, `paintCard` and `paintToast` in `omp/panel-view.ts` are marked UNMOUNTED in the
+  file: nothing in omp calls them, so their parity tests are not evidence of a mounted surface.
 
 ## Sources
 
