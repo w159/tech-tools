@@ -79,7 +79,7 @@ describe('B1: the gates tab never says a thing twice or parts a label from its v
   });
   test('the group figure is n of m green', () => {
     const text = body(panelWorld('gates', 150, ui, { rows: 24, gates: groups as never })).join('\n');
-    expect(text).toContain('1 of 2 green');
+    expect(text).toContain('1/2 green');
     expect(text).not.toMatch(/\d+ of \d+ failing/);
   });
 });

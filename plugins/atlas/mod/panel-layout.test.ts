@@ -71,7 +71,7 @@ describe('route tab', () => {
     const text = rows('route', 80, { todos: planned, workers: running, phase: 'research' }).join('\n');
     expect(text).toContain('write the report');
     expect(text).toContain('check the numbers');
-    expect(text).toContain('0 of 2');
+    expect(text).toContain('0/2');
     expect(text).toContain('3 running');
     expect(text).not.toContain('nothing planned');
   });
@@ -103,7 +103,7 @@ describe('route tab', () => {
     expect(out.some((l) => /\d+ more tasks on the board$/.test(l))).toBe(true);
   });
   test('names that do not fit the gates row fold to a labelled count', () => {
-    expect(rows('route', 30).find((l) => l.startsWith(' gates '))).toContain('2 of 3 green');
+    expect(rows('route', 30).find((l) => l.startsWith(' gates '))).toContain('2/3 green');
   });
 });
 
@@ -147,7 +147,7 @@ describe('gates tab', () => {
   const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
   test('a group says how many fail in words and shows the first fix', () => {
     const row = rows('gates', 100, { gates: g() }).at(-1)!;
-    expect(row).toMatch(/^ {2}▲ Completion gate {2}warning run the hooks suite +1 of 2 green$/);
+    expect(row).toMatch(/^ {2}▲ Completion gate {2}warning run the hooks suite +1\/2 green$/);
     expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });
   test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {
@@ -190,6 +190,43 @@ describe('core tab', () => {
     const out = rows('core', 120, { core: c }).join('\n');
     expect(out).toMatch(/■ {3}4x explorer +off plan +4 explorers ran, 1 planned/);
     expect(out).not.toContain('1x explorer');
+  });
+  // critique 12 B1/B6: live-150-8271cfc8-1 core tab: the plan is 5/5 done, the rows carry no evidence and no finding verifies them
+  const planDone = Array.from({ length: 5 }, (_, i) => ({ id: `t${i + 1}`, label: `T${i + 1}`, state: 'done' as const, evidence: null }));
+  const zeroCore = { ...core, verdicts: [], claims: [], ledger: { verified: 0, refuted: 0, pending: 0, claimed: 0, unchecked: 0 }, contract: { ...core.contract, evidence: { ok: 0, total: 5 }, verifiedDone: { ok: 0, total: 5 } } } as CoreModel;
+  test('B1: a zero beside a full plan is explained, never bare', () => {
+    for (const cols of [150, 110, 80, 56]) {
+      const out = rows('core', cols, { core: zeroCore, todos: planDone, rows: 40 }).join('\n');
+      expect([cols, out]).toEqual([cols, expect.stringMatching(/evidence +0\/5 +5 done without evidence/)]);
+      expect([cols, out]).toEqual([cols, expect.stringMatching(/verified +0\/5 +0 verified findings so far/)]);
+    }
+  });
+  test('B6: the verdict line carries the verified count against the plan denominator whether or not a done item has evidence', () => {
+    for (const ev of [{ ok: 0, total: 5 }, { ok: 5, total: 5 }]) {
+      const c = { ...zeroCore, contract: { ...zeroCore.contract, evidence: ev } } as CoreModel;
+      expect(rows('core', 150, { core: c, todos: planDone, rows: 40 }).join('\n')).toMatch(/verified +0\/5/);
+    }
+  });
+  test('B3: the gates figure is n/m in the route tab and on the group row, as the header has it', () => {
+    const gates = [{ id: 'lint', title: 'Lint', lines: [{ id: 'l1', label: 'style', ok: true }] }, { id: 'doctor', title: 'Doctor', lines: [{ id: 'd1', label: 'x', ok: false }, { id: 'd2', label: 'y', ok: true }] }];
+    for (const cols of [150, 110, 80]) {
+      const route = rows('route', cols, { gates }).join('\n');
+      expect([cols, route]).toEqual([cols, expect.stringContaining('1/2 green')]);
+      expect(route).not.toMatch(/\d+ of \d+ green/);
+      expect(rows('gates', cols, { gates }).join('\n')).not.toMatch(/\d+ of \d+ green/);
+    }
+  });
+  test('B2: a drifted dispatch route makes the routing group warn on the gates tab, the verdict the core row states', () => {
+    const c = JSON.parse(JSON.stringify(core)) as CoreModel;
+    c.routes = [{ teamId: 'in-process:audit/low', name: 'in-process', cls: 'audit', effort: 'low', isolation: '', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
+    const gates = [{ id: 'routing', title: 'Tool routing', lines: [{ id: 'native-Read', label: 'Native Read calls', ok: true }] }];
+    expect(rows('gates', 150, { gates, core: { ...c, routes: [] } }).join('\n')).toMatch(/Tool routing +passing/);
+    const out = rows('gates', 150, { gates, core: c }).join('\n');
+    expect(out).toMatch(/Tool routing +warning/);
+    expect(out).toContain('Dispatches followed the plan');
+    const open = bodyLines(panelWorld('gates', 150, mocha, { gates, core: c, expanded: 'gate:dispatch-plan' })).map(lineText).join('\n');
+    expect(open).toContain('planned audit team (low effort), ran 3 explorers'); // the line's detail is the core row's own sentence
+    expect(rows('core', 150, { core: c }).join('\n')).toMatch(/off plan/);
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {
     const c = { ...core, verdicts: [], ledger: { verified: 0, refuted: 0, pending: 0, claimed: 0, unchecked: 0 } } as CoreModel;
@@ -238,9 +275,9 @@ describe('shared invariants', () => {
   });
   test('every count carries its word', () => {
     const route = rows('route', 120).join('\n');
-    expect(route).toContain('3 of 7');
-    expect(route).toContain('2 of 4');
-    expect(route).toContain('2 of 3 green');
+    expect(route).toContain('3/7');
+    expect(route).toContain('2/4');
+    expect(route).toContain('2/3 green');
     expect(route).toMatch(/1 running/);
     for (const l of rows('route', 120).slice(0, 9)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/);
   });

@@ -26,9 +26,9 @@ describe('band core row', () => {
     for (const columns of [120, 160]) {
       const rows = rowsOf(columns, 12, true);
       expect(rows[0]).toContain('idle');
-      expect(rows[1]).toContain('contract  ');
       expect(rows[1]).toContain('verdicts  ');
-      expect(rows.filter((r) => r.includes('contract  '))).toHaveLength(1);
+      expect(rows[1]).toContain('verdicts  ');
+      expect(rows.filter((r) => r.includes('verdicts  '))).toHaveLength(1);
     }
   });
   test('idle at 120 columns prints the shared core golden', () => {
@@ -36,7 +36,7 @@ describe('band core row', () => {
     expect(rowsOf(160, 12, true)[1]!.trimEnd()).toBe(coreGolden[160]);
   });
   test('a running band shows no core row: its rows go to workers', () => {
-    for (const columns of [80, 120, 160]) expect(rowsOf(columns, 12, false).some((r) => r.includes('contract  '))).toBe(false);
+    for (const columns of [80, 120, 160]) expect(rowsOf(columns, 12, false).some((r) => r.includes('verdicts  '))).toBe(false);
   });
   test('never more rows than maxRows', () => {
     for (const idle of [false, true])
@@ -46,14 +46,14 @@ describe('band core row', () => {
   });
   test('idle: no core, no extra row', () => {
     const without = rowsOf(160, 12, true, false);
-    expect(without.some((r) => r.includes('contract  '))).toBe(false);
+    expect(without.some((r) => r.includes('verdicts  '))).toBe(false);
     expect(rowsOf(160, 12, true)).toHaveLength(without.length + 1);
   });
   test('idle: the core row waits for room (the band, then core at 2 rows)', () => {
-    expect(rowsOf(160, 1, true).some((r) => r.includes('contract  '))).toBe(false);
-    expect(rowsOf(160, 2, true).some((r) => r.includes('contract  '))).toBe(true);
+    expect(rowsOf(160, 1, true).some((r) => r.includes('verdicts  '))).toBe(false);
+    expect(rowsOf(160, 2, true).some((r) => r.includes('verdicts  '))).toBe(true);
   });
   test('narrow bands (under 80 columns) show no core row', () => {
-    expect(rowsOf(70, 12, true).some((r) => r.includes('contract  '))).toBe(false);
+    expect(rowsOf(70, 12, true).some((r) => r.includes('verdicts  '))).toBe(false);
   });
 });

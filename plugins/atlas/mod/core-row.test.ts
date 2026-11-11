@@ -22,7 +22,7 @@ describe('core row', () => {
   });
   test('a muted lowercase label leads each group', () => {
     const labels = coreCells(model, 160).filter((c) => c.tone === 'muted' && /^[a-z]+ {2}$/.test(c.t)).map((c) => c.t.trim());
-    expect(labels).toEqual(['contract', 'verdicts']); // offload and a route that ran as planned are not on the band (critique 10 B3)
+    expect(labels).toEqual(['verdicts']); // offload and a route that ran as planned are not on the band (critique 10 B3)
   });
 });
 
@@ -80,7 +80,8 @@ describe('core row cells', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     m.contract = { header: { ok: 0, total: 0 }, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 0 };
-    expect(toneOf(coreCells(m, 300), 'no done items yet')).toBe('muted');
+    expect(cellsText(coreCells(m, 300))).not.toContain('contract'); // critique 12 B1: `contract no done items yet` beside `todo 1/5` (f0063) says nothing true: dropped
+    expect(cellsText(coreCells(m, 300))).not.toContain('no done items yet');
     m.contract = { header: { ok: 0, total: 0 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 0 };
     expect(toneOf(coreCells(m, 300), '2/2 done items carry evidence')).toBe('text');
     m.contract = { header: { ok: 1, total: 3 }, evidence: { ok: 1, total: 2 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 2 };

@@ -30,7 +30,7 @@ const panel = (width: number, core: PanelModel["core"], workers = 0): PanelModel
 	core,
 	idle: workers ? undefined : { workers: 3, secs: 91, failed: 0 },
 });
-const coreRow = (rows: string[]) => rows.map(strip).find((r) => r.includes("contract  "));
+const coreRow = (rows: string[]) => rows.map(strip).find((r) => r.includes("verdicts  "));
 
 for (const cols of [160, 120] as const) {
 	test(`panel core row equals coreGolden[${cols}] after ANSI strip`, () => {
@@ -44,12 +44,12 @@ for (const cols of [160, 120] as const) {
 test("the core row sits right under the band; the last run shares its row only when both fit 92 cells (critique 12 A3: the same rows at every width)", () => {
 	const rows = renderPanel(panel(160, fixtureModel())).map(strip);
 	expect(rows[0]).toContain("ATLAS");
-	const at = rows.findIndex((r) => r.includes("contract  "));
+	const at = rows.findIndex((r) => r.includes("verdicts  "));
 	expect(at).toBeGreaterThan(0);
 	expect(at).toBeLessThanOrEqual(2);
 	expect(rows.slice(1, 3).join("\n")).toContain("last run");
 	// the same rows at 105 and 93 columns (the 110 body and the docked 150 body)
-	const kinds = (cols: number) => renderPanel(panel(cols, fixtureModel())).map(strip).map((r) => (r.includes("contract  ") ? "contract" : r.includes("last run") ? "last" : "")).filter(Boolean).join(",");
+	const kinds = (cols: number) => renderPanel(panel(cols, fixtureModel())).map(strip).map((r) => (r.includes("verdicts  ") ? "contract" : r.includes("last run") ? "last" : "")).filter(Boolean).join(",");
 	for (const cols of [93, 105]) expect(kinds(cols)).toBe(kinds(160));
 });
 
@@ -60,7 +60,7 @@ test("a running panel keeps its rows for workers: no core row", () => {
 });
 
 test("labels are muted and only what is off takes colour (mocha hex as foreground)", () => {
-	const row = renderPanel(panel(160, fixtureModel())).find((r) => r.includes("contract  "))!;
+	const row = renderPanel(panel(160, fixtureModel())).find((r) => r.includes("verdicts  "))!;
 	expect(row).toContain("38;2;147;153;178"); // muted #9399b2 behind the labels
 	expect(row).toContain("38;2;243;139;168"); // bad #f38ba8: the refuted claim
 	expect(row).toContain("38;2;166;227;161"); // ok #a6e3a1: the verified claim

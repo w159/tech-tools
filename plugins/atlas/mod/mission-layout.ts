@@ -173,6 +173,8 @@ function phaseIndex(m: MissionModel): number {
 const openMore = (m: MissionModel): string => {
   const n = (m.openWork ?? 0) - (m.total - m.done);
   if (!m.total || n <= 0) return '';
+  // An open dispatch row of a worker that is listed running is that worker: `1 dispatch open` beside `◐ 1 running` said one fact twice (critique 12 B4, f0061). The agent count carries it.
+  if ((m.openDispatch ?? 0) >= n && n <= m.workers.filter((w) => w.state !== 'done' && w.state !== 'failed').length) return '';
   return (m.openDispatch ?? 0) >= n ? ` · ${n} ${n === 1 ? 'dispatch' : 'dispatches'} open` : ` · ${n} open`; // an open dispatch row is named: Stop refuses on it though the plan reads full
 };
 const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.todo ?? (m.total ? Math.min(1, m.done / m.total) : 0), ui);

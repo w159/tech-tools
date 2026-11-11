@@ -259,12 +259,12 @@ describe('5d. a task that just completed stays in the folded plan', () => {
 describe('6. the band footer says it in plain words', () => {
   test('idle band: no header n/m or evidence n/m tally', () => {
     for (const columns of [104, 138]) {
-      const row = bandRows(columns, true).find((r) => r.includes('contract'))!;
+      const row = bandRows(columns, true).find((r) => r.includes('verdicts'))!;
       expect(row).toBeDefined();
       expect(row).not.toMatch(/header \d+\/\d+/);
       expect(row).not.toMatch(/evidence \d+\/\d+/);
       expect(row).not.toMatch(/header/); // replies are a different unit from the plan: the gates tab holds that tally (critique 10 B4)
-      expect(row).toMatch(/\d+\/\d+ (done items carry )?evidence|no done items yet/);
+      expect(row).not.toContain('no done items yet'); // a zero the band cannot explain beside the plan count (critique 12 B1)
     }
   });
 });

@@ -5,7 +5,7 @@ import { bandTree } from './band';
 import { cellsText, coreCells } from './core-row';
 import type { Ui } from './atlas-ui';
 import { busySnap, NOW } from './live_fixture';
-import { gateTally, leadBusy } from './data/runstate';
+import { gateTally, leadBusy, withCoreTally } from './data/runstate';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -69,6 +69,39 @@ describe('B3: the contract cell never contradicts the plan', () => {
   test('some evidence on record: the cell stays and states it over the plan', () => {
     const m = { ...core(0), contract: { ...core(0).contract, evidence: { ok: 3, total: 5 } } };
     expect(cellsText(coreCells(m as never, 150, ui, 5))).toContain('3/5');
+  });
+});
+
+describe('critique 12 B1/B4: no unexplained zero, one phrase for one open dispatch', () => {
+  test('f0063: T1 done in the plan, the core model has no done item yet: no `no done items yet` beside the plan count', () => {
+    const empty = { ...core(0), contract: { ...core(0).contract, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 0, total: 0 } } };
+    expect(cellsText(coreCells(empty as never, 150, ui, 5))).not.toContain('no done items yet');
+    expect(cellsText(coreCells(empty as never, 150, ui, 5))).not.toContain('contract');
+  });
+  test('f0061: 1 dispatch open and 1 agent running is one fact: the band says `1 running`, not both', () => {
+    const rowsOf = (live: unknown[]) => ((bandTree(els, { snapshot: busySnap({ sessionId: SESSION, todos: doneStore('in_progress').map((t) => (t.status === 'completed' && t.origin === 'session' ? { ...t, status: 'pending' } : t)) } as never), live, gates: [], columns: 150, tick: 0, maxRows: 12, ui, core: null } as never) as unknown as Node).props.children as Node[]).map(text);
+    const out = rowsOf([{ name: 'gamma-explorer', role: 'explorer', state: 'working', tool: 'Read', lastTool: null, target: null, lastLine: '', calls: [], startedAt: NOW - 5000, since: NOW - 5000 }]).join('\n');
+    expect(out).toContain('running');
+    expect(out).not.toContain('dispatch open');
+  });
+  test('an open dispatch row with no worker running still reads `n dispatch open` (Stop refuses on it)', () => {
+    expect(rows(idle({ todos: doneStore('pending') }), [], 150, core(0)).join('\n')).toContain('5/5 · 1 dispatch open');
+  });
+});
+
+describe('critique 12 B2: the routing verdict has one source', () => {
+  const routes = [{ teamId: 'in-process:audit/low', name: 'in-process', cls: 'audit', effort: 'low', isolation: '', maxParallel: 3, transport: 'in-process', drift: ['explorer ran 3, seat plans 1'], seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
+  const driftCore = { ...core(0), routes };
+  const gates = [grp('completion', true), grp('routing', true)];
+  test('core drift makes the routing check warn on the band, the same group the gates tab shows', () => {
+    const done = idle({ todos: doneStore(), activity: lead(null, 'done') });
+    expect(rows(done, gates, 150, core(0)).join('\n')).not.toContain('▲ routing');
+    expect(rows(done, gates, 150, driftCore).join('\n')).toContain('▲ routing');
+  });
+  test('withCoreTally adds the drift line to the routing group only when a route drifted', () => {
+    expect(gateTally(withCoreTally(gates as never, core(0) as never) as never).green).toBe(2);
+    const t = gateTally(withCoreTally(gates as never, driftCore as never) as never);
+    expect([t.green, t.total, t.failing]).toEqual([1, 2, ['routing']]);
   });
 });
 

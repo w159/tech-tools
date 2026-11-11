@@ -10,7 +10,7 @@ import type { On, EngineInterface } from 'claude-code';
 import type { AtlasSnapshot } from './contract';
 import { headerPhaseOf } from './restyle';
 import type { HeaderCheck } from './gates';
-import { EMPTY_ORCH, LEAD, onToolEnd, onToolStart } from './data/orchestration';
+import { EMPTY_ORCH, LEAD, onStep, onToolEnd, onToolStart } from './data/orchestration';
 
 /** Inline tool output at or above this many chars (~1k tokens) counts as heavy. */
 export const HEAVY_CHARS = 4000;
@@ -111,6 +111,16 @@ async function trackToolEnd($: EngineInterface, agent: string): Promise<void> {
     await update($, orchState, (o) => onToolEnd(o, agent, t));
   } catch {
     // the activity feed never blocks a tool
+  }
+}
+
+/** A submitted prompt starts the lead's turn: `thinking` until a tool, the answer or an abort moves it (onStep keeps a tool in flight). */
+async function trackPromptSubmit($: EngineInterface): Promise<void> {
+  try {
+    const t = await $.clock.now();
+    await update($, orchState, (o) => onStep(o, LEAD, t));
+  } catch {
+    // the activity feed never blocks a prompt
   }
 }
 
@@ -238,6 +248,7 @@ export function registerDiscipline(on: On, deps: DisciplineDeps): void {
   });
 
   on('prompt.submit', async ($, e, next) => {
+    await trackPromptSubmit($); // the lead is busy from the submit (the host spinner shows), not from the first model step: the band never reads idle then (critique 12 B5)
     const context = await promptContext($, e, deps);
     return context === e.context ? next(e) : next({ ...e, context });
   });

@@ -10,7 +10,7 @@ import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from '.
 import { isPlanItem, ownTodos, planBasis, todoCounts } from './data/todos';
 import { openWork } from './data/core';
 import { blockedCount } from './board-model';
-import { gateTally, leadBusy, planBusy, ranWorkers, withHeaderTally } from './data/runstate';
+import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
 import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -118,7 +118,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const plan = planBasis(s.todos, s.sessionId);
   const owners = workerStates(s, b.live);
   const { done, total } = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
-  const tally = gateTally(withHeaderTally(b.gates, b.core?.contract.header)); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract included
+  const tally = gateTally(withCoreTally(b.gates, b.core)); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract and the dispatch plan included
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
   const working = active.filter((w) => w.state === 'working' || w.state === 'blocked');

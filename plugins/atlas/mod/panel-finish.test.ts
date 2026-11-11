@@ -47,20 +47,20 @@ describe('2: no middle ellipsis on a name the panel owns', () => {
     const gates = [{ id: 'g1', title: 'Completion gate', lines: [{ id: 'a', label: 'x', ok: false }, { id: 'b', label: 'y', ok: true }] }];
     const rows = body('gates', 45, { gates });
     expect(rows[0]).toContain('Completion gate');
-    expect(rows.join('\n')).toContain('1 of 2 green');
+    expect(rows.join('\n')).toContain('1/2 green');
   });
 });
 
-describe('3: one unit, `N of M word`', () => {
+describe('3: one count format, `n/m`, inside the panel (critique 12 B3)', () => {
   for (const cols of [150, 80, 60, 45, 38]) {
-    test(`no bare n/m on the route tab at ${cols}`, () => {
+    test(`no \`n of m\` on the route tab at ${cols}`, () => {
       const rows = body('route', cols);
-      expect(rows.join('\n')).not.toMatch(/\b\d+\/\d+\b/);
-      expect(rows.find((l) => l.startsWith(' gates'))).toMatch(/\d of \d green/);
+      expect(rows.filter((l) => /^ (phase|gates|todo) /.test(l)).join('\n')).not.toMatch(/\b\d+ of \d+\b/);
+      expect(rows.find((l) => l.startsWith(' gates'))).toMatch(/\d\/\d green/);
     });
   }
-  test('the phase row reads `n of m`', () => {
-    expect(body('route', 80).find((l) => l.startsWith(' phase'))).toMatch(/\d of \d$/);
+  test('the phase row reads `n/m`', () => {
+    expect(body('route', 80).find((l) => l.startsWith(' phase'))).toMatch(/\d\/\d$/);
   });
 });
 

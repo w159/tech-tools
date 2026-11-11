@@ -5,6 +5,11 @@
 - Critique 12 A1 (110 layout): the host places an unasked pane only from 144 columns, so a 110-column terminal gets the pane only on request (`register.ts` `DOCK_MIN_COLUMNS`). The dock check no longer ends at the first render: a terminal started narrow and widened to 144+ docks at the first render that fits, once.
 - Critique 12 A2: the route tab prints no owner column on a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`), and the column gives way before such a title is cut, so `read ...` and the doubled owner are gone at 110 and 150.
 - Critique 12 A3: one band form from 90 to 119 columns (`research · todo 0/5 · 1 dispatch open · ctx 7% · ◐ 1 running`, one ` · ` separator), so 110 (body 105) and a docked 150 (body 93) read alike; the last run joins the contract row by a fixed 92-cell rule, not by the body width.
+- Fixed (critique 12 B1): the band drops `contract no done items yet` (a zero it cannot explain beside `todo 1/5`); the core tab's `evidence 0/5` and `verified 0/5` now say why (`5 done without evidence`, `0 verified findings so far`), so the verified count against the plan shows in every frame with a plan (B6).
+- Fixed (critique 12 B2): one routing verdict. A dispatch route that ran off its plan fails the routing group (`withCoreTally`, mod/data/runstate.ts), so the band's `▲ routing`, the gates tab and the core row's `off plan` agree.
+- Fixed (critique 12 B3): the panel reads `n/m` everywhere (`2/4 green`, `phase research 2/4`, `todo 3/7`), no `2 of 4 green`; design goldens updated to match.
+- Fixed (critique 12 B4): `1 dispatch open` is not repeated beside `◐ 1 running` when the open dispatch row is the running worker.
+- Fixed (critique 12 B5): `prompt.submit` marks the lead thinking (mod/discipline.ts), so the band never reads `idle` from the submit to the first model step.
 
 ## 17.11.0 - 2026-11-11
 
