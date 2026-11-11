@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Live data path (`mod/register.ts`, `mod/notify.ts`): rebuild is serialized (one in flight, queued requests share one follow-up) and every snapshot carries a monotonic `seq` that notify and the snapshot write ignore when older, so a finish toast fires once; data-file changes reach the screen within ~100 ms through `fs.watch` when the engine offers it, with a 500 ms stat poll (was 1500 ms) as the fallback.
+
 ## 17.6.0 - 2026-11-11
 
 ### Fixed
