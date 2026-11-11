@@ -30,8 +30,8 @@ describe('core headings', () => {
 
 describe('contract figures: tone by tally', () => {
   const tone = (ok: number, total: number): string | undefined => {
-    const c = core({ contract: { header: { ok, total }, evidence: { ok: 0, total: 0 }, openGates: 0, verifiedDone: { ok: 0, total: 0 } } as never });
-    const word = total ? `${ok} of ${total}` : 'none yet';
+    const c = core({ contract: { header: { ok: 0, total: 0 }, evidence: { ok, total }, openGates: 0, verifiedDone: { ok: 0, total: 0 } } as never });
+    const word = total ? `${ok}/${panelWorld('core', 120, mocha).todos.length}` : 'none yet'; // the figure is over the plan, the tone over the done items
     return runs(c).find((x) => x.t.trim() === word)?.tone;
   };
   test('a whole tally reads plain, a short one warns, an empty one is muted', () => {

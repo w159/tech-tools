@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Band and gates speak one truth (critique 10, slice B): a failing check without a Stop refusal reads `warning` on the band footer, the gates tab and its goldens (`blocked: <reason>` stays for a refusal); the band never reads `idle` while a plan row runs (`busy` on the mission model, `planBusy` in `mod/data/runstate.ts`, both hosts); the band drops `offload` and shows a route only when it ran differently, as `planned audit/low, ran 3 explorers` (`plannedText`, shared with the core tab); the band and core tab drop the reply-header tally and count evidence over the plan (`3/5`), the band counts read `n/m` at every width (`mod/slice-b10.test.ts`).
+
 ## 17.10.0 - 2026-11-11
 
 - Fixed (wave 11 integration): the band shows Stop's open count beside the plan (`todo 5/5 · 1 open`) when store rows the plan does not carry are open, so a full plan never reads as all done while Stop would refuse (`openWork` on the mission model, from the core row's contract.open).

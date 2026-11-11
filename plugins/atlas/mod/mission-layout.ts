@@ -59,6 +59,8 @@ export type MissionModel = {
   todoBlocked?: number;
   /** Stop's open-item count (openWork, mod/data/core.ts). Open rows beyond the plan's own (dispatch rows the plan does not list) show as `· n open`, so `todo 5/5` never reads as all done while Stop would refuse. */
   openWork?: number;
+  /** The lead is mid-turn: a plan row is running (data/runstate planBusy, the HUD's TODO rule) though no worker is listed. The band never reads `idle` then. */
+  busy?: boolean;
   /** Workers to show: running, waiting, failed and recently finished (never parked). */
   workers: readonly MissionWorker[];
   /** The newest channel message. */
@@ -180,7 +182,7 @@ const GAUGE_MIN = 120;
 export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; reason: { long: string; short: string } } {
   const stopGates = m.stopGates ?? [];
   const blocked = !!m.blocked || stopGates.length > 0;
-  const quiet = !blocked && !isRunning(m);
+  const quiet = !blocked && !isRunning(m) && !m.busy;
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   const warn = quiet && failing.length > 0 ? warningText(failing) : undefined; // idle in every way but a failing check: a warning, not a block
   return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates) };
@@ -218,7 +220,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const counts = bandCounts(m, ui, true, noun, gap);
     return [
       ...cap, r('  '), ...name,
-      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${m.done} of ${m.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
+      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${m.done}/${m.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
       ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge && gauges ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
       ...(counts.length ? [r(gap), ...counts] : []),
     ];
@@ -244,14 +246,14 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   } else out.push({ runs: [...cap, r(`${idle ? ' idle' : ''}${todo ? `${quiet(m) ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...tail(tiny)], min: 0 });
   return out;
 }
-const quiet = (m: MissionModel): boolean => !m.blocked && !m.stopGates?.length && !isRunning(m);
+const quiet = (m: MissionModel): boolean => !m.blocked && !m.stopGates?.length && !isRunning(m) && !m.busy;
 
 /** The rich band: the capsule and the numbered phase rail, a blank row, then the todo and ctx gauges and the counts. */
 function richBand(m: MissionModel, ui: Ui): Line[] {
   const st = runStateOf(m);
   const { flagged: isBlocked, idle, reason } = st;
   const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(isBlocked ? [r('   '), ...flagHead(ui, st, reason.long)] : idle ? [r('   '), r('idle', 'text', true)] : [])];
-  const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done} of ${m.total} · ${percent(m.done / m.total)}${openMore(m)}`, 'sub')] : [];
+  const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done}/${m.total} · ${percent(m.done / m.total)}${openMore(m)}`, 'sub')] : [];
   const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxBar(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
   const counts = bandCounts(m, ui, true, true);
   const blocked = blockedRuns(m, ui, true);
@@ -366,7 +368,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
     [...join(checks), r(`  ${green}`, 'sub')],
     join(checks), // tight: the names and marks carry the figure
     failing.length ? [...join(failing), r(`  ${green}`, 'sub')] : [stateRun('done', ui), r(` ${green}`, 'sub')],
-    failing.length ? [stateRun('failed', ui), r(` ${plural(failing.length, 'failing')}`, 'text')] : [stateRun('done', ui)],
+    failing.length ? [stateRun('failed', ui), r(` ${plural(failing.length, 'warning')}`, 'text')] : [stateRun('done', ui)],
   ];
   const label = [r(' checks  ', 'muted')];
   for (const f of forms) if (runsWidth(label) + runsWidth(f) <= room) return [...label, ...f];

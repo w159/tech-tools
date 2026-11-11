@@ -140,7 +140,7 @@ describe('gates tab', () => {
   const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
   test('a group says how many fail in words and shows the first fix', () => {
     const row = rows('gates', 100, { gates: g() }).at(-1)!;
-    expect(row).toMatch(/^ {2}■ Completion gate {2}failing run the hooks suite +1 of 2 green$/);
+    expect(row).toMatch(/^ {2}■ Completion gate {2}warning run the hooks suite +1 of 2 green$/);
     expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });
   test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {
@@ -165,7 +165,7 @@ describe('gates tab', () => {
 describe('core tab', () => {
   test('contract, verdicts, offload and route sections with words on every figure', () => {
     const out = rows('core', 120, { core }).join('\n');
-    for (const w of [' contract', '  ▲ header   3 of 4', ' verdicts  1 verified · 1 refuted', ' reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', ' teams  3 this session']) expect(out).toContain(w);
+    for (const w of [' contract', ' verdicts  1 verified · 1 refuted', ' reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', ' teams  3 this session']) expect(out).toContain(w);
   });
   test('L16: three explorers on a one-seat route read ran 3 / planned 1 and drift, not 1x as planned', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;

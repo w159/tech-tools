@@ -69,7 +69,7 @@ const counts = (text: string): Partial<Record<UiState, number>> => {
   return out;
 };
 const todoOf = (text: string): [number, number] | undefined => {
-  const m = /(\d+) of (\d+)/.exec(text);
+  const m = /(\d+)(?: of |\/)(\d+)/.exec(text); // the band reads `4/5`, the HUD and the route tab `4 of 5`
   return m ? [Number(m[1]), Number(m[2])] : undefined;
 };
 /** `● lint  ■ doctor`: glyph and name pairs for the world's gates; the glyph says ok or not. */
@@ -172,7 +172,8 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
     f.gates = gatePairs(text);
     f.gatesGreen = /(\d+) of (\d+) green/.exec(text)?.slice(1, 3).join('/');
   }
-  if (tab === 'core') f.todo = [Number(/evidence\s+\d+ of (\d+)/.exec(text)?.[1]), world.todos.length];
+  // the core tab's evidence figure is `n/m` over the plan (critique 10 B4): only its m is the plan total; its n counts evidence, not done rows, so the done count is the world's own
+  if (tab === 'core') f.todo = [done, Number(/evidence\s+\d+\/(\d+)/.exec(text)?.[1])];
   return f;
 }
 

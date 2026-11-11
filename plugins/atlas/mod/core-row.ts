@@ -2,8 +2,8 @@
 // verdicts, offload, route), each a dim lowercase label and its plain figures. Only what is off takes colour (a
 // refuted claim red, a partial tally amber). Cells are mission-layout runs, so the Claude band and the omp mission
 // panel paint identical text. Golden: contracts/core-golden.ts.
-import { type CoreModel, type Route, type Verdict, hasCore, tok } from "./data/core";
-import { stateGlyph, uiFromEnv, type Ui } from "./atlas-ui";
+import { type CoreModel, type Route, type Verdict, hasCore, plannedText, tok } from "./data/core";
+import { uiFromEnv, type Ui } from "./atlas-ui";
 import { type Run, runsText, runsWidth, type Tone } from "./mission-layout";
 
 /** Core cells are layout runs: a tone, not a colour (mission-layout.ts TONE_HEX paints them on both harnesses). */
@@ -14,9 +14,6 @@ const label = (t: string): Cell => ({ t: `${t}  `, tone: "muted" });
 const sep: Cell = c(" · ", "muted");
 const gap: Cell = c("   ");
 
-/** A state mark from the glyph map (never a literal check, cross or ellipsis). */
-const mark = (state: "queued" | "done" | "failed", ui: Ui): string => stateGlyph(state, ui);
-
 /** `4.3x`, `18x`: the kept-to-returned ratio, one decimal below 10. Empty for none. */
 export const ratioText = (r: number | null): string =>
   r === null ? "" : `${r >= 10 ? Math.round(r) : r.toFixed(1)}x`;
@@ -26,15 +23,14 @@ const tally = (ok: number, total: number): string => (total ? `${ok} of ${total}
 const toneOf = (ok: number, total: number): Tone => (!total ? "muted" : ok === total ? "text" : "warn");
 const joinSep = (parts: Cell[]): Cell[] => parts.flatMap((p, i) => (i ? [sep, p] : [p]));
 
-/** `contract  3 of 4 headers · 7 of 7 done with evidence` in words: the replies that opened with the ATLAS header and the done items that carry
- * evidence. Full reads `3 of 4 replies opened with the ATLAS header · 7 of 7 done items carry evidence` (the /atlas-core report's wording);
- * compact drops the evidence tally when no done item exists yet. */
-function contract(m: CoreModel, full: boolean): Cell[] {
-  const { header: h, evidence: e } = m.contract;
-  const of = (ok: number, total: number): string => `${ok} of ${total}`;
-  const parts = [c(h.total ? (full ? `${of(h.ok, h.total)} replies opened with the ATLAS header` : `${of(h.ok, h.total)} headers`) : "no headers yet", toneOf(h.ok, h.total))];
-  if (full || e.total) parts.push(c(e.total ? (full ? `${of(e.ok, e.total)} done items carry evidence` : `${of(e.ok, e.total)} done with evidence`) : "no done items yet", toneOf(e.ok, e.total)));
-  return [label("contract"), ...joinSep(parts)];
+/** `contract  3/5 evidence`: the done items that carry evidence over the plan's items (`plan`, the same denominator as the band's `todo n/m`; the done
+ * items when no plan is known). The header tally counts replies, a different unit, so it is not on the band (the gates tab holds it). Full reads
+ * `3/5 done items carry evidence`. */
+function contract(m: CoreModel, full: boolean, _ui: Ui, plan?: number): Cell[] {
+  const e = m.contract.evidence;
+  const total = plan && plan > 0 ? Math.max(plan, e.ok) : e.total;
+  const of = `${e.ok}/${total}`;
+  return [label("contract"), c(e.total ? (full ? `${of} done items carry evidence` : `${of} evidence`) : "no done items yet", toneOf(e.ok, e.total))] // amber when a done item lacks evidence: the figure is over the plan, the tone over the done items;
 }
 
 /** `verdicts  1 verified · 1 refuted`; a refuted claim is red, open and unchecked ones amber. Full adds the claim
@@ -58,43 +54,30 @@ function verdict(m: CoreModel, full: boolean): Cell[] {
   return [label("verdicts"), ...joinSep(parts)];
 }
 
-/** `offload  17.9k kept in 3 workers, 608 back (30x)`; compact `offload  17.9k kept, 608 back (30x)`. */
-function offload(m: CoreModel, full: boolean): Cell[] {
-  const o = m.offload;
-  if (!o.workers.length) return [label("offload"), c("none yet", "muted")];
-  const ratio = ratioText(o.ratio);
-  const n = o.workers.length;
-  const body = full ? `${tok(o.kept)} kept in ${n} worker${n === 1 ? "" : "s"}, ${tok(o.returned)} back` : `${tok(o.kept)} kept, ${tok(o.returned)} back`;
-  return [label("offload"), c(body), ...(ratio ? [c(` (${ratio})`, "muted")] : [])];
-}
-
-/** The newest route: `route  fix/low: implementer sonnet ●`; a drifted seat reads `■ drift` in red; `+N more` older routes. */
-function route(m: CoreModel, full: boolean, ui: Ui): Cell[] {
+/** The newest route, only when it ran differently from its plan: `route  planned audit/low, ran 3 explorers`. A team that ran as planned is not news on the band
+ * (the core tab lists every team); nothing without one. */
+function route(m: CoreModel): Cell[] {
   const r: Route | undefined = m.routes[m.routes.length - 1];
-  if (!r) return [label("route"), c("no team yet", "muted")];
-  const seats = r.seats.map((s) => `${s.count > 1 ? `${s.count}× ` : ""}${s.role} ${s.model}`).join(", ");
-  const ran = r.seats.some((s) => s.ran.length);
-  const markCell = r.drift.length ? c(` ${mark("failed", ui)} drift`, "bad") : ran ? c(` ${mark("done", ui)}`, "ok") : c(` ${mark("queued", ui)}`, "muted");
-  const more = full && m.routes.length > 1 ? [c(` +${m.routes.length - 1} more`, "muted")] : [];
-  return [label("route"), c(`${r.cls}/${r.effort}`), ...(full ? [c(": ", "muted"), c(seats || "?")] : []), markCell, ...more];
+  return r && r.drift.length ? [label("route"), c(plannedText(r), "warn")] : [];
 }
 
 export const cellsWidth = (cells: readonly Cell[]): number => runsWidth(cells);
 /** The row's plain text, for goldens and text surfaces. */
 export const cellsText = (cells: readonly Cell[]): string => runsText(cells);
 
-type Group = (m: CoreModel, full: boolean, ui: Ui) => Cell[];
-const GROUPS: readonly Group[] = [contract, verdict, offload, route];
-/** Which groups widen first when there is room: the adversarial ledger, then the route, the offload, the contract. */
-const WIDEN: readonly number[] = [1, 3, 2, 0];
+type Group = (m: CoreModel, full: boolean, ui: Ui, plan?: number) => Cell[];
+const GROUPS: readonly Group[] = [contract, verdict, route];
+/** Which groups widen first when there is room: the adversarial ledger, then the contract. (The route group has no wide form.) */
+const WIDEN: readonly number[] = [1, 0];
 
-/** All four groups, compact, then each widened to its full form in WIDEN order while the row still fits `cols`
- * (one leading cell). Narrower than four compact groups: contract + verdicts only. Empty without core data or room. */
-export function coreCells(m: CoreModel | null | undefined, cols: number, ui: Ui = uiFromEnv()): Cell[] {
+/** The groups, compact, then each widened to its full form in WIDEN order while the row still fits `cols` (one leading cell). A group with nothing to say
+ * (a route that ran as planned) is left out. Narrower than the groups together: contract + verdicts only. Empty without core data or room. `plan`: the
+ * plan's item count, the denominator of the contract's evidence figure. */
+export function coreCells(m: CoreModel | null | undefined, cols: number, ui: Ui = uiFromEnv(), plan?: number): Cell[] {
   if (!hasCore(m)) return [];
   const build = (full: readonly boolean[], groups: readonly Group[] = GROUPS): Cell[] =>
-    [c(" "), ...groups.flatMap((g, i) => [...(i ? [gap] : []), ...g(m, full[i] ?? false, ui)])];
-  const full = [false, false, false, false];
+    [c(" "), ...groups.map((g, i) => g(m, full[i] ?? false, ui, plan)).filter((cs) => cs.length).flatMap((cs, i) => [...(i ? [gap] : []), ...cs])];
+  const full = [false, false, false];
   if (cellsWidth(build(full)) > cols) {
     const two = build(full, GROUPS.slice(0, 2));
     return cellsWidth(two) <= cols ? two : [];

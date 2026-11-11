@@ -10,7 +10,7 @@ import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan,
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
-import { hasCore, tok, type CoreModel, type Verdict } from './data/core';
+import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withHeaderTally } from './data/runstate';
 import { displayName } from './hud';
@@ -537,7 +537,7 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
   ];
 }
 
-const GATE_WORD_W = 7; // `passing` and `failing`
+const GATE_WORD_W = 7; // `passing` and `warning`
 /** `2 of 3 green`: the group's checks that pass, the value column (the unit the tab ribbon uses); empty while the group passes. */
 const gateValue = (g: PanelGate): string => (groupFailing(g) ? `${g.lines.length - groupFailing(g)} of ${g.lines.length} green` : '');
 
@@ -549,7 +549,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
   // What is wrong follows the word: the first fix, else (while the group is closed) the failing check's name. Once the checks are listed the name is
   // their own row, never said twice; a passing group says nothing here (a check's detail belongs to its row, never beside another's name).
   const tail = g.error ? `unavailable: ${oneLine(g.error)}` : bad ? oneLine(first?.fix ?? (open ? '' : first?.label)) : '';
-  const word = bad || g.error ? 'failing' : 'passing';
+  const word = bad || g.error ? 'warning' : 'passing';
   // The green count is the right-aligned value; the tail follows the word when it fits whole, else wraps under.
   const value = showValue ? gateValue(g) : '';
   const fixed = GRID_LEAD + nameW + 2 + GATE_WORD_W + (value ? cells(value) + 1 : 0) + 1;
@@ -621,15 +621,18 @@ const VERDICT_CAP = 8;
 const OFFLOAD_CAP = 8;
 const TEAM_CAP = 6;
 
-/** `contract`: three rows, each `glyph name  n of m`; the figure sits in the word column, whole at any width. */
+/** `contract`: `evidence` and `verified`, each `glyph name  n/m` over the plan's items (the denominator of the band's `todo n/m`; the done items when the pane has no
+ * plan). The header tally counts replies, a different unit: it lives on the gates tab (Header contract), not here. */
 function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
-  const { header: h, evidence: e, verifiedDone: v } = c.contract;
-  const items: [string, { ok: number; total: number }][] = [['header', h], ['evidence', e], ['verified', v]];
+  const { evidence: e, verifiedDone: v } = c.contract;
+  const plan = m.todos.length;
+  const over = (t: { total: number; ok: number }): number => (plan > 0 && t.total > 0 ? Math.max(plan, t.ok) : t.total); // the figure's denominator; the tone and mark read the done items (amber when one lacks evidence)
+  const items: [string, { ok: number; total: number }][] = [['evidence', e], ['verified', v]];
   return [
     heading('contract', [], m),
     ...items.map(([name, t]) => line(fitRuns(gridRow({
       cols: m.cols, ui: m.ui, mark: stateRun(!t.total ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
-      name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok} of ${t.total}` : 'none yet', tone: tallyTone(t.ok, t.total) }, wordW: 8,
+      name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: tallyTone(t.ok, t.total) }, wordW: 8,
     }), m.cols))),
   ];
 }
@@ -722,9 +725,8 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
   };
   const rows = teams.flatMap((rt): PanelLine[] => {
     const teamName = `${rt.cls}/${rt.effort}`;
-    // A team that ran differently says what happened, in words: `planned audit/low, ran 3 explorers`.
-    const ranWords = rt.seats.filter((s) => s.ran.length).map((s) => `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'}`).join(', ');
-    const headName = rt.drift.length ? `planned ${teamName}, ran ${ranWords || 'nothing'}` : teamName;
+    // A team that ran differently says what happened, in words: `planned audit/low, ran 3 explorers` (data/core plannedText, the band's wording).
+    const headName = rt.drift.length ? plannedText(rt) : teamName;
     const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('failed', m.ui) : null, name: { t: headName, bold: true }, nameW: Math.min(cells(headName), Math.max(1, m.cols - GRID_LEAD)) });
     const seats = rt.seats.flatMap((s): PanelLine[] => {
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');

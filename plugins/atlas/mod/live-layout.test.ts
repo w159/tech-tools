@@ -263,7 +263,8 @@ describe('6. the band footer says it in plain words', () => {
       expect(row).toBeDefined();
       expect(row).not.toMatch(/header \d+\/\d+/);
       expect(row).not.toMatch(/evidence \d+\/\d+/);
-      expect(row).toMatch(/\d+ of \d+/);
+      expect(row).not.toMatch(/header/); // replies are a different unit from the plan: the gates tab holds that tally (critique 10 B4)
+      expect(row).toMatch(/\d+\/\d+ (done items carry )?evidence|no done items yet/);
     }
   });
 });

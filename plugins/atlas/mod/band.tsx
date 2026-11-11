@@ -9,7 +9,7 @@ import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
 import { ownTodos, planBasis, todoCounts } from './data/todos';
 import { blockedCount } from './board-model';
-import { gateTally, ranWorkers, withHeaderTally } from './data/runstate';
+import { gateTally, planBusy, ranWorkers, withHeaderTally } from './data/runstate';
 import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -106,6 +106,8 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const lingering = all.filter((w) => w.state === 'done' && now - w.since <= LINGER_MS);
   const queued = queuedMembers(s).map((name): MissionWorker => ({ name, role: name.includes('-') ? name.replace(/-[^-]*$/, '') : undefined, state: 'queued', secs: 0 })); // dispatched, not listed by the host yet
   const shown = active.length || queued.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
+  const plan = planBasis(s.todos, s.sessionId);
+  const owners = workerStates(s, b.live);
   const { done, total } = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
   const tally = gateTally(withHeaderTally(b.gates, b.core?.contract.header)); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract included
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
@@ -115,13 +117,14 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now,
     project: boardOf(s), scope: b.team,
     phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
-    done, total, openWork: b.core?.contract.open, todoBlocked: blockedCount(planBasis(s.todos, s.sessionId), workerStates(s, b.live)),
+    done, total, openWork: b.core?.contract.open, todoBlocked: blockedCount(plan, owners),
+    busy: planBusy(plan, owners),
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
     lastRun: lastRun(all, now, ownTodos(s.todos, s.sessionId).filter((t) => t.origin === 'dispatch' && t.owner).map((t) => t.owner!)),
-    core: coreCells(b.core, Math.max(1, b.columns), b.ui),
+    core: coreCells(b.core, Math.max(1, b.columns), b.ui, total),
     boardRows: b.todoExpanded && ownTodos(s.todos, s.sessionId).length ? ownTodos(s.todos, s.sessionId).length + 1 : 0,
     ctx: s.contextPct > 0 ? Math.min(1, s.contextPct / 100) : undefined,
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',

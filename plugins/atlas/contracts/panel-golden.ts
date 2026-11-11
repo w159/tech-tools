@@ -279,7 +279,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  failing                                                                                         0 of 1 green",
+      "  ■ doctor  warning                                                                                         0 of 1 green",
       "  ■   doctor"
     ],
     80: [
@@ -291,7 +291,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  failing                                                 0 of 1 green",
+      "  ■ doctor  warning                                                 0 of 1 green",
       "  ■   doctor"
     ],
     56: [
@@ -303,7 +303,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  failing                         0 of 1 green",
+      "  ■ doctor  warning                         0 of 1 green",
       "  ■   doctor"
     ]
   },
@@ -315,7 +315,6 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "                                            ━━━━",
       "",
       " contract",
-      "  ▲ header   3 of 4",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",
       "",
@@ -343,7 +342,6 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "                                            ━━━━",
       " contract",
-      "  ▲ header   3 of 4",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",
       "",
@@ -372,7 +370,6 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "r: route  t: team  c: chan  g: gates  k: core  o: board",
       "                                         ━━━━",
       " contract",
-      "  ▲ header   3 of 4",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",
       "",
