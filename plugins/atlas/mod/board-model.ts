@@ -10,7 +10,7 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { clip, gauge, ribbon, runsCells, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, clip, gauge, ribbon, runsCells, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */
@@ -19,6 +19,7 @@ export type BoardRow = { label: string; state: UiState; owner: string; detail: s
 /** Column starts of the full form, and the compact form's state column. */
 export const COL = { state: 30, owner: 42, detail: 62, stateCompact: 26 } as const;
 export const OWNER_W = 18;
+const STATE_W = 7; // the longest state word (running, waiting)
 export const FULL_MIN = 100;
 export const COMPACT_MIN = 60;
 
@@ -100,7 +101,8 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 /** Pad `runs` with spaces to reach cell `col` (a single space when the cursor is already past it). */
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number };
+/** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; stateCol?: number };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= COMPACT_MIN ? 'compact' : 'narrow');
 
@@ -124,7 +126,7 @@ export function boardRow(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
     f === 'full' ? (row.state === 'done' ? r(clip(row.label, w), 'sub', { strike: true }) : r(clip(row.label, w), 'text', { bold: focus }))
       : r(clip(row.label, w), f === 'narrow' && row.state === 'done' ? 'sub' : 'text');
   if (f === 'narrow') return [...head, labelRun(Math.max(1, o.cols - 4))];
-  const stateCol = f === 'full' ? COL.state : COL.stateCompact;
+  const stateCol = f === 'full' ? COL.state : (o.stateCol ?? COL.stateCompact);
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
   if (f === 'compact') return [...withLabel, r(row.state)];
   const stateCell = o.rich ? stateChip(row.state, o.ui) : r(row.state);
@@ -144,7 +146,9 @@ export type BoardLine = { runs: Run[] };
 /** The rows alone: the header (full form) and one line per item. The band's inline board slot draws these. */
 export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const focus = rows.findIndex((x) => x.focus ?? x.state === 'running');
-  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, o) }));
+  // Compact form: the state column slides right to fit the widest label, never past the room the longest state word needs.
+  const stateCol = form(o.cols) === 'compact' ? Math.max(COL.stateCompact, Math.min(o.cols - STATE_W - 1, Math.max(0, ...rows.map((x) => cells(x.label))) + 7)) : undefined;
+  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol }) }));
   return form(o.cols) === 'full' ? [{ runs: boardHeader() }, ...lines] : lines;
 }
 

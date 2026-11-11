@@ -42,6 +42,16 @@ describe('board goldens', () => {
     expect(text[6]).toStartWith('> | Subagents block');
     expect(text[6]).toContain('[ RUNNING ]');
   });
+  test('the 60-cell pane gives the label the room left: five full labels survive, none cut to 18', () => {
+    const labels = ['T1 read alpha.py (alpha-explorer)', 'T4 combine the three reports', 'List the function names', 'T2 read beta.py (beta-explorer)', 'Subagents block'];
+    const rows = labels.map((label) => ({ label, state: 'done' as const, owner: '', detail: '' }));
+    const text = boardText(boardBody(rows, { cols: 60, ui: ui('mocha') }));
+    for (const label of labels) expect(text.some((t) => t.includes(label))).toBe(true);
+  });
+  test('at 30 cells no board row exceeds 30 cells', () => {
+    const rows = ['T1 read alpha.py (alpha-explorer)', 'T4 combine the three reports'].map((label) => ({ label, state: 'running' as const, owner: 'alpha-explorer', detail: 'x' }));
+    for (const l of boardLines(rows, { cols: 30, ui: ui('mocha') })) expect(runsWidth(l.runs)).toBeLessThanOrEqual(30);
+  });
   test('narrow widths keep marker, glyph and label, and never overflow', () => {
     for (const cols of [40, 59, 60, 79, 99, 100]) {
       for (const l of boardLines(worldBoardRows(), { cols, ui: ui('mocha') })) expect([cols, runsWidth(l.runs) <= cols]).toEqual([cols, true]);

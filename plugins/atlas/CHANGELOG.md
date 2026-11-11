@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Board labels in the 60 to 99 cell form (the shown side pane) are no longer cut at 18 cells: the state column slides right to fit the widest label (`mod/board-model.ts`, shared with omp).
+
 ### Added
 
 - ATLAS design system rev 4 primitives and the redesigned Mission Control band, identical on Claude Code (`mod/band.tsx`) and omp (`omp/mission-panel.ts`):
