@@ -97,7 +97,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const ev = flat(t.evidence);
     const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || flat(t.owner);
     const detail = ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base;
-    return { label: labelOf(t), state, detail, focus: false };
+    return { label: labelOf(t), state, detail, focus: false, ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
   const at = rows.findIndex((r) => r.state === 'running');
   const focus = at >= 0 ? at : rows.findIndex((r) => r.state !== 'done');
@@ -139,7 +139,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
     s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.flatMap((a): [string, UiState][] => [[a.name, a.ui ?? workerUiState(a.state)], ...(a.key !== undefined ? [[a.key, a.ui ?? workerUiState(a.state)] as [string, UiState]] : [])]))), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
-    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.motion ? { motion: opts.motion } : {}) },
+    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}) },
   };
 }
 

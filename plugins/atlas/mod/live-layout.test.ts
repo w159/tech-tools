@@ -209,6 +209,44 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   });
 });
 
+describe('5c. an idle band that leaves rows undrawn hands them to the plan', () => {
+  const doneAgent = (name: string): HudAgent => ({ name, role: 'explorer', state: 'done', model: 'haiku', ui: 'done', since: NOW });
+  const plan = PLAN.map((t, i) => ({ ...t, status: i === 0 || i === 2 ? 'completed' : 'pending' }));
+  const hudIn: HudInput = { todos: plan, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(doneAgent) };
+  const budget = 15;
+  const cols = 104;
+  const snapshot = busySnap({ squad: [], activity: {}, comms: [] }); // idle: nothing running, so the band draws fewer rows than it is allotted
+  const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: cols, tick: 0, maxRows, workersInHud: true, ui });
+  const draw = (maxRows: number) => hudLines(hudIn, { cols, maxRows, ui, rich: false, now: NOW });
+  test('every plan row is shown and no "more todos not shown" row appears', () => {
+    const cap = hudBudget(budget, hudCompactRows(hudIn, cols), 7, false);
+    const first = draw(cap);
+    const hud = reclaimBlanks(first, cap, budget, (h) => bandSpareRows(bandModel(budget - h.length)), draw);
+    const rows = hud.map(runsString);
+    expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
+    expect(rows.some((r) => /more todos? not shown/.test(r))).toBe(false);
+    expect(hud.length).toBeLessThanOrEqual(budget);
+  });
+  test('the HUD at the cap alone folds when the band is allotted its seven rows: the defect', () => {
+    const cap = hudBudget(budget, hudCompactRows(hudIn, cols), 7, false);
+    expect(bandSpareRows(bandModel(budget - cap))).toBeGreaterThan(0);
+  });
+});
+
+describe('5d. a task that just completed stays in the folded plan', () => {
+  test('T3 completed 5 s ago is shown beside the running row while queued rows fold', () => {
+    const at = Math.floor(NOW / 1000) - 5;
+    const plan: TodoItem[] = [
+      { ...todo('t1', 'T1 read alpha.py', 'completed'), completed_at: at - 600 }, { ...todo('t2', 'T2 read beta.py', 'in_progress'), claimed_at: at - 60 },
+      { ...todo('t3', 'T3 read gamma.py', 'completed'), completed_at: at }, todo('t4', 'T4 combine the reports', 'pending'), todo('t5', 'T5 write the summary', 'pending'),
+    ];
+    const rows = hudLines({ todos: plan, agents: [] }, { cols: 104, maxRows: 4, ui, rich: false, now: NOW }).map(runsString);
+    expect(rows.some((r) => r.includes('T3 read gamma.py'))).toBe(true);
+    expect(rows.some((r) => r.includes('T2 read beta.py'))).toBe(true);
+    expect(rows.some((r) => /\d+ more todos? not shown/.test(r))).toBe(true);
+  });
+});
+
 describe('6. the band footer says it in plain words', () => {
   test('idle band: no header n/m or evidence n/m tally', () => {
     for (const columns of [104, 138]) {

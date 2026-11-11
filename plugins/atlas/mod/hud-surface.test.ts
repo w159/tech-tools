@@ -120,6 +120,15 @@ describe('row budget never hides rows silently', () => {
     expect(hidden).toBe(6);
     expect(shown.map((r) => r.label)).toEqual(['Item 4', 'Item 5', 'Item 6', 'Item 7']);
   });
+  test('a row that completed within LINGER_MS stays visible when queued rows compete; older done rows fold first, newest first', () => {
+    const NOW = 1_000_000;
+    const row = (label: string, state: TodoRow['state'], doneAt?: number): TodoRow => ({ label, state, detail: '', focus: false, ...(doneAt !== undefined ? { doneAt } : {}) });
+    const rows = [row('old done', 'done', NOW - 90_000), row('q1', 'queued'), row('fresh done', 'done', NOW - 5_000), row('q2', 'queued')];
+    expect(windowRows(rows, 3, NOW).shown.map((r) => r.label)).toContain('fresh done'); // keep 2: the fresh done row and one queued row
+    expect(windowRows(rows, 3, NOW).shown.map((r) => r.label)).toEqual(['q1', 'fresh done']);
+    const dones = [row('d1', 'done', NOW - 90_000), row('d2', 'done', NOW - 60_000), row('d3', 'done', NOW - 80_000)];
+    expect(windowRows(dones, 2, NOW).shown.map((r) => r.label)).toEqual(['d2']); // newest completion first, not plan order
+  });
   test('a running agent keeps its row before the plan keeps its last row', () => {
     const rows = text(fitStack({ todos: many(10), agents: worldAgents() }, opts(120), 6));
     expect(rows.length).toBeLessThanOrEqual(6);

@@ -178,7 +178,8 @@ export function missionTree(els: ClientElements, m: MissionModel, todoRows: (row
   return panel(els, rows, m.cols, ui);
 }
 
-/** Breathing blanks the running band draws at `b.maxRows` (rows of spaces only; a board slot or the key footer never counts): the rows the HUD can have instead. */
+/** Rows the HUD can have instead of the band's: the breathing blanks it draws at `b.maxRows` (rows of spaces only; a board slot or the key footer never counts),
+ * plus the allotted rows it does not draw at all (an idle band stops short of its slot). */
 /** What the Motion observes of the band: each state's agent count (the counts the header draws). */
 export const bandCountItems = (b: BandModel): MotionItem[] => bandMotionItems(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() }));
 
@@ -186,7 +187,10 @@ export function bandSpareRows(b: BandModel): number {
   const maxRows = b.maxRows ?? 12;
   if (maxRows < 1) return 0;
   const m = missionModel({ ...b, maxRows, ui: b.ui ?? uiFromEnv() });
-  return missionLines(m).filter((l) => !l.board && !l.keys && l.runs.every((x) => x.t.trim() === '')).length;
+  const lines = missionLines(m);
+  const blanks = lines.filter((l) => !l.board && !l.keys && l.runs.every((x) => x.t.trim() === '')).length;
+  const drawn = lines.reduce((n, l) => n + (l.board ?? 1), 0); // a board slot counts as the rows it holds
+  return blanks + Math.max(0, maxRows - drawn);
 }
 
 export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): RenderElement {
