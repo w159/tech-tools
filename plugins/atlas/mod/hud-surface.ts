@@ -3,6 +3,7 @@
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, type MotionCtx } from './motion';
+import { clipWords, lastText } from './data/lasttext';
 import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, percent, ribbon, runsCells, spinFrameOf, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
@@ -153,7 +154,6 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
 }
 
 const TASK_W = 5; // `T1,T2`: the task column's width when every agent's ids fit
-const TASK_MAX = 18;
 /** Every owned id (`T1,T2`) when they fit `width`, else the count (`3 tasks`); an agent that owns none shows nothing. */
 export const taskCell = (tasks: readonly number[], width: number = TASK_W): string => {
   const ids = tasks.map((n) => `T${n}`).join(',');
@@ -161,10 +161,11 @@ export const taskCell = (tasks: readonly number[], width: number = TASK_W): stri
 };
 /** The TASK cell of a row: its plan ids, else the agent's own task text (the dispatch description). */
 const taskText = (r: AgentRow): string => (r.tasks.length > 0 ? taskCell(r.tasks) : flat(r.task ?? ''));
-/** The task column's width: wide enough for the longest cell, at most TASK_MAX. */
-const taskWidth = (rows: readonly AgentRow[]): number => Math.min(TASK_MAX, rows.reduce((n, r) => Math.max(n, cells(taskText(r))), TASK_W));
+/** The task column's width: wide enough for the longest cell (a dispatch description is shown whole while any room is left, see agentCols). */
+const taskWidth = (rows: readonly AgentRow[]): number => rows.reduce((n, r) => Math.max(n, cells(taskText(r))), TASK_W);
 
-/** Which optional columns fit, and where they start. A narrow row drops columns in this order: last text, task, model. A model or task cell is never cut; the last text end-clips from LAST_MIN cells. */
+/** Which optional columns fit, and where they start. A narrow row drops LAST first, then MODEL, before a TASK is cut (the model gives its cells to the task);
+ * only when the task alone still does not fit is it ended on a whole word. A name is never cut here. The last text ends on a whole word from LAST_MIN cells. */
 type AgentCols = { model?: number; modelW: number; task?: number; taskW: number; last?: number; ctx?: number };
 const LAST_MIN = 8;
 function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number): AgentCols {
@@ -181,13 +182,17 @@ function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, sta
     return plan;
   }
   const modelAt = stateAt + 12;
-  if (modelAt + modelW > cols) return plan;
-  plan.model = modelAt;
   const taskAt = modelAt + modelW + 1;
-  if (taskAt + plan.taskW > cols) return plan;
-  plan.task = taskAt;
-  const lastAt = taskAt + plan.taskW + 1;
-  if (lastAt + LAST_MIN <= cols) plan.last = lastAt;
+  const fullTask = taskAt + plan.taskW <= cols;
+  if (fullTask) { // model, whole task, and the last text when it has LAST_MIN cells left
+    plan.model = modelAt;
+    plan.task = taskAt;
+    const lastAt = taskAt + plan.taskW + 1;
+    if (lastAt + LAST_MIN <= cols) plan.last = lastAt;
+    return plan;
+  }
+  // The task does not fit beside the model: the model goes (LAST went already), the task takes its place, whole when it fits there.
+  if (modelAt + TASK_W <= cols) { plan.task = modelAt; plan.taskW = Math.min(plan.taskW, cols - modelAt); }
   return plan;
 }
 
@@ -210,13 +215,17 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   const { ui, cols } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.name)), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state)];
-  const cell = (text: string, at: number | undefined, width: number): void => {
-    if (text !== '' && at !== undefined) row = [...toCol(row, at), t(clip(flat(text), Math.max(1, Math.min(width, cols - at))), 'sub')];
+  /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. */
+  const cell = (text: string, at: number | undefined, width: number, words = false): void => {
+    if (text === '' || at === undefined) return;
+    const room = Math.max(1, Math.min(width, cols - at));
+    const shown = words ? clipWords(flat(text), room) : clip(flat(text), room);
+    if (shown !== '') row = [...toCol(row, at), t(shown, 'sub')];
   };
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
   cell(r.model, plan.model, plan.modelW);
-  if (!rich) cell(taskText(r), plan.task, plan.taskW);
-  cell(r.tool, plan.last, cols);
+  if (!rich) cell(taskText(r), plan.task, plan.taskW, true);
+  cell(lastText(r.tool), plan.last, cols, true);
   return row;
 }
 

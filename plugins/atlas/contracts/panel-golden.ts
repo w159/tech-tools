@@ -279,7 +279,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  failing doctor                                                                                1 of 1 failing",
+      "  ■ doctor  failing                                                                                         0 of 1 green",
       "  ■   doctor"
     ],
     80: [
@@ -291,7 +291,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  failing doctor                                        1 of 1 failing",
+      "  ■ doctor  failing                                                 0 of 1 green",
       "  ■   doctor"
     ],
     56: [
@@ -303,7 +303,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  failing doctor                1 of 1 failing",
+      "  ■ doctor  failing                         0 of 1 green",
       "  ■   doctor"
     ]
   },

@@ -200,7 +200,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const m = missionModel({ ...b, maxRows, ui });
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
   const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
-  const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
+  const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0, hintWidth: textWidth(BAND_HINT) + 3 });
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), nowMs: b.snapshot.now, ui, rich: m.rich, motion: b.motion });
     if (l.keys && on) return [keysRow(els, l, cols, on, ui)];

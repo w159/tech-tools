@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Gates (critique 6, B1): `atlas_gates.py` lists the team gate (`s`) beside the other Stop gates; a failing check is named by its failing line on the band (`BLOCKED - team gate failing`), the gates tab and the tally (`gateTally().names`); the band checks row, the gates tab and the core tab share one `n of m` unit (`2 of 3 green`, `3 of 4 headers`); the gates tab no longer repeats a failing check's name under its group nor shows a check's detail beside another's label.
+- No false calm (B2): `last run ... all ok` never sits under a declared BLOCKED band, the team tab's lead reads `blocked` (with the band's reason) instead of `done` while a gate fails, and the core tab's `reading` line says `N workers returned, no token figures kept` instead of `returned nothing yet` once workers have returned.
+- One identity (B3): the spawn reducer records the description's `name: ` prefix as the worker's name when the Agent call gave none, and the HUD name rule drops a `type-first-three-words` guess for it.
+- Last text (B4): the HUD LAST column and the team tab `last` lines strip list markers, backticks and absolute paths (file name kept) and end on a whole word (`mod/data/lasttext.ts`); the HUD drops LAST, then MODEL, before a TASK is cut (the 18-cell TASK cap is gone).
+
 ## 17.7.0 - 2026-11-11
 
 - Fixed: 256-colour painting no longer burns the host CPU: `fitHex`, `surfaceHex` and `stable256` memoise on their arguments and the stable palette is built once as {hex, rgb} records plus a hex Set, so a frame costs map lookups instead of thousands of hex builds; results are byte-identical (`mod/paint-cost.test.ts`: 4000-paint workload 6038 ms -> 27 ms).

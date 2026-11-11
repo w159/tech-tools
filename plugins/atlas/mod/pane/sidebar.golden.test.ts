@@ -65,7 +65,7 @@ describe('sidebar golden text', () => {
   test('gates: group rows with failing lines in words, copy fix when expanded', () => {
     const t = goldenText('gates');
     expect(t).toContain('Completion gate');
-    expect(t).toContain('1 of 2 failing');
+    expect(t).toContain('1 of 2 green');
     expect(goldenText('gatesExpanded')).toContain('verification coverage');
     expect(goldenText('gatesExpanded')).toContain('run the hooks suite');
   });

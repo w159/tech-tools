@@ -41,6 +41,11 @@ _LABELS = {
     "o": "Required phases marked",
     "p": "Colony channel used",
     "q": "Worker branches merged",
+    "s": "Team gate",
+}
+# Gates that completion_gate.evaluate() can fail but _GISTS has no one-line fix for.
+_FIXES = {
+    "s": "in-process workers without a tmux team: run atlas_mux.py spawn-team, or set ATLAS_TEAM_GATE=off",
 }
 _NATIVE = ("Read", "Grep", "Glob", "Bash")
 _CONTEXT_SERVERS = (
@@ -98,7 +103,7 @@ def completion_group(session: str, root: Path, transcript: str) -> dict:
                 _LABELS[letter],
                 not failing,
                 None,
-                cg._GISTS[letter] if failing else None,
+                (cg._GISTS.get(letter) or _FIXES.get(letter)) if failing else None,
             )
         )
     return g

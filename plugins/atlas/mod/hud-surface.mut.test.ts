@@ -1,5 +1,5 @@
 // Mutation-kill tests for hud-surface.ts (seed 1105 survivors): the narrow tier spends every cell after its four-cell head on the label;
-// the task column is cut at TASK_MAX; the ctx gauge needs its exact block width; an empty or column-less cell draws nothing; the agents-only fit has no header.
+// the task column drops the model and the last text before it is cut; the ctx gauge needs its exact block width; an empty or column-less cell draws nothing; the agents-only fit has no header.
 //
 // Equivalent (seed 1105, third pass), not tested:
 //  - maxLen reduce seed `0` -> `1` (hud-surface.ts:40): the seed only shows when every cell width is 0, and both callers floor the result well above 1
@@ -7,7 +7,7 @@
 //  - fitStack hideTodo try `extras: false` -> `true` (line 250): that try empties the todos, todoRows([]) returns [] (line 69), and agentRows never
 //    reads `extras` (only `cap` and `spacers`), so the stack is identical.
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, runsCells, runsString, type Ui } from './atlas-ui';
+import { runsCells, runsString, type Ui } from './atlas-ui';
 import { agentRows, fitStack, todoRows, type AgentRow, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: true, color: 'truecolor' };
@@ -24,10 +24,22 @@ describe('todoRows at the min tier', () => {
 });
 
 describe('agentRows columns', () => {
-  test('TASK_MAX: a long task cell is cut at exactly 18 cells', () => {
+  test('a long task cell is shown whole while it fits (critique 6: no 18-cell cut)', () => {
     const out = agentRows([agent({ task: 'x'.repeat(30) })], { cols: 200, ui }, plain);
-    const cell = out[1]!.find((x) => x.t.endsWith('...'))!;
-    expect(cells(cell.t)).toBe(18);
+    expect(runsString(out[1]!)).toContain('x'.repeat(30));
+  });
+
+  test('the model and the last text go before the task is cut', () => {
+    const task = 'one two three four five six seven eight nine'; // 44 cells: beside the model at 80 columns it would pass the edge
+    const out = agentRows([agent({ name: 'a'.repeat(19), task, model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain);
+    const row = runsString(out[1]!);
+    expect(row).toContain(task);
+    expect(row).not.toContain('haiku');
+    expect(row).not.toContain('alpha.py');
+    expect(runsCells(out[1]!)).toBeLessThanOrEqual(80);
+    // only when the task alone does not fit is it ended on a whole word
+    const tight = runsString(agentRows([agent({ name: 'a'.repeat(19), task: `${task} ${task}` })], { cols: 80, ui }, plain)[1]!);
+    expect(tight).toMatch(/nine\.\.\.$|eight\.\.\.$|seven\.\.\.$/);
   });
 
   test('ctx gauge column: drawn when the block fits exactly, at stateAt + 14; absent one cell short', () => {

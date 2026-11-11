@@ -21,7 +21,7 @@ const mark = (state: "queued" | "done" | "failed", ui: Ui): string => stateGlyph
 export const ratioText = (r: number | null): string =>
   r === null ? "" : `${r >= 10 ? Math.round(r) : r.toFixed(1)}x`;
 
-const tally = (ok: number, total: number): string => (total ? `${ok}/${total}` : "none");
+const tally = (ok: number, total: number): string => (total ? `${ok} of ${total}` : "none");
 /** Colour only what is off: a partial tally is amber, a complete or empty one stays plain. */
 const toneOf = (ok: number, total: number): Tone => (!total ? "muted" : ok === total ? "text" : "warn");
 const joinSep = (parts: Cell[]): Cell[] => parts.flatMap((p, i) => (i ? [sep, p] : [p]));

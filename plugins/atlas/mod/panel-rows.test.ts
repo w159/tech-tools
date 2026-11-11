@@ -152,9 +152,11 @@ describe('core tab: caps, notes and figures', () => {
   test('B4: with nothing read or returned the offload line is a sentence, not `0 tokens read by workers`', () => {
     const c = empty();
     c.routes = [route('t1')] as never;
-    const line = core(c).find((l) => l.startsWith(' reading'))!;
+    const line = body('core', 120, { core: c, workers: [] }).find((l) => l.startsWith(' reading'))!; // no worker has returned either
     expect(line).toBe(' reading  workers have read and returned nothing yet');
     expect(line).not.toMatch(/\b0 tokens\b/);
+    // critique 6: workers that did return are never said to have returned nothing; in-process workers keep no token log
+    expect(core(c).find((l) => l.startsWith(' reading'))).toBe(' reading  3 workers returned, no token figures kept');
   });
   test('B4: a seat that ran another model says so in words', () => {
     const c = empty();
