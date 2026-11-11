@@ -14,8 +14,8 @@ const rows = (m: PanelModel) => renderPanel(m).map(strip);
 const head = (m: PanelModel) => rows(m)[0]!;
 const laneOf = (m: PanelModel, name: string) => rows(m).find((x) => x.includes(name))!;
 
-test("band: the todo gauge reads `N of M`, ctx shows only when known, no board means no todo part", () => {
-	expect(head(model({ done: 2, total: 5 }))).toContain("todo ████░░░░░░ 2 of 5");
+test("band: the todo gauge reads `N/M`, ctx shows only when known, no board means no todo part", () => {
+	expect(head(model({ done: 2, total: 5 }))).toContain("todo ████░░░░░░ 2/5");
 	expect(head(model({ done: 0, total: 0 }))).not.toContain("todo");
 	expect(head(model({ ctx: 0.5 }))).toContain("ctx ████░░░░ 50%");
 	expect(head(model({}))).not.toContain("ctx");
@@ -130,7 +130,7 @@ test("idle panel: the band reads idle, the last run follows, a failed count is b
 	const idle = (failed: number) => model({ idle: { workers: 3, secs: 70, failed }, workers: [], phase: "done", done: 6, total: 6, maxLines: 6 });
 	const ok = rows(idle(0));
 	expect(ok[0]).toContain("idle   todo");
-	expect(ok[0]).toContain("6 of 6");
+	expect(ok[0]).toContain("6/6");
 	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	expect(rows(idle(2))[1]).toContain("2 failed");
 	expect(renderPanel(idle(2))[1]).toMatch(/\x1b\[1;38;2;205;214;244;48;2;24;24;37m2 failed/);

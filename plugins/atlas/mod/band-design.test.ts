@@ -66,7 +66,7 @@ describe('counts and gauges equal the data', () => {
   test('todo and phase counts equal the world', () => {
     const row = text(bandLines(worldModel(120, ui('mocha'))))[0]!;
     expect(row).toContain(`todo `);
-    expect(row).toContain(`${done} of ${todos.length}`);
+    expect(row).toContain(`${done}/${todos.length}`);
     const active = world.phases.findIndex((p) => p.state === 'active');
     expect(active).toBeGreaterThanOrEqual(0);
     expect(row).not.toMatch(/phase \d\/\d/); // the plan count is the band's progress figure
@@ -85,7 +85,7 @@ describe('counts and gauges equal the data', () => {
           const eighths = [...full].reduce((n, c) => n + (c === '█' ? 8 : '▏▎▍▌▋▊▉'.indexOf(c) + 1), 0);
           const after = row.slice((m.index ?? 0) + bar.length);
           const pct = /^ (\d+)%/.exec(after);
-          const frac = /^ (\d+) of (\d+)/.exec(after);
+          const frac = /^ (\d+)\/(\d+)/.exec(after);
           const value = pct ? Number(pct[1]) / 100 : frac ? Number(frac[1]) / Number(frac[2]) : undefined;
           if (value === undefined) continue;
           const tol = 0.125 + (pct ? 0.005 * w : 0);

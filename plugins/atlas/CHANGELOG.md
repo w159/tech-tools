@@ -5,6 +5,7 @@
 - Fixed (critique 10, slice A1): the HUD and the side panel draw one tick for the same TODO and agent row. `register.ts` hands both surfaces the motion driver's frame clock (`Motion.stamp`/`ctx()`) instead of two separate `$.clock.now()` reads, so the pop frame and fade colour never differ by a render; the HUD spinner for an unowned item turns the item id's phase, as the panel does (`mod/phase-sync.test.ts`).
 - Changed (critique 10, slice A2): `returned` has its own mark, `◃` (`<` in ASCII) in the accent tone, never the amber `▲`; `rowWordTone` is the one tone of a state word on the HUD and the panel.
 - Fixed (critique 10, slice A3): the 256-colour fade steps one palette colour per 100 ms beat (no repeated frame in the ramp; the window is 500 ms, was 900 ms with 4 to 5 identical frames per step), and the HUD state word fades with its glyph.
+- Band and gates speak one truth (critique 10, slice B): a failing check without a Stop refusal reads `warning` on the band footer, the gates tab and its goldens (`blocked: <reason>` stays for a refusal); the band never reads `idle` while a plan row runs (`busy` on the mission model, `planBusy` in `mod/data/runstate.ts`, both hosts); the band drops `offload` and shows a route only when it ran differently, as `planned audit/low, ran 3 explorers` (`plannedText`, shared with the core tab); the band and core tab drop the reply-header tally and count evidence over the plan (`3/5`), the band counts read `n/m` at every width (`mod/slice-b10.test.ts`).
 
 ## 17.10.0 - 2026-11-11
 

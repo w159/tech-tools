@@ -290,7 +290,7 @@ test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; the hea
 	view.open(ui, { channel: CHAN, members: names, cwd: root });
 	expect(calls[0]!.length).toBeLessThanOrEqual(10);
 	expect(plain([calls[0]![0]!])).toContain("ATLAS");
-	expect(plain([calls[0]![0]!])).toContain("of 1");
+	expect(plain([calls[0]![0]!])).toContain("0/1");
 	expect(plain([calls[0]!.at(-1)!])).toContain("a to all   sent a message"); // no checks reported yet: the message row closes the panel (facts only, never the text)
 	view.stop();
 });
@@ -322,7 +322,7 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo █████▌░░░░ 5 of 9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
+	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo █████▌░░░░ 5\/9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
 	expect(p[2]).toMatch(/^ ◓ explorer-a324 {5}explorer {5}ctx_search {2}dispatch_tripwire\.py +1m12s $/);
 	expect(p[3]).toMatch(/^ ◓ implementer-band {2}implementer {2}thinking {3}last Edit mod\/band\.tsx +48s $/);
@@ -365,7 +365,7 @@ test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers int
 test("panel idle: the band reads idle and the last run follows, the whole thing is two rows", () => {
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle {3}todo █████▌░░░░ 5 of 9 +$/);
+	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle {3}todo █████▌░░░░ 5\/9 +$/);
 	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
 	expect(failed).toContain("last run  2 workers · 9s · 1 failed");

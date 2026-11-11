@@ -45,13 +45,13 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const { rows } = panel(160, { gates: [gate] });
     expect(rows[0]).toContain('◖ ◆ ATLAS ◗  implement  ');
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
-    expect(rows[0]).toContain('todo ██▌░░░░░░░ 1 of 4');
+    expect(rows[0]).toContain('todo ██▌░░░░░░░ 1/4');
     expect(rows[0]).toContain('ctx █░░░░░░░ 12%');
     expect(rows[0]).toContain(`agents ${spinnerGlyph(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
     const withTodos = panel(160, { gates: [gate], snapshot: busySnap({ todos: boardTodos as any }) });
     expect(withTodos.rows).toHaveLength(panel(160, { gates: [gate] }).rows.length); // a folded board costs no row
   });
-  test('counts the lead plan only: 2 of 11 with two dispatch rows present', () => {
+  test('counts the lead plan only: 2/11 with two dispatch rows present', () => {
     const plan = Array.from({ length: 11 }, (_, n) => ({ id: `p${n}`, content: `plan item ${n}`, status: n < 2 ? 'completed' : 'pending' }));
     const dispatch = [
       { id: 'd0', content: 'dispatch one', status: 'completed', origin: 'dispatch' },
@@ -60,7 +60,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const item = (t: { id: string; content: string; status: string; origin?: string }) => ({ ...t, owner: null, evidence: null, live: true });
     const todoGroups = [{ phase: 'implement', dept: 'FORGE', glyph: '', done: 2, total: 13, items: [...plan, ...dispatch].map(item) }] as any;
     const { rows } = panel(160, { snapshot: busySnap({ todos: [...plan, ...dispatch] as any, todoGroups }) });
-    expect(rows[0]).toContain('2 of 11');
+    expect(rows[0]).toContain('2/11');
     expect(rows[0]).not.toContain('13');
   });
   test('capsule: caps accent on the panel, the middle ink on accent fill; every other cell is on the panel; no cost', () => {
@@ -107,15 +107,15 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const { rows, rowNodes } = panel(160, { rich: true });
     expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ● 1 research  ──  ● 2 theory  ──  ● 3 test  ──  ▸ 4 implement  ──  ◇ 5 verify`);
     expect(rows[1]!.trim()).toBe('');
-    expect(rows[2]).toMatch(/^todo ████░░░░░░░░░░░░ 1 of 4 · 25% {2,}ctx █▎░░░░░░░░ 12%/);
+    expect(rows[2]).toMatch(/^todo ████░░░░░░░░░░░░ 1\/4 · 25% {2,}ctx █▎░░░░░░░░ 12%/);
     expect(cellOf(rowNodes[0]!, '▸').props).toMatchObject({ color: TONE_HEX.accent, bold: true });
     expect(cellOf(rowNodes[0]!, '4 implement').props).toMatchObject({ color: TONE_HEX.text, bold: true });
     expect(cellOf(rowNodes[0]!, '◇').props.color).toBe(TONE_HEX.muted);
   });
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
-    expect(band(160)).toContain('todo ██▌░░░░░░░ 1 of 4');
-    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo 1 of 4 {3}ctx 12%/); // figures, no gauge track, below 120 (critique 9)
+    expect(band(160)).toContain('todo ██▌░░░░░░░ 1/4');
+    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo 1\/4 {3}ctx 12%/); // figures, no gauge track, below 120 (critique 9)
     expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
   });
@@ -442,10 +442,10 @@ describe('message row: only real messages, never presence events', () => {
 
 describe('band counts the open work the TODO tree shows', () => {
   const rowsOf = (items: { id: string; status: string }[]) => items.map((t) => ({ ...t, content: `item ${t.id}`, owner: 'explorer-a843', evidence: null, origin: 'dispatch' }));
-  test('only dispatch rows on the board, no groups: `0 of 2`', () => {
+  test('only dispatch rows on the board, no groups: `0/2`', () => {
     const todos = rowsOf([{ id: 'd0', status: 'in_progress' }, { id: 'd1', status: 'pending' }]);
     const { rows } = panel(160, { snapshot: busySnap({ todos: todos as any, todoGroups: [] }) });
-    expect(rows[0]).toContain('0 of 2');
+    expect(rows[0]).toContain('0/2');
   });
 });
 
@@ -457,11 +457,11 @@ describe('D2 the band count is the snapshot count', () => {
     r('ph', { content: 'placeholder', session_id: 'old' }), r('old', { session_id: 'older' }),
     r('adv', { origin: 'advisor' }), r('car', { origin: 'carried' }),
   ];
-  test('D2: band `N of M` equals computeCounts on the same board (1 of 3), whatever the groups drop', () => {
+  test('D2: band `N of M` equals computeCounts on the same board (1/3), whatever the groups drop', () => {
     const contract = busySnap().contract;
     const snapshot = busySnap({ todos: items as any, todoGroups: groupTodos(items as any, contract, 's'), counts: computeCounts(items as any, contract, 's') });
     expect(snapshot.counts).toMatchObject({ done: 1, total: 3 });
-    expect(panel(160, { snapshot }).rows[0]).toContain('1 of 3');
+    expect(panel(160, { snapshot }).rows[0]).toContain('1/3');
   });
 });
 

@@ -5,6 +5,12 @@
 import { groupOpenCount } from '../gates';
 import { textWidth } from '../theme';
 import type { GateGroup } from '../pane/sidebar-types';
+import type { UiState } from '../atlas-ui';
+import { todoState } from './todos';
+
+/** The lead is mid-turn: a plan row reads `running` (the HUD's TODO rule, todoState). One that only its returned owner keeps open does not count. First hit wins, no allocation. */
+export const planBusy = (items: readonly { status: string; owner?: string | null }[], owners: ReadonlyMap<string, UiState>): boolean =>
+  items.some((it) => todoState(it.status, it.owner ? owners.get(it.owner) : undefined).state === 'running');
 
 /** `name`: only on a failing check, what the blocked reason calls it (the failing line's own words). */
 export type GateCheck = { id: string; ok: boolean; name?: string };

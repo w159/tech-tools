@@ -163,10 +163,10 @@ describe('chips and contrast', () => {
 
 describe('counts equal the band on the same world', () => {
   const model = worldModel(120, ui('mocha'));
-  test('done and total: the board states what the band states (3 of 7)', () => {
+  test('done and total: the board states what the band states (3/7)', () => {
     const c = boardCounts(worldBoardRows());
     expect([c.done, c.total]).toEqual([model.done, model.total]);
-    expect(band_120[0]).toContain(`${model.done} of ${model.total}`);
+    expect(band_120[0]).toContain(`${model.done}/${model.total}`);
     expect(boardText(boardLines(worldBoardRows(), { cols: 120, ui: ui('mocha') }))[0]).toContain(`${c.total} items`);
   });
   test('running, failed and queued: the same counts as the band words', () => {

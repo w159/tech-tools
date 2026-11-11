@@ -10,7 +10,7 @@ import type { MotionCtx, MotionItem } from "../mod/motion";
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, parseGates } from "../mod/gates";
-import { gateTally, withHeaderTally } from "../mod/data/runstate";
+import { gateTally, planBusy, withHeaderTally } from "../mod/data/runstate";
 import { hostEnv, paintAnsi, sgrColor, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
@@ -134,6 +134,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 	const tally = gateTally(withHeaderTally(m.gates ?? [], m.core?.contract.header));
 	const workers = m.idle ? [] : m.workers.map(missionWorker);
 	const rail = railOf(railIds(m.phases), m.phase);
+	const owners = ownerStates(m);
 	return {
 		cols: w,
 		maxRows: m.maxLines,
@@ -148,13 +149,14 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		done: m.done,
 		total: m.total,
 		openWork: m.core?.contract.open,
-		todoBlocked: blockedCount(m.todos ?? [], ownerStates(m)),
+		todoBlocked: blockedCount(m.todos ?? [], owners),
+		busy: planBusy(m.todos ?? [], owners),
 		workers,
 		note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
 		checks: tally.total ? tally.checks : null,
 		elapsedSecs: m.elapsedSecs,
 		lastRun: m.idle,
-		core: coreCells(m.core, w),
+		core: coreCells(m.core, w, undefined, m.total),
 		boardRows: m.todosExpanded && m.todos?.length ? m.todos.length + 1 : 0,
 		ctx: m.ctx,
 		rich: m.rich ?? hostEnv().ATLAS_BAND_RICH === "1",

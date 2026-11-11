@@ -100,7 +100,7 @@ describe('eased gauges', () => {
     const plain = rowsOf(160)[0]!;
     const half = rowsOf(160, { eased: { todo: 0.9, ctx: 0.9 } })[0]!;
     expect(half).not.toBe(plain);
-    expect(half).toContain('1 of 4');
+    expect(half).toContain('1/4');
     expect(half).toContain('12%');
   });
   test('retarget starts a move from the value on screen, and an unchanged target keeps the same move', () => {
@@ -155,7 +155,7 @@ describe('band counts what the HUD counts (critique-3 change 4)', () => {
   test('a blocked task has its own glyph and count beside the todo count, with the agents noun in front of the agent counts', () => {
     const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
     expect(head).toContain('todo ');
-    expect(head).toMatch(/1 of 3 ▲ 1 blocked/);
+    expect(head).toMatch(/1\/3 ▲ 1 blocked/);
     expect(head).toMatch(/agents .*1 running/);
     expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/todo 1\/3 ▲1/);
   });
