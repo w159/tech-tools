@@ -7,7 +7,8 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { On } from 'claude-code';
 import { fullModel, promptName, registerCompletion, registerRouting } from './routing';
 import type { Persona } from './contract';
-import { memState } from './test_helpers';
+import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs, memState } from './test_helpers';
+import { SnapshotBuilder } from './snapshot';
 
 // Structural mirrors of the event shapes the handlers read (d.ts: AgentSpawnInput,
 // TurnStepInput, TurnCompleteInput, PromptSubmitInput).
@@ -465,5 +466,51 @@ describe('registerRouting bookkeeping', () => {
     expect(await run({ input_tokens: 10 })).toBe(10);
     expect(await run({ output_tokens: 4 })).toBe(4);
     expect(await run({ input_tokens: 10, output_tokens: 4 })).toBe(14);
+  });
+});
+
+describe('registerRouting provisional row (critique 11 A5)', () => {
+  const agentsOf = async ($: { state: ReturnType<typeof memState> }) =>
+    ((await $.state.get({ plugin: 'atlas', key: 'taskAgents' })).value as Array<{ name: string; state: string; task?: string }> | undefined) ?? [];
+  const call = { tool: 'Agent', tool_use_id: 'toolu_01', subagent_type: 'atlas:explorer', description: 'alpha-explorer: read alpha.py', prompt: 'read it' };
+
+  test('the Agent tool_use alone puts a running row in the task agents, before any agent.spawn', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [persona], logDrift() {} });
+    const $c = { ...$, clock: { now: async () => 1000 } };
+    await pick('tool.call')($c, call, () => ({}));
+    expect((await agentsOf($)).map((a) => [a.name, a.state])).toEqual([['alpha-explorer', 'running']]);
+  });
+
+  test('agent.spawn replaces the provisional row: one row, never two', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [persona], logDrift() {} });
+    const $c = { ...$, clock: { now: async () => 1000 } };
+    await pick('tool.call')($c, call, () => ({}));
+    await pick('agent.spawn')($c, spawnInput({ tool_use_id: 'toolu_01', description: call.description, subagentType: 'atlas:explorer' }), spawnNext);
+    expect((await agentsOf($)).map((a) => a.name)).toEqual(['agent-1']);
+    const orch = (await $.state.get({ plugin: 'atlas', key: 'orch' })).value as { meta: Record<string, { name?: string }> };
+    expect(Object.entries(orch.meta).map(([id, m]) => [id, m.name])).toEqual([['agent-1', 'alpha-explorer']]);
+  });
+
+  test('a tool call that throws leaves no row behind', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [persona], logDrift() {} });
+    const $c = { ...$, clock: { now: async () => 1000 } };
+    await expect(pick('tool.call')($c, call, () => { throw new Error('denied'); })).rejects.toThrow('denied');
+    expect(await agentsOf($)).toEqual([]);
+  });
+
+  test('the snapshot built between tool.call and agent.spawn carries the row, running', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [persona], logDrift() {} });
+    const $c = { ...$, clock: { now: async () => FIXTURE_EPOCH_MS } };
+    await pick('tool.call')($c, call, () => ({}));
+    const fs = memFs({ ['/plugin/contracts/operating-contract.json']: JSON.stringify(FIXTURE_CONTRACT), ['/r/.atlas']: '' });
+    const b = new SnapshotBuilder(fs, '/plugin');
+    await b.init('/r', {}, 'abc12345', 'tech-tools', 'main');
+    const orch = (await $.state.get({ plugin: 'atlas', key: 'orch' })).value as never;
+    const snap = await b.build({ headerPhase: null, taskAgents: await agentsOf($) as never, orch, herdrStdout: undefined, usage: { contextPct: 1 }, now: FIXTURE_EPOCH_MS });
+    expect(snap.squad.filter((a) => a.name === 'alpha-explorer').map((a) => a.state)).toEqual(['running']);
   });
 });

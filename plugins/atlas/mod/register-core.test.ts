@@ -5,6 +5,7 @@ import type { EngineInterface, On } from 'claude-code';
 import { coreMatrix } from '../contracts/core-fixture';
 import { buildCore, coreTick, headerTallyOf, register, resetCore } from './register';
 import { memState } from './test_helpers';
+import { withHeaderTally } from './data/runstate';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;
@@ -281,5 +282,26 @@ describe('critique 7 B2: evidence counts the plan the band counts', () => {
     ] });
     const core = await buildCore(s.$);
     expect(core!.contract.evidence).toEqual({ ok: 1, total: 2 }); // T1 and T2 are the plan's done items; the rest of the board is not the plan
+  });
+});
+
+describe('critique 11 B3: the gates tab counts the replies the transcript drew a chip for', () => {
+  const headerReplies = ['ATLAS | 🔍 research | 1/3 explorers returned', 'ATLAS | 🔍 research | 2/3 explorers returned', 'ATLAS | ✅ verify | done, 5/5'];
+  // Live (150-1 tab-gates.png): the host lists no lead messages ($.session.messages is empty), turn.complete carries only the last reply, the transcript drew 3 chips.
+  test('three header replies drawn, one turn.complete, no lead messages: the core header is 3 of 3 and the Header contract line reads 3 of 3', async () => {
+    const { forgetDrawnHeaders } = await import('./restyle');
+    forgetDrawnHeaders();
+    const s = await session(false);
+    (s.$ as unknown as { session: Record<string, unknown> }).session.messages = async () => [];
+    const draw = s.all('ui.render', ['component', 'AssistantMessage'])[0]!;
+    for (const [i, text] of headerReplies.entries()) await draw(s.$, { surface: 'terminal', component: 'AssistantMessage', requestId: `m${i}`, props: { text } }, noopNext);
+    const done = { reason: 'answer', answer: headerReplies[2], agentId: undefined, isAborted: false };
+    for (const h of s.all('turn.complete', ['reason', 'answer'])) await h(s.$, done, noopNext).catch(() => undefined);
+    expect((await s.state.get({ plugin: 'atlas', key: 'headerTally' })).value).toEqual({ ok: 1, total: 1 }); // the per-turn count alone is what read `0 of 1` / `1 of 1`
+    const core = await buildCore(s.$);
+    expect(core!.contract.header).toEqual({ ok: 3, total: 3 });
+    const groups = withHeaderTally([{ id: 'header', lines: [] as unknown[] }], core!.contract.header) as { lines: { ok: boolean; detail: string }[] }[];
+    expect(groups[0]!.lines[0]).toMatchObject({ ok: true, detail: '3 of 3' });
+    forgetDrawnHeaders();
   });
 });

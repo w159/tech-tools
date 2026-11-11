@@ -6,8 +6,8 @@
 // Event shapes mirror plugins/atlas/.claude-plugin/types/claude-code/index.d.ts
 // (AgentSpawnInput, TurnStepInput, TurnCompleteInput, PromptSubmitInput).
 import { atom, read, update } from 'claude-code';
-import type { On } from 'claude-code';
-import { EMPTY_ORCH, LEAD, onComplete, onSpawn, onStep } from './data/orchestration';
+import type { EngineInterface, On } from 'claude-code';
+import { descriptionName, EMPTY_ORCH, LEAD, onComplete, onSpawn, onStep } from './data/orchestration';
 import type { AtlasSnapshot, Persona, SquadAgent } from './contract';
 
 const ATLAS_PREFIX = 'atlas:';
@@ -69,19 +69,48 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
   // Agent/Task tool calls carrying a `name`, awaiting their agent.spawn (the Agent tool's own name, which agent.spawn may lack).
   let calls: AgentCall[] = [];
 
+  // tool_use_id -> the display name of the provisional row the Agent call drew before its agent.spawn (the mod learns the agentId only after the host returns it).
+  const provisional = new Map<string, string>();
+
+  /** Drop a provisional row: its task agent and its spawn-time stamp. Never touches a real agent id. */
+  const dropProvisional = async ($: EngineInterface, toolUseId: string): Promise<void> => {
+    const name = provisional.get(toolUseId);
+    if (name === undefined) return;
+    provisional.delete(toolUseId);
+    await update($, taskAgentsState, (agents) => agents.filter((a) => a.name !== name));
+    await update($, orchState, (o) => (o.meta[name] === undefined ? o : { ...o, meta: Object.fromEntries(Object.entries(o.meta).filter(([k]) => k !== name)) }));
+  };
+
   on('tool.call', { tool: /^(Agent|Task)$/ }, async ($, e, next) => {
+    const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+    const a = e as unknown as Record<string, unknown>; // SAFETY: a RegExp matcher cannot narrow e; Agent/Task args are an open string-keyed bag, every read goes through str()
+    const toolUseId = str(a.tool_use_id);
     try {
-      const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-      const a = e as unknown as Record<string, unknown>; // SAFETY: a RegExp matcher cannot narrow e; Agent/Task args are an open string-keyed bag, every read goes through str()
       const name = str(a.name);
-      if (name) {
-        const at = await $.clock.now();
-        calls = [...calls.filter((c) => at - c.at <= CALL_TTL_MS), { id: str(a.tool_use_id), name, description: str(a.description), type: str(a.subagent_type), at }].slice(-16);
+      const at = await $.clock.now();
+      if (name) calls = [...calls.filter((c) => at - c.at <= CALL_TTL_MS), { id: toolUseId, name, description: str(a.description), type: str(a.subagent_type), at }].slice(-16);
+      // The row exists from the first sight of the tool_use: running, named as agent.spawn will name it, replaced (not joined) at the spawn.
+      if (toolUseId) {
+        const type = str(a.subagent_type);
+        const role = type.replace(ATLAS_PREFIX, '').toLowerCase();
+        const label = name || promptName(str(a.prompt)) || descriptionName(str(a.description)) || role || 'agent';
+        provisional.set(toolUseId, label);
+        await update($, taskAgentsState, (agents) => withAgent(agents, label, role || 'unknown', str(a.description) || undefined));
+        await update($, orchState, (o) => ({ ...o, meta: { ...o.meta, [label]: { name: label, type, at } } }));
       }
     } catch {
-      // name capture never blocks a dispatch
+      // name capture and the provisional row never block a dispatch
     }
-    return next(e);
+    try {
+      return await next(e);
+    } catch (err) {
+      try {
+        await dropProvisional($, toolUseId);
+      } catch {
+        // cleanup never masks the denial
+      }
+      throw err;
+    }
   });
 
   on('agent.spawn', async ($, e, next) => {
@@ -116,11 +145,25 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
         // explicit model, else the role's frontmatter pin, else the parent's (what `inherit` resolves to)
         const pinned = persona && persona.model !== 'inherit' ? persona.model : undefined;
         const model = (e.model && e.model !== 'inherit' ? e.model : undefined) ?? pinned ?? (e.parentModel || undefined);
-        await update($, taskAgentsState, (agents) => withAgent(agents, agentId, persona?.name ?? (label || 'unknown'), e.description, fullModel(model, e.parentModel || undefined)));
+        const heldBy = provisional.get(e.tool_use_id); // the row the tool_use drew; this spawn replaces it
+        const drawn = new Set(provisional.values());
+        provisional.delete(e.tool_use_id);
+        const replaced = heldBy !== undefined && heldBy !== agentId ? heldBy : undefined;
+        await update($, taskAgentsState, (agents) => withAgent(replaced === undefined ? agents : agents.filter((a) => a.name !== replaced), agentId, persona?.name ?? (label || 'unknown'), e.description, fullModel(model, e.parentModel || undefined)));
         const now = await $.clock.now();
         const name = e.name || matchCall(calls, e, now) || promptName(e.prompt);
+        // A tool_use whose id did not reach the spawn: its row is the one that carries the spawn's name.
+        const orphan = replaced === undefined && name !== undefined && name !== agentId && drawn.has(name) ? name : undefined;
+        if (orphan !== undefined) {
+          for (const [id, held] of provisional) if (held === orphan) provisional.delete(id);
+          await update($, taskAgentsState, (agents) => agents.filter((a) => a.name !== orphan));
+        }
+        const gone = replaced ?? orphan;
         const scope = /^\s*SCOPE:\s*(\S+)/m.exec(e.prompt ?? '')?.[1];
-        await update($, orchState, (o) => onSpawn(o, agentId, e.description || e.prompt, now, { ...(name ? { name } : {}), ...(scope ? { scope } : {}), ...(model ? { model } : {}), type: e.subagentType }));
+        await update($, orchState, (o) => {
+          const spawned = onSpawn(o, agentId, e.description || e.prompt, now, { ...(name ? { name } : {}), ...(scope ? { scope } : {}), ...(model ? { model } : {}), type: e.subagentType });
+          return gone === undefined || spawned.meta[gone] === undefined ? spawned : { ...spawned, meta: Object.fromEntries(Object.entries(spawned.meta).filter(([k]) => k !== gone)) };
+        });
       } catch {
         // recording never blocks a spawn
       }

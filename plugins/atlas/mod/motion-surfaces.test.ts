@@ -79,6 +79,27 @@ describe('HUD rows', () => {
   });
 });
 
+describe('a new SUBAGENTS row (critique 11 A5)', () => {
+  test('its state word and glyph are whole on every reveal frame; only the name grows in', () => {
+    const full = hudInput('pending', 'working');
+    const fewer: HudInput = { ...full, agents: full.agents.slice(0, -1) };
+    const added = full.agents[full.agents.length - 1]!;
+    const mo = new Motion(true);
+    mo.observe('hud-agents', hudMotionItems(fewer, { now: T0 }).agents, 0);
+    mo.observe('hud-agents', hudMotionItems(full, { now: T0 }).agents, T0);
+    const rest = hudLines(full, hudView(undefined)).map(runsString);
+    const at = rest.findIndex((l) => l.includes(added.name));
+    expect(at).toBeGreaterThanOrEqual(0);
+    const word = /\b(running|queued|done|failed|blocked|waiting)\b/.exec(rest[at]!)![1]!;
+    for (const dt of [0, 50, 100, 150, 200, 299]) {
+      const line = runsString(hudLines(full, hudView(mo.ctx(T0 + dt)))[at]!);
+      expect(line).toContain(word);
+    }
+    const first = runsString(hudLines(full, hudView(mo.ctx(T0)))[at]!);
+    expect(first).not.toContain(added.name); // the name is what reveals
+  });
+});
+
 // ---- Board ------------------------------------------------------------------------------------------------------------------------
 const boardRows = (state: UiState): BoardRow[] => worldBoardRows().map((r, i) => (i === 1 ? { ...r, state } : r));
 describe('Board rows', () => {
