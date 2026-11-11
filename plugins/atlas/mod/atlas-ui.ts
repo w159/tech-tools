@@ -142,6 +142,12 @@ export function stateRun(s: UiState, ui: Ui, spinFrame = 0): Run {
   const g = s === 'running' ? spinnerGlyph(spinFrame, ui.ascii) : stateGlyph(s, ui);
   return { t: g, tone: ui.ascii ? 'text' : glyphTone(STATE_TOKEN[s], ui.theme) };
 }
+/** Tone of a state WORD (text, 4.5:1): the state's token where it reaches 4.5:1 on the panel, else `text`; `text` in ASCII mode. */
+export function stateWordTone(s: UiState, ui: Pick<Ui, 'ascii' | 'theme'>): Token {
+  if (ui.ascii) return 'text';
+  const tok = STATE_TOKEN[s];
+  return contrast(PALETTES[ui.theme][tok], PALETTES[ui.theme].panel) >= NEED.text ? tok : 'text';
+}
 /** `◐ 1 running`: glyph run, then the count and word in text. */
 export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0): Run[] => [{ ...stateRun(s, ui, spinFrame), t: `${stateRun(s, ui, spinFrame).t} ` }, { t: `${n} ${s}`, tone: 'text' }];
 
@@ -157,6 +163,17 @@ export function clip(text: string, n: number): string {
   const cs = [...text];
   if (cs.length <= n) return text;
   return n <= 3 ? cs.slice(0, n).join('') : `${cs.slice(0, n - 3).join('')}...`;
+}
+/** Cut to n cells keeping both ends, `...` in the middle (`implem...0278`): for names whose tail tells them apart. n of 3 or less is a plain cut. */
+export function clipMiddle(text: string, n: number): string {
+  if (n <= 0) return '';
+  const cs = [...text];
+  if (cs.length <= n) return text;
+  if (n <= 3) return cs.slice(0, n).join('');
+  const room = n - 3;
+  const tail = Math.floor(room / 2);
+  const head = room - tail;
+  return `${cs.slice(0, head).join('')}...${cs.slice(cs.length - tail).join('')}`;
 }
 export const padEnd = (text: string, n: number): string => text + ' '.repeat(Math.max(0, n - cells(text)));
 /** Pad `runs` with spaces to reach cell `col`; when the cursor is already past it, two spaces separate. */
@@ -185,6 +202,76 @@ export function ribbon(cols: number, surface: string, right: string, ui: Ui): Ru
   const tail: Run[] = right ? [{ t: ` ${right} `, tone: 'sub' }] : [];
   const fill = Math.max(0, cols - runsCells(left) - runsCells(tail) - 1);
   return [...left, ui.ascii ? { t: '-'.repeat(fill), tone: 'muted' } : { t: '━'.repeat(fill), tone: 'line' }, ...tail, { t: ' ', tone: 'text' }];
+}
+
+
+/** `◆ ATLAS` without the capsule: the small mark for surfaces that are not a ribbon (toast, worker card). The capsule stays once per
+ * screen, at the left end of a ribbon. ASCII: `ATLAS`. */
+export const brandMark = (ui: Pick<Ui, 'ascii'>): Run[] => (ui.ascii ? [{ t: 'ATLAS', tone: 'text', bold: true }] : [{ t: '◆ ', tone: 'accent' }, { t: 'ATLAS', tone: 'accent', bold: true }]);
+
+// ---- row grammar --------------------------------------------------------------------------------------
+
+/** Every list row on every tab is `focus  glyph  name  word  detail ... value`: the focus marker, a blank, the state glyph and a blank
+ * (four cells), then the name column, the state word column, free detail text, and a value column right-aligned to the panel edge. */
+export const GRID_LEAD = 4;
+export type GridCell = { t: string; tone?: Tone; bold?: boolean; strike?: boolean };
+export type GridRowSpec = {
+  /** Panel width: the row is never wider. */
+  cols: number;
+  ui: Pick<Ui, 'ascii'>;
+  /** The state glyph run (its text is one glyph); absent leaves the glyph cell blank. */
+  mark?: Run | null;
+  /** `▸` in the focus cell. */
+  focus?: boolean;
+  name: GridCell;
+  /** Name column width: the name is cut in the middle to it and padded. */
+  nameW: number;
+  word?: GridCell;
+  wordW?: number;
+  /** Cells between the name and the word column (default 1). */
+  gap?: number;
+  /** Free runs after the word column (kept as given; the caller fits them). */
+  tail?: readonly Run[];
+  /** Detail text after the word column, cut with `...` to what the value column leaves. */
+  detail?: GridCell;
+  /** The figure at the right edge: never cut, the name column gives way. */
+  value?: GridCell;
+};
+const cellRun = (c: GridCell, text: string, dflt: Tone): Run => ({ t: text, tone: c.tone ?? dflt, ...(c.bold ? { bold: true } : {}), ...(c.strike ? { strike: true } : {}) });
+
+/** One row of the grammar as runs, at most `cols` cells. Columns line up across rows that share `nameW`, `wordW` and `gap`. */
+export function gridRow(o: GridRowSpec): Run[] {
+  const gap = ' '.repeat(o.gap ?? 1);
+  const runs: Run[] = [
+    o.focus ? { t: o.ui.ascii ? '>' : '▸', tone: 'accent', bold: true } : { t: ' ', tone: 'text' }, { t: ' ', tone: 'text' },
+    o.mark ? { ...o.mark } : { t: ' ', tone: 'text' }, { t: ' ', tone: 'text' },
+  ];
+  const name = clipMiddle(o.name.t, Math.max(0, o.nameW));
+  runs.push(cellRun(o.name, name + ' '.repeat(Math.max(0, o.nameW - cells(name))), 'text'));
+  if (o.wordW) runs.push({ t: gap, tone: 'text' }, o.word ? cellRun(o.word, padEnd(clip(o.word.t, o.wordW), o.wordW), 'muted') : { t: ' '.repeat(o.wordW), tone: 'text' });
+  if (o.tail) runs.push(...o.tail);
+  const used = runsCells(runs);
+  const vw = o.value ? cells(o.value.t) : 0;
+  if (o.detail && o.detail.t) {
+    const room = o.cols - used - 1 - (vw ? vw + 1 : 0);
+    if (room >= 4) runs.push(cellRun(o.detail, ` ${clip(o.detail.t, room)}`, 'muted'));
+  }
+  if (o.value && vw) runs.push({ t: ' '.repeat(Math.max(1, o.cols - runsCells(runs) - vw)), tone: 'text' }, cellRun(o.value, o.value.t, 'text'));
+  return runs;
+}
+
+/** Column widths for a tab's rows at `cols`: the name column is the longest name up to `max`; the word column is fixed; a required
+ * `value` keeps its whole width and the name column gives way (never below 1); an `optional` one is dropped when the name column
+ * would fall under `min`. Returns the widths to hand every row of the tab. */
+export function gridPlan(cols: number, o: { names: readonly string[]; word?: number; gap?: number; value?: number; optional?: boolean; min?: number; max?: number }): { nameW: number; wordW: number; valueW: number } {
+  const wordW = o.word ?? 0;
+  const wordCost = wordW ? wordW + (o.gap ?? 1) : 0;
+  const longest = Math.max(1, ...o.names.map(cells));
+  const min = Math.min(o.min ?? 8, longest);
+  let valueW = o.value ?? 0;
+  const room = (v: number): number => cols - GRID_LEAD - wordCost - (v ? v + 1 : 0);
+  if (valueW && o.optional && room(valueW) < min) valueW = 0;
+  return { nameW: Math.max(1, Math.min(o.max ?? 36, longest, room(valueW))), wordW, valueW };
 }
 
 // ---- phase rail ------------------------------------------------------------------------------------
@@ -289,5 +376,6 @@ export function emittedPairs(theme: ThemeName): Pair[] {
   for (const t of ['text', 'sub', 'muted'] as const) add('text', t, 'panel', `text ${t}`);
   for (const t of ['line', 'accent', 'ok', 'run', 'warn', 'bad', 'info', 'muted'] as const) add('glyph', glyphTone(t, theme), 'panel', `glyph ${t}`);
   for (const f of ['accent', 'ok', 'run', 'warn', 'bad', 'info', 'queued_fill'] as const) add('text', inkFor(f, theme), f, `chip ${f}`);
+  for (const st of UI_STATES) add('text', stateWordTone(st, { ascii: false, theme }), 'panel', `state word ${st}`);
   return out;
 }

@@ -13,17 +13,17 @@ describe('sidebar golden', () => {
 });
 
 describe('sidebar golden text', () => {
-  test('every tab opens on the ribbon, a blank row, the strip with five labelled tabs', () => {
+  test('every tab opens on the ribbon, a blank row, the strip with six labelled tabs', () => {
     for (const k of ['route', 'team', 'channel', 'gates', 'core']) {
       const r = rows(k);
       expect(r[0]).toContain('ATLAS');
       expect(r[0]).toContain('SIDEPANEL');
       expect(r[1]!.trim()).toBe('');
-      expect(r[2]).toBe('r: route  t: team  c: channel  g: gates  k: core');
+      expect(r[2]).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
     }
   });
   test('the lit tab is ruled by a heavy line under its label only', () => {
-    expect(rows('route')[3]).toBe('   ━━━━━' + ' '.repeat(40));
+    expect(rows('route')[3]!.trimEnd()).toBe('   ━━━━━');
     expect(rows('team')[3]!.trim()).toBe('━━━━');
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
@@ -41,7 +41,7 @@ describe('sidebar golden text', () => {
     expect(rows('route')).not.toEqual(rows('routeSpinning'));
   });
   test('team: the lead row first, then every subagent by name with its state word, running first', () => {
-    const r = rows('team').slice(5, 9);
+    const r = rows('team').slice(4, 8);
     expect(r[0]).toMatch(/^ {2}[◐◓◑◒] lead\s+running/);
     expect(r[1]).toMatch(/^▸ [◐◓◑◒] explorer-1\s+running/);
     expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/);
@@ -50,7 +50,7 @@ describe('sidebar golden text', () => {
   test('team at 38 columns wraps the strip to a second row and keeps name and state', () => {
     const r = rows('cols38');
     expect(r[2]).toBe('r: route  t: team  c: channel');
-    expect(r[4]).toBe('g: gates  k: core');
+    expect(r[4]).toBe('g: gates  k: core  o: board');
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
   });
@@ -66,7 +66,7 @@ describe('sidebar golden text', () => {
   test('gates: group rows with failing lines in words, copy fix when expanded', () => {
     const t = goldenText('gates');
     expect(t).toContain('Completion gate');
-    expect(t).toContain('1 failing');
+    expect(t).toContain('1 of 2 failing');
     expect(goldenText('gatesExpanded')).toContain('verification coverage');
     expect(goldenText('gatesExpanded')).toContain('run the hooks suite');
   });

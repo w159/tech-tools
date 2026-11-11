@@ -175,7 +175,7 @@ describe('registerNotify', () => {
 		await hook($, {}, async (x) => x);
 		await put(snap({ squad: [agent('a', 'failed')], todos: [todo('t1', 'in_progress', 'build')] }));
 		await hook($, {}, async (x) => x);
-		expect(toasts).toEqual(['■ failed  a']);
+		expect(toasts).toEqual(['▌ ◆ ATLAS  ■ failed  a']);
 		expect(suggested).toEqual(['research: build', 'research: build']);
 	});
 });
@@ -249,20 +249,20 @@ describe('registerNotify toasts', () => {
 		const { toasts } = await run(prev, next);
 		// One toast per turn: a burst of six left the stack undrawn and the host printed a notice into the transcript.
 		expect(toasts).toEqual([mergeToasts([
-			'◉ waiting  wait  which path?',
-			'■ failed  bad  boom',
-			'◐ running  new  started',
-			'● done  done  all green',
+			'▌ ◆ ATLAS  ◉ waiting  wait  which path?',
+			'▌ ◆ ATLAS  ■ failed  bad  boom',
+			'▌ ◆ ATLAS  ◐ running  new  started',
+			'▌ ◆ ATLAS  ● done  done  all green',
 			'note  impl-auth  ship it.',
-			'● done  task  build it',
+			'▌ ◆ ATLAS  ● done  task  build it',
 		])!]);
-		expect(toasts[0]!.startsWith('◉ waiting  wait  which path?  +5 more')).toBe(true);
+		expect(toasts[0]!.startsWith('▌ ◆ ATLAS  ◉ waiting  wait  which path?  +5 more')).toBe(true);
 		expect(toasts[0]).not.toMatch(/[✓✗⏸▸]/u);
 	});
 	test('trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare', async () => {
 		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running'), agent('c', 'running')] }, { a: act(), b: act(), c: act() });
 		const next = withActivity({ squad: [agent('a', 'failed'), agent('b', 'input'), agent('c', 'finished')] }, { a: act(), b: act({ mood: 'blocked' }), c: act() });
-		expect((await run(prev, next)).toasts).toEqual(['◉ waiting  b  +2 more']);
+		expect((await run(prev, next)).toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  b  +2 more']);
 	});
 	test('mergeToasts: one passes through, many fold into one row of at most TOAST_MAX', () => {
 		expect(mergeToasts([])).toBeNull();
@@ -277,8 +277,8 @@ describe('registerNotify toasts', () => {
 			const next = withActivity({ now: 0, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 0, lastLine: line }) });
 			return (await run(prev, next)).toasts[0]!;
 		};
-		expect(await at('y'.repeat(40))).toBe(`● done  a  ${'y'.repeat(40)}`);
-		expect(await at('y'.repeat(41))).toBe(`● done  a  ${'y'.repeat(37)}...`);
+		expect(await at('y'.repeat(40))).toBe(`▌ ◆ ATLAS  ● done  a  ${'y'.repeat(40)}`);
+		expect(await at('y'.repeat(41))).toBe(`▌ ◆ ATLAS  ● done  a  ${'y'.repeat(37)}...`);
 	});
 	test('a phase advance plays the sound only when sound is on', async () => {
 		const prev = snap({ phase: 'research' });

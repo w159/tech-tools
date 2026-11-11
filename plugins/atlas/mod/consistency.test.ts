@@ -172,7 +172,7 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
     f.gates = gatePairs(text);
     f.gatesGreen = /(\d+) of (\d+) green/.exec(text)?.slice(1, 3).join('/');
   }
-  if (tab === 'core') f.todo = [Number(/evidence \d+\/(\d+)/.exec(text)?.[1]), world.todos.length];
+  if (tab === 'core') f.todo = [Number(/evidence\s+\d+ of (\d+)/.exec(text)?.[1]), world.todos.length];
   return f;
 }
 

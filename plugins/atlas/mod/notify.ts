@@ -9,7 +9,7 @@ import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
 import { clip, type Ui } from './atlas-ui';
 import { lookOf } from './look';
-import { toastText } from './panel-layout';
+import { noteToastText, toastText } from './panel-layout';
 import { formatDuration } from './theme';
 
 export type NotifyEvent =
@@ -39,7 +39,8 @@ export function mergeToasts(texts: readonly string[]): string | null {
 	return `${clip(texts[0]!, TOAST_MAX - more.length)}${more}`;
 }
 
-/** A toast reads state, then name, then one fact: `● done  implementer-layout  9 of 9 steps`. No glyph prefix of its own, no code, no full stop. */
+/** A toast reads bar, ATLAS mark, state, name, one fact: `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps`. No code, no full stop. The host
+ * draws a toast as plain text, so the bar and the mark are characters; the omp and transcript painters colour the same runs. */
 const FACT_MAX = 40;
 export const stateToast = (state: Parameters<typeof toastText>[0], name: string, fact: string, ui: Ui): string => toastText(state, name, clip(fact.replace(/\s+/g, ' ').trim(), FACT_MAX), ui);
 
@@ -130,7 +131,7 @@ export function registerNotify(
 							texts.push(stateToast('waiting', ev.name, ev.lastLine, ui));
 							break;
 						case 'note':
-							texts.push(`note  ${ev.sender}  ${clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX)}`);
+							texts.push(noteToastText(ev.sender, clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX), ui));
 							break;
 						case 'todo-done':
 							texts.push(stateToast('done', 'task', ev.text, ui));

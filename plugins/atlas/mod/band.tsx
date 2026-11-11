@@ -16,6 +16,7 @@ import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
 import { contractRail, railOf, type Rail } from './rail';
+import { STRIP_TABS } from './panel-layout';
 import { textWidth } from './theme';
 
 export { planRows } from './mission-layout';
@@ -35,10 +36,7 @@ export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
 export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void };
 /** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
-export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = [
-  { id: 'route', key: 'r', label: 'route' }, { id: 'team', key: 't', label: 'team' }, { id: 'channel', key: 'c', label: 'channel' },
-  { id: 'gates', key: 'g', label: 'gates' }, { id: 'board', key: 'o', label: 'board' },
-];
+export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = STRIP_TABS; // the side panel's own tab strip (route team channel gates core board)
 /** How to give the band the keyboard; shown after the keys when it fits. */
 export const BAND_HINT = 'ctrl+x tab';
 const buttonWidth = (b: { label: string }): number => 3 + textWidth(b.label) + 2; // engine draws `k: label`, two cells between buttons

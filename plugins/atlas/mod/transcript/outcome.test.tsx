@@ -82,7 +82,7 @@ test('background launch card: an ended worker reads done in the border, its STAT
   const e = launched('completed')
   const out = strings(await sites().ToolUse!(engine([e.agent]), e, next))
   const rows = (JSON.parse(out) as { children: Array<{ children: Array<{ children: string[] }> }> }).children.map((r) => r.children.map((c) => c.children.join('')).join(''))
-  expect(rows[0]).toMatch(/^┌─ done wave-a /)
+  expect(rows[0]).toMatch(/^┌─ ◆ done wave-a /)
   expect(rows.some((r) => /^│ last {2}STATUS: DONE · 29s +│$/.test(r))).toBe(true);
   expect(out).not.toContain('finished');
 })

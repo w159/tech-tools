@@ -37,7 +37,7 @@ const W = 44
 test('running card: a closed box, the state word and name in the top border, goal and last rows', () => {
   const c = workerCard(call(), 'running', 0, undefined, '', { now: 'Grep auth/ 12s', wave: 2 })!
   const rows = rowsOf(c)
-  expect(rows[0]).toMatch(/^┌─ running impl-a ─+ sonnet ─┐$/u)
+  expect(rows[0]).toMatch(/^┌─ ◆ running impl-a ─+ sonnet ─┐$/u)
   expect(rows.at(-1)).toMatch(/^└─+┘$/u)
   expect(rows.some((r) => /^│ goal {2}ship the thing +│$/.test(r))).toBe(true)
   expect(rows.some((r) => /^│ last {2}Grep auth\/ 12s +│$/.test(r))).toBe(true)
@@ -128,7 +128,7 @@ test('phaseOf maps a finished call by its worker state, not the idle fallback', 
 test('card rows are fixed-size boxes; a returned worker reads done, never finished-as-done twice', () => {
   const running = workerCard(call(), 'running', 60, undefined, '', { now: 'x' })!
   for (const row of (running as El).children) expect(row.props.flexShrink).toBe(0)
-  expect(rowsOf(running)[0]).toMatch(/^┌─ running impl-a/u)
+  expect(rowsOf(running)[0]).toMatch(/^┌─ ◆ running impl-a/u)
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished', 60)!
   expect(rowsOf(done)[0]).toContain('done impl-a')
 })
@@ -201,6 +201,6 @@ test('a killed or failed background worker reads failed in the border; a finishe
 })
 
 test('the notification row is state, name, role and outcome', () => {
-  expect(text(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^● done {2}wave-a {2}explorer STATUS: DONE/)
-  expect(text(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^■ failed {2}wave-a/)
+  expect(text(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a {2}explorer STATUS: DONE/)
+  expect(text(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ failed {2}wave-a/)
 })

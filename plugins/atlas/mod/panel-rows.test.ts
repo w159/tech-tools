@@ -53,7 +53,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   test('an open lead row has no age line (the lead has no start time)', () => {
     const out = body('team', 80, { lead, workers: [], mates: [], expanded: 'worker:lead' });
     expect(out.some((l) => l.includes('running ') && l.includes('tool calls'))).toBe(false);
-    expect(out[1]).toBe('      idle');
+    expect(out[1]).toBe('    idle');
   });
 });
 
@@ -71,31 +71,32 @@ describe('channel tab: header, columns and marks', () => {
     expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe('#atlas-board-mod  5 people');
   });
   test('the time column starts at 50 cells', () => {
-    expect(body('channel', 50, { notes: [note()] })[1]).toBe('10:02 lead hello');
-    expect(body('channel', 49, { notes: [note()] })[1]).toBe('lead hello');
+    expect(body('channel', 50, { notes: [note()] })[1]).toBe('    lead hello                               10:02'); // the right-aligned value column
+    expect(body('channel', 49, { notes: [note()] })[1]).toBe('    lead hello');
   });
   test('the nick column is 4 cells at least, 10 at most below 100 columns, 18 from 100, cut with an ellipsis', () => {
-    expect(body('channel', 80, { notes: [note({ from: 'ab' })] })[1]).toBe('10:02 ab   hello');
-    expect(body('channel', 80, { notes: [note({ from: 'implementer-band' })] })[1]).toBe('10:02 impleme... hello');
-    expect(body('channel', 120, { notes: [note({ from: 'implementer-band' })] })[1]).toBe('10:02 implementer-band hello');
-    expect(body('channel', 120, { notes: [note({ from: 'x'.repeat(30) })] })[1]).toBe(`10:02 ${'x'.repeat(15)}... hello`);
+    const first = (cols: number, from: string): string => body('channel', cols, { notes: [note({ from })] })[1]!.replace(/ +10:02$/, '');
+    expect(first(80, 'ab')).toBe('    ab hello');
+    expect(first(80, 'implementer-band')).toBe('    imple...band hello'); // cut in the middle, the tail that tells workers apart stays
+    expect(first(120, 'implementer-band')).toBe('    implementer-band hello');
+    expect(first(120, 'x'.repeat(30))).toBe(`    ${'x'.repeat(11)}...${'x'.repeat(10)} hello`);
   });
   test('the nick column is as wide as the widest nick shown in the log', () => {
     const out = body('channel', 80, { notes: [note({ from: 'ab' }), note({ from: 'abcdefg', text: 'two' })] });
-    expect(out.slice(1)).toEqual(['10:02 ab      hello', '10:02 abcdefg two']);
+    expect(out.slice(1).map((l) => l.replace(/ +10:02$/, ''))).toEqual(['    ab      hello', '    abcdefg two']);
   });
   test('marks: blocked and handoff carry a glyph and a word; a note to a peer names it; a note to all names nobody', () => {
     const out = body('channel', 120, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' }), note({ from: 'd', to: 'peer-1' }), note({ from: 'e', to: 'all' }), note({ from: 'f', kind: 'blocked', to: 'peer-1' })] });
-    expect(out.slice(1)).toEqual([
-      '10:02 a    ▲ blocked hello', '10:02 b    ● handoff hello', '10:02 c    ● done hello', '10:02 d    ▸ peer-1 hello', '10:02 e    hello', '10:02 f    ▲ blocked hello',
+    expect(out.slice(1).map((l) => l.replace(/ +10:02$/, ''))).toEqual([
+      '  ▲ a  blocked hello', '  ● b  handoff hello', '  ● c  done    hello', '    d          ▸ peer-1 hello', '    e          hello', '  ▲ f  blocked hello',
     ]);
   });
   test('a note is one line: whitespace and line breaks collapse', () => {
-    expect(body('channel', 80, { notes: [note({ text: 'a   b\n c\t d' })] })[1]).toBe('10:02 lead a b c d');
+    expect(body('channel', 80, { notes: [note({ text: 'a   b\n c\t d' })] })[1]!.replace(/ +10:02$/, '')).toBe('    lead a b c d');
   });
   test('ASCII mode marks a note to a peer with > and draws plain ASCII', () => {
     const out = body('channel', 120, { notes: [note({ to: 'peer-1' })] }, ascii);
-    expect(out[1]).toBe('10:02 lead > peer-1 hello');
+    expect(out[1]!.replace(/ +10:02$/, '')).toBe('    lead > peer-1 hello');
   });
   test('no persona colour: a nick is bold text whoever speaks', () => {
     const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ from: 'implementer-live' }), note({ from: 'lead' })] }));
@@ -134,24 +135,24 @@ describe('core tab: caps, notes and figures', () => {
   test('only the last 6 routes show, newest first', () => {
     const c = empty();
     c.routes = Array.from({ length: 7 }, (_, i) => route(`r${i}`)) as never;
-    const names = core(c).filter((l) => /^ {2}fix\/low/.test(l)).map((l) => l.split(/\s+/)[2]);
+    const names = core(c).filter((l) => /^ {4}fix\/low/.test(l)).map((l) => l.split(/\s+/)[2]);
     expect(names).toEqual(['r6', 'r5', 'r4', 'r3', 'r2', 'r1']);
   });
   test('without in-process rows the tab says they are not shown; with them it shows the transport and no note', () => {
     const c = empty();
     c.routes = [route('t1')] as never;
-    expect(core(c).at(-1)).toBe('  in-process dispatches are not shown here');
+    expect(core(c).at(-1)).toBe('    in-process dispatches are not shown here');
     c.inProcess = true;
     c.routes = [route('in-process:fix/low', { name: 'in-process', transport: 'in-process', isolation: '', maxParallel: 2 })] as never;
     const out = core(c);
-    expect(out).toContain('  fix/low  in-process  in-process, max 2');
+    expect(out).toContain('    fix/low in-process  in-process, max 2');
     expect(out.join('\n')).not.toContain('not shown here');
   });
   test('B8: a route without a transport is not labelled tmux', () => {
     const c = empty();
     c.routes = [route('t1', { transport: undefined })] as never;
-    const line = core(c).find((l) => l.startsWith('  fix/low'))!;
-    expect(line).toBe('  fix/low  t1  transport unknown, shared, max 1');
+    const line = core(c).find((l) => l.startsWith('    fix/low'))!;
+    expect(line).toBe('    fix/low t1  transport unknown, shared, max 1');
     expect(line).not.toContain('tmux');
   });
   test('the ledger drops open and unchecked counts of zero and says what is off', () => {
@@ -167,7 +168,7 @@ describe('core tab: caps, notes and figures', () => {
     c.verdicts = [verdict('a')] as never;
     c.claims = [{ owner: 'lonely', status: 'DONE', at: 9, matched: null }, { owner: 'matched', status: 'DONE', at: 8, matched: 'a' }, { owner: 'failed', status: 'FAILED', at: 7, matched: null }] as never;
     const out = core(c);
-    expect(out).toContain('  ▲ lonely          unchecked: says done, no verdict yet');
+    expect(out).toContain('  ▲ lonely unchecked      says done, no verdict yet');
     expect(out.join('\n')).not.toContain('matched ');
     expect(out.join('\n')).not.toContain('failed ');
   });
@@ -175,15 +176,15 @@ describe('core tab: caps, notes and figures', () => {
     const c = empty();
     c.offload = { workers: [{ name: 'w1', model: null, peak: 58_800, kept: 7000, returned: 151, costUsd: null, finished: false }], kept: 7000, returned: 151, ratio: 46.4 } as never;
     const out = core(c);
-    expect(out.find((l) => l.startsWith('offload'))).toBe('offload  7.0k kept in tmux, 151 back (46x)');
-    expect(out.find((l) => l.startsWith('  w1'))).toBe('  w1                ?            58.8k held   7.0k kept    151 back');
+    expect(out.find((l) => l.startsWith('offload'))).toBe('offload  7.0k tokens read by workers, 151 returned to the lead, 2% of what they read');
+    expect(out.find((l) => l.startsWith('    w1'))).toBe(`    w1 ?${' '.repeat(77)}peak 58.8k  read 7.0k  returned 151`); // figures right-aligned, no cost when unknown
   });
-  test('the offload ratio is one decimal below 10 and whole from 10', () => {
+  test('the offload share is a whole percent of what the workers read, and only when it can not pass 100', () => {
     const c = empty();
     c.offload = { workers: [worker('w')], kept: 15, returned: 10, ratio: 1.5 } as never;
-    expect(core(c).find((l) => l.startsWith('offload'))).toContain('(1.5x)');
-    c.offload = { workers: [worker('w')], kept: 15, returned: 1, ratio: 9.96 } as never;
-    expect(core(c).find((l) => l.startsWith('offload'))).toContain('(10x)');
+    expect(core(c).find((l) => l.startsWith('offload'))).toBe('offload  15 tokens read by workers, 10 returned to the lead, 67% of what they read');
+    c.offload = { workers: [worker('w')], kept: 10, returned: 15, ratio: 0.7 } as never;
+    expect(core(c).find((l) => l.startsWith('offload'))).not.toContain('%');
   });
 });
 
@@ -191,11 +192,12 @@ describe('route tab: blocked owner, phase position', () => {
   const todo = (id: string, state: PanelTodo['state'], over: Partial<PanelTodo> = {}): PanelTodo => ({ id, label: `task ${id}`, state, ...over });
   test('a blocked task shows the blocked mark, its word, its owner and why from 100 columns', () => {
     const out = body('route', 120, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe('  ▲ task b                         blocked   impl-live          blocked: waiting for lead reply');
+    expect(out.find((l) => l.includes('task b'))).toBe(`  ▲ task b                blocked blocked: waiting for lead reply${' '.repeat(46)}impl-live`);
   });
-  test('below 100 columns the owner and the reason leave the row; the mark, label and word stay', () => {
+  test('below 100 columns the reason leaves the row (the owner stays right-aligned); the mark, label and word stay', () => {
     const out = body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe('  ▲ task b                         blocked');
+    expect(out.find((l) => l.includes('task b'))).toBe(`  ▲ task b                blocked${' '.repeat(38)}impl-live`); // the reason leaves the row at 80 (open the row to read it)
+    expect(body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })], expanded: 'task:b' }).join('\n')).toContain('    owner impl-live · blocked: waiting for lead reply');
   });
   test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {
     const phase = (p: string): string => body('route', 80, { phase: p, phases: ['research', 'theory', 'build', 'verify'] })[0]!;

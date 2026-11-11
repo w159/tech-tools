@@ -81,7 +81,7 @@ describe('coreTick', () => {
     // One toast per read: state first, then the name, then one fact; the rest fold into `+N more`.
     expect(s.rec.toasts).toHaveLength(1);
     const [toast] = s.rec.toasts;
-    expect(toast).toBe('■ failed  b  refuted: title b  +2 more');
+    expect(toast).toBe('▌ ◆ ATLAS  ■ failed  b  refuted: title b  +2 more');
     await coreTick(s.$);
     await coreTick(s.$);
     expect(s.rec.toasts).toHaveLength(1);
@@ -105,7 +105,7 @@ describe('coreTick', () => {
     s.files[`${RUN}/logs/implementer-1.log`] += `\n${JSON.stringify({ type: 'result', total_cost_usd: 0.1, modelUsage: { 'claude-sonnet-5-5': { costUSD: 0.1 } } })}`;
     await coreTick(s.$);
     await coreTick(s.$);
-    expect(s.rec.toasts).toEqual(['● done  implementer-1  4.0k kept, 0 back']);
+    expect(s.rec.toasts).toEqual(['▌ ◆ ATLAS  ● done  implementer-1  4.0k kept, 0 back']);
   });
 
   test('an unchanged log is not read again', async () => {

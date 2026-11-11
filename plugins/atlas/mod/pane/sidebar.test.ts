@@ -52,8 +52,10 @@ describe('sidebar shell', () => {
     expect(tabs.every((b) => b.plain === true)).toBe(true);
   });
 
-  test('the board key o joins the strip only when the board is wired', () => {
-    expect(strip(tree()).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k']);
+  test('the board key o is always in the strip (the same six tabs as omp); it presses only when the board is wired', () => {
+    expect(strip(tree()).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
+    expect(() => tab(tree(), 'todos').props.onPress()).not.toThrow(); // unwired: a no-op
+    expect(calls).not.toContain('board');
     const wired = sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: open, ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns: 70, rows: 40 }, { ...on, toggleTodos: () => calls.push('board') }) as unknown as Node;
     expect(strip(wired).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
     tab(wired, 'todos').props.onPress();

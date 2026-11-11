@@ -34,24 +34,23 @@ const byKey = (root: Node, key: string): Node => {
 };
 
 describe('band footer buttons', () => {
-  test('route team channel gates board are Buttons with distinct single-letter hotkeys', () => {
+  test('route team channel gates core board are Buttons with distinct single-letter hotkeys', () => {
     const t = band();
     expect(['route', 'team', 'channel', 'gates', 'board'].map((k) => byKey(t, `band:${k}`).props.hotkey)).toEqual(['r', 't', 'c', 'g', 'o']);
     expect(new Set(hotkeys(t)).size).toBe(hotkeys(t).length);
   });
   test('pressing a button opens that pane view, or toggles the board', () => {
     const t = band();
-    for (const k of ['route', 'team', 'channel', 'gates']) byKey(t, `band:${k}`).props.onPress();
+    for (const k of ['route', 'team', 'channel', 'gates', 'core']) byKey(t, `band:${k}`).props.onPress();
     byKey(t, 'band:board').props.onPress();
-    expect(calls).toEqual(['open:route', 'open:team', 'open:channel', 'open:gates', 'board']);
+    expect(calls).toEqual(['open:route', 'open:team', 'open:channel', 'open:gates', 'open:core', 'board']);
   });
-  test('the buttons are labelled route, team, channel, gates, board (the gates button is `gates`, not `core`)', () => {
-    expect(buttons(band()).map((b) => b.props.label)).toEqual(['route', 'team', 'channel', 'gates', 'board']);
-    expect(textOf(band())).not.toContain('core');
+  test('the buttons are the side panel strip: route, team, channel, gates, core, board (change 9: the same set and order on both hosts)', () => {
+    expect(buttons(band()).map((b) => b.props.label)).toEqual(['route', 'team', 'channel', 'gates', 'core', 'board']);
   });
   test('keys show only while idle at 80+ columns: they survive 80, drop at 79 and with no handlers', () => {
-    expect(buttons(band(80)).length).toBe(5);
-    expect(buttons(band(90)).length).toBe(5);
+    expect(buttons(band(80)).length).toBe(6);
+    expect(buttons(band(90)).length).toBe(6);
     expect(buttons(band(79)).length).toBe(0);
     expect(buttons(band(160, null)).length).toBe(0);
   });
@@ -63,10 +62,10 @@ describe('band footer buttons', () => {
   test('the footer keeps its checks on the left and the keys flush right, the row exactly the width', () => {
     const gates = [{ id: 'tripwire', title: 'tripwire', lines: [{ ok: false, label: 'x' }] }] as any;
     const snapshot = busySnap({ squad: [], activity: {}, comms: [] });
-    for (const columns of [80, 120, 160]) {
+    for (const columns of [80, 120, 160]) { // at 80 the six keys leave 18 cells, so the checks give way to them; the row is still exactly the width
       const t = bandTree(els, { snapshot, live: [], gates, columns, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
       const foot = kids(t).at(-1)!;
-      expect(textOf(foot)).toContain('checks  ■ tripwire');
+      if (columns > 80) expect(textOf(foot)).toContain('checks  ■ tripwire');
       const width = kids(foot).reduce((n, k) => n + (k.kind === 'Button' ? 3 + String(k.props.label).length : [...String(k.props.children ?? '')].length), 0);
       expect(width).toBe(columns);
     }
@@ -79,8 +78,8 @@ describe('band footer buttons', () => {
       return textOf(kids(t).at(-1)!).includes('ctrl+x tab');
     };
     expect(hint(160)).toBe(true);
-    expect(hint(120)).toBe(true);
-    expect(hint(80)).toBe(false);
+    expect(hint(140)).toBe(true);
+    expect(hint(80)).toBe(true); // the checks gave way to the six keys, so the hint has the room they left
     expect(textOf(band())).not.toMatch(/click or/);
   });
   test('the hint sits two cells after the last key, the same gap as between keys', () => {
@@ -90,8 +89,8 @@ describe('band footer buttons', () => {
   });
   test('every key the band advertises exists as a hotkey, unique', () => {
     const t = band();
-    expect(hotkeys(t).sort()).toEqual(['c', 'g', 'o', 'r', 't']);
-    expect(new Set(hotkeys(t)).size).toBe(5);
+    expect(hotkeys(t).sort()).toEqual(['c', 'g', 'k', 'o', 'r', 't']);
+    expect(new Set(hotkeys(t)).size).toBe(6);
   });
 });
 

@@ -6,9 +6,9 @@ import { coreFixture, coreMatrix } from '../contracts/core-fixture';
 import { panelWorld, worldCard } from '../contracts/panel-world';
 import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } from '../contracts/panel-golden';
 import { world } from '../contracts/band-world';
-import { cells, runsString, UI_STATES, type Ui } from './atlas-ui';
+import { cells, runsString, stateWordTone, UI_STATES, type Ui } from './atlas-ui';
 import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, cardLines, headerRows, lineText, PANEL_TABS, panelText, tabGap, toastText, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, cardLines, headerRows, lineText, PANEL_TABS, panelText, STRIP_TABS, toastText, type PanelModel, type PanelTab } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
@@ -40,25 +40,22 @@ describe('side panel design goldens', () => {
 });
 
 describe('tab strip', () => {
-  test('lists route team channel gates core; the lit tab is ruled and bold', () => {
+  test('lists r: route t: team c: channel g: gates k: core o: board; the lit tab is ruled and bold', () => {
     for (const t of tabs) {
       const [strip, rule] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
-      expect(lineText(strip!).trim().split(/\s+/)).toEqual(['route', 'team', 'channel', 'gates', 'core']);
+      expect(lineText(strip!).trim()).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
       const lit = strip!.runs.find((x) => x.bold)!;
       expect(lit.t).toBe(t);
       expect(lineText(rule!).trim()).toBe('━'.repeat(t.length));
-      expect(lineText(rule!).indexOf('━')).toBe(lineText(strip!).indexOf(t));
+      expect(lineText(rule!).indexOf('━')).toBe(lineText(strip!).indexOf(`${PANEL_TABS.find((x) => x.id === t)!.key}: ${t}`) + 3);
     }
   });
-  test('L21: the strip fits every width from 29 to 140 and never runs labels together', () => {
+  test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (it wraps)', () => {
     for (let cols = 29; cols <= 140; cols++) {
-      const [strip] = headerRows(panelWorld('route', cols, mocha)).slice(2);
-      const text = lineText(strip!);
-      expect(cells(text)).toBeLessThanOrEqual(cols);
-      expect(text.trim().split(/\s+/)).toEqual(['route', 'team', 'channel', 'gates', 'core']);
+      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => /^\w: /.test(l.trim()));
+      for (const l of rowsOut) expect(cells(l)).toBeLessThanOrEqual(cols);
+      expect(rowsOut.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w)).join('')).toBe(STRIP_TABS.map((t) => `${t.key}:`).join(''));
     }
-    expect(tabGap(110)).toBe(3);
-    expect(tabGap(38)).toBe(2);
   });
 });
 
@@ -99,7 +96,7 @@ describe('route tab', () => {
     expect(out.at(-1)).toMatch(/\d+ more tasks on the board$/);
   });
   test('names that do not fit the gates row fold to a labelled count', () => {
-    expect(rows('route', 30)[5]).toContain('2/3 green');
+    expect(rows('route', 30).find((l) => l.startsWith('gates '))).toContain('2/3 green');
   });
 });
 
@@ -140,7 +137,9 @@ describe('gates tab', () => {
   const long = 'the completion gate found that verification coverage is missing for the changed modules and the docs tree';
   const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
   test('a group says how many fail in words and shows the first fix', () => {
-    expect(rows('gates', 100, { gates: g() }).at(-1)).toBe('■ Completion gate  1 failing  run the hooks suite');
+    const row = rows('gates', 100, { gates: g() }).at(-1)!;
+    expect(row).toMatch(/^ {2}■ Completion gate {2}failing run the hooks suite +1 of 2 failing$/);
+    expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });
   test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {
     const out = rows('gates', 40, { gates: g({ lines: [{ id: 'verify', label: long, ok: false }] }) });
@@ -149,8 +148,8 @@ describe('gates tab', () => {
   });
   test('an open group lists its lines; an open failing line shows the fix and copies it on a second press', () => {
     const open = bodyLines(panelWorld('gates', 100, mocha, { gates: g(), expanded: 'gate:verify' })).map((l) => ({ t: lineText(l), p: l.press }));
-    expect(open.map((x) => x.t)).toContain('  ■ verification coverage');
-    expect(open.map((x) => x.t)).toContain('     fix: run the hooks suite (press to copy)');
+    expect(open.map((x) => x.t)).toContain('  ■   verification coverage');
+    expect(open.map((x) => x.t)).toContain('      fix: run the hooks suite (press to copy)');
     expect(open.find((x) => x.p?.key === 'gate:verify')?.p?.copy).toBe('run the hooks suite');
   });
   test('an unavailable source says so', () => {
@@ -164,14 +163,14 @@ describe('gates tab', () => {
 describe('core tab', () => {
   test('contract, verdicts, offload and route sections with words on every figure', () => {
     const out = rows('core', 120, { core }).join('\n');
-    for (const w of ['contract  header 3/4', 'verdicts  1 verified · 1 refuted', 'offload  17.9k kept in tmux, 608 back (30x)', 'route  class/effort']) expect(out).toContain(w);
+    for (const w of ['contract', '  ▲ header   3 of 4', 'verdicts  1 verified · 1 refuted', 'offload  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', 'dispatch  planned against what ran']) expect(out).toContain(w);
   });
   test('L16: three explorers on a one-seat route read ran 3 / planned 1 and drift, not 1x as planned', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
     expect(out).toContain('ran 3 / planned 1 (haiku)');
-    expect(out).toContain('■ drift');
+    expect(out).toMatch(/■ {3}1x explorer +drift +ran 3 \/ planned 1 \(haiku\)/);
     expect(out).not.toContain('as planned');
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {
@@ -195,8 +194,8 @@ describe('channel tab', () => {
   test('header counts people and unread in words; blocked and handoff notes carry the state glyph and word', () => {
     const out = bodyLines(panelWorld('channel', 120, mocha)).map(lineText);
     expect(out[0]).toBe('#atlas-board-mod  5 people · 2 unread');
-    expect(out[2]).toContain('▲ blocked');
-    expect(out[3]).toContain('● handoff');
+    expect(out[2]).toMatch(/^ {2}▲ implementer-live +blocked /);
+    expect(out[3]).toMatch(/^ {2}● implementer-layout +handoff /);
   });
   test('the log keeps the newest rows - 4 notes', () => {
     const notes = Array.from({ length: 40 }, (_, i) => ({ at: '10:00', from: 'lead', text: `note ${i}` }));
@@ -247,8 +246,8 @@ describe('worker card', () => {
   test('the border carries the state word for every state, and the frame takes the state tone', () => {
     for (const s of UI_STATES) {
       const top = cardLines({ ...worldCard(mocha), state: s }, 80)[0]!;
-      expect(runsString(top)).toContain(` ${s} implementer-band `);
-      expect(top.find((x) => x.t === s)?.tone).toBe('text');
+      expect(runsString(top)).toContain(` ◆ ${s} implementer-band `);
+      expect(top.find((x) => x.t === s)?.tone).toBe(stateWordTone(s, mocha));
       expect(top[0]!.tone).not.toBe('text');
       expect(top[0]!.tone).not.toBe('line');
     }
@@ -261,10 +260,10 @@ describe('worker card', () => {
 });
 
 describe('toast', () => {
-  test('order is state, name, fact (design golden)', () => {
+  test('order is bar, ATLAS mark, state, name, fact (design golden, with the round 3 bar and mark)', () => {
     expect([toastText('done', 'implementer-layout', '9 of 9 steps', mocha), toastText('failed', 'implementer-live', 'tests red 3', mocha)]).toEqual(toastDesign);
   });
   test('ASCII mode uses the ASCII state mark', () => {
-    expect(toastText('failed', 'a', 'b', ascii)).toBe('# failed  a  b');
+    expect(toastText('failed', 'a', 'b', ascii)).toBe('| ATLAS  # failed  a  b');
   });
 });
