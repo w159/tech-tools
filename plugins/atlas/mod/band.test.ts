@@ -317,12 +317,12 @@ describe('the board slot', () => {
     expect(open).toContain('Trace gate path');
     expect(open).not.toMatch(/\[(research|label)\]/);
   });
-  test('the running board item carries the spinner frame of the tick and its owner, as in omp', () => {
+  test('the running board item turns the snapshot clock\'s frame for its owner, whatever the tick, as in omp', () => {
     const snapshot = busySnap({ todos: [{ id: 'b', content: '[research] edit auth middleware', status: 'in_progress', owner: 'explorer-1' }] as any });
     const row = (tick: number) => panel(200, { snapshot, tick, todoExpanded: true }).rows[2]!;
-    expect(row(0)).toMatch(/^▸ ◐ edit auth middleware +running +explorer-1/);
-    expect(row(1)).toMatch(/^▸ ◓ edit auth middleware/);
-    expect(row(4)).toBe(row(0));
+    const want = spinnerGlyph(spinFrameOf(snapshot.now, 'explorer-1'));
+    expect(row(0)).toMatch(new RegExp(`^▸ ${want} edit auth middleware +running +explorer-1`));
+    expect(row(1)).toBe(row(0));
   });
 });
 

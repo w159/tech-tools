@@ -7,10 +7,12 @@ import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_ric
 import { worldHudAgents, worldPhases, worldPlan } from "../contracts/hud-world";
 import type { Ui } from "../mod/atlas-ui";
 import { hudRows } from "../mod/hud";
-import { hudText, paintHud } from "./hud-paint";
+import { hudText as rawHudText, paintHud } from "./hud-paint";
 
 const ui: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
 const opts = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
+// The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
+const hudText = (...a: Parameters<typeof rawHudText>) => rawHudText(...a).map(l => l.replace(/[◐◓◑◒]/g, "◐"));
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const phases = worldPhases();
 const block = (rows: string[]) => rows.slice(rows.findIndex(l => l.includes("SUBAGENTS")));
@@ -38,7 +40,7 @@ test("parity: Claude Code rows and omp rows are the same text at 120, 100, 80, 6
 		for (const rich of [false, true]) {
 			for (const maxRows of [60, 12, 6, 2, 1]) {
 				const cc = hudRows(input, opts(cols, rich, maxRows)).map(r => r.map(s => s.t).join("").trimEnd());
-				expect(hudText(input, opts(cols, rich, maxRows))).toEqual(cc);
+				expect(rawHudText(input, opts(cols, rich, maxRows))).toEqual(cc);
 				expect(paintHud(input, opts(cols, rich, maxRows)).map(l => strip(l).trimEnd())).toEqual(cc);
 			}
 		}

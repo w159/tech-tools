@@ -4,16 +4,13 @@
  * the way omp/mission-panel.ts paints the band. omp draws its own native Subagents widget; `paintHud` is the shared
  * draw for any Atlas widget that shows agents (the TODO fallback passes none).
  */
-import { PALETTES, runsString, sgrColor, uiFromEnv, type Run, type Ui, runHex } from "../mod/atlas-ui";
+import { paintAnsi, runsString, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
 import { hudLines, type HudInput, type HudOpts } from "../mod/hud";
-import { RST } from "./panel-paint";
 
 /** One run in ANSI: bold/strike, the tone foreground on the run's fill or the rev 4 panel; NO_COLOR keeps bold and strike only. */
 export function paintRun(x: Run, ui: Ui): string {
 	if (x.t === "") return "";
-	const p = PALETTES[ui.theme];
-	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(runHex(x, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
-	return sgr ? `\x1b[${sgr}m${x.t}${RST}` : x.t;
+	return paintAnsi(x, ui);
 }
 
 /** The HUD as ANSI rows, each padded to `opts.cols`. */

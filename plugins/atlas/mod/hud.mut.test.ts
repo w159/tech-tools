@@ -11,7 +11,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { worldHudAgents, worldPhases, worldPlan } from '../contracts/hud-world';
 import { hudRows, reclaimBlanks, segmentOf, todoModel, type HudInput } from './hud';
-import { hostEnv, type Ui } from './atlas-ui';
+import { hostEnv, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import type { Segment } from './runs';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -19,10 +19,16 @@ const input = (): HudInput => ({ todos: worldPlan(), agents: worldHudAgents(), p
 const text = (rows: Segment[][]): string[] => rows.map((r) => r.map((s) => s.t).join(''));
 
 describe('hud surfaces: defaults', () => {
-  test('the tick moves the running spinner, and no tick reads as tick 0', () => {
-    const at = (tick?: number) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, now: 0, ...(tick === undefined ? {} : { tick }) }));
+  test('without a clock the tick moves the running spinner, and no tick reads as tick 0', () => {
+    const at = (tick?: number) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, ...(tick === undefined ? {} : { tick }) })).map((l) => l.replace(/elapsed \d\d:\d\d/, ''));
     expect(at(0)).toEqual(at());
     expect(at(3)).not.toEqual(at(0));
+  });
+  test('with a clock the spinner turns spinFrameOf(now, owner) and the tick is ignored', () => {
+    const at = (now: number, tick: number) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, now, tick })).join('\n');
+    expect(at(0, 0)).toEqual(at(0, 3));
+    expect(at(0, 0)).toContain(`${spinnerGlyph(spinFrameOf(0, 'implementer-band'))} Subagents block`);
+    expect(at(100, 0)).toContain(`${spinnerGlyph(spinFrameOf(100, 'implementer-band'))} Subagents block`);
   });
   test('rich unset follows ATLAS_BAND_RICH, an explicit rich wins over it', () => {
     const draw = (rich?: boolean) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, now: 0, ...(rich === undefined ? {} : { rich }) }));

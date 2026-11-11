@@ -11,7 +11,7 @@ import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, parseGates } from "../mod/gates";
 import { gateTally } from "../mod/data/runstate";
-import { hostEnv, PALETTES, sgrColor, type Ui, type UiState, uiFromEnv, runHex } from "../mod/atlas-ui";
+import { hostEnv, paintAnsi, sgrColor, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
 import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/board-model";
@@ -163,11 +163,9 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 
 /** One run in ANSI: bold/strike, the tone foreground on the run's fill or the panel; NO_COLOR keeps bold and strike only. */
 const paintRun = (x: Run, ui: Ui): string => {
-	const p = PALETTES[ui.theme];
-	const sgr = [x.bold ? "1" : "", x.strike ? "9" : "", sgrColor(runHex(x, ui.theme), 38, ui.color), sgrColor(x.bg ? p[x.bg] : p.panel, 48, ui.color)].filter(Boolean).join(";");
-	return sgr ? `\x1b[${sgr}m${x.t}${RST}` : x.t;
+	return paintAnsi(x, ui);
 };
-const fillOf = (ui: Ui): string => (ui.color === "none" ? "" : `\x1b[${sgrColor(PALETTES[ui.theme].panel, 48, ui.color)}m`);
+const fillOf = (ui: Ui): string => (ui.color === "none" ? "" : `\x1b[${sgrColor(surfaceHex("panel", ui), 48, ui.color)}m`);
 
 /** A MissionModel as ANSI rows; `board(rows)` fills the todo slot (omitted: no slot rows). */
 export function paintMission(mm: MissionModel, board: (rows: number) => string[] = () => []): string[] {

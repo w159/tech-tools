@@ -62,7 +62,7 @@ test("fallback widget appears for board items when no native todo has run", () =
 	h.fire("before_agent_start");
 	const last = h.widgets.at(-1);
 	expect(title(last)).toContain("▸ TODO");
-	expect(strip(last ?? [])).toMatch(/▸ ◐ a +running/);
+	expect(strip(last ?? [])).toMatch(/▸ [◐◓◑◒] a +running/);
 });
 
 test("a successful native todo result removes the fallback and keeps it removed", () => {

@@ -47,7 +47,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
 function boardIn(els: ClientElements, m: SidebarModel, cols: number, ui: Ui): RenderElement {
   const s = m.snapshot;
   const items = withOwnerStates(ownTodos(s.todos ?? [], s.sessionId), workerStates(s, liveWorkers(s, s.now)));
-  return boardTree(els, items, { cols, rows: Math.max(1, m.rows - 4), tick: m.tick ?? 0, now: Math.floor(s.now / 1000), ui, motion: m.motion });
+  return boardTree(els, items, { cols, rows: Math.max(1, m.rows - 4), tick: m.tick ?? 0, now: Math.floor(s.now / 1000), nowMs: s.now, ui, motion: m.motion });
 }
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {

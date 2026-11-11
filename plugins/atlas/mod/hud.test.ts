@@ -17,7 +17,9 @@ import { textWidth } from './theme';
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');
 const lines = (rows: Segment[][]): string[] => rows.map(text);
-const trimmed = (rows: Segment[][]): string[] => lines(rows).map((l) => l.trimEnd());
+// The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
+const unspin = (l: string): string => l.replace(/[◐◓◑◒]/g, '◐');
+const trimmed = (rows: Segment[][]): string[] => lines(rows).map((l) => unspin(l.trimEnd()));
 const todo = (id: string, content: string, status: string, extra: Partial<TodoItem> | string = {}): TodoItem => ({ id, content, status, ...(typeof extra === 'string' ? { phase: extra as TodoItem['phase'] } : extra) });
 
 const worldPlan = worldPlanOf;

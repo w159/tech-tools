@@ -6,7 +6,7 @@ import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { itemState } from './board-model';
-import { hostEnv, LINGER_MS, PALETTES, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, tierOf, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -103,7 +103,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const ev = flat(t.evidence);
     const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || flat(t.owner);
     const detail = ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base;
-    return { label: labelOf(t), state, detail, focus: false, ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
+    return { label: labelOf(t), state, detail, focus: false, ...(flat(t.owner) ? { owner: flat(t.owner) } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
   const at = rows.findIndex((r) => r.state === 'running');
   const focus = at >= 0 ? at : rows.findIndex((r) => r.state !== 'done');
@@ -169,9 +169,8 @@ export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
 
 /** A run as a Segment: the theme's tone colour on the run's own fill or the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export function segmentOf(x: Run, ui: Ui): Segment {
-  const p = PALETTES[ui.theme];
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
-  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme), bg: x.bg ? p[x.bg] : p.panel, ...style };
+  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme, ui.color), bg: surfaceHex(x.bg ?? 'panel', ui), ...style };
 }
 
 /** The HUD rows above the band: TODO tree and Subagents block; [] when there is nothing to show. */
