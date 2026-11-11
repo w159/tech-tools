@@ -2,11 +2,12 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
+import { animateRow, type MotionCtx } from './motion';
 import { cells, CHIP_W, COUNT_ORDER, clip, gauge, percent, ribbon, runsCells, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
-export type TodoRow = { label: string; state: UiState; detail: string; focus: boolean };
+export type TodoRow = { label: string; state: UiState; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean };
+export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string };
 export type SurfaceOpts = {
   cols: number;
   ui: Ui;
@@ -16,6 +17,8 @@ export type SurfaceOpts = {
   rich?: boolean;
   /** Phase ids and the 0-based lit phase for the rich rail. */
   phases?: { ids: readonly string[]; active: number };
+  /** Motion view (mod/motion.ts): a row with a key and an entry is drawn mid-transition. Absent: the resting render. */
+  motion?: MotionCtx | undefined;
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
 export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number };
@@ -92,6 +95,11 @@ function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich:
 }
 
 function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
+  const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt);
+  return r.key === undefined ? runs : animateRow(runs, r.key, r.state, o.motion, o.ui);
+}
+
+function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
   const { ui } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, o.tick ?? 0), t(' ')];
   const labelW = tier === 'min' ? Math.max(1, o.cols - 4) : stateAt - 5;
@@ -159,6 +167,11 @@ function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, taskW: numb
 }
 
 function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, taskW: number): Run[] {
+  const runs = agentRowResting(r, o, rich, stateAt, taskW);
+  return r.key === undefined ? runs : animateRow(runs, r.key, r.state, o.motion, o.ui);
+}
+
+function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, taskW: number): Run[] {
   const { ui, cols } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, o.tick ?? 0), t(' '), t(clip(flat(r.name), stateAt - 5), 'text', { bold: true })];
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state)];

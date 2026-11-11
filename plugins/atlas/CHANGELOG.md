@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added: real motion on state changes (`mod/motion.ts`): a TODO, SUBAGENTS, Board, side panel route or gate row, or a band count that changes state is drawn in its new accent, brightened, easing back to rest over 900 ms (a row turning done pops open diamond, filled diamond, disc); a new row reveals left to right over 300 ms. One pure model shared by Claude Code and omp (`Run.fg` override, `runHex` in every painter); the frame timer runs only while a transition is open, the end is the resting render byte for byte, and `ATLAS_REDUCED_MOTION=1` / `NO_COLOR` draw the resting render only. `bun mod/motion-demo.ts --out <dir>` writes the frames of a running -> done TODO and agent row as `.ans` files.
+
 ## 17.6.0 - 2026-11-11
 
 ### Fixed

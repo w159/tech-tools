@@ -29,6 +29,8 @@ import { headerPhaseOf, registerRestyle } from './restyle';
 import { mergeToasts, registerNotify, stateToast } from './notify';
 import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
 import { clearLook, lookOf } from './look';
+import { Motion, MotionDriver, reducedMotion } from './motion';
+import { motionFeed } from './motion-feed';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { LiveSnapshot, TeamTool } from './orchestra-types';
 import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
@@ -152,6 +154,19 @@ async function easeTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
 			}
 		})().catch(() => undefined);
 	});
+}
+
+// ---- motion (mod/motion.ts): row transitions and reveals ----------------------------------------------------------
+// The tick observes the snapshot (only when a rebuild produced a new one), the Motion keeps each row's window, and a timer
+// bumps the band's redraw atom only while a window is open: idle runs no timer and writes nothing. Renders read `motion.ctx`.
+let motion: Motion | null = null;
+let motionDriver: MotionDriver | null = null;
+async function motionTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
+	if (!motionDriver) {
+		motion = new Motion(!reducedMotion({ ATLAS_REDUCED_MOTION: await $.env.get('ATLAS_REDUCED_MOTION').catch(() => undefined), NO_COLOR: await $.env.get('NO_COLOR').catch(() => undefined) }));
+		motionDriver = new MotionDriver(motion, (ms, fn) => $.clock.every(ms, fn), async () => void (await update($, easeTickState, (n) => n + 1)), () => $.clock.now());
+	}
+	await motionDriver.step(snap, async () => motionFeed(snap, await gateGroups($), await read($, coreState), (await lookOf($)).ui));
 }
 /** A spawn-recorded agent the host list does not (yet) contain is only presumed gone after this long. */
 const SPAWN_GRACE_MS = 15_000;
@@ -884,6 +899,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					const snap = await read($, snapshotState);
 					if (!snap) return;
 					await easeTick($, snap as LiveSnapshot);
+					await motionTick($, snap as LiveSnapshot);
 					if (activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
 				})().catch(() => undefined);
 			});
@@ -993,7 +1009,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
 		const look = await lookOf($);
 		const tick = await read($, spinnerTickState);
-		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now }; // the board's clock too: one `claimed_at`, one elapsed
+		const motionCtx = motion?.ctx(await $.clock.now());
+		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now, motion: motionCtx }; // the board's clock too: one `claimed_at`, one elapsed
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;
@@ -1004,7 +1021,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length : budget, lastPhase: lastRailPhase, core, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const hudCap = hudBudget(budget, hudCompactRows(hudIn, columns), BAND_MIN_ROWS, running);
 		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
 		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
@@ -1031,9 +1048,11 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const look = await lookOf($);
+		await read($, easeTickState); // a transition bumps it each frame: the pane redraws mid-transition too
+		const paneMotion = motion?.ctx(await $.clock.now());
 		if (e.requestId === BOARD_ID) {
 			return boardTree($.ui.resolve(e), withOwnerStates(ownTodos(snapshot.todos ?? [], snapshot.sessionId), workerStates(snapshot, liveWorkers(snapshot, snapshot.now))), {
-				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich,
+				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
 			});
 		}
 		return sidebarTree($.ui.resolve(e), {
@@ -1045,6 +1064,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
 			tick: await read($, spinnerTickState),
+			motion: paneMotion,
 		}, sidebarHandlers($, e.surface));
 	});
 

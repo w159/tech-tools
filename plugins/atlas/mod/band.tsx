@@ -10,8 +10,9 @@ import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from '.
 import { ownTodos, planBasis, todoCounts } from './data/todos';
 import { blockedCount } from './board-model';
 import { groupOpenCount } from './gates';
-import { hostEnv, LINGER_MS, PALETTES, toneHex, uiFromEnv, type Ui } from './atlas-ui';
-import { bandLines, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
+import { hostEnv, LINGER_MS, PALETTES, toneHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
+import type { MotionCtx, MotionItem } from './motion';
+import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
@@ -22,7 +23,7 @@ import { textWidth } from './theme';
 export { planRows } from './mission-layout';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; eased?: { todo?: number; ctx?: number } };
+export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 // `team` (omp: the team record's `<class>/<effort>`) is the header's scope label; `leadName` (omp: `lead-<sid6>`)
 // names the lead in the message row. Both absent: not shown / `lead`. `ui` (theme, ASCII, colour depth) defaults to the
 // environment; `rich` (ATLAS_BAND_RICH=1) draws the tall band when the rows allow. `workersInHud`: the HUD's Subagents
@@ -125,7 +126,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     ctx: s.contextPct > 0 ? Math.min(1, s.contextPct / 100) : undefined,
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
-    workersInHud: b.workersInHud, eased: b.eased,
+    workersInHud: b.workersInHud, eased: b.eased, ...(b.motion ? { motion: b.motion } : {}),
   };
 }
 
@@ -135,7 +136,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
 const seg = (x: Run, ui: Ui): Segment => {
   const p = PALETTES[ui.theme];
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
-  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: toneHex(x.tone, ui.theme), bg: x.bg ? p[x.bg] : p.panel, ...style };
+  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme), bg: x.bg ? p[x.bg] : p.panel, ...style };
 };
 const segs = (l: Line, ui: Ui): Segment[] => l.runs.map((x) => seg(x, ui));
 const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : PALETTES[ui.theme].panel);
@@ -178,6 +179,9 @@ export function missionTree(els: ClientElements, m: MissionModel, todoRows: (row
 }
 
 /** Breathing blanks the running band draws at `b.maxRows` (rows of spaces only; a board slot or the key footer never counts): the rows the HUD can have instead. */
+/** What the Motion observes of the band: each state's agent count (the counts the header draws). */
+export const bandCountItems = (b: BandModel): MotionItem[] => bandMotionItems(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() }));
+
 export function bandSpareRows(b: BandModel): number {
   const maxRows = b.maxRows ?? 12;
   if (maxRows < 1) return 0;
@@ -195,7 +199,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   const rows: Row[] = lines.flatMap((l): Row[] => {
-    if (l.board) return todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), ui, rich: m.rich });
+    if (l.board) return todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), ui, rich: m.rich, motion: b.motion });
     if (l.keys && on) return [keysRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });

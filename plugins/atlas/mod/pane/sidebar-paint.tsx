@@ -1,7 +1,7 @@
 // sidebar-paint.tsx: PanelLines (mod/panel-layout.ts) as Claude Code elements. A row with a press is a plain Button; every
 // run is painted in the live theme's tone on the rev 4 panel token, so the pane meets the band without a seam.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { PALETTES, toneHex, uiFromEnv, type Run, type Ui } from '../atlas-ui';
+import { PALETTES, uiFromEnv, type Run, type Ui, runHex } from '../atlas-ui';
 import { bodyLines, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
@@ -10,7 +10,7 @@ import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 export function runEl(els: ClientElements, x: Run, ui: Ui): RenderElement {
   const p = PALETTES[ui.theme];
   const base = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strikethrough: true } : {}) };
-  return els.Text(ui.color === 'none' ? { ...base, children: x.t } : { ...base, color: toneHex(x.tone, ui.theme), backgroundColor: x.bg ? p[x.bg] : p.panel, children: x.t });
+  return els.Text(ui.color === 'none' ? { ...base, children: x.t } : { ...base, color: runHex(x, ui.theme), backgroundColor: x.bg ? p[x.bg] : p.panel, children: x.t });
 }
 export const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : PALETTES[ui.theme].panel);
 
