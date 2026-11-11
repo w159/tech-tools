@@ -56,6 +56,8 @@ def has_failing(text):
     """True when evidence text reports an unresolved failure."""
     text = RESOLVED_RE.sub(" ", text)
     return bool(FAILING_RE.search(text) or FAILING_WORD_RE.search(text))
+
+
 GONE_RE = re.compile(r"delet|remov|throwaway|scratch|temp|not committed", re.I)
 
 
@@ -251,7 +253,10 @@ def close_board_item(atlas_todo, root, who, msg, report):
         why = "no final report"
         if msg and msg.strip():
             with open(PROTOCOL, encoding="utf-8") as f:
-                why = "; ".join(check_report(msg, "atlas:", None, json.load(f)["report"])) or why
+                why = (
+                    "; ".join(check_report(msg, "atlas:", None, json.load(f)["report"]))
+                    or why
+                )
         _block(atlas_todo, root, pick, why)
         return
     lines = msg.splitlines()
@@ -342,10 +347,19 @@ def main():
     p = json.loads(sys.stdin.read(), strict=False)
     if not isinstance(p, dict) or p.get("hook_event_name") != "SubagentStop":
         return
-    if p.get("stop_hook_active"):
-        return
     agent_type = str(p.get("agent_type") or "")
     msg = p.get("last_assistant_message")
+    if p.get("stop_hook_active"):
+        # The retry stop after a block never blocks again, but it still ends the agent:
+        # settle its member and dispatch row (valid report completes, else blocked).
+        report = None
+        if agent_type.startswith("atlas:") and isinstance(msg, str) and msg.strip():
+            with open(PROTOCOL, encoding="utf-8") as f:
+                report = json.load(f)["report"]
+            if check_report(msg, agent_type, p.get("cwd"), report):
+                report = None
+        finish_member(p, msg if report else None, report)
+        return
     if (
         not agent_type.startswith("atlas:")
         or not isinstance(msg, str)

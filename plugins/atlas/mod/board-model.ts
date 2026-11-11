@@ -10,12 +10,12 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, clip, gauge, ribbon, runsCells, spinFrameOf, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, clip, gauge, ribbon, runsCells, spinFrameOf, STATE_TOKEN, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */
-export type BoardRow = { label: string; state: UiState; owner: string; detail: string; elapsed?: { secs: number; of?: number }; ownerState?: UiState; focus?: boolean };
+export type BoardRow = { label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`ended`: the agent is gone, the store row is still open). */ word?: string; owner: string; detail: string; elapsed?: { secs: number; of?: number }; ownerState?: UiState; focus?: boolean };
 
 /** Column starts of the full form, and the compact form's state column. */
 export const COL = { state: 30, owner: 42, detail: 62, stateCompact: 26 } as const;
@@ -23,6 +23,9 @@ export const OWNER_W = 18;
 const STATE_W = 7; // the longest state word (running, waiting)
 export const FULL_MIN = 100;
 export const COMPACT_MIN = 60;
+/** Below this the board is the label alone; from here to COMPACT_MIN the state (and, when it fits, the owner) still sit right of the label. */
+export const NARROW_MIN = 30;
+const LABEL_MIN = 15; // the least label room the narrow form keeps before it drops the owner column
 
 // ---- data: todo rows to board rows --------------------------------------------------------------------------------
 
@@ -35,7 +38,7 @@ export function stateOfStatus(status: string): UiState {
   switch (status) {
     case 'completed': case 'done': return 'done';
     case 'in_progress': case 'running': return 'running';
-    case 'blocked': return 'blocked';
+    case 'blocked': case 'ended': return 'blocked'; // `ended`: the agent finished but the store still holds its row open (attention, never done)
     case 'failed': case 'abandoned': return 'failed';
     case 'waiting': return 'waiting';
     default: return 'queued';
@@ -71,9 +74,10 @@ export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
   const state = itemState(it.status, it.ownerState);
   // Named only when it adds to the item's own word (a failed owner already reads `failed`; a waiting owner reads `blocked` and is named).
   const ownerState = state !== 'done' && (it.ownerState === 'failed' || it.ownerState === 'waiting' || it.ownerState === 'blocked') && it.ownerState !== state ? it.ownerState : undefined;
-  const base = { label: bare(it.content), state, owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}) };
+  const ended = it.status === 'ended';
+  const base = { label: bare(it.content), state, ...(ended ? { word: 'ended' } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}) };
   const ev = cleanEvidence(it.evidence);
-  const detail = ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
+  const detail = ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
   if (state === 'done' && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
   if (state === 'running' && it.claimed_at && nowSecs !== undefined && nowSecs >= it.claimed_at) {
     const est = typeof it.estimate_s === 'number' && it.estimate_s > 0 ? it.estimate_s : undefined;
@@ -86,8 +90,17 @@ export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
 export const boardRowsOf = (items: readonly BoardSource[], nowSecs?: number): BoardRow[] => {
   const plan = items.filter((i) => i.origin !== 'dispatch');
   const dispatch = items.filter((i) => i.origin === 'dispatch');
-  return [...plan, ...dispatch].map((i) => toBoardRow(i, nowSecs));
+  const names = new Set(dispatch.map((i) => i.owner).filter((n): n is string => !!n));
+  return [...plan, ...dispatch].map((i) => toBoardRow(withTitleOwner(i, names), nowSecs));
 };
+
+/** A plan row names its worker in the title (`T1 read alpha.py (alpha-explorer)`) while the store holds no owner: when that
+ * trailing parenthesis is one of the dispatched workers, the name moves to the owner column and leaves the label. */
+function withTitleOwner(it: BoardSource, workers: ReadonlySet<string>): BoardSource {
+  if (it.owner || workers.size === 0) return it;
+  const m = /\s*\(([^()\s]+)\)\s*$/.exec(it.content);
+  return m && workers.has(m[1]!) ? { ...it, content: it.content.slice(0, m.index), owner: m[1]! } : it;
+}
 
 /** Counts of a board by state, plus done and total: the numbers the ribbon and the band both state. */
 export function boardCounts(rows: readonly BoardRow[]): Record<UiState, number> & { total: number } {
@@ -105,7 +118,7 @@ const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
 export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
 
-const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= COMPACT_MIN ? 'compact' : 'narrow');
+const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= NARROW_MIN ? 'compact' : 'narrow');
 
 function detailRuns(row: BoardRow, o: BoardOpts, room: number): Run[] {
   if (row.elapsed) {
@@ -129,26 +142,10 @@ const boardKeys = (rows: readonly BoardRow[]): string[] => keysOf('board', rows.
 /** What the Motion observes of a board: each row's key and state word. */
 export const boardMotionItems = (rows: readonly BoardRow[]): MotionItem[] => boardKeys(rows).map((key, i) => ({ key, state: rows[i]!.state }));
 
-/** Labels cut to `w` cells for one list: a label that fits stays whole; when the labels share a long head (`List the function names defined in ...`)
- * the cut keeps the end of the label (the file name) behind a leading `...`, else the end is cut. Never a middle cut. */
+/** Labels cut to `w` cells for one list: a label that fits stays whole, a longer one loses its end (`clip` ends in `…`). Never the front, never the
+ * middle: rows with one shared head stay apart by their owner column, not by a different cut. */
 export function labelCut(labels: readonly string[], w: number): string[] {
-  const endCut = (l: string): string => clip(l, w);
-  const over = labels.filter((l) => cells(l) > w);
-  if (over.length < 2) return labels.map(endCut);
-  let head = over[0]!;
-  for (const l of over) while (!l.startsWith(head)) head = head.slice(0, -1);
-  if (cells(head.slice(0, head.search(/\S*$/))) < 10) return labels.map(endCut);
-  return labels.map((l) => {
-    if (cells(l) <= w || w <= 6) return endCut(l);
-    const cs = [...l];
-    let at = cs.length;
-    let used = 0;
-    while (at > 0 && used + cells(cs[at - 1]!) <= w - 3) used += cells(cs[--at]!);
-    let tail = cs.slice(at);
-    const brk = tail.findIndex((c) => c === ' ' || c === '/');
-    if (brk >= 0 && brk < 6 && brk < tail.length - 1) tail = tail.slice(brk + 1);
-    return `...${tail.join('')}`;
-  });
+  return labels.map((l) => clip(l, w));
 }
 
 /** One row at rest. `focus` marks the row the marker `▸` points at. */
@@ -163,8 +160,9 @@ function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   if (f === 'narrow') return [...head, labelRun(Math.max(1, o.cols - 4))];
   const stateCol = f === 'full' ? COL.state : (o.stateCol ?? COL.stateCompact);
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
-  if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(row.state)], stateCol + STATE_W + 1), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(row.state)];
-  const stateCell = o.rich ? stateChip(row.state, o.ui) : r(row.state);
+  const word = row.word ?? row.state;
+  if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + STATE_W + 1), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
+  const stateCell = o.rich ? (row.word ? chip(word, STATE_TOKEN[row.state], o.ui) : stateChip(row.state, o.ui)) : r(word);
   const withState = to([...withLabel, stateCell], COL.owner);
   const owner = to([...withState, ...(row.owner ? [r(clip(row.owner, OWNER_W), 'sub')] : [])], COL.detail);
   return [...owner, ...detailRuns(row, o, Math.max(0, o.cols - COL.detail - 1))];
@@ -184,10 +182,14 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   // Compact form: the state column slides right to fit the widest label, never past the room the longest state word needs.
   const keys = o.motion ? boardKeys(rows) : [];
   const compact = form(o.cols) === 'compact';
-  const ownerW = compact ? Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(x.owner)))) : 0;
+  const ownerAll = compact ? Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(x.owner)))) : 0;
+  // Under COMPACT_MIN the owner column only stays while the label keeps LABEL_MIN cells; it never pushes the state off the row.
+  const ownerFit = Math.min(ownerAll, o.cols - (LABEL_MIN + 5) - STATE_W - 2);
+  const ownerW = o.cols >= COMPACT_MIN ? ownerAll : ownerFit >= 5 ? ownerFit : 0; // a sliver of a name tells nothing
   const widest = Math.max(0, ...rows.map((x) => cells(x.label)));
-  // Compact: the owner column takes its width from the right, the state column slides left to make room (never under 26, never past the widest label).
-  const stateColC = compact ? Math.max(COL.stateCompact, Math.min(o.cols - STATE_W - 1 - (ownerW ? ownerW + 1 : 0), widest + 7)) : undefined;
+  // Compact: the owner column takes its width from the right, the state column slides left to make room (never under 26 at 60+, never past the widest label).
+  const avail = o.cols - STATE_W - 1 - (ownerW ? ownerW + 1 : 0);
+  const stateColC = compact ? Math.max(Math.min(COL.stateCompact, avail), Math.min(avail, widest + 7)) : undefined;
   const labelW = form(o.cols) === 'narrow' ? Math.max(1, o.cols - 4) : (stateColC ?? COL.state) - 5;
   const shown = labelCut(rows.map((x) => x.label), labelW);
   const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol: stateColC, shown: shown[i]!, ...(ownerW ? { ownerW } : {}), ...(o.motion ? { key: keys[i]! } : {}) }) }));

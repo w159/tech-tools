@@ -1358,9 +1358,63 @@ class AtlasDoctorTest(unittest.TestCase):
         self.assertFalse(c["ok"])
         self.assertIn("ATLAS_MANDATES=off", c["detail"])
 
+    def _grep_traffic(self, proj, denied=0):
+        db = os.path.join(self.tmp, "beh.db")
+        conn = atlas_db.connect(db)
+        atlas_db.init(conn)
+        now = time.time()
+        atlas_db.upsert_session_log(conn, "s1", cwd=proj, last_ingest_at=now)
+        for i in range(atlas_doctor.INERT_MIN_NATIVE):
+            atlas_db.insert_tool_call(
+                conn,
+                "s1",
+                {"tool_use_id": f"g{i}", "ts": now, "tool_name": "Grep", "kind": "builtin", "target": "Grep"},
+            )
+        conn.execute("UPDATE tool_calls SET denied=?", (denied,))
+        conn.commit()
+        conn.close()
+        return db
+
+    def _which_lean_ctx(self, present):
+        real = shutil.which
+        return mock.patch(
+            "shutil.which",
+            side_effect=lambda n, *a, **k: ("/bin/lean-ctx" if present else None) if n == "lean-ctx" else real(n, *a, **k),
+        )
+
+    def test_native_calls_where_the_deny_cannot_fire_are_not_counted_as_inert(self):
+        # critique 6: 0 of 62 native Grep/Glob calls denied was reported as INERT gates, but the
+        # deny needs a docs/ dir, the lean-ctx binary and a configured lean-ctx MCP server.
+        # A project without them only ever gets the nudge, so its calls say nothing about the gate.
+        proj = os.path.join(self.tmp, "proj")
+        os.makedirs(os.path.join(proj, ".git"))
+        db = self._grep_traffic(proj)
+        env = {"ATLAS_DB": db, "ATLAS_GATES": "always"}
+        for name, docs, mcp, binary in (
+            ("no docs/", False, True, True),
+            ("no lean-ctx server configured", True, False, True),
+            ("no lean-ctx binary", True, True, False),
+        ):
+            shutil.rmtree(os.path.join(proj, "docs"), ignore_errors=True)
+            if os.path.exists(os.path.join(proj, ".mcp.json")):
+                os.remove(os.path.join(proj, ".mcp.json"))
+            if docs:
+                os.makedirs(os.path.join(proj, "docs"))
+            if mcp:
+                with open(os.path.join(proj, ".mcp.json"), "w") as f:
+                    json.dump({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}, f)
+            with mock.patch.dict(os.environ, env), self._which_lean_ctx(binary):
+                c = self._checks()["enforcement-rates"]
+            self.assertTrue(c["ok"], (name, c["detail"]))
+            self.assertNotIn("INERT", c["detail"], name)
+            self.assertIn("0 ran", c["detail"], name)
+
     def test_inert_enforcement_is_reported_from_the_db(self):
         proj = os.path.join(self.tmp, "proj")
         os.makedirs(os.path.join(proj, ".git"))
+        os.makedirs(os.path.join(proj, "docs"))
+        with open(os.path.join(proj, ".mcp.json"), "w") as f:
+            json.dump({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}, f)
         db = os.path.join(self.tmp, "beh.db")
         conn = atlas_db.connect(db)
         atlas_db.init(conn)
@@ -1380,7 +1434,7 @@ class AtlasDoctorTest(unittest.TestCase):
             )
         conn.commit()
         conn.close()
-        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_GATES": "always"}):
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_GATES": "always"}), self._which_lean_ctx(True):
             c = self._checks()
         self.assertFalse(c["enforcement-rates"]["ok"])
         self.assertIn("INERT", c["enforcement-rates"]["detail"])
@@ -1389,7 +1443,7 @@ class AtlasDoctorTest(unittest.TestCase):
         conn.execute("UPDATE tool_calls SET denied=1")
         conn.commit()
         conn.close()
-        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_GATES": "always"}):
+        with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_GATES": "always"}), self._which_lean_ctx(True):
             self.assertTrue(self._checks()["enforcement-rates"]["ok"])
 
     def test_unwritable_db_fails_the_doctor(self):

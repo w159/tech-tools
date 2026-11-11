@@ -16,14 +16,14 @@ function board(items: unknown[]): string {
 	return root;
 }
 
-test("a dispatch row whose worker ended reads completed; a running worker's row and plan rows are untouched", () => {
+test("a dispatch row whose worker ended reads ended (the store holds it open); a running worker's row and plan rows are untouched", () => {
 	const root = board([
 		row({ content: "plan", status: "in_progress" }),
 		row({ content: "dispatch w1", origin: "dispatch", owner: "w1", claimed_at: 100 }),
 		row({ content: "dispatch w2", origin: "dispatch", owner: "w2", claimed_at: 100 }),
 	]);
 	const got = todoItems(root, "s1", ["w1"]);
-	expect(got.map(i => i.status)).toEqual(["in_progress", "completed", "pending"]);
+	expect(got.map(i => i.status)).toEqual(["in_progress", "ended", "pending"]);
 });
 
 test("parity with the mod: omp settles through the same settleDispatch", () => {
@@ -33,8 +33,8 @@ test("parity with the mod: omp settles through the same settleDispatch", () => {
 	expect(todoItems(root, "s1", ["w1"]).map(i => i.status)).toEqual(mod.map(i => i.status));
 });
 
-test("claimed_at and completed_at reach the board model: a settled row prints how long it ran", () => {
-	const root = board([row({ origin: "dispatch", owner: "w1", claimed_at: 100, completed_at: 165 })]);
+test("claimed_at and completed_at reach the board model: a completed row prints how long it ran", () => {
+	const root = board([row({ origin: "dispatch", owner: "w1", status: "completed", claimed_at: 100, completed_at: 165 })]);
 	const [r] = boardRowsOf(todoItems(root, "s1", ["w1"]), 200);
 	expect(r!.state).toBe("done");
 	expect(r!.detail).toBe("ran 01:05");

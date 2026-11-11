@@ -130,6 +130,45 @@ class WorkerReportGateTest(unittest.TestCase):
         )
         self.assertEqual(todo.load(root)["items"][0]["status"], "completed")
 
+    def _retry_after_block(self, retry_msg):
+        # Live runs (critique 6, S1): the first stop is blocked for a malformed report; the
+        # agent's retry stop arrives with stop_hook_active=true and used to return before it
+        # settled the member, leaving the dispatch row pending forever.
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["alpha-explorer"])
+        todo.add(root, "read alpha", owner="alpha-explorer", origin="dispatch")
+        todo.set_member_agent_id(root, "alpha-explorer", "a85313f7b04ba678f")
+        base = dict(agent_id="a85313f7b04ba678f", agent_type="atlas:explorer", cwd=root)
+        first = self.run_hook(
+            payload(last_assistant_message="prose, no container", **base)
+        )
+        self.assertIn('"decision": "block"', first.stdout)
+        self.assertEqual(todo.load(root)["items"][0]["status"], "pending")
+        self.run_hook(
+            payload(stop_hook_active=True, last_assistant_message=retry_msg, **base)
+        )
+        mem = [
+            m
+            for c in todo._reg_read(root)["channels"].values()
+            for m in c["members"]
+            if m["name"] == "alpha-explorer"
+        ]
+        return todo.load(root)["items"][0], mem
+
+    def test_retry_stop_with_valid_report_completes_dispatch_row(self):
+        item, mem = self._retry_after_block(COMPLIANT)
+        self.assertEqual(item["status"], "completed")
+        self.assertEqual([m.get("exit_code") for m in mem], [0])
+
+    def test_retry_stop_with_bad_report_still_settles_dispatch_row(self):
+        item, mem = self._retry_after_block("still prose")
+        self.assertEqual(item["status"], "blocked")
+        self.assertEqual([m.get("exit_code") for m in mem], [0])
+
     def test_member_finish_cli_with_done_report_reaps_like_claude(self):
         # omp path: `member-finish --message <final text>` settles item and member.
         sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
@@ -528,7 +567,11 @@ class WorkerReportGateTest(unittest.TestCase):
         home = tempfile.mkdtemp(dir=self.gate)
         env = dict(self.env, ATLAS_HOME=home)
         r = self.run_hook(
-            payload(last_assistant_message=msg, agent_type="atlas:implementer", cwd=["not", "a", "path"]),
+            payload(
+                last_assistant_message=msg,
+                agent_type="atlas:implementer",
+                cwd=["not", "a", "path"],
+            ),
             env,
         )
         self.assertEqual((r.returncode, r.stdout), (0, ""))

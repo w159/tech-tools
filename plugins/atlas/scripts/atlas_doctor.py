@@ -1646,6 +1646,29 @@ def _armed_cwd(cwd):
             os.environ["ATLAS_DB"] = old
 
 
+def _deny_capable(cwd):
+    """True when the native Grep/Glob deny can fire for sessions in `cwd`: the tripwire's own preconditions
+    (hooks/dispatch_tripwire_core._native_tool_policy) are a docs/ dir at the project root, ATLAS_TRIPWIRE_HARD
+    not off, the lean-ctx binary on PATH and a lean-ctx MCP server configured for the project. Anywhere else the
+    gate only nudges, so a native call there says nothing about whether the gate works. Unreadable: True (count it)."""
+    if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
+        return False
+    try:
+        from pathlib import Path
+
+        hooks = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hooks")
+        if hooks not in sys.path:
+            sys.path.insert(0, hooks)
+        import dispatch_tripwire_core as dt
+
+        root = dt.find_root(Path(cwd))
+        if root is None or not (root / "docs").is_dir():
+            return False
+        return bool(shutil.which("lean-ctx")) and dt._lean_ctx_server_key(root) is not None
+    except Exception:  # noqa: BLE001 -- fail toward counting
+        return True
+
+
 def _live_faults(faults, version):
     import atlas_faults
 
@@ -1748,7 +1771,7 @@ def behaviour_checks(add, plugin_name, version, now=None):
         ).fetchall()
         ran = denied = 0
         for cwd, r, d in rows:
-            if cwd and _armed_cwd(cwd):
+            if cwd and _armed_cwd(cwd) and _deny_capable(cwd):
                 ran += r or 0
                 denied += d or 0
         disp = conn.execute(
@@ -1766,7 +1789,7 @@ def behaviour_checks(add, plugin_name, version, now=None):
     add(
         "enforcement-rates",
         not inert,
-        f"{RATE_WINDOW_DAYS}d armed projects: native grep/glob {ran} ran, "
+        f"{RATE_WINDOW_DAYS}d armed projects where the deny can fire (docs/, lean-ctx): native grep/glob {ran} ran, "
         f"{denied} denied ({(denied / total if total else 0):.0%})"
         + (" -- gates are INERT" if inert else "")
         + f"; dispatch calls {disp[0]}, denied {disp[1] or 0}",

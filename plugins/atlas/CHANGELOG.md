@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed: a dispatch row now closes when its agent ends even on the retry stop: `worker_report_gate_core.main` returned on `stop_hook_active` before it settled the member, so an explorer whose first report was blocked left its row pending and Stop counted "3 open todo item(s)" (live runs, S1); the retry stop completes the row on a valid report, else marks it blocked (`hooks/test_worker_report_gate.py`).
+- Fixed: the Board never draws an open store row as done: `settleDispatch` reads an open dispatch row whose agent has ended as `ended` (attention tone, `ended` in the state column and chip, detail `agent ended, row still open`), not `completed`; `done` and the green glyph are the store's word only (`mod/board.test.ts`).
+- Fixed: the Board keeps a state column from 30 cells up (the 38-cell side pane included) and an owner column wherever the label keeps 15 cells; a plan row that names its dispatched worker in the title (`T1 read alpha.py (alpha-explorer)`) shows it in the owner column; `labelCut` cuts every label at the end, never the front.
+- Fixed: doctor `enforcement-rates` counts only native Grep/Glob calls from projects where the deny can fire (docs/ dir, lean-ctx binary on PATH, lean-ctx MCP server configured, `ATLAS_TRIPWIRE_HARD` not off), so a project that only ever gets the nudge no longer reads "gates are INERT" (`scripts/test_atlas_doctor.py`).
+
 ## 17.7.0 - 2026-11-11
 
 - Fixed: 256-colour painting no longer burns the host CPU: `fitHex`, `surfaceHex` and `stable256` memoise on their arguments and the stable palette is built once as {hex, rgb} records plus a hex Set, so a frame costs map lookups instead of thousands of hex builds; results are byte-identical (`mod/paint-cost.test.ts`: 4000-paint workload 6038 ms -> 27 ms).

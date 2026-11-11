@@ -272,17 +272,17 @@ export function endedOf(squad: readonly { name: string; state: string }[], orch?
   return out;
 }
 
-/** The hook adds one `origin: dispatch` row per subagent and nothing marks it done when the worker ends (S1), so every
- * surface read the row as pending and `0 of 3`. A pending or in_progress dispatch row whose owner has ended reads
- * `completed` (done) or `failed`; any other row, and a dispatch row whose worker is still running, is returned as written
- * (the very same array when no row changes). */
+/** A pending or in_progress dispatch row whose owner has ended reads `ended` (the agent is gone, the store still holds the row
+ * open: the screen must not call it done while Stop counts it open) or `failed`; any other row, and a dispatch row whose worker
+ * is still running, is returned as written (the very same array when no row changes). The SubagentStop hook is what completes
+ * the store row (hooks/worker_report_gate_core.py); until it does, the view says `ended`. */
 export function settleDispatch<T extends { status: string; owner?: string; origin?: string }>(items: T[], ended: Readonly<Record<string, Outcome>>): T[] {
   let changed = false;
   const out = items.map((it) => {
     const outcome = it.origin === 'dispatch' && it.owner !== undefined ? ended[it.owner] : undefined;
     if (!outcome || (it.status !== 'pending' && it.status !== 'in_progress')) return it;
     changed = true;
-    return { ...it, status: outcome === 'done' ? 'completed' : 'failed' };
+    return { ...it, status: outcome === 'done' ? 'ended' : 'failed' };
   });
   return changed ? out : items; // the same array when nothing settled: the snapshot's todo cache keeps its identity
 }

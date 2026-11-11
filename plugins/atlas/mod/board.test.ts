@@ -56,7 +56,33 @@ describe('board goldens', () => {
     for (const cols of [40, 59, 60, 79, 99, 100]) {
       for (const l of boardLines(worldBoardRows(), { cols, ui: ui('mocha') })) expect([cols, runsWidth(l.runs) <= cols]).toEqual([cols, true]);
     }
-    expect(boardText(boardLines(worldBoardRows(), { cols: 40, ui: ui('mocha') })).slice(2)[3]).toBe('▸ ◐ Subagents block');
+    expect(boardText(boardLines(worldBoardRows(), { cols: 40, ui: ui('mocha') })).slice(2)[3]).toMatch(/^▸ ◐ Subagents block +running +\S/);
+  });
+  test('A3: from 30 cells up every row keeps a state column, and an owner column wherever the label keeps its room; below 30 the label alone', () => {
+    const rows = boardRowsOf([
+      { content: 'T1 read alpha.py (alpha-explorer)', status: 'completed' },
+      { content: 'List the function names defined in alpha.py.', status: 'pending', origin: 'dispatch', owner: 'alpha-explorer' },
+    ]);
+    for (const cols of [38, 59, 60, 80, 99, 110, 150]) {
+      const lines = boardText(boardBody(rows, { cols, ui: ui('mocha') })).filter((l) => /^[▸ ] [●◇▲◐] /.test(l));
+      expect(lines.length).toBe(2);
+      for (const l of lines) {
+        expect([cols, /\b(done|queued)\b/.test(l)]).toEqual([cols, true]);
+        expect([cols, /alpha-(explorer|\.\.\.)/.test(l)]).toEqual([cols, true]); // the owner, the T row's included
+        expect([cols, l.includes('(alpha-explorer)')]).toEqual([cols, false]); // not left in the title
+      }
+    }
+    expect(boardText(boardBody(rows, { cols: 28, ui: ui('mocha') })).every((l) => !/\b(done|queued)\b/.test(l))).toBe(true);
+  });
+  test('A3: labels are cut at the end, never at the front, even when rows share a long head', () => {
+    const rows = ['alpha', 'beta', 'gamma'].map((n) => ({ content: `List the function names defined in /mnt/project-files/${n}.py`, status: 'pending', origin: 'dispatch', owner: `${n}-explorer` }));
+    for (const cols of [38, 60, 80, 110]) {
+      for (const l of boardText(boardBody(boardRowsOf(rows), { cols, ui: ui('mocha') }))) {
+        if (l.startsWith('ITEM')) continue;
+        expect([cols, l.includes('...') ? /^[▸ ] [^ ] List the/.test(l) : true]).toEqual([cols, true]);
+        expect([cols, /^[▸ ] [^ ] \.\.\./.test(l)]).toEqual([cols, false]);
+      }
+    }
   });
   test('the running row is the focus: marker, bold label; done labels are struck', () => {
     const rows = boardLines(worldBoardRows(), { cols: 120, ui: ui('mocha') });
@@ -155,9 +181,9 @@ describe('data to rows', () => {
 
 describe('S1: a dispatch row follows its worker', () => {
   const dispatch = (over: Record<string, unknown>) => ({ id: 'd', content: 'do it', status: 'pending', origin: 'dispatch', owner: 'impl-a', ...over });
-  test('a pending or in_progress dispatch row becomes completed when its worker finished, failed when it died', () => {
-    expect(settleDispatch([dispatch({})], { 'impl-a': 'done' })[0]!.status).toBe('completed');
-    expect(settleDispatch([dispatch({ status: 'in_progress' })], { 'impl-a': 'done' })[0]!.status).toBe('completed');
+  test('a pending or in_progress dispatch row reads ended when its worker finished (the store holds it open), failed when it died', () => {
+    expect(settleDispatch([dispatch({})], { 'impl-a': 'done' })[0]!.status).toBe('ended');
+    expect(settleDispatch([dispatch({ status: 'in_progress' })], { 'impl-a': 'done' })[0]!.status).toBe('ended');
     expect(settleDispatch([dispatch({})], { 'impl-a': 'failed' })[0]!.status).toBe('failed');
   });
   test('plan rows, rows of other workers and rows already final are left alone', () => {
@@ -171,9 +197,26 @@ describe('S1: a dispatch row follows its worker', () => {
     ] as SquadAgent[];
     expect(endedOf(squad)).toEqual({ a: 'done', b: 'failed', c: 'failed' });
   });
-  test('the board then draws the row done or failed, and the counts follow', () => {
+  test('the board then draws the row ended (attention, never done) or failed, and the counts follow', () => {
     const settled = settleDispatch([dispatch({ id: '1' }), dispatch({ id: '2', owner: 'impl-b' })], { 'impl-a': 'done', 'impl-b': 'failed' });
-    expect(boardRowsOf(settled).map((r) => r.state)).toEqual(['done', 'failed']);
+    expect(boardRowsOf(settled).map((r) => r.state)).toEqual(['blocked', 'failed']);
+    expect(boardRowsOf(settled).map((r) => r.word)).toEqual(['ended', undefined]);
+  });
+  test('A2: no open store status ever draws as done: the glyph is not the done glyph and the word is not `done`', () => {
+    for (const status of ['pending', 'in_progress', 'ended', 'blocked']) {
+      const rows = boardRowsOf([{ content: 'x', status, origin: 'dispatch', owner: 'w' }]);
+      for (const cols of [38, 80, 110]) {
+        const line = boardText(boardBody(rows, { cols, ui: ui('mocha') }))[cols >= 100 ? 1 : 0]!;
+        expect([status, cols, line.includes('●'), /\bdone\b/.test(line)]).toEqual([status, cols, false, false]);
+      }
+    }
+  });
+  test('an ended row names itself in the state column (plain and rich) and says why in the detail', () => {
+    const rows = boardRowsOf([{ content: 'x', status: 'ended', origin: 'dispatch', owner: 'w' }]);
+    expect(boardText(boardBody(rows, { cols: 110, ui: ui('mocha') }))[1]).toMatch(/^ {2}▲ x +ended +w +agent ended, row still open$/);
+    const rich = boardBody(rows, { cols: 110, ui: ui('mocha'), rich: true })[1]!.runs.find((x) => x.chip)!;
+    expect(rich.t).toBe(' ENDED     ');
+    expect(rich.bg).toBe('warn');
   });
 });
 

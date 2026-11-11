@@ -83,6 +83,6 @@ describe('runstate: dispatch rows close from agent completion (S1)', () => {
     const ended = endedOf([], { stage: { a1: 'reported' }, meta: { a1: { name: 'alpha' } }, activity: { a1: { mood: 'done' } } } as never);
     expect(ended).toEqual({ alpha: 'done' });
     const rows = settleDispatch([{ status: 'pending', owner: 'alpha', origin: 'dispatch' }], ended);
-    expect(rows[0]!.status).toBe('completed');
+    expect(rows[0]!.status).toBe('ended');
   });
 });

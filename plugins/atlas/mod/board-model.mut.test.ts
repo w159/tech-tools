@@ -69,8 +69,8 @@ describe('boardRow: the label tone', () => {
   test('compact keeps a done label in text, narrow dims it', () => {
     expect(labelTone(row('done'), 80)).toBe('text');
     expect(labelTone(row('running'), 80)).toBe('text');
-    expect(labelTone(row('done'), 50)).toBe('sub');
-    expect(labelTone(row('running'), 50)).toBe('text');
+    expect(labelTone(row('done'), 29)).toBe('sub');
+    expect(labelTone(row('running'), 29)).toBe('text');
   });
 });
 
@@ -97,7 +97,7 @@ describe('boardRow: the elapsed gauge needs its whole width', () => {
 describe('boardRow: the narrow form spends every cell after its four-cell head on the label', () => {
   test('a long label fills exactly the width', () => {
     const row: BoardRow = { label: 'x'.repeat(80), state: 'running', owner: 'o', detail: '' };
-    const w = boardRow(row, false, { cols: 30, ui }).map((x) => x.t).join('').length;
-    expect(w).toBe(30);
+    const w = boardRow(row, false, { cols: 29, ui }).map((x) => x.t).join('').length;
+    expect(w).toBe(29);
   });
 });

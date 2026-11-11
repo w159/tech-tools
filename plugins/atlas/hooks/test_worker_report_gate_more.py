@@ -28,7 +28,14 @@ GOOD = (
 )
 
 
-def report(status="DONE", steps="2/2", files="none", evidence="1. pytest -q -> 5 passed", deliverable="none", nxt="none"):
+def report(
+    status="DONE",
+    steps="2/2",
+    files="none",
+    evidence="1. pytest -q -> 5 passed",
+    deliverable="none",
+    nxt="none",
+):
     return (
         f"STATUS: {status}\nSTEPS: {steps}\nFILES_CHANGED: {files}\nEVIDENCE:\n{evidence}\n"
         f"DELIVERABLE: {deliverable}\nNEXT: {nxt}"
@@ -37,7 +44,16 @@ def report(status="DONE", steps="2/2", files="none", evidence="1. pytest -q -> 5
 
 def git(root, *args):
     subprocess.run(
-        ["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
+        [
+            "git",
+            "-C",
+            root,
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            *args,
+        ],
         check=True,
         capture_output=True,
     )
@@ -52,11 +68,26 @@ class Tmp(unittest.TestCase):
 
 class HasFailingTest(unittest.TestCase):
     def test_unresolved_failures_detected(self):
-        for t in ("5 failed, 3 passed", "1 error", "2 failures", "FAILED tests/x.py", "Error: boom", "10 Errors"):
+        for t in (
+            "5 failed, 3 passed",
+            "1 error",
+            "2 failures",
+            "FAILED tests/x.py",
+            "Error: boom",
+            "10 Errors",
+        ):
             self.assertTrue(core.has_failing(t), t)
 
     def test_clean_or_resolved_text_passes(self):
-        for t in ("all passed", "0 failed", "no failures", "errors-free", "3 failed (all fixed, 0 remaining)", "0 errors, 12 passed", "ok"):
+        for t in (
+            "all passed",
+            "0 failed",
+            "no failures",
+            "errors-free",
+            "3 failed (all fixed, 0 remaining)",
+            "0 errors, 12 passed",
+            "ok",
+        ):
             self.assertFalse(core.has_failing(t), t)
 
     def test_decimal_prefix_is_not_a_count(self):
@@ -69,34 +100,59 @@ class HasFailingTest(unittest.TestCase):
 
 class MarkerClaimedTest(Tmp):
     def test_first_claim_true_then_false_and_names_sanitized(self):
-        with mock.patch.dict(os.environ, {"ATLAS_REPORT_GATE_DIR": os.path.join(self.root, "gate")}):
+        with mock.patch.dict(
+            os.environ, {"ATLAS_REPORT_GATE_DIR": os.path.join(self.root, "gate")}
+        ):
             self.assertTrue(core.marker_claimed("a/b c"))
             self.assertFalse(core.marker_claimed("a/b c"))
             self.assertTrue(core.marker_claimed("other"))
-            self.assertEqual(sorted(os.listdir(os.path.join(self.root, "gate"))), ["a_b_c", "other"])
+            self.assertEqual(
+                sorted(os.listdir(os.path.join(self.root, "gate"))), ["a_b_c", "other"]
+            )
 
     def test_default_dir_under_tempdir(self):
         env = {k: v for k, v in os.environ.items() if k != "ATLAS_REPORT_GATE_DIR"}
-        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(core.tempfile, "gettempdir", return_value=self.root):
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.object(core.tempfile, "gettempdir", return_value=self.root),
+        ):
             self.assertTrue(core.marker_claimed(7))
-        self.assertTrue(os.path.exists(os.path.join(self.root, "atlas-report-gate", "7")))
+        self.assertTrue(
+            os.path.exists(os.path.join(self.root, "atlas-report-gate", "7"))
+        )
 
 
 class SectionsTest(unittest.TestCase):
     FIELDS = ["STATUS", "STEPS", "EVIDENCE"]
 
     def test_continuations_and_ignored_preamble(self):
-        lines = ["preamble", "STATUS: DONE", "STEPS : 1/2", "EVIDENCE:", "1. a -> b", "  more", "other: x"]
+        lines = [
+            "preamble",
+            "STATUS: DONE",
+            "STEPS : 1/2",
+            "EVIDENCE:",
+            "1. a -> b",
+            "  more",
+            "other: x",
+        ]
         self.assertEqual(
             core.sections(lines, self.FIELDS),
-            {"STATUS": "DONE", "STEPS": "1/2", "EVIDENCE": "1. a -> b\n  more\nother: x"},
+            {
+                "STATUS": "DONE",
+                "STEPS": "1/2",
+                "EVIDENCE": "1. a -> b\n  more\nother: x",
+            },
         )
 
     def test_repeated_label_appends(self):
-        self.assertEqual(core.sections(["STATUS: a", "STATUS: b"], self.FIELDS), {"STATUS": "a\nb"})
+        self.assertEqual(
+            core.sections(["STATUS: a", "STATUS: b"], self.FIELDS), {"STATUS": "a\nb"}
+        )
 
     def test_label_must_start_the_line(self):
-        self.assertEqual(core.sections([" STATUS: DONE", "xSTEPS: 1/1"], self.FIELDS), {})
+        self.assertEqual(
+            core.sections([" STATUS: DONE", "xSTEPS: 1/1"], self.FIELDS), {}
+        )
 
 
 class EvidenceOkTest(unittest.TestCase):
@@ -113,7 +169,14 @@ class EvidenceOkTest(unittest.TestCase):
         self.assertTrue(core.evidence_ok("1. pytest -q\n\n   5 passed"))
 
     def test_rejections(self):
-        for t in ("", "no numbering -> here", "1. only a command", "1. -> output only", "1. cmd ->", "1.\n   orphan continuation"):
+        for t in (
+            "",
+            "no numbering -> here",
+            "1. only a command",
+            "1. -> output only",
+            "1. cmd ->",
+            "1.\n   orphan continuation",
+        ):
             self.assertFalse(core.evidence_ok(t), t)
 
     def test_second_item_can_satisfy(self):
@@ -125,15 +188,24 @@ class EvidenceOkTest(unittest.TestCase):
 
 class LastEvidenceRowTest(unittest.TestCase):
     def test_last_item_with_continuations(self):
-        self.assertEqual(core.last_evidence_row("1. red -> 2 failed\n2. green -> ok\n   4 passed"), "2. green -> ok\n   4 passed")
+        self.assertEqual(
+            core.last_evidence_row("1. red -> 2 failed\n2. green -> ok\n   4 passed"),
+            "2. green -> ok\n   4 passed",
+        )
 
     def test_no_numbered_rows_returns_whole_text(self):
         self.assertEqual(core.last_evidence_row("free text"), "free text")
         self.assertEqual(core.last_evidence_row(""), "")
 
     def test_red_then_green_passes_the_failure_check(self):
-        self.assertFalse(core.has_failing(core.last_evidence_row("1. t -> 2 failed\n2. t -> 2 passed")))
-        self.assertTrue(core.has_failing(core.last_evidence_row("1. t -> ok\n2. t -> 2 failed")))
+        self.assertFalse(
+            core.has_failing(
+                core.last_evidence_row("1. t -> 2 failed\n2. t -> 2 passed")
+            )
+        )
+        self.assertTrue(
+            core.has_failing(core.last_evidence_row("1. t -> ok\n2. t -> 2 failed"))
+        )
 
 
 class GitChangedTest(Tmp):
@@ -148,7 +220,15 @@ class GitChangedTest(Tmp):
         raw = "R  new.py\0old.py\0 M mod.py\0?? un.txt\0 C copy.py\0src.py\0AM a.py\0"
         self.assertEqual(
             self._run(raw),
-            {"/top/new.py", "/top/old.py", "/top/mod.py", "/top/un.txt", "/top/copy.py", "/top/src.py", "/top/a.py"},
+            {
+                "/top/new.py",
+                "/top/old.py",
+                "/top/mod.py",
+                "/top/un.txt",
+                "/top/copy.py",
+                "/top/src.py",
+                "/top/a.py",
+            },
         )
 
     def test_plain_entry_does_not_swallow_next_entry(self):
@@ -163,7 +243,9 @@ class GitChangedTest(Tmp):
     def test_git_unavailable_is_empty(self):
         with mock.patch.object(core.subprocess, "run", side_effect=OSError("no git")):
             self.assertEqual(core.git_changed("/x"), set())
-        with mock.patch.object(core.subprocess, "run", side_effect=subprocess.TimeoutExpired("git", 5)):
+        with mock.patch.object(
+            core.subprocess, "run", side_effect=subprocess.TimeoutExpired("git", 5)
+        ):
             self.assertEqual(core.git_changed("/x"), set())
 
     def test_real_repo_untracked_modified_and_rename(self):
@@ -180,7 +262,10 @@ class GitChangedTest(Tmp):
         with open(os.path.join(self.root, "sub", "u.txt"), "w") as f:
             f.write("u")
         got = core.git_changed(self.root)
-        want = {os.path.join(self.root, n) for n in ("keep.txt", "old.txt", "new.txt", os.path.join("sub", "u.txt"))}
+        want = {
+            os.path.join(self.root, n)
+            for n in ("keep.txt", "old.txt", "new.txt", os.path.join("sub", "u.txt"))
+        }
         self.assertEqual(got, want)
 
     def test_non_repo_is_empty(self):
@@ -199,7 +284,9 @@ class MissingFilesTest(Tmp):
             self.assertEqual(core.missing_files(v, self.root), [])
         self.assertEqual(core.missing_files("ghost.py", None), [])
         self.assertEqual(core.missing_files("ghost.py", ""), [])
-        self.assertEqual(core.missing_files("ghost.py", os.path.join(self.root, "nodir")), [])
+        self.assertEqual(
+            core.missing_files("ghost.py", os.path.join(self.root, "nodir")), []
+        )
 
     def test_existing_relative_absolute_and_backticked(self):
         p = self._touch("a/b.py")
@@ -208,7 +295,12 @@ class MissingFilesTest(Tmp):
 
     def test_missing_listed_in_order_split_on_semicolons_and_newlines(self):
         self._touch("here.py")
-        self.assertEqual(core.missing_files("ghost1.py; here.py\n- ghost2.py\n* ghost3.py", self.root), ["ghost1.py", "ghost2.py", "ghost3.py"])
+        self.assertEqual(
+            core.missing_files(
+                "ghost1.py; here.py\n- ghost2.py\n* ghost3.py", self.root
+            ),
+            ["ghost1.py", "ghost2.py", "ghost3.py"],
+        )
 
     def test_skips_globs_urls_none_and_gone_annotations(self):
         v = "src/*.py; a?.py; {a,b}.py; local://x; agent://y; none; scratch.py (deleted); tmp.py (throwaway, not committed); real_missing.py"
@@ -216,7 +308,10 @@ class MissingFilesTest(Tmp):
 
     def test_non_gone_annotation_is_stripped_and_checked(self):
         self._touch("mod.py")
-        self.assertEqual(core.missing_files("mod.py (new helper); nope.py (renamed)", self.root), ["nope.py"])
+        self.assertEqual(
+            core.missing_files("mod.py (new helper); nope.py (renamed)", self.root),
+            ["nope.py"],
+        )
 
     def test_semicolon_inside_annotation_does_not_split(self):
         self._touch("keep.py")
@@ -228,7 +323,10 @@ class MissingFilesTest(Tmp):
         git(self.root, "add", ".")
         git(self.root, "commit", "-qm", "x")
         os.remove(p)
-        self.assertEqual(core.missing_files("gone.py; truly_absent.py", self.root), ["truly_absent.py"])
+        self.assertEqual(
+            core.missing_files("gone.py; truly_absent.py", self.root),
+            ["truly_absent.py"],
+        )
 
     def test_git_not_consulted_when_nothing_missing(self):
         self._touch("a.py")
@@ -247,38 +345,74 @@ class CheckReportTest(Tmp):
         self.assertEqual(self.check("\n\n" + GOOD), [])
 
     def test_first_line_and_missing_labels_short_circuit(self):
-        self.assertEqual(self.check("hello"), ["the first non-empty line is not `STATUS: DONE|FAILED|BLOCKED`", "missing labels: STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT"])
+        self.assertEqual(
+            self.check("hello"),
+            [
+                "the first non-empty line is not `STATUS: DONE|FAILED|BLOCKED`",
+                "missing labels: STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT",
+            ],
+        )
         out = self.check("STATUS: DONE\nSTEPS: 1/1")
-        self.assertEqual(out, ["missing labels: FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT"])
-        self.assertEqual(self.check(GOOD.replace("STATUS: DONE", "STATUS: MAYBE")), ["the first non-empty line is not `STATUS: DONE|FAILED|BLOCKED`"])
+        self.assertEqual(
+            out, ["missing labels: FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT"]
+        )
+        self.assertEqual(
+            self.check(GOOD.replace("STATUS: DONE", "STATUS: MAYBE")),
+            ["the first non-empty line is not `STATUS: DONE|FAILED|BLOCKED`"],
+        )
 
     def test_steps_validation(self):
-        self.assertEqual(self.check(report(steps="three")), ["STEPS is not `<done>/<total>`"])
+        self.assertEqual(
+            self.check(report(steps="three")), ["STEPS is not `<done>/<total>`"]
+        )
         self.assertEqual(self.check(report(steps="3/2")), ["STEPS done exceeds total"])
         self.assertEqual(self.check(report(steps=" 2 / 2 ")), [])
         self.assertEqual(self.check(report(steps="0/0")), [])
-        self.assertEqual(self.check(report("BLOCKED", steps="x")), ["STEPS is not `<done>/<total>`"])
+        self.assertEqual(
+            self.check(report("BLOCKED", steps="x")), ["STEPS is not `<done>/<total>`"]
+        )
 
     def test_done_needs_evidence_and_no_failures(self):
         out = self.check(report(evidence="1. just a command"))
         self.assertEqual(len(out), 1)
         self.assertIn("numbered EVIDENCE line", out[0])
         out = self.check(report(evidence="1. pytest -> 2 failed"))
-        self.assertEqual(out, ["a DONE report's EVIDENCE shows failing results; report FAILED or fix and re-run"])
-        self.assertEqual(self.check(report("FAILED", evidence="1. pytest -> 2 failed")), [])
+        self.assertEqual(
+            out,
+            [
+                "a DONE report's EVIDENCE shows failing results; report FAILED or fix and re-run"
+            ],
+        )
+        self.assertEqual(
+            self.check(report("FAILED", evidence="1. pytest -> 2 failed")), []
+        )
 
     def test_writers_files_changed_checked_readers_not(self):
         out = self.check(report(files="ghost.py"), agent="atlas:implementer")
-        self.assertEqual(out, ["FILES_CHANGED names paths that do not exist and are not in git status: ghost.py"])
-        self.assertEqual(self.check(report(files="ghost.py"), agent="atlas:explorer"), [])
-        self.assertEqual(self.check(report("FAILED", files="ghost.py"), agent="atlas:implementer"), [])
+        self.assertEqual(
+            out,
+            [
+                "FILES_CHANGED names paths that do not exist and are not in git status: ghost.py"
+            ],
+        )
+        self.assertEqual(
+            self.check(report(files="ghost.py"), agent="atlas:explorer"), []
+        )
+        self.assertEqual(
+            self.check(report("FAILED", files="ghost.py"), agent="atlas:implementer"),
+            [],
+        )
 
     def test_ghost_list_truncated_to_three(self):
-        out = self.check(report(files="a.py; b.py; c.py; d.py"), agent="atlas:docs-curator")
+        out = self.check(
+            report(files="a.py; b.py; c.py; d.py"), agent="atlas:docs-curator"
+        )
         self.assertTrue(out[0].endswith("a.py, b.py, c.py"))
 
     def test_writers_constant(self):
-        self.assertEqual(core.WRITERS, ("atlas:implementer", "atlas:docs-curator", "atlas:runner"))
+        self.assertEqual(
+            core.WRITERS, ("atlas:implementer", "atlas:docs-curator", "atlas:runner")
+        )
 
 
 class FakeTodo:
@@ -313,7 +447,7 @@ class CloseBoardItemTest(unittest.TestCase):
         long = "x" * 400
         msg = report(evidence=f"1. first -> {long}\n2. second -> y")
         core.close_board_item(t, "R", "w", msg, REPORT)
-        (root, iid, status, ev), = t.calls
+        ((root, iid, status, ev),) = t.calls
         self.assertEqual((root, iid, status), ("R", "i1", "completed"))
         self.assertEqual(len(ev), 300)
         self.assertTrue(ev.startswith("1. first -> xx"))
@@ -339,7 +473,13 @@ class CloseBoardItemTest(unittest.TestCase):
         self.assertEqual(t.calls[0][1], "own")
 
     def test_owner_fallback_picks_latest_open_item(self):
-        t = FakeTodo([{"id": "a", "owner": "w"}, {"id": "b", "owner": "w"}, {"id": "c", "owner": "z"}])
+        t = FakeTodo(
+            [
+                {"id": "a", "owner": "w"},
+                {"id": "b", "owner": "w"},
+                {"id": "c", "owner": "z"},
+            ]
+        )
         core.close_board_item(t, "R", "w", GOOD, REPORT)
         self.assertEqual(t.calls[0][1], "b")
 
@@ -352,12 +492,23 @@ class CloseBoardItemTest(unittest.TestCase):
         for msg, rep in ((None, REPORT), ("", REPORT), ("   ", None)):
             t = FakeTodo([{"id": "a", "owner": "w"}])
             core.close_board_item(t, "R", "w", msg, rep)
-            self.assertEqual(t.calls, [("R", "a", "blocked", "worker finished without a valid report: no final report")], (msg, rep))
+            self.assertEqual(
+                t.calls,
+                [
+                    (
+                        "R",
+                        "a",
+                        "blocked",
+                        "worker finished without a valid report: no final report",
+                    )
+                ],
+                (msg, rep),
+            )
 
     def test_message_without_report_blocks_with_container_problems(self):
         t = FakeTodo([{"id": "a", "owner": "w"}])
         core.close_board_item(t, "R", "w", "just prose", None)
-        (_, iid, status, ev), = t.calls
+        ((_, iid, status, ev),) = t.calls
         self.assertEqual((iid, status), ("a", "blocked"))
         self.assertEqual(
             ev,
@@ -368,13 +519,18 @@ class CloseBoardItemTest(unittest.TestCase):
     def test_report_without_message_blocks(self):
         t = FakeTodo([{"id": "a", "owner": "w"}])
         core.close_board_item(t, "R", "w", None, REPORT)
-        self.assertEqual(t.calls[0][2:], ("blocked", "worker finished without a valid report: no final report"))
+        self.assertEqual(
+            t.calls[0][2:],
+            ("blocked", "worker finished without a valid report: no final report"),
+        )
 
     def test_block_reason_capped_at_300(self):
         t = FakeTodo([{"id": "a", "owner": "w"}])
         core._block(t, "R", {"id": "a"}, "y" * 500)
         self.assertEqual(len(t.calls[0][3]), 300)
-        self.assertTrue(t.calls[0][3].startswith("worker finished without a valid report: yyy"))
+        self.assertTrue(
+            t.calls[0][3].startswith("worker finished without a valid report: yyy")
+        )
 
     def test_reap_member_settles_finishes_and_leaves_every_channel(self):
         t = FakeTodo([{"id": "a", "owner": "w"}])
@@ -393,7 +549,11 @@ class FinishMemberTest(Tmp):
         git(self.root, "init", "-q")
 
     def _members(self):
-        return {m["name"]: m for c in self.todo._reg_read(self.root)["channels"].values() for m in c["members"]}
+        return {
+            m["name"]: m
+            for c in self.todo._reg_read(self.root)["channels"].values()
+            for m in c["members"]
+        }
 
     def test_agent_name_match_with_report_completes_item(self):
         self.todo.open_lead_channel(self.root, "lead-x", ["impl-1"])
@@ -405,12 +565,20 @@ class FinishMemberTest(Tmp):
     def test_agent_id_mapping_used(self):
         self.todo.open_lead_channel(self.root, "lead-x", ["impl-2"])
         self.todo.set_member_agent_id(self.root, "impl-2", "aid123456789")
-        core.finish_member({"agent_id": "aid123456789", "agent_type": "atlas:implementer", "cwd": self.root})
+        core.finish_member(
+            {
+                "agent_id": "aid123456789",
+                "agent_type": "atlas:implementer",
+                "cwd": self.root,
+            }
+        )
         self.assertEqual(self._members()["impl-2"].get("exit_code"), 0)
 
     def test_type_fallback_single_candidate_and_excludes_lead_and_mapped(self):
         self.todo.open_lead_channel(self.root, "lead-x", ["runner-a", "explorer-q"])
-        core.finish_member({"agent_id": "nomap", "agent_type": "atlas:runner", "cwd": self.root})
+        core.finish_member(
+            {"agent_id": "nomap", "agent_type": "atlas:runner", "cwd": self.root}
+        )
         m = self._members()
         self.assertEqual(m["runner-a"].get("exit_code"), 0)
         self.assertNotIn("exit_code", m["explorer-q"])
@@ -419,22 +587,35 @@ class FinishMemberTest(Tmp):
     def test_type_fallback_ambiguous_records_fault_and_finishes_nobody(self):
         self.todo.open_lead_channel(self.root, "lead-x", ["runner-a", "runner-b"])
         with mock.patch("atlas_faults.record") as rec:
-            core.finish_member({"agent_id": "nomap", "agent_type": "atlas:runner", "cwd": self.root})
+            core.finish_member(
+                {"agent_id": "nomap", "agent_type": "atlas:runner", "cwd": self.root}
+            )
         self.assertEqual(rec.call_args[0][0], "worker_report_gate.finish_member")
-        self.assertIn("ambiguous SubagentStop fallback: ['runner-a', 'runner-b']", str(rec.call_args[0][1]))
+        self.assertIn(
+            "ambiguous SubagentStop fallback: ['runner-a', 'runner-b']",
+            str(rec.call_args[0][1]),
+        )
         self.assertTrue(all("exit_code" not in m for m in self._members().values()))
 
     def test_no_agent_type_and_no_match_are_noops(self):
         self.todo.open_lead_channel(self.root, "lead-x", ["runner-a"])
         core.finish_member({"agent_id": "nomap", "cwd": self.root})
-        core.finish_member({"agent_id": "nomap", "agent_type": "atlas:verifier", "cwd": self.root})
+        core.finish_member(
+            {"agent_id": "nomap", "agent_type": "atlas:verifier", "cwd": self.root}
+        )
         self.assertTrue(all("exit_code" not in m for m in self._members().values()))
 
     def test_errors_are_swallowed_and_recorded(self):
-        with mock.patch("atlas_todo.find_root", side_effect=RuntimeError("bad root")), mock.patch("atlas_faults.record") as rec:
+        with (
+            mock.patch("atlas_todo.find_root", side_effect=RuntimeError("bad root")),
+            mock.patch("atlas_faults.record") as rec,
+        ):
             self.assertIsNone(core.finish_member({"cwd": self.root}))
         self.assertEqual(rec.call_args[0][0], "worker_report_gate.finish_member")
-        with mock.patch("atlas_todo.find_root", side_effect=RuntimeError("bad")), mock.patch("atlas_faults.record", side_effect=RuntimeError("worse")):
+        with (
+            mock.patch("atlas_todo.find_root", side_effect=RuntimeError("bad")),
+            mock.patch("atlas_faults.record", side_effect=RuntimeError("worse")),
+        ):
             self.assertIsNone(core.finish_member({"cwd": self.root}))
 
 
@@ -444,12 +625,25 @@ class MainTest(Tmp):
         e = {"ATLAS_REPORT_GATE_DIR": gate}
         e.update(env or {})
         out = io.StringIO()
-        with mock.patch.dict(os.environ, e), mock.patch("sys.stdin", io.StringIO(raw if raw is not None else json.dumps(payload))), mock.patch("sys.stdout", out):
+        with (
+            mock.patch.dict(os.environ, e),
+            mock.patch(
+                "sys.stdin",
+                io.StringIO(raw if raw is not None else json.dumps(payload)),
+            ),
+            mock.patch("sys.stdout", out),
+        ):
             core.main()
         return out.getvalue()
 
     def pl(self, **kw):
-        p = {"hook_event_name": "SubagentStop", "agent_id": "a1", "agent_type": "atlas:runner", "last_assistant_message": "nope", "cwd": self.root}
+        p = {
+            "hook_event_name": "SubagentStop",
+            "agent_id": "a1",
+            "agent_type": "atlas:runner",
+            "last_assistant_message": "nope",
+            "cwd": self.root,
+        }
         p.update(kw)
         return p
 
@@ -458,7 +652,10 @@ class MainTest(Tmp):
             out = self.run_main(self.pl())
             d = json.loads(out)
             self.assertEqual(d["decision"], "block")
-            self.assertIn("Your final message is not the atlas report container (the first non-empty line is not", d["reason"])
+            self.assertIn(
+                "Your final message is not the atlas report container (the first non-empty line is not",
+                d["reason"],
+            )
             self.assertIn("EVIDENCE:\n1. <command or read-back> -> ", d["reason"])
             fm.assert_not_called()
             self.assertEqual(self.run_main(self.pl()), "")
@@ -473,21 +670,40 @@ class MainTest(Tmp):
 
     def test_no_agent_id_keys_marker_on_message(self):
         with mock.patch.object(core, "finish_member"):
-            self.assertIn("block", self.run_main(self.pl(agent_id=None, last_assistant_message="one")))
-            self.assertIn("block", self.run_main(self.pl(agent_id=None, last_assistant_message="two")))
-            self.assertEqual(self.run_main(self.pl(agent_id=None, last_assistant_message="one")), "")
+            self.assertIn(
+                "block",
+                self.run_main(self.pl(agent_id=None, last_assistant_message="one")),
+            )
+            self.assertIn(
+                "block",
+                self.run_main(self.pl(agent_id=None, last_assistant_message="two")),
+            )
+            self.assertEqual(
+                self.run_main(self.pl(agent_id=None, last_assistant_message="one")), ""
+            )
 
     def test_silent_skip_paths(self):
         with mock.patch.object(core, "finish_member") as fm:
             self.assertEqual(self.run_main(self.pl(), env={"ATLAS_GATE": "off"}), "")
-            self.assertEqual(self.run_main(self.pl(), env={"ATLAS_GATE_REPORT": "off"}), "")
+            self.assertEqual(
+                self.run_main(self.pl(), env={"ATLAS_GATE_REPORT": "off"}), ""
+            )
             self.assertEqual(self.run_main(self.pl(hook_event_name="Stop")), "")
             self.assertEqual(self.run_main(None, raw="[1]"), "")
-            self.assertEqual(self.run_main(self.pl(stop_hook_active=True)), "")
             fm.assert_not_called()
+            # the retry stop after a block never blocks again but still settles the member
+            self.assertEqual(self.run_main(self.pl(stop_hook_active=True)), "")
+            fm.assert_called_once()
+            self.assertEqual(fm.call_args[0][1:], (None, None))
 
     def test_non_atlas_or_blank_message_only_finishes_member(self):
-        for kw in ({"agent_type": "other:x"}, {"agent_type": ""}, {"last_assistant_message": "  "}, {"last_assistant_message": None}, {"last_assistant_message": 5}):
+        for kw in (
+            {"agent_type": "other:x"},
+            {"agent_type": ""},
+            {"last_assistant_message": "  "},
+            {"last_assistant_message": None},
+            {"last_assistant_message": 5},
+        ):
             with mock.patch.object(core, "finish_member") as fm:
                 self.assertEqual(self.run_main(self.pl(**kw)), "", kw)
             fm.assert_called_once_with(self.pl(**kw))
@@ -499,7 +715,10 @@ class MainTest(Tmp):
 
 class CliTest(Tmp):
     def test_cli_exits_zero_and_records_fault_on_error(self):
-        with mock.patch.object(core, "main", side_effect=RuntimeError("bang")), mock.patch("atlas_faults.record") as rec:
+        with (
+            mock.patch.object(core, "main", side_effect=RuntimeError("bang")),
+            mock.patch("atlas_faults.record") as rec,
+        ):
             with self.assertRaises(SystemExit) as cm:
                 core._cli()
         self.assertEqual(cm.exception.code, 0)
@@ -514,7 +733,10 @@ class CliTest(Tmp):
         rec.assert_not_called()
 
     def test_cli_swallows_fault_recorder_failure(self):
-        with mock.patch.object(core, "main", side_effect=RuntimeError("x")), mock.patch("atlas_faults.record", side_effect=RuntimeError("y")):
+        with (
+            mock.patch.object(core, "main", side_effect=RuntimeError("x")),
+            mock.patch("atlas_faults.record", side_effect=RuntimeError("y")),
+        ):
             with self.assertRaises(SystemExit) as cm:
                 core._cli()
         self.assertEqual(cm.exception.code, 0)
