@@ -26,14 +26,15 @@ import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { reinforceLine, registerDiscipline } from './discipline';
 import { headerPhaseOf, registerRestyle } from './restyle';
-import { mergeToasts, registerNotify, stateToast } from './notify';
+import { isOlder, mergeToasts, registerNotify, stateToast } from './notify';
 import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
 import { clearLook, lookOf } from './look';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { LiveSnapshot, TeamTool } from './orchestra-types';
 import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
 
-const REBUILD_MS = 1500;
+const POLL_MS = 500; // the fallback poll of the cheap stat fingerprint; a rebuild runs only when it moved
+const WATCH_DEBOUNCE_MS = 100; // file events inside this window share one fingerprint check
 const WT_MS = 5000;
 const MUX_MS = 5000;
 const HERDR_MS = 5000;
@@ -112,6 +113,11 @@ const headerTallyState = atom({ plugin: 'atlas', key: 'headerTally' } as const, 
 let builder: SnapshotBuilder | null = null;
 let herdrStdout = '';
 let lastFingerprint = '';
+let rebuildRun: Promise<void> | null = null; // the rebuild in flight (see rebuild)
+let rebuildFollow: Promise<void> | null = null; // the one queued run behind it
+let rebuildSeq = 0; // stamped on each snapshot; never reset, so a re-boot's snapshots stay newer than any late write
+let watchHandles: { cancel(): void }[] = []; // fs.watch subscriptions of this session's data dir
+let watchTimer: { cancel(): void } | null = null; // the debounce for file events
 let wtAt = -Infinity; // last atlas_wt.py status run (ms clock)
 let wtRows: WtRow[] = [];
 let lastRailPhase: string | null = null; // last phase the band lit, kept through a blocked reply
@@ -416,9 +422,29 @@ async function worktrees($: EngineInterface, now: number): Promise<WtRow[]> {
 /** Snapshot root, '' when no board is in view. */
 const rootOf = (snap: AtlasSnapshot | null): string => snap?.root || '';
 
-/** Rebuild the snapshot from disk + live state; never throws. */
-async function rebuild($: EngineInterface): Promise<void> {
+/**
+ * Rebuild the snapshot from disk + live state; never throws. Serialized: one run in flight, every request that arrives
+ * meanwhile (rebuild, mux, herdr and core ticks, the file watcher) shares ONE follow-up run, so two runs never resolve out of
+ * order and the last write is always the newest build.
+ */
+export function rebuild($: EngineInterface): Promise<void> {
+	if (rebuildRun === null) {
+		const run: Promise<void> = rebuildOnce($).finally(() => {
+			if (rebuildRun === run) rebuildRun = null;
+		});
+		rebuildRun = run;
+		return run;
+	}
+	rebuildFollow ??= rebuildRun.then(() => {
+		rebuildFollow = null;
+		return rebuild($);
+	});
+	return rebuildFollow;
+}
+
+async function rebuildOnce($: EngineInterface): Promise<void> {
 	if (builder === null) return;
+	const seq = ++rebuildSeq;
 	let listed: { id: string; status: string }[] = [];
 	const names: Record<string, string> = {};
 	try {
@@ -463,8 +489,9 @@ async function rebuild($: EngineInterface): Promise<void> {
 			listed,
 			wt: await worktrees($, now),
 		});
-		// The snapshot write redraws the band, pane and restyles that read it.
-		await update($, snapshotState, () => snap);
+		// The snapshot write redraws the band, pane and restyles that read it. Stamped; an older build never replaces a newer one.
+		const stamped = { ...snap, seq };
+		await update($, snapshotState, (cur) => (cur && isOlder(cur, stamped) ? cur : stamped));
 		// The board keeps its last good rows; say why they may be stale.
 		if (builder.todoError !== undefined) reportFailure($, `atlas: todos.json is ${builder.todoError}, showing the last good board`);
 	} catch (err) {
@@ -481,8 +508,35 @@ export async function dockTick($: EngineInterface): Promise<void> {
 	void $.ui.open(PANE_DOCK).then(toastUnplaced($));
 }
 
-/** 1.5 s tick: rebuild only when the data files moved. */
-async function rebuildTick($: EngineInterface): Promise<void> {
+/** Event-driven update: watch the dirs the fingerprint stats (fs.watch, when the engine has one) and run a fingerprint check
+ * WATCH_DEBOUNCE_MS after the first event of a burst. Without fs.watch the POLL_MS tick is the only path. Never throws. */
+function armWatch($: EngineInterface, root: string): void {
+	for (const h of watchHandles) h.cancel();
+	watchHandles = [];
+	watchTimer?.cancel();
+	watchTimer = null;
+	const fs = $.fs as unknown as { watch?: (path: string, onChange: () => void) => { cancel?: () => void; close?: () => void } | undefined };
+	if (typeof fs.watch !== 'function' || root === '') return;
+	const base = `${root.replace(/\/+$/, '')}/.atlas/.run`;
+	const onChange = (): void => {
+		if (watchTimer !== null) return;
+		watchTimer = $.clock.after(WATCH_DEBOUNCE_MS, () => {
+			watchTimer = null;
+			void rebuildTick($);
+		});
+	};
+	for (const dir of [base, `${base}/board`, `${base}/crew`]) {
+		try {
+			const h = fs.watch(dir, onChange);
+			if (h) watchHandles.push({ cancel: () => (h.cancel ?? h.close)?.call(h) });
+		} catch {
+			// a dir that does not exist yet: the poll covers it
+		}
+	}
+}
+
+/** POLL_MS tick and watcher callback: rebuild only when the data files moved. */
+export async function rebuildTick($: EngineInterface): Promise<void> {
 	await dockTick($);
 	if (builder === null) return;
 	const fingerprint = await dataFingerprint($);
@@ -861,7 +915,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 				await $.command.register({ name: 'atlas-say', description: 'Post a note to the lead channel', argumentHint: '<message>' });
 				await $.command.register({ name: 'atlas-core', description: 'Show the Atlas core: contract, verdicts, offload, routes' });
 				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
-				$.clock.every(REBUILD_MS, () => {
+				$.clock.every(POLL_MS, () => {
 					void rebuildTick($);
 				});
 				$.clock.every(HERDR_MS, () => {
@@ -875,6 +929,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					void runGates($);
 				});
 			}
+			armWatch($, rootOf(await read($, snapshotState)));
 			void runGates($);
 			void coreTick($);
 			// The tick only runs while a worker is live, so an idle session redraws nothing.
@@ -1074,6 +1129,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		tickTimer = null;
 		easeTimer?.cancel();
 		easeTimer = null;
+		for (const h of watchHandles) h.cancel();
+		watchHandles = [];
+		watchTimer?.cancel();
+		watchTimer = null;
 		return next(e);
 	});
 
