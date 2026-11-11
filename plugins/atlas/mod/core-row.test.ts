@@ -169,9 +169,9 @@ describe('core report lines', () => {
     m.offload.workers = [worker('w1', { costUsd: null, model: null })] as any;
     m.contract = { header: { ok: 1, total: 2 }, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 3, total: 3 }, openGates: 2 };
     const r = coreReport(m).split('\n');
-    expect(r).toContain('  header    1/2 replies opened with the ATLAS header');
+    expect(r).toContain('  header    1 of 2 replies opened with the ATLAS header'); // one n of m unit on every tab
     expect(r).toContain('  evidence  none done items carry evidence');
-    expect(r).toContain('  verified  3/3 done items have a verified finding');
+    expect(r).toContain('  verified  3 of 3 done items have a verified finding');
     expect(r).toContain('  gates     2 open');
     expect(r).toContain('  no verdict recorded yet');
     expect(r).toContain('  w1  ?  peak 58.8k  kept 7.0k  returned 151  cost ?');

@@ -217,6 +217,23 @@ class AtlasGatesInProcess(unittest.TestCase):
             line = self._tripwire()["inline"]
             self.assertEqual((line["ok"], line["detail"]), (False, "4 of 4"))
 
+    def test_completion_group_lists_every_gate_that_can_block_stop(self):
+        """Critique 6: the team gate (s) blocks Stop but had no row. (r) is decided at Stop alone, evaluate() never fails it: no row."""
+        import completion_gate as cg
+
+        def group(failed):
+            with self.mock.patch.object(cg, "_delegation_state", return_value=(False, [], "")), self.mock.patch.object(
+                cg, "_session_is_orchestrating", return_value=True
+            ), self.mock.patch.object(cg, "evaluate", return_value={"failed": failed}):
+                return {ln["id"]: ln for ln in self.gates.completion_group(SESSION, Path(self.tmp.name), "")["lines"]}
+
+        by_id = group(["s"])
+        self.assertEqual(by_id["s"]["label"], "Team gate")
+        self.assertFalse(by_id["s"]["ok"])
+        self.assertIn("spawn-team", by_id["s"]["fix"])  # a failing row says what to do
+        self.assertNotIn("r", by_id)
+        self.assertTrue(group([])["s"]["ok"])
+
     def test_armed_line_reports_state(self):
         line = self._tripwire()["armed"]
         self.assertEqual((line["ok"], line["detail"]), (True, "armed"))

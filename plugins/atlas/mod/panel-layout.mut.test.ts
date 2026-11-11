@@ -52,9 +52,14 @@ describe('gates tab: the first fix or detail stays on the group row once it fits
       expect([cols, rows.some((t) => t.includes(title) && t.includes(tail))]).toEqual([cols, cols >= from]);
     }
   };
-  test('a failing group (with its failing count) and a passing group (without a value)', () => {
-    wholeAt(failing, 'lint', 'run the formatter now', 54);
-    wholeAt(passing, 'docs', 'all links resolve fine', 40);
+  test('a failing group (with its green count) holds the first fix', () => {
+    wholeAt(failing, 'lint', 'run the formatter now', 52); // `1 of 2 green` is two cells shorter than the old `1 of 2 failing`
+  });
+  test('a passing group never carries a check\'s detail: it stays with its own row (critique 6, label and value apart)', () => {
+    for (let cols = 30; cols <= 160; cols++) {
+      const rows = bodyLines(panelWorld('gates', cols, mocha, { gates: [passing] as never })).map((l) => l.runs.map((x) => x.t).join(''));
+      expect([cols, rows.some((t) => t.includes('docs') && t.includes('all links'))]).toEqual([cols, false]);
+    }
   });
 });
 

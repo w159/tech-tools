@@ -32,7 +32,8 @@ export type MissionNote = { from: string; to: string; text: string; at?: string;
  * the newest comm whose kind is not one of these (`say`, `dispatch`, `report`, or a kind the source does not state). */
 const NOT_MESSAGE = new Set(['join', 'leave', 'exit', 'merge']);
 export const isMessageKind = (kind?: string): boolean => !kind || !NOT_MESSAGE.has(kind);
-export type MissionCheck = { id: string; ok: boolean };
+/** `name`: what a failing check is called in the blocked reason (the failing line's own words, `team gate`); the id when absent. */
+export type MissionCheck = { id: string; ok: boolean; name?: string };
 export type LastRun = { workers: number; secs?: number; failed: number };
 
 export type MissionModel = {
@@ -70,6 +71,8 @@ export type MissionModel = {
   boardRows?: number;
   /** Cells the band's key buttons take on the footer; 0 on omp. */
   keysWidth?: number;
+  /** Cells the focus hint after the keys wants (with its gap); the checks keep to a shorter form before they push it out. */
+  hintWidth?: number;
   /** Lead context used, 0..1; absent hides the ctx gauge. */
   ctx?: number;
   /** The tall band (phase rail, blank, gauge row) when the width and rows allow it. */
@@ -125,9 +128,6 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n =
 
 const isRunning = (m: MissionModel): boolean => m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
 const uiOf = (m: MissionModel): Ui => m.ui ?? uiFromEnv();
-/** Checks that fail or err: with any, an idle band is not idle, it needs a look (the header says blocked, the last run is not `all ok`). */
-const failingChecks = (m: MissionModel): number => (m.checks ?? []).filter((c) => !c.ok).length;
-
 /** A mission worker's place in the six-word vocabulary. */
 export const uiStateOf = (s: WorkerState): UiState => (s === 'thinking' ? 'running' : s);
 
@@ -170,7 +170,7 @@ const WIDE_MIN = 100;
 /** The one run state every form below reads: blocked (declared by the lead, or idle beside a failing check), idle, and why. */
 export function runStateOf(m: MissionModel): { blocked: boolean; idle: boolean; reason: { long: string; short: string } } {
   const quiet = !m.blocked && !isRunning(m);
-  const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.id);
+  const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   const stuck = quiet && failing.length > 0; // idle in every way but a failing check: the header says so
   return { blocked: !!m.blocked || stuck, idle: quiet && !stuck, reason: blockReasons(!!m.blocked, failing) };
 }
@@ -329,16 +329,20 @@ function noteLine(n: MissionNote, cols: number): Line {
   return { runs: [...left, ...fitRuns([r(noteState(n.kind), 'text')], Math.max(0, room)), ...right] };
 }
 
-/** `checks  ● completion  ■ tripwire  ● routing`; when that does not fit, `checks  ■ tripwire` (failures only) or
- * `checks  ● all 3 pass`. Failing names take the text tone so they stand out; passing names stay muted. */
-function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui): Run[] {
+/** `checks  ● completion  ■ tripwire  ● routing  2 of 3 green`; when that does not fit, `checks  ■ tripwire  2 of 3 green` (failures only) or
+ * `checks  ● 3 of 3 green`. The figure is the gates tab's own `n of m green`. Failing names take the text tone so they stand out; passing names stay muted. */
+function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui, hint = 0): Run[] {
+  const lean = hint > 0 ? checkRuns(checks, room - hint, ui) : []; // the form that leaves the hint its room, when one fits
+  if (lean.length) return lean;
   if (!checks?.length) return [];
   const one = (c: MissionCheck): Run[] => [stateRun(c.ok ? 'done' : 'failed', ui), r(` ${c.id}`, c.ok ? 'sub' : 'text')];
   const join = (cs: readonly MissionCheck[]): Run[] => cs.flatMap((c, i) => [...(i ? [r('  ')] : []), ...one(c)]);
   const failing = checks.filter((c) => !c.ok);
+  const green = `${checks.length - failing.length} of ${checks.length} green`;
   const forms: Run[][] = [
-    join(checks),
-    failing.length ? [...join(failing), r(`  ${checks.length - failing.length} ok`, 'sub')] : [stateRun('done', ui), r(` all ${checks.length} pass`, 'sub')],
+    [...join(checks), r(`  ${green}`, 'sub')],
+    join(checks), // tight: the names and marks carry the figure
+    failing.length ? [...join(failing), r(`  ${green}`, 'sub')] : [stateRun('done', ui), r(` ${green}`, 'sub')],
     failing.length ? [stateRun('failed', ui), r(` ${plural(failing.length, 'failing')}`, 'text')] : [stateRun('done', ui)],
   ];
   const label = [r(' checks  ', 'muted')];
@@ -348,7 +352,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui)
 
 function footerLine(m: MissionModel): Line | null {
   const keys = m.keysWidth ?? 0;
-  const checks = checkRuns(m.checks, m.cols - keys - (keys ? 2 : 0), uiOf(m));
+  const checks = checkRuns(m.checks, m.cols - keys - (keys ? 2 : 0), uiOf(m), keys ? m.hintWidth ?? 0 : 0);
   if (!checks.length && !keys) return null;
   // With keys the band pads the gap itself (flush-right buttons), so the checks stay unpadded.
   return { runs: keys ? checks : fitRuns(checks, m.cols), keys: keys > 0 };
@@ -382,7 +386,7 @@ const blank = (cols: number): Line => ({ runs: [r(' '.repeat(cols))] });
 
 function idleLines(m: MissionModel): Line[] {
   const band = bandLines(m);
-  const last = lastRunRuns(m.lastRun, failingChecks(m) > 0);
+  const last = lastRunRuns(m.lastRun, runStateOf(m).blocked); // `all ok` never sits under a BLOCKED header, declared or from a failing check
   const lastRow: Line[] = last.length && m.maxRows > band.length ? [{ runs: last }] : [];
   const head = [...band, ...lastRow];
   const foot = footerLine(m);

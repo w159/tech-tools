@@ -61,8 +61,11 @@ function withComm(o: Orch, entry: Omit<CommsEntry, 'seq'>): CommsEntry[] {
 // ---- reducers ------------------------------------------------------------------
 
 /** agent.spawn: lead dispatches `id`; the worker joins. */
-export function onSpawn(o: Orch, id: string, text: string, now: number, meta?: SpawnMeta): Orch {
+export function onSpawn(o: Orch, id: string, text: string, now: number, given?: SpawnMeta): Orch {
   const line = firstLine(text);
+  // The requested name: the Agent call's own `name`, else the description's `name: ` prefix; never a name derived from the task words.
+  const requested = given?.name || descriptionName(text);
+  const meta = requested && requested !== given?.name ? { ...given, name: requested } : given;
   const dispatched = withComm(o, { ts: now, from: LEAD, to: id, text: line || 'task dispatched', kind: 'dispatch' });
   return {
     ...o,

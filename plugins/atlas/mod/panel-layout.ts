@@ -11,7 +11,8 @@ import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
 import { hasCore, tok, type CoreModel, type Verdict } from './data/core';
-import { gateTally } from './data/runstate';
+import { clipWords, lastText } from './data/lasttext';
+import { blockReasons, gateTally } from './data/runstate';
 import { displayName } from './hud';
 import type { GateGroup } from './pane/sidebar-types';
 
@@ -327,10 +328,14 @@ const tall = (m: PanelModel): boolean => m.rows >= TALL;
 /** Rows left in a pane after the header and `used` body rows (one row stays free at the foot). */
 const spareRows = (m: PanelModel, used: number): number => m.rows - headerRows(m).length - used - 1;
 
+/** A worker's last step as every `last` text shows it: no list marker, backtick or absolute path (`lastText`), ended on a whole word within `room` cells; empty when no word fits. */
+const lastFit = (w: PanelWorker, room: number): string => clipWords(lastText(w.detail), Math.max(0, room));
+
 /** An agent row under the route tab's `agents` row: glyph, whole name, state word, from 100 columns what it is doing. */
 function routeAgentRow(m: PanelModel, w: PanelWorker, nameW: number): PanelLine {
   const tone: Tone = w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub';
-  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW, word: { t: w.state, tone }, wordW: WORD_W, ...(m.cols >= WIDE && w.detail ? { detail: { t: oneLine(w.detail) } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
+  const last = m.cols >= WIDE ? lastFit(w, m.cols - 2 - (GRID_LEAD + nameW + 1 + WORD_W) - 1) : '';
+  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW, word: { t: w.state, tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
 }
 
 function routeBody(m: PanelModel): PanelLine[] {
@@ -350,7 +355,7 @@ function routeBody(m: PanelModel): PanelLine[] {
     // Work may be running with no plan on the board: say so with the workers, never "nothing planned".
     const running = listed.length ? [] : m.workers.filter((w) => w.state === 'running');
     const nameW = Math.min(nameCap(m.cols), Math.max(...running.map((w) => cells(nameOf(w))), 1));
-    if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: w.detail } }))));
+    if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
     else if (!m.workers.length) rows.push(BLANK, line([r('(no state)', 'muted'), r(`  no tasks yet ${dot(m.ui)} add one with /todo add`, 'muted')]));
     return rows;
   }
@@ -393,7 +398,8 @@ function workerDetail(m: PanelModel, w: PanelWorker): PanelLine[] {
   const task = [goalOf(w), w.task && goalOf(w) ? `(${w.task})` : w.task].filter(Boolean).join(' ');
   const how = [w.model, w.secs !== undefined ? shortAge(w.secs) : '', w.tools !== undefined ? `${w.tools} tool calls` : ''].filter(Boolean).join(` ${dot(m.ui)} `);
   if (!task && !how) return []; // a last step alone is what the row already says
-  return [task ? ['task', task] : null, how ? ['model', how] : null, w.detail ? ['last', oneLine(w.detail)] : null]
+  const last = lastFit(w, m.cols - 4 - 6);
+  return [task ? ['task', task] : null, how ? ['model', how] : null, last ? ['last', last] : null]
     .filter((x): x is [string, string] => !!x)
     .map(([k, v]) => line(fitRuns([r(`    ${lab(k)}`, 'muted'), r(v, 'sub')], m.cols)));
 }
@@ -404,7 +410,9 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
   // Wide: the design's Subagents columns after the state word (model, task, what it is doing), shared with the HUD block.
   // Dropped as the pane narrows: the model first, then the task tag; the detail is cut at its end last. The name never gives way to them.
   const room = m.cols - GRID_LEAD - nameW - 2 - (wide ? 12 : 10) - 1;
-  const tail = wide ? [...(room >= 10 + 6 + 12 ? [r(pad(w.model ?? '', 10), 'sub')] : []), ...(room >= 6 + 12 ? [r(pad(w.task ?? '', 6), 'sub')] : []), r(w.detail, 'muted')] : [];
+  const withModel = room >= 10 + 6 + 12;
+  const withTask = room >= 6 + 12;
+  const tail = wide ? [...(withModel ? [r(pad(w.model ?? '', 10), 'sub')] : []), ...(withTask ? [r(pad(w.task ?? '', 6), 'sub')] : []), r(lastFit(w, room - (withModel ? 10 : 0) - (withTask ? 6 : 0)), 'muted')] : [];
   const runs = gridRow({
     cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name),
     name: { t: nameOf(w), bold: true }, nameW, gap: 2,
@@ -412,7 +420,7 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
   });
   const out = [line(fitRuns(moving(runs, key, w.state, m), m.cols), { kind: 'worker', key, name: w.name })];
   if (m.expanded === key) {
-    out.push(line(fitRuns([r(`    ${w.detail || w.state}`, 'muted')], m.cols)));
+    out.push(line(fitRuns([r(`    ${lastFit(w, m.cols - 4) || w.state}`, 'muted')], m.cols)));
     if (w.secs !== undefined) out.push(line(fitRuns([r(`    running ${shortAge(w.secs)}${w.tools !== undefined ? ` ${dot(m.ui)} ${w.tools} tool calls` : ''}`, 'muted')], m.cols)));
   } else if (more) out.push(...workerDetail(m, w));
   return out;
@@ -425,16 +433,28 @@ function leadSummary(m: PanelModel): PanelLine {
   return line(fitRuns([r('lead  ', 'text', { bold: true }), r(parts.join(` ${dot(m.ui)} `), 'muted')], m.cols));
 }
 
+/** The lead as the band would read it: while the band is BLOCKED (declared, or a gate fails with no agent running) the lead is not `done`; it reads
+ * blocked, with the reason the band gives. Any other state is the lead's own. */
+function leadOf(m: PanelModel): PanelWorker | undefined {
+  const lead = m.lead;
+  if (!lead || lead.state !== 'done') return lead;
+  const t = tallyOf(m.gates);
+  const declared = m.phase === 'blocked';
+  if (!declared && (t.failing.length === 0 || m.workers.some((w) => w.state === 'running'))) return lead;
+  return { ...lead, state: 'blocked', detail: blockReasons(declared, t.names).long };
+}
+
 function teamBody(m: PanelModel): PanelLine[] {
   const mates = m.mates ?? [];
-  const everyone = [...(m.lead ? [m.lead] : []), ...m.workers, ...mates];
+  const lead = leadOf(m);
+  const everyone = [...(lead ? [lead] : []), ...m.workers, ...mates];
   if (!everyone.length) return [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])];
   const cap = Math.max(18, Math.min(40, m.cols - GRID_LEAD - 2 - (m.cols >= WIDE ? 12 : 10) - 1 - (m.cols >= WIDE ? 28 : 0)));
   const nameW = Math.min(cap, Math.max(6, ...everyone.map((w) => cells(nameOf(w)))));
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : m.workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[], more: ReadonlySet<string>): PanelLine[] => ws.flatMap((w) => workerRows(m, w, Math.min(nameW, Math.max(6, m.cols - 14)), w.name === focusName, more.has(w.name)));
   const hint = !m.workers.length && !mates.length ? [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])] : [];
-  const build = (more: ReadonlySet<string>): PanelLine[] => [...(m.lead ? rows([m.lead], more) : []), ...hint, ...rows(m.workers, more), ...rows(mates, more), ...(m.lead ? [leadSummary(m)] : [])];
+  const build = (more: ReadonlySet<string>): PanelLine[] => [...(lead ? rows([lead], more) : []), ...hint, ...rows(m.workers, more), ...rows(mates, more), ...(m.lead ? [leadSummary(m)] : [])];
   const base = build(new Set());
   if (!tall(m)) return base;
   // A tall pane: the rows left go to per-agent detail, in roster order (the lead, then running first), each agent whole or not at all.
@@ -530,20 +550,22 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
 }
 
 const GATE_WORD_W = 7; // `passing` and `failing`
-/** `1 of 3 failing`: the group's failing count, the value column; empty while it passes. */
-const gateValue = (g: PanelGate): string => (groupFailing(g) ? `${groupFailing(g)} of ${g.lines.length} failing` : '');
+/** `2 of 3 green`: the group's checks that pass, the value column (the unit the tab ribbon uses); empty while the group passes. */
+const gateValue = (g: PanelGate): string => (groupFailing(g) ? `${g.lines.length - groupFailing(g)} of ${g.lines.length} green` : '');
 
 function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: boolean, all = false): PanelLine[] {
   const bad = groupFailing(g);
   const key = `group:${g.id}`;
-  const first = g.lines.find((l) => !l.ok) ?? g.lines[0];
-  const tail = g.error ? `unavailable: ${oneLine(g.error)}` : oneLine(bad ? first?.fix ?? first?.label : first?.detail);
+  const first = g.lines.find((l) => !l.ok);
+  const open = all || m.expanded === key || g.lines.some((l) => m.expanded === `gate:${l.id}`);
+  // What is wrong follows the word: the first fix, else (while the group is closed) the failing check's name. Once the checks are listed the name is
+  // their own row, never said twice; a passing group says nothing here (a check's detail belongs to its row, never beside another's name).
+  const tail = g.error ? `unavailable: ${oneLine(g.error)}` : bad ? oneLine(first?.fix ?? (open ? '' : first?.label)) : '';
   const word = bad || g.error ? 'failing' : 'passing';
-  // The failing count is the right-aligned value; the first fix (or the first detail) follows the word when it fits whole, else wraps under.
+  // The green count is the right-aligned value; the tail follows the word when it fits whole, else wraps under.
   const value = showValue ? gateValue(g) : '';
   const fixed = GRID_LEAD + nameW + 2 + GATE_WORD_W + (value ? cells(value) + 1 : 0) + 1;
   const fits = !tail || cells(tail) <= m.cols - fixed;
-  const open = all || m.expanded === key || g.lines.some((l) => m.expanded === `gate:${l.id}`);
   const runs = gridRow({
     cols: m.cols, ui: m.ui, mark: stateRun(groupOk(g) ? 'done' : 'failed', m.ui),
     name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'bad' : 'ok' }, wordW: GATE_WORD_W,
@@ -658,7 +680,8 @@ function offloadRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const o = c.offload;
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
   const nothing = o.kept === 0 && o.returned === 0;
-  const head = flowHeading('reading', nothing ? ['workers have read and returned nothing yet'] : [`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
+  const gone = m.workers.filter((w) => w.state === 'done' || w.state === 'failed').length; // in-process workers keep no token log: they returned, the figure is absent
+  const head = flowHeading('reading', nothing ? [gone ? `${gone} worker${gone === 1 ? '' : 's'} returned, no token figures kept` : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
   const ws = o.workers.slice(-8);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);

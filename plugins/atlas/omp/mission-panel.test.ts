@@ -122,7 +122,7 @@ test("the message row drops before the footer when rows run short", () => {
 
 test("footer: checks only, no key hints or buttons on omp", () => {
 	const r = rows(model({ gates: [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }, { id: "routing", title: "r", lines: [{ ok: true, label: "y" }] }] as never, notes: [{ from: "a", to: "b", text: "hi" }] }));
-	expect(r.at(-1)).toBe(" checks  ■ tripwire  ● routing".padEnd(140));
+	expect(r.at(-1)).toBe(" checks  ■ tripwire  ● routing  1 of 2 green".padEnd(140));
 	expect(r.join("\n")).not.toMatch(/r: route|ctrl\+x/);
 });
 

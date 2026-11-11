@@ -50,10 +50,12 @@ const phrase = (task: string | undefined, n = 3): string => (task ?? '').toLower
 /** The name the panel shows: the dispatch name, else (for a host id or a hash-suffixed name) the prefix of the Agent description
  * (`readme-explorer: compare ...`), else the agent type and a short task phrase, else the type; the id is the last resort. */
 export function agentName(name: string, role: string, task?: string): string {
-  const hashed = name === '' || HOST_ID.test(name) || hashTail(name) !== undefined;
+  const said = descriptionName(task);
+  // A name built from the task words (`explorer-list-open-atlas`, a type and the first words of `list open Atlas todo items`) is a guess: the requested name wins.
+  const derived = said !== undefined && said !== name && name === `${role}-${phrase(taskOf(task))}`;
+  const hashed = name === '' || HOST_ID.test(name) || hashTail(name) !== undefined || derived;
   if (!hashed) return name;
   const type = GENERIC.has(role) ? (name.replace(HEX_SUFFIX, '$1').replace(/-$/, '') || '') : role;
-  const said = descriptionName(task);
   if (said) return said;
   const slug = phrase(task);
   if (type && slug) return `${type}-${slug}`;

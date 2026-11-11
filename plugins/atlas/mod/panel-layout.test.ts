@@ -140,7 +140,7 @@ describe('gates tab', () => {
   const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
   test('a group says how many fail in words and shows the first fix', () => {
     const row = rows('gates', 100, { gates: g() }).at(-1)!;
-    expect(row).toMatch(/^ {2}■ Completion gate {2}failing run the hooks suite +1 of 2 failing$/);
+    expect(row).toMatch(/^ {2}■ Completion gate {2}failing run the hooks suite +1 of 2 green$/);
     expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });
   test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {

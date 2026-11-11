@@ -329,7 +329,7 @@ test("panel: the band, workers in words, the newest message and the checks foote
 	expect(p[4]).toMatch(/^ ◇ verifier-ui {7}verifier {5}queued +12s $/);
 	expect(p[5]).toBe(" ".repeat(120));
 	expect(p[6]).toMatch(/^ implementer-band to all {3}sent a message +$/);
-	expect(p[7]).toBe(" checks  ■ routing".padEnd(120)); // groups with no lines yet are not shown
+	expect(p[7]).toBe(" checks  ■ routing  0 of 1 green".padEnd(120)); // groups with no lines yet are not shown
 	expect(lines).toHaveLength(8);
 	expect(lines[7]).toContain("38;2;243;139;168"); // bad
 
