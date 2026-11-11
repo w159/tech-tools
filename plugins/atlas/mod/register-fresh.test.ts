@@ -125,6 +125,26 @@ describe('step 3: a gate file change re-runs the gates on the next poll', () => 
     expect(s.gateRuns.length - base).toBe(3);
   });
 
+  test('a new Stop verdict runs the gates on that very poll, inside the minimum gap (critique 9: BLOCKED lagged Stop by 3.5 s)', async () => {
+    const s = stubEngine();
+    await boot(s);
+    await poll(s);
+    s.advance(5000);
+    await poll(s);
+    s.write(DB, 'db-a'); // a hook wrote the gate DB: the run happens now
+    await poll(s);
+    const base = s.gateRuns.length;
+    s.write(`${RUN}/stop-verdict.json`, '{"sessions":{}}'); // Stop refused, inside the 5 s gap
+    await poll(s);
+    expect(s.gateRuns.length - base).toBe(1);
+    s.write(`${RUN}/stop-verdict.json`, '{"sessions":{"a":{"blocked":true}}}'); // and again on the next refusal
+    await poll(s);
+    await poll(s);
+    expect(s.gateRuns.length - base).toBe(2);
+    for (let i = 0; i < 4; i++) await poll(s); // quiet polls add nothing
+    expect(s.gateRuns.length - base).toBe(2);
+  });
+
   test('a burst of changes inside the minimum gap runs the gates once, then once more after the gap', async () => {
     const s = stubEngine();
     await boot(s);

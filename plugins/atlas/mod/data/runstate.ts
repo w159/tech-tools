@@ -41,19 +41,31 @@ export function gateTally(groups: readonly GateGroup[]): GateTally {
   return { total: checks.length, green: checks.length - failing.length, failing, names: checks.filter((c) => !c.ok).map((c) => c.name!), checks, stop: stopOf(groups) };
 }
 
+/** One refusing gate's word, lowercased; a bare gate letter (`r`) or the stand-in `gate` never reaches the band: it reads `stop refused`. */
+const plainStop = (x: string): string => {
+  const w = x.trim().toLowerCase();
+  return w === '' ? '' : /^[a-z]$/.test(w) || w === 'gate' ? 'stop refused' : w;
+};
+
 /** The Stop verdict line in any group; `Last Stop blocked` + `Team gate, Todos drained` reads as blocked by `team gate`, `todos drained`. */
 function stopOf(groups: readonly GateGroup[]): StopVerdict | null {
   for (const g of groups) {
     const l = g.lines.find((x) => x.id === STOP_LINE);
-    if (l) return l.label.endsWith('blocked') ? { blocked: true, gates: (l.detail ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean) } : { blocked: false, gates: [] };
+    if (l) return l.label.endsWith('blocked') ? { blocked: true, gates: (l.detail ?? '').split(',').map((x) => plainStop(x)).filter(Boolean) } : { blocked: false, gates: [] };
   }
   return null;
 }
 
-/** Why a band is BLOCKED: the lead declared it (`needs you`), or the Stop gate refused the stop (`stop: team gate`, `stop: 2 gates`). `short` is the form for a crowded row. */
+/** Longest joined reason the band spells out; past it the count stands in (`3 reasons`). */
+const REASON_MAX = 28;
+
+/** Why a band is blocked, after `blocked:` and in plain words: the lead declared it (`needs you`), or the Stop gate refused the stop and said why
+ * (`1 todo open`, `team gate`, `team gate, todos drained`). One string at every width: a crowded row drops the reason whole, never rewords it. */
 export function blockReasons(declared: boolean, stopGates: readonly string[]): { long: string; short: string } {
-  if (declared || stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
-  const one = stopGates.length === 1 ? `stop: ${stopGates[0]}` : `stop: ${stopGates.length} gates`; // one string at every width: a crowded row drops the reason whole, never rewords it
+  if (declared) return { long: 'needs you', short: 'needs you' };
+  if (stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
+  const joined = stopGates.join(', ');
+  const one = textWidth(joined) <= REASON_MAX ? joined : `${stopGates.length} reasons`;
   return { long: one, short: one };
 }
 

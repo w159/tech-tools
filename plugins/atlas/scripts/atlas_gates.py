@@ -43,6 +43,8 @@ _LABELS = {
     "q": "Worker branches merged",
     "s": "Team gate",
 }
+# Stop-only gates: they refuse a Stop but are not a row on the gates tab.
+_STOP_ONLY = {"r": "Done claimed early"}
 # Gates that completion_gate.evaluate() can fail but _GISTS has no one-line fix for.
 _FIXES = {
     "s": "in-process workers without a tmux team: run atlas_mux.py spawn-team, or set ATLAS_TEAM_GATE=off",
@@ -84,7 +86,12 @@ def stop_verdict_line(session: str, root: Path):
             )
         )["sessions"][session]
         blocked = bool(rec["blocked"])
-        names = [_LABELS.get(str(x), str(x)) for x in rec.get("letters") or []]
+        why = [str(x) for x in rec.get("why") or [] if str(x).strip()]
+        # the recorded plain words win (`1 todo open`); a letter without a label never reaches the band bare
+        names = why or [
+            _LABELS.get(str(x)) or _STOP_ONLY.get(str(x)) or "gate"
+            for x in rec.get("letters") or []
+        ]
     except Exception:  # noqa: BLE001 -- no record, or an unreadable one, means no line
         return None
     if blocked:

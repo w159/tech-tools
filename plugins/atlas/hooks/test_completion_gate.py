@@ -3021,6 +3021,26 @@ class DoneHeaderClaimTest(GateOrchestrationTest):
         self.assertIn("(r)", reason)
         self.assertIn("1 open todo", reason)
 
+    def _why(self):
+        path = os.path.join(self.tmp, ".atlas", ".run", "stop-verdict.json")
+        with open(path) as f:
+            return json.load(f)["sessions"]["sess-orch"].get("why")
+
+    def test_done_claim_records_a_plain_reason_in_the_verdict(self):
+        # critique 9: the band said `stop: r`; the record now carries what Stop said, in words
+        os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
+        self._stop(self.DONE, transcript_path=self._open_todo_transcript())
+        self.assertEqual(self._why(), ["1 todo open"])
+
+    def test_done_claim_with_running_agents_and_todos_records_both(self):
+        os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
+        self._stop(
+            self.DONE,
+            background_tasks=self.RUNNING,
+            transcript_path=self._open_todo_transcript(),
+        )
+        self.assertEqual(self._why(), ["1 agent running", "1 todo open"])
+
     def test_verify_header_with_running_subagent_stays_silent(self):
         r = self._stop(self.VERIFY, background_tasks=self.RUNNING)
         self.assertEqual(r.stdout.strip(), "", r.stdout)

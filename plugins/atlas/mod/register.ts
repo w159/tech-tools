@@ -131,6 +131,8 @@ let nameMemo: Record<string, string> = {};
 let gatesBusy = false;
 let gatesSig = ''; // signature of the gate inputs at the last poll
 let gatesDirty = false; // a gate input moved since the last run
+let gatesUrgent = false; // the Stop verdict moved: the next run skips the GATES_MIN_MS gap
+let verdictSig = ''; // stat signature of stop-verdict.json at the last poll
 let gatesRunAt = -Infinity; // ms clock of the last gate run
 let pendingDrift: string[] = [];
 let paneChecked = false; // the unasked pane open is decided once per session
@@ -554,7 +556,11 @@ async function gatesPoll($: EngineInterface): Promise<void> {
 	const sig = await gatesSigOf($, root);
 	if (gatesSig !== '' && sig !== gatesSig) gatesDirty = true; // the first sight only records
 	gatesSig = sig;
-	if (gatesDirty && !gatesBusy && (await $.clock.now()) - gatesRunAt >= GATES_MIN_MS) void runGates($).catch(() => undefined);
+	// The Stop verdict is the one file that is not throttled: a refusal must reach the band on the poll that sees it. One stat per poll.
+	const vsig = await statSig($, `${root.replace(/\/+$/, '')}/.atlas/.run/stop-verdict.json`);
+	if (verdictSig !== '' && vsig !== verdictSig) gatesUrgent = gatesDirty = true;
+	verdictSig = vsig;
+	if (gatesDirty && !gatesBusy && (gatesUrgent || (await $.clock.now()) - gatesRunAt >= GATES_MIN_MS)) void runGates($).catch(() => undefined);
 }
 
 /** POLL_MS tick: rebuild only when the data files moved. */
@@ -669,6 +675,7 @@ async function runGates($: EngineInterface): Promise<void> {
 	gatesBusy = true;
 	gatesRunAt = await $.clock.now();
 	gatesDirty = false;
+	gatesUrgent = false;
 	try {
 		const out = await $.process
 			.run(['python3', `${$.plugin.root}/scripts/atlas_gates.py`, '--session', sessionUuid, '--root', root, '--json'])
@@ -776,6 +783,8 @@ function bandHandlers($: EngineInterface): BandHandlers {
 export function resetCore(): void {
 	gatesSig = '';
 	gatesDirty = false;
+	gatesUrgent = false;
+	verdictSig = '';
 	gatesRunAt = -Infinity;
 	coreSeen = null;
 	coreFinished = {};
