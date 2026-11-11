@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- TODO state (critique 9, slice B): one `todoState` (mod/data/todos.ts) now derives every plan row's state for the HUD TODO block and the side panel route tab; a row whose owner agent returned while the store row is open reads `returned` (attention tone), never `queued`; HUD SUBAGENTS rows sort by their T row inside a state.
+
 ## 17.9.0 - 2026-11-11
 
 - Fixed (critique 8 A1/A2): the band reads `BLOCKED` only when the lead declared it or the completion gate's last Stop verdict for the session refused the stop (`BLOCKED · stop: team gate`); a failing tripwire or other check with Stop allowed is `▲ <gate> warning` / `▲ <n> gates warning`. `completion_gate_core.py` records each Stop verdict in `.atlas/.run/stop-verdict.json` (per session), `atlas_gates.py` serves it as the completion group's `stop-verdict` line, and the team tab lead row reads the same verdict.

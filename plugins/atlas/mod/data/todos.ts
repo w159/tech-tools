@@ -5,7 +5,18 @@
 import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } from '../contract';
 import type { TodoGroup } from '../orchestra-types';
 import { contractGlyph } from '../theme';
-import { titleOwner } from '../board-model';
+import type { UiState } from '../atlas-ui';
+import { itemState, titleOwner } from '../board-model';
+
+/** The one derived state of a plan row, shared by the HUD TODO block and the side panel's route tab: the board's rule (board-model itemState),
+ * plus `returned` (attention tone, so state `blocked`): the owner agent has ended but the store row is not completed, which never reads `queued`.
+ * `word` is the state word as drawn when it differs from `state`. */
+export function todoState(status: string, ownerState?: UiState): { state: UiState; word?: string } {
+  const state = itemState(status, ownerState);
+  if (state === 'done') return { state };
+  if (ownerState === 'done' && (state === 'queued' || state === 'running' || status === 'ended')) return { state: 'blocked', word: 'returned' };
+  return { state };
+}
 
 /** Phase -> department label (the single copy; pane/board.tsx imports it). */
 export const DEPT: Record<string, string> = {

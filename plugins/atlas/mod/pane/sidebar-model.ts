@@ -1,11 +1,10 @@
 // sidebar-model.ts: the Claude Code SidebarModel as the host-free PanelModel (mod/panel-layout.ts).
 import type { ChannelNote } from '../contract';
 import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
-import { planBasis } from '../data/todos';
+import { planBasis, todoState } from '../data/todos';
 import { spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
-import { itemState } from '../board-model';
 import { contractRail, railOf } from '../rail';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
@@ -34,9 +33,9 @@ function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] 
   return rows.map((it): PanelTodo => {
     const owner = it.owner ?? undefined;
     const w = owner ? workers.find((x) => x.name === owner) : undefined;
-    const state: UiState = itemState(it.status, w?.state); // the board's rule (mod/board-model.ts): a failed owner fails the item, a waiting one blocks it
+    const { state, word } = todoState(it.status, w?.state); // the one rule (data/todos todoState), the same as the HUD's: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
     const detail = state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
-    return { id: it.id, label: one(it.content), state, owner: owner ? one(owner) : undefined, detail, evidence: it.evidence ?? null };
+    return { id: it.id, label: one(it.content), state, ...(word ? { word } : {}), owner: owner ? one(owner) : undefined, detail, evidence: it.evidence ?? null };
   });
 }
 
