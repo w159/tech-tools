@@ -2,7 +2,7 @@
 import type { ChannelNote } from '../contract';
 import { liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
 import { planBasis } from '../data/todos';
-import { uiFromEnv, type Ui, type UiState } from '../atlas-ui';
+import { SPINNER_MS, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { itemState } from '../board-model';
@@ -23,7 +23,7 @@ function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const detail = state === 'failed' ? one(w.lastLine) || 'failed' : state === 'waiting' ? 'waiting for lead reply' : state === 'done' ? one(w.lastLine) || 'finished' : state === 'queued' ? 'parked' : doing;
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
-    name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item,
+    name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),
     secs: Math.max(0, Math.round((s.now - w.startedAt) / 1000)), tools: s.activity[w.name]?.toolCount ?? 0,
   };
 }
@@ -66,7 +66,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
-    cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, tick: m.tick ?? 0,
+    cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, tick: m.tick ?? 0, now: s.now + (m.tick ?? 0) * SPINNER_MS, // the snapshot clock moves with the ticker, so a spinner turns between data polls
     expanded: m.ui.expanded, recipient: m.ui.recipient,
     phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos: todosOf(s, workers), workers, lead,
     gates, core: m.core,
