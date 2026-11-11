@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.8.0 - 2026-11-11
+
+- atlas 17.8.0: fixes for hostile critiques 6 and 7. The Board equals the plan and never draws an open store row as done; a dispatch row closes when its agent ends, even on a retry stop, so the 3-explorer stall is gone in 6 of 6 live runs. The Stop team gate (s) skips read-only roles as the dispatch gate does (D11). The gates tab's team row calls the Stop gate's own check, and the blocker reason uses one string at every width. The header, evidence and TODO counts reconcile; there are no `STATUS:` caps on cards; LAST is deduped; the SUBAGENTS column header stays at 110 columns. The done-transition glyph is unique, there is one spinner clock, and the side-panel tabs use full words and fill the pane. Doctor `enforcement-rates` counts only projects where the deny can fire (0 FAIL again). Live, 3 runs per width against 17.5.0: TODO visibility 22.5% to 97.6% (150 cols) and 23.1% to 97.0% (110), band count 23.0% to 94.9% and 26.2% to 79.5%, workers on any surface 65.4% to 94.6% and 26.7% to 91.6%, every side-panel tab 100%. The 3x bar is met on 13 of 18 lines. Not met: events never shown per surface (2 lines), first-appearance lag (2 lines) and the design critic (5.9, target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.
+
+## marketplace 5.13.0 - 2026-11-11
+
+- marketplace 5.13.0: atlas 17.8.0. armada and programmer are unchanged.
+
 ## atlas 17.7.0 - 2026-11-11
 
 - atlas 17.7.0: round 2 follow-up. The band reads BLOCKED with its reason, last-run worker counts come from real dispatches, agent names show whole and the lead reads `lead`, the side panel tallies gates and fills its height, 256-colour terminals get stable palette colours (no navy fill on the HUD), one spinner clock, gate checks re-run within 5 s of a gate change without blocking the poll, and a palette cache that removes a CPU regression found in live runs (4000 256-colour paints 6038 ms to 27 ms). Measured against 17.5.0 with the real `claude` CLI in tmux, 3 runs per width: TODO visibility 22.5% to 97.6% (150 cols) and 23.1% to 97.5% (110), running workers on any surface 65.4% to 91.9% and 26.7% to 90.6%, events never shown on any surface 10 of 22 to 0 of 66, mutation survivors 51 of 300 to 13 of 320. The 3x (200%) bar is met on 13 of 18 targeted lines; the per-surface never-shown count, first-appearance lag and the design critic (3.5 to 5.7, target 8.2) are not met. Details in docs/audits/2026-11-11_atlas-round2.md.

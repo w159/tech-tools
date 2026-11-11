@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 17.8.0 - 2026-11-11
+
 - Fixed: one blocker evaluation (critique 7 A1/A2): the gates tab `Team gate` row now calls the Stop gate's own `_team_gate` (red exactly when Stop blocks on (s)), and the band reason is one string at every width, `<gate> failing` or `<n> gates failing`, never `tripwire` / `2 failing` / `2 checks failing`.
 - Fixed: the Board equals the plan (critique 7 A3): a dispatch row whose owner owns a plan row folds into it (5 plan items with 3 owned dispatches draw 5 rows, the worker's state folded in); under 60 cells the owner column goes before a title is cut below 16 cells.
 - Fixed (critique 7 B1): `contract n of m headers` counts every assistant reply that opens with the ATLAS header (the replies the transcript draws a chip for), read from the lead transcript at each answer; it counted only each turn's final answer, so `1 of 1 headers` sat under 3 chips (`register.ts` `headerTallyOf`).
