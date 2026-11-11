@@ -99,6 +99,10 @@ export function nextStepSuggestion(s: AtlasSnapshot): string | null {
 // The live snapshot is read from $.state (declared here for the key scan).
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
 
+/** True when `next` was built before `prev` (both stamped, lower seq): a late write that must not be applied or diffed. */
+export const isOlder = (prev: AtlasSnapshot | null, next: AtlasSnapshot): boolean =>
+	prev?.seq !== undefined && next.seq !== undefined && next.seq < prev.seq;
+
 /**
  * Registers answer-turn-boundary notifications. `on` is the mod's On; deps
  * inject the sound toggle (the snapshot is read from $.state). Toasts and the next-step
@@ -113,7 +117,7 @@ export function registerNotify(
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
 			const snap = await read($, snapshotState);
-			if (snap) {
+			if (snap && !isOlder(lastSnapshot, snap)) {
 				const texts: string[] = [];
 				const ui = (await lookOf($)).ui;
 				for (const ev of diffSnapshots(lastSnapshot, snap)) {

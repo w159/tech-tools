@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Tests: seed-1105 second-pass mutation kills for the TS mods (`mod/band`, `board-model`, `hud`, `hud-surface`, `panel-layout`, `omp/mission-panel` `*.mut.test.ts`); four more survivors argued equivalent in the test headers.
+- Fixed: `types/index.d.ts` shared snapshot block now carries the optional `seq` field on `AtlasSnapshot`, so it is identical to `mod/contract.ts` again (`ModTypesContractSync`).
+- Tests: `test_completion_gate.py` is hermetic for the one-shot (o) phased-todo and (s) team-gate blocks (`GateOrchestrationTest` and `InProcessMainTest` use a per-test marker dir with both off) and the (n) continuation test resets the Stop-burst breaker per subtest, so the suite no longer depends on test order, xdist, tmux on PATH or machine load.
+- Fixed: the dispatch hook's auto-name for an unnamed `atlas:*` dispatch now uses the description's own `label:` prefix when it is one valid token (letters, digits, `-`, `_`, <= 24 chars) that does not echo the role (`alpha-explorer: read alpha.py` -> `alpha-explorer`); otherwise the role-plus-words rule is unchanged (`_name_base`, `hooks/dispatch_tripwire_core.py`).
+- Fixed: the HUD plan is no longer folded to "N more todos not shown" while the idle band leaves allotted rows undrawn (`bandSpareRows` now returns undrawn rows as well as blanks, so `reclaimBlanks` hands them to the TODO block).
+- Fixed: when the plan folds, a row that completed within `LINGER_MS` ranks with running rows and done rows sort newest first (`windowRows` takes `now`; `TodoRow.doneAt` comes from the item's `completed_at`), so a task that just finished is no longer hidden behind queued rows.
+- Live data path (`mod/register.ts`, `mod/notify.ts`): rebuild is serialized (one in flight, queued requests share one follow-up) and every snapshot carries a monotonic `seq` that notify and the snapshot write ignore when older, so a finish toast fires once; data-file changes are polled every 500 ms (was 1500 ms) by a cheap stat fingerprint, and a rebuild runs only when it moved.
+- Tests: new `*.mut.test.ts` files pin the seed-1105 mutation survivors of band, board-model, hud, mission-layout, sidebar and panel-layout (no source change); the equivalent mutants are explained in the test headers.
+- Added: real motion on state changes (`mod/motion.ts`): a TODO, SUBAGENTS, Board, side panel route or gate row, or a band count that changes state is drawn in its new accent, brightened, easing back to rest over 900 ms (a row turning done pops open diamond, filled diamond, disc); a new row reveals left to right over 300 ms. One pure model shared by Claude Code and omp (`Run.fg` override, `runHex` in every painter); the frame timer runs only while a transition is open, the end is the resting render byte for byte, and `ATLAS_REDUCED_MOTION=1` / `NO_COLOR` draw the resting render only. `bun mod/motion-demo.ts --out <dir>` writes the frames of a running -> done TODO and agent row as `.ans` files.
+
 ## 17.6.0 - 2026-11-11
 
 ### Fixed

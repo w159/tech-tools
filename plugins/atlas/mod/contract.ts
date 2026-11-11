@@ -88,6 +88,8 @@ export interface PhaseCount { done: number; total: number }
 
 /** Everything the UI needs, rebuilt by the hooks module on file change and passed as Client props. */
 export interface AtlasSnapshot {
+  /** Monotonic build number stamped by register.ts rebuild(); a consumer ignores a snapshot with a lower one than it last applied. */
+  seq?: number;
   root: string | null;
   sessionId: string;
   channel: string | null;

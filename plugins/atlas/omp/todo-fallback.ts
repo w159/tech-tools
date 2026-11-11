@@ -9,6 +9,8 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { boardRoot, sessionTodos } from "./channel-view";
 import { hudText, paintHud } from "./hud-paint";
+import { hudMotionItems } from "../mod/hud";
+import { Motion, reducedMotion } from "../mod/motion";
 import type { TodoItem } from "../mod/contract";
 
 export const TODO_WIDGET_KEY = "atlas-todo";
@@ -48,7 +50,13 @@ export interface FallbackDeps {
 	pollMs?: number;
 	setInterval?: (fn: () => void, ms: number) => unknown;
 	clearInterval?: (h: unknown) => void;
+	/** The transition frame timer (mod/motion.ts), apart from the poll timer; defaults to setInterval. */
+	setFrame?: (fn: () => void, ms: number) => unknown;
+	clearFrame?: (h: unknown) => void;
+	/** Clock in ms. */
+	now?: () => number;
 }
+const FRAME_MS = 100; // a transition redraws at the spinner's rate, only while it is open
 
 export function registerTodoFallback(pi: Pick<ExtensionAPI, "on">, deps: FallbackDeps = {}): { stop(): void } {
 	const env = deps.env ?? process.env;
@@ -60,6 +68,11 @@ export function registerTodoFallback(pi: Pick<ExtensionAPI, "on">, deps: Fallbac
 			return t;
 		});
 	const clearIv = deps.clearInterval ?? ((h: unknown) => clearInterval(h as Timer));
+	const setFrame = deps.setFrame ?? setIv;
+	const clearFrame = deps.clearFrame ?? clearIv;
+	const clock = deps.now ?? Date.now;
+	const motion = new Motion(!reducedMotion(env));
+	let anim: unknown;
 	let native = false;
 	let ctx: Ctx | undefined;
 	let poll: unknown;
@@ -75,17 +88,27 @@ export function registerTodoFallback(pi: Pick<ExtensionAPI, "on">, deps: Fallbac
 			// UI gone
 		}
 	};
+	const stopAnim = () => {
+		if (anim !== undefined) clearFrame(anim);
+		anim = undefined;
+	};
 	const stopPoll = () => {
 		if (poll !== undefined) clearIv(poll);
 		poll = undefined;
+		stopAnim();
 	};
 	const paint = () => {
 		try {
 			if (native || !ctx?.cwd) return set(undefined);
 			const id = ctx.sessionManager?.getSessionId?.();
 			const rows = sessionTodos(boardRoot(ctx.cwd, env), typeof id === "string" && id.trim() ? id : undefined);
-			const lines = paintHud({ todos: planOf(rows), agents: [] }, { cols: widgetWidth(), maxRows: MAX_ROWS });
+			const input = { todos: planOf(rows), agents: [] };
+			const at = clock();
+			motion.observe("hud-todo", hudMotionItems(input, { now: at }).todos, at);
+			const lines = paintHud(input, { cols: widgetWidth(), maxRows: MAX_ROWS, now: at, motion: motion.ctx(at) });
 			set(lines.length ? lines : undefined);
+			if (motion.animating(at)) anim ??= setFrame(paint, FRAME_MS);
+			else stopAnim();
 		} catch {
 			// fail soft: a bad board never breaks the session
 		}

@@ -161,6 +161,13 @@ class GateOrchestrationTest(unittest.TestCase):
             # "sess-orch" across many _run_gate calls, and must never touch
             # real ~/.atlas or trip the breaker across unrelated tests.
             ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            # (o) phased todo and (s) team gate are one-shot per session via
+            # marker files; left on, whether they fire here depends on test
+            # order, xdist and tmux on PATH. Tests of (o)/(s) live in
+            # ContractVisibilityTest, which owns its marker dir.
+            ATLAS_CONTRACT_GATE_DIR=os.path.join(self.tmp, "markers"),
+            ATLAS_GATE_PHASES="off",
+            ATLAS_TEAM_GATE="off",
         )
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
         import atlas_db
@@ -689,6 +696,13 @@ class InProcessMainTest(unittest.TestCase):
             os.environ,
             ATLAS_DB=self.db_path,
             ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            # (o) phased todo and (s) team gate are one-shot per session via
+            # marker files; left on, whether they fire here depends on test
+            # order, xdist and tmux on PATH. Tests of (o)/(s) live in
+            # ContractVisibilityTest, which owns its marker dir.
+            ATLAS_CONTRACT_GATE_DIR=os.path.join(self.tmp, "markers"),
+            ATLAS_GATE_PHASES="off",
+            ATLAS_TEAM_GATE="off",
         )
         c = atlas_db.connect(self.db_path)
         atlas_db.init(c)
@@ -3696,9 +3710,14 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertEqual(self._loop_friction_letters(), [("a,n",)])
 
     def _drop_loop_marker(self):
-        path = os.path.join(self.env["ATLAS_HOOKSTATE_DIR"], "gate-loop-" + self.SID_A)
-        if os.path.exists(path):
-            os.remove(path)
+        state_dir = self.env["ATLAS_HOOKSTATE_DIR"]
+        # Also reset the session's Stop-burst breaker state: Stops more than
+        # STOP_EVENT_DEDUP_SECONDS apart each count, so on a loaded machine the
+        # subtests would trip the breaker (silencing the gate) and flake.
+        for name in ("gate-loop-" + self.SID_A, self.SID_A + ".json"):
+            path = os.path.join(state_dir, name)
+            if os.path.exists(path):
+                os.remove(path)
 
     def test_n_continuation_without_a_matched_header_does_not_reset_the_count(self):
         """Only a main-thread continuation whose first non-empty line matches

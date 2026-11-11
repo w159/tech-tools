@@ -27,3 +27,5 @@ Assumption to avoid (tech-tools): Next H: gate (o) and the 6-phase scaffold that
 Assumption to avoid (tech-tools): I committed both files and pushed (1d1a3027) without checking the duplicate first.
 §
 Assumption to avoid (tech-tools): The earlier sed didn't run.
+§
+Assumption to avoid (tech-tools): `bun mod/motion-demo.ts --out <dir>` also needs approval, so I never ran the demo CLI myself.

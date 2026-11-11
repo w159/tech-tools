@@ -7,6 +7,7 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
 import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, percent, ribbon, stateGlyph, stateRun, stateWordTone, UI_STATES, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
 import { hasCore, tok, type CoreModel, type Verdict } from './data/core';
@@ -111,6 +112,8 @@ export type PanelModel = {
   people: number;
   unread: number;
   notes: readonly PanelNote[];
+  /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
+  motion?: MotionCtx | undefined;
 };
 
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
@@ -123,6 +126,8 @@ export type PanelLine = { runs: Run[]; press?: Press };
 const r = (t: string, tone: Tone = 'text', o: Partial<Run> = {}): Run => ({ t, tone, ...o });
 const line = (runs: Run[], press?: Press): PanelLine => (press ? { runs, press } : { runs });
 export const BLANK: PanelLine = { runs: [] };
+/** A row's runs mid-transition when the model carries a motion view (key: the row's entry; accent: the state that leads). */
+const moving = (runs: Run[], key: string, accent: UiState, m: Pick<PanelModel, 'motion' | 'ui'>): Run[] => animateRow(runs, key, accent, m.motion, m.ui);
 const rowWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 const pad = (t: string, n: number): string => t + ' '.repeat(Math.max(0, n - cells(t)));
 const cut = (t: string, n: number): string => pad(clip(t, n), n);
@@ -279,7 +284,16 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   const open = m.expanded === key;
   const facts = [t.owner ? `owner ${oneLine(t.owner)}` : '', oneLine(t.detail)].filter(Boolean).join(` ${dot(m.ui)} `);
   const extra = open ? [...(facts ? [facts] : []), t.evidence ? `evidence: ${oneLine(t.evidence)}` : 'no evidence yet'] : [];
-  return [line(fitRuns(runs, m.cols), { kind: 'toggle', key }), ...extra.map((x) => line(fitRuns([r(`    ${x}`, 'muted')], m.cols)))];
+  return [line(fitRuns(moving(runs, key, t.state, m), m.cols), { kind: 'toggle', key }), ...extra.map((x) => line(fitRuns([r(`    ${x}`, 'muted')], m.cols)))];
+}
+
+/** What the Motion observes of the panel: each plan task, worker, gate group and gate line (key and state word), the rows `bodyLines` can move. */
+export function panelMotionItems(m: Pick<PanelModel, 'todos' | 'workers' | 'lead' | 'mates' | 'gates'>): MotionItem[] {
+  return [
+    ...m.todos.map((t): MotionItem => ({ key: `task:${t.id}`, state: t.state })),
+    ...[...m.workers, ...(m.mates ?? [])].map((w): MotionItem => ({ key: `worker:${w.name}`, state: w.state })),
+    ...m.gates.flatMap((g): MotionItem[] => [{ key: `group:${g.id}`, state: groupOk(g) ? 'done' : 'failed' }, ...g.lines.map((l): MotionItem => ({ key: `gate:${l.id}`, state: l.ok ? 'done' : 'failed' }))]),
+  ];
 }
 
 /** Rows a tab may use below its header; a plan longer than that folds into `+N more`. */
@@ -318,7 +332,7 @@ function routeBody(m: PanelModel): PanelLine[] {
   rows.push(BLANK, ...shown, ...(hidden > 0 ? [line([r(`    ${hidden} more ${hidden === 1 ? 'task' : 'tasks'} on the board`, 'muted')])] : []));
   if (loose.length) {
     const nameW = Math.min(18, Math.max(...looseShown.map((w) => cells(w.name)), 1));
-    rows.push(BLANK, ...looseShown.map((w) => line(fitRuns([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateRun(w.state, m.ui, m.tick), name: { t: w.name, bold: true }, nameW, word: { t: w.state, tone: w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub' }, wordW: WORD_W, ...(m.cols >= WIDE && w.detail ? { detail: { t: oneLine(w.detail) } } : {}) })], m.cols))));
+    rows.push(BLANK, ...looseShown.map((w) => line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateRun(w.state, m.ui, m.tick), name: { t: w.name, bold: true }, nameW, word: { t: w.state, tone: w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub' }, wordW: WORD_W, ...(m.cols >= WIDE && w.detail ? { detail: { t: oneLine(w.detail) } } : {}) })], `worker:${w.name}`, w.state, m), m.cols))));
     if (loose.length > looseShown.length) rows.push(line([r(`    ${loose.length - looseShown.length} more on the team tab`, 'muted')]));
   }
   return rows;
@@ -338,7 +352,7 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
     name: { t: w.name, bold: true }, nameW, gap: 2,
     word: { t: w.state, tone: w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub' }, wordW: wide ? 12 : 10, tail,
   });
-  const out = [line(fitRuns(runs, m.cols), { kind: 'worker', key, name: w.name })];
+  const out = [line(fitRuns(moving(runs, key, w.state, m), m.cols), { kind: 'worker', key, name: w.name })];
   if (m.expanded === key) {
     out.push(line(fitRuns([r(`    ${w.detail || w.state}`, 'muted')], m.cols)));
     if (w.secs !== undefined) out.push(line(fitRuns([r(`    running ${shortAge(w.secs)}${w.tools !== undefined ? ` ${dot(m.ui)} ${w.tools} tool calls` : ''}`, 'muted')], m.cols)));
@@ -419,7 +433,7 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
   const [first = '', ...more] = wrap(oneLine(ln.label), Math.max(8, m.cols - 6));
   const extra = open ? [ln.detail, ln.fix ? `fix: ${ln.fix} (press to copy)` : undefined].filter((x): x is string => !!x) : [];
   return [
-    line(gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(ln.ok ? 'done' : 'failed', m.ui), name: { t: `  ${first}` }, nameW: cells(first) + 2 }), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
+    line(moving(gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(ln.ok ? 'done' : 'failed', m.ui), name: { t: `  ${first}` }, nameW: cells(first) + 2 }), key, ln.ok ? 'done' : 'failed', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
     ...more.map((t) => note(`  ${t}`, m)), ...extra.map((t) => note(`  ${oneLine(t)}`, m)),
   ];
 }
@@ -445,7 +459,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number): PanelLine[] 
     ...(fits && tail ? { detail: { t: tail } } : {}), ...(value ? { value: { t: value, tone: 'bad' as const } } : {}),
   });
   return [
-    line(fitRuns(runs, m.cols), { kind: 'toggle', key }),
+    line(fitRuns(moving(runs, key, groupOk(g) ? 'done' : 'failed', m), m.cols), { kind: 'toggle', key }),
     ...(fits ? [] : wrap(tail, Math.max(8, m.cols - 6)).map((t) => note(t, m))),
     ...(open ? g.lines.flatMap((l) => gateLineRows(m, l)) : []),
   ];

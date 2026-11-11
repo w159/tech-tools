@@ -11471,5 +11471,124 @@
     "status": "verified",
     "verified_at": "2026-11-11T06:58:07+00:00",
     "verified_by": "lead"
+  },
+  {
+    "id": "tbaaf1c-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Round2 slices A/B/C unverifiable: no implementer diffs available to verifier",
+    "evidence": [
+      "board notes seq<=208 show only kickoff tbaaf1c; no implementer done/handoff note; worktrees ae8d/1783/2053 at fc6ad5a7, status inspection denied by sandbox"
+    ],
+    "doc_refs": [],
+    "reproduction": "atlas_todo.py notes --to verifier-6281; git worktree list",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T07:26:23+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-sliceA",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "slice A: register.ts:533 binds $.fs as a value; host loader rejects register.ts (30 real plugin-test failures vs 0 at fc6ad5a7)",
+    "evidence": [
+      "plugins/atlas/mod/register.ts:533; claude plugin test: 232 fail, 30 not 'did not load'"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas | grep '^(fail)' | grep -vc 'did not load'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T07:51:53+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-sliceB",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "slice B: sidebar 1000->1001 and tally === -> !== mutations killed; 8 equivalents judged equivalent",
+    "evidence": [
+      "mod/pane/sidebar.mut.test.ts, mod/panel-layout.mut.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "sed mutation + bun test <file>.mut.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T07:51:53+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-sliceC",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "slice C: motion unit/demo verified (8 distinct in-between frames, end==resting) but wired register.ts fails host load; tsc 6 errors in test files",
+    "evidence": [
+      "mod/motion-demo.ts output md5; tsc 6 errors hud.mut.test.ts, motion.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun mod/motion-demo.ts --out <dir>; bunx tsc -p mod/tsconfig.json --noEmit",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T07:51:54+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-sliceA",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "round 3 slice A host load fix",
+    "evidence": [
+      "tsc exit 0; bun mod omp 2242 pass 0 fail; claude plugin test real fails 0 at 5ced20b9"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bunx tsc -p mod/tsconfig.json --noEmit && COLORTERM=truecolor bun test mod omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T08:02:23+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-sliceC",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "round 3 slice C motion",
+    "evidence": [
+      "motion-demo 8 distinct frames, end md5 equals resting; host plugin test real fails 0 at 5ced20b9"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun mod/motion-demo.ts --out /tmp/x",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T08:02:23+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "mutkill-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mutation-killing tests kill claimed survivors; 3 equivalences hold",
+    "evidence": [
+      "mod/hud.mut.test.ts, omp/mission-panel.mut.test.ts, mod/panel-layout.mut.test.ts; tsc exit 0; 2254 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "hand-mutate hud.ts:94, mission-panel.ts:178, panel-layout.ts:589; bun test <file>; git checkout; COLORTERM=truecolor bun test mod omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T09:38:21+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

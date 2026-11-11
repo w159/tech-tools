@@ -19,7 +19,8 @@ import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, re
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import type { PanelTodo } from "./todo-panel";
-import { type GatesCache,type IdleWave, type LaneTool, type PanelNote, type PanelWorker, createGatesCache, renderPanel, spawnText } from "./mission-panel";
+import { type GatesCache,type IdleWave, type LaneTool, type PanelModel, type PanelNote, type PanelWorker, createGatesCache, panelMotionOf, renderPanel, spawnText } from "./mission-panel";
+import { Motion, reducedMotion } from "../mod/motion";
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
@@ -34,6 +35,7 @@ const MAX_LINES = 10; // omp MAX_WIDGET_LINES: title + rail + lanes + ticker + f
 const MAX_NOTES = 8;
 const MAX_LINE = 110;
 const POLL_MS = 1500;
+const MOTION_FRAME_MS = 100; // a transition redraws at the spinner's rate, only while it is open
 const LINGER_MS = 15_000;
 const MAX_MS = 30 * 60_000; // hard cap: the view never outlives this even if no member is ever marked finished
 const QUIET_POLLS = 3; // polls with every member finished and no new note before the linger starts
@@ -67,6 +69,9 @@ export interface ViewDeps {
 	setInterval?: (fn: () => void, ms: number) => unknown;
 	clearInterval?: (h: unknown) => void;
 	setTimeout?: (fn: () => void, ms: number) => unknown;
+	/** The transition frame timer (mod/motion.ts), apart from the poll timer; defaults to setInterval. */
+	setFrame?: (fn: () => void, ms: number) => unknown;
+	clearFrame?: (h: unknown) => void;
 	clearTimeout?: (h: unknown) => void;
 	columns?: () => number | undefined; // terminal width; default process.stdout.columns, else 120
 	gates?: GatesCache; // default: atlas_gates.py through spawnText, armed projects only
@@ -513,6 +518,8 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			return t;
 		});
 	const clearIv = deps.clearInterval ?? ((h: unknown) => clearInterval(h as Timer));
+	const setFrame = deps.setFrame ?? setIv;
+	const clearFrame = deps.clearFrame ?? clearIv;
 	const setTo =
 		deps.setTimeout ??
 		((fn, ms) => {
@@ -542,6 +549,8 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	let quiet = 0;
 	let painted = "";
 	let tickN = 0;
+	const motion = new Motion(!reducedMotion(env));
+	let anim: unknown; // the frame timer: runs only while a transition is open
 
 	// Sticky: a member once finished stays finished, and a channel that vanishes after it was seen (atlas_team reap
 	// drops it from channels.json) finishes everyone. Without this the pending fallback repaints every reaped lane.
@@ -550,9 +559,14 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	// Outlives clear(): reap closes the channel (registry rows gone) and often lands after the linger already cleared.
 	let wave: (IdleWave & { channel: string }) | undefined;
 
+	const stopAnim = () => {
+		if (anim !== undefined) clearFrame(anim);
+		anim = undefined;
+	};
 	const stopPoll = () => {
 		if (poll !== undefined) clearIv(poll);
 		poll = undefined;
+		stopAnim();
 	};
 	const goneMembers = (i: ChannelOpenInfo & { root: string }): Iterable<string> => {
 		const listed = channelListed(i.root, i.channel);
@@ -590,7 +604,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		refreshGates(info);
 		const team = teamInfo(info.root, info.channel);
 		const workers = panelWorkers(info.root, liveWorkers(info.root, info.channel), pending, now(), team.roles);
-		const lines = renderPanel({
+		const model: PanelModel = {
 			width: panelWidth(columns()),
 			maxLines: MAX_LINES,
 			phase,
@@ -609,7 +623,15 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			todos: todoItems(info.root, info.sessionId, fin),
 			nowSecs: Math.floor(now() / 1000),
 			core: coreOf(info),
-		});
+		};
+		// Motion: observe what the panel is about to draw, draw it mid-transition, and run the frame timer only while one is open.
+		const at = now();
+		const seen = panelMotionOf(model);
+		motion.observe("board", seen.board, at);
+		motion.observe("band", seen.band, at);
+		const lines = renderPanel({ ...model, motion: motion.ctx(at) });
+		if (motion.animating(at)) anim ??= setFrame(() => { try { paint(); } catch { /* fail soft */ } }, MOTION_FRAME_MS);
+		else stopAnim();
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);
 		painted = key;
