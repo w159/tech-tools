@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: the dispatch hook's auto-name for an unnamed `atlas:*` dispatch now uses the description's own `label:` prefix when it is one valid token (letters, digits, `-`, `_`, <= 24 chars) that does not echo the role (`alpha-explorer: read alpha.py` -> `alpha-explorer`); otherwise the role-plus-words rule is unchanged (`_name_base`, `hooks/dispatch_tripwire_core.py`).
 - Fixed: the HUD plan is no longer folded to "N more todos not shown" while the idle band leaves allotted rows undrawn (`bandSpareRows` now returns undrawn rows as well as blanks, so `reclaimBlanks` hands them to the TODO block).
 - Fixed: when the plan folds, a row that completed within `LINGER_MS` ranks with running rows and done rows sort newest first (`windowRows` takes `now`; `TodoRow.doneAt` comes from the item's `completed_at`), so a task that just finished is no longer hidden behind queued rows.
 - Live data path (`mod/register.ts`, `mod/notify.ts`): rebuild is serialized (one in flight, queued requests share one follow-up) and every snapshot carries a monotonic `seq` that notify and the snapshot write ignore when older, so a finish toast fires once; data-file changes are polled every 500 ms (was 1500 ms) by a cheap stat fingerprint, and a rebuild runs only when it moved.
