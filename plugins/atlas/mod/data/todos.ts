@@ -18,7 +18,7 @@ export const DEPT: Record<string, string> = {
 };
 
 /** Reusable read result: items already filtered + phase-stamped for one (root, session, members) caller. */
-export interface TodosCache { mtimeMs: number; items: TodoItem[] }
+export interface TodosCache { mtimeMs: number; items: TodoItem[]; size?: number }
 
 /** Why a todos.json that exists could not be used; a missing file is a true empty board, not an error. */
 export type TodosError = 'corrupt' | 'unreadable';
@@ -63,7 +63,7 @@ export async function readTodos(
 ): Promise<{ items: TodoItem[]; cache: TodosCache; error?: TodosError }> {
   const path = `${root.replace(/\/+$/, '')}/.atlas/.run/todos.json`;
   const st = await fs.stat(path).catch(() => undefined);
-  if (cache && cache.mtimeMs === (st ? st.mtimeMs : 0)) return { items: cache.items, cache };
+  if (cache && cache.mtimeMs === (st ? st.mtimeMs : 0) && (cache.size ?? st?.size) === st?.size) return { items: cache.items, cache }; // mtime AND size: the poll fingerprint keys on both, a rewrite inside one mtime tick must not serve the old rows
 
   // stat undefined => file missing (the true empty board); skip the read.
   const raw = st === undefined ? undefined : await fs.read(path).catch(() => undefined);
@@ -82,7 +82,7 @@ export async function readTodos(
   // A file that exists but cannot be used keeps the last good items on screen (cached under the bad mtime so it is not re-read).
   if (error !== undefined && st !== undefined) {
     const items = cache?.items ?? [];
-    return { items, cache: { mtimeMs: st.mtimeMs, items }, error };
+    return { items, cache: { mtimeMs: st.mtimeMs, size: st.size, items }, error };
   }
   // Unphased items stay unphased (grouped as 'unsorted'); never defaulted to a real phase.
   const items = parsed
@@ -90,7 +90,7 @@ export async function readTodos(
     .filter(it => it.session_id === sessionId || it.session_id === '' ||
       it.status === 'pending' || it.status === 'in_progress')
     .map(it => ({ ...it, phase: resolvePhase(it, contract) }));
-  const next: TodosCache = { mtimeMs: st ? st.mtimeMs : 0, items };
+  const next: TodosCache = { mtimeMs: st ? st.mtimeMs : 0, size: st?.size, items };
   return { items, cache: next };
 }
 

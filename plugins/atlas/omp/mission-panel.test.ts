@@ -105,11 +105,11 @@ test("a tight budget folds workers past the budget into `+N more`, naming any th
 test("message row: the newest note only, `from to to   text   hh:mm` with the clock only for a real value; bold sender", () => {
 	const notes = [{ from: "lead", to: "implementer-0001", text: "ship it", ts: 1_700_000_000 }, { from: "implementer-0001", to: "lead", text: "ok" }];
 	const raw = renderPanel(model({ notes })).find((x) => strip(x).includes(" to "))!;
-	expect(strip(raw)).toMatch(/^ implementer-0001 to lead-1 {3}ok +$/); // the lead is named from the channel, no clock
+	expect(strip(raw)).toMatch(/^ implementer-0001 to lead-1 {3}sent a message +$/); // the lead is named from the channel, no clock
 	expect(rows(model({ notes })).filter((x) => x.includes(" to "))).toHaveLength(1);
 	expect(raw).toMatch(/\x1b\[1;38;2;[0-9;]+;48;2;[0-9;]+mimplementer-0001/);
 	const stamped = rows(model({ notes: [{ from: "a", to: "b", text: "hi", ts: 1_700_000_000 }] })).find((x) => x.includes(" to "))!;
-	expect(stamped).toMatch(/a to b {3}hi +\d\d:\d\d $/);
+	expect(stamped).toMatch(/a to b {3}sent a message +\d\d:\d\d $/);
 });
 
 test("the message row drops before the footer when rows run short", () => {

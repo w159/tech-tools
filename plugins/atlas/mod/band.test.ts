@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandRows, bandTree, missionTree, planRows, railPhase, shortTool } from './band';
 import { worldModel } from '../contracts/band-world';
-import { PALETTES, spinnerGlyph, type Ui } from './atlas-ui';
+import { PALETTES, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { computeCounts, groupTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
@@ -169,7 +169,7 @@ describe('workers: a row each, in words', () => {
     for (const tick of [0, 1, 2]) {
       expect(at(tick).find((r) => r.includes('runner-1'))).toContain('■ runner-1');
       expect(at(tick).find((r) => r.includes('impl-auth'))).toContain('◉ impl-auth');
-      expect(at(tick).find((r) => r.includes('explorer-1'))).toContain(`${spinnerGlyph(tick)} explorer-1`);
+      expect(at(tick).find((r) => r.includes('explorer-1'))).toContain(`${spinnerGlyph(spinFrameOf(NOW, 'explorer-1'))} explorer-1`);
     }
   });
   test('running shows the short tool name and its target', () => {
@@ -250,14 +250,15 @@ describe('15 s linger', () => {
 });
 
 describe('message and footer', () => {
-  test('one message row: `from to to   text   hh:mm`, the lead named like omp', () => {
+  test('one message row: `from to to   what it was   hh:mm`, built from facts and with the lead named `lead`', () => {
     const { rows } = panel(200, { leadName: 'lead-01a189' });
-    const row = rows.find((r) => r.includes('need a decision'))!;
-    expect(row).toMatch(/^ impl-auth to lead-01a189 {3}need a decision on the token ttl +\d\d:\d\d $/);
-    expect(rows.filter((r) => r.includes('need a decision'))).toHaveLength(1);
+    const row = rows.find((r) => r.includes('impl-auth to lead'))!;
+    expect(row).toMatch(/^ impl-auth to lead {3}sent a message +\d\d:\d\d $/);
+    expect(row).not.toContain('need a decision'); // the message text never reaches the band
+    expect(rows.filter((r) => r.includes('impl-auth to lead'))).toHaveLength(1);
   });
   test('without a lead name the collapsed `lead` stays', () => {
-    expect(panel(160).all).toContain('impl-auth to lead   need a decision');
+    expect(panel(160).all).toContain('impl-auth to lead   sent a message');
   });
   test('checks name each group with a mark and a word; failures take the text tone', () => {
     const { rows, rowNodes } = panel(160, { gates: [gate, okGate] });
@@ -335,16 +336,16 @@ describe('degrade order and the row budget', () => {
     expect(blanks(6)).toBe(0);
     const full = rowsAt(8);
     expect(full[1]!.trim()).toBe('');
-    const note = full.findIndex((r) => r.includes('need a decision'));
+    const note = full.findIndex((r) => r.includes('impl-auth to lead'));
     expect(full[note - 1]!.trim()).toBe('');
     expect(rowsAt(7)[1]!.trim()).toBe(''); // the first blank, under the band, outlasts the second
   });
   test('then the message goes, then the footer, then workers past a `+N more` row', () => {
     const has = (n: number, s: string) => rowsAt(n).some((r) => r.includes(s));
-    expect(has(6, 'need a decision')).toBe(true);
-    expect(has(5, 'need a decision')).toBe(true);
+    expect(has(6, 'impl-auth to lead')).toBe(true);
+    expect(has(5, 'impl-auth to lead')).toBe(true);
     expect(has(5, '+2 more')).toBe(true);
-    expect(has(4, 'need a decision')).toBe(false);
+    expect(has(4, 'impl-auth to lead')).toBe(false);
     expect(has(4, 'checks')).toBe(true);
     expect(has(3, 'checks')).toBe(true);
     expect(has(2, 'checks')).toBe(false);

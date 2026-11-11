@@ -112,12 +112,12 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
   const working = active.filter((w) => w.state === 'working' || w.state === 'blocked');
   return {
-    cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick,
+    cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now,
     project: boardOf(s), scope: b.team,
     phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked',
     done, total, todoBlocked: blockedCount(planBasis(s.todos, s.sessionId), workerStates(s, b.live)),
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
-    note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
+    note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
     lastRun: lastRun(all, now, ownTodos(s.todos, s.sessionId).filter((t) => t.origin === 'dispatch' && t.owner).map((t) => t.owner!)),

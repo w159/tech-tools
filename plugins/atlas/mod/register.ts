@@ -39,7 +39,8 @@ const POLL_MS = 500; // the poll of the cheap stat fingerprint; a rebuild runs o
 const WT_MS = 5000;
 const MUX_MS = 5000;
 const HERDR_MS = 5000;
-const GATES_MS = 30_000;
+const GATES_MS = 30_000; // the backstop run; a change to a gate file runs the gates on the next poll instead
+const GATES_MIN_MS = 2000; // the shortest gap between two gate runs (a hook writes the gate DB on every tool call)
 const PANE_ID = 'atlas';
 // The auto open (first render with a viewport) is docked only and asks no keyboard; /atlas-cc opens a
 // 12-row pane on demand, takes focus, and Esc closes it.
@@ -128,6 +129,9 @@ let sessionUuid = '';
 /** raw host agent id -> display name, kept across rebuilds: a finished agent drops out of the host list but its id must keep resolving. */
 let nameMemo: Record<string, string> = {};
 let gatesBusy = false;
+let gatesSig = ''; // signature of the gate inputs at the last poll
+let gatesDirty = false; // a gate input moved since the last run
+let gatesRunAt = -Infinity; // ms clock of the last gate run
 let pendingDrift: string[] = [];
 let paneChecked = false; // the unasked pane open is decided once per session
 let dockWanted = false; // set by the first AbovePrompt render with a viewport, acted on by dockTick (renders may not write)
@@ -508,6 +512,7 @@ async function rebuildOnce($: EngineInterface): Promise<void> {
 		if (builder.todoError !== undefined) reportFailure($, `atlas: todos.json is ${builder.todoError}, showing the last good board`);
 	} catch (err) {
 		reportFailure($, `atlas: rebuild failed: ${String(err)}`);
+		lastFingerprint = ''; // the poll recorded this build's fingerprint before it ran: forget it so the next tick retries instead of waiting for another file change
 		// keep the last good snapshot
 	}
 }
@@ -520,10 +525,34 @@ export async function dockTick($: EngineInterface): Promise<void> {
 	void $.ui.open(PANE_DOCK).then(toastUnplaced($));
 }
 
+/** Signature of what atlas_gates.py reads: the board files under <root>/.atlas/.run and the gate DB (ATLAS_DB, else
+ * $ATLAS_HOME/atlas.db, else ~/.atlas/atlas.db) with its WAL, where the hooks record every check. */
+async function gatesSigOf($: EngineInterface, root: string): Promise<string> {
+	const run = `${root.replace(/\/+$/, '')}/.atlas/.run`;
+	const env = async (k: string): Promise<string | undefined> => (await $.env.get(k).catch(() => undefined)) || undefined;
+	const home = await env('ATLAS_HOME');
+	const user = await env('HOME');
+	const db = (await env('ATLAS_DB')) ?? (home ? `${home}/atlas.db` : user ? `${user}/.atlas/atlas.db` : '');
+	const paths = [`${run}/todos.json`, `${run}/findings.json`, ...(db ? [db, `${db}-wal`] : [])];
+	return (await Promise.all(paths.map((p) => statSig($, p)))).join('|');
+}
+
+/** POLL_MS tick: a change to a gate file marks the gates stale; they re-run on this poll once GATES_MIN_MS has passed since
+ * the last run (never wait out the 30 s backstop to show a check that just failed). */
+async function gatesPoll($: EngineInterface): Promise<void> {
+	const root = rootOf(await read($, snapshotState));
+	if (root === '' || sessionUuid === '') return;
+	const sig = await gatesSigOf($, root);
+	if (gatesSig !== '' && sig !== gatesSig) gatesDirty = true; // the first sight only records
+	gatesSig = sig;
+	if (gatesDirty && !gatesBusy && (await $.clock.now()) - gatesRunAt >= GATES_MIN_MS) await runGates($);
+}
+
 /** POLL_MS tick: rebuild only when the data files moved. */
 export async function rebuildTick($: EngineInterface): Promise<void> {
 	await dockTick($);
 	if (builder === null) return;
+	await gatesPoll($).catch(() => undefined);
 	const fingerprint = await dataFingerprint($);
 	if (fingerprint === lastFingerprint && (await read($, snapshotState)) !== null) return;
 	lastFingerprint = fingerprint;
@@ -629,6 +658,8 @@ async function runGates($: EngineInterface): Promise<void> {
 	const root = rootOf(await read($, snapshotState));
 	if (root === '') return;
 	gatesBusy = true;
+	gatesRunAt = await $.clock.now();
+	gatesDirty = false;
 	try {
 		const out = await $.process
 			.run(['python3', `${$.plugin.root}/scripts/atlas_gates.py`, '--session', sessionUuid, '--root', root, '--json'])
@@ -734,6 +765,9 @@ function bandHandlers($: EngineInterface): BandHandlers {
 
 /** A fresh session: the next coreTick is a baseline again. */
 export function resetCore(): void {
+	gatesSig = '';
+	gatesDirty = false;
+	gatesRunAt = -Infinity;
 	coreSeen = null;
 	coreFinished = {};
 	coreFiles = {};
