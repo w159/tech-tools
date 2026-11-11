@@ -136,7 +136,7 @@ export function registerNotify(
 	// Per registration, not module-level: a second registerNotify (another test, a re-register) must not inherit this one's baseline.
 	let lastSnapshot: AtlasSnapshot | null = null;
 	let shownAt = Number.NEGATIVE_INFINITY; // snapshot clock of the toast on screen
-	let held: Toast[] = []; // routine toasts that fell inside the gap, folded into the next one
+	let held: (string | Toast)[] = []; // routine toasts that fell inside the gap, folded into the next one
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
 			const snap = await read($, snapshotState);
