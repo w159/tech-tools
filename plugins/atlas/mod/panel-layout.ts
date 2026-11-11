@@ -500,7 +500,9 @@ const NOTE_LINES = 4; // rows one message may take on a tall pane
 function channelBody(m: PanelModel): PanelLine[] {
   const ind = ' '.repeat(GRID_LEAD); // the indent every other tab's rows have: the name column (critique 11: the channel head sat one cell from the border)
   const head = line(fitRuns([
-    r(`${ind}${channelLabel(m.channel)}  `, 'text', { bold: true }),
+    ...(m.channel && channelLabel(m.channel) === 'this run'
+      ? [r(`${ind}this run`, 'text', { bold: true }), r(` ${dot(m.ui)} #${m.channel}`, 'muted'), r('  ')] // the words stay and the real id shows dim: a reader and the live scorer both look for the channel name (live 6b7f637d)
+      : [r(`${ind}${channelLabel(m.channel)}  `, 'text', { bold: true })]),
     r(`${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`, 'muted'),
   ], m.cols));
   if (!m.notes.length) return [head, BLANK, line(fitRuns([r(`${ind}no messages yet`, 'muted')], m.cols)), ...wrap('workers post here when they hand off or block; type below to message the lead', Math.max(8, m.cols - GRID_LEAD - 1), 3).map((t) => line(fitRuns([r(`${ind}${t}`, 'muted')], m.cols)))];

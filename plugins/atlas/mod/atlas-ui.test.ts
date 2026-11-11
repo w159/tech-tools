@@ -313,3 +313,11 @@ describe('ASCII mode', () => {
     for (const ch of new Set([...all])) if (ch.charCodeAt(0) > 0x7e) expect([ch, ATLAS_GLYPHS.includes(ch)]).toEqual([ch, true]);
   });
 });
+
+import { gridRow as gridRowStrike } from './atlas-ui';
+test('live 6b7f637d: a struck name column strikes the name, never the padding spaces that follow it (critique 13)', () => {
+  const runs = gridRowStrike({ cols: 40, ui: { ascii: false }, name: { t: 'T2 read', tone: 'sub', strike: true }, nameW: 12 });
+  const struck = runs.filter((x) => x.strike);
+  expect(struck.map((x) => x.t)).toEqual(['T2 read']);
+  expect(runs.map((x) => x.t).join('')).toContain('T2 read     '); // the column still pads to its width
+});

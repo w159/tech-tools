@@ -153,3 +153,13 @@ test('an outcome is memoized only once its duration is known', async () => {
   expect(await cardExtra(noDuration, e.props.output, [e.agent], fresh)).toEqual({ ended: 'finished', outcome: '' });
   expect(fresh.size).toBe(0);
 });
+
+test('live 6b7f637d: the card and the team tab read ONE duration, the worker\'s own observed run (startedAt to its stamped finish), not the host figure that includes spawn time', async () => {
+  const e = launched('completed');
+  const eng = engine([e.agent]);
+  const withActivity = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'done', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface;
+  // the team tab prints round((since - startedAt) / 1000) = 15s; the host said 29046 ms
+  expect(await cardExtra(withActivity, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '15s' });
+  const running = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'working', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface;
+  expect(await cardExtra(running, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '29s' }); // a worker the mod still sees running keeps the host figure
+});

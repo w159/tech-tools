@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Regression fix (critique 13): the channel tab head keeps `this run` and also shows the real id dim (`this run · #lc-opl0e60i`), so the channel name is visible again (live 6b7f637d `channel_name_shown` false in all six runs).
+- Regression fix (critique 13): an ended worker's card duration reads the same observed run the team tab prints (startedAt to stamped finish, one rounding), not the host `duration_ms` on another clock (15s tab against 16s card); the host figure stays the fallback while the mod has not seen the worker end.
+- Regression fix (critique 13): a shell call in the SUBAGENTS LAST column and the panel reads `run atlas_todo.py`, never the raw command line and its temp path.
+- Regression fix (critique 13): a struck (done) name in the panel grid strikes the name only, not the padding spaces after it.
 - Critique 12 A1 (110 layout): the host places an unasked pane only from 144 columns, so a 110-column terminal gets the pane only on request (`register.ts` `DOCK_MIN_COLUMNS`). The dock check no longer ends at the first render: a terminal started narrow and widened to 144+ docks at the first render that fits, once.
 - Critique 12 A2: the route tab prints no owner column on a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`), and the column gives way before such a title is cut, so `read ...` and the doubled owner are gone at 110 and 150.
 - Critique 12 A3: one band form from 90 to 119 columns (`research · todo 0/5 · 1 dispatch open · ctx 7% · ◐ 1 running`, one ` · ` separator), so 110 (body 105) and a docked 150 (body 93) read alike; the last run joins the contract row by a fixed 92-cell rule, not by the body width.

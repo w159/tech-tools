@@ -72,9 +72,9 @@ describe('channel tab: header, columns and marks', () => {
     expect(body('channel', 80, { people: 1, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  1 person');
     expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
-  test('critique 12: a generated launch id (`lc-opl0e60i`) is no channel name: the header and the ribbon say `this run`, a named channel keeps its #name', () => {
-    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe('    this run  2 people');
-    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] }).join('\n')).not.toContain('lc-opl0e60i');
+  test('critique 12: a generated launch id (`lc-opl0e60i`) is no channel name: the ribbon says `this run`, the header keeps the words and also the real name (`this run · #lc-opl0e60i`, live 6b7f637d lost channel_name_shown), a named channel keeps its #name', () => {
+    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe('    this run · #lc-opl0e60i  2 people');
+    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] }).join('\n')).toContain('#lc-opl0e60i');
     expect(body('channel', 80, { channel: 'atlas-board-mod', people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
   test('a missing channel name reads #channel', () => {

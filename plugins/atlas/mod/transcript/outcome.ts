@@ -5,6 +5,7 @@
 import { atom, read } from 'claude-code'
 import type { AgentInfo, EngineInterface, RenderElement } from 'claude-code'
 import { EMPTY_ORCH } from '../data/orchestration'
+import type { ActivityEntry } from '../orchestra-types'
 import { formatDuration, spin } from '../theme'
 import { notificationTree, resultLine, stripStatus } from './cards'
 import { lookOf } from '../look'
@@ -62,9 +63,15 @@ async function workerOutcome($: EngineInterface, who: Who, memo: Map<string, Out
  return memo.get(`${who.id}:${who.status}`) ?? (await readOutcome($, who, memo, durationMs))
 }
 
+/** The run the team tab prints (data/live endedAt: first sight to the stamped finish) when the mod saw the worker end: the card then reads the same figure, not the host's `duration_ms`, which counts spawn time on another clock (live 6b7f637d: 15s on the tab, 16s on the card). */
+async function observedMs($: EngineInterface, id: string): Promise<number | undefined> {
+ const a: ActivityEntry | undefined = (await read($, orchRef)).activity[id]
+ return a && (a.mood === 'done' || a.mood === 'failed') && a.startedAt !== undefined && a.since > a.startedAt ? a.since - a.startedAt : undefined
+}
+
 async function readOutcome($: EngineInterface, who: Who, memo: Map<string, Outcome>, durationMs?: number): Promise<Outcome> {
  const line = reportOf(rows(await $.session.messages({ agentId: who.id }).catch(() => [])))
- const ms = durationMs ?? notifiedMs(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id)
+ const ms = (await observedMs($, who.id)) ?? durationMs ?? notifiedMs(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id)
  const o: Outcome = { status: who.status, line, ...(ms !== undefined ? { durationMs: ms } : {}) }
  if (ms !== undefined) memo.set(`${who.id}:${who.status}`, o)
  return o

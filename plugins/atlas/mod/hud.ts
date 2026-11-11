@@ -121,14 +121,24 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
 /** `opus`, `sonnet-5`: the model without its provider and the `claude-` prefix; nothing is guessed. */
 export const shortModel = (model: string | undefined): string => flat(model).replace(/^.*\//, '').replace(/^claude-/, '');
 
+const INTERPRETERS = new Set(['python', 'python3', 'node', 'bun', 'bash', 'sh', 'zsh', 'uv', 'npx', 'bunx']);
+/** A shell call as a person reads it: `run <script>` (the interpreter's first argument, by basename) or `run <command>`, never the raw command line and its temp paths (critique 13). */
+const shellCall = (command: string): string => {
+  const words = (command.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((w) => w.replace(/^["']|["']$/g, ''));
+  const first = words[0] ?? '';
+  const word = INTERPRETERS.has(first.split('/').pop() ?? first) ? (words.slice(1).find((w) => !w.startsWith('-')) ?? first) : first;
+  return `run ${word.split('/').pop() || 'shell'}`;
+};
+const isShell = (tool: string | null | undefined): boolean => (tool ?? '').toLowerCase() === 'bash';
+
 /** The agent's current call (`read runs.ts:17`), else its last line, else its last call. */
 export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, root?: string | null): string {
   const base = root ? `${root.replace(/\/+$/, '')}/` : '';
   const rel = (s: string): string => (base ? s.split(base).join('') : s);
   const target = rel(flat(a.target));
-  if (a.tool) return `${a.tool.toLowerCase()}${target ? ` ${target}` : ''}`;
+  if (a.tool) return isShell(a.tool) && target ? shellCall(target) : `${a.tool.toLowerCase()}${target ? ` ${target}` : ''}`;
   // Between calls and after the end: the last call (its target, else its intent), then the free-text report only when there was no call.
-  const call = a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${target}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
+  const call = isShell(a.lastTool) && target ? shellCall(target) : a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${target}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
   return call || rel(flat(a.lastLine));
 }
 

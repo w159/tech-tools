@@ -380,7 +380,9 @@ export function gridRow(o: GridRowSpec): Run[] {
     o.mark ? { ...o.mark } : { t: ' ', tone: 'text' }, { t: ' ', tone: 'text' },
   ];
   const name = (o.nameCut === 'end' ? clip : clipMiddle)(o.name.t, Math.max(0, o.nameW));
-  runs.push(cellRun(o.name, name + ' '.repeat(Math.max(0, o.nameW - cells(name))), 'text'));
+  const pad = ' '.repeat(Math.max(0, o.nameW - cells(name)));
+  if (o.name.strike && pad) runs.push(cellRun(o.name, name, 'text'), { t: pad, tone: o.name.tone ?? 'text' }); // the strike stops at the name: the padding is no text (critique 13)
+  else runs.push(cellRun(o.name, name + pad, 'text'));
   if (o.wordW) runs.push({ t: gap, tone: 'text' }, o.word ? cellRun(o.word, padEnd(clip(o.word.t, o.wordW), o.wordW), 'muted') : { t: ' '.repeat(o.wordW), tone: 'text' });
   if (o.tail) runs.push(...o.tail);
   const used = runsCells(runs);

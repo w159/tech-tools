@@ -8,7 +8,7 @@ import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_ric
 import type { TodoItem } from './contract';
 import type { Ui } from './atlas-ui';
 import { PALETTES } from './atlas-ui';
-import { agentModel, agentName, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
+import { agentModel, agentName, lastAction, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
 import { computeCounts, routeCounts } from './data/todos';
 import { effectiveRows, inlineBelowRows } from './register';
 import type { Segment } from './runs';
@@ -385,5 +385,19 @@ describe('hud fixes (round 3): canonical name, task text, finished wave', () => 
     const rows = hudLines({ todos: [], agents: ags }, { cols: 110, maxRows: 10, ui, now: 1000 + 18000 + 5000 }).map((r) => r.map((x) => x.t).join(''));
     expect(rows[0]).toContain('3 done');
     expect(rows.filter((r) => /explorer\s+done/.test(r))).toHaveLength(3);
+  });
+});
+
+describe('live 6b7f637d: a shell call is never the LAST column text (critique 13: `bash python3 "/tmp/claude-0/-home-user-tech-t`)', () => {
+  const cmd = 'python3 "/tmp/claude-0/-home-user-tech-tools/1040432e/scratchpad/snap/plugins/atlas/scripts/atlas_todo.py" set \'[{"content":"T1"}]\'';
+  test('a current Bash call reads `run <script>`', () => {
+    expect(lastAction({ tool: 'Bash', target: cmd, detail: null, lastTool: null, lastLine: '' })).toBe('run atlas_todo.py');
+  });
+  test('a last Bash call between calls reads the same, a plain command keeps its first word', () => {
+    expect(lastAction({ tool: null, target: cmd, detail: null, lastTool: 'Bash', lastLine: '' })).toBe('run atlas_todo.py');
+    expect(lastAction({ tool: 'Bash', target: 'ls -la /tmp/x', detail: null, lastTool: null, lastLine: '' })).toBe('run ls');
+  });
+  test('other tools keep `tool target`', () => {
+    expect(lastAction({ tool: 'Read', target: 'alpha.py', detail: null, lastTool: null, lastLine: '' })).toBe('read alpha.py');
   });
 });
