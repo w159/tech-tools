@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Fixed: one open-work truth (critique 9, slice A). A dispatch row closes when its agent ends even when the launch recorded no agent_id and the member is named `<slice>-<role>` (`gamma-explorer`): the unmapped-stop fallback now matches a `-<type>` suffix, so Stop no longer counts "1 open todo item(s)" over a Board that read done (`hooks/test_worker_report_gate.py`). The Board fold never hides an open dispatch row: the footer reads `5 items · 1 dispatch open` and the plan row it folds into re-opens (`mod/open-work.test.ts`). `atlas_todo.open_items` is the one rule Stop, the `Todos drained`/`Evidence captured` gates rows, `counts()["open"]` (now in the helper summary) and `coreModel().contract.open` share (`hooks/test_atlas_gates.py` on `contracts/open-work-store.json`).
+- TODO state (critique 9, slice B): one `todoState` (mod/data/todos.ts) now derives every plan row's state for the HUD TODO block and the side panel route tab; a row whose owner agent returned while the store row is open reads `returned` (attention tone), never `queued`; HUD SUBAGENTS rows sort by their T row inside a state.
 
 ## 17.9.0 - 2026-11-11
 

@@ -72,7 +72,7 @@ export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; 
   return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap };
 }
 
-export type PanelTodo = { id: string; label: string; state: UiState; owner?: string; detail?: string; evidence?: string | null };
+export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
 export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; tools?: number };
 export type PanelGateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string };
 export type PanelGate = { id: string; title: string; error?: string; lines: PanelGateLine[] };
@@ -282,12 +282,12 @@ const TITLE_MIN_W = 21; // the title column's least width (the state word starts
 /** The Board's compact form on the panel: `focus glyph title state [detail] owner`. Every task row shares one state column (cell 26) and one
  * right-aligned owner column (dropped when the panel is too narrow to keep a title of 8 cells); a title that does not fit is cut at its end (labels that share a head keep their tail); from 100 columns the reason (detail) fills the room between the state word and the owner. An open row adds its owner and detail,
  * then its evidence. */
-function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; shown?: string }): PanelLine[] {
+function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; wordW: number; shown?: string }): PanelLine[] {
   const key = `task:${t.id}`;
   const runs = gridRow({
     cols: m.cols, ui: m.ui, mark: stateMark(t.state, m, t.owner ?? t.id),
     name: { t: w.shown ?? oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text' }, nameW: w.nameW, nameCut: 'end',
-    word: { t: t.state, tone: stateWordTone2(t.state) }, wordW: WORD_W,
+    word: { t: t.word ?? t.state, tone: stateWordTone2(t.state) }, wordW: w.wordW,
     ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
     ...(w.valueW && t.owner ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
   });
@@ -354,11 +354,12 @@ function routeBody(m: PanelModel): PanelLine[] {
   const ordered = m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
   const widest = Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.map((t) => cells(oneLine(t.owner)))));
   // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
-  const plan = gridPlan(m.cols, { names: [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))], word: WORD_W, value: widest, optional: true, min: 8, max: m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols }); // from 100 columns the title leaves the reason a column
+  const todoWordW = ordered.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), WORD_W); // 8 while a row reads `returned`
+  const plan = gridPlan(m.cols, { names: [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))], word: todoWordW, value: widest, optional: true, min: 8, max: m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols }); // from 100 columns the title leaves the reason a column
   const shown: PanelLine[] = [];
   const shownTitles = labelCut(ordered.map((t) => oneLine(t.label)), plan.nameW);
   for (const [i, t] of ordered.entries()) {
-    const rs = todoRows(m, t, { ...plan, shown: shownTitles[i]! });
+    const rs = todoRows(m, t, { ...plan, wordW: todoWordW, shown: shownTitles[i]! });
     if (shown.length + rs.length > room) break;
     shown.push(...rs);
   }

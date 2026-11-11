@@ -4,9 +4,9 @@
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
-import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, percent, ribbon, runsCells, spinClock, spinFrameOf, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, percent, ribbon, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, STATE_TOKEN, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
-export type TodoRow = { label: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
+export type TodoRow = { label: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
 export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
 /** The spinner frame of row `id` (the agent's squad name): the shared clock's frame (spinFrameOf of spinClock, as the side panel turns it)
@@ -91,8 +91,11 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
 /** The state column: just past the longest title, so every title shows whole; never past the last cell a state word (or chip) still fits,
  * and, where a detail column follows (100 columns and up), never so far that the detail has under 16 cells. Every width has it; only a
  * pane under 13 cells (no room for a title and a word) drops it (0). */
+/** The plain state column's width: 7 (`running`), 8 while a row reads `returned`. */
+const todoWordW = (rows: readonly TodoRow[]): number => rows.reduce((n, r) => Math.max(n, cells(r.word ?? r.state)), 7);
+
 function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich: boolean): number {
-  const wordW = rich ? CHIP_W : 7; // `running` and `blocked` are the longest of the six words
+  const wordW = rich ? CHIP_W : todoWordW(rows); // `running` and `blocked` are the longest of the six words
   if (tier === 'min') return o.cols < MIN_STATE_AT + wordW ? 0 : Math.min(maxLen(rows.map((r) => flat(r.label))) + 2 + 4, o.cols - wordW);
   const detail = tier === 'full' && rows.some((r) => r.detail !== '');
   const last = o.cols - wordW - (detail ? 14 + 16 : 0); // the leftmost the column may start at
@@ -111,7 +114,7 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   const text = clip(flat(r.label), labelW);
   const label = r.state === 'done' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
   if (stateAt === 0) return [...head, label];
-  const row = [...toCol([...head, label], stateAt), rich ? stateChip(r.state, ui) : t(r.state)];
+  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, STATE_TOKEN[r.state], ui) : stateChip(r.state, ui)) : t(r.word ?? r.state, r.word ? 'warn' : undefined)];
   if (tier !== 'full' || r.detail === '') return row;
   return [...toCol(row, metaAt), t(clip(flat(r.detail), Math.max(1, o.cols - metaAt)), 'sub')];
 }
@@ -131,9 +134,12 @@ function railRow(ids: readonly string[], active: number, ui: Ui): Run[] {
 
 // ---- SUBAGENTS -------------------------------------------------------------------------------------------
 
-/** Agents in the order the mocks show them: running first, then blocked, failed, waiting, queued and done; stable inside a state. */
-export const sortAgents = <T extends { state: UiState }>(rows: readonly T[]): T[] =>
-  rows.map((row, i) => ({ row, i })).sort((a, b) => PRIORITY[a.row.state] - PRIORITY[b.row.state] || a.i - b.i).map((x) => x.row);
+/** Agents in the order the mocks show them: running first, then blocked, failed, waiting, queued and done. Inside a state an agent that owns plan rows
+ * sorts by its first T row (T1 before T2), not by start time; agents without a plan row follow, then as given. */
+export const sortAgents = <T extends { state: UiState; tasks?: readonly number[] }>(rows: readonly T[]): T[] => {
+  const first = (r: T): number => (r.tasks && r.tasks.length ? Math.min(...r.tasks) : Infinity);
+  return rows.map((row, i) => ({ row, i })).sort((a, b) => PRIORITY[a.row.state] - PRIORITY[b.row.state] || (first(a.row) === first(b.row) ? 0 : first(a.row) < first(b.row) ? -1 : 1) || a.i - b.i).map((x) => x.row);
+};
 
 /** Nothing below 80 columns: the band's counts carry the running agents there (design 3g). */
 export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
