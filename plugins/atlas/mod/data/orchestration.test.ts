@@ -61,7 +61,7 @@ describe('finished workers and comms labels', () => {
     const run = (now: number) => deriveOrchestration(base({ squad, now, finishedAt: memo })).activity.pane;
     expect(run(NOW + 18_000)).toMatchObject({ mood: 'done', since: NOW + 18_000, startedAt: NOW });
     expect(run(NOW + 70_000)?.since).toBe(NOW + 18_000);
-    const live: SquadAgent[] = [{ name: 'p2', persona: 'explorer', state: 'running', source: 'mux' }];
+    const live: SquadAgent[] = [{ name: 'p2', persona: 'explorer', state: 'running', source: 'mux' } as never];
     expect(deriveOrchestration(base({ squad: live, now: NOW + 5_000, finishedAt: memo })).activity.p2?.since).toBe(NOW + 5_000); // a running one keeps moving
   });
 

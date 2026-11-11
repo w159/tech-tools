@@ -171,7 +171,7 @@ test('the band is still when no worker is live: no tick, no redraw difference', 
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   await clock.advance(1000); // the first gate run lands
   const before = await abovePromptText($, 30);
-  expect(before).toContain('▲ BLOCKED'); // the fixture's gate has a failing completion check, so the idle band reads blocked (A2)
+  expect(before).toContain('▲ completion warning'); // the fixture's gate has a failing completion check and no Stop refusal, so the idle band warns (critique 8 A1)
   for (let i = 0; i < 5; i++) {
     await clock.advance(1000);
     expect(await abovePromptText($, 30)).toBe(before);
