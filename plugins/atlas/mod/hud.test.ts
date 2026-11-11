@@ -8,7 +8,7 @@ import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_ric
 import type { TodoItem } from './contract';
 import type { Ui } from './atlas-ui';
 import { PALETTES } from './atlas-ui';
-import { agentName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
+import { agentName, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
 import { computeCounts, routeCounts } from './data/todos';
 import { effectiveRows, inlineBelowRows } from './register';
 import type { Segment } from './runs';
@@ -339,5 +339,26 @@ describe('mutation kills (round 2): queued names, the elapsed clock and the Suba
     expect(hudListsAgents([[seg('TODO')], [seg('SUBAGENTS')]])).toBe(false); // the ribbon alone: counts only
     expect(hudListsAgents([[seg('TODO')], [seg('impl-a')]])).toBe(false);
     expect(hudListsAgents([])).toBe(false);
+  });
+});
+
+describe('hud fixes (round 3): canonical name, task text, finished wave', () => {
+  const sq = (name: string, task: string) => ({ name, persona: 'atlas:explorer', state: 'done', source: 'task', task }) as never;
+  const lw = (name: string, state: 'working' | 'done', since = 0) => ({ name, role: 'explorer', state, tool: null, lastTool: null, since, startedAt: 0, target: null, lastLine: '', calls: [], scope: null }) as never;
+  test('displayName: one whole name; the lead reads `lead`', () => {
+    expect(displayName('lead-a3a3ab', 'lead')).toBe('lead');
+    expect(displayName('board-auditor-open-items', 'explorer')).toBe('board-auditor-open-items');
+    expect(displayName('alpha-explorer', 'explorer')).toBe(agentName('alpha-explorer', 'explorer'));
+  });
+  test('the TASK column is filled from the agent description (f0054, f0176)', () => {
+    const agents = hudAgents([lw('alpha-explorer', 'working')], [sq('alpha-explorer', 'alpha-explorer: read alpha.py')]);
+    const rows = hudLines({ todos: [], agents }, { cols: 120, maxRows: 10, ui, now: 0 }).map((r) => r.map((x) => x.t).join(''));
+    expect(rows.some((r) => r.includes('alpha-explorer') && r.includes('read alpha.py'))).toBe(true);
+  });
+  test('a finished wave lingers as one: the header count and the rows both list all three (110 f0086)', () => {
+    const ags = ['alpha', 'beta', 'gamma'].map((n, i): HudAgent => ({ name: `${n}-explorer`, role: 'explorer', state: 'done', ui: 'done', since: 1000 + i * 9000 }));
+    const rows = hudLines({ todos: [], agents: ags }, { cols: 110, maxRows: 10, ui, now: 1000 + 18000 + 5000 }).map((r) => r.map((x) => x.t).join(''));
+    expect(rows[0]).toContain('3 done');
+    expect(rows.filter((r) => /explorer\s+done/.test(r))).toHaveLength(3);
   });
 });

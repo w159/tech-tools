@@ -40,7 +40,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const out = text(todoRows(rows, opts(120), full));
     const done = rows.filter((r) => r.state === 'done').length;
     expect(out[0]).toContain(`${done} of ${rows.length} done`);
-    expect(out[2]).toContain(`${done} of ${rows.length} · 43%`);
+    expect(out[1]).toContain(`${done} of ${rows.length} · 43%`);
     expect(out.filter((l) => /^[ ▸] [●◐◇■▲◉] /.test(l))).toHaveLength(rows.length);
   });
   test('columns: label at 4, state at 30, meta at 44; at most one chip per row; no row wider than the surface', () => {
@@ -192,19 +192,22 @@ describe('mutation kills (round 2): order, slots, focus mark, name column cap, s
     const asciiRow = todoRows([td('a', 'running', true)], { ...opts(120), ui: { ...ui, ascii: true } }, { spacers: false, extras: false })[1]![0]!;
     expect(asciiRow).toMatchObject({ t: '>', bold: true });
   });
-  test('the agent name column stops growing at 29 cells: a longer name is clipped and the state word starts at column 33', () => {
-    const rows = text(agentRows([ag('x'.repeat(60))], opts(120), { spacers: false, extras: false }));
-    expect(rows[1]!.indexOf('running')).toBe(33);
-    expect(rows[1]!.slice(4, 33).trimEnd().length).toBeLessThanOrEqual(28);
+  test('a long agent name shows whole while the row has room; only a name that alone overflows is end-clipped', () => {
+    const long = 'board-auditor-open-items-and-more'; // 33 cells
+    const rows = text(agentRows([ag(long)], opts(120), { spacers: false, extras: false }));
+    expect(rows[1]).toContain(long);
+    const tight = text(agentRows([ag('x'.repeat(90))], opts(80), { spacers: false, extras: false }));
+    expect(tight[1]).toContain('running');
+    expect(tight[1]).toMatch(/x\.\.\. +running/);
   });
   test('stack puts a blank row between the blocks only when spacers is on and both blocks exist', () => {
     const s = { todos: [td('t')], agents: [ag('a')] };
     const blanks = (b: { spacers: boolean; extras: boolean }, x: { todos: TodoRow[]; agents: AgentRow[] }) => stack(x, opts(120), b).filter((r) => r.length === 0).length;
     const on = { spacers: true, extras: false };
-    expect(blanks(on, s)).toBe(2); // the TODO spacer under its ribbon and the separator between the blocks (the agents' spacer row holds the column words)
+    expect(blanks(on, s)).toBe(1); // the separator between the blocks (the TODO block has no blank row) (the agents' spacer row holds the column words)
     expect(blanks({ spacers: false, extras: false }, s)).toBe(0);
     // One block alone never gets the separator row.
-    expect(blanks(on, { todos: s.todos, agents: [] })).toBe(1); // its own under-ribbon spacer only
+    expect(blanks(on, { todos: s.todos, agents: [] })).toBe(0); // no separator and no blank inside the block
     expect(blanks(on, { todos: [], agents: s.agents })).toBe(0);
   });
   test('fitStack at two rows with two agents ends on the two bare ribbons (no spacer row to push it to one)', () => {
@@ -212,5 +215,41 @@ describe('mutation kills (round 2): order, slots, focus mark, name column cap, s
     expect(text(rows).map((l) => l.trim().split(/\s+/)[2] ?? '')).toHaveLength(2);
     expect(text(rows)[0]).toContain('TODO');
     expect(text(rows)[1]).toContain('SUBAGENTS');
+  });
+});
+
+describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO layout', () => {
+  const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py -> first lines', ctx: null, focus: false, ...o });
+  const lines = (rows: AgentRow[], cols: number): string[] => text(agentRows(rows, opts(cols), { spacers: false, extras: false })).slice(1);
+  test('a narrow row drops last text, then task, then model; the state word is never cut', () => {
+    const a = row({ name: 'board-auditor-open-items', task: 'list open items' });
+    const widths = [140, 100, 90, 80];
+    const seen = widths.map((w) => lines([a], w)[0]!);
+    for (const l of seen) { expect(l).toContain('board-auditor-open-items'); expect(l).toContain('running'); expect(l).not.toContain('...items'); }
+    expect(seen[0]).toContain('first lines');
+    expect(seen[3]).not.toContain('first');
+    const at = (l: string) => ({ model: l.includes('haiku'), task: l.includes('list open'), last: l.includes('read alpha') });
+    // Whatever survives, a later column never shows without the earlier one.
+    for (const l of seen) { const c = at(l); if (c.last) expect(c.task && c.model).toBe(true); if (c.task) expect(c.model).toBe(true); }
+  });
+  test('no state word is cut at any width (runnin, haik)', () => {
+    for (let w = 80; w <= 120; w++) {
+      const l = lines([row({ name: 'board-auditor-open-items' })], w)[0]!;
+      expect(l).toContain(' running');
+      expect(/haik(?!u)/.test(l)).toBe(false);
+    }
+  });
+  test('the TASK column carries the dispatch description when the agent owns no plan row', () => {
+    const l = lines([row({ name: 'alpha-explorer', task: 'read alpha.py' })], 120)[0]!;
+    expect(l).toContain('read alpha.py');
+  });
+  test('the TODO block has one layout at every width: ribbon, (progress row from 100 columns), then the rows with their state column; no blank row', () => {
+    for (const cols of [80, 100, 110, 150]) {
+      const out = text(todoRows(worldTodos(), opts(cols), full));
+      expect(out[0]).toContain('TODO');
+      expect(out.filter((l) => l === '')).toHaveLength(0);
+      if (cols >= 100) expect(out[1]).toMatch(/^progress /);
+      expect(out[cols >= 100 ? 2 : 1]).toMatch(/done/);
+    }
   });
 });

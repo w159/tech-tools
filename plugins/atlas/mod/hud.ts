@@ -61,11 +61,17 @@ export function agentName(name: string, role: string, task?: string): string {
   return GENERIC.has(role) && HOST_ID.test(name) ? name.slice(0, 6) : name;
 }
 
+/** The one canonical name every surface shows for an agent (HUD rows, both card formats, toasts): `agentName`, and the lead's per-session hash name (`lead-a3a3ab`) reads `lead`. */
+export const displayName = (name: string, role = '', task?: string): string => (/^lead-[0-9a-f]{6}$/i.test(name) ? 'lead' : agentName(name, role, task));
+
+/** An agent's task text for the TASK column: its dispatch description without the `name: ` prefix (`read alpha.py`). */
+const taskOf = (task: string | undefined): string => flat(task).replace(/^[a-z0-9]+(?:[-_.][a-z0-9]+)+:\s+/i, '');
+
 /** Band workers plus the squad's spawn model and task, in the HUD's shape; `queued` names dispatched workers the host does not list yet (data/live.ts queuedMembers). */
 export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[] = []): HudAgent[] {
   const listed = live.map((w) => {
     const s = squad.find((a) => a.name === w.name);
-    const name = agentName(w.name, w.role, s?.task);
+    const name = displayName(w.name, w.role, s?.task);
     return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
   return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
@@ -121,7 +127,7 @@ function lastAction(a: HudAgent, root?: string | null): string {
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const rows = agents.map((a): AgentRow => {
     const tasks = todos.flatMap((t, i) => (t.owner === a.name || (a.key !== undefined && t.owner === a.key) ? [i + 1] : []));
-    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false };
+    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -133,7 +139,10 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const plan = input.todos.filter(isPlanItem);
   // A finished agent shows while a wave runs, and with nothing running a done one stays LINGER_MS after it ended while a failed one stays until it is cleared (the band's rule).
   const running = input.agents.some(isRunning);
-  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && a.since !== undefined && opts.now !== undefined && opts.now - a.since <= LINGER_MS));
+  // The finished wave lingers as one: while its newest member is within LINGER_MS every done agent shows, so the header count and the rows keep matching the band.
+  const newestDone = input.agents.reduce((n, a) => (a.state === 'done' && a.since !== undefined ? Math.max(n, a.since) : n), -Infinity);
+  const waveLingers = opts.now !== undefined && opts.now - newestDone <= LINGER_MS;
+  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && waveLingers));
   const agents = shown.length > 0 ? agentModel(shown, plan, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
