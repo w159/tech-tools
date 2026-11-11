@@ -11199,5 +11199,277 @@
     "status": "verified",
     "verified_at": "2026-11-10T14:01:46+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "fixwave-f4e6c29c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "f4e6c29c: D1,D2(note),D3,D4,D6,D7,D11 and mod D1-D9 reproduced; D2 notes-read gap and omp/mod legacy-row mismatch found",
+    "evidence": [
+      "/mnt/project-files/atlas-ui-redesign/round2/after/verify-fixwave.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest -n 8 (8647 pass); bun test mod omp (1790 pass); old-source bun run 28 fail; live tmux spawn-team/wait/reap",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-10T23:46:21+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "fixwave-f4e6c29c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Fix wave f4e6c29c verified with 7 regressions open",
+    "evidence": [
+      "/mnt/project-files/atlas-ui-redesign/round2/after/verify-fixwave.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "see verify-fixwave.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-10T23:46:53+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "vb-gates",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Gates: bun/tsc green but kit has 3 real failures (register-sidebar) absent at f4e6c29c",
+    "evidence": [
+      "/mnt/project-files/atlas-ui-redesign/round2/after/verify-build.md#1"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas (worktree e6683b47)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T00:57:39+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "vb-L1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "L1: old hudRows kept the completed row; test fails on old for format only",
+    "evidence": [
+      "verify-build.md#2"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun probe on f4e6c29c hudRows",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T00:57:39+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "vb-L13",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "L13 not fixed: HUD running vs band queued for same worker",
+    "evidence": [
+      "verify-build.md#B3"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas (register-sidebar docked pane test output)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T00:57:39+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "vb-L2-L11-R5-S1-L19",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "L2, L11, R5, S1, L19 tests fail on old code and pass on new",
+    "evidence": [
+      "verify-build.md#2"
+    ],
+    "doc_refs": [],
+    "reproduction": "old-tree probes and copied tests (board-settle, board-wiring)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T00:57:39+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "vb-L16-L17-L21",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "L16/L17/L21 not run against old code; L21 assumes host draws k: label",
+    "evidence": [
+      "verify-build.md#2"
+    ],
+    "doc_refs": [],
+    "reproduction": "n/a: tests import new modules",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T00:57:39+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "vb-env",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "NO_COLOR/ATLAS_THEME/ASCII read via process.env, not declared by plugin validate; no live capture",
+    "evidence": [
+      "plugins/atlas/mod/atlas-ui.ts:42"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin validate plugins/atlas | grep 'env reads'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T00:57:39+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "verify-build-e6683b47",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hostile review of e6683b47: B1-B9 open, L13 not fixed",
+    "evidence": [
+      "/mnt/project-files/atlas-ui-redesign/round2/after/verify-build.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T01:06:55+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "band-polish-a929c761",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "band polish: kit 976 pass 0 real fail, bun 1838/0, tsc clean",
+    "evidence": [
+      "/mnt/project-files/atlas-ui-redesign/round2/after/band-polish.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude plugin test plugins/atlas; cd plugins/atlas && bun test mod omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T01:06:55+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "critic3-ui-score",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Rebuilt Atlas surfaces are NOT expert grade: after mean 6.2 vs baseline 3.5; 13 cross-surface disagreements",
+    "evidence": [
+      "/mnt/project-files/atlas-ui-redesign/round2/after/critique-3.md; board-model.ts:23; band.tsx:49; sidebar-model.ts:51; omp/mission-panel.ts:20"
+    ],
+    "doc_refs": [],
+    "reproduction": "Read after/*.png and baseline/live-150/*.png; cd plugins/atlas && bun test mod omp (1838 pass 0 fail)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T01:09:56+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t3ed02608",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "critique-4: Atlas terminal mods score 6.1 overall (live basis); HEAD 9c1668d4 not in any live run",
+    "evidence": [
+      "round2/after/live-150-8dd03fe7/{tab-*,mod-*}.png, metrics.json defects L1-L24; bun test mod omp 2112 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp; Read live PNGs under /mnt/project-files/atlas-ui-redesign/round2/after/live-*",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T04:52:08+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t5a3a83-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "A1-A5/B1-B5 slices: no implementer diff to verify",
+    "evidence": [
+      "git status --short plugins/atlas -> 0 lines at 969d1446"
+    ],
+    "doc_refs": [],
+    "reproduction": "git status --short plugins/atlas | wc -l",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T04:54:26+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "wave5-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "wave5 staged: A1,A3-A5,B1-B5 verified; A2 breaks kit test register-sidebar 'the band is still when no worker is live' (expects idle, gets blocked)",
+    "evidence": [
+      "mod/register-sidebar.test.ts:168-174; bun test mod omp 2144 pass 0 fail; tsc exit 0"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /home/user/tech-tools && claude plugin test plugins/atlas | grep '^(fail)' | grep -v 'did not load'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T05:28:06+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "wave5-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Wave 5 live truth and side panel fixes verified; A2 kit regression fixed by updating the stillness test",
+    "evidence": [
+      "verifier-wave5 per-item table; bun test mod omp 2144/0; kit non-noise fails 0"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && COLORTERM=truecolor bun test mod omp; claude plugin test plugins/atlas",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T05:34:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "round2-b58d1c1d",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "seat count and card name fixes, final live rerun",
+    "evidence": [
+      "bun test mod omp 2146 pass 0 fail; tsc 0; live-150-b58d1c1d and live-110-b58d1c1d gates 100, route 100, todo 97.8/87.0"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T06:58:07+00:00",
+    "verified_by": "lead"
   }
 ]

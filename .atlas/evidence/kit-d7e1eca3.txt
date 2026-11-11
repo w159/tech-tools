@@ -1,0 +1,2166 @@
+
+colony/herdr-web-ui/scripts/generate-protocol-types.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/generate-protocol-types.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/generate-protocol-types.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/phone-setup.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/phone-setup.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/phone-setup.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/phone-setup.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/phone-setup.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/phone-setup.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/plugin-port.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/plugin-port.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/plugin-port.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/plugin-runtime.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/plugin-runtime.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/plugin-runtime.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/plugin.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/plugin.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/plugin.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/release-notes.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/release-notes.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/release-notes.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/scripts/windows-plugin.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/scripts/windows-plugin.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/scripts/windows-plugin.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/access.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/access.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/access.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/agent-name.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/agent-name.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/agent-name.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/api.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/api.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/api.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/atlas-gateway.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/atlas-gateway.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/atlas-gateway.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/atlas-landing.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/atlas-landing.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/atlas-landing.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/attach-held.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/attach-held.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/attach-held.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/attach-output.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/attach-output.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/attach-output.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/chat-history.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/chat-history.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/chat-history.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/claude-session.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/claude-session.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/claude-session.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/claude-store.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/claude-store.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/claude-store.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex-binding.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex-binding.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex-binding.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex-images.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex-images.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex-images.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex-processes.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex-processes.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex-processes.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/codex.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/codex.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/codex.test.ts: /home/user/tech-tools/plugins/atlas/colony/herdr-web-ui/server/codex.test.ts, compiled line 669 `const { createCodexTranscriptParser } = await import("./codex.ts");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+colony/herdr-web-ui/server/collector.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/collector.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/collector.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/commands.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/commands.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/commands.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/completion.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/completion.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/completion.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/conversation-metadata.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/conversation-metadata.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/conversation-metadata.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/conversation.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/conversation.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/conversation.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/device-access.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/device-access.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/device-access.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/devices.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/devices.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/devices.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/directories.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/directories.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/directories.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/file-view.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/file-view.test.ts: /home/user/tech-tools/plugins/atlas/colony/herdr-web-ui/server/file-view.test.ts, compiled line 55 `const { mkdirSync } = await import("node:fs");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+colony/herdr-web-ui/server/files.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/files.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/files.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/gjc-runtime.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/gjc-runtime.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/gjc-runtime.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/gjc.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/gjc.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/gjc.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/herdr-marker.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/herdr-marker.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/herdr-marker.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/herdr-update.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/herdr-update.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/herdr-update.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/herdr/client.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/herdr/client.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/herdr/client.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machine-proxy.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machine-proxy.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machine-proxy.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machine-update.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machine-update.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machine-update.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machines-refresh.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machines-refresh.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machines-refresh.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/machines.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/machines.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/machines.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/mirror-input.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/mirror-input.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/mirror-input.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/mirror.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/mirror.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/mirror.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-prompt.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-prompt.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-prompt.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-records.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-records.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-records.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-status.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-status.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-status.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo-tasks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo-tasks.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo-tasks.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omo.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omo.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omo.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/omp.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/omp.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/omp.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/output-window.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/output-window.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/output-window.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/output.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/output.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/output.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/paste.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/paste.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/paste.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi-models.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi-models.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi-models.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi-tree.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi-tree.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi-tree.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pi.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pi.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pi.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/process-start.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/process-start.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/process-start.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/prompt.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/prompt.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/prompt.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/prompt.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/prompt.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/prompt.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/pty/session.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/pty/session.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/pty/session.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/push.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/push.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/push.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/reattach.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/reattach.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/reattach.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/remote-bundle.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/remote-bundle.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/remote-bundle.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/secret.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/secret.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/secret.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/shell-agent.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/shell-agent.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/shell-agent.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/skill-activity.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/skill-activity.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/skill-activity.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/submit.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/submit.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/submit.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/tailscale.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/tailscale.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/tailscale.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/take-over.contract.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/take-over.contract.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/take-over.contract.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/tool-output.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/tool-output.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/tool-output.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/updater.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/updater.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/updater.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/usage.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/usage.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/usage.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/voice.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/voice.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/voice.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/server/windows-native.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/server/windows-native.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/server/windows-native.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/shared/patch.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/shared/patch.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/shared/patch.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/shared/secret-prompt.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/shared/secret-prompt.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/shared/secret-prompt.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/atlas-bridge.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/atlas-bridge.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/atlas-bridge.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/alertSound.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/alertSound.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/alertSound.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/api.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/api.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/api.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/authLink.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/authLink.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/authLink.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/bridgeProgress.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/bridgeProgress.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/bridgeProgress.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/checklist.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/checklist.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/checklist.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/compose.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/compose.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/compose.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/composerDraft.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/composerDraft.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/composerDraft.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/conversationFetch.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/conversationFetch.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/conversationFetch.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/dagPane.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/dagPane.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/dagPane.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/diff.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/diff.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/diff.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/directoryGroups.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/directoryGroups.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/directoryGroups.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/draft.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/draft.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/draft.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/droplet.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/droplet.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/droplet.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/edgeSwipe.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/edgeSwipe.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/edgeSwipe.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/filePaths.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/filePaths.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/filePaths.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/fontFaces.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/fontFaces.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/fontFaces.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/fontFamily.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/fontFamily.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/fontFamily.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/goals.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/goals.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/goals.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/greeting.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/greeting.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/greeting.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/headerCrumb.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/headerCrumb.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/headerCrumb.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/heldRows.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/heldRows.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/heldRows.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/i18n.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/i18n.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/i18n.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/install.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/install.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/install.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/keyboard.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/keyboard.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/keyboard.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/keys.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/keys.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/keys.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/machineNotice.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/machineNotice.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/machineNotice.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/markdown.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/markdown.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/markdown.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/mentions.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/mentions.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/mentions.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/messageQueue.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/messageQueue.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/messageQueue.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/modelName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/modelName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/modelName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/needsInput.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/needsInput.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/needsInput.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/notificationTarget.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/notificationTarget.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/notificationTarget.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/notifications.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/notifications.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/notifications.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/omoTasks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/omoTasks.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/omoTasks.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/osc52.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/osc52.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/osc52.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/paletteSearch.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/paletteSearch.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/paletteSearch.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/paneName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/paneName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/paneName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/phone.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/phone.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/phone.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/promptAnswer.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/promptAnswer.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/promptAnswer.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/push.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/push.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/push.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/runningVersion.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/runningVersion.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/runningVersion.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/settings.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/settings.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/settings.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/shortcuts.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/shortcuts.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/shortcuts.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/snapshot.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/snapshot.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/snapshot.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/snapshotRequests.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/snapshotRequests.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/snapshotRequests.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/sshOutput.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/sshOutput.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/sshOutput.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/status.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/status.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/status.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/tabName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/tabName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/tabName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/tabStripScroll.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/tabStripScroll.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/tabStripScroll.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalBoxGlyphs.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalBoxGlyphs.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalBoxGlyphs.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalDraft.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalDraft.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalDraft.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalFileLinks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalFileLinks.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalFileLinks.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalGlyphs.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalGlyphs.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalGlyphs.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/terminalWidths.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/terminalWidths.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/terminalWidths.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/todos.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/todos.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/todos.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/toolVerbs.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/toolVerbs.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/toolVerbs.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/transcript.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/transcript.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/transcript.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/turnRevision.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/turnRevision.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/turnRevision.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/updateProgress.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/updateProgress.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/updateProgress.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/usage.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/usage.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/usage.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/voice.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/voice.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/voice.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/wakeLock.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/wakeLock.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/wakeLock.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/workBlocks.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/workBlocks.test.ts: /home/user/tech-tools/plugins/atlas/colony/herdr-web-ui/src/lib/workBlocks.test.ts, compiled line 94 `const { isLiveWorkTurn } = await import("./workBlocks.ts");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+colony/herdr-web-ui/src/lib/worktreeName.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/worktreeName.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/worktreeName.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/lib/ws.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/lib/ws.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/lib/ws.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/motion.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/motion.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/motion.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/pwa-notification.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/pwa-notification.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/pwa-notification.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+colony/herdr-web-ui/src/pwa.test.ts:
+(fail) the file did not load
+  colony/herdr-web-ui/src/pwa.test.ts: cannot import "bun:test" (from colony/herdr-web-ui/src/pwa.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+mod/atlas-ui.edges.test.ts:
+(pass) hostEnv > is the live process environment, not an empty object [4.23ms]
+(pass) countRuns > without a spin frame the running glyph is the first frame, followed by a blank [1.55ms]
+(pass) clip and clipMiddle > a width of zero or less is the empty string, never undefined [1.09ms]
+(pass) clip and clipMiddle > clipMiddle: 3 cells or fewer is a plain cut, 4 is one letter and the dots [1.43ms]
+(pass) padEnd and atColumn > padEnd fills to n cells and never pads past it (wide glyphs count two) [0.76ms]
+(pass) padEnd and atColumn > atColumn pads to the column, and two spaces separate when the cursor is already past it [0.59ms]
+(pass) brandMark > ASCII is a bold ATLAS; the glyph form is a plain diamond and a bold accent ATLAS [0.73ms]
+
+mod/atlas-ui.test.ts:
+(pass) tokens > Mocha and Latte carry every token as #rrggbb, with the rev 4 values [7.80ms]
+(pass) tokens > toneHex maps legacy dim to a readable colour in each theme [0.86ms]
+(pass) environment > theme: ATLAS_THEME wins, COLORFGBG background 7 or 15 reads light, default Mocha [0.88ms]
+(pass) environment > ASCII: ATLAS_ASCII=1 or a non-UTF-8 locale; 0 turns it off; an unset locale reads UTF-8 [2.11ms]
+(pass) environment > colour: NO_COLOR (non-empty) turns it off, TERM=xterm-256color without COLORTERM is 256, else truecolor [0.64ms]
+(pass) environment > 256-colour indexes and SGR parameters [0.81ms]
+(pass) contrast > WCAG maths: black on white is 21:1, equal colours 1:1 [2.44ms]
+(pass) contrast > every pair the primitives can emit meets its threshold, text 4.5:1 and glyphs 3:1, in both themes [5.57ms]
+(pass) contrast > rules: Latte run is under 4.5 as text and ok under 3 as a glyph, so the glyph falls back to text [0.52ms]
+(pass) contrast > chip ink is whichever of ink and white reads better on the fill [2.76ms]
+(pass) contrast > runKind: marks and rules are glyphs (3:1), words and digits are text (4.5:1) [0.49ms]
+(pass) state vocabulary > six lowercase words, each one glyph, one ASCII mark and one token [0.98ms]
+(pass) state vocabulary > stateRun: token colour, text where under 3:1 or in ASCII; running takes the spinner frame [0.95ms]
+(pass) state vocabulary > chips are the state words in capitals, one fixed width [1.31ms]
+(pass) brand capsule, ribbon, rail > capsule: ◖ ◆ ATLAS ◗ with the fill on the middle only; ASCII [ATLAS] [0.45ms]
+(pass) brand capsule, ribbon, rail > ribbon: exactly `cols` cells, the right label ends the row, ◆ appears once [2.26ms]
+(pass) brand capsule, ribbon, rail > rail: numbered phases, ● done, ▸ active, ◇ ahead; all done when active = length [0.58ms]
+(pass) gauge > golden gauges from the design (rev 3 section 6a) [0.50ms]
+(pass) gauge > property: widths 1-40 and values 0-1, filled cells within 1/8 of value*width, width exact [177.18ms]
+(pass) gauge > clamps out-of-range and non-finite values; zero and full are exact [0.49ms]
+(pass) gauge > runs: fill in info (or a given token) over a line track; ASCII is = over . [0.63ms]
+(pass) chip > fixed 11 cells whatever the word, ink on fill, bold [0.67ms]
+(pass) chip > ASCII chip has no fill and keeps the width [0.24ms]
+(pass) chip > chipCount counts fills; clip and cells [0.40ms]
+(pass) sparkline > eight block levels scaled to the peak, five ASCII levels [0.40ms]
+(pass) sparkline > the world spark series draws 60 cells with its peak at the top level [0.37ms]
+(pass) motion > spinner: ◐◓◑◒ one frame per 100 ms, |/-\ in ASCII, any integer frame [0.40ms]
+(pass) motion > eased gauge: ease-out cubic over 160 ms, six frames, ends on the target [0.61ms]
+(pass) ASCII mode > every primitive prints plain ASCII, no fills and no colour-only meaning [0.85ms]
+(pass) ASCII mode > ATLAS_GLYPHS lists every non-ASCII character the Unicode primitives emit [5.39ms]
+
+mod/band-controls.test.ts:
+(fail) the file did not load
+  mod/band-controls.test.ts: /home/user/tech-tools/plugins/atlas/mod/band-controls.test.ts, compiled line 129 `const { missionTree } = await import("./band");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+mod/band-core.test.ts:
+(pass) band core row > idle: the core row sits directly under the band, with muted labels and plain figures [13.06ms]
+(pass) band core row > idle at 120 columns prints the shared core golden [7.69ms]
+(pass) band core row > a running band shows no core row: its rows go to workers [13.37ms]
+(pass) band core row > never more rows than maxRows [114.03ms]
+(pass) band core row > idle: no core, no extra row [1.24ms]
+(pass) band core row > idle: the core row waits for room (the band, then core at 2 rows) [1.32ms]
+(pass) band core row > narrow bands (under 80 columns) show no core row [0.49ms]
+
+mod/band-design.test.ts:
+(pass) band goldens > mocha 120 equals the design golden and fits its width [21.87ms]
+(pass) band goldens > mocha 120 rich equals the design golden and fits its width [2.83ms]
+(pass) band goldens > mocha 80 equals the design golden and fits its width [1.36ms]
+(pass) band goldens > mocha 60 equals the design golden and fits its width [1.72ms]
+(pass) band goldens > mocha 40 equals the design golden and fits its width [0.79ms]
+(pass) band goldens > latte 120 equals the design golden and fits its width [1.01ms]
+(pass) band goldens > latte 120 rich equals the design golden and fits its width [0.87ms]
+(pass) band goldens > latte 80 equals the design golden and fits its width [0.72ms]
+(pass) band goldens > latte 60 equals the design golden and fits its width [0.61ms]
+(pass) band goldens > latte 40 equals the design golden and fits its width [0.73ms]
+(pass) WCAG on every rendered run > mocha: each run's foreground meets 4.5:1 as text or 3:1 as a glyph on its background [17.46ms]
+(pass) WCAG on every rendered run > latte: each run's foreground meets 4.5:1 as text or 3:1 as a glyph on its background [21.05ms]
+(pass) counts and gauges equal the data > chips: at most one per row in every tier [8.38ms]
+(pass) counts and gauges equal the data > todo and phase counts equal the world [1.36ms]
+(pass) counts and gauges equal the data > every gauge matches its label (within one eighth of a cell plus label rounding) [1.26ms]
+
+mod/band-golden.test.ts:
+(pass) band golden rows > renders the shared world to the golden rows (plain text, 120 columns, tick 0) [20.56ms]
+(pass) band golden rows > idle renders the shared idle golden, core row included, a failed worker still counted, no key buttons without handlers [5.46ms]
+(pass) band tiers on the shared world (design evidence goldens) > 120 columns: one row equals the golden [1.45ms]
+(pass) band tiers on the shared world (design evidence goldens) > 120-rich columns: rich band equals the golden [2.16ms]
+(pass) band tiers on the shared world (design evidence goldens) > 80 columns: one row equals the golden [1.32ms]
+(pass) band tiers on the shared world (design evidence goldens) > 60 columns: one row equals the golden [1.18ms]
+(pass) band tiers on the shared world (design evidence goldens) > 40 columns: one row equals the golden [0.90ms]
+
+mod/band-polish.test.ts:
+(pass) band beside the Subagents block: counts only > without the HUD block the band lists its workers [49.58ms]
+(pass) band beside the Subagents block: counts only > with the HUD block the band lists no worker and keeps the counts [13.28ms]
+(pass) band beside the Subagents block: counts only > the band counts equal the HUD block: a roster member the host does not list is queued in both; a listed worker is running at any age [17.81ms]
+(pass) band beside the Subagents block: counts only > narrow bands list nothing either way (the single row) [6.74ms]
+(pass) idle band > reads idle, with the phase position and no running count, at every width [10.67ms]
+(pass) idle band > rich idle also says idle; a running band does not [8.93ms]
+(pass) the live phase rail for the HUD > hudPhases is the rail ids and the lit index; done lights every phase; blocked keeps the last phase [1.38ms]
+(pass) the live phase rail for the HUD > the HUD draws the rail from it [10.65ms]
+(pass) eased gauges > the band draws the eased value; the label keeps the true figure [7.27ms]
+(pass) eased gauges > retarget starts a move from the value on screen, and an unchanged target keeps the same move [0.62ms]
+(pass) eased gauges > displayed follows the frame functions and lands on the target; settled once EASE_MS has passed [0.67ms]
+(pass) eased gauges > gaugeTargets reads the plan ratio and the context fill; context is absent at 0 [5.90ms]
+(pass) when the band may drop its worker rows > true only while the Subagents block lists at least one agent [6.71ms]
+(pass) when the band may drop its worker rows > false with the ribbon alone (starved), below 80 columns (no block) and with nothing running [3.44ms]
+(pass) band counts what the HUD counts (critique-3 change 4) > a blocked task has its own glyph and count beside the todo count, with the agents noun in front of the agent counts [7.77ms]
+(pass) band counts what the HUD counts (critique-3 change 4) > the order is the HUD ribbon's: running, failed, queued, waiting [2.12ms]
+(pass) band counts what the HUD counts (critique-3 change 4) > idle keeps the failed count and the blocked count visible [3.19ms]
+
+mod/band.test.ts:
+(pass) band: the brand capsule and the facts, and nowhere else the task count > reads the phase, the todo gauge and the ctx gauge and the worker counts, tick 3 [27.61ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > counts the lead plan only: 2 of 11 with two dispatch rows present [3.76ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > capsule: caps accent on the panel, the middle ink on accent fill; every other cell is on the panel; no cost [4.29ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > the gauges fill in info over a line track; ctx has no threshold colours [3.03ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > without a context figure there is no ctx gauge [2.59ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > latte paints the latte panel; ASCII swaps the capsule; NO_COLOR keeps words and drops every colour [6.81ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > blocked reads `▲ blocked · needs you` and the phase rail keeps the last real phase lit [2.31ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > rich: capsule with the numbered phase rail, a blank row, then the gauges [2.39ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small [5.32ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > idle shows the last run under the band [0.99ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > a failed worker turns the last run into a bold failed count [1.03ms]
+(pass) band: the brand capsule and the facts, and nowhere else the task count > last run counts the most recent spawn burst only, not every worker of the session [0.88ms]
+(pass) workers: a row each, in words > failed and waiting sort first, then running [2.35ms]
+(pass) workers: a row each, in words > each state has its mark, tone and word: running, waiting, failed [2.40ms]
+(pass) workers: a row each, in words > only a worker with a tool in flight spins; a failed or waiting one never moves [17.32ms]
+(pass) workers: a row each, in words > running shows the short tool name and its target [2.04ms]
+(pass) workers: a row each, in words > thinking: a grey spinner, the word, and the last tool dimmed, never "-" [3.03ms]
+(pass) workers: a row each, in words > a host-listed worker with no call yet is running (thinking), never starting: no clock decides a state word [2.34ms]
+(pass) workers: a row each, in words > a dispatched member the host does not list yet is a queued row: a hollow dot and the word [3.02ms]
+(pass) workers: a row each, in words > role column joins at 100 columns; below it the name keeps the room [4.48ms]
+(pass) workers: a row each, in words > the elapsed time ends the row [6.39ms]
+(pass) workers: a row each, in words > shortTool strips mcp server prefixes [0.29ms]
+(pass) workers: a row each, in words > no per-worker faces, chips or graphs [2.60ms]
+(pass) 15 s linger > a finished worker keeps its row for 15 s, green, reading `finished` [2.77ms]
+(pass) 15 s linger > and is gone after that [1.88ms]
+(pass) 15 s linger > a finished worker never lingers once the whole wave is done (idle shows the last run instead) [2.99ms]
+(pass) message and footer > one message row: `from to to   text   hh:mm`, the lead named like omp [3.06ms]
+(pass) message and footer > without a lead name the collapsed `lead` stays [3.04ms]
+(pass) message and footer > checks name each group with a mark and a word; failures take the text tone [2.85ms]
+(pass) message and footer > gate results appear once: the header carries no count, the footer is the only place [3.01ms]
+(pass) message and footer > the header check group never draws or counts as a check [2.81ms]
+(pass) message and footer > when tight the footer keeps only failures, then a bare mark [2.43ms]
+(pass) message and footer > no checks reported yet: no footer row [2.06ms]
+(pass) the board slot > expanded lists every item right under the band (header, then one row each); folded costs nothing [4.25ms]
+(pass) the board slot > a tight budget shrinks the board before it takes the footer or the attention workers [6.17ms]
+(pass) the board slot > board text drops the [phase] / [label] prefix [16.30ms]
+(pass) the board slot > the running board item carries the spinner frame of the tick and its owner, as in omp [9.98ms]
+(pass) degrade order and the row budget > blank rows go first: the one above the message, then the one under the band [9.28ms]
+(pass) degrade order and the row budget > then the message goes, then the footer, then workers past a `+N more` row [7.56ms]
+(pass) degrade order and the row budget > workers that need attention are the ones kept [1.78ms]
+(pass) degrade order and the row budget > the total never exceeds maxRows [7.64ms]
+(pass) degrade order and the row budget > planRows: workers past the budget fold into `+N more`, the message gives way first [0.47ms]
+(pass) degrade order and the row budget > maxRows under 3 falls back to the one summary row; 0 or below draws nothing [1.60ms]
+(pass) degrade order and the row budget > every row fills exactly the columns at 60..200 [10.55ms]
+(pass) below 80 columns: only the band, one row > `◖ ◆ ATLAS ◗ ph 4/5 · todo 1/4 · ◒1 ■1` fills the columns [0.82ms]
+(pass) below 80 columns: only the band, one row > idle keeps the capsule and the todo count; 80 columns is the full layout [1.86ms]
+(pass) below 80 columns: only the band, one row > a blocked band says so in the summary [0.50ms]
+(pass) below 80 columns: only the band, one row > the panel is a non-shrinking column on the panel background [1.42ms]
+(pass) railPhase > an on-rail phase is lit as itself, ignoring lastPhase [0.25ms]
+(pass) railPhase > an off-rail phase falls back to the last rail phase seen [0.14ms]
+(pass) railPhase > an off-rail phase with no or unknown lastPhase lights the first rail phase [0.19ms]
+(pass) message row: only real messages, never presence events > a newer join or leave does not replace the last message [1.37ms]
+(pass) message row: only real messages, never presence events > only presence events: no message row at all [1.16ms]
+(pass) band counts the open work the TODO tree shows > only dispatch rows on the board, no groups: `0 of 2` [1.53ms]
+(pass) D2 the band count is the snapshot count > D2: band `N of M` equals computeCounts on the same board (1 of 3), whatever the groups drop [1.86ms]
+(pass) mutation kills (round 2): ctx clamp, bandRows, the footer gap > a lead context over 100% reads 100%, never the raw figure [1.43ms]
+(pass) mutation kills (round 2): ctx clamp, bandRows, the footer gap > bandRows is the band alone as plain text, one string per band row [1.70ms]
+(pass) mutation kills (round 2): ctx clamp, bandRows, the footer gap > when the checks leave no room, the gap before the key buttons is empty, not one stray cell [0.97ms]
+
+mod/board-key.test.ts:
+(pass) the band board key opens the board pane, and the pane draws the board [686.73ms]
+(pass) the sidebar board key opens the same pane [475.59ms]
+(pass) pressing the key again keeps one board pane (one per id) and the Atlas pane is left alone [365.34ms]
+(pass) live host: `o` in the shown Atlas pane draws the board in that pane (▸ BOARD ribbon), and `o` again returns to the route [427.81ms]
+
+mod/board-settle.test.ts:
+(pass) dispatch rows follow their workers in the snapshot > three explorers finish: the three pending dispatch rows read completed and the count is 3 of 3, not 0 of 3 [10.35ms]
+(pass) dispatch rows follow their workers in the snapshot > a failed worker leaves a failed row; a running one leaves its row as written [0.86ms]
+
+mod/board-wiring.test.ts:
+(pass) L19: the board key opens the Board pane > the band `o` Button calls ui.open for atlas-board with focus and Esc-to-close [45.97ms]
+(pass) L19: the board key opens the Board pane > the Pane hook for atlas-board draws the ribbon, the header and one row per todo [7.41ms]
+(pass) L19: the board key opens the Board pane > the Atlas pane (requestId atlas) is still the sidebar, not the board [8.14ms]
+(pass) L19: the board key opens the Board pane > an empty board draws the ribbon and `(no state)` [5.30ms]
+
+mod/board.test.ts:
+(pass) board goldens > mocha 120 equals the design golden; the ribbon fills exactly 120 cells [23.54ms]
+(pass) board goldens > mocha 120 rich equals the design golden; the ribbon fills exactly 120 cells [2.91ms]
+(pass) board goldens > mocha 80 equals the design golden; the ribbon fills exactly 80 cells [7.47ms]
+(pass) board goldens > latte 120 equals the design golden; the ribbon fills exactly 120 cells [2.93ms]
+(pass) board goldens > latte 120 rich equals the design golden; the ribbon fills exactly 120 cells [4.22ms]
+(pass) board goldens > latte 80 equals the design golden; the ribbon fills exactly 80 cells [0.98ms]
+(pass) board goldens > the design files are the exact-fill ribbon with its trailing blanks trimmed (118 and 119 characters, not 120) [3.69ms]
+(pass) board goldens > ASCII mode draws the ASCII brand, marks and a bracket chip [1.13ms]
+(pass) board goldens > the 60-cell pane gives the label the room left: five full labels survive, none cut to 18 [4.71ms]
+(pass) board goldens > at 30 cells no board row exceeds 30 cells [0.67ms]
+(pass) board goldens > narrow widths keep marker, glyph and label, and never overflow [8.40ms]
+(pass) board goldens > the running row is the focus: marker, bold label; done labels are struck [1.12ms]
+(pass) board goldens > a long owner is cut to 18 cells and a long label to its column, so no cell runs into the next [0.56ms]
+(pass) chips and contrast > at most one chip per row, none in the plain form, 11 cells wide in the rich [5.21ms]
+(pass) chips and contrast > mocha: each run meets 4.5:1 as text or 3:1 as a glyph on its background [11.12ms]
+(pass) chips and contrast > latte: each run meets 4.5:1 as text or 3:1 as a glyph on its background [9.67ms]
+(pass) counts equal the band on the same world > done and total: the board states what the band states (3 of 7) [0.92ms]
+(pass) counts equal the band on the same world > running, failed and queued: the same counts as the band words [1.85ms]
+(pass) counts equal the band on the same world > the rows the board draws are the world, one for one, in the world order [1.67ms]
+(pass) data to rows > statuses map onto the six-word vocabulary; an unknown one reads queued [0.28ms]
+(pass) data to rows > done shows `ran mm:ss` from its stamps; running carries elapsed, and `of` only from its own estimate [1.57ms]
+(pass) data to rows > plan rows come before the per-subagent dispatch rows [0.37ms]
+(pass) S1: a dispatch row follows its worker > a pending or in_progress dispatch row becomes completed when its worker finished, failed when it died [0.35ms]
+(pass) S1: a dispatch row follows its worker > plan rows, rows of other workers and rows already final are left alone [0.47ms]
+(pass) S1: a dispatch row follows its worker > the squad says who ended: finished is done, failed and dead are failed, running is not ended [0.23ms]
+(pass) S1: a dispatch row follows its worker > the board then draws the row done or failed, and the counts follow [0.23ms]
+(pass) mutation kills (round 2): blockedCount, boardCounts, the elapsed gauge room > blockedCount counts only items whose state word is blocked (a waiting owner blocks, a finished item stays done) [0.19ms]
+(pass) mutation kills (round 2): blockedCount, boardCounts, the elapsed gauge room > boardCounts starts every state at zero and counts each row once [0.37ms]
+(pass) mutation kills (round 2): blockedCount, boardCounts, the elapsed gauge room > the rich elapsed gauge needs 19 cells plus the tail: drawn at exactly that room, text one cell short [1.12ms]
+
+mod/consistency.test.ts:
+(fail) the file did not load
+  mod/consistency.test.ts: /home/user/tech-tools/plugins/atlas/mod/consistency.test.ts, compiled line 16 `const ompLoad = (m) => import(ompAt + m);`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+mod/core-row.test.ts:
+(pass) core row > golden text at 160 and 120 columns [20.16ms]
+(pass) core row > empty without data [1.88ms]
+(pass) core row > never wider than the columns, 40 to 200 [73.29ms]
+(pass) core row > a muted lowercase label leads each group [0.97ms]
+(pass) core report and status > four sections with the refuted verdict, the 17.9k figure and the routes [1.07ms]
+(pass) core report and status > a drifted seat is listed [2.61ms]
+(pass) core report and status > no data is one line [0.79ms]
+(pass) core report and status > ratio text: one decimal under 10, none when null [0.29ms]
+(pass) core row cells > ratio: exactly 10 rounds, below 10 keeps a decimal [0.20ms]
+(pass) core row cells > cellsWidth sums the run widths and starts from zero; cellsText joins them [0.91ms]
+(pass) core row cells > contract tallies are muted when empty, plain when complete, amber when partial; gates are not repeated here [2.73ms]
+(pass) core row cells > compact forms at the narrowest width that fits all four groups [8.92ms]
+(pass) core row cells > below the four compact groups: contract and verdict only, below that nothing [3.50ms]
+(pass) core row cells > with room every group widens to its full form [1.52ms]
+(pass) core row cells > claims and workers are singular for one [0.61ms]
+(pass) core row cells > verdict figures are muted at zero and coloured when non-zero [0.64ms]
+(pass) core row cells > offload without workers says so; route without a team says so [0.37ms]
+(pass) core row cells > route marks: drift, ran, not yet; seats fall back to "?" [1.00ms]
+(pass) core report lines > tallies, open gates and the empty-verdict note [1.17ms]
+(pass) core report lines > verdict words and unchecked claims; the empty note only when nothing is open or unchecked [1.34ms]
+(pass) core report lines > routes: seats, ran models once each, not run yet, fallback name [0.43ms]
+(pass) core report lines > no ratio means no parenthesis on the offload line [0.17ms]
+(pass) core report is bounded > 40 distinct findings print at most 12 rows, refuted and open first, then a more line [0.67ms]
+(pass) core report is bounded > the counts on the VERDICTS line sum to the findings total [0.21ms]
+(pass) core report is bounded > an entry with no id and no title is counted as unlabeled, not printed as a blank row [0.42ms]
+(pass) core report is bounded > 30 workers of which 10 carry no data print at most 8 rows and a more line [0.46ms]
+(pass) D7 / D4 shared core row and report > D7: the band row and the report say `no verdicts yet`, never 0 verified · 0 refuted [0.66ms]
+(pass) D7 / D4 shared core row and report > D4: the report shows ran 3 / planned 1 for three explorers on a one-explorer seat [0.31ms]
+
+mod/core-seats.test.ts:
+(pass) routes with two seats of one role > each seat is matched to the members spawned for its label, so there is no false drift [3.70ms]
+(pass) routes with two seats of one role > a seat that ran the other seat tier is still reported as drift [0.61ms]
+(pass) routes with two seats of one role > an unlabelled seat still matches by role [0.59ms]
+
+mod/data/channels.test.ts:
+(pass) read: filters channel, sorts by seq then ts, caps at the last 500 [6.73ms]
+(pass) read: cursor re-reads only grown files, resets on shrink, skips unchanged ones [2.31ms]
+(pass) read: tolerates blank and torn lines between valid ones [0.41ms]
+(pass) read: missing board dir and missing files resolve to [] [0.40ms]
+(pass) systemLine: exit kind renders *** quit with the code from the text, undefined otherwise [0.66ms]
+(pass) formatNote: HH:MM owner → to │ text, collapsed; missing ts/to fall back [5.54ms]
+(pass) readRoster: first present candidate wins; unreadable/missing file yields null [1.66ms]
+(pass) ts normalisation: epoch seconds and ms both become ISO; strings parse or pass through; others are empty [3.23ms]
+(pass) note field normalisation: owner/text defaults, seq coercion, optional fields, channel is stamped [0.51ms]
+(pass) read: ties on seq break by ts ascending; non-jsonl files are ignored [0.38ms]
+(pass) read: a failing stat forces a re-read, and a vanished file drops its cached notes [0.81ms]
+(pass) read: a read that throws skips that file only [0.90ms]
+(pass) readRoster: null or non-object channels, and junk members, are tolerated; all member fields map through [1.01ms]
+
+mod/data/core.test.ts:
+(pass) core model on the captured run > the adversarial ledger [3.27ms]
+(pass) core model on the captured run > offload: 17948 tokens kept in tmux, 608 returned [1.58ms]
+(pass) core model on the captured run > routes: newest first by created is the last; every seat ran sonnet, no drift [1.16ms]
+(pass) core model on the captured run > contract carries the header tally and the open gates [0.35ms]
+(pass) core model edges > a seat whose worker ran another model reads as drift [0.49ms]
+(pass) core model edges > a DONE claim with no verdict after it is unchecked [0.79ms]
+(pass) core model edges > a verdict recorded before the claim does not check it [0.57ms]
+(pass) core model edges > an omp message_end usage log counts context like claude assistant lines [0.31ms]
+(pass) core model edges > bad findings JSON reads as no verdicts [2.36ms]
+(pass) core model edges > nothing in, nothing to show [0.52ms]
+(pass) claim pairing by id > an unrelated-id verdict does not check a claim when another claim names it [0.45ms]
+(pass) claim pairing by id > an id-linked verdict pairs out of time-order preference [0.26ms]
+(pass) claim pairing by id > an id seen only in an already-checked claim does not fall back onto another claim [0.21ms]
+(pass) claim pairing by id > a verdict whose id no claim names falls back to time order, and tokens match whole words only [0.17ms]
+(pass) core model: context accounting and defaults > omp usage sums input + cacheRead + cacheWrite; claude usage sums its three fields [0.69ms]
+(pass) core model: context accounting and defaults > assistant lines with the same message id collapse to the latest usage; id-less lines stay separate [0.30ms]
+(pass) core model: context accounting and defaults > offloadOf: model from the costliest modelUsage entry, cost from total_cost_usd, no calls => zeros [0.40ms]
+(pass) core model: context accounting and defaults > roleOfName strips a trailing tag containing a digit only [0.62ms]
+(pass) core model: context accounting and defaults > contract evidence tally counts completed items with non-blank evidence; verifiedDone follows verified ids [0.45ms]
+(pass) core model: context accounting and defaults > offload ratio is kept/returned, null when either side is zero [0.56ms]
+(pass) core model: context accounting and defaults > a one-token report still yields a ratio; non-finite numbers in team records fall back to defaults [0.42ms]
+(pass) core model: context accounting and defaults > routes: defaults, ordering by created, class and effort aliases, labelled seats [0.47ms]
+(pass) core model: context accounting and defaults > labelled seats of one role match only the members spawned for that label [0.41ms]
+(pass) core model: context accounting and defaults > hasCore is true for each kind of content on its own [1.66ms]
+(pass) core model: context accounting and defaults > one id appearing three times counts once, by its latest entry [0.49ms]
+(pass) core model: context accounting and defaults > an entry without id or title falls back to batch and claim [0.91ms]
+(pass) core model: context accounting and defaults > tok formats at the 1000 and 1,000,000 boundaries [0.23ms]
+(pass) routes: transport and session > with channels, a previous session team record is no route [0.49ms]
+(pass) routes: transport and session > in-process dispatches become in-process routes per SCOPE, seats ran the dispatch model [1.57ms]
+(pass) routes: transport and session > SCOPE-less or malformed-SCOPE dispatches are bucketed under -/- with no seats, never dropped [0.63ms]
+(pass) routes: transport and session > tmux and in-process routes sit side by side; no dispatches handed in means inProcess false [0.46ms]
+(pass) D4 route count drift > D4: three explorer dispatches against a one-explorer seat are drift, though the model matches [0.31ms]
+(pass) D4 route count drift > D4: as many dispatches as seats is no drift [0.23ms]
+
+mod/data/crew.test.ts:
+(pass) live lead channel > resolves "<folder>@<branch>/lead-<s6>" over the stale "<folder>@<branch>" entry [8.17ms]
+(pass) crew runs > workers become squad rows (state from pid/exit) and log lines become notes; Team differs from Channel [9.91ms]
+(pass) crew runs > dead pid: a killed worker (pid file, no exit file, run summary written) is not running [0.96ms]
+(pass) crew runs > dead pid: with no summary yet, a pid whose files went quiet past the stale window is dead, fresh is running [0.62ms]
+(pass) crew runs > a run is live up to exactly 30 minutes after its newest file, history one millisecond later [0.69ms]
+(pass) crew runs > a file the fs cannot stat counts as mtime 0 (oldest), not 1 [0.66ms]
+(pass) crew runs > log notes keep their kind, except an exit line, which carries none [1.06ms]
+(pass) crew runs > crewSig changes when irc/log.jsonl grows [0.67ms]
+
+mod/data/herdr.test.ts:
+(pass) parseHerdrStatus reads the real status envelope (no agents key) [3.48ms]
+(pass) parseHerdrStatus maps agent rows (agents() shape) and tolerates missing fields [0.97ms]
+(pass) parseHerdrStatus survives tracebacks, CLI errors and wrapped stdout [1.01ms]
+(pass) live members with fresh notes run; a working herdr pane runs too [2.22ms]
+(pass) an idle herdr pane reads idle [0.36ms]
+(pass) herdr agent_status blocked -> input, even past the stuck window [0.77ms]
+(pass) 15 min without a note -> stuck (with or without a herdr pane) [0.31ms]
+(pass) exit note -> finished (exit 0) / failed (nonzero) [0.44ms]
+(pass) registry exit_code settles the state even without a note [0.49ms]
+(pass) ended_at without any exit record -> dead [0.38ms]
+(pass) a live herdr pane outranks a stale exit note (revived worker) [0.68ms]
+(pass) persona derives from name or role prefix, else unknown [2.31ms]
+(pass) the lead is not a squad sprite [0.83ms]
+(pass) a member whose role is lead is not a squad sprite, whatever its name [0.25ms]
+(pass) a member with no pane and no note is parked, never running [0.16ms]
+(pass) task agents win same-name clashes and borrow colony pane ids and notes [1.07ms]
+(pass) unknown personas on task agents get derived, and task states pass through untouched [0.26ms]
+
+mod/data/live.test.ts:
+(pass) liveWorkers orders blocked, failed, working, done and drops the lead [4.04ms]
+(pass) host-finished worker is done even when its activity mood is blocked [0.69ms]
+(pass) liveWorkers carries startedAt, target, and a distinct parked state outside the working count [0.80ms]
+(pass) liveWorkers ranks every state strictly: blocked, failed, working, parked, done (no ties) [0.49ms]
+(pass) liveWorkers maps host and mood states [1.62ms]
+(pass) liveWorkers copies every activity field and falls back to since / now / null otherwise [1.09ms]
+(pass) workerWord: queued = dispatched and not listed; running = listed; done and failed from the outcome; waiting from the board [0.91ms]
+(pass) queuedMembers: an open roster member that is not the lead and not in the squad; ended members and listed ones are not queued [0.80ms]
+(pass) withOwnerStates attaches the owner state to the items whose owner is a listed worker or a queued member [0.39ms]
+(pass) callBuckets: 12 slots of 5s by default, oldest first, edges and out-of-range [0.80ms]
+
+mod/data/mux.test.ts:
+(pass) teamsOf: spawn-team records on the lead channel are status runs (live: team workers never reached the band) [3.73ms]
+(pass) ownRows keeps this session's workers once each; other sessions' claude-bg agents stay out [0.63ms]
+(pass) paneTool: last tool_use is in flight until a tool_result answers it; no call => {} [0.88ms]
+(pass) a team worker with no in-process events gets its lane tool and target from the squad row [1.63ms]
+(pass) parseMuxStatus maps rows to tagged squad entries; garbage => [] [0.48ms]
+(pass) paneExit: the stream-json result event ends the lane (worktree teams post exit notes to another root's board) [0.73ms]
+(pass) a tiled team (one window named after its session, workers are panes) reaches the band through its record members [0.40ms]
+(pass) mux workers reach liveWorkers with working/blocked/failed/done [0.32ms]
+
+mod/data/orchestration.golden.test.ts:
+(pass) orchestration golden > serialized output matches the fixture [5.35ms]
+
+mod/data/orchestration.test.ts:
+(pass) worktree merges > a finished worker with a merged worktree gets one merge row [5.30ms]
+(pass) worktree merges > no merge row while the worktree is unmerged, the worker still runs, or only a persona-named branch merged [1.24ms]
+(pass) finished workers and comms labels > host status completed beats a stale running mood; since freezes at the first-seen finish time, tool clears [0.97ms]
+(pass) finished workers and comms labels > a worker the host no longer lists is finished when its own turn.complete arrived or its squad row is finished [1.56ms]
+(pass) finished workers and comms labels > two spawns in the same millisecond keep both dispatch and join lines (defect C) [0.76ms]
+(pass) finished workers and comms labels > the report line skips a bare STATUS marker and keeps the first informative line (defect D) [0.65ms]
+(pass) finished workers and comms labels > the report line skips a `STEPS: n/n` bookkeeping line and takes the finding, prose or heading (live run) [0.37ms]
+(pass) finished workers and comms labels > the report line skips every ALL-CAPS bookkeeping label (FILES_CHANGED: none) and takes the finding [0.44ms]
+(pass) finished workers and comms labels > failed and killed hosts read failed [1.22ms]
+(pass) finished workers and comms labels > comms never carry a raw id: names map, then the spawn label, then `worker` [0.77ms]
+(pass) activity truth > startedAt is set once at first sight and survives tool start/end; since tracks the current tool [2.64ms]
+(pass) activity truth > tool end keeps the answered tool as lastTool and its target [0.30ms]
+(pass) activity truth > tool start records a target: file basename, else the first 40 chars of a command [0.38ms]
+(pass) activity truth > MCP tools take path, pattern and query as the target [0.26ms]
+(pass) reducer edges > onToolStart counts calls by exactly one, keeps the lead out of stage, and never un-reports a worker [1.99ms]
+(pass) reducer edges > detailOf Read ranges: offset and limit combine, alone, and at the value 1 [0.88ms]
+(pass) reducer edges > onStep: thinking when idle, untouched while a tool is in flight, since only moves on the change [0.53ms]
+(pass) reducer edges > onComplete adds tokens only when positive; an empty report reads failed or reported [0.77ms]
+(pass) reducer edges > parseWt keeps only objects with string agent and branch [0.61ms]
+(pass) reducer edges > a squad-only worker (a team pane) gets its tool, tokens, mood and pane-log fields; undefined ones are omitted [2.46ms]
+(pass) reducer edges > a board note longer than 300 chars is clipped to 300 with an ellipsis [0.53ms]
+(pass) reducer edges > a worker whose own turn reported (live stage) but has no finished squad row still gets its merge row [0.42ms]
+
+mod/data/personas.test.ts:
+(pass) parseFrontmatter > parses the real agents/implementer.md head [3.10ms]
+(pass) parseFrontmatter > keeps colons inside values and stops at the closing fence [0.87ms]
+(pass) parseFrontmatter > returns empty for files without a frontmatter fence [1.02ms]
+(pass) parseFrontmatter > strips quoted values and handles CRLF [0.75ms]
+(pass) loadPersonas > reads agents/*.md via FsLike, skips non-md, defaults missing fields [1.24ms]
+(pass) loadContract > maps the operating contract fields [0.96ms]
+(pass) loadContract > throws a contextual error on malformed JSON [0.75ms]
+(pass) personaColor > maps frontmatter colour names to dashboard-token hexes [0.58ms]
+(pass) personaColor > armada departments wear the subagent token, unknown goes idle [0.34ms]
+(pass) personaColor > resolves persona names, with or without the atlas: prefix [2.29ms]
+(pass) PERSONA_COLORS > every colour used in agents/*.md frontmatter is covered [0.88ms]
+(pass) ROUTING_MATRIX > copies the plan section 5 table [0.59ms]
+(pass) stableHue > is deterministic, hex-shaped, and distinct across dispatch names [0.42ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("") = #d6d85a [2.41ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("a") = #d85a84 [0.25ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("x") = #5ad879 [0.13ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("abc") = #715ad8 [0.11ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("zz") = #93d85a [0.15ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("impl-auth") = #d85a84 [0.31ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("verifier-ui") = #d85ab7 [0.12ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("explorer-map") = #ced85a [0.10ms]
+(pass) stableHue golden values (FNV-1a hash -> hue, S=0.62 L=0.6) > stableHue("dispatch-9") = #5ad87e [0.39ms]
+(pass) parseFrontmatter edge cases > accepts a one-character key and rejects a leading colon [0.32ms]
+(pass) parseFrontmatter edge cases > strips matching single and double quotes, leaves mismatched or lone quotes [1.73ms]
+(pass) parseFrontmatter edge cases > stops at the first non key:value line [0.28ms]
+(pass) parseFrontmatter edge cases > skips blank lines inside the head [0.23ms]
+(pass) loadContract defaults > fills every missing field with its default [0.64ms]
+(pass) loadContract defaults > keeps a custom itemPhasePrefix and defaults a phase without id [0.33ms]
+(pass) loadContract defaults > throws when the contract file is missing [0.27ms]
+(pass) loadPersonas skips > skips files without a name and honours explicit fields [0.41ms]
+
+mod/data/root.test.ts:
+(pass) boardRoot honours ATLAS_PROJECT_ROOT only when it holds .atlas [3.10ms]
+(pass) boardRoot walks ancestors to the nearest .atlas [0.65ms]
+(pass) boardRoot stops at the filesystem root and after 12 levels [1.06ms]
+(pass) leadChannelName leads with the sid6 name, then the folder@branch fallback [1.76ms]
+(pass) boardRoot prefers the git repo over an ancestor stray .atlas, like the hooks (atlas_paths.project_root) [0.64ms]
+(pass) boardRoot maps a linked worktree (.git file) to the main repo root [0.57ms]
+
+mod/data/todos.test.ts:
+(pass) readTodos > keeps session items, drops other sessions completed items [6.53ms]
+(pass) readTodos > keeps the open backlog (pending/in_progress) from any session [1.38ms]
+(pass) readTodos > drops archived even when session matches [0.88ms]
+(pass) readTodos > open items stay across sessions regardless of owner; archived never [0.91ms]
+(pass) readTodos > stamps phase: field wins over prefix; unknown prefix and no prefix stay unphased [0.71ms]
+(pass) readTodos > cache hit: same mtime returns cached items without re-reading [1.42ms]
+(pass) readTodos > changed mtime re-reads and refreshes the cache [1.04ms]
+(pass) readTodos > missing file => empty items, zero-mtime cache, and a stable second read [0.77ms]
+(pass) readTodos > corrupt JSON => empty items, cached by mtime, recovers when file changes [1.37ms]
+(pass) readTodos > corrupt JSON after a good read keeps the previous items and reports corrupt [1.15ms]
+(pass) readTodos > a file that exists but cannot be read keeps the previous items and reports unreadable [0.83ms]
+(pass) readTodos > a missing file is an empty board with no error [0.58ms]
+(pass) readTodos > corrupt on the very first read => empty items plus the error [0.56ms]
+(pass) readTodos > non-array items field => empty [0.61ms]
+(pass) computeCounts > totals overall and per phase [1.01ms]
+(pass) groupTodos > unphased item lands in unsorted, not ARCHIVE; dept + glyph from contract; live first [1.41ms]
+(pass) groupTodos > completed backlog of other sessions is not live [0.39ms]
+(pass) groupTodos > advisor / carried / manual-unphased rows never reach contract groups or progress; advisors collapse to one group [0.66ms]
+(pass) groupTodos > advisor notes list newest first by created_at, whatever the board order or session [0.31ms]
+(pass) groupTodos row shaping > clips content at 160 chars with an ellipsis and evidence at 200 [0.67ms]
+(pass) groupTodos row shaping > owner passes through, absent owner and empty evidence become null [0.45ms]
+(pass) groupTodos row shaping > origin is carried onto the row only when set [0.72ms]
+(pass) groupTodos row shaping > advisor ordering treats a missing created_at as 0, below a positive one [0.38ms]
+(pass) groupTodos row shaping > unknown contract phase gets an upper-cased dept and a dot glyph; completed advisors are dropped [0.31ms]
+(pass) groupTodos row shaping > in_progress sorts before pending before completed among live rows [0.47ms]
+(pass) isPlanItem / routeCounts / computeCounts with dispatch rows > isPlanItem is false only for dispatch-origin rows [0.29ms]
+(pass) isPlanItem / routeCounts / computeCounts with dispatch rows > computeCounts ignores dispatch rows [0.35ms]
+(pass) isPlanItem / routeCounts / computeCounts with dispatch rows > routeCounts counts every non-advisor group item except dispatch rows [0.69ms]
+(pass) DEPT > maps every phase to its department label [0.24ms]
+(pass) readTodos path and filters > strips trailing slashes from root and requires session match for completed rows [0.30ms]
+(pass) readTodos path and filters > a read failure after a successful stat yields an empty list [0.35ms]
+(pass) readTodos path and filters > a throwing stat is treated as a missing file [0.34ms]
+(pass) readTodos path and filters > a custom itemPhasePrefix is escaped and parsed [0.61ms]
+(pass) readTodos path and filters > a prefix without <phase> never stamps a phase [0.28ms]
+(pass) currentPhase without a stamped active phase > in_progress item lacking a phase falls through to the header [0.23ms]
+(pass) carried rows re-stamped to the current session (defect A) > a fresh session with only carried phased rows has no groups [0.17ms]
+(pass) carried rows re-stamped to the current session (defect A) > own session rows still count beside carried ones [0.46ms]
+(pass) currentPhase > the active todo wins over the reply header (live 12.2.0: rail read verify during a research task) [0.27ms]
+(pass) currentPhase > with no active todo the header phase is used [0.26ms]
+(pass) currentPhase > first in_progress item phase next [0.18ms]
+(pass) currentPhase > falls back to research with default source [0.57ms]
+(pass) planCounts > dispatch rows are excluded while a real plan exists [0.28ms]
+(pass) planCounts > only dispatch rows: they count, so the header matches the TODO tree [0.18ms]
+(pass) planCounts > empty board: 0 of 0 [0.14ms]
+(pass) D1 phantom rows leave the plan basis > D1: a placeholder stub row does not count: 2 of 3, not 2 of 4 [0.46ms]
+(pass) D1 phantom rows leave the plan basis > D1: another session's open row does not inflate this session's total [0.25ms]
+(pass) D1 phantom rows leave the plan basis > D1: an empty-content row is a stub too [0.15ms]
+(pass) D2 one count basis > D2: computeCounts, planCounts and todoCounts agree on a mixed board [0.64ms]
+(pass) D3 phase after completion > D3: every plan row completed => done, never research [0.33ms]
+(pass) D3 phase after completion > D3: a stale header cannot pull a finished run back [0.19ms]
+(pass) D3 phase after completion > D3/R4: nothing in progress, work pending, no header => the earliest open row's phase, not the stale last-completed one [0.24ms]
+(pass) D3 phase after completion > D3: dispatch and stub rows do not hold a finished run open [0.20ms]
+(pass) D9 one glyph path > D9: group glyphs go through contractGlyph, so the done glyph is one mark [0.68ms]
+(pass) regression fixes R3 R4 R7 (f4e6c29c verifier) > R3: a carried row completed this session counts as done; a still-pending carried row stays out [0.35ms]
+(pass) regression fixes R3 R4 R7 (f4e6c29c verifier) > R4: [verify completed, implement pending] reads implement; an in_progress row still wins [0.65ms]
+(pass) regression fixes R3 R4 R7 (f4e6c29c verifier) > R7: the groups-only count fallback scopes like planCounts: other sessions and pending carried rows leave, completed carried rows count [0.33ms]
+(pass) R8 plan rows written by `atlas_todo.py set` without --session > R8: they survive readTodos, count, and render as groups next to dispatch rows [0.60ms]
+
+mod/discipline.test.ts:
+(pass) reinforceLine > carries the contract template and phase, never the regex [10.99ms]
+(pass) reinforceLine > names the header in words when the contract carries no template [0.35ms]
+(pass) heavy inline meter > toasts once at the limit [6.53ms]
+(pass) heavy inline meter > light calls, subagent calls and a delegation never count [1.96ms]
+(pass) heavy inline meter > ATLAS_MOD=off and headless sessions stay silent [13.23ms]
+(pass) heavy inline meter > fails open: a throwing engine never breaks the tool, the answer or the prompt [1.89ms]
+(pass) contract drift + token growth > a main-loop answer without the header toasts; a good header and subagents do not [0.55ms]
+(pass) contract drift + token growth > toasts are rate-limited [5.64ms]
+(pass) contract drift + token growth > a turn that added many tokens inline without delegating toasts [0.66ms]
+(pass) prompt sharpening > vague prompt gets facts plus the reinforce line; text untouched [0.63ms]
+(pass) prompt sharpening > specific, slash, quoted and non-composer prompts get no facts [0.66ms]
+(pass) prompt sharpening > git failure fails open: the prompt still goes through [0.32ms]
+(pass) prompt sharpening > pure helpers [0.50ms]
+
+mod/gates.test.ts:
+(pass) parseGates > keeps optional detail/fix/error only when strings [3.45ms]
+(pass) parseGates > throws on bad shapes [1.25ms]
+(pass) headerGroup / gatesError / openGateCount > header states [0.83ms]
+(pass) headerGroup / gatesError / openGateCount > error group and count [1.25ms]
+
+mod/hud-surface.test.ts:
+(pass) TODO surface goldens (rev 4) > 120 columns rich=false equals the design golden [17.93ms]
+(pass) TODO surface goldens (rev 4) > 120 columns rich=true equals the design golden [2.84ms]
+(pass) TODO surface goldens (rev 4) > 80 columns rich=false equals the design golden [3.74ms]
+(pass) TODO surface goldens (rev 4) > 40 columns rich=false equals the design golden [0.69ms]
+(pass) TODO surface goldens (rev 4) > 60 columns uses the 40 column form under a 60 column ribbon [4.54ms]
+(pass) TODO surface goldens (rev 4) > completed rows are drawn as done: the done glyph, the word and a struck label [5.01ms]
+(pass) TODO surface goldens (rev 4) > header counts equal the row sums [1.49ms]
+(pass) TODO surface goldens (rev 4) > columns: label at 4, state at 30, meta at 44; at most one chip per row; no row wider than the surface [16.57ms]
+(pass) SUBAGENTS surface goldens (rev 4) > 120 columns rich=false equals the design golden [6.07ms]
+(pass) SUBAGENTS surface goldens (rev 4) > 120 columns rich=true equals the design golden [1.97ms]
+(pass) SUBAGENTS surface goldens (rev 4) > 80 columns rich=false equals the design golden [4.51ms]
+(pass) SUBAGENTS surface goldens (rev 4) > A4: 80 to 99 columns (a wide terminal with the pane docked) show model, task and last line, as 104 does [25.33ms]
+(pass) SUBAGENTS surface goldens (rev 4) > 60 and 40 columns draw no Subagents block (the band counts carry it) [0.62ms]
+(pass) SUBAGENTS surface goldens (rev 4) > header counts equal the row sums [1.49ms]
+(pass) SUBAGENTS surface goldens (rev 4) > A3: one count order everywhere, attention first (the shared COUNT_ORDER) [0.49ms]
+(pass) SUBAGENTS surface goldens (rev 4) > a long name widens the name column instead of being cut, up to 28 cells [1.23ms]
+(pass) row budget never hides rows silently > 45 rows tall: a 30 item plan with 4 agents shows every row [12.31ms]
+(pass) row budget never hides rows silently > shown rows plus the counted hidden rows always equal the plan, at every height [610.84ms]
+(pass) row budget never hides rows silently > windowRows keeps open work first, then the queue, in plan order [4.74ms]
+(pass) row budget never hides rows silently > a running agent keeps its row before the plan keeps its last row [7.59ms]
+(pass) row budget never hides rows silently > one row: the Subagents ribbon when an agent runs, else the TODO ribbon [3.18ms]
+(pass) SUBAGENTS task column (critique-3 change 8) > every owned id is listed; more than fit read as a count [5.16ms]
+(pass) SUBAGENTS task column (critique-3 change 8) > the full form names its columns in the spacer row: AGENT STATE MODEL TASK LAST (rich: CTX instead of TASK) [0.77ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > sortAgents puts running, blocked, failed, waiting, queued, done in that order and keeps input order inside a state [0.36ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > windowRows with no slot shows nothing and counts every row hidden; one slot is only the overflow row [0.80ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > windowRows ranks blocked ahead of failed when slots run out [0.27ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > todoRows draws nothing for no rows, and a ribbon plus the row for exactly one [0.29ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > the focus marker is a bold accent triangle (a bold > in ASCII); an unfocused row has a plain blank [0.45ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > the agent name column stops growing at 29 cells: a longer name is clipped and the state word starts at column 33 [0.67ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > stack puts a blank row between the blocks only when spacers is on and both blocks exist [0.62ms]
+(pass) mutation kills (round 2): order, slots, focus mark, name column cap, stacking > fitStack at two rows with two agents ends on the two bare ribbons (no spacer row to push it to one) [3.38ms]
+
+mod/hud.test.ts:
+(pass) hud goldens through the Claude Code adapter (rev 4) > TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens [16.69ms]
+(pass) hud goldens through the Claude Code adapter (rev 4) > SUBAGENTS at 120, 120 rich and 80 equals the design goldens; 60 and 40 draw none [8.32ms]
+(pass) hud goldens through the Claude Code adapter (rev 4) > both blocks stack as the TODO golden, a blank row, then the SUBAGENTS golden [2.33ms]
+(pass) hud goldens through the Claude Code adapter (rev 4) > every row is padded to the width and none is wider [7.12ms]
+(pass) hud goldens through the Claude Code adapter (rev 4) > the rows carry the rev 4 panel background, never the legacy #11111b [2.47ms]
+(pass) hud goldens through the Claude Code adapter (rev 4) > NO_COLOR keeps the words and drops every colour [2.28ms]
+(pass) hud goldens through the Claude Code adapter (rev 4) > ASCII mode draws no glyph outside ASCII except the box rule [2.45ms]
+(pass) L1: a completed plan row is shown as completed > the done row stays in the tree with the done glyph, the word and a struck label [0.96ms]
+(pass) L1: a completed plan row is shown as completed > when every row is done they all show, and the header says so [0.81ms]
+(pass) L1: a completed plan row is shown as completed > a plan row that completes appears in the next render with state done [0.46ms]
+(pass) L2: the plan is not cut to "N more todos not shown" > a 12 row plan at a 45 row height shows all 12 rows and no more-todos row [1.86ms]
+(pass) L2: the plan is not cut to "N more todos not shown" > under a tight budget the hidden rows are counted exactly, never hidden silently [29.76ms]
+(pass) L2: the plan is not cut to "N more todos not shown" > the ribbon count stays the whole plan at every height [30.65ms]
+(pass) L11: agents are named > the dispatch name wins [0.82ms]
+(pass) L11: agents are named > a host id falls back to the description prefix, then the role [0.55ms]
+(pass) L11: agents are named > A5: a type-plus-hex name (explorer-3fa9c1) or a bare 6-hex id reads as the description name, else type and task; the id is the last resort [0.65ms]
+(pass) L11: agents are named > A5: an agent renamed for display still owns the plan rows its raw name owns [1.22ms]
+(pass) L11: agents are named > hudAgents carries the name through, and the block shows it [1.07ms]
+(pass) the Subagents block is back on Claude Code > a running agent draws the SUBAGENTS ribbon with its name, state, model and last action [0.78ms]
+(pass) the Subagents block is back on Claude Code > with nothing running the block is absent, even with finished agents [0.36ms]
+(pass) the Subagents block is back on Claude Code > with nothing running, agents that finished within the linger window still show as done; older ones are gone [1.23ms]
+(pass) the Subagents block is back on Claude Code > with nothing running, a failed agent stays however long ago it failed [0.86ms]
+(pass) the Subagents block is back on Claude Code > a finished agent shows beside a running one, and the header counts every row [0.96ms]
+(pass) the Subagents block is back on Claude Code > the T column is the position of the plan row the agent owns [1.06ms]
+(pass) the Subagents block is back on Claude Code > shortModel drops the provider and claude- prefix and guesses nothing [0.50ms]
+(pass) R5: no hardcoded check mark, bullet or ellipsis > no ✓ • … ☐ ☑ ⏳ in any state [38.23ms]
+(pass) R5: no hardcoded check mark, bullet or ellipsis > done rows use the state glyph ● [0.69ms]
+(pass) header counts equal the row sums > TODO and SUBAGENTS counts match the rows of the world [1.93ms]
+(pass) hud row budget > every budget is respected [125.28ms]
+(pass) hud row budget > a running agent keeps its row before the plan keeps its last row [21.77ms]
+(pass) hud row budget > one row is the Subagents ribbon while an agent runs, else the TODO ribbon [5.47ms]
+(pass) hud row budget > empty input -> no rows; dispatch rows are not plan rows [0.68ms]
+(pass) hud row budget > hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows [1.28ms]
+(pass) hud counts > computeCounts counts the plan only: 2/11 with two dispatch rows present [0.72ms]
+(pass) hud counts > routeCounts counts the same plan from the groups (label and unphased items included, dispatch rows not) [0.49ms]
+(pass) inline renderer budget (viewport less the rows below the AbovePrompt slot) > rows below the slot: prompt 3, status line, mode line and blank 2, the blank row above the prompt 1, agent list main + one per running agent [0.24ms]
+(pass) inline renderer budget (viewport less the rows below the AbovePrompt slot) > fullscreen and a missing viewport keep the slot as reported; inline takes the smaller of slot and viewport less below [0.25ms]
+(pass) inline renderer budget (viewport less the rows below the AbovePrompt slot) > 30 rows, 1 running agent, 6-item plan: the blank row above the prompt is counted so the TODO ribbon is not scrolled off [1.55ms]
+(pass) inline renderer budget (viewport less the rows below the AbovePrompt slot) > 24 and 30 rows with 2 running agents and a long plan: the HUD fits and keeps the TODO, SUBAGENTS and both agents [5.89ms]
+(pass) mutation kills (round 2): queued names, the elapsed clock and the Subagents ribbon probe > hudAgents lists a dispatched-but-unlisted worker once, and never twice when the host already lists it [0.46ms]
+(pass) mutation kills (round 2): queued names, the elapsed clock and the Subagents ribbon probe > the running todo shows elapsed mm:ss (zero padded) and its estimate [0.33ms]
+(pass) mutation kills (round 2): queued names, the elapsed clock and the Subagents ribbon probe > hudListsAgents is true only when a SUBAGENTS ribbon has a row under it [0.30ms]
+
+mod/intents.test.ts:
+(pass) argv head invariant > every cli intent begins python3 + <pluginRoot>/scripts/<script>.py [4.18ms]
+(pass) exact argv per intent variant > todo.phase -> atlas_todo status --id --status --root [1.28ms]
+(pass) exact argv per intent variant > todo.claim -> atlas_todo claim --id --owner --root [0.78ms]
+(pass) exact argv per intent variant > todo.complete -> atlas_todo complete --id --evidence --root [0.34ms]
+(pass) exact argv per intent variant > note -> atlas_todo note --root --channel --owner --to + positional text [0.37ms]
+(pass) exact argv per intent variant > steer -> atlas_herdr prompt --pane --text [0.26ms]
+(pass) exact argv per intent variant > stop -> atlas_mux kill --run [0.24ms]
+(pass) ui intents > tab accepts every contract tab and returns kind ui [0.60ms]
+(pass) ui intents > tab rejects unknown tabs [0.25ms]
+(pass) ui intents > inspect returns kind ui with the agent name [1.34ms]
+(pass) injection attempts rejected > spaces, ;, $(), backticks, newlines in ids/owner/to/agent/paneId/run are rejected [4.56ms]
+(pass) injection attempts rejected > injection payloads in the channel are rejected [0.81ms]
+(pass) injection attempts rejected > null channel is rejected [0.22ms]
+(pass) injection attempts rejected > real channel format <name>@<branch>/lead-<id> is accepted [0.16ms]
+(pass) text caps and empties > 2000 chars accepted, 2001 rejected [0.80ms]
+(pass) text caps and empties > empty and whitespace-only text rejected [1.87ms]
+(pass) text caps and empties > non-string fields rejected [1.29ms]
+(pass) validation edges > stop without run rejected [0.28ms]
+(pass) validation edges > unknown t rejected [0.57ms]
+(pass) validation edges > unknown phase rejected [0.22ms]
+(pass) validation edges > missing ids/owner/to/agent/paneId rejected [0.69ms]
+(pass) rejection messages quote at most the first 32 characters > bad owner [0.55ms]
+(pass) rejection messages quote at most the first 32 characters > bad to [0.22ms]
+(pass) rejection messages quote at most the first 32 characters > bad agent [0.17ms]
+(pass) rejection messages quote at most the first 32 characters > bad paneId [0.18ms]
+(pass) rejection messages quote at most the first 32 characters > bad phase [0.94ms]
+(pass) rejection messages quote at most the first 32 characters > bad id [0.26ms]
+
+mod/live-channel.test.ts:
+(pass) the channel tab names the repo folder channel and its one member from the registry the script wrote [699.13ms]
+
+mod/live-layout.test.ts:
+(pass) 1. titles use the width the row has > HUD TODO at 88 columns: every title shows whole, the state word has its column [8.05ms]
+(pass) 1. titles use the width the row has > HUD TODO at 104 columns: every title shows whole, the state word has its column [3.92ms]
+(pass) 1. titles use the width the row has > HUD TODO at 138 columns: every title shows whole, the state word has its column [5.00ms]
+(pass) 1. titles use the width the row has > a title that cannot fit is cut with ... and the state word stays whole [1.60ms]
+(pass) 1. titles use the width the row has > the pane route tab at 55 columns shows whole titles, owners aside [6.02ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 55, route lit: one strip row, the rule under the lit label [1.54ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 55, team lit: one strip row, the rule under the lit label [1.10ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 55, channel lit: one strip row, the rule under the lit label [1.29ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 55, gates lit: one strip row, the rule under the lit label [1.37ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 55, core lit: one strip row, the rule under the lit label [0.85ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 43, route lit: one strip row, the rule under the lit label [0.73ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 43, team lit: one strip row, the rule under the lit label [0.57ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 43, channel lit: one strip row, the rule under the lit label [0.51ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 43, gates lit: one strip row, the rule under the lit label [0.63ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 43, core lit: one strip row, the rule under the lit label [0.49ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 37, route lit: one strip row, the rule under the lit label [0.85ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 37, team lit: one strip row, the rule under the lit label [0.59ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 37, channel lit: one strip row, the rule under the lit label [0.60ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 37, gates lit: one strip row, the rule under the lit label [0.53ms]
+(pass) 2. the tab strip fits the pane and the rule sits under the lit tab > pane 37, core lit: one strip row, the rule under the lit label [0.64ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > HUD at 88: every row is 88 cells [13.76ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > HUD at 104: every row is 104 cells [16.42ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > HUD at 138: every row is 138 cells [16.72ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel route at 55: every painted row is 55 cells [15.43ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel team at 55: every painted row is 55 cells [26.80ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel channel at 55: every painted row is 55 cells [3.22ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel gates at 55: every painted row is 55 cells [2.50ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel core at 55: every painted row is 55 cells [1.54ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel route at 43: every painted row is 43 cells [3.51ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel team at 43: every painted row is 43 cells [2.30ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel channel at 43: every painted row is 43 cells [2.37ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel gates at 43: every painted row is 43 cells [2.00ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel core at 43: every painted row is 43 cells [1.86ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel route at 37: every painted row is 37 cells [4.22ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel team at 37: every painted row is 37 cells [4.63ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel channel at 37: every painted row is 37 cells [1.81ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel gates at 37: every painted row is 37 cells [2.27ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > side panel core at 37: every painted row is 37 cells [1.08ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > a wide character in a title (CJK, emoji) counts two cells and never overflows a slot [3.42ms]
+(pass) 3. every row of every surface is exactly its slot wide in terminal cells > the worker card is a closed box: every row has the same cell width [2.44ms]
+(pass) 3b. the band rows fit their slot > band at 88, idle and running: no row is wider than the slot [14.23ms]
+(pass) 3b. the band rows fit their slot > band at 104, idle and running: no row is wider than the slot [4.80ms]
+(pass) 3b. the band rows fit their slot > band at 138, idle and running: no row is wider than the slot [3.52ms]
+(pass) 4. no fold marker > no HUD or band row carries a [-] or [+] marker (the host draws its own beside the first row) [4.01ms]
+(pass) 5. the plan row budget and the overflow row > five todos and three agents: the compact form holds all five plan rows [2.37ms]
+(pass) 5. the plan row budget and the overflow row > when rows run short the cut says how many are not shown, in plain words, with no ellipsis [2.64ms]
+(pass) 5. the plan row budget and the overflow row > a plan longer than five still keeps its window and counts the rest [2.01ms]
+(pass) 5b. A1: the band blanks go to the plan before the plan is folded > the band at the live budget spends rows on blanks while the plan is cut [3.85ms]
+(pass) 5b. A1: the band blanks go to the plan before the plan is folded > reclaimBlanks shows every plan row once the blanks are handed over, and the band loses only blanks [8.16ms]
+(pass) 5b. A1: the band blanks go to the plan before the plan is folded > a HUD that already fits, or a band with no blanks, is returned as it was [8.74ms]
+(pass) 6. the band footer says it in plain words > idle band: no header n/m or evidence n/m tally [2.20ms]
+
+mod/live_fixture.test.ts:
+(pass) busySnap > NOW is the fixture epoch [3.10ms]
+(pass) busySnap > session scaffolding comes from the idle base [1.89ms]
+(pass) busySnap > phase and counts [1.13ms]
+(pass) busySnap > squad: a running explorer, an input-blocked implementer, a failed runner, all task-sourced [0.38ms]
+(pass) busySnap > activity: per-agent tool, mood, counters and a 42s-old start [1.10ms]
+(pass) busySnap > comms are ordered oldest to newest with their kinds [0.37ms]
+(pass) busySnap > todo groups: an implement group with a finished non-live item and an unsorted group [0.68ms]
+(pass) busySnap > overrides win, everything else is kept; calls do not share state [1.63ms]
+
+mod/mission-layout.test.ts:
+(pass) mission-layout: bold is opt-in > the muted `todo ` label is not bold; the phase name is [5.94ms]
+(pass) mission-layout: A3 the count order is the shared COUNT_ORDER > running, failed, waiting, queued: waiting reads before queued on every form [1.38ms]
+(pass) mission-layout: A2 the header never reads idle or all ok beside a failing check > idle with a failing check reads blocked, in every width form [3.68ms]
+(pass) mission-layout: A2 the header never reads idle or all ok beside a failing check > the rich band says blocked too [1.07ms]
+(pass) mission-layout: A2 the header never reads idle or all ok beside a failing check > last run does not say all ok while a check fails; it does when none fails [8.70ms]
+(pass) mission-layout: failure count on the band > while a worker runs, the last wave's failures are not counted; with nothing listed failed there is no failed count [2.23ms]
+(pass) mission-layout: failure count on the band > idle with no last wave shows no failure; idle with a last wave of 2 failures counts them [1.71ms]
+(pass) mission-layout: failure count on the band > a finished-only worker list is idle [0.93ms]
+(pass) mission-layout: the lit phase > the first phase is 1/3; a phase off the rail still lights the first, never the second [1.40ms]
+(pass) mission-layout: worker rows > a thinking worker draws the muted spinner frame, not a blank [2.14ms]
+(pass) mission-layout: worker rows > the name column is the longest name (at least 8) plus two cells: the activity starts at a fixed cell [3.99ms]
+(pass) mission-layout: worker rows > the role column joins at 100 columns, not before [1.22ms]
+(pass) mission-layout: worker rows > attention first: failed, waiting, running, thinking, queued, finished; stable inside a state [6.12ms]
+(pass) mission-layout: worker rows > a waiting worker outranks a running one even when it comes later [1.16ms]
+(pass) mission-layout: the footer > no checks and no keys draws no footer row at all [1.22ms]
+(pass) mission-layout: the footer > the footer is flagged `keys` only when the band reserves key cells for it [4.93ms]
+(pass) mission-layout: the footer > keys alone (no checks) still make a footer row [0.63ms]
+(pass) mission-layout: the row budget > planRows: two slots with more workers than slots shows one lane and the "+N more" row [0.61ms]
+(pass) mission-layout: the row budget > three rows while running is already more than the band alone [3.86ms]
+(pass) mission-layout: the row budget > an expanded board that leaves under four rows below the band takes no slot [1.85ms]
+(pass) mission-layout: the row budget > 80 columns is the first width that shows more than the band [2.61ms]
+
+mod/notify.test.ts:
+(pass) diffSnapshots > null prev yields no events (first sight) [3.23ms]
+(pass) diffSnapshots > no change yields no events [0.73ms]
+(pass) diffSnapshots > agent running -> finished toasts complete [0.67ms]
+(pass) diffSnapshots > agent running -> failed toasts fail, and stays put (no repeat) [1.00ms]
+(pass) diffSnapshots > new working agent toasts spawn; a new already-finished one is not a completion [0.38ms]
+(pass) diffSnapshots > agent turning blocked toasts blocked [0.25ms]
+(pass) diffSnapshots > new note to lead yields sender + 60-char preview; non-lead notes ignored [0.51ms]
+(pass) diffSnapshots > note to human counts as addressed to the human [1.38ms]
+(pass) diffSnapshots > todo becomes completed once [0.75ms]
+(pass) diffSnapshots > phase advance yields phase event with new phase [0.33ms]
+(pass) diffSnapshots > multiple events at once [0.73ms]
+(pass) diffSnapshots > malformed snapshots never throw [0.73ms]
+(pass) nextStepSuggestion > blocked worker wins: reply <name>: <lastLine> [0.39ms]
+(pass) nextStepSuggestion > first in_progress todo, prefix stripped, phase falls back to snapshot phase [0.58ms]
+(pass) nextStepSuggestion > null when nothing blocked or in progress [0.29ms]
+(pass) registerNotify > toasts state, name and fact for a failed worker and makes the single suggestion [2.57ms]
+(pass) diffSnapshots details > a completed worker carries its age and last line [0.59ms]
+(pass) diffSnapshots details > a one millisecond age is "0s", a zero or negative one is blank [0.35ms]
+(pass) diffSnapshots details > failed and blocked events carry the worker's last line [0.34ms]
+(pass) registerNotify toasts > every event kind has its toast [2.18ms]
+(pass) registerNotify toasts > trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare [0.84ms]
+(pass) registerNotify toasts > mergeToasts: one passes through, many fold into one row of at most TOAST_MAX [1.35ms]
+(pass) registerNotify toasts > B5: the toast fact comes from structured data (duration, state), never from the agent's last line [1.35ms]
+(pass) registerNotify toasts > B5: a failed or blocked worker toast carries no free text either [0.55ms]
+(pass) registerNotify toasts > a phase advance plays the sound only when sound is on [0.61ms]
+(pass) registerNotify toasts > the hook hands the event on to the next handler and returns its result [0.41ms]
+(pass) registerNotify toasts > a hook that meets a broken snapshot still passes the turn on [0.32ms]
+
+mod/paint.test.ts:
+(pass) seg and chip > seg defaults to the panel background, no colour, not bold [2.96ms]
+(pass) seg and chip > seg takes colour, background and bold as given [0.50ms]
+(pass) seg and chip > chip pads the text with one space each side, dark text, bold, on the given background [0.50ms]
+(pass) padRow > pads with panel spaces up to exactly cols cells [0.59ms]
+(pass) padRow > uses the given background for the padding [0.28ms]
+(pass) padRow > measures terminal cells, not code units: a wide glyph counts as two [0.28ms]
+(pass) padRow > a row that already fills (or overflows) cols is returned untouched [0.77ms]
+(pass) padRow > measures across all the runs [0.28ms]
+(pass) merge > adjacent runs with the same colour, background and weight fold into one [1.02ms]
+(pass) merge > a change of colour, background or bold breaks the run [0.36ms]
+(pass) merge > only adjacent runs fold: A B A stays three runs [0.35ms]
+(pass) merge > does not mutate its input [0.17ms]
+(pass) merge > empty in, empty out [0.22ms]
+
+mod/pane/chrome.test.ts:
+(pass) ageStr > under 45 seconds reads "now" (the boundary itself reads seconds) [2.72ms]
+(pass) ageStr > seconds up to the first minute [0.48ms]
+(pass) ageStr > minutes carry the leftover seconds, unpadded [0.60ms]
+(pass) ageStr > hours pad the minutes to two digits and drop seconds [1.20ms]
+(pass) scrub > cuts a bare 17-hex agent id to six characters [0.30ms]
+(pass) scrub > scrubs every id in the text [0.20ms]
+(pass) scrub > ids of any other length, or inside longer words, are left alone [0.31ms]
+(pass) scrub > uppercase hex is not an agent id [0.18ms]
+(pass) scrub > text without ids is returned as is [0.22ms]
+
+mod/pane/sidebar-model.edges.test.ts:
+(pass) worker detail per state > running reads the tool and target, the bare tool, the last tool or plain thinking [10.33ms]
+(pass) worker detail per state > failed and done read the last line on one line, else the state word [5.48ms]
+(pass) worker detail per state > a blocked worker reads waiting for the lead, a parked one reads parked, whatever their last lines say [0.70ms]
+(pass) worker age and order > secs is the whole seconds since the worker started, and never negative [0.59ms]
+(pass) worker age and order > running, waiting, failed, queued (a parked worker, then a dispatched member the host does not list), then done [0.56ms]
+(pass) todos from the board groups > a failed owner fails the item and shows the owner line [0.37ms]
+(pass) todos from the board groups > a waiting owner blocks the item and the detail says why [5.13ms]
+(pass) todos from the board groups > a running owner, no owner, or a finished item carries no detail [0.44ms]
+(pass) todos from the board groups > evidence passes through, and an item without evidence reads null [0.56ms]
+(pass) defaults > a model without a tick reads tick 0 [0.34ms]
+
+mod/pane/sidebar-model.test.ts:
+(pass) team rows from the live snapshot > the lead row comes first, the workers follow, the lead tally closes [6.39ms]
+(pass) team rows from the live snapshot > an idle lead reads waiting and a roster member the squad does not know reads queued [1.25ms]
+(pass) team rows from the live snapshot > L13: a state word comes from evidence, never a clock: a host-listed worker is running at any age, a dispatched member the host does not list is queued [3.20ms]
+(pass) team rows from the live snapshot > a parked worker draws a queued row without throwing [1.41ms]
+(pass) team rows from the live snapshot > a stale resting member and another session lead are not on the roster [0.64ms]
+(pass) channel tab from the live snapshot > unread counts the notes after the lead last spoke, and every note when it never spoke [7.72ms]
+(pass) channel tab from the live snapshot > a missing channel name reads #channel; a note with a bad timestamp reads --:--; a good one reads hh:mm [3.07ms]
+(pass) gate text > a 17-hex agent id in a gate title, label, detail, fix or error shows its first 6 characters [2.59ms]
+(pass) gate text > a 16-hex or 18-hex run is left alone [0.81ms]
+(pass) message input row > the label names the recipient, and defaults to the lead [4.37ms]
+(pass) message input row > typing calls draftChange and Enter calls send with the text [1.10ms]
+
+mod/pane/sidebar-roster.test.ts:
+(pass) roster (mates) > the lead is always first and other sessions' leads are never teammates [3.90ms]
+(pass) roster (mates) > ended members, members already in the squad and duplicate names are left out [0.43ms]
+(pass) roster (mates) > a stale resting member drops off; recent, running and note-less ones stay [0.45ms]
+(pass) roster (mates) > the cut-off is strictly over two hours [0.51ms]
+(pass) roster (mates) > lead row: running when anyone works or it holds a tool, else idle; text is the tool [0.78ms]
+(pass) roster (mates) > worker text: own entry text, else tool, else working (running) or the state [0.46ms]
+(pass) roster (mates) > mood: the activity mood wins, else the state maps, else idle; since only while a tool runs [0.72ms]
+(pass) roster (mates) > leadMood is the lead row's mood, not the next teammate's [0.42ms]
+(pass) roster (mates) > line: lastLine, else the member's own latest comm, else its state; scrubbed, one line, 160 cells [0.57ms]
+(pass) roster (mates) > a lead-named member never speaks with the lead's channel traffic [0.20ms]
+(pass) team summary > counts only running or spawning teammates, not the lead [0.52ms]
+
+mod/pane/sidebar.edges.test.ts:
+(pass) pane box > the width is the columns less the border, but never under 10 [10.09ms]
+(pass) pane box > the pane and every strip row are columns and rows that do not shrink, on the panel colour [1.80ms]
+(pass) the rule under the lit tab > only the row that holds the lit tab is ruled, at every width and for every view [31.68ms]
+(pass) the blank row under the strip > there from 100 columns of pane width (101 host columns), not before [2.19ms]
+
+mod/pane/sidebar.golden.test.ts:
+(pass) sidebar golden > serialized trees match the fixture [62.91ms]
+(pass) sidebar golden text > every tab opens on the ribbon, a blank row, the strip with six labelled tabs [4.88ms]
+(pass) sidebar golden text > the lit tab is ruled by a heavy line under its label only [2.44ms]
+(pass) sidebar golden text > route: phase, gates, todo gauge with N of M, agents in words [2.25ms]
+(pass) sidebar golden text > route lists every plan task with its state word, not only the current phase [1.97ms]
+(pass) sidebar golden text > route with a tick turns the spinner glyph [4.35ms]
+(pass) sidebar golden text > team: the lead row first, then every subagent by name with its state word, running first [1.09ms]
+(pass) sidebar golden text > team at 38 columns keeps the keys, drops words from the right on one row and keeps name and state [1.49ms]
+(pass) sidebar golden text > 30 columns still fits: no row is wider than the pane [2.89ms]
+(pass) sidebar golden text > 120 columns widens the team rows to model and task columns [0.94ms]
+(pass) sidebar golden text > channel: people and unread counted in words [0.55ms]
+(pass) sidebar golden text > gates: group rows with failing lines in words, copy fix when expanded [2.61ms]
+(pass) sidebar golden text > core: the empty ledger reads (no state) rather than a blank pane [0.74ms]
+(pass) sidebar golden text > an empty squad reads as nothing running, not a blank pane [0.49ms]
+(pass) sidebar golden text > no legacy glyphs: no check, bullet, ellipsis or spinner braille in any case [12.03ms]
+
+mod/pane/sidebar.test.ts:
+(pass) sidebar shell > five plain hotkey tabs r t c g k with plain labels, no glyphs [11.88ms]
+(pass) sidebar shell > the board key o is always in the strip (the same six tabs as omp); it presses only when the board is wired [8.28ms]
+(pass) sidebar shell > the lit tab is bold text, the others muted; pressing a tab sets that view [2.89ms]
+(pass) sidebar shell > L21: at 110 columns the docked pane is 38 cells inner and no strip row overflows it [4.80ms]
+(pass) sidebar shell > L21: stripRows keeps every tab, in order, and wraps instead of overflowing [1.19ms]
+(pass) sidebar shell > L21: the strip takes a shorter label form in a narrow pane and rules the lit tab under its drawn label [2.10ms]
+(pass) sidebar shell > the panel paints the rev 4 panel token, never the legacy #11111b [0.89ms]
+(pass) sidebar shell > plain column: no borderStyle at any width (the host pane draws the one frame) [1.90ms]
+(pass) sidebar shell > the root is exactly as wide as the pane minus the host border cell [3.00ms]
+(pass) sidebar shell > exactly one view body under the strip, and no advisor section [6.10ms]
+(pass) sidebar interactions > pressing a subagent row selects it as the recipient [0.97ms]
+(pass) sidebar interactions > pressing a gate group toggles it [0.73ms]
+
+mod/panel-layout.edges.test.ts:
+(pass) team tab focus mark > without a recipient the first running worker is marked [14.44ms]
+(pass) team tab focus mark > a recipient that is not on the roster falls back to the first running worker [1.13ms]
+(pass) team tab focus mark > a recipient on the roster takes the mark, and only it [0.80ms]
+(pass) team tab focus mark > with nobody running and no recipient, nobody is marked [0.60ms]
+(pass) channel log word column > a lone blocked, handoff or done note brings the word column; a lone plain note has none [9.18ms]
+(pass) channel log word column > a plain note beside a marked one is padded to the word column [0.80ms]
+(pass) wrap > is two lines by default and the second is cut with `...` when text is left over [0.87ms]
+(pass) core tab dispatch rows > the name column is capped at 16 cells, cut in the middle [4.60ms]
+(pass) core tab dispatch rows > a detail is whole at every width: it fits after the row or wraps under it, and is never clipped by one cell [77.53ms]
+
+mod/panel-layout.test.ts:
+(pass) side panel design goldens > route head at 120 equals the design sidepanel golden [11.35ms]
+(pass) side panel design goldens > team body at 120 equals the design subagents golden [2.49ms]
+(pass) side panel design goldens > route head at 80 equals the design sidepanel golden [2.24ms]
+(pass) side panel design goldens > team body at 80 equals the design subagents golden [1.52ms]
+(pass) side panel design goldens > the team ribbon carries the worker counts with their words [1.70ms]
+(pass) side panel design goldens > route at 120 equals its golden [2.78ms]
+(pass) side panel design goldens > route at 80 equals its golden [1.99ms]
+(pass) side panel design goldens > route at 56 equals its golden [2.14ms]
+(pass) side panel design goldens > team at 120 equals its golden [1.19ms]
+(pass) side panel design goldens > team at 80 equals its golden [0.88ms]
+(pass) side panel design goldens > team at 56 equals its golden [0.86ms]
+(pass) side panel design goldens > channel at 120 equals its golden [1.65ms]
+(pass) side panel design goldens > channel at 80 equals its golden [1.02ms]
+(pass) side panel design goldens > channel at 56 equals its golden [0.76ms]
+(pass) side panel design goldens > gates at 120 equals its golden [1.18ms]
+(pass) side panel design goldens > gates at 80 equals its golden [0.70ms]
+(pass) side panel design goldens > gates at 56 equals its golden [0.68ms]
+(pass) side panel design goldens > core at 120 equals its golden [3.29ms]
+(pass) side panel design goldens > core at 80 equals its golden [4.06ms]
+(pass) side panel design goldens > core at 56 equals its golden [6.65ms]
+(pass) tab strip > lists r: route t: team c: channel g: gates k: core o: board; the lit tab is ruled and bold [4.66ms]
+(pass) tab strip > L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (it wraps) [54.77ms]
+(pass) route tab > L17: plan items show while three explorers run, whatever phase they belong to [4.07ms]
+(pass) route tab > L17: with no plan but running workers, the route lists them instead of saying nothing is planned [3.68ms]
+(pass) route tab > an empty board and nobody running is the design empty state [0.61ms]
+(pass) route tab > an open task row shows its evidence line, or says there is none [4.63ms]
+(pass) route tab > a plan longer than the row budget folds into a counted more row [1.38ms]
+(pass) route tab > names that do not fit the gates row fold to a labelled count [1.21ms]
+(pass) team tab lists the subagents by name and state > every worker row names the worker and one of the six state words [3.85ms]
+(pass) team tab lists the subagents by name and state > running first, then failed, queued, done (as the design lists them) [3.02ms]
+(pass) team tab lists the subagents by name and state > the recipient takes the focus marker; without one the first running worker does [1.05ms]
+(pass) team tab lists the subagents by name and state > an open worker row adds what it is doing and how long it has run [1.01ms]
+(pass) team tab lists the subagents by name and state > nobody dispatched is the design empty state [0.40ms]
+(pass) team tab lists the subagents by name and state > rows are pressable and select the worker [2.11ms]
+(pass) gates tab > a group says how many fail in words and shows the first fix [0.70ms]
+(pass) gates tab > D8: a long tail wraps onto muted rows and is never cut mid-word [4.94ms]
+(pass) gates tab > an open group lists its lines; an open failing line shows the fix and copies it on a second press [0.71ms]
+(pass) gates tab > an unavailable source says so [0.61ms]
+(pass) gates tab > no gate data is the design empty state [0.34ms]
+(pass) core tab > contract, verdicts, offload and route sections with words on every figure [3.44ms]
+(pass) core tab > L16: three explorers on a one-seat route read ran 3 / planned 1 and drift, not 1x as planned [2.45ms]
+(pass) core tab > an empty ledger reads no verdicts yet, never 0 verified [1.87ms]
+(pass) core tab > an open verdict row shows which claim it checked and its evidence [1.51ms]
+(pass) core tab > no core data is the design empty state [0.41ms]
+(pass) channel tab > header counts people and unread in words; blocked and handoff notes carry the state glyph and word [0.88ms]
+(pass) channel tab > the log keeps the newest rows - 4 notes [1.70ms]
+(pass) shared invariants > no row is wider than its panel at any width, theme-free and in ASCII mode [211.50ms]
+(pass) shared invariants > ASCII mode draws plain ASCII only [8.61ms]
+(pass) shared invariants > no row carries two chip fills and the brand capsule appears once [5.69ms]
+(pass) shared invariants > every count carries its word [2.58ms]
+(pass) shared invariants > the latte theme changes tones only, never text [4.38ms]
+(pass) worker card > matches the design card at 120 columns [0.98ms]
+(pass) worker card > matches the design card at 80 columns [0.36ms]
+(pass) worker card > is a closed box 44 wide at 120, 80 and 44 columns, and clips to a narrower terminal [11.74ms]
+(pass) worker card > the border carries the state word for every state, and the frame takes the state tone [1.21ms]
+(pass) worker card > rows without data are left out; a goal row comes first [0.31ms]
+(pass) toast > order is bar, ATLAS mark, state, name, fact (design golden, with the round 3 bar and mark) [0.33ms]
+(pass) toast > ASCII mode uses the ASCII state mark [0.12ms]
+(pass) route tab names the running agents (live round2: `agents ◒ 3 running` and no name) > each agent that holds no plan row is listed by name with its state word, at 80 and 120 columns [1.62ms]
+(pass) route tab names the running agents (live round2: `agents ◒ 3 running` and no name) > an agent that owns a plan row is named by that row, not listed twice; finished and parked ones are not listed [5.90ms]
+(pass) route tab names the running agents (live round2: `agents ◒ 3 running` and no name) > a long group folds into `+N more`, and a failed agent reads failed [0.89ms]
+
+mod/panel-polish.test.ts:
+(pass) clipMiddle (atlas-ui) > keeps both ends and exactly n cells, `...` in the middle [8.25ms]
+(pass) change 6: the route tab is the Board compact form > at 120 every task row has its state word in one column, long titles and owners included [14.62ms]
+(pass) change 6: the route tab is the Board compact form > at 120 a long title is clipped at its end: its start survives, the state word is never pushed off [5.03ms]
+(pass) change 6: the route tab is the Board compact form > at 120 rows keep the Board's item order (no done-last reshuffle) [7.35ms]
+(pass) change 6: the route tab is the Board compact form > at 80 every task row has its state word in one column, long titles and owners included [3.31ms]
+(pass) change 6: the route tab is the Board compact form > at 80 a long title is clipped at its end: its start survives, the state word is never pushed off [2.49ms]
+(pass) change 6: the route tab is the Board compact form > at 80 rows keep the Board's item order (no done-last reshuffle) [2.33ms]
+(pass) change 6: the route tab is the Board compact form > at 56 every task row has its state word in one column, long titles and owners included [4.01ms]
+(pass) change 6: the route tab is the Board compact form > at 56 a long title is clipped at its end: its start survives, the state word is never pushed off [1.18ms]
+(pass) change 6: the route tab is the Board compact form > at 56 rows keep the Board's item order (no done-last reshuffle) [2.87ms]
+(pass) change 6: the route tab is the Board compact form > at 38 every task row has its state word in one column, long titles and owners included [3.33ms]
+(pass) change 6: the route tab is the Board compact form > at 38 a long title is clipped at its end: its start survives, the state word is never pushed off [0.92ms]
+(pass) change 6: the route tab is the Board compact form > at 38 rows keep the Board's item order (no done-last reshuffle) [1.00ms]
+(pass) change 6: the route tab is the Board compact form > at 120 the owner is the right-aligned value column of every row [3.82ms]
+(pass) change 6: the route tab is the Board compact form > at 80 the owner is the right-aligned value column of every row [1.89ms]
+(pass) change 6: the route tab is the Board compact form > at 56 the owner is the right-aligned value column of every row [1.09ms]
+(pass) change 6: the route tab is the Board compact form > B2: a label that carries its owner in brackets is clipped at the end, never in the middle [3.87ms]
+(pass) change 6: the route tab is the Board compact form > B2: the owner column is whole whenever it was given room, at every width the column exists [4.30ms]
+(pass) change 6: the route tab is the Board compact form > the detail is one fixed column from 100 cells; below that it moves to the open row instead of a ragged third column [16.08ms]
+(pass) change 7: the core tab in plain words, numbers whole > no inner heading collides with the route tab name, and the jargon words are gone [23.44ms]
+(pass) change 7: the core tab in plain words, numbers whole > the offload section says in words what the figures are [1.57ms]
+(pass) change 7: the core tab in plain words, numbers whole > at 80 no figure is ever cut: the label column gives way [2.36ms]
+(pass) change 7: the core tab in plain words, numbers whole > at 56 no figure is ever cut: the label column gives way [1.72ms]
+(pass) change 7: the core tab in plain words, numbers whole > at 38 no figure is ever cut: the label column gives way [6.67ms]
+(pass) change 7: the core tab in plain words, numbers whole > at 38 a worker name is cut in the middle, its figures stay whole [1.67ms]
+(pass) change 7: the core tab in plain words, numbers whole > the figures are the right-aligned value column [6.03ms]
+(pass) one row grammar on all five tabs > at 120 the state glyph sits in cell 3 and names start in cell 5 on every tab row [15.05ms]
+(pass) one row grammar on all five tabs > at 80 the state glyph sits in cell 3 and names start in cell 5 on every tab row [10.06ms]
+(pass) one row grammar on all five tabs > at 38 the state glyph sits in cell 3 and names start in cell 5 on every tab row [9.04ms]
+(pass) one row grammar on all five tabs > channel and gates carry a right-aligned value column (time, failing count) [8.47ms]
+(pass) one row grammar on all five tabs > rows never pass the panel width, in ASCII and both themes, 10 to 160 columns [184.42ms]
+(pass) change 10: the card and the toast > the toast reads bar, ATLAS mark, state, name, fact [1.01ms]
+(pass) change 10: the card and the toast > the left bar and the state word carry the state tone; the rest keeps its own [0.75ms]
+(pass) change 10: the card and the toast > every state word tone reaches 4.5:1 on the panel in both themes (a token that cannot falls back to text) [1.34ms]
+(pass) change 10: the card and the toast > the card top carries the ATLAS mark and a state word in the state tone [1.23ms]
+(pass) change 10: the card and the toast > at 120 the card's two gauges are the same width and never touch row on row (no stepped block) [0.52ms]
+(pass) change 10: the card and the toast > at 80 the card's two gauges are the same width and never touch row on row (no stepped block) [0.27ms]
+
+mod/panel-rows.test.ts:
+(pass) team tab: lead row, roster rows, lead tally > the live shape at 120 equals the hand-written golden [18.40ms]
+(pass) team tab: lead row, roster rows, lead tally > the live shape at 80 equals the hand-written golden [8.98ms]
+(pass) team tab: lead row, roster rows, lead tally > the lead row is first and the tally is last; the ribbon counts only the workers [2.63ms]
+(pass) team tab: lead row, roster rows, lead tally > the tally always says running, and drops the other states with no worker [7.54ms]
+(pass) team tab: lead row, roster rows, lead tally > no workers and no roster keeps the hint, and the lead stays above it [0.62ms]
+(pass) team tab: lead row, roster rows, lead tally > a roster member the squad does not list reads queued and is not counted in the agents row [24.15ms]
+(pass) team tab: lead row, roster rows, lead tally > a parked worker draws a queued row with its word instead of throwing [0.53ms]
+(pass) team tab: lead row, roster rows, lead tally > the recipient can be the lead: it takes the focus marker [13.26ms]
+(pass) team tab: lead row, roster rows, lead tally > an open lead row has no age line (the lead has no start time) [3.96ms]
+(pass) channel tab: header, columns and marks > one person is singular, more are plural [0.67ms]
+(pass) channel tab: header, columns and marks > a missing channel name reads #channel [0.30ms]
+(pass) channel tab: header, columns and marks > unread is shown only when not zero, with its word [0.52ms]
+(pass) channel tab: header, columns and marks > the time column starts at 50 cells [0.97ms]
+(pass) channel tab: header, columns and marks > the nick column is 4 cells at least, 10 at most below 100 columns, 18 from 100, cut with an ellipsis [6.96ms]
+(pass) channel tab: header, columns and marks > the nick column is as wide as the widest nick shown in the log [0.53ms]
+(pass) channel tab: header, columns and marks > marks: blocked and handoff carry a glyph and a word; a note to a peer names it; a note to all names nobody [5.92ms]
+(pass) channel tab: header, columns and marks > a note is one line: whitespace and line breaks collapse [0.45ms]
+(pass) channel tab: header, columns and marks > ASCII mode marks a note to a peer with > and draws plain ASCII [0.39ms]
+(pass) channel tab: header, columns and marks > no persona colour: a nick is bold text whoever speaks [0.51ms]
+(pass) core tab: caps, notes and figures > only the last 8 verdicts show [7.90ms]
+(pass) core tab: caps, notes and figures > only the last 8 offload workers show [7.10ms]
+(pass) core tab: caps, notes and figures > only the last 6 routes show, newest first [1.62ms]
+(pass) core tab: caps, notes and figures > without in-process rows the tab says they are not shown; with them it shows the transport and no note [1.14ms]
+(pass) core tab: caps, notes and figures > B4: with nothing read or returned the offload line is a sentence, not `0 tokens read by workers` [3.34ms]
+(pass) core tab: caps, notes and figures > B4: a seat that ran another model says so in words [5.26ms]
+(pass) core tab: caps, notes and figures > B8: a route without a transport is not labelled tmux [0.74ms]
+(pass) core tab: caps, notes and figures > the ledger drops open and unchecked counts of zero and says what is off [0.80ms]
+(pass) core tab: caps, notes and figures > a DONE claim with no verdict gets a warning row; a matched or non-DONE one does not [0.72ms]
+(pass) core tab: caps, notes and figures > an offload row has exact columns, `?` for an unknown model and a cost only when known [0.76ms]
+(pass) core tab: caps, notes and figures > the offload share is a whole percent of what the workers read, and only when it can not pass 100 [4.62ms]
+(pass) route tab: blocked owner, phase position > a blocked task shows the blocked mark, its word, its owner and why from 100 columns [1.15ms]
+(pass) route tab: blocked owner, phase position > below 100 columns the reason leaves the row (the owner stays right-aligned); the mark, label and word stay [2.16ms]
+(pass) route tab: blocked owner, phase position > the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail [4.98ms]
+
+mod/parallel-attribution.test.ts:
+(pass) parallel workers dispatched in one message > each worker gets its own dispatch, join, report and quit, attributed by agent id [30.11ms]
+(pass) parallel workers dispatched in one message > same when a rebuild lands between the host listing the agents and the spawn hook recording them [3.68ms]
+(pass) parallel workers dispatched in one message > same when the host list drops a worker once it completed [2.44ms]
+(pass) parallel workers dispatched in one message > same with both [3.87ms]
+(pass) parallel workers dispatched in one message > a turn.complete without agentId: the host row that completed names the worker [7.41ms]
+
+mod/rail.test.ts:
+(pass) the phase rail > validate, blocked and done are not steps; an empty list is the default rail [3.66ms]
+(pass) the phase rail > the lit step, its index and its number [0.76ms]
+
+mod/register-agents.test.ts:
+(pass) register agent-list sync > host agents land in the squad with mapped states and unknown usage pre-measure [25.80ms]
+(pass) register agent-list sync > an unknown AgentStatus reads as running [1.18ms]
+(pass) register agent-list sync > a measured zero replaces the unknowns [1.02ms]
+(pass) register agent-list sync > a measure with absent fields leaves the figures unknown [0.73ms]
+(pass) register agent-list sync > usage and task agents survive a re-register: they live in $.state, not module variables [2.06ms]
+(pass) register agent-list sync > a missing agent surface keeps spawn-recorded agents [2.48ms]
+(pass) syncAgentsFromList identity > labels by persona/type with the description as task, never the raw host id [1.77ms]
+(pass) syncAgentsFromList identity > generic agents are labelled by a short slug of the Agent description; teammates and personas keep their names [28.60ms]
+(pass) syncAgentsFromList identity > duplicate labels get a short id suffix; unlisted spawn records are kept [0.66ms]
+(pass) syncAgentsFromList dispatch identity > the Agent call name labels the worker and the spawn type (atlas:explorer) is its persona, even for a teammate-typed row [0.32ms]
+(pass) syncAgentsFromList names without an Agent call name > a `<slug>: summary` description names the worker; two explorers never read explorer / explorer-xxxx [0.29ms]
+(pass) syncAgentsFromList names without an Agent call name > same persona twice with different descriptions: the task slugs tell them apart [0.21ms]
+(pass) syncAgentsFromList names without an Agent call name > the Agent call name still wins over a description prefix [0.28ms]
+(pass) stale workers > host status completed/failed/killed wins over a spawn-recorded running entry [0.58ms]
+(pass) stale workers > liveness is the host list only: listed pending/running/waiting stay live whatever the lead does; completed/failed/killed finish [0.57ms]
+(pass) stale workers > a spawn-recorded entry the host does not list expires only once its spawn is older than 15 s [0.48ms]
+(pass) spawn model and name reach the HUD agent > the Agent call name labels the lane and the spawn model rides the squad row into the HUD agent [9.42ms]
+(pass) hud-state.json writer > writes {ts,maxRows,wanted,shown,fullscreen} atomically and skips an unchanged state [1.01ms]
+(pass) hud-state.json writer > rewrites at least every 5 s while shown < wanted so the reader stays fresh [0.48ms]
+(pass) hud-state.json writer > never throws and does nothing without a root [0.37ms]
+(pass) starved is judged against the rows the HUD gets with the FULL status line > loop: compact line frees 3 rows, the HUD then fits, yet starved stays true [0.45ms]
+(pass) starved is judged against the rows the HUD gets with the FULL status line > a genuinely roomy slot is not starved, with or without a compact report [0.28ms]
+(pass) starved is judged against the rows the HUD gets with the FULL status line > readStatuslineRows takes a fresh report only [13.26ms]
+(pass) starved is judged against the rows the HUD gets with the FULL status line > publishHudState writes the supplied starved flag over shown < wanted [0.42ms]
+
+mod/register-clear.test.ts:
+(pass) /clear re-boot > after session.end(clear) + classic.SessionStart(clear) the band draws and the builder carries the new session id [12.32ms]
+(pass) /clear re-boot > a classic SessionStart that is not a clear changes nothing [1.15ms]
+
+mod/register-core.test.ts:
+(pass) coreTick > the baseline read toasts nothing; each new verdict toasts once [20.21ms]
+(pass) coreTick > sound plays fail.wav on a refutation only when the option is on [8.91ms]
+(pass) coreTick > a worker whose log finishes toasts its offload once [1.17ms]
+(pass) coreTick > an unchanged log is not read again [1.21ms]
+(pass) coreTick > unchanged findings are read once; a same-size rewrite with a new mtime is re-read [1.21ms]
+(pass) coreTick > a removed log is evicted from the cache [1.18ms]
+(pass) coreTick > findings.json missing for one tick does not re-toast every verdict on the next good read [4.79ms]
+(pass) coreTick > a partial findings.json for one tick does not re-toast every verdict on the next good read [1.45ms]
+(pass) coreTick > board reports with one timestamp keep a stable order whatever the listing order [1.96ms]
+(pass) coreTick > the core is stored only when it changed, and written never by a render [1.60ms]
+(pass) coreTick > buildCore hands the pane this session's channels and in-process dispatches [1.19ms]
+(pass) coreTick > no board root: no state [1.22ms]
+(pass) coreTick > headless sessions do nothing [0.52ms]
+(pass) /atlas-core and the header tally > the command answers with the report, computed from the files [1.98ms]
+(pass) /atlas-core and the header tally > with nothing recorded the command says so in one line [0.94ms]
+(pass) /atlas-core and the header tally > session.start registers /atlas-core in an interactive session [5.97ms]
+(pass) /atlas-core and the header tally > main-agent answers bump the header tally; a matching header bumps ok [4.68ms]
+
+mod/register-edges.test.ts:
+(pass) mapListed labels > a generic agent is labelled by the first three words of its description [14.63ms]
+(pass) mapListed labels > the persona recorded at spawn labels a typeless row, but a recorded unknown does not [12.46ms]
+(pass) mapListed labels > every row gets a string label, the id prefix as the last resort [0.91ms]
+(pass) D5 duplicate labels read as ordinals, never a host id > D5: two explorers with no description are `explorer` and `explorer #2` [0.31ms]
+(pass) D5 duplicate labels read as ordinals, never a host id > D5: a label an earlier id still holds gives the new id the next ordinal [0.33ms]
+(pass) D5 duplicate labels read as ordinals, never a host id > D5: the dispatch name is the label, with no suffix when names differ [0.28ms]
+(pass) D5 duplicate labels read as ordinals, never a host id > D5: a true collision on a dispatch name is `alpha-explorer #2` [0.27ms]
+(pass) HUD row arithmetic > hudStarvedAtFullLine is true only when strictly fewer rows show than wanted [0.51ms]
+(pass) HUD row arithmetic > inlineBelowRows adds prompt 3, status line (5 unknown), mode+blank 2, blank 1, and the agent list [0.43ms]
+(pass) session boot and rebuild > the folder half of the cwd names the lead channel candidate (`<folder>@<branch>`) [18.98ms]
+(pass) session boot and rebuild > atlas_wt.py status runs at most every 5 s of the clock [4.85ms]
+(pass) session boot and rebuild > a worker the host lists as failed, killed or completed is reported with the matching outcome [3.09ms]
+(pass) session boot and rebuild > pane-log tool uses that appear after the first read become calls (the first read is the baseline) [6.10ms]
+(pass) sidebar note > submitting the message input posts the note to the lead on the snapshot channel, clears the draft and toasts [25.98ms]
+(pass) sidebar note > a snapshot with no board root refuses the note with a toast and keeps the draft [6.96ms]
+(pass) core cache and gates > an unchanged file is read once; a new mtime or size re-reads it and the new text wins [1.76ms]
+(pass) core cache and gates > coreTick builds only for an interactive session with the mod on [0.72ms]
+(pass) core cache and gates > open gates count every script group but ignore a stale stored header group (the header is rebuilt) [0.49ms]
+
+mod/register-faults.test.ts:
+(pass) visible failure lines > a boot that throws shows one short atlas line with the error text [16.01ms]
+(pass) visible failure lines > a snapshot rebuild over a corrupt todos.json shows one atlas line naming todos.json [18.04ms]
+(pass) visible failure lines > a ui.fault shows one line naming the component and the reason [1.03ms]
+(pass) visible failure lines > the same failure 5 times is one line, a different one adds a second [0.55ms]
+
+mod/register-look.test.ts:
+(pass) B2 the side panel has colour and the worker row when NO_COLOR is unset (the NO_COLOR checks below are not vacuous) [975.87ms]
+(pass) B2 NO_COLOR keeps the words and removes the colour on the side panel [890.87ms]
+(pass) B2 NO_COLOR removes the colour from the board [569.66ms]
+(pass) B2 the board has colour when NO_COLOR is unset (the check above is not vacuous) [474.73ms]
+(pass) B2 ATLAS_ASCII from $.env draws the side panel and the board in plain ASCII [552.30ms]
+(pass) B2 without ATLAS_ASCII the same surfaces draw the unicode marks [787.23ms]
+(pass) B5 the HUD and the board both read elapsed from the snapshot clock (claimed 42 s ago reads 00:42) [454.66ms]
+
+mod/register-open.test.ts:
+(pass) sidebar open requests > shouldDock: fullscreen and >= 144 columns only (the engine floor for unasked panes) [2.95ms]
+(pass) sidebar open requests > no auto open at 100 columns non-fullscreen or fullscreen-narrow [6.13ms]
+(pass) sidebar open requests > the band render writes no $.state (the engine skips a render hook that does) [0.83ms]
+(pass) sidebar open requests > opens once docked at 160 fullscreen; /atlas-cc opens 12 rows with focus and Esc-close [1.08ms]
+(pass) sidebar open requests > closing the pane resets the tab to route [0.53ms]
+
+mod/register-sidebar.test.ts:
+(pass) press a member, type, submit: the note goes to that member and the draft clears [970.27ms]
+(pass) hotkey tab c sets the view to channel [517.22ms]
+(pass) the spinner tick stays still when no worker is live [860.66ms]
+(pass) the spinner tick advances with a live worker [735.30ms]
+(pass) the band spinner advances one frame per 100 ms while a worker runs [973.85ms]
+(pass) the band is still when no worker is live: no tick, no redraw difference [647.00ms]
+(pass) the HUD lists the agent; the band beside it keeps the counts and draws no worker row [543.90ms]
+(pass) with no HUD (ATLAS_HUD=off) the band lists its own worker rows [638.05ms]
+(pass) narrow (70 columns) the HUD drops the Subagents block and the band is its one summary row [720.28ms]
+(pass) at a starved maxRows the HUD keeps its Subagents ribbon and row, and the band folds to its one summary row [372.85ms]
+(pass) ATLAS_HUD=off draws no HUD rows (the band is unaffected) [524.00ms]
+(pass) with the docked pane open (measured: viewport 143, bodyColumns 138) the band draws its full tier [443.26ms]
+(pass) ATLAS_BAND_RICH=1 reaches the host band: the full tier carries the phase rail [580.68ms]
+(pass) ATLAS_ASCII=1 reaches the host band: the brand falls back to [ATLAS] [424.04ms]
+(pass) the band ctx gauge glides on the eased frames after a measure, then the timers stop [2917.73ms]
+(pass) register hands the HUD the live phase rail: the rich TODO block draws it above its progress row [253.48ms]
+(pass) L13 the HUD, the band and the side panel say the same state word for a worker in the same frame [280.44ms]
+
+mod/register.test.ts:
+(pass) register kill switch > ATLAS_MOD=off: session.start wires nothing, handlers pass through [6.15ms]
+(pass) header phase > reads the phase from the live `ATLAS | <glyph> <phase> | <state>` header [0.75ms]
+(pass) header phase > null when the line misses the contract pattern or the pattern is empty [0.38ms]
+(pass) header phase > a new turn drops the previous turn's header phase (live 12.2.0: rail kept a stale "done") [0.52ms]
+(pass) faults > ui.fault logs component, module, phase and reason to debug, then passes on [0.80ms]
+(pass) headless inertness > headless session.start: no ui.*, no timers, no commands, next(e) flows [2.61ms]
+(pass) snapshot refresh on live state > a session.measure reaches the snapshot on the next tick, no file change [3.21ms]
+
+mod/restyle.test.tsx:
+(pass) formatDuration [3.97ms]
+(pass) receipt duration is the turn durationMs, not session time [0.77ms]
+(pass) spinner suffix names working workers, blocked first, and is empty when idle [0.56ms]
+(pass) deployment card for atlas persona Task rows [2.36ms]
+(pass) non-atlas tool rows keep the engine drawing [0.66ms]
+(pass) header line is drawn styled in place with the body kept [0.97ms]
+(pass) header is filled pills: brand on violet, phase on its hue, then the state text, no pipe [1.69ms]
+(pass) header row fits one line at 60 columns; under 60 only the two pills stay [1.01ms]
+(pass) headerless or summary replies return null (engine-drawn) [0.45ms]
+(pass) an empty contract pattern draws no pill on a plain reply [0.25ms]
+(pass) a header with no valid phase draws no pill, never the snapshot phase [0.27ms]
+(pass) the pill shows the phase the header states, not a phase word in its sentence [0.26ms]
+(pass) turn receipt: done delta, workers, ctx [0.45ms]
+(pass) registerRestyle wires the four sites; without a snapshot every site no-ops [1.89ms]
+(pass) the receipt never prints dollars, even when the engine reports a session cost [0.75ms]
+(pass) receipt duration is capped by the mod-owned turn timer when the host figure is larger [0.47ms]
+(pass) ATLAS_MOD=off no-ops every site even with a live snapshot [3.04ms]
+(pass) live spinner passes the suffix through next [0.45ms]
+(pass) AssistantMessage draws the contract header on one styled row and keeps the body [0.73ms]
+(pass) header-less AssistantMessage keeps the engine drawing with no pill [0.57ms]
+(pass) noisy tool: huge Bash output collapses to a one-line size badge; small/running keeps engine row [0.61ms]
+(pass) running worker card shows what it is doing: tool (mcp prefix cut), target, age, tool count [0.84ms]
+(pass) worker card activity: last tool without a target, and no tool at all, still render the age [1.14ms]
+(pass) with no listed agent the card status falls back from the call flags [1.45ms]
+(pass) a listed agent is found by name, and its status wins over the call flags [0.76ms]
+(pass) noisy badge is an inverse accent pill with the size; boundary is 8000 [3.41ms]
+(pass) header pills: tail shows from 60 columns up, only the two pills below, and a width of 1 is narrow [0.67ms]
+(pass) assistantTree: an unknown phase word gives null (no snapshot fallback), bad pattern and empty text give null, layout follows the body [0.71ms]
+(pass) durationTree: capped by the mod clock, delta only when positive, no workers or ctx when zero [0.31ms]
+(pass) personaFor needs the atlas: prefix and a known name [0.24ms]
+(pass) UserMessage: agent messages become chat bubbles; prompts, expanded rows, senderless text and mod-off stay engine-drawn [1.21ms]
+(pass) ToolGroup: two atlas dispatches draw as a numbered wave, anything else stays engine-drawn [1.77ms]
+(pass) a failing clock leaves the receipt on the host figure [0.39ms]
+(pass) PHASE_RE picks a whole phase word and ignores substrings [0.21ms]
+
+mod/roles.test.ts:
+(pass) role characters > every persona maps to a character, unknown ones to generic [5.66ms]
+(pass) role characters > each role key has its own eyes [3.48ms]
+(pass) role characters > running and thinking cycle with the tick, and keep moving when sampled every 8 ticks [11.71ms]
+(pass) role characters > done, failed and blocked hold one frame [0.49ms]
+(pass) role characters > states look different from each other [0.23ms]
+(pass) role characters > every frame of every role and state is exactly three cells [49.50ms]
+
+mod/routing.test.ts:
+(pass) registerRouting agent.spawn > passes an omitted model through untouched and records the agent [9.99ms]
+(pass) registerRouting agent.spawn > passes an inherit model through untouched and records the agent [10.84ms]
+(pass) registerRouting agent.spawn > passes an explicit model through untouched, records the agent, and notes the drift [0.68ms]
+(pass) registerRouting agent.spawn > leaves a fork untouched [0.41ms]
+(pass) registerRouting agent.spawn > routes no persona for unknown roles but records them for the band [5.64ms]
+(pass) registerRouting agent.spawn > fails open when getPersonas throws [0.42ms]
+(pass) registerRouting Agent tool name > tool.call name reaches a nameless agent.spawn by tool_use_id [1.10ms]
+(pass) registerRouting Agent tool name > tool.call name reaches a nameless agent.spawn by description+type [0.51ms]
+(pass) registerRouting spawn model > an explicit spawn model and the spawn name reach the orchestration meta and the task agent [6.68ms]
+(pass) registerRouting spawn model > an unpinned spawn inherits the parent model [2.33ms]
+(pass) registerRouting spawn model > a known role shows its frontmatter pin, not the parent model [1.45ms]
+(pass) registerRouting turn.step > pins the recorded persona effort onto the request [4.14ms]
+(pass) registerRouting turn.step > leaves unrecorded agents untouched [0.48ms]
+(pass) registerRouting turn.step > pins nothing when the persona effort is not low/medium/high [0.43ms]
+(pass) registerRouting turn.step > records an inherit-model persona so its effort is pinned [2.60ms]
+(pass) registerRouting turn.step > fails open when getPersonas throws on turn.step [0.57ms]
+(pass) registerCompletion > never throws on an engine without a clock and still moves the answer on [0.49ms]
+(pass) fullModel > resolves an alias only to a parent id of the same family [2.94ms]
+(pass) promptName > reads the first-line worker name, with the allowed characters only [0.32ms]
+(pass) registerRouting bookkeeping > caps live task agents at 64, newest kept, and re-spawning an id updates in place [16.05ms]
+(pass) registerRouting bookkeeping > prompt first-line name and SCOPE reach the orch meta when the spawn and tool call carry no name [0.56ms]
+(pass) registerRouting bookkeeping > an explicit spawn model beats the persona pin; the pin beats the parent [3.29ms]
+(pass) registerRouting bookkeeping > tool.call name matching: id first, then newest same description+type inside 5s, never across type, description or time [2.45ms]
+(pass) registerRouting bookkeeping > pending tool calls are pruned past 5s and capped at the newest 16 [3.13ms]
+(pass) registerRouting bookkeeping > turn.complete adds input and output tokens, each defaulting to 0 [1.20ms]
+
+mod/runs.test.ts:
+(pass) fitRuns > runs that fit are laid out whole, in order [2.88ms]
+(pass) fitRuns > the run that overflows is cut with an ellipsis and later runs are dropped [0.53ms]
+(pass) fitRuns > a run that fills the budget exactly stops the row [0.30ms]
+(pass) fitRuns > an empty run costs nothing and does not stop the row [0.23ms]
+(pass) fitRuns > a zero or negative budget still gets one cell [0.68ms]
+(pass) fitRuns > the total width never exceeds the budget [2.35ms]
+(pass) fitRuns > style flags are passed to the Text [0.70ms]
+(pass) rowOf > a row Box that keeps its height and holds the fitted runs [0.55ms]
+
+mod/snapshot.test.ts:
+(pass) SnapshotBuilder > init resolves root via ancestor walk and pins the lead channel [28.90ms]
+(pass) SnapshotBuilder > filter: own session plus the open backlog of any session, never archived [1.24ms]
+(pass) SnapshotBuilder > counts: done/total and per-phase buckets over the session slice [28.07ms]
+(pass) SnapshotBuilder > phase precedence: active todo beats header; header next; no signal falls back to default [1.73ms]
+(pass) SnapshotBuilder > todo mtime cache lives on the instance: unchanged mtime reuses the parsed array [11.82ms]
+(pass) SnapshotBuilder > notes and squad merge from board, roster, herdr and task agents [1.46ms]
+(pass) SnapshotBuilder > roster is re-read on every build: a new member appears, a read error keeps the last roster [10.02ms]
+(pass) SnapshotBuilder > live pass-throughs land on every snapshot field [5.99ms]
+(pass) SnapshotBuilder > no .atlas root: idle snapshot, never throws [1.06ms]
+(pass) SnapshotBuilder > orchestration: orch events and wt rows feed activity and comms [16.67ms]
+(pass) SnapshotBuilder > todoGroups: unsorted holds only session-origin unphased items; other-session backlog without a phase and advisor notes stay out [1.59ms]
+(pass) SnapshotBuilder > raw agent ids in notes/comms/activity resolve to labels [1.19ms]
+
+mod/sprites/api.test.ts:
+(pass) sprite api > every persona, mood, size and frame has the exact cell geometry [375.00ms]
+(pass) sprite api > runs never overflow the sprite and padding carries no colour [79.27ms]
+(pass) sprite api > size s is the 1-row badge chip [0.66ms]
+(pass) sprite api > badge and display names read as people, not keys [0.71ms]
+(pass) sprite api > personas have distinct silhouettes at m and l (cell and pixel level) [2.68ms]
+(pass) sprite api > every persona has a distinct pixel silhouette at m and l [9.66ms]
+(pass) sprite api > lead silhouette has a crown row on top, narrower than the head [1.15ms]
+(pass) sprite api > personas are visually distinct and moods animate [23.62ms]
+(pass) sprite api > persona aliases resolve and unknown falls back [0.55ms]
+(pass) sprite api > speech bubble rows share one width within maxCols [0.93ms]
+(pass) sprite pixels > procedural personas draw: eyes land on the design grid (plain, working shift, happy, X) [9.83ms]
+(pass) sprite pixels > a failed procedural creature has X eyes in red and a sunken body (bob 1) [0.76ms]
+(pass) sprite pixels > the prop sits one design pixel below its anchor at rest and three when failed [7.25ms]
+(pass) sprite pixels > adjacent runs in a row never merge-able: same colours and glyph are one run [32.93ms]
+(pass) sprite pixels > hand-drawn art: confetti marks mirror into the right padding columns, on empty art cells only [6.45ms]
+(pass) sprite pixels > failed colours are an exact half-way mix towards gray [0.59ms]
+(pass) speech bubble wrapping > a word longer than the inner width is split into inner-wide chunks, the remainder on its own line [6.63ms]
+(pass) speech bubble wrapping > a long word after a short one starts a fresh line; an exact multiple leaves no empty line [0.28ms]
+
+mod/sprites/art.test.ts:
+(pass) ART tables > every drawn persona is a known creature [7.06ms]
+(pass) ART tables > lead/m is a 12x12 grid of legend characters [14.10ms]
+(pass) ART tables > lead/m has an outlined, filled body [0.52ms]
+(pass) ART tables > lead/l is a 16x16 grid of legend characters [13.88ms]
+(pass) ART tables > lead/l has an outlined, filled body [0.33ms]
+(pass) ART tables > lead: the large drawing is not the medium one scaled by padding alone [0.54ms]
+(pass) ART tables > explorer/m is a 12x12 grid of legend characters [32.78ms]
+(pass) ART tables > explorer/m has an outlined, filled body [0.35ms]
+(pass) ART tables > explorer/l is a 16x16 grid of legend characters [7.96ms]
+(pass) ART tables > explorer/l has an outlined, filled body [0.35ms]
+(pass) ART tables > explorer: the large drawing is not the medium one scaled by padding alone [0.18ms]
+(pass) ART tables > implementer/m is a 12x12 grid of legend characters [11.77ms]
+(pass) ART tables > implementer/m has an outlined, filled body [0.31ms]
+(pass) ART tables > implementer/l is a 16x16 grid of legend characters [13.65ms]
+(pass) ART tables > implementer/l has an outlined, filled body [0.32ms]
+(pass) ART tables > implementer: the large drawing is not the medium one scaled by padding alone [0.16ms]
+(pass) ART tables > verifier/m is a 12x12 grid of legend characters [7.87ms]
+(pass) ART tables > verifier/m has an outlined, filled body [0.55ms]
+(pass) ART tables > verifier/l is a 16x16 grid of legend characters [13.09ms]
+(pass) ART tables > verifier/l has an outlined, filled body [0.37ms]
+(pass) ART tables > verifier: the large drawing is not the medium one scaled by padding alone [0.16ms]
+(pass) ART tables > runner/m is a 12x12 grid of legend characters [8.25ms]
+(pass) ART tables > runner/m has an outlined, filled body [0.26ms]
+(pass) ART tables > runner/l is a 16x16 grid of legend characters [8.24ms]
+(pass) ART tables > runner/l has an outlined, filled body [0.47ms]
+(pass) ART tables > runner: the large drawing is not the medium one scaled by padding alone [0.13ms]
+(pass) ART tables > planner/m is a 12x12 grid of legend characters [3.62ms]
+(pass) ART tables > planner/m has an outlined, filled body [0.26ms]
+(pass) ART tables > planner/l is a 16x16 grid of legend characters [11.90ms]
+(pass) ART tables > planner/l has an outlined, filled body [0.28ms]
+(pass) ART tables > planner: the large drawing is not the medium one scaled by padding alone [0.35ms]
+(pass) ART tables > completeness-critic/m is a 12x12 grid of legend characters [4.32ms]
+(pass) ART tables > completeness-critic/m has an outlined, filled body [0.24ms]
+(pass) ART tables > completeness-critic/l is a 16x16 grid of legend characters [7.76ms]
+(pass) ART tables > completeness-critic/l has an outlined, filled body [0.31ms]
+(pass) ART tables > completeness-critic: the large drawing is not the medium one scaled by padding alone [0.14ms]
+
+mod/sprites/palette.test.ts:
+(pass) every creature has valid colours, a species, a catchphrase and a known prop [7.84ms]
+(pass) each persona has its own body colour [0.54ms]
+(pass) the shipped creature table matches the golden, in display order [1.49ms]
+(pass) every alias resolves to a real creature and matches the golden [2.05ms]
+(pass) prop legend colours are valid single-char keys and match the golden [0.80ms]
+(pass) every prop is a 4x3 template over the legend (or "." / "a") with four work offsets [23.98ms]
+(pass) the shipped prop table matches the golden, in order [1.54ms]
+
+mod/sprites/review.test.ts:
+(pass) runsToSvg > ▀ draws a half-height fg rect, █ a full-height one [2.64ms]
+(pass) runsToSvg > chip text becomes <text> [0.40ms]
+(pass) runsToSvg > honours cell size [0.55ms]
+(pass) runsToSvg exact output > empty input is a 0x0 svg [0.46ms]
+(pass) runsToSvg exact output > ▀ ▄ █ paint upper half, lower half, full cell over the bg rect [0.44ms]
+(pass) runsToSvg exact output > missing fg and bg fall back to the sprite tile colour [0.87ms]
+(pass) runsToSvg exact output > a space is only a bg rect [0.61ms]
+(pass) runsToSvg exact output > a letter is a bg rect plus positioned <text>; bold and default fill [0.40ms]
+(pass) runsToSvg exact output > text is XML-escaped [0.44ms]
+(pass) runsToSvg exact output > multi-char runs advance one cell per code point; width is the widest row, height the row count [0.50ms]
+(pass) runsToSvg exact output > cellW and cellH apply independently [12.14ms]
+
+mod/sprites/sprites.golden.test.ts:
+(pass) sprites golden > serialized output matches the fixture [1891.64ms]
+
+mod/theme.helpers.test.ts:
+(pass) phaseColor and stateColor cover every key with the BRAND token [6.54ms]
+(pass) STATE_GLYPH and glyph tables [0.71ms]
+(pass) meterColor boundaries are inclusive at 60 and 85 [0.57ms]
+(pass) lerp extrapolates unclamped using (b - a) [0.69ms]
+(pass) dim: per-channel rounding, clamping and malformed input [0.83ms]
+(pass) mix blends channel-wise and clamps t [3.50ms]
+(pass) MOCHA palette and phaseHue [0.78ms]
+(pass) chartRoom roles and spriteTile [4.51ms]
+(pass) barParts: widths, rounding and out-of-range input [5.54ms]
+(pass) blink > toggles every period using the wall clock [12.15ms]
+(pass) spin: default braille frames, per-phase tables, wrap, negative, fractional [1.36ms]
+(pass) rangeWidth: zero wins over wide, wide is 2, else 1; spans are inclusive [0.45ms]
+(pass) textWidth honours every zero-width and wide span edge [15.56ms]
+(pass) fitText: fits, cuts on cell boundaries with an ellipsis, handles wide chars and tiny limits [1.08ms]
+(pass) isRawId accepts host agent hex ids only [0.43ms]
+(pass) contractGlyph maps each emoji; other single-cell passes; anything else becomes a dot [8.88ms]
+(pass) formatDuration: seconds, zero-padded minutes, hours, rounding and clamping [0.96ms]
+
+mod/theme.test.ts:
+(pass) bar clamps and rounds [3.47ms]
+(pass) meterColor steps ok / input / fail [0.43ms]
+(pass) lerp interpolates [0.72ms]
+(pass) dim scales hex and passes non-hex through [1.02ms]
+(pass) phase and state colours resolve from BRAND [0.39ms]
+(pass) every glyph and state glyph is exactly 1 cell wide [4.30ms]
+(pass) ATLAS design glyph set: one cell each, all in DejaVu Sans Mono, and nothing else is emitted [6.77ms]
+(pass) blink domain [0.37ms]
+(pass) contractGlyph maps every contract emoji to one cell [1.02ms]
+
+mod/todo-panel.edges.test.ts:
+(pass) todoRows budget > a one-row slot is `+N more` alone, counting every row it left out [11.66ms]
+(pass) boardTree budget and box > rows of 0 (or less) still keep one row: `+N more` [5.07ms]
+(pass) boardTree budget and box > the pane box is a column that does not shrink [3.65ms]
+
+mod/todo-panel.test.ts:
+(pass) slot rows > nothing without items, without room, or folded [3.74ms]
+(pass) slot rows > 120: the header and rows are the golden's, every row padded to exactly 120 cells [7.91ms]
+(pass) slot rows > 120 rich: the header and rows are the golden's, every row padded to exactly 120 cells [2.17ms]
+(pass) slot rows > 80: the header and rows are the golden's, every row padded to exactly 80 cells [1.97ms]
+(pass) slot rows > a short slot ends in `+N more`, and the width never overflows at any column count [19.99ms]
+(pass) slot rows > the running row spins with the tick (◐ ◓ ◑ ◒) and nothing else moves [4.51ms]
+(pass) slot rows > colour is state only: glyphs and chips take the state token, text the text tokens, nothing a hard-coded hex [46.79ms]
+(pass) slot rows > Latte: done falls back to text colour (the ok glyph is under 3:1 on the Latte panel) [1.05ms]
+(pass) slot rows > NO_COLOR keeps bold and strike and sets no colour at all [8.16ms]
+(pass) slot rows > rows keep todo order, with the per-subagent dispatch rows after the plan [0.59ms]
+(pass) pane tree > the whole surface: ribbon, a blank row, the header, seven items; each row exactly the width [13.57ms]
+(pass) pane tree > rich: chips and the elapsed gauge [1.26ms]
+(pass) pane tree > 80 columns: ribbon and the item and state columns [0.74ms]
+(pass) pane tree > rows beyond the pane height become `+N more` [0.91ms]
+(pass) pane tree > an empty board draws the ribbon and `(no state)` [0.61ms]
+(pass) pane tree > the pane sits on the rev 4 panel colour [1.08ms]
+
+mod/transcript/cards.test.tsx:
+(pass) goalLine takes the GOAL: line, else the description [7.57ms]
+(pass) resultLine prefers the STATUS line [0.58ms]
+(pass) running card: a closed box, the state word and name in the top border, goal and last rows [3.21ms]
+(pass) the card frame takes the state hue: running, done and failed differ; the state word stays plain text [1.66ms]
+(pass) done card shows the result line in the last row; errored reads failed in the border [1.28ms]
+(pass) non-atlas Agent call is left to the engine [3.95ms]
+(pass) wave of 3 is one strip headed WAVE 1 with three cards [2.52ms]
+(pass) bubble names sender and carries the text [0.48ms]
+(pass) phaseOf: errored beats interrupted beats running; else finished; the UI state is in the six-word vocabulary [0.83ms]
+(pass) interrupted card says so; flatten walks nested output [0.74ms]
+(pass) narrow wave stacks cards [0.79ms]
+(pass) denied dispatch: failed in the border, the first sentence of the reason, goal from the GOAL: line only [1.14ms]
+(pass) goalLine stops at the next ALL-CAPS label on a one-line prompt [0.25ms]
+(pass) phaseOf maps a finished call by its worker state, not the idle fallback [0.31ms]
+(pass) card rows are fixed-size boxes; a returned worker reads done, never finished-as-done twice [1.15ms]
+(pass) bubble body lines are fitted to the columns less the 3-cell gutter [0.54ms]
+(pass) every card is a closed box as wide as asked up to the design 44, at 30 to 120 columns, every state, long text [37.66ms]
+(pass) a card with no width is the design 44 columns [0.71ms]
+(pass) side-by-side wave cards fit the columns between them; below two boxes of room they stack [4.13ms]
+(pass) a wave whose workers all returned is headed finished, never done [1.98ms]
+(pass) the outcome of a background worker is the last row, led by its label [0.43ms]
+(pass) a killed or failed background worker reads failed in the border; a finished one reads done [0.93ms]
+(pass) the notification row is state, name, role and outcome [0.62ms]
+
+mod/transcript/outcome.test.tsx:
+(pass) reportOf takes the SubagentHandback STATUS line, else the last assistant text [10.36ms]
+(pass) notifiedMs reads duration_ms of the notification naming the agent; outcomeText joins word, line, duration [0.73ms]
+(pass) background launch card: live worker spins as running, never a stale completed [7.36ms]
+(pass) background launch card: an ended worker reads done in the border, its STATUS line · duration in the last row [6.22ms]
+(pass) a call still being written reads pending, not completed [1.08ms]
+(pass) task-notification of an atlas worker that left the host list draws its result row [0.99ms]
+(pass) task-notification of a non-atlas task keeps the engine row [0.59ms]
+(pass) notifiedMs finds a notice that starts at offset 0 of its text [0.21ms]
+(pass) launchedId needs both the async_launched status and a string agentId [2.41ms]
+(pass) cardExtra is empty for a call that launched nothing and for a non-atlas worker [1.06ms]
+(pass) cardExtra spins from tick 0 when the spinner atom was never written [0.44ms]
+(pass) an outcome is memoized only once its duration is known [0.71ms]
+
+mod/worker-live.test.ts:
+(pass) a listed running subagent > promptName reads the first-line label [2.70ms]
+(pass) a listed running subagent > is one working worker under the dispatch name, counted as a person in the channel header [32.09ms]
+
+omp/advisor.test.ts:
+(fail) the file did not load
+  omp/advisor.test.ts: cannot import "bun:test" (from omp/advisor.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/agent-guard.test.ts:
+(fail) the file did not load
+  omp/agent-guard.test.ts: cannot import "bun:test" (from omp/agent-guard.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/channel-todos.test.ts:
+(fail) the file did not load
+  omp/channel-todos.test.ts: cannot import "node:fs" (from omp/channel-todos.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/channel-view.test.ts:
+(fail) the file did not load
+  omp/channel-view.test.ts: /home/user/tech-tools/plugins/atlas/omp/channel-view.test.ts, compiled line 568 `const { age } = await import("./mission-panel");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+omp/channels.test.ts:
+(fail) the file did not load
+  omp/channels.test.ts: cannot import "bun:test" (from omp/channels.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/cmd-unwrap.test.ts:
+(fail) the file did not load
+  omp/cmd-unwrap.test.ts: cannot import "node:fs" (from omp/cmd-unwrap.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/contracts.test.ts:
+(fail) the file did not load
+  omp/contracts.test.ts: cannot import "bun:test" (from omp/contracts.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/core-command.test.ts:
+(fail) the file did not load
+  omp/core-command.test.ts: /home/user/tech-tools/plugins/atlas/omp/core-command.test.ts, compiled line 11 `const { registerAtlasCoreCommand } = await import("./core-command");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+omp/core-fixes.test.ts:
+(fail) the file did not load
+  omp/core-fixes.test.ts: cannot import "bun:test" (from omp/core-fixes.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/core-row.test.ts:
+(fail) the file did not load
+  omp/core-row.test.ts: cannot import "bun:test" (from omp/core-row.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/core-source.test.ts:
+(fail) the file did not load
+  omp/core-source.test.ts: cannot import "bun:test" (from omp/core-source.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/delegation-gate.test.ts:
+(fail) the file did not load
+  omp/delegation-gate.test.ts: cannot import "bun:test" (from omp/delegation-gate.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/delegation.test.ts:
+(fail) the file did not load
+  omp/delegation.test.ts: cannot import "bun:test" (from omp/delegation.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/done-glyph.test.ts:
+(fail) the file did not load
+  omp/done-glyph.test.ts: cannot import "bun:test" (from omp/done-glyph.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/extension.test.ts:
+(fail) the file did not load
+  omp/extension.test.ts: cannot import "bun:test" (from omp/extension.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/fault-log.test.ts:
+(fail) the file did not load
+  omp/fault-log.test.ts: cannot import "bun:test" (from omp/fault-log.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/gen-agents.test.ts:
+(fail) the file did not load
+  omp/gen-agents.test.ts: /home/user/tech-tools/plugins/atlas/omp/gen-agents.test.ts, compiled line 180 `const { resolveModelRoleValue } = await import(OMP_RESOLVER);`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+omp/glyph-guard.test.ts:
+(fail) the file did not load
+  omp/glyph-guard.test.ts: cannot import "bun:test" (from omp/glyph-guard.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/hook-bridge-session.test.ts:
+(fail) the file did not load
+  omp/hook-bridge-session.test.ts: cannot import "bun:test" (from omp/hook-bridge-session.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/hook-bridge.test.ts:
+(fail) the file did not load
+  omp/hook-bridge.test.ts: cannot import "bun:test" (from omp/hook-bridge.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/hud-paint.test.ts:
+(fail) the file did not load
+  omp/hud-paint.test.ts: cannot import "bun:test" (from omp/hud-paint.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/index.test.ts:
+(fail) the file did not load
+  omp/index.test.ts: cannot import "bun:test" (from omp/index.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/knobs.test.ts:
+(fail) the file did not load
+  omp/knobs.test.ts: cannot import "bun:test" (from omp/knobs.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/live-channel-roster.test.ts:
+(fail) the file did not load
+  omp/live-channel-roster.test.ts: cannot import "bun:test" (from omp/live-channel-roster.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/mandates.test.ts:
+(fail) the file did not load
+  omp/mandates.test.ts: cannot import "node:fs" (from omp/mandates.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/mission-panel-golden.test.ts:
+(fail) the file did not load
+  omp/mission-panel-golden.test.ts: cannot import "bun:test" (from omp/mission-panel-golden.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/mission-panel.edges.test.ts:
+(fail) the file did not load
+  omp/mission-panel.edges.test.ts: cannot import "bun:test" (from omp/mission-panel.edges.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/mission-panel.test.ts:
+(fail) the file did not load
+  omp/mission-panel.test.ts: cannot import "bun:test" (from omp/mission-panel.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/panel-paint.test.ts:
+(fail) the file did not load
+  omp/panel-paint.test.ts: cannot import "bun:test" (from omp/panel-paint.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/panel-strip.test.ts:
+(fail) the file did not load
+  omp/panel-strip.test.ts: cannot import "bun:test" (from omp/panel-strip.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/panel-view.test.ts:
+(fail) the file did not load
+  omp/panel-view.test.ts: cannot import "bun:test" (from omp/panel-view.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/plugin-path.test.ts:
+(fail) the file did not load
+  omp/plugin-path.test.ts: cannot import "bun:test" (from omp/plugin-path.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/proc.test.ts:
+(fail) the file did not load
+  omp/proc.test.ts: cannot import "bun:test" (from omp/proc.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/rail.test.ts:
+(fail) the file did not load
+  omp/rail.test.ts: cannot import "bun:test" (from omp/rail.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/resolve-model.test.ts:
+(fail) the file did not load
+  omp/resolve-model.test.ts: /home/user/tech-tools/plugins/atlas/omp/resolve-model.test.ts, compiled line 9 `const { resolve } = await import("./resolve");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+omp/resolve.test.ts:
+(fail) the file did not load
+  omp/resolve.test.ts: cannot import "bun:test" (from omp/resolve.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/run-state.test.ts:
+(fail) the file did not load
+  omp/run-state.test.ts: cannot import "bun:test" (from omp/run-state.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/scope.test.ts:
+(fail) the file did not load
+  omp/scope.test.ts: cannot import "node:fs" (from omp/scope.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/shell-route.test.ts:
+(fail) the file did not load
+  omp/shell-route.test.ts: cannot import "bun:test" (from omp/shell-route.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/stop-bridge.test.ts:
+(fail) the file did not load
+  omp/stop-bridge.test.ts: /home/user/tech-tools/plugins/atlas/omp/stop-bridge.test.ts, compiled line 745 `const { textOf } = await import("./stop-bridge");`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+omp/style.test.ts:
+(fail) the file did not load
+  omp/style.test.ts: cannot import "bun:test" (from omp/style.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/team-tool.test.ts:
+(fail) the file did not load
+  omp/team-tool.test.ts: cannot import "bun:test" (from omp/team-tool.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/test-tmp-hygiene.test.ts:
+(fail) the file did not load
+  omp/test-tmp-hygiene.test.ts: cannot import "bun:test" (from omp/test-tmp-hygiene.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/todo-fallback.test.ts:
+(fail) the file did not load
+  omp/todo-fallback.test.ts: cannot import "node:fs" (from omp/todo-fallback.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/todo-panel.edges.test.ts:
+(fail) the file did not load
+  omp/todo-panel.edges.test.ts: cannot import "bun:test" (from omp/todo-panel.edges.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/todo-panel.test.ts:
+(fail) the file did not load
+  omp/todo-panel.test.ts: cannot import "bun:test" (from omp/todo-panel.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/tui-command.test.ts:
+(fail) the file did not load
+  omp/tui-command.test.ts: cannot import "bun:test" (from omp/tui-command.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/usage-statusline.test.ts:
+(fail) the file did not load
+  omp/usage-statusline.test.ts: /home/user/tech-tools/plugins/atlas/omp/usage-statusline.test.ts, compiled line 131 `mod = await import(`./usage-statusline.ts?fresh=${++freshSeq}`);`: a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")
+
+omp/worker-report.test.ts:
+(fail) the file did not load
+  omp/worker-report.test.ts: cannot import "bun:test" (from omp/worker-report.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+omp/workers.test.ts:
+(fail) the file did not load
+  omp/workers.test.ts: cannot import "bun:test" (from omp/workers.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+scripts/sprite_review.test.ts:
+(fail) the file did not load
+  scripts/sprite_review.test.ts: cannot import "bun:test" (from scripts/sprite_review.test.ts): a hooks module imports its own files by relative path and "claude-code", nothing else
+
+ 1214 pass
+ 200 fail
+Ran 1414 tests across 274 files. [31.34s]

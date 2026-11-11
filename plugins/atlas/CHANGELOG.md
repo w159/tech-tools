@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 17.6.0 - 2026-11-11
+
 ### Fixed
 
 - Side panel route row counts the agents that ran (`4x explorer`), not the planned matrix seat count; the planned figure stays in the detail sentence (`seatCount` in `mod/panel-layout.ts`, shared with omp).
