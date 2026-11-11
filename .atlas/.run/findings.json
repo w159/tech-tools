@@ -11658,5 +11658,39 @@
     "status": "rejected",
     "verified_at": "2026-11-11T18:52:42+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "ce4b-gatespoll",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "band gatesPoll runs gates on the poll that sees stop-verdict change (urgent bypass of 5s gap)",
+    "evidence": [
+      "plugins/atlas/mod/register.ts:559-563,675-678; register-fresh.test.ts:128 (5 pass 0 fail)"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && COLORTERM=truecolor bun test mod/register-fresh.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T19:41:29+00:00",
+    "verified_by": "verifier-ce4b"
+  },
+  {
+    "id": "wave12-phase-sync",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "wave 12 HUD/route-tab same glyph+colour claim refuted in live frames f0050/60/61/63 (TODO rows)",
+    "evidence": [
+      "live-150-5d6a53ef-1/frames f0050 rows24-26 HUD running vs panel rows12-14 queued; f0063 HUD returned vs panel queued; phase-sync.test.ts 9 pass uses synthetic busySnap only"
+    ],
+    "doc_refs": [],
+    "reproduction": "COLORTERM=truecolor bun test mod/phase-sync.test.ts (9 pass) + ANSI-strip of frames f0050,f0060,f0061,f0063",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T20:35:51+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

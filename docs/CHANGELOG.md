@@ -1,5 +1,20 @@
 # Changelog
 
+## atlas 17.11.0 - 2026-11-11
+
+- atlas 17.11.0: fixes for hostile critiques 10 and 11 (waves 12 and 13). Also in this release:
+  - The HUD and the side panel draw one tick for the same row; `returned` has its own `◃` mark.
+  - The band, gates tab and core tab agree: one amber `▲` for a warning, no `idle` while the lead runs a tool, open dispatches named, one row set at 110 and 150 columns.
+  - A new Agent or Task call draws its SUBAGENTS row at once, and agent rows keep one order by task on every surface.
+  - The done toast counts only its own kind and fits in 40 cells; the Board in the side panel has no nested ribbon.
+  - The self-referencing `plugins/atlas/.claude-plugin/types` symlink is untracked and ignored.
+
+  Live, 3 runs per width on build 8271cfc8: TODO 82.5% (150 cols) and 82.0% (110); band 94.7% and 78.6%; workers on any surface 94.8% and 93.2%; critic 6.4 (critique 12). The 3x bar is met on 13 of 19 lines. Not met: per-surface never-shown (2 lines), first-appearance lag (2 lines), the side panel gates tab (66.7%, the scorer no longer finds a `verified n of m` line) and the design critic (target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.
+
+## marketplace 5.16.0 - 2026-11-11
+
+- marketplace 5.16.0: atlas 17.11.0. armada and programmer are unchanged.
+
 ## atlas 17.10.0 - 2026-11-11
 
 - atlas 17.10.0: fixes for hostile critique 9. Also in this release:

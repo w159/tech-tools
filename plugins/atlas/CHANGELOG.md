@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 17.11.0 - 2026-11-11
+
+- Fixed (wave 13 follow-up): untracked the self-referencing `plugins/atlas/.claude-plugin/types` symlink that a wave 12 merge added, with a `.gitignore` rule (commit 8271cfc8).
 - Fixed (wave 13 integration): the side panel board footer says `N items` when the nested ribbon is off and no dispatch row is folded (the count was said nowhere); `notify.ts` types its toast list as `(string | Toast)[]`; the host-run `board-key`, `register-core` and `restyle` tests follow the no-nested-BOARD-header and static-import rules.
 - Fixed (critique 11, A5 integration): an Agent or Task tool_use draws its SUBAGENTS row at once, running, named as `agent.spawn` will name it (`routing.ts` keeps a provisional task agent keyed by `tool_use_id`); `agent.spawn` replaces it in one update, so there is never a second row or a gap, and a denied call removes it. Tests: `routing.test.ts`, `motion-surfaces.test.ts` (a new row's state word and glyph are whole on every reveal frame; only the name grows in).
 - Fixed (critique 11, B3 integration): the gates tab `Header contract` line and the route tab gates row agree with the transcript (3 chips draw `3 of 3`, not the per-turn `1 of 1`); the route tab gates row marks a failing group with the same amber `warnMark` as the band and the checks row. Test: `register-core.test.ts`.
