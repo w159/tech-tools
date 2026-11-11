@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { coreMatrix } from '../contracts/core-fixture';
-import { buildCore, coreTick, register, resetCore } from './register';
+import { buildCore, coreTick, headerTallyOf, register, resetCore } from './register';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
@@ -241,5 +241,45 @@ describe('/atlas-core and the header tally', () => {
       await h(s.$, e('no header here'), noopNext).catch(() => undefined);
     }
     expect((await s.state.get({ plugin: 'atlas', key: 'headerTally' })).value).toEqual({ ok: 1, total: 2 });
+  });
+});
+
+describe('critique 7 B1: the header count is the transcript chip count', () => {
+  const snap = { contract: { headerFirstLinePattern: '^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\| \\S' } } as never;
+  // 150-1 f0107: one turn, three header replies between tool calls and notifications; only the last is the turn's answer.
+  const transcript = [
+    { role: 'user', text: 'run the scenario' },
+    { role: 'assistant', text: 'ATLAS | 🔍 research | 1/3 explorers returned (alpha)', toolUses: [] },
+    { role: 'user', text: '<task-notification>alpha</task-notification>' },
+    { role: 'assistant', text: 'ATLAS | 🔍 research | 2/3 explorers returned (alpha, beta)' },
+    { role: 'assistant', text: '', toolUses: [{ tool: 'Bash', input: { command: 'ls' } }] },
+    { role: 'assistant', text: 'ATLAS | ✅ verify | done, 5/5 board items complete' },
+  ];
+  test('headerTallyOf counts every assistant text the transcript draws a chip for, and the answer once', () => {
+    expect(headerTallyOf(transcript, 'ATLAS | ✅ verify | done, 5/5 board items complete', snap)).toEqual({ ok: 3, total: 3 });
+    expect(headerTallyOf([...transcript, { role: 'assistant', text: 'plain reply, no header' }], 'plain reply, no header', snap)).toEqual({ ok: 3, total: 4 });
+    // the host had not appended the answer to the transcript yet: it still counts, once
+    expect(headerTallyOf(transcript.slice(0, -1), 'ATLAS | ✅ verify | done, 5/5 board items complete', snap)).toEqual({ ok: 3, total: 3 });
+  });
+  test('turn.complete stores the transcript count: 3 of 3 under three chips, never 1 of 1', async () => {
+    const s = await session(false);
+    (s.$ as unknown as { session: Record<string, unknown> }).session.messages = async (a?: { agentId?: string }) => (a?.agentId ? [] : transcript);
+    const e = { reason: 'answer', answer: 'ATLAS | ✅ verify | done, 5/5 board items complete', agentId: undefined, isAborted: false };
+    for (const h of s.all('turn.complete', ['reason', 'answer'])) await h(s.$, e, noopNext).catch(() => undefined);
+    expect((await s.state.get({ plugin: 'atlas', key: 'headerTally' })).value).toEqual({ ok: 3, total: 3 });
+  });
+});
+
+describe('critique 7 B2: evidence counts the plan the band counts', () => {
+  test('buildCore counts this session plan items, not the shared board (dispatch rows, other sessions, advisor notes)', async () => {
+    const s = await session(false);
+    const row = (id: string, o: Record<string, unknown>) => ({ id, content: `item ${id}`, status: 'completed', evidence: 'ran it', session_id: 'sess-core', ...o });
+    const snap = (await s.state.get({ plugin: 'atlas', key: 'snapshot' })).value as Record<string, unknown>;
+    await s.state.set({ plugin: 'atlas', key: 'snapshot' }, { ...snap, todos: [
+      row('T1', { origin: 'session' }), row('T2', { origin: 'session', evidence: '' }), row('T3', { origin: 'session', status: 'pending' }),
+      row('d1', { origin: 'dispatch' }), row('d2', { origin: 'dispatch' }), row('x1', { origin: 'session', session_id: 'other-session' }), row('a1', { origin: 'advisor' }),
+    ] });
+    const core = await buildCore(s.$);
+    expect(core!.contract.evidence).toEqual({ ok: 1, total: 2 }); // T1 and T2 are the plan's done items; the rest of the board is not the plan
   });
 });

@@ -151,8 +151,21 @@ describe('B4: lastText and clipWords', () => {
     expect(lastText('- 2) done: see /a/b/c.ts:12 and /x/y/z.md')).toBe('done: see c.ts:12 and z.md');
     expect(lastText('a 1. b')).toBe('a 1. b');
   });
+  test('B4: a doubled leading verb reads once, keeping the first spelling', () => {
+    expect(lastText('read Read gamma.py')).toBe('read gamma.py');
+    expect(lastText('Read read /a/b/gamma.py')).toBe('Read gamma.py');
+    expect(lastText('read gamma.py')).toBe('read gamma.py');
+    expect(lastText('read reader.py')).toBe('read reader.py');
+  });
+  test('B4: clipWords cuts before an unclosed bracket and off a dangling connector', () => {
+    expect(clipWords('lines 1-7 (7 lines, def beta_sum(a, b))', 22)).toBe('lines 1-7...');
+    expect(clipWords('bash Post result line to the lead now', 28)).toBe('bash Post result line...');
+    expect(clipWords('Read beta.py -> lines 1-7: def beta', 20)).toBe('Read beta.py...');
+    expect(cells(clipWords('lines 1-7 (7 lines, def beta_sum(a, b))', 22))).toBeLessThanOrEqual(22);
+  });
   test('clipWords never cuts mid-word', () => {
-    expect(clipWords('read the whole board now', 15)).toBe('read the...');
+    expect(clipWords('read the whole board now', 15)).toBe('read...'); // the cut falls off the dangling `the`
+    expect(clipWords('read whole board now', 17)).toBe('read whole...');
     expect(clipWords('read the whole board now', 40)).toBe('read the whole board now');
     expect(clipWords('sidebar-paint.tsx', 8)).toBe('');
     expect(cells(clipWords('read the whole board now', 15))).toBeLessThanOrEqual(15);

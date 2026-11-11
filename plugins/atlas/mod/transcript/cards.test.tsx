@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing'
 import { fitText, textWidth } from '../theme'
 import { hexTo256, hostTo256, toneHex } from '../atlas-ui'
-import { bubbleTree, notificationTree, waveTree, workerCard, goalLine, resultLine, phaseOf } from './cards'
+import { bubbleTree, notificationTree, waveTree, workerCard, goalLine, resultLine, phaseOf, stripStatus } from './cards'
 import type { CallLike } from './cards'
 
 const leaf = (n: unknown): string => (typeof n === 'string' || typeof n === 'number' ? String(n) : '')
@@ -57,7 +57,8 @@ test('the card frame takes the state hue: running, done and failed differ; the s
 test('done card shows the result line in the last row; errored reads failed in the border', () => {
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished')!
   expect(rowsOf(done)[0]).toContain('done impl-a')
-  expect(text(done)).toContain('STATUS: DONE')
+  expect(text(done)).not.toContain('STATUS')
+  expect(text(done)).not.toContain('DONE')
   const bad = workerCard(call({ isRunning: false, isErrored: true }), 'failed')!
   expect(rowsOf(bad)[0]).toContain('failed impl-a')
 })
@@ -190,7 +191,7 @@ test('a wave whose workers all returned is headed finished, never done', () => {
 test('the outcome of a background worker is the last row, led by its label', () => {
   const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
   const lastRow = (ended: string, outcome: string): string => rowsOf(workerCard(launch, 'finished', 60, undefined, '', { ended, outcome })!).slice(1, -1).join('\n')
-  expect(lastRow('finished', 'STATUS: DONE · 29s')).toContain('last  STATUS: DONE · 29s')
+  expect(lastRow('finished', 'STATUS: DONE · 29s')).toContain('last  29s')
 })
 
 test('a killed or failed background worker reads failed in the border; a finished one reads done', () => {
@@ -201,7 +202,7 @@ test('a killed or failed background worker reads failed in the border; a finishe
 })
 
 test('the notification row is state, name, role and outcome', () => {
-  expect(text(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a {2}explorer STATUS: DONE/)
+  expect(text(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a {2}explorer\s*$/)
   expect(text(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ failed {2}wave-a/)
 })
 
@@ -224,4 +225,17 @@ test('C6: on a 256-colour terminal the card fills are stable palette colours, ne
   const hexes = [...JSON.stringify(card).matchAll(/"backgroundColor":"(#[0-9a-f]{6})"/g)].map((x) => x[1]!)
   expect(hexes.length).toBeGreaterThan(0)
   for (const b of hexes) expect([b, hostTo256(b), hostTo256(b) === 17]).toEqual([b, hexTo256(b), false])
+})
+
+test('B3: a raw STATUS: <WORD> caps prefix never prints on a card; the border state word carries it', () => {
+  expect(stripStatus('STATUS: DONE')).toBe('')
+  expect(stripStatus('STATUS: DONE - read alpha.py')).toBe('read alpha.py')
+  expect(stripStatus('STATUS: COMPLETE · 29s')).toBe('29s')
+  expect(stripStatus('STATUS: BLOCKED needs a tmux team')).toBe('blocked: needs a tmux team')
+  expect(stripStatus('STATUS: FAILED')).toBe('failed')
+  expect(stripStatus('read alpha.py')).toBe('read alpha.py')
+  const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE - read alpha.py' }), 'finished', 60)!
+  expect(rowsOf(done)[0]).toContain('done impl-a')
+  expect(text(done)).toContain('last  read alpha.py')
+  expect(text(done)).not.toMatch(/STATUS|DONE/)
 })

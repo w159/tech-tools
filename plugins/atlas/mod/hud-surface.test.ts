@@ -273,3 +273,31 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
   });
 
 });
+
+describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
+  const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py', ctx: null, focus: false, ...o });
+  test('B5: the SUBAGENTS column header outlives the blank rows: the budgeted stack keeps it at 110 columns', () => {
+    const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
+    const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
+    const out = text(fitStack({ todos, agents: rows }, opts(110), 8)); // ribbon + 3 plan rows + ribbon + header + 2 agents: no room for the blank rows
+    expect(out.length).toBe(8);
+    expect(out.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
+  });
+  test('B4: a doubled verb draws once in the LAST column', () => {
+    const out = text(agentRows([row({ name: 'alpha-explorer', task: 'read alpha.py', tool: 'read Read alpha.py' })], opts(110), full));
+    expect(out[2]).toContain('read alpha.py read alpha.py');
+    expect(out[2]).not.toContain('Read');
+  });
+  test('B4: LAST takes the model column slack before it is cut', () => {
+    const last = 'one two three four five six seven eight nine tenth ab'; // 53 cells: 110 - 60 = 50 with the model column at 9, 110 - 56 = 54 at its tight width
+    const out = text(agentRows([row({ name: 'alpha-explorer', task: 'read alpha.py', tool: last })], opts(110), full));
+    expect(out[2]).toContain(last);
+    expect(out[2]).not.toContain('...');
+    expect(textWidth(out[2]!)).toBeLessThanOrEqual(110);
+  });
+  test('B4: a done agent keeps its LAST text (the row turning done does not blank it)', () => {
+    const out = text(agentRows([row({ name: 'alpha-explorer', state: 'done', task: 'read alpha.py', tool: 'read runs.ts:17' })], opts(110), full));
+    expect(out[2]).toContain('done');
+    expect(out[2]).toContain('read runs.ts:17');
+  });
+});

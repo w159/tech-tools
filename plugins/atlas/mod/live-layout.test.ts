@@ -157,8 +157,8 @@ describe('4. no fold marker', () => {
 
 describe('5. the plan row budget and the overflow row', () => {
   test('five todos and three agents: the compact form holds all five plan rows', () => {
-    // ribbon + 5 plan rows + agents ribbon + 3 agents = 10 rows
-    expect(hudCompactRows(input, 88)).toBe(10);
+    // ribbon + 5 plan rows + agents ribbon + column header + 3 agents = 11 rows
+    expect(hudCompactRows(input, 88)).toBe(11);
     const rows = hudLines(input, view(88, hudBudget(13, hudCompactRows(input, 88), 7, true))).map(runsString);
     expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
@@ -181,7 +181,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   const planDone = PLAN.map((t) => ({ ...t, status: 'completed' }));
   const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
   const hudIn: HudInput = { todos: planDone, agents };
-  const budget = 14; // the live frame: 15 slot rows less the host's line
+  const budget = 16; // the live frame's 15 slot rows less the host's line (14), plus the Subagents column-header row and its blank
   const snapshot = busySnap();
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
   const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));
