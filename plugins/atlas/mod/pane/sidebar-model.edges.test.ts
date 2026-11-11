@@ -70,13 +70,13 @@ describe('worker age and order', () => {
     expect(byName(s, 'rn').secs).toBe(70); // a running worker still counts to now
     expect(byName(s, 'nofin').secs).toBe(70); // no finish stamp (since == start): fall back to now rather than show 0s
   });
-  test('running, waiting, failed, queued (a parked worker, then a dispatched member the host does not list), then done', () => {
+  test('start order, never state order (critique 11 A3): the squad as listed, then the dispatched members the host does not list', () => {
     const s = world({
       squad: [sq('dn', 'finished'), sq('pk', 'parked'), sq('fl', 'failed'), sq('bl', 'running'), sq('rn', 'running')],
       activity: { dn: act(), pk: act(), fl: act(), bl: act({ mood: 'blocked' }), rn: act() } as never,
       members: [{ name: 'qm' }] as never,
     });
-    expect(workers(s).map((w) => `${w.name}:${w.state}`)).toEqual(['rn:running', 'bl:waiting', 'fl:failed', 'pk:queued', 'qm:queued', 'dn:done']);
+    expect(workers(s).map((w) => `${w.name}:${w.state}`)).toEqual(['dn:done', 'pk:queued', 'fl:failed', 'bl:waiting', 'rn:running', 'qm:queued']);
   });
 });
 

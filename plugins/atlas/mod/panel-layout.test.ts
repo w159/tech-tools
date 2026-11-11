@@ -106,15 +106,16 @@ describe('team tab lists the subagents by name and state', () => {
   test('every worker row names the worker and one of the six state words', () => {
     const body = bodyLines(panelWorld('team', 80, mocha, { rows: 24 })).map(lineText); // the short pane: one row per worker
     expect(body).toHaveLength(world.workers.length);
-    world.workers.forEach((w, i) => {
+    const byTask = ['implementer-layout', 'implementer-gates', 'implementer-band', 'runner-land', 'implementer-live'].map((n) => world.workers.find((w) => w.name === n)!); // critique 11 A3: by task, not by state
+    byTask.forEach((w, i) => {
       expect(body[i]).toContain(w.name);
       expect(body[i]).toContain(w.state);
       expect(UI_STATES).toContain(w.state);
     });
   });
-  test('running first, then failed, queued, done (as the design lists them)', () => {
+  test('by task: T1, T3, T4, T5, T6 (a worker keeps its row whatever its state)', () => {
     expect(bodyLines(panelWorld('team', 80, mocha, { rows: 24 })).map((l) => lineText(l).slice(4).split(' ')[0])).toEqual(
-      ['implementer-band', 'implementer-live', 'runner-land', 'implementer-layout', 'implementer-gates']);
+      ['implementer-layout', 'implementer-gates', 'implementer-band', 'runner-land', 'implementer-live']);
   });
   test('the recipient takes the focus marker; without one the first running worker does', () => {
     const marked = (r: string | null): string[] => bodyLines(panelWorld('team', 80, mocha, { recipient: r })).map(lineText).filter((l) => l.startsWith('▸'));
@@ -123,14 +124,15 @@ describe('team tab lists the subagents by name and state', () => {
   });
   test('an open worker row adds what it is doing and how long it has run', () => {
     const open = bodyLines(panelWorld('team', 80, mocha, { expanded: 'worker:implementer-band' })).map(lineText);
-    expect(open[1]).toContain('read runs.ts:17');
-    expect(open[2]).toContain('running 42s');
+    const at = open.findIndex((l) => l.includes('implementer-band'));
+    expect(open[at + 1]).toContain('read runs.ts:17');
+    expect(open[at + 2]).toContain('running 42s');
   });
   test('nobody dispatched is the design empty state', () => {
     expect(rows('team', 80, { workers: [] }).at(-1)).toBe('(no state)  nobody dispatched yet, ask the lead to start a worker');
   });
   test('rows are pressable and select the worker', () => {
-    const l = bodyLines(panelWorld('team', 80, mocha))[0]!;
+    const l = bodyLines(panelWorld('team', 80, mocha)).find((x) => x.press?.name === 'implementer-band')!;
     expect(l.press).toEqual({ kind: 'worker', key: 'worker:implementer-band', name: 'implementer-band' });
   });
 });

@@ -134,11 +134,11 @@ function railRow(ids: readonly string[], active: number, ui: Ui): Run[] {
 
 // ---- SUBAGENTS -------------------------------------------------------------------------------------------
 
-/** Agents in the order the mocks show them: running first, then blocked, failed, waiting, queued and done. Inside a state an agent that owns plan rows
- * sorts by its first T row (T1 before T2), not by start time; agents without a plan row follow, then as given. */
-export const sortAgents = <T extends { state: UiState; tasks?: readonly number[] }>(rows: readonly T[]): T[] => {
+/** Agents in one stable order: by the first plan row (T row) each owns (T1 before T2), whatever its state, so a row never moves when a worker finishes; agents that own
+ * none follow the tasked ones in the order given (start order). The state is the row's word, not its place. */
+export const sortAgents = <T extends { tasks?: readonly number[] }>(rows: readonly T[]): T[] => {
   const first = (r: T): number => (r.tasks && r.tasks.length ? Math.min(...r.tasks) : Infinity);
-  return rows.map((row, i) => ({ row, i })).sort((a, b) => PRIORITY[a.row.state] - PRIORITY[b.row.state] || (first(a.row) === first(b.row) ? 0 : first(a.row) < first(b.row) ? -1 : 1) || a.i - b.i).map((x) => x.row);
+  return rows.map((row, i) => ({ row, i })).sort((a, b) => (first(a.row) === first(b.row) ? 0 : first(a.row) < first(b.row) ? -1 : 1) || a.i - b.i).map((x) => x.row);
 };
 
 /** Nothing below 80 columns: the band's counts carry the running agents there (design 3g). */

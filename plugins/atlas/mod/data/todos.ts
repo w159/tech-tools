@@ -156,6 +156,10 @@ export const ownTodos = <T extends object>(items: readonly T[], sessionId?: stri
 export const planBasis = <T extends object>(items: readonly T[], sessionId?: string): T[] =>
   items.filter((it) => ownRow(it, sessionId) && isPlanItem(it));
 
+/** The plan rows every surface lists: the plan basis over this session's rows with a title-named worker made the owner (ownTodos). The HUD, the side panel's
+ * route tab and the board all read this one set, so a row whose worker is named only in its title (`T1 read alpha.py (alpha-explorer)`) gets that owner's state everywhere. */
+export const ownPlan = <T extends object>(items: readonly T[], sessionId?: string): T[] => planBasis(ownTodos(items, sessionId), sessionId);
+
 /** Advisor notes are not operating-contract work: they never join phase groups or progress. */
 const isAdvisor = (it: BoardItem): boolean => it.origin === 'advisor';
 /** Carried rows are re-stamped with the new session id at boot (atlas_todo.carry) yet belong to an earlier plan. */

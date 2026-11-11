@@ -9,8 +9,8 @@ import { agentRows, fitStack, padRows, sortAgents, stack, stateCounts, taskCell,
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 export const worldTodos = (): TodoRow[] => world.todos.map((t) => ({ label: t.label, state: t.state, detail: t.detail, focus: t.state === 'running' }));
-export const worldAgents = (): AgentRow[] =>
-  world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running' }));
+export const worldAgents = (): AgentRow[] => // the adapter's order (hud.ts agentModel): by task, not by state
+  sortAgents(world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running' })));
 const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
 const full = { spacers: true, extras: true };
@@ -70,12 +70,12 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
     for (const cols of [80, 88, 99]) {
       const rows = text(agentRows(worldAgents(), opts(cols), full));
       expect(rows[1]).toMatch(/AGENT +STATE +MODEL +TASK +LAST/);
-      expect(rows[2]).toMatch(/implementer-band +running +opus +T4 +read runs\.ts:17/);
-      expect(rows[4]).toMatch(/runner-land +queued +opus +T5 +waits on implementer-live/);
+      expect(rows[4]).toMatch(/implementer-band +running +opus +T4 +read runs\.ts:17/);
+      expect(rows[5]).toMatch(/runner-land +queued +opus +T5 +waits on implementer-live/);
       for (const r of agentRows(worldAgents(), opts(cols), full)) expect(runsString(r).length).toBeLessThanOrEqual(cols);
     }
     // nothing a narrow terminal shows is missing from a wide one: the 104 column row carries the same cells
-    const cells = (cols: number) => (text(agentRows(worldAgents(), opts(cols), full))[2] ?? '').split(/\s+/).filter(Boolean);
+    const cells = (cols: number) => (text(agentRows(worldAgents(), opts(cols), full))[4] ?? '').split(/\s+/).filter(Boolean);
     expect(cells(88)).toEqual(cells(104));
   });
   test('60 and 40 columns draw no Subagents block (the band counts carry it)', () => {
@@ -92,7 +92,7 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
     expect(stateCounts(all)).toBe(COUNT_ORDER.map((s) => `1 ${s}`).join(' · '));
   });
   test('a long name widens the name column instead of being cut, up to 28 cells', () => {
-    const rows = text(agentRows([{ ...worldAgents()[0]!, name: 'implementer-capture-harness' }], opts(120), full));
+    const rows = text(agentRows([{ ...worldAgents().find((a) => a.state === 'running')!, name: 'implementer-capture-harness' }], opts(120), full));
     expect(rows[2]).toContain('implementer-capture-harness');
     expect(rows[2]!.indexOf('running')).toBe(4 + 28);
   });
@@ -164,9 +164,12 @@ describe('mutation kills (round 2): order, slots, focus mark, name column cap, s
   const ag = (name: string, state: AgentRow['state'] = 'running'): AgentRow => ({ name, state, model: 'opus', tasks: [], tool: '', ctx: null, focus: false });
   const td = (label: string, state: TodoRow['state'] = 'queued', focus = false): TodoRow => ({ label, state, detail: '', focus });
 
-  test('sortAgents puts running, blocked, failed, waiting, queued, done in that order and keeps input order inside a state', () => {
-    const rows = [ag('f1', 'failed'), ag('b1', 'blocked'), ag('r1'), ag('r2'), ag('d1', 'done'), ag('q1', 'queued'), ag('w1', 'waiting'), ag('r3'), ag('b2', 'blocked')];
-    expect(sortAgents(rows).map((r) => r.name)).toEqual(['r1', 'r2', 'r3', 'b1', 'b2', 'f1', 'w1', 'q1', 'd1']);
+  test('sortAgents orders by the first plan row each agent owns, whatever its state, and keeps input order for those without one (critique 11 A3)', () => {
+    const t = (name: string, state: AgentRow['state'], ...tasks: number[]): AgentRow => ({ ...ag(name, state), tasks });
+    const rows = [t('f1', 'failed', 3), ag('d0', 'done'), t('r1', 'running', 2), t('d1', 'done', 5, 1), ag('q0', 'queued'), t('w1', 'waiting', 4)];
+    expect(sortAgents(rows).map((r) => r.name)).toEqual(['d1', 'r1', 'f1', 'w1', 'd0', 'q0']);
+    // a worker that finishes does not move: the same rows with other states give the same order
+    expect(sortAgents(rows.map((r) => ({ ...r, state: 'done' as const }))).map((r) => r.name)).toEqual(['d1', 'r1', 'f1', 'w1', 'd0', 'q0']);
   });
   test('windowRows with no slot shows nothing and counts every row hidden; one slot is only the overflow row', () => {
     const rows = [td('a', 'running'), td('b', 'queued')];

@@ -71,7 +71,8 @@ const taskOf = (task: string | undefined): string => flat(task).replace(/^[a-z0-
 
 /** Band workers plus the squad's spawn model and task, in the HUD's shape; `queued` names dispatched workers the host does not list yet (data/live.ts queuedMembers). */
 export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[] = []): HudAgent[] {
-  const listed = live.map((w) => {
+  const started = (w: LiveWorker): number => squad.findIndex((a) => a.name === w.name); // the squad lists workers in start order; liveWorkers sorts by urgency, which would move a row when a worker's state changes
+  const listed = [...live].sort((a, b) => started(a) - started(b)).map((w) => {
     const s = squad.find((a) => a.name === w.name);
     const name = displayName(w.name, w.role, s?.task);
     return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
@@ -93,6 +94,10 @@ const WORD_PREFIX = /^(research|theory|plan|design|test|implement|build|fix|veri
 /** The item's text without a `[phase] ` or `Phase: ` prefix (the rail names the phase). */
 const labelOf = (t: TodoItem): string => flat(t.content).replace(LABEL_PREFIX, '').replace(WORD_PREFIX, '');
 const mmss = (ms: number): string => `${String(Math.floor(ms / 60_000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+
+/** Owner name -> state word, from the HUD's agents (by display name and by host key): the one map the TODO rows and the side panel's route tab read an owner's state from. */
+export const ownerStatesOf = (agents: readonly HudAgent[]): Map<string, UiState> =>
+  new Map(agents.flatMap((a): [string, UiState][] => { const ui = a.ui ?? workerUiState(a.state); return [[a.name, ui], ...(a.key !== undefined ? [[a.key, ui] as [string, UiState]] : [])]; }));
 
 /** Plan rows in plan order. Every row is shown with its own state; the focus mark sits on the running row, else the first open one. */
 export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map()): TodoRow[] {
@@ -151,7 +156,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
-    s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.flatMap((a): [string, UiState][] => [[a.name, a.ui ?? workerUiState(a.state)], ...(a.key !== undefined ? [[a.key, a.ui ?? workerUiState(a.state)] as [string, UiState]] : [])]))), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
+    s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents)), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
     o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}) },
   };
 }

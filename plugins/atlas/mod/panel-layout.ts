@@ -331,7 +331,8 @@ function routeBody(m: PanelModel): PanelLine[] {
   if (gates) rows.push(gates);
   rows.push(...agentsRows(m));
   // A tall pane lists the agents under their count (the row headed `agents` holds agents, never plan rows); a short one names only the loose ones below the plan.
-  const listed = tall(m) ? m.workers.slice(0, AGENT_ROWS) : [];
+  const team = workersByTask(m); // the one agent order (HUD, route and team tab): by task
+  const listed = tall(m) ? team.slice(0, AGENT_ROWS) : [];
   if (listed.length) {
     const nameW = Math.min(nameCap(m.cols), Math.max(...listed.map((w) => cells(nameOf(w))), 1));
     rows.push(...listed.map((w) => routeAgentRow(m, w, nameW)));
@@ -340,7 +341,7 @@ function routeBody(m: PanelModel): PanelLine[] {
   if (!m.todos.length) {
     rows.push(todoCount(m));
     // Work may be running with no plan on the board: say so with the workers, never "nothing planned".
-    const running = listed.length ? [] : m.workers.filter((w) => w.state === 'running');
+    const running = listed.length ? [] : team.filter((w) => w.state === 'running');
     const nameW = Math.min(nameCap(m.cols), Math.max(...running.map((w) => cells(nameOf(w))), 1));
     if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
     else if (!m.workers.length) rows.push(BLANK, line([r('(no state)', 'muted'), r(`  no tasks yet ${dot(m.ui)} add one with /todo add`, 'muted')]));
@@ -348,7 +349,7 @@ function routeBody(m: PanelModel): PanelLine[] {
   }
   // Agents that work but hold no plan row (the plan rows carry no owner while the agents are host-spawned): a group under the plan names them, in the HUD Subagents state words.
   const owners = new Set(m.todos.map((t) => t.owner).filter((o): o is string => !!o));
-  const loose = listed.length ? [] : m.workers.filter((w) => w.state !== 'done' && w.state !== 'queued' && !owners.has(w.name));
+  const loose = listed.length ? [] : team.filter((w) => w.state !== 'done' && w.state !== 'queued' && !owners.has(w.name));
   const looseShown = loose.slice(0, AGENT_ROWS);
   const room = Math.max(1, bodyRows(m, rows.length + 1) - (loose.length ? looseShown.length + 1 + (loose.length > looseShown.length ? 1 : 0) : 0));
   const ordered = m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
@@ -414,11 +415,11 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
   return out;
 }
 
-/** `lead  1 running · 2 done`: the lead's tally of its workers. Running always reads; the other states only when not zero. */
+/** `workers  1 running · 2 done`: the tally of the lead's workers, under its own row (which already names the lead, so the name is not said twice). Running always reads; the other states only when not zero. */
 function leadSummary(m: PanelModel): PanelLine {
   const n = (s: UiState): number => m.workers.filter((w) => w.state === s).length;
   const parts = UI_STATES.filter((s) => s === 'running' || n(s)).map((s) => `${n(s)} ${s}`);
-  return line(fitRuns([r(' '.repeat(GRID_LEAD)), r('lead  ', 'text', { bold: true }), r(parts.join(` ${dot(m.ui)} `), 'muted')], m.cols)); // in the name column, under the lead's own row
+  return line(fitRuns([r(' '.repeat(GRID_LEAD)), r('workers  ', 'text', { bold: true }), r(parts.join(` ${dot(m.ui)} `), 'muted')], m.cols)); // in the name column, under the lead's own row
 }
 
 /** The lead as the band would read it: while the band is BLOCKED (the lead declared it, or the Stop gate's last verdict refused the stop) the lead is not `done`; it
@@ -432,10 +433,11 @@ function leadOf(m: PanelModel): PanelWorker | undefined {
   return { ...lead, state: 'blocked', detail: blockReasons(declared, stop?.gates ?? ['gate']).long };
 }
 
-/** The workers in the HUD's order (hud-surface sortAgents): running first, then blocked, failed, waiting, queued and done; inside a state the worker that owns the
- * earliest plan row (T1 before T2) first, those that own none after, then as given. The plan row number is its place in `m.todos` (the board's order). */
+/** The workers in the HUD's order (hud-surface sortAgents): by the earliest plan row (T1 before T2) each owns, whatever its state, those that own none after, then as
+ * given (start order). The plan row number is its place in `m.todos` (the board's order); a worker whose row names no owner falls back to its own `T3` tag. */
 export function workersByTask(m: Pick<PanelModel, 'todos' | 'workers'>): PanelWorker[] {
-  return sortAgents(m.workers.map((w) => ({ w, state: w.state, tasks: m.todos.flatMap((t, i) => (t.owner === w.name ? [i + 1] : [])) }))).map((x) => x.w);
+  const tag = (w: PanelWorker): number[] => { const n = /^T(\d+)$/i.exec(w.task ?? '')?.[1]; return n ? [Number(n)] : []; };
+  return sortAgents(m.workers.map((w) => { const owned = m.todos.flatMap((t, i) => (t.owner === w.name ? [i + 1] : [])); return { w, tasks: owned.length ? owned : tag(w) }; })).map((x) => x.w);
 }
 
 function teamBody(m: PanelModel): PanelLine[] {
@@ -729,7 +731,10 @@ const SEAT_WORD_W = 10; // `as planned`
 /** The dispatch plan against what ran: a row per team (class/effort, name, transport), a row per seat with the verdict `as planned`, `drift` or `not run`. */
 function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] {
   const teams = c.routes.slice(-cap).reverse();
-  const head = heading('teams', teams.length ? [r(`${teams.length} this session`, 'muted')] : [], m);
+  // One source for the heading and the rows: an in-process route is a dispatch group, never a tmux team (its row says `no tmux team`), so it is counted apart.
+  const inProc = teams.filter((rt) => rt.transport === 'in-process').length;
+  const tmux = teams.length - inProc;
+  const head = heading(tmux === 0 && inProc > 0 ? 'dispatches' : 'teams', teams.length ? [r(inProc > 0 && tmux > 0 ? `${tmux} tmux, ${inProc} in-process` : `${teams.length} this session`, 'muted')] : [], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
   const names = teams.flatMap((rt) => rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`));
