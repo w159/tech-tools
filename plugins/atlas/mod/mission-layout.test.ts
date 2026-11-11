@@ -25,6 +25,25 @@ describe('mission-layout: bold is opt-in', () => {
   });
 });
 
+describe('mission-layout: critique 9, the contract row outlasts the last-run row when rows are tight (the 110 band)', () => {
+  const core = [{ t: ' contract  4 of 4 headers', tone: 'text' as const }];
+  const idle = (maxRows: number, cols = 110) => rows(model({ cols, maxRows, phase: 'done', done: 3, total: 3, core, lastRun: { workers: 3, secs: 19, failed: 0 }, checks: [{ id: 'completion', ok: true }], keysWidth: 40 }));
+  test('4 rows: band, contract, checks and keys; the last run gives way', () => {
+    const r4 = idle(4);
+    expect(r4).toHaveLength(4);
+    expect(r4.some((x) => x.includes('contract'))).toBe(true);
+    expect(r4.some((x) => x.includes('last run'))).toBe(false);
+  });
+  test('5 rows: everything shows, last run above contract', () => {
+    const r5 = idle(5);
+    expect(r5.findIndex((x) => x.includes('last run'))).toBeGreaterThan(-1);
+    expect(r5.findIndex((x) => x.includes('last run'))).toBeLessThan(r5.findIndex((x) => x.includes('contract')));
+  });
+  test('no gauge track in the 110 band', () => {
+    expect(idle(4)[0]).not.toContain('░');
+  });
+});
+
 describe('mission-layout: A3 the count order is the shared COUNT_ORDER', () => {
   test('running, failed, waiting, queued: waiting reads before queued on every form', () => {
     const ws = [w('q', 'queued'), w('wt', 'waiting'), w('f', 'failed'), w('r', 'running')];
@@ -43,7 +62,7 @@ describe('mission-layout: the header never reads idle or all ok beside a failing
     for (const cols of [160, 120, 100, 80, 60, 40]) {
       const b = band(model({ cols, checks: bad, phase: 'verify', done: 3 }));
       expect(b).not.toContain('idle');
-      expect(b).not.toContain('BLOCKED');
+      expect(b).not.toContain('blocked');
       expect(b).toContain('routing warning');
     }
     expect(band(model({ checks: [{ id: 'a', ok: false }, { id: 'b', ok: false }] }))).toContain('2 gates warning');
@@ -53,26 +72,26 @@ describe('mission-layout: the header never reads idle or all ok beside a failing
   test('the rich band says warning too', () => {
     const b = runsText(bandLines(model({ cols: 160, rich: true, checks: bad }))[0]!.runs);
     expect(b).not.toContain('idle');
-    expect(b).not.toContain('BLOCKED');
+    expect(b).not.toContain('blocked');
     expect(b).toContain('routing warning');
   });
   test('a refused Stop reads BLOCKED with the refusing gate named, in every width form and the rich band', () => {
     for (const cols of [160, 120, 100, 80, 60, 40]) {
       const b = band(model({ cols, checks: bad, stopGates: ['team gate'], phase: 'verify', done: 3 }));
-      expect(b).toContain('BLOCKED');
+      expect(b).toContain('blocked');
       expect(b).not.toContain('warning');
-      if (cols >= 60) expect(b).toContain('stop: team gate');
+      if (cols >= 60) expect(b).toContain('team gate');
     }
-    expect(band(model({ checks: null, stopGates: ['a', 'b'] }))).toContain('stop: 2 gates');
+    expect(band(model({ checks: null, stopGates: ['a', 'b'] }))).toContain('a, b');
     const rich = runsText(bandLines(model({ cols: 160, rich: true, checks: bad, stopGates: ['team gate'] }))[0]!.runs);
-    expect(rich).toContain('BLOCKED · stop: team gate');
+    expect(rich).toContain('blocked: team gate');
   });
   test('no Stop block and no declaration: a passing or failing check alone is never BLOCKED', () => {
-    expect(band(model({ checks: bad, workers: [w('a', 'running')] }))).not.toContain('BLOCKED');
-    expect(band(model({ checks: null, stopGates: [] }))).not.toContain('BLOCKED');
+    expect(band(model({ checks: bad, workers: [w('a', 'running')] }))).not.toContain('blocked');
+    expect(band(model({ checks: null, stopGates: [] }))).not.toContain('blocked');
   });
   test('a declared block still reads BLOCKED: needs you', () => {
-    expect(band(model({ blocked: true }))).toContain('BLOCKED · needs you');
+    expect(band(model({ blocked: true }))).toContain('blocked: needs you');
   });
   test('last run does not say all ok while a check fails; it does when none fails', () => {
     expect(all(model({ checks: bad, lastRun }))).not.toContain('all ok');

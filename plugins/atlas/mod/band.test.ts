@@ -94,13 +94,13 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(plain.rows[0]).toContain('◖ ◆ ATLAS ◗');
     expect(cells(plain.rowNodes[0]!).every((t) => t.props.color === undefined && t.props.backgroundColor === undefined)).toBe(true);
   });
-  test('blocked reads `▲ BLOCKED · needs you` and the phase rail keeps the last real phase lit', () => {
+  test('blocked reads `▲ blocked: needs you` and the phase rail keeps the last real phase lit', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
     const { rows } = panel(160, { snapshot, live: [], lastPhase: 'implement', rich: true });
     expect(rows[0]).toContain('▸ 4 implement');
     const band = panel(160, { snapshot, live: [], lastPhase: 'implement' }).rows[0]!;
-    expect(band).toContain('▲ BLOCKED · needs you');
+    expect(band).toContain('▲ blocked: needs you');
     expect(band).not.toContain('idle');
   });
   test('rich: capsule with the numbered phase rail, a blank row, then the gauges', () => {
@@ -115,7 +115,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ██▌░░░░░░░ 1 of 4');
-    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {2}todo ██░░░░░░ 1 of 4/);
+    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo 1 of 4 {3}ctx 12%/); // figures, no gauge track, below 120 (critique 9)
     expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
   });
@@ -398,7 +398,7 @@ describe('below 80 columns: only the band, one row', () => {
   test('a blocked band says so in the summary', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
-    expect(panel(70, { snapshot, live: [], lastPhase: 'implement' }).rows[0]).toContain('BLOCKED');
+    expect(panel(70, { snapshot, live: [], lastPhase: 'implement' }).rows[0]).toContain('blocked');
   });
   test('the panel is a non-shrinking column on the panel background', () => {
     const { node } = panel(160);

@@ -114,7 +114,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   return {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now,
     project: boardOf(s), scope: b.team,
-    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['gate'] } : {}),
+    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
     done, total, todoBlocked: blockedCount(planBasis(s.todos, s.sessionId), workerStates(s, b.live)),
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,

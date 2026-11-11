@@ -196,7 +196,6 @@ from docs_drift import find_root as _find_root  # noqa: E402
 from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
 
 
-
 def _record_analytics(key):
     """Anonymous usage counter gate.<letter>.block (validated). Imported on use, so a Stop that records
     nothing never pays for the client; a missing or broken module never changes gate behavior."""
@@ -232,7 +231,9 @@ def _user_facing_scripts_dir() -> Path:
     # invoked) is the only place the spelled path survives.
     main = getattr(sys.modules.get("__main__"), "__file__", None) or ""
     here = os.path.abspath(main) if main else ""
-    if not here or not os.path.isfile(os.path.join(os.path.dirname(here), "completion_gate_core.py")):
+    if not here or not os.path.isfile(
+        os.path.join(os.path.dirname(here), "completion_gate_core.py")
+    ):
         here = os.path.abspath(__file__)
     return Path(here).parents[1] / "scripts"
 
@@ -370,7 +371,9 @@ def _roadmap_done_items(content: str) -> bool:
     status_col = None
     for raw in content.splitlines():
         line = raw.strip().lower()
-        if re.match(r"[-*]\s*\[(x|done)\]", line) or re.match(r"status:\s*done\b", line):
+        if re.match(r"[-*]\s*\[(x|done)\]", line) or re.match(
+            r"status:\s*done\b", line
+        ):
             return True
         if not line.startswith("|"):
             status_col = None
@@ -422,7 +425,9 @@ def _delegation_exempt():
     contracts/native-tools.json (also read by omp/contracts.ts); None if unreadable."""
     try:
         path = (
-            Path(os.path.abspath(__file__)).parents[1] / "contracts" / "native-tools.json"
+            Path(os.path.abspath(__file__)).parents[1]
+            / "contracts"
+            / "native-tools.json"
         )
         spec = json.loads(path.read_text())["delegationExempt"]
         return tuple(str(d) for d in spec["dirs"]), tuple(
@@ -1458,10 +1463,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # checks it on its own at the in-flight return (`_reply_lacks_header`).
     sidechain = _payload_is_sidechain(data)
     contract = None if sidechain else _contract_doc()
-    header_failing = (
-        not sidechain
-        and _status_header_would_block(data, contract)
-    )
+    header_failing = not sidechain and _status_header_would_block(data, contract)
     phases_missing = (
         []
         if sidechain or not code_changed or _contract_block_used("o", session, root)
@@ -1481,7 +1483,9 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
             and colony_workers >= 2
             and not _colony_channel_used(root, session, started)
         )
-    team_inprocess, team_advisory = (None, False) if sidechain else _team_gate(root, session, started)
+    team_inprocess, team_advisory = (
+        (None, False) if sidechain else _team_gate(root, session, started)
+    )
     team_failing = bool(team_inprocess) and not team_advisory
     wt_unmerged = [] if sidechain else _unmerged_worker_branches(root)
     failed = [
@@ -1550,9 +1554,25 @@ def _verdict_root(cwd: Path) -> Path | None:
     return None
 
 
-def _write_stop_verdict(session: str, cwd: Path, letters: list) -> None:
+def _done_claim_why(reason: str) -> list:
+    """The plain words of a (r) block for the band: `1 agent running`, `2 todos open`.
+    Parsed from the block text's own counts, so the band says what Stop said."""
+    out = []
+    m = re.search(r"(\d+) running agent", reason)
+    if m:
+        out.append(f"{m.group(1)} agent{'' if m.group(1) == '1' else 's'} running")
+    m = re.search(r"(\d+) open todo", reason)
+    if m:
+        out.append(f"{m.group(1)} todo{'' if m.group(1) == '1' else 's'} open")
+    return out
+
+
+def _write_stop_verdict(
+    session: str, cwd: Path, letters: list, why: list | None = None
+) -> None:
     """Record this session's last Stop verdict in <root>/.atlas/.run/stop-verdict.json
-    ({"sessions": {sid: {blocked, letters, at}}}, newest 20 kept). Only into an existing
+    ({"sessions": {sid: {blocked, letters, at, why?}}}, newest 20 kept; `why`: the
+    refusal in plain words when the gate knows them). Only into an existing
     .atlas/.run (an atlas project); fail-open: observability never wedges Stop."""
     if not session:
         return
@@ -1567,8 +1587,16 @@ def _write_stop_verdict(session: str, cwd: Path, letters: list) -> None:
             loaded = json.loads(path.read_text(encoding="utf-8")).get("sessions")
             if isinstance(loaded, dict):
                 sessions = loaded
-        sessions[session] = {"blocked": bool(letters), "letters": list(letters), "at": time.time()}
-        keep = sorted(sessions.items(), key=lambda kv: (kv[1] or {}).get("at", 0), reverse=True)[:20]
+        sessions[session] = {
+            "blocked": bool(letters),
+            "letters": list(letters),
+            "at": time.time(),
+        }
+        if why and letters:
+            sessions[session]["why"] = list(why)
+        keep = sorted(
+            sessions.items(), key=lambda kv: (kv[1] or {}).get("at", 0), reverse=True
+        )[:20]
         tmp = run / f".stop-verdict.{os.getpid()}.tmp"
         tmp.write_text(json.dumps({"sessions": dict(keep)}), encoding="utf-8")
         os.replace(tmp, path)
@@ -1580,7 +1608,12 @@ def main() -> int:
         return _main()
     finally:
         if "session" in _STOP:
-            _write_stop_verdict(_STOP["session"], _STOP["cwd"], _STOP.get("letters", []))
+            _write_stop_verdict(
+                _STOP["session"],
+                _STOP["cwd"],
+                _STOP.get("letters", []),
+                _STOP.get("why"),
+            )
 
 
 def _main() -> int:
@@ -1612,7 +1645,10 @@ def _main() -> int:
     try:
         if os.environ.get("ATLAS_GATE", "").lower() == "off":
             return 0
-        _STOP.update(session=str(data.get("session_id") or ""), cwd=Path(data.get("cwd") or os.getcwd()))
+        _STOP.update(
+            session=str(data.get("session_id") or ""),
+            cwd=Path(data.get("cwd") or os.getcwd()),
+        )
         # stop_hook_active and the session circuit breaker. The breaker is a
         # deliberate cap that ends a runaway Stop loop: more than
         # atlas_hook_guard.STOP_BURST_LIMIT Stops within STOP_BURST_WINDOW
@@ -1685,6 +1721,7 @@ def _main() -> int:
             if not loop_exhausted:
                 _record_gate_block(session, ["r"])
                 _STOP["letters"] = ["r"]
+                _STOP["why"] = _done_claim_why(done_reason)
                 _record_analytics("gate.r.block")
                 notice = _block_loop_notice(count, ["r"])
                 if notice:
@@ -2122,6 +2159,7 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
 
 
 from atlas_lazyre import lre  # noqa: E402
+
 _TEST_RUNNER_RE = lre(
     r'(?:^|[;&|]\s*|&&\s*|\|\|\s*|"(?:command|code)":\s*"|\n|\\n)'
     r"\s*(?:sudo\s+)?(?:python3?\s+-m\s+)?"
@@ -2599,7 +2637,10 @@ def _header_reason_part(contract: dict | None, short: bool = False) -> str:
         (contract or {}).get("headerTemplate") or "ATLAS | <glyph> <phase> | <state>"
     ).replace("<state>", "<one-line state>")
     if short:  # repeat block: rule name plus the template; SessionStart has the rest
-        return "  (n) still open: first line of your final reply must be `%s`. Re-send, then retry Stop." % template
+        return (
+            "  (n) still open: first line of your final reply must be `%s`. Re-send, then retry Stop."
+            % template
+        )
     phases = ", ".join(
         str(p.get("id"))
         for p in ((contract or {}).get("phases") or [])
@@ -2693,7 +2734,7 @@ def _role_name(agent_type) -> str:
     role = str(agent_type or "").strip()
     for prefix in ("atlas:", "atlas-"):
         if role.startswith(prefix):
-            role = role[len(prefix):]
+            role = role[len(prefix) :]
             break
     return role
 
@@ -2865,7 +2906,8 @@ def _inprocess_working_dispatches(session_id: str) -> int | None:
         return sum(
             1
             for (agent_type,) in rows
-            if _is_working_role(agent_type) and _role_name(agent_type) not in READ_ONLY_ROLES
+            if _is_working_role(agent_type)
+            and _role_name(agent_type) not in READ_ONLY_ROLES
         )
     except Exception:
         return None

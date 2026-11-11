@@ -144,7 +144,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		phases: rail.ids,
 		phase: rail.phase,
 		blocked: m.blocked,
-		...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ["gate"] } : {}),
+		...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ["stop refused"] } : {}),
 		done: m.done,
 		total: m.total,
 		todoBlocked: blockedCount(m.todos ?? [], ownerStates(m)),

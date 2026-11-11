@@ -77,7 +77,13 @@ class AtlasGatesTest(unittest.TestCase):
         run = self.root / ".atlas" / ".run"
         run.mkdir(parents=True, exist_ok=True)
         (run / "stop-verdict.json").write_text(
-            json.dumps({"sessions": {session: {"blocked": blocked, "letters": letters, "at": 1.0}}})
+            json.dumps(
+                {
+                    "sessions": {
+                        session: {"blocked": blocked, "letters": letters, "at": 1.0}
+                    }
+                }
+            )
         )
 
     def _stop_line(self, doc):
@@ -90,7 +96,37 @@ class AtlasGatesTest(unittest.TestCase):
         (line,) = self._stop_line(doc)
         self.assertEqual(line["label"], "Last Stop blocked")
         self.assertEqual(line["detail"], "Team gate, Todos drained")
-        self.assertTrue(line["ok"])  # a record, not a check: it never adds to the failing count
+        self.assertTrue(
+            line["ok"]
+        )  # a record, not a check: it never adds to the failing count
+
+    def test_stop_verdict_prefers_the_recorded_plain_reason(self):
+        run = self.root / ".atlas" / ".run"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "stop-verdict.json").write_text(
+            json.dumps(
+                {
+                    "sessions": {
+                        SESSION: {
+                            "blocked": True,
+                            "letters": ["r"],
+                            "why": ["1 todo open"],
+                            "at": 1.0,
+                        }
+                    }
+                }
+            )
+        )
+        _, doc = _run(self.db, self.root)
+        (line,) = self._stop_line(doc)
+        self.assertEqual(line["detail"], "1 todo open")
+
+    def test_stop_verdict_never_shows_a_bare_gate_letter(self):
+        self._write_verdict(SESSION, True, ["r"])  # an old record: no `why`
+        _, doc = _run(self.db, self.root)
+        (line,) = self._stop_line(doc)
+        self.assertNotEqual(line["detail"], "r")
+        self.assertGreater(len(line["detail"]), 1)
 
     def test_stop_verdict_allowed(self):
         self._write_verdict(SESSION, False, [])

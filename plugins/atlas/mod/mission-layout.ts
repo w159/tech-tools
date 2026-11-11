@@ -168,6 +168,8 @@ const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.
 
 /** Narrowest width (columns) of the wide standard forms (the first four); the compact forms below them carry their own minimum. A form also has to fit. */
 const WIDE_MIN = 100;
+/** The gauge forms need this much: between WIDE_MIN and here the band carries the same facts as figures. */
+const GAUGE_MIN = 120;
 
 /** The one run state every form below reads. `blocked`: the lead declared it, or the Stop gate refused the stop (never inferred from a failing check alone).
  * `warn`: idle while a check fails and Stop did not refuse (`tripwire warning`). `flagged`: either, the band's attention state. */
@@ -180,8 +182,8 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates) };
 }
 
-/** `▲ BLOCKED · stop: team gate`: glyph, the header chip's upper-case word and, when given, the reason. */
-const blockedHead = (ui: Ui, reason?: string): Run[] => [stateRun('blocked', ui), r(' BLOCKED', 'text', true), ...(reason ? [r(` · ${reason}`, 'sub')] : [])];
+/** `▲ blocked: 1 todo open`: glyph, the word and, when given, the reason in plain words (what Stop said). One form at every width. */
+const blockedHead = (ui: Ui, reason?: string): Run[] => [stateRun('blocked', ui), r(reason ? ' blocked:' : ' blocked', 'text', true), ...(reason ? [r(` ${reason}`, 'sub')] : [])];
 /** `▲ tripwire warning`: the attention glyph and the warning, no BLOCKED word. */
 const warnHead = (ui: Ui, warn: string): Run[] => [stateRun('blocked', ui), r(` ${warn}`, 'warn', true)];
 /** The head of a flagged band: BLOCKED with its reason, or the warning. */
@@ -207,12 +209,13 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const todo = m.total ? `${m.done}/${m.total}` : '';
   const blockedWords = blockedRuns(m, ui, true);
   const blockedTiny = blockedRuns(m, ui, false);
-  const full = (noun: boolean, ctxGauge: boolean, gap: string, gw = 10): Run[] => {
+  // Below GAUGE_MIN the one-row band carries figures, not gauges: an empty `░░░` track beside `0 of 5` (critique 9, the 110 band) says nothing the figure does not.
+  const full = (noun: boolean, ctxGauge: boolean, gap: string, gw = 10, gauges = true): Run[] => {
     const counts = bandCounts(m, ui, true, noun, gap);
     return [
       ...cap, r('  '), ...name,
-      ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${m.done} of ${m.total}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
-      ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
+      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${m.done} of ${m.total}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
+      ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge && gauges ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
       ...(counts.length ? [r(gap), ...counts] : []),
     ];
   };
@@ -222,8 +225,10 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const tail = (cs: Run[]): Run[] => [...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(cs.length ? [r(' · ', 'sub'), ...cs] : [])];
   const compact = (word: string, cs: Run[], why: string): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word)}`, 'sub')] : [r(` ${lead}${midTodo(word)}`, 'sub')]), ...tail(cs)];
   const out: Form[] = [
-    { runs: full(true, true, '   '), min: WIDE_MIN }, { runs: full(true, false, '  ', 8), min: WIDE_MIN },
-    { runs: full(false, true, '   '), min: WIDE_MIN }, { runs: full(false, false, '  ', 8), min: WIDE_MIN },
+    { runs: full(true, true, '   '), min: GAUGE_MIN }, { runs: full(true, false, '  ', 8), min: GAUGE_MIN },
+    { runs: full(false, true, '   '), min: GAUGE_MIN }, { runs: full(false, false, '  ', 8), min: GAUGE_MIN },
+    { runs: full(true, false, '   ', 0, false), min: WIDE_MIN }, { runs: full(true, false, '  ', 0, false), min: WIDE_MIN },
+    { runs: full(false, false, '   ', 0, false), min: WIDE_MIN }, { runs: full(false, false, '  ', 0, false), min: WIDE_MIN },
     { runs: compact('phase', counts, reason.long), min: 80 },
     { runs: compact('phase', tiny, reason.short), min: 50 },
     { runs: compact('ph', tiny, reason.short), min: 50 },
@@ -402,11 +407,17 @@ const blank = (cols: number): Line => ({ runs: [r(' '.repeat(cols))] });
 function idleLines(m: MissionModel): Line[] {
   const band = bandLines(m);
   const last = lastRunRuns(m.lastRun, runStateOf(m).flagged); // `all ok` never sits under a BLOCKED header, declared or from a failing check
-  const lastRow: Line[] = last.length && m.maxRows > band.length ? [{ runs: last }] : [];
-  const head = [...band, ...lastRow];
   const foot = footerLines(m);
-  const footRows = foot.length && m.maxRows >= head.length + 1 ? Math.min(foot.length, m.maxRows - head.length) : 0;  // two footer rows when both show; the key row outlasts the checks row
-  const core = m.core?.length && m.maxRows >= head.length + 1 + footRows ? [{ runs: fitRuns(m.core, m.cols) }] : [];
+  const plan = (withLast: boolean) => {
+    const lastRow: Line[] = withLast && last.length && m.maxRows > band.length ? [{ runs: last }] : [];
+    const head = [...band, ...lastRow];
+    const footRows = foot.length && m.maxRows >= head.length + 1 ? Math.min(foot.length, m.maxRows - head.length) : 0;  // two footer rows when both show; the key row outlasts the checks row
+    const core = m.core?.length && m.maxRows >= head.length + 1 + footRows ? [{ runs: fitRuns(m.core, m.cols) }] : [];
+    return { head, footRows, core };
+  };
+  // The contract row outranks the last-run row: when only one fits, the band keeps the same rows at every width (critique 9, the 110 band had no contract row).
+  let { head, footRows, core } = plan(true);
+  if (m.core?.length && !core.length) ({ head, footRows, core } = plan(false));
   const room = m.maxRows - head.length - core.length - footRows;
   const board = m.boardRows && room >= 1 ? [{ runs: [], board: Math.min(m.boardRows, room) }] : [];
   return [...head, ...core, ...board, ...foot.slice(foot.length - footRows)];
