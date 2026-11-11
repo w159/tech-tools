@@ -76,7 +76,7 @@ const todoOf = (text: string): [number, number] | undefined => {
 const GATE_NAMES = world.gates.map((g) => g.name).join('|');
 const gatePairs = (text: string): Record<string, boolean> => {
   const out: Record<string, boolean> = {};
-  for (const m of text.matchAll(new RegExp(`([●■]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●';
+  for (const m of text.matchAll(new RegExp(`([●■▲]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
   return out;
 };
 /** Rows `glyph name  word`: the glyph must agree with the word. */
@@ -170,7 +170,7 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
   if (tab === 'channel') { const m = /^ #\S+\s+(\d+) people(?: · (\d+) unread)?/m.exec(text); if (m) f.channel = { people: Number(m[1]), unread: Number(m[2] ?? 0) }; }
   if (tab === 'gates') {
     f.gates = gatePairs(text);
-    f.gatesGreen = /(\d+) of (\d+) green/.exec(text)?.slice(1, 3).join('/');
+    f.gatesGreen = /SIDEPANEL\D*(\d+)\/(\d+)/.exec(text)?.slice(1, 3).join('/'); // the ribbon's figure is `n/m` at every width
   }
   // the core tab's evidence figure is `n/m` over the plan (critique 10 B4): only its m is the plan total; its n counts evidence, not done rows, so the done count is the world's own
   if (tab === 'core') f.todo = [done, Number(/evidence\s+\d+\/(\d+)/.exec(text)?.[1])];

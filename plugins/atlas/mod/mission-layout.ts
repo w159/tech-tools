@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, spinFrameOf, spinnerGlyph, stateRun, uiFromEnv, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, spinFrameOf, spinnerGlyph, stateRun, uiFromEnv, warnMark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons, warningText } from './data/runstate';
 import { displayName } from './hud';
@@ -59,7 +59,9 @@ export type MissionModel = {
   todoBlocked?: number;
   /** Stop's open-item count (openWork, mod/data/core.ts). Open rows beyond the plan's own (dispatch rows the plan does not list) show as `· n open`, so `todo 5/5` never reads as all done while Stop would refuse. */
   openWork?: number;
-  /** The lead is mid-turn: a plan row is running (data/runstate planBusy, the HUD's TODO rule) though no worker is listed. The band never reads `idle` then. */
+  /** Of Stop's open rows, how many are dispatch rows: the extra open rows beyond the plan read `n dispatch open` when they all are. */
+  openDispatch?: number;
+  /** The lead is mid-turn: its own tool runs or it is thinking (data/runstate leadBusy), or a plan row is running (planBusy, the HUD's TODO rule), though no worker is listed. The band never reads `idle` then. */
   busy?: boolean;
   /** Workers to show: running, waiting, failed and recently finished (never parked). */
   workers: readonly MissionWorker[];
@@ -168,7 +170,11 @@ function phaseIndex(m: MissionModel): number {
 }
 
 /** ` · 1 open`: the store's open rows the plan count does not carry; empty when the plan's own open rows cover them. */
-const openMore = (m: MissionModel): string => { const n = (m.openWork ?? 0) - (m.total - m.done); return m.total && n > 0 ? ` · ${n} open` : ''; };
+const openMore = (m: MissionModel): string => {
+  const n = (m.openWork ?? 0) - (m.total - m.done);
+  if (!m.total || n <= 0) return '';
+  return (m.openDispatch ?? 0) >= n ? ` · ${n} ${n === 1 ? 'dispatch' : 'dispatches'} open` : ` · ${n} open`; // an open dispatch row is named: Stop refuses on it though the plan reads full
+};
 const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.todo ?? (m.total ? Math.min(1, m.done / m.total) : 0), ui);
 const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
 
@@ -191,7 +197,7 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
 /** `▲ blocked: 1 todo open`: glyph, the word and, when given, the reason in plain words (what Stop said). One form at every width. */
 const blockedHead = (ui: Ui, reason?: string): Run[] => [stateRun('blocked', ui), r(reason ? ' blocked:' : ' blocked', 'text', true), ...(reason ? [r(` ${reason}`, 'sub')] : [])];
 /** `▲ tripwire warning`: the attention glyph and the warning, no BLOCKED word. */
-const warnHead = (ui: Ui, warn: string): Run[] => [stateRun('blocked', ui), r(` ${warn}`, 'warn', true)];
+const warnHead = (ui: Ui, warn: string): Run[] => [warnMark(ui), r(` ${warn}`, 'warn', true)];
 /** The head of a flagged band: BLOCKED with its reason, or the warning. */
 const flagHead = (ui: Ui, st: { blocked: boolean; warn?: string }, reason?: string): Run[] => (st.blocked ? blockedHead(ui, reason) : warnHead(ui, st.warn ?? ''));
 
@@ -360,7 +366,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
   const lean = hint > 0 ? checkRuns(checks, room - hint, ui) : []; // the form that leaves the hint its room, when one fits
   if (lean.length) return lean;
   if (!checks?.length) return [];
-  const one = (c: MissionCheck): Run[] => [stateRun(c.ok ? 'done' : 'failed', ui), r(` ${c.id}`, c.ok ? 'sub' : 'text')];
+  const one = (c: MissionCheck): Run[] => [c.ok ? stateRun('done', ui) : warnMark(ui), r(` ${c.id}`, c.ok ? 'sub' : 'text')];
   const join = (cs: readonly MissionCheck[]): Run[] => cs.flatMap((c, i) => [...(i ? [r('  ')] : []), ...one(c)]);
   const failing = checks.filter((c) => !c.ok);
   const green = `${checks.length - failing.length} of ${checks.length} green`;
@@ -368,7 +374,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
     [...join(checks), r(`  ${green}`, 'sub')],
     join(checks), // tight: the names and marks carry the figure
     failing.length ? [...join(failing), r(`  ${green}`, 'sub')] : [stateRun('done', ui), r(` ${green}`, 'sub')],
-    failing.length ? [stateRun('failed', ui), r(` ${plural(failing.length, 'warning')}`, 'text')] : [stateRun('done', ui)],
+    failing.length ? [warnMark(ui), r(` ${plural(failing.length, 'warning')}`, 'text')] : [stateRun('done', ui)],
   ];
   const label = [r(' checks  ', 'muted')];
   for (const f of forms) if (runsWidth(label) + runsWidth(f) <= room) return [...label, ...f];
@@ -414,11 +420,13 @@ function idleLines(m: MissionModel): Line[] {
   const band = bandLines(m);
   const last = lastRunRuns(m.lastRun, runStateOf(m).flagged); // `all ok` never sits under a BLOCKED header, declared or from a failing check
   const foot = footerLines(m);
+  // The last run rides the core row when both fit one row (`verdicts ... last run 3 workers`), so a 110 and a 150 band draw the same rows (critique 11: 110 had no last-run row).
+  const joined: Run[] = m.core?.length && last.length && runsWidth(m.core) + 3 + runsWidth(last) <= m.cols ? [...m.core, r('   '), ...last] : [];
   const plan = (withLast: boolean) => {
-    const lastRow: Line[] = withLast && last.length && m.maxRows > band.length ? [{ runs: last }] : [];
+    const lastRow: Line[] = withLast && !joined.length && last.length && m.maxRows > band.length ? [{ runs: last }] : [];
     const head = [...band, ...lastRow];
     const footRows = foot.length && m.maxRows >= head.length + 1 ? Math.min(foot.length, m.maxRows - head.length) : 0;  // two footer rows when both show; the key row outlasts the checks row
-    const core = m.core?.length && m.maxRows >= head.length + 1 + footRows ? [{ runs: fitRuns(m.core, m.cols) }] : [];
+    const core = m.core?.length && m.maxRows >= head.length + 1 + footRows ? [{ runs: fitRuns(withLast && joined.length ? joined : m.core, m.cols) }] : [];
     return { head, footRows, core };
   };
   // The contract row outranks the last-run row: when only one fits, the band keeps the same rows at every width (critique 9, the 110 band had no contract row).

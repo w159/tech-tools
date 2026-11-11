@@ -83,9 +83,11 @@ describe('core row cells', () => {
     expect(toneOf(coreCells(m, 300), 'no done items yet')).toBe('muted');
     m.contract = { header: { ok: 0, total: 0 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 0 };
     expect(toneOf(coreCells(m, 300), '2/2 done items carry evidence')).toBe('text');
-    m.contract = { header: { ok: 1, total: 3 }, evidence: { ok: 0, total: 2 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 2 };
+    m.contract = { header: { ok: 1, total: 3 }, evidence: { ok: 1, total: 2 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 2 };
     const part = coreCells(m, 300);
-    expect(toneOf(part, '0/2 done items carry evidence')).toBe('warn');
+    expect(toneOf(part, '1/2 done items carry evidence')).toBe('warn');
+    m.contract = { ...m.contract, evidence: { ok: 0, total: 2 } };
+    expect(cellsText(coreCells(m, 300))).not.toContain('contract'); // done items and none with evidence: dropped, it only contradicted `todo 2/2` (critique 11)
     expect(cellsText(part)).not.toMatch(/gates|header/); // the footer's checks row owns gate results; the reply tally is a different unit (critique 10 B4)
   });
   test('critique 10 B4: the evidence figure shares the plan denominator the band `todo n/m` uses; the tone still reads the done items', () => {

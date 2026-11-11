@@ -274,7 +274,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
   },
   gates: {
     120: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2 of 3 green",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3",
       "",
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "                                  ━━━━━",
@@ -283,11 +283,11 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  warning                                                                                         0 of 1 green",
-      "  ■   doctor"
+      "  ▲ doctor  warning                                                                                         0 of 1 green",
+      "  ▲   doctor"
     ],
     80: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2 of 3 green",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3",
       "",
       "r: route  t: team  c: channel  g: gates  k: core  o: board",
       "                                  ━━━━━",
@@ -295,11 +295,11 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  warning                                                 0 of 1 green",
-      "  ■   doctor"
+      "  ▲ doctor  warning                                                 0 of 1 green",
+      "  ▲   doctor"
     ],
     56: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━ 2 of 3 green",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3",
       "",
       "r: route t: team c: channel g: gates k: core o: board",
       "                               ━━━━━",
@@ -307,8 +307,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ●   lint",
       "  ● test    passing",
       "  ●   test",
-      "  ■ doctor  warning                         0 of 1 green",
-      "  ■   doctor"
+      "  ▲ doctor  warning                         0 of 1 green",
+      "  ▲   doctor"
     ]
   },
   core: {

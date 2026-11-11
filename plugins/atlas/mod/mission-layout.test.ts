@@ -28,16 +28,22 @@ describe('mission-layout: bold is opt-in', () => {
 describe('mission-layout: critique 9, the contract row outlasts the last-run row when rows are tight (the 110 band)', () => {
   const core = [{ t: ' contract  4 of 4 headers', tone: 'text' as const }];
   const idle = (maxRows: number, cols = 110) => rows(model({ cols, maxRows, phase: 'done', done: 3, total: 3, core, lastRun: { workers: 3, secs: 19, failed: 0 }, checks: [{ id: 'completion', ok: true }], keysWidth: 40 }));
-  test('4 rows: band, contract, checks and keys; the last run gives way', () => {
+  test('4 rows: band, the contract row carrying the last run, checks and keys (critique 11: 110 and 150 draw the same rows)', () => {
     const r4 = idle(4);
     expect(r4).toHaveLength(4);
-    expect(r4.some((x) => x.includes('contract'))).toBe(true);
-    expect(r4.some((x) => x.includes('last run'))).toBe(false);
+    expect(r4[1]).toContain('contract');
+    expect(r4[1]).toContain('last run');
   });
-  test('5 rows: everything shows, last run above contract', () => {
-    const r5 = idle(5);
-    expect(r5.findIndex((x) => x.includes('last run'))).toBeGreaterThan(-1);
-    expect(r5.findIndex((x) => x.includes('last run'))).toBeLessThan(r5.findIndex((x) => x.includes('contract')));
+  test('5 rows and more draw the same four rows at 110 and at 150', () => {
+    for (const rows5 of [5, 12]) expect(idle(rows5)).toHaveLength(4);
+    expect(idle(12, 150)).toHaveLength(idle(12, 110).length);
+  });
+  test('a core row too wide to share the line keeps the last run on a row of its own when a row is free', () => {
+    const wide = [{ t: ` contract  ${'x'.repeat(90)}`, tone: 'text' as const }];
+    const r = rows(model({ cols: 110, maxRows: 12, phase: 'done', done: 3, total: 3, core: wide, lastRun: { workers: 3, secs: 19, failed: 0 }, checks: [{ id: 'completion', ok: true }], keysWidth: 40 }));
+    expect(r).toHaveLength(5);
+    expect(r[1]).toContain('last run');
+    expect(r[2]).toContain('contract');
   });
   test('no gauge track in the 110 band', () => {
     expect(idle(4)[0]).not.toContain('░');

@@ -12,6 +12,14 @@ import { todoState } from './todos';
 export const planBusy = (items: readonly { status: string; owner?: string | null }[], owners: ReadonlyMap<string, UiState>): boolean =>
   items.some((it) => todoState(it.status, it.owner ? owners.get(it.owner) : undefined).state === 'running');
 
+/** The lead is mid-turn on its OWN work: a tool in flight (`working`) or a model step between tools (`thinking`), as the host's tool.call / turn.step hooks record it
+ * (data/orchestration activity.lead). The live host lists no worker and no plan row for a lead that only runs a shell command, so planBusy alone read `idle` then
+ * (critique 11, f0025). A finished (`done`), aborted (`idle`) or failed turn is not busy. */
+export const leadBusy = (s: { activity?: Readonly<Record<string, { mood?: string } | undefined>> }): boolean => {
+  const mood = s.activity?.lead?.mood;
+  return mood === 'working' || mood === 'thinking';
+};
+
 /** `name`: only on a failing check, what the blocked reason calls it (the failing line's own words). */
 export type GateCheck = { id: string; ok: boolean; name?: string };
 /** `stop`: the completion gate's last Stop verdict for this session (the `stop-verdict` line atlas_gates.py reads from completion_gate_core's record): `gates` are the

@@ -109,9 +109,11 @@ describe('C3: the narrow gates header carries its count', () => {
     expect(head).toMatch(/SIDEPANEL ━+ 1\/2$/); // two groups, one green
     expect(cells(head)).toBeLessThanOrEqual(38);
   });
-  test('at 150 cells it still reads in words', () => {
+  test('at 150 cells it reads `n/m` too: one gates header format at every width (critique 11)', () => {
     const m = panelWorld('gates', 150, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }] }] });
-    expect(lineText(ribbonRow(m))).toContain('1 of 1 green');
+    expect(lineText(ribbonRow(m)).trimEnd()).toMatch(/SIDEPANEL ━+ 1\/1$/);
+    const wide = lineText(ribbonRow(panelWorld('gates', 110, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }] }] }))).trimEnd();
+    expect(wide).toMatch(/SIDEPANEL ━+ 1\/1$/);
   });
 });
 
