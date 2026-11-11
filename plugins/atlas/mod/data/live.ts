@@ -21,8 +21,6 @@ export interface LiveWorker {
   calls: number[];
   /** Dispatch `SCOPE:` value (`audit/medium`), when the prompt carried one. */
   scope: string | null;
-  /** False when no first-sight time was recorded (a worker only the host lists): its start is unknown, so it is never `starting`. */
-  seen?: boolean;
 }
 
 const ORDER = { blocked: 0, failed: 1, working: 2, parked: 3, done: 4 } as const;
@@ -41,7 +39,7 @@ export function liveWorkers(snapshot: LiveSnapshot, now: number): LiveWorker[] {
         : act?.mood === 'failed' ? 'failed'
         : act?.mood === 'done' ? 'done'
         : 'working';
-      return { name: a.name, role: a.persona, state, tool: act?.tool ?? null, lastTool: act?.lastTool ?? null, since: act?.since ?? now, startedAt: act?.startedAt ?? act?.since ?? now, target: act?.target ?? null, detail: act?.detail ?? null, lastLine: act?.lastLine ?? '', calls: act?.calls ?? [], scope: act?.scope ?? null, seen: act?.startedAt !== undefined };
+      return { name: a.name, role: a.persona, state, tool: act?.tool ?? null, lastTool: act?.lastTool ?? null, since: act?.since ?? now, startedAt: act?.startedAt ?? act?.since ?? now, target: act?.target ?? null, detail: act?.detail ?? null, lastLine: act?.lastLine ?? '', calls: act?.calls ?? [], scope: act?.scope ?? null };
     })
     .sort((x, y) => ORDER[x.state] - ORDER[y.state]);
 }
@@ -58,16 +56,30 @@ export function callBuckets(calls: readonly number[], now: number, n = 12, bucke
 
 export const activeCount = (ws: LiveWorker[]) => ws.filter((w) => w.state === 'working' || w.state === 'blocked').length;
 
-/** A working worker with no call yet reads `starting` (queued) for this long after it was first seen; after it, `thinking`. */
-export const STARTING_MS = 90_000;
+/** What the data shows about one worker; `workerWord` turns it into the state word. */
+export type WorkerEvidence = {
+  /** The host lists the worker (a squad entry, a registry row). False: dispatched, not seen yet. */
+  listed: boolean;
+  /** How it ended, when it has. */
+  outcome?: 'done' | 'failed';
+  /** The board says it waits (on the lead, on input). */
+  blocked?: boolean;
+};
 
-/** A worker's state word before the first call: working with nothing in flight and nothing answered yet, seen within STARTING_MS. */
-export const isStarting = (w: LiveWorker, now: number): boolean => w.seen !== false && w.state === 'working' && !w.tool && !w.lastTool && now - w.startedAt <= STARTING_MS;
+/** THE state rule, one for every surface and both hosts (band, HUD, side panel, board, omp). A state word comes from the
+ * data, never from a clock: queued = dispatched but the host does not list the worker yet; running = the host lists it (a
+ * tool in flight or not); done and failed from the outcome; waiting from the board. */
+export function workerWord(e: WorkerEvidence): UiState {
+  if (e.outcome) return e.outcome;
+  if (!e.listed) return 'queued';
+  return e.blocked ? 'waiting' : 'running';
+}
 
-/** The one state word of a worker, for every surface (HUD, band, side panel): a starting worker reads queued (design: `◇ queued`),
- * a working one running (tool in flight or thinking between calls), blocked reads waiting (it waits for the lead), parked queued. */
-export function liveState(w: LiveWorker, now: number): UiState {
-  return isStarting(w, now) ? 'queued' : workerUiState(w.state);
+/** The one state word of a host-listed worker, for every surface (HUD, band, side panel). A parked worker is one the host
+ * lists as resting: it has not started the work, so it reads queued, the one place a listed worker is not running. */
+export function liveState(w: LiveWorker): UiState {
+  if (w.state === 'parked') return 'queued';
+  return workerWord({ listed: true, outcome: w.state === 'done' || w.state === 'failed' ? w.state : undefined, blocked: w.state === 'blocked' });
 }
 
 /** The same mapping for a bare state word (a fixture's `running` and `queued` pass through; an unknown word reads running). */
@@ -81,3 +93,20 @@ export function workerUiState(state: string): UiState {
     default: return 'running';
   }
 }
+
+/** Dispatched members the host does not list: roster rows still open (no `ended_at`), not the lead, not in the squad. Each is
+ * a queued worker on every surface, until the host lists it. */
+export function queuedMembers(s: Pick<LiveSnapshot, 'members' | 'squad'>): string[] {
+  const listed = new Set(s.squad.map((a) => a.name));
+  const names = s.members.filter((x) => !x.ended_at && x.role !== 'lead' && x.name !== 'lead' && !x.name.startsWith('lead-') && !listed.has(x.name)).map((x) => x.name);
+  return [...new Set(names)];
+}
+
+/** Name -> state word of every worker a surface lists: the host-listed workers and the queued members. */
+export function workerStates(s: Pick<LiveSnapshot, 'members' | 'squad'>, workers: readonly LiveWorker[]): Map<string, UiState> {
+  return new Map<string, UiState>([...queuedMembers(s).map((n): [string, UiState] => [n, 'queued']), ...workers.map((w): [string, UiState] => [w.name, liveState(w)])]);
+}
+
+/** Items with their owner's state word attached (`ownerState`), for the board and the TODO tree. */
+export const withOwnerStates = <T extends { owner?: string }>(items: readonly T[], states: ReadonlyMap<string, UiState>): (T & { ownerState?: UiState })[] =>
+  items.map((it) => { const o = it.owner ? states.get(it.owner) : undefined; return o ? { ...it, ownerState: o } : { ...it }; });

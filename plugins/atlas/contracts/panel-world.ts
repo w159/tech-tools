@@ -4,6 +4,11 @@ import type { Ui } from "../mod/atlas-ui";
 import type { CardModel, PanelModel, PanelTab } from "../mod/panel-layout";
 import { world } from "./band-world";
 
+/** People on the channel: everyone who spoke and every worker not finished (the rule of mod/pane/sidebar-model.ts). */
+const worldPeople = (): number => new Set([...world.notes.map((n) => n.from), ...world.workers.filter((w) => w.state !== "done").map((w) => w.name)]).size;
+/** Notes after the lead last spoke (every note when it never did). */
+const worldUnread = (): number => world.notes.length - 1 - world.notes.map((n) => "lead" in n && n.lead === true).lastIndexOf(true);
+
 export const panelWorld = (tab: PanelTab, cols: number, ui: Ui, over: Partial<PanelModel> = {}): PanelModel => ({
   cols, rows: 40, ui, tab, tick: 0, expanded: null, recipient: null,
   phases: world.phases.map((p) => p.id as string),
@@ -11,12 +16,8 @@ export const panelWorld = (tab: PanelTab, cols: number, ui: Ui, over: Partial<Pa
   todos: world.todos.map((t) => ({ id: t.id, label: t.label, state: t.state, owner: t.owner, detail: t.detail })),
   workers: world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, task: w.task, detail: w.last_tool, secs: 42 })),
   gates: world.gates.map((g) => ({ id: g.name, title: g.name, lines: [{ id: g.name, label: g.name, ok: g.state === "done" }] })),
-  channel: "atlas-board-mod", people: 6, unread: 1,
-  notes: [
-    { at: "10:02", from: "lead", to: "implementer-band", text: "take T4, then run the gate tests", lead: true },
-    { at: "10:05", from: "implementer-live", kind: "blocked", text: "tests red 3, need a decision on the changelog" },
-    { at: "10:07", from: "implementer-layout", kind: "handoff", text: "T1 and T2 merged" },
-  ],
+  channel: "atlas-board-mod", people: worldPeople(), unread: worldUnread(),
+  notes: world.notes.map((n) => ({ at: n.at, from: n.from, ...("to" in n ? { to: n.to } : {}), ...("kind" in n ? { kind: n.kind } : {}), text: n.text, ...("lead" in n ? { lead: n.lead } : {}) })),
   ...over,
 });
 

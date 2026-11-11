@@ -22,7 +22,7 @@ export const TONE_HEX: Record<Tone, string> = { ...PALETTES.mocha, dim: '#585b70
 /** Panel background of the surfaces that have not moved to the rev 4 panel token yet (todo list, side panel). */
 export const PANEL_BG = '#11111b';
 
-export type WorkerState = 'running' | 'thinking' | 'starting' | 'waiting' | 'failed' | 'done';
+export type WorkerState = 'running' | 'thinking' | 'queued' | 'waiting' | 'failed' | 'done';
 export type MissionWorker = { name: string; role?: string; state: WorkerState; tool?: string; target?: string; secs: number };
 export type MissionNote = { from: string; to: string; text: string; at?: string };
 /** Presence and system events (a worker joining or leaving, a worktree merge) are not messages: the message row shows
@@ -47,6 +47,8 @@ export type MissionModel = {
   blocked?: boolean;
   done: number;
   total: number;
+  /** Plan items in the blocked state (the board's rule: its own status, or a waiting owner). Shown beside the todo count with its own glyph, so a blocked task never hides. */
+  todoBlocked?: number;
   /** Workers to show: running, waiting, failed and recently finished (never parked). */
   workers: readonly MissionWorker[];
   /** The newest channel message. */
@@ -118,14 +120,26 @@ const isRunning = (m: MissionModel): boolean => m.workers.some((w) => w.state !=
 const uiOf = (m: MissionModel): Ui => m.ui ?? uiFromEnv();
 
 /** A mission worker's place in the six-word vocabulary. */
-export const uiStateOf = (s: WorkerState): UiState => (s === 'running' || s === 'thinking' ? 'running' : s === 'starting' ? 'queued' : s);
+export const uiStateOf = (s: WorkerState): UiState => (s === 'thinking' ? 'running' : s);
 
-/** Worker counts by state, in the order the band shows them; zero counts are left out. */
-function bandCounts(m: MissionModel, ui: Ui, glyphsOnly: boolean): Run[] {
-  const n = (s: UiState): number => m.workers.filter((w) => uiStateOf(w.state) === s).length;
-  const order: UiState[] = glyphsOnly ? ['running', 'failed'] : ['running', 'failed', 'queued', 'waiting'];
-  const parts = order.filter((s) => n(s) > 0).map((s): Run[] => (glyphsOnly ? [stateRun(s, ui, m.tick), r(`${n(s)}`)] : countRuns(s, n(s), ui, m.tick)));
-  return parts.flatMap((p, i) => (i ? [r(glyphsOnly ? ' ' : '   '), ...p] : p));
+/** Failed workers on the band: the listed workers, and on an idle band the last wave's failures too (idle never hides a failure). */
+const failedCount = (m: MissionModel): number => Math.max(m.workers.filter((w) => uiStateOf(w.state) === 'failed').length, isRunning(m) ? 0 : m.lastRun?.failed ?? 0);
+
+/** Agent counts by state, in the order the band shows them; zero counts are left out. `words`: `◐ 1 running`; otherwise glyph and
+ * number (`◐1`), where queued gives way. `noun`: the basis, `agents`, in front (the todo count is tasks; the two are never mixed). */
+function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   '): Run[] {
+  const n = (s: UiState): number => (s === 'failed' ? failedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
+  const order: UiState[] = words ? ['running', 'failed', 'queued', 'waiting'] : ['running', 'failed', 'waiting'];
+  const parts = order.filter((s) => n(s) > 0).map((s): Run[] => (words ? countRuns(s, n(s), ui, m.tick) : [stateRun(s, ui, m.tick), r(`${n(s)}`)]));
+  const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
+  return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
+}
+
+/** The blocked tasks beside the todo count: `▲ 1 blocked` (words) or `▲1`; nothing when none. */
+function blockedRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
+  const n = m.todoBlocked ?? 0;
+  if (n <= 0) return [];
+  return words ? countRuns('blocked', n, ui) : [stateRun('blocked', ui), r(`${n}`)];
 }
 
 /** 0-based lit phase; `phases.length` once the run is done (every phase reads complete). */
@@ -135,12 +149,12 @@ function phaseIndex(m: MissionModel): number {
 }
 
 const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.todo ?? (m.total ? Math.min(1, m.done / m.total) : 0), ui);
-const ctxGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
+const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
 
-/** Narrowest width (columns) of each standard form: the 120, 80, 60 and 40 column mocks. A form also has to fit. */
-const TIER_MIN = [100, 80, 50, 0] as const;
+/** Narrowest width (columns) of each standard form (see standardForms): the 120, 80, 60 and 40 column mocks. A form also has to fit. */
+const TIER_MIN = [100, 100, 100, 100, 80, 50, 0] as const;
 
-/** The four standard forms, widest first: 120, 80, 60 and 40 columns in the mocks. */
+/** The standard forms, widest first: 120 (the design's look; then a tight one for a crowded row: 2-cell gaps, ctx as a figure, an 8-cell todo gauge; each with and without the `agents` noun), 80, 60 and 40 columns. */
 function standardForms(m: MissionModel, ui: Ui): Run[][] {
   const cap = capsule(ui);
   const idx = phaseIndex(m);
@@ -151,18 +165,24 @@ function standardForms(m: MissionModel, ui: Ui): Run[][] {
     ? [stateRun('blocked', ui), r(' blocked', 'text', true), r(' · needs you', 'sub')]
     : idle ? [r('idle', 'text', true), r(` · phase ${phaseNo}`, 'sub')] : [r(m.phase, 'text', true), r(` · phase ${phaseNo}`, 'sub')];
   const todo = m.total ? `${m.done}/${m.total}` : '';
-  const counts = bandCounts(m, ui, false);
-  const tiny = bandCounts(m, ui, true);
-  const full: Run[] = [
-    ...cap, r('  '), ...name,
-    ...(m.total ? [r('   todo '), ...todoGauge(m, ui, 10), r(` ${m.done} of ${m.total}`, 'sub')] : []),
-    ...(m.ctx !== undefined ? [r('   ctx '), ...ctxGauge(m, ui, 8), r(` ${percent(m.ctx)}`, 'sub')] : []),
-    ...(counts.length ? [r('   '), ...counts] : []),
-  ];
-  const mid: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}phase ${phaseNo}`}${todo ? ` · todo ${todo}` : ''}`, 'sub'), ...(counts.length ? [r(' · ', 'sub'), ...counts] : [])];
-  const short: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}ph ${phaseNo}`}${todo ? ` · todo ${todo}` : ''}`, 'sub'), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
-  const small: Run[] = [...cap, r(`${m.blocked ? ' blocked' : idle ? ' idle' : ''}${todo ? `${m.blocked || idle ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
-  return [full, mid, short, small];
+  const blockedWords = blockedRuns(m, ui, true);
+  const blockedTiny = blockedRuns(m, ui, false);
+  const full = (noun: boolean, ctxGauge: boolean, gap: string, gw = 10): Run[] => {
+    const counts = bandCounts(m, ui, true, noun, gap);
+    return [
+      ...cap, r('  '), ...name,
+      ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${m.done} of ${m.total}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
+      ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
+      ...(counts.length ? [r(gap), ...counts] : []),
+    ];
+  };
+  const counts = bandCounts(m, ui, true);
+  const tiny = bandCounts(m, ui, false);
+  const midTodo = `${todo ? ` · todo ${todo}` : ''}`;
+  const mid: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}phase ${phaseNo}`}${midTodo}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(counts.length ? [r(' · ', 'sub'), ...counts] : [])];
+  const short: Run[] = [...cap, r(` ${m.blocked ? 'blocked' : `${idle ? 'idle · ' : ''}ph ${phaseNo}`}${midTodo}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
+  const small: Run[] = [...cap, r(`${m.blocked ? ' blocked' : idle ? ' idle' : ''}${todo ? `${m.blocked || idle ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(tiny.length ? [r(' · ', 'sub'), ...tiny] : [])];
+  return [full(true, true, '   '), full(true, false, '  ', 8), full(false, true, '   '), full(false, false, '  ', 8), mid, short, small];
 }
 
 /** The rich band: the capsule and the numbered phase rail, a blank row, then the todo and ctx gauges and the counts. */
@@ -170,12 +190,15 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
   const idle = !m.blocked && !isRunning(m);
   const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(idle ? [r('   '), r('idle', 'text', true)] : [])];
   const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done} of ${m.total} · ${percent(m.done / m.total)}`, 'sub')] : [];
-  const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxGauge(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
-  const counts = bandCounts(m, ui, false);
+  const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxBar(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
+  const counts = bandCounts(m, ui, true, true);
+  const blocked = blockedRuns(m, ui, true);
   const to = (row: Run[], col: number): Run[] => (row.length ? atColumn(row, col) : [r(' '.repeat(col))]);
-  let row = todo;
-  if (ctx.length) row = [...to(row, 40), ...ctx];
-  if (counts.length) row = [...to(row, 62), ...counts];
+  const todoRow = [...todo, ...(todo.length && blocked.length ? [r('  '), ...blocked] : [])];
+  const ctxAt = Math.max(40, runsWidth(todoRow) + 3); // the ctx and count columns move right when the blocked count joins the todo group
+  let row = todoRow;
+  if (ctx.length) row = [...to(row, ctxAt), ...ctx];
+  if (counts.length) row = [...to(row, Math.max(62, ctxAt + (ctx.length ? 22 : 0))), ...counts];
   return [{ runs: head }, { runs: [r(' ')] }, { runs: row }];
 }
 
@@ -207,7 +230,7 @@ function mark(w: MissionWorker, m: MissionModel, ui: Ui): Run {
   switch (w.state) {
     case 'running': return stateRun('running', ui, m.tick);
     case 'thinking': return r(spinnerGlyph(m.tick, ui.ascii), 'muted');
-    case 'starting': return stateRun('queued', ui);
+    case 'queued': return stateRun('queued', ui);
     case 'waiting': return stateRun('waiting', ui);
     case 'failed': return stateRun('failed', ui);
     case 'done': return stateRun('done', ui);
@@ -220,7 +243,7 @@ function activity(w: MissionWorker): Run[] {
   switch (w.state) {
     case 'running': return [r(w.tool ?? 'working', 'text', true), ...target];
     case 'thinking': return [r('thinking', 'sub'), ...(w.tool ? [r('   last ', 'muted'), r(w.tool, 'muted'), ...(w.target ? [r(` ${w.target}`, 'muted')] : [])] : [])];
-    case 'starting': return [r('starting', 'sub')];
+    case 'queued': return [r('queued', 'sub')];
     case 'waiting': return [r('waiting', 'text'), ...target];
     case 'failed': return [r('failed', 'text', true), ...target];
     case 'done': return [r('finished', 'sub')];
@@ -305,8 +328,8 @@ export function planRows(maxRows: number, nWorkers: number, hasNote: boolean, ha
   return { lanes: more ? slots - 1 : Math.min(nWorkers, slots), ticker, footer, more };
 }
 
-/** Workers that need attention sort first (failed, waiting), then running, thinking, starting, finished. */
-const ORDER: Record<WorkerState, number> = { failed: 0, waiting: 1, running: 2, thinking: 3, starting: 4, done: 5 };
+/** Workers that need attention sort first (failed, waiting), then running, thinking, queued, finished. */
+const ORDER: Record<WorkerState, number> = { failed: 0, waiting: 1, running: 2, thinking: 3, queued: 4, done: 5 };
 const byAttention = (ws: readonly MissionWorker[]): MissionWorker[] => ws.map((w, i) => [w, i] as const).sort((a, b) => ORDER[a[0].state] - ORDER[b[0].state] || a[1] - b[1]).map(([w]) => w);
 
 const blank = (cols: number): Line => ({ runs: [r(' '.repeat(cols))] });

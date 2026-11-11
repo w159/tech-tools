@@ -6,7 +6,7 @@ import { easedFrames, EASE_MS, type Ui } from './atlas-ui';
 import { bandTree, hudPhases, railPhase } from './band';
 import { displayed, gaugeTargets, retarget, settled, type Move } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows } from './hud';
-import { liveWorkers, type LiveWorker } from './data/live';
+import { liveWorkers, queuedMembers, type LiveWorker } from './data/live';
 import { busySnap, NOW } from './live_fixture';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -39,17 +39,19 @@ describe('band beside the Subagents block: counts only', () => {
     expect(rows[0]).toContain('1 failed');
     expect(rows.length).toBeLessThan(rowsOf(160, { snapshot: busySnap({ comms: [] }) }).length);
   });
-  test('the band counts equal the HUD block: a worker before its first call is queued in both, and running once 90 s have passed', () => {
-    const base = liveWorkers(busySnap(), NOW);
-    const fresh = base.map((w) => ({ ...w, state: 'working', tool: null, lastTool: null, startedAt: NOW - 5_000, seen: true })) as LiveWorker[];
+  test('the band counts equal the HUD block: a roster member the host does not list is queued in both; a listed worker is running at any age', () => {
+    const base = busySnap();
+    const snapshot = { ...base, members: [...base.members, { name: 'runner-land' }] };
     const text = (rs: readonly (readonly { t: string }[])[]): string => rs.map((r) => r.map((x) => x.t).join('')).join('\n');
-    const hud = text(hudRows({ todos: [], agents: hudAgents(fresh, [], NOW) }, { cols: 160, maxRows: 20, ui: UI }));
-    expect(hud).toContain(`${fresh.length} queued`);
-    expect(rowsOf(160, { live: fresh, workersInHud: true })[0]).toContain(`${fresh.length} queued`);
-    expect(rowsOf(160, { live: fresh })[0]).toContain(`${fresh.length} queued`); // listed: the row says starting
-    const aged = fresh.map((w) => ({ ...w, startedAt: NOW - 91_000 })) as LiveWorker[];
-    expect(text(hudRows({ todos: [], agents: hudAgents(aged, [], NOW) }, { cols: 160, maxRows: 20, ui: UI }))).toContain(`${aged.length} running`);
-    expect(rowsOf(160, { live: aged, workersInHud: true })[0]).toContain(`${aged.length} running`);
+    const live = liveWorkers(snapshot, NOW);
+    const hud = text(hudRows({ todos: [], agents: hudAgents(live, snapshot.squad, queuedMembers(snapshot)) }, { cols: 160, maxRows: 20, ui: UI }));
+    expect(hud).toContain('1 queued');
+    expect(rowsOf(160, { snapshot, live, workersInHud: true })[0]).toContain('1 queued');
+    // age decides nothing: the same workers, started a day ago, are still just running
+    const aged = live.map((w) => ({ ...w, startedAt: NOW - 86_400_000 })) as LiveWorker[];
+    const running = aged.filter((w) => w.state === 'working').length;
+    expect(text(hudRows({ todos: [], agents: hudAgents(aged, snapshot.squad, queuedMembers(snapshot)) }, { cols: 160, maxRows: 20, ui: UI }))).toContain(`${running} running`);
+    expect(rowsOf(160, { snapshot, live: aged, workersInHud: true })[0]).toContain(`${running} running`);
   });
   test('narrow bands list nothing either way (the single row)', () => {
     expect(rowsOf(60, { workersInHud: true })).toHaveLength(1);
@@ -64,7 +66,7 @@ describe('idle band', () => {
       expect(row).not.toContain('running');
       expect(row).not.toContain('implement');
     }
-    expect(rowsOf(160, { snapshot: idleSnap(), live: [] })[0]).toContain('idle · phase 4/6');
+    expect(rowsOf(160, { snapshot: idleSnap(), live: [] })[0]).toContain('idle · phase 4/5');
   });
   test('rich idle also says idle; a running band does not', () => {
     expect(rowsOf(160, { snapshot: idleSnap(), live: [], rich: true, maxRows: 12 }).join('\n')).toContain('idle');
@@ -76,7 +78,7 @@ describe('idle band', () => {
 describe('the live phase rail for the HUD', () => {
   test('hudPhases is the rail ids and the lit index; done lights every phase; blocked keeps the last phase', () => {
     const s = busySnap();
-    const ids = s.contract.phases.map((p) => p.id as string).filter((id) => id !== 'validate' && id !== 'blocked');
+    const ids = s.contract.phases.map((p) => p.id as string).filter((id) => id !== 'validate' && id !== 'blocked' && id !== 'done'); // the one rail (mod/rail.ts): done is the end of the rail, not a step
     expect(hudPhases(s)).toEqual({ ids, active: ids.indexOf('implement') });
     expect(hudPhases({ ...s, phase: 'done' } as never).active).toBe(ids.length);
     const blocked = { ...s, phase: 'blocked' } as never;
@@ -141,5 +143,33 @@ describe('when the band may drop its worker rows', () => {
     expect(hudListsAgents(rows(20, 70))).toBe(false);
     expect(hudListsAgents(rows(20, 160, []))).toBe(false);
     expect(hudListsAgents([])).toBe(false);
+  });
+});
+
+describe('band counts what the HUD counts (critique-3 change 4)', () => {
+  const blockedSnap = (over: Record<string, unknown> = {}) => busySnap({ todos: [
+    { id: 'a', content: 'one', status: 'completed', owner: 'explorer-1' },
+    { id: 'b', content: 'two', status: 'blocked', owner: 'you' },
+    { id: 'c', content: 'three', status: 'pending' },
+  ] as never, ...over });
+  test('a blocked task has its own glyph and count beside the todo count, with the agents noun in front of the agent counts', () => {
+    const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
+    expect(head).toContain('todo ');
+    expect(head).toMatch(/1 of 3 ▲ 1 blocked/);
+    expect(head).toMatch(/agents .*1 running/);
+    expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/todo 1\/3 ▲1/);
+  });
+  test('the order is the HUD ribbon\'s: running, failed, queued, waiting', () => {
+    const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
+    expect(head.indexOf('running')).toBeLessThan(head.indexOf('failed'));
+    expect(head.indexOf('failed')).toBeLessThan(head.indexOf('waiting'));
+  });
+  test('idle keeps the failed count and the blocked count visible', () => {
+    const snapshot = blockedSnap({ squad: [], activity: {}, comms: [] });
+    const failedOnly = liveWorkers(busySnap(), NOW).map((w) => ({ ...w, state: w.name === 'runner-1' ? ('failed' as const) : ('done' as const), startedAt: NOW - 60_000, since: NOW - 30_000 }));
+    const head = rowsOf(200, { snapshot, live: failedOnly })[0]!;
+    expect(head).toContain('idle');
+    expect(head).toMatch(/1 failed/);
+    expect(head).toMatch(/▲ 1 blocked/);
   });
 });

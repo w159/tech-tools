@@ -9,15 +9,17 @@
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, groupOpenCount, parseGates } from "../mod/gates";
-import { hostEnv, PALETTES, sgrColor, toneHex, type Ui, uiFromEnv } from "../mod/atlas-ui";
-import { bandLines, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState } from "../mod/mission-layout";
+import { hostEnv, PALETTES, sgrColor, toneHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
+import { bandLines, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
+import { blockedCount } from "../mod/board-model";
+import { withOwnerStates } from "../mod/data/live";
+import { railIds, railOf } from "../mod/rail";
 import { RST, bg, PANEL, visibleWidth } from "./panel-paint";
 import { type PanelTodo, todoLines } from "./todo-panel";
 
 export { visibleWidth };
 
-const PHASES = ["research", "theory", "test", "implement", "verify", "done"];
 const GATES_TTL_MS = 10_000;
 
 /** A lane's current tool (active) or the last one it ran (inactive, between calls). */
@@ -46,6 +48,8 @@ export interface PanelModel {
 	width: number;
 	maxLines: number;
 	phase: string;
+	/** Contract phase ids the rail is cut from (mod/rail.ts); absent: the default rail. */
+	phases?: readonly string[];
 	spin: string; // kept for callers; the layout picks its own spinner frame from `tick`
 	laneSpin: string; // the todo list's in-progress glyph
 	tick: number;
@@ -60,7 +64,7 @@ export interface PanelModel {
 	idle?: IdleWave;
 	todos?: PanelTodo[]; // the shared board; listed under the rail when expanded
 	nowSecs?: number; // epoch seconds: times the running board item
-	todosExpanded?: boolean; // ATLAS_TODO_EXPANDED=1: the list under the rail
+	todosExpanded?: boolean; // the list under the rail
 	core?: CoreModel | null; // the Atlas core row on the idle panel; absent or empty: no row
 	blocked?: boolean; // the lead's last reply declared the blocked phase
 	ctx?: number; // lead context used, 0..1; absent hides the ctx gauge
@@ -103,9 +107,9 @@ const channelScope = (c?: string | null) => (c ? c.replace(/\/[^/]*$/, "") : "")
 /** The lead's name in the channel (`<repo>@<branch>/<lead>`); comms collapse it to `lead`, the message row names it. */
 const channelLead = (c?: string | null) => (c?.includes("/") ? c.slice(c.lastIndexOf("/") + 1) : "");
 
-/** A worker's state: the source's own when it has one, else running with a tool in flight, thinking between calls,
- * starting before its first tool (twin: mod/band.tsx workerState). */
-const stateOf = (w: PanelWorker): WorkerState => w.state ?? (w.tool ? (w.tool.active ? "running" : "thinking") : "starting");
+/** A worker's state: the source's own when it has one (`queued` for a dispatched member the registry does not list yet), else
+ * running: the registry lists it, with a tool in flight or thinking between calls (twin: mod/band.tsx workerState; the one rule is mod/data/live.ts workerWord). */
+const stateOf = (w: PanelWorker): WorkerState => w.state ?? (w.tool && w.tool.active ? "running" : "thinking");
 
 const missionWorker = (w: PanelWorker): MissionWorker => ({
 	name: w.name,
@@ -116,23 +120,28 @@ const missionWorker = (w: PanelWorker): MissionWorker => ({
 	secs: w.secs,
 });
 
+/** Each listed worker's state word, by name: what a plan item's owner is doing (the owner of a failed worker's item reads failed). */
+const ownerStates = (m: PanelModel): Map<string, UiState> => new Map(m.workers.map((w): [string, UiState] => [w.name, uiStateOf(stateOf(w))]));
+
 function missionModel(m: PanelModel, w: number): MissionModel {
 	const last = [...m.notes].reverse().find(n => isMessageKind(n.kind));
 	const lead = channelLead(m.channel);
 	const named = (n: string) => (lead && n === "lead" ? lead : n);
 	const gates = (m.gates ?? []).filter(g => g.lines.length > 0 || !!g.error);
 	const workers = m.idle ? [] : m.workers.map(missionWorker);
+	const rail = railOf(railIds(m.phases), m.phase);
 	return {
 		cols: w,
 		maxRows: m.maxLines,
 		tick: m.tick,
 		project: channelScope(m.channel) || "atlas",
 		scope: m.team,
-		phases: PHASES,
-		phase: PHASES.includes(m.phase) ? m.phase : PHASES[0]!,
+		phases: rail.ids,
+		phase: rail.phase,
 		blocked: m.blocked,
 		done: m.done,
 		total: m.total,
+		todoBlocked: blockedCount(m.todos ?? [], ownerStates(m)),
 		workers,
 		note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
 		checks: gates.length ? gates.map(g => ({ id: g.id, ok: !groupOpenCount(g) && !g.error })) : null,
@@ -162,7 +171,7 @@ export function paintMission(mm: MissionModel, board: (rows: number) => string[]
 
 export function renderPanel(m: PanelModel): string[] {
 	const w = Math.max(20, m.width);
-	return paintMission(missionModel(m, w), rows => todoLines(m.todos ?? [], { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows, now: m.nowSecs }).map(s => fitLine(s, w)));
+	return paintMission(missionModel(m, w), rows => todoLines(withOwnerStates(m.todos ?? [], ownerStates(m)), { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows, now: m.nowSecs }).map(s => fitLine(s, w)));
 }
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */
 export interface GatesCache {

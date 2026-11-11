@@ -6,14 +6,16 @@ import type { ClientElements, RenderElement } from 'claude-code';
 import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
-import { isStarting, type LiveWorker } from './data/live';
-import { ownTodos, todoCounts } from './data/todos';
+import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
+import { ownTodos, planBasis, todoCounts } from './data/todos';
+import { blockedCount } from './board-model';
 import { groupOpenCount } from './gates';
 import { hostEnv, PALETTES, toneHex, uiFromEnv, type Ui } from './atlas-ui';
 import { bandLines, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
+import { contractRail, railOf, type Rail } from './rail';
 import { textWidth } from './theme';
 
 export { planRows } from './mission-layout';
@@ -28,7 +30,6 @@ export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: Gat
 
 const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 const LINGER_MS = 15_000; // a finished worker keeps its row, ticked, this long
-const RAIL_SKIP = new Set(['validate', 'blocked']);
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
@@ -46,21 +47,18 @@ const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
 /** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
 export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
 
-const railIds = (s: LiveSnapshot): string[] => s.contract.phases.map((p) => p.id as string).filter((id) => !RAIL_SKIP.has(id));
+/** The snapshot's rail (mod/rail.ts, the one rail every surface asks): ids, the lit step and its index. */
+const railFor = (s: LiveSnapshot, lastPhase?: string | null): Rail => railOf(contractRail(s.contract), s.phase, lastPhase);
 
 /** `HudInput.phases`: the rail ids and the lit index (`ids.length` once the run is done), the band's own rail for the HUD's rich form. */
 export function hudPhases(s: LiveSnapshot, lastPhase?: string | null): { ids: string[]; active: number } {
-  const ids = railIds(s);
-  const phase = railPhase(s, lastPhase);
-  return { ids, active: phase === 'done' ? ids.length : Math.max(0, ids.indexOf(phase)) };
+  const r = railFor(s, lastPhase);
+  return { ids: r.ids, active: r.index };
 }
 
-/** The lit step: the snapshot phase when it is on the rail; for `blocked` (or any off-rail phase) the last rail phase
- * the caller saw, else the first, so a blocked reply never leaves the rail with nothing lit. */
-export function railPhase(s: LiveSnapshot, lastPhase?: string | null): string {
-  const ids = railIds(s);
-  return ids.includes(s.phase) ? s.phase : lastPhase && ids.includes(lastPhase) ? lastPhase : ids[0] ?? s.phase;
-}
+/** The lit step: the snapshot phase when it is on the rail (`done` for a finished run); for `blocked` (or any off-rail phase)
+ * the last rail phase the caller saw, else the first, so a blocked reply never leaves the rail with nothing lit. */
+export const railPhase = (s: LiveSnapshot, lastPhase?: string | null): string => railFor(s, lastPhase).phase;
 
 // ---- model --------------------------------------------------------------------------
 
@@ -78,14 +76,15 @@ function waves(ws: readonly LiveWorker[]): LiveWorker[][] {
 /** `<folder>@<branch>` of the board channel; without a board, the project folder. */
 const boardOf = (s: LiveSnapshot): string => (s.channel ? s.channel.split('/')[0]! : (s.root ?? '').replace(/\/+$/, '').split('/').pop() || 'atlas');
 
-/** A working worker reads running with a tool in flight, thinking between calls, starting before its first tool. */
-function workerState(w: LiveWorker, now: number): WorkerState {
-  if (w.state === 'working') return w.tool ? 'running' : isStarting(w, now) ? 'starting' : 'thinking';
-  return w.state === 'blocked' ? 'waiting' : w.state === 'failed' ? 'failed' : 'done';
+/** The host lists a working worker, so it is running: with a tool in flight it draws the tool, between calls it draws `thinking`
+ * (the state word is `running` either way; data/live.ts holds the one rule). A parked worker reads queued. */
+function workerState(w: LiveWorker): WorkerState {
+  if (w.state === 'working') return w.tool ? 'running' : 'thinking';
+  return w.state === 'parked' ? 'queued' : w.state === 'blocked' ? 'waiting' : w.state === 'failed' ? 'failed' : 'done';
 }
 
 function missionWorker(w: LiveWorker, now: number): MissionWorker {
-  const state = workerState(w, now);
+  const state = workerState(w);
   const tool = w.tool ?? w.lastTool;
   const end = state === 'done' || state === 'failed' ? w.since : now;
   return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.round((end - w.startedAt) / 1000)) };
@@ -98,7 +97,7 @@ function lastRun(all: readonly LiveWorker[], now: number): MissionModel['lastRun
   const wave = waves(all).pop();
   if (!wave) return undefined;
   const end = Math.max(...wave.map((w) => (w.state === 'done' || w.state === 'failed' ? w.since : now)));
-  return { workers: wave.length, secs: Math.max(0, Math.round((end - Math.min(...wave.map((w) => w.startedAt))) / 1000)), failed: wave.filter((w) => w.state === 'failed').length };
+  return { workers: wave.length, secs: Math.max(0, Math.round((end - Math.min(...wave.map((w) => w.startedAt))) / 1000)), failed: all.filter((w) => w.state === 'failed').length }; // a failure of an earlier wave still counts: idle never reads `all ok` over a failed worker
 }
 
 function missionModel(b: BandModel & { maxRows: number }): MissionModel {
@@ -107,7 +106,8 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const all = b.live.filter((w) => w.state !== 'parked'); // parked workers are resting
   const active = all.filter((w) => w.state !== 'done');
   const lingering = all.filter((w) => w.state === 'done' && now - w.since <= LINGER_MS);
-  const shown = active.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
+  const queued = queuedMembers(s).map((name): MissionWorker => ({ name, role: name.includes('-') ? name.replace(/-[^-]*$/, '') : undefined, state: 'queued', secs: 0 })); // dispatched, not listed by the host yet
+  const shown = active.length || queued.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
   const { done, total } = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
   const gates = b.gates.filter((g) => g.id !== 'header' && hasGateData(g)); // the header check is the mod's own group; omp never shows it
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
@@ -116,9 +116,9 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   return {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick,
     project: boardOf(s), scope: b.team,
-    phases: railIds(s), phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked',
-    done, total,
-    workers: shown.map((w) => missionWorker(w, now)),
+    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked',
+    done, total, todoBlocked: blockedCount(planBasis(s.todos, s.sessionId), workerStates(s, b.live)),
+    workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts) } : undefined,
     checks: gates.length ? gates.map((g) => ({ id: g.id, ok: !groupOpenCount(g) && !g.error })) : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
@@ -190,7 +190,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   const rows: Row[] = lines.flatMap((l): Row[] => {
-    if (l.board) return todoRows(ownTodos(b.snapshot.todos, b.snapshot.sessionId), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), ui, rich: m.rich });
+    if (l.board) return todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), ui, rich: m.rich });
     if (l.keys && on) return [keysRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });

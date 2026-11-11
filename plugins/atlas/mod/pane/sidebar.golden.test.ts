@@ -28,7 +28,7 @@ describe('sidebar golden text', () => {
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
-    expect(r).toContain('phase  implement 5/6');
+    expect(r).toContain('phase  implement 4/5');
     expect(r.some((l) => l.startsWith('gates ') && l.endsWith('1/3'))).toBe(true);
     expect(r.some((l) => l.startsWith('todo ') && l.includes('1 of 7'))).toBe(true);
     expect(r.some((l) => l.startsWith('agents ') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);

@@ -67,8 +67,8 @@ describe('channel tab: header, columns and marks', () => {
     expect(body('channel', 80, { channel: undefined, people: 3, unread: 0, notes: [] })[0]).toBe('#channel  3 people');
   });
   test('unread is shown only when not zero, with its word', () => {
-    expect(body('channel', 80, { unread: 4, notes: [] })[0]).toBe('#atlas-board-mod  6 people · 4 unread');
-    expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe('#atlas-board-mod  6 people');
+    expect(body('channel', 80, { unread: 4, notes: [] })[0]).toBe('#atlas-board-mod  5 people · 4 unread');
+    expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe('#atlas-board-mod  5 people');
   });
   test('the time column starts at 50 cells', () => {
     expect(body('channel', 50, { notes: [note()] })[1]).toBe('10:02 lead hello');

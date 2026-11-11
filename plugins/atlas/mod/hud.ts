@@ -5,6 +5,7 @@ import type { SquadAgent, TodoItem } from './contract';
 import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
+import { itemState } from './board-model';
 import { hostEnv, PALETTES, toneHex, uiFromEnv, type Run, type Ui, type UiState } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, tierOf, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import type { Segment } from './runs';
@@ -38,23 +39,22 @@ export function agentName(name: string, role: string, task?: string): string {
   return descriptionName(task) ?? (GENERIC.has(role) ? name.slice(0, 6) : role);
 }
 
-/** Band workers plus the squad's spawn model and task, in the HUD's shape. */
-export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], now = Date.now()): HudAgent[] {
-  return live.map((w) => {
+/** Band workers plus the squad's spawn model and task, in the HUD's shape; `queued` names dispatched workers the host does not list yet (data/live.ts queuedMembers). */
+export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[] = []): HudAgent[] {
+  const listed = live.map((w) => {
     const s = squad.find((a) => a.name === w.name);
-    return { name: agentName(w.name, w.role, s?.task), role: w.role, state: w.state, ui: liveState(w, now), tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    return { name: agentName(w.name, w.role, s?.task), role: w.role, state: w.state, ui: liveState(w), tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
+  return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
 }
 
 /** `root` (the project root) makes paths in a tool preview project-relative. `phases` feeds the rich rail. */
 export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | null; phases?: { ids: readonly string[]; active: number } };
 export type HudOpts = { cols: number; maxRows: number; ui?: Ui; rich?: boolean; tick?: number; now?: number };
 
-export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running';
+export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running' || a.state === 'queued';
 
 // ---- adapters ---------------------------------------------------------------------------------------
-
-const TODO_STATE: Record<string, UiState> = { completed: 'done', in_progress: 'running', blocked: 'blocked', abandoned: 'failed', pending: 'queued' };
 
 const flat = (s: string | null | undefined): string => (s ?? '').replace(/\s+/g, ' ').trim();
 const LABEL_PREFIX = /^\[([A-Za-z][\w-]*)\]\s+/;
@@ -64,11 +64,16 @@ const labelOf = (t: TodoItem): string => flat(t.content).replace(LABEL_PREFIX, '
 const mmss = (ms: number): string => `${String(Math.floor(ms / 60_000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
 /** Plan rows in plan order. Every row is shown with its own state; the focus mark sits on the running row, else the first open one. */
-export function todoModel(todos: readonly TodoItem[], now: number): TodoRow[] {
+export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map()): TodoRow[] {
   const rows = todos.map((t): TodoRow => {
-    const state = TODO_STATE[t.status] ?? 'queued';
+    const state = itemState(t.status, t.owner ? owners.get(t.owner) : undefined); // the board's rule: a failed owner fails the item
     const claimed = typeof t.claimed_at === 'number' && t.claimed_at > 0 ? now - t.claimed_at * 1000 : undefined;
-    const detail = flat(t.evidence) || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}` : '') || flat(t.owner);
+    const est = typeof t.estimate_s === 'number' && t.estimate_s > 0 ? ` of ${mmss(t.estimate_s * 1000)}` : ''; // the estimate only when the item carries one
+    const own = t.owner ? owners.get(t.owner) : undefined;
+    const ownerWord = state !== 'done' && (own === 'failed' || own === 'waiting' || own === 'blocked') && own !== state ? `owner ${own}` : ''; // as on the board: a failed owner already fails the item, a waiting owner blocks it and is named
+    const ev = flat(t.evidence);
+    const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || flat(t.owner);
+    const detail = ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base;
     return { label: labelOf(t), state, detail, focus: false };
   });
   const at = rows.findIndex((r) => r.state === 'running');
@@ -89,11 +94,11 @@ function lastAction(a: HudAgent, root?: string | null): string {
   return rel(flat(a.lastLine)) || (a.lastTool ? `${a.lastTool.toLowerCase()}${flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '');
 }
 
-/** Agent rows, in the mocks' order. `T4` is the 1-based position of the plan row the agent owns. */
+/** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const rows = agents.map((a): AgentRow => {
-    const owned = todos.findIndex((t) => t.owner === a.name);
-    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), task: owned >= 0 ? `T${owned + 1}` : '', tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false };
+    const tasks = todos.flatMap((t, i) => (t.owner === a.name ? [i + 1] : []));
+    return { name: a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -107,7 +112,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const agents = input.agents.some(isRunning) ? agentModel(input.agents, plan, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
   return {
-    s: { todos: todoModel(plan, opts.now ?? Date.now()), agents },
+    s: { todos: todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.map((a): [string, UiState] => [a.name, a.ui ?? workerUiState(a.state)]))), agents },
     o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}) },
   };
 }

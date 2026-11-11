@@ -186,7 +186,7 @@ test('the HUD lists the agent; the band beside it keeps the counts and draws no 
   expect(shown).toContain('SUBAGENTS'); // the restored block
   expect(shown).toContain('impl-a'); // listed once, by the HUD
   expect(shown).not.toContain('implementer'); // the band's role column is gone
-  expect(shown).toContain('phase 1/6');
+  expect(shown).toContain('phase 1/5');
   expect(shown).toMatch(/[◐◓◑◒] 1 running/); // the band's count agrees with the block (a working agent is running)
   expect(shown).not.toContain('queued');
   expect(shown).not.toContain('starting'); // no band worker row (its activity word)
@@ -211,7 +211,7 @@ test('narrow (70 columns) the HUD drops the Subagents block and the band is its 
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const shown = await abovePromptText($, 30, 70);
   expect(shown).not.toContain('SUBAGENTS');
-  expect(shown).toContain('ph 1/6');
+  expect(shown).toContain('ph 1/5');
   expect(shown).not.toContain('implementer');
 });
 
@@ -221,10 +221,10 @@ test('at a starved maxRows the HUD keeps its Subagents ribbon and row, and the b
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const two = await abovePromptText($, 2);
   expect(two).toContain('SUBAGENTS'); // a running agent keeps two rows before the band keeps any
-  expect(two).not.toContain('phase 1/6'); // so the band has no row left
+  expect(two).not.toContain('phase 1/5'); // so the band has no row left
   const three = await abovePromptText($, 3);
   expect(three).toContain('SUBAGENTS');
-  expect(three).toContain('phase 1/6'); // the band's one summary row: phase position and counts
+  expect(three).toContain('phase 1/5'); // the band's one summary row: phase position and counts
   expect(three).toMatch(/[◐◓◑◒] 1 running/);
   expect(three).not.toContain('theory'); // no rail: it would name every phase
   expect(three).not.toContain('implementer');
@@ -243,7 +243,7 @@ test('with the docked pane open (measured: viewport 143, bodyColumns 138) the ba
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const shown = await abovePromptText($, 18, 138);
   expect(shown).toContain('ATLAS');
-  expect(shown).toContain('research · phase 1/6'); // the full tier names the phase and its position; the rail is the rich form's
+  expect(shown).toContain('research · phase 1/5'); // the full tier names the phase and its position; the rail is the rich form's
   expect(shown).not.toContain('theory');
 });
 

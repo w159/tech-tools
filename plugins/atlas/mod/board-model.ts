@@ -12,20 +12,21 @@
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
 import { clip, gauge, ribbon, runsCells, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
-/** One board row. `elapsed` (seconds into a budget) draws the gauge on a running row in the rich form. */
-export type BoardRow = { label: string; state: UiState; owner: string; detail: string; elapsed?: { secs: number; of: number }; focus?: boolean };
+/** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
+ * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */
+export type BoardRow = { label: string; state: UiState; owner: string; detail: string; elapsed?: { secs: number; of?: number }; ownerState?: UiState; focus?: boolean };
 
 /** Column starts of the full form, and the compact form's state column. */
 export const COL = { state: 30, owner: 42, detail: 62, stateCompact: 26 } as const;
 export const OWNER_W = 18;
 export const FULL_MIN = 100;
 export const COMPACT_MIN = 60;
-/** The budget the elapsed gauge counts against when a running item has no budget of its own (five minutes, as in the design). */
-export const ELAPSED_BUDGET_S = 300;
 
 // ---- data: todo rows to board rows --------------------------------------------------------------------------------
 
-export type BoardSource = { content: string; status: string; owner?: string; evidence?: string; claimed_at?: number | null; completed_at?: number | null; origin?: string };
+/** `estimate_s`: the item's own estimate in seconds, when the board records one. `ownerState`: the state word of the item's
+ * owner when the caller knows the worker (data/live.ts); a failed or waiting owner shows on the item. */
+export type BoardSource = { content: string; status: string; owner?: string; evidence?: string; claimed_at?: number | null; completed_at?: number | null; origin?: string; estimate_s?: number | null; ownerState?: UiState };
 
 /** The six-word vocabulary for a todo status; an unknown status reads as queued. */
 export function stateOfStatus(status: string): UiState {
@@ -33,7 +34,7 @@ export function stateOfStatus(status: string): UiState {
     case 'completed': case 'done': return 'done';
     case 'in_progress': case 'running': return 'running';
     case 'blocked': return 'blocked';
-    case 'failed': return 'failed';
+    case 'failed': case 'abandoned': return 'failed';
     case 'waiting': return 'waiting';
     default: return 'queued';
   }
@@ -48,17 +49,35 @@ export const mmss = (secs: number): string => {
 const bare = (content: string): string => content.replace(/^\s*\[[^\]]+\]\s*/, '');
 const cleanEvidence = (e: string | undefined): string => (e ?? '').replace(/^\s*\d+[.)]\s*/, '').replace(/\s+/g, ' ').trim();
 
-/** `ran 03:10` for a finished item with both stamps, `elapsed` data for a running one with a claim time, else the evidence. */
+/** An item's state word: its status, except that a failed owner fails the item and a waiting owner blocks it (a finished item stays done).
+ * One rule for every surface that lists plan items (board, TODO tree, side panel). */
+export function itemState(status: string, ownerState?: UiState): UiState {
+  const own = stateOfStatus(status);
+  if (own === 'done') return own;
+  if (ownerState === 'failed') return 'failed';
+  if (ownerState === 'waiting' || ownerState === 'blocked') return 'blocked';
+  return own;
+}
+
+/** Items whose state word is `blocked` under `itemState`, given each owner's state word. */
+export const blockedCount = (items: readonly { status: string; owner?: string }[], owners: ReadonlyMap<string, UiState>): number =>
+  items.filter((it) => itemState(it.status, it.owner ? owners.get(it.owner) : undefined) === 'blocked').length;
+
+/** `ran 03:10` for a finished item with both stamps, `elapsed` data for a running one with a claim time (its `of` only when the
+ * item carries an estimate), else the evidence. An owner that failed or waits is named in front of the detail. */
 export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
-  const state = stateOfStatus(it.status);
-  const base = { label: bare(it.content), state, owner: it.owner ?? '' };
+  const state = itemState(it.status, it.ownerState);
+  // Named only when it adds to the item's own word (a failed owner already reads `failed`; a waiting owner reads `blocked` and is named).
+  const ownerState = state !== 'done' && (it.ownerState === 'failed' || it.ownerState === 'waiting' || it.ownerState === 'blocked') && it.ownerState !== state ? it.ownerState : undefined;
+  const base = { label: bare(it.content), state, owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}) };
   const ev = cleanEvidence(it.evidence);
+  const detail = ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
   if (state === 'done' && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
   if (state === 'running' && it.claimed_at && nowSecs !== undefined && nowSecs >= it.claimed_at) {
-    const secs = nowSecs - it.claimed_at;
-    return { ...base, detail: ev, elapsed: { secs, of: Math.max(ELAPSED_BUDGET_S, secs) } };
+    const est = typeof it.estimate_s === 'number' && it.estimate_s > 0 ? it.estimate_s : undefined;
+    return { ...base, detail, elapsed: { secs: nowSecs - it.claimed_at, ...(est ? { of: est } : {}) } };
   }
-  return { ...base, detail: ev };
+  return { ...base, detail };
 }
 
 /** Rows of `items` in board order (plan rows first, then the per-subagent dispatch rows). */
@@ -88,8 +107,9 @@ const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN 
 function detailRuns(row: BoardRow, o: BoardOpts, room: number): Run[] {
   if (row.elapsed) {
     const { secs, of } = row.elapsed;
-    const tail = `${mmss(secs)} of ${mmss(of)}`;
-    if (o.rich && !o.ui.ascii && room >= 8 + 10 + 1 + tail.length) return [r('elapsed ', 'muted'), ...gauge(10, Math.min(1, secs / Math.max(1, of)), o.ui), r(` ${tail}`, 'sub')];
+    // The gauge and `of mm:ss` need a real estimate; without one the row says `elapsed 00:42` and draws no gauge.
+    const tail = of === undefined ? mmss(secs) : `${mmss(secs)} of ${mmss(of)}`;
+    if (of !== undefined && o.rich && !o.ui.ascii && room >= 8 + 10 + 1 + tail.length) return [r('elapsed ', 'muted'), ...gauge(10, Math.min(1, secs / Math.max(1, of)), o.ui), r(` ${tail}`, 'sub')];
     return [r(clip(`elapsed ${tail}${row.detail ? `  ${row.detail}` : ''}`, room), 'sub')];
   }
   return row.detail ? [r(clip(row.detail, room), 'sub')] : [];

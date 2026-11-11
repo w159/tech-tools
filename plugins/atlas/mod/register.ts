@@ -14,7 +14,7 @@ import { bandTree, hudPhases, railPhase, type BandHandlers } from './band';
 import { allSettled, easedNow, gaugeTargets, retargetAll, type GaugeMoves } from './band-motion';
 import { hudAgents, hudBudget, hudCompactRows, hudListsAgents, hudRows, isRunning } from './hud';
 import { rowOf } from './runs';
-import { activeCount, liveWorkers } from './data/live';
+import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
@@ -981,7 +981,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const live = liveWorkers(snapshot, snapshot.now); // one clock for the band, the HUD, the board and the pane
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		// The HUD draws the TODO tree and the Subagents block (rev 4 design); below 80 columns the block gives way to the band's counts.
-		const agents = hudAgents(live, snapshot.squad, snapshot.now);
+		const agents = hudAgents(live, snapshot.squad, queuedMembers(snapshot));
 		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
 		const look = await lookOf($);
 		const tick = await read($, spinnerTickState);
@@ -1019,7 +1019,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (snapshot === null) return next(e);
 		const look = await lookOf($);
 		if (e.requestId === BOARD_ID) {
-			return boardTree($.ui.resolve(e), ownTodos(snapshot.todos ?? [], snapshot.sessionId), {
+			return boardTree($.ui.resolve(e), withOwnerStates(ownTodos(snapshot.todos ?? [], snapshot.sessionId), workerStates(snapshot, liveWorkers(snapshot, snapshot.now))), {
 				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich,
 			});
 		}

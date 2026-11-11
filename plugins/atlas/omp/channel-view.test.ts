@@ -299,7 +299,7 @@ test("widget paints the band first and repaints a poll only when the picture cha
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
 	timers.iv?.();
 	expect(plain([calls[0]![0]!])).toContain("ATLAS");
-	expect(calls.length).toBe(1); // a starting worker draws no spinner, so nothing moves between polls
+	expect(calls.length).toBe(2); // the registry lists w1, so it is running (thinking): its spinner moves between polls, and the poll repaints
 	view.stop();
 });
 
@@ -308,7 +308,7 @@ const model = (over: Partial<PanelModel> = {}): PanelModel => ({
 	workers: [
 		{ name: "explorer-a324", secs: 72, tool: { tool: "ctx_search", target: "dispatch_tripwire.py", active: true }, spark: [1, 3, 5, 2, 6, 7, 4, 2, 5, 6, 3, 1] },
 		{ name: "implementer-band", secs: 48, role: "implementer", tool: { tool: "Edit", target: "mod/band.tsx", active: false } },
-		{ name: "verifier-ui", secs: 12 },
+		{ name: "verifier-ui", secs: 12, state: "queued" },
 	],
 	notes: [{ from: "explorer-a324", to: "implementer-band", text: "found 3 call sites" }, { from: "implementer-band", to: "all", text: "band.tsx compiles" }],
 	gates: [{ id: "completion", title: "c", lines: [] }, { id: "tripwire", title: "t", lines: [] }, { id: "routing", title: "r", lines: [{ id: "a", label: "a", ok: false }] }],
@@ -320,11 +320,11 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}implement · phase 4\/6 {3}todo █████▌░░░░ 5 of 9 {3}◓ 2 running {3}◇ 1 queued +$/);
+	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}implement · phase 4\/5 {3}todo █████▌░░░░ 5 of 9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
 	expect(p[2]).toMatch(/^ ◓ explorer-a324 {5}explorer {5}ctx_search {2}dispatch_tripwire\.py +1m12s $/);
 	expect(p[3]).toMatch(/^ ◓ implementer-band {2}implementer {2}thinking {3}last Edit mod\/band\.tsx +48s $/);
-	expect(p[4]).toMatch(/^ ◇ verifier-ui {7}verifier {5}starting +12s $/);
+	expect(p[4]).toMatch(/^ ◇ verifier-ui {7}verifier {5}queued +12s $/);
 	expect(p[5]).toBe(" ".repeat(120));
 	expect(p[6]).toMatch(/^ implementer-band to all {3}band\.tsx compiles +$/);
 	expect(p[7]).toBe(" checks  ■ routing".padEnd(120)); // groups with no lines yet are not shown
@@ -363,7 +363,7 @@ test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers int
 test("panel idle: the band reads idle and the last run follows, the whole thing is two rows", () => {
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle · phase 6\/6 {3}todo █████▌░░░░ 5 of 9 +$/);
+	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle · phase 5\/5 {3}todo █████▌░░░░ 5 of 9 +$/);
 	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
 	expect(failed).toContain("last run  2 workers · 9s · 1 failed");
@@ -378,17 +378,17 @@ test("long worker names and roles are cut with an ellipsis in their columns, nev
 test("panel at 60 columns is the band alone", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
 	expect(p).toHaveLength(1);
-	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ph 4/6 · todo 5/9 · ◓2");
+	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ph 4/5 · todo 5/9 · ◓2");
 });
 
-test("worker marks: a running worker's spinner follows the tick, thinking has a grey one, starting is a hollow diamond; no faces", () => {
+test("worker marks: a running worker's spinner follows the tick, thinking has a grey one; no faces", () => {
 	const lane = (tick: number, tool?: { tool: string; target: string; active: boolean }) =>
 		plain([renderPanel(model({ tick, workers: [{ name: "explorer-a324", secs: 5, tool }] }))[2]!]);
 	const run = { tool: "ctx_search", target: "x", active: true };
 	expect(lane(0, run)).toMatch(/^ ◐ explorer-a324 +explorer +ctx_search {2}x/);
 	expect(lane(1, run)).toMatch(/^ ◓ explorer-a324/);
 	expect(lane(0, { ...run, active: false })).toMatch(/^ ◐ explorer-a324 +explorer +thinking {3}last ctx_search x/);
-	expect(lane(0)).toMatch(/^ ◇ explorer-a324 +explorer +starting/);
+	expect(lane(0)).toMatch(/^ ◐ explorer-a324 +explorer +thinking/); // the registry lists it: running, no clock-guessed starting
 	expect(lane(0, run)).not.toMatch(/[◔•◉]/);
 });
 

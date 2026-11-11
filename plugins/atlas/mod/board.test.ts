@@ -120,10 +120,19 @@ describe('data to rows', () => {
   test('statuses map onto the six-word vocabulary; an unknown one reads queued', () => {
     expect(['completed', 'in_progress', 'blocked', 'failed', 'waiting', 'pending', 'weird'].map(stateOfStatus)).toEqual(['done', 'running', 'blocked', 'failed', 'waiting', 'queued', 'queued']);
   });
-  test('done shows `ran mm:ss` from its stamps; running carries elapsed against the five minute budget', () => {
+  test('done shows `ran mm:ss` from its stamps; running carries elapsed, and `of` only from its own estimate', () => {
     expect(toBoardRow({ content: '[build] wire it', status: 'completed', owner: 'a', claimed_at: 100, completed_at: 290 })).toMatchObject({ label: 'wire it', detail: 'ran 03:10' });
-    expect(toBoardRow({ content: 'x', status: 'in_progress', claimed_at: 100 }, 142)).toMatchObject({ elapsed: { secs: 42, of: 300 } });
-    expect(toBoardRow({ content: 'x', status: 'in_progress', claimed_at: 100 }, 1000).elapsed).toEqual({ secs: 900, of: 900 });
+    expect(toBoardRow({ content: 'x', status: 'in_progress', claimed_at: 100 }, 142)).toMatchObject({ elapsed: { secs: 42 } });
+    expect(toBoardRow({ content: 'x', status: 'in_progress', claimed_at: 100 }, 142).elapsed).toEqual({ secs: 42 });
+    expect(toBoardRow({ content: 'x', status: 'in_progress', claimed_at: 100, estimate_s: 300 }, 142).elapsed).toEqual({ secs: 42, of: 300 });
+    // No estimate: the row reads `elapsed 00:42`, no `of`, no gauge (rich or not).
+    const noEst = boardText(boardLines([toBoardRow({ content: 'x', status: 'in_progress', claimed_at: 100, owner: 'a' }, 142)], { cols: 120, ui: ui('mocha'), rich: true })).join('\n');
+    expect(noEst).toContain('elapsed 00:42');
+    expect(noEst).not.toContain(' of ');
+    expect(noEst).not.toMatch(/[█░▏▎▍▌▋▊▉]/);
+    // A failed owner fails its item; a waiting owner blocks it and is named.
+    expect(toBoardRow({ content: 'x', status: 'pending', owner: 'a', ownerState: 'failed' })).toMatchObject({ state: 'failed', detail: '' });
+    expect(toBoardRow({ content: 'x', status: 'pending', owner: 'a', ownerState: 'waiting' })).toMatchObject({ state: 'blocked', detail: 'owner waiting' });
     expect(toBoardRow({ content: 'x', status: 'blocked', evidence: '2) needs   review' }).detail).toBe('needs review');
     expect(mmss(125)).toBe('02:05');
   });

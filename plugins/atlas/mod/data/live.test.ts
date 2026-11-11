@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing';
 import { busySnap, NOW } from '../live_fixture';
-import { activeCount, callBuckets, isStarting, liveWorkers } from './live';
+import { activeCount, callBuckets, liveState, liveWorkers, queuedMembers, workerStates, workerWord, withOwnerStates } from './live';
 
 test('liveWorkers orders blocked, failed, working, done and drops the lead', () => {
   const s = busySnap();
@@ -62,15 +62,36 @@ test('liveWorkers copies every activity field and falls back to since / now / nu
   s.activity['full'] = { mood: 'working', tool: 'Read', lastTool: 'Grep', since: NOW - 10, startedAt: NOW - 99, target: 'a.ts', detail: 'reading', lastLine: 'hello', calls: [NOW - 1, NOW - 2], scope: 'audit/medium', toolCount: 1, tokens: 5 } as (typeof s.activity)[string];
   s.activity['nostart'] = { mood: 'working', tool: null, since: NOW - 7, toolCount: 0, tokens: null, lastLine: '' } as (typeof s.activity)[string];
   const by = Object.fromEntries(liveWorkers(s, NOW + 500).map((w) => [w.name, w]));
-  expect(by['full']).toEqual({ name: 'full', role: 'explorer', state: 'working', tool: 'Read', lastTool: 'Grep', since: NOW - 10, startedAt: NOW - 99, target: 'a.ts', detail: 'reading', lastLine: 'hello', calls: [NOW - 1, NOW - 2], scope: 'audit/medium', seen: true });
-  expect(by['bare']).toEqual({ name: 'bare', role: 'runner', state: 'working', tool: null, lastTool: null, since: NOW + 500, startedAt: NOW + 500, target: null, detail: null, lastLine: '', calls: [], scope: null, seen: false });
+  expect(by['full']).toEqual({ name: 'full', role: 'explorer', state: 'working', tool: 'Read', lastTool: 'Grep', since: NOW - 10, startedAt: NOW - 99, target: 'a.ts', detail: 'reading', lastLine: 'hello', calls: [NOW - 1, NOW - 2], scope: 'audit/medium' });
+  expect(by['bare']).toEqual({ name: 'bare', role: 'runner', state: 'working', tool: null, lastTool: null, since: NOW + 500, startedAt: NOW + 500, target: null, detail: null, lastLine: '', calls: [], scope: null });
   expect(by['nostart']?.startedAt).toBe(NOW - 7);
-  // A worker the host lists with no activity ever seen has an unknown start: it is never `starting`, whatever the clock.
-  expect(isStarting(by['bare']!, NOW + 500)).toBe(false);
-  expect(isStarting(by['nostart']!, NOW + 500)).toBe(false); // no startedAt recorded: unknown start
-  expect(isStarting(by['full']!, NOW - 99 + 50)).toBe(false); // it holds a tool
-  expect(isStarting({ ...by['bare']!, seen: true, startedAt: NOW }, NOW + 90_000)).toBe(true);
-  expect(isStarting({ ...by['bare']!, seen: true, startedAt: NOW }, NOW + 90_001)).toBe(false);
+  // The host lists them: they are running, whatever the clock says and whether or not a call was ever seen.
+  expect(liveState(by['bare']!)).toBe('running');
+  expect(liveState({ ...by['bare']!, startedAt: 0 })).toBe('running');
+  expect(liveState(by['nostart']!)).toBe('running');
+});
+
+test('workerWord: queued = dispatched and not listed; running = listed; done and failed from the outcome; waiting from the board', () => {
+  expect(workerWord({ listed: false })).toBe('queued');
+  expect(workerWord({ listed: true })).toBe('running');
+  expect(workerWord({ listed: true, outcome: 'done' })).toBe('done');
+  expect(workerWord({ listed: true, outcome: 'failed' })).toBe('failed');
+  expect(workerWord({ listed: true, blocked: true })).toBe('waiting');
+  expect(workerWord({ listed: false, outcome: 'failed' })).toBe('failed'); // an outcome outranks the listing
+  // no clock enters the rule: the evidence is the whole input
+  expect(workerWord.length).toBe(1);
+});
+
+test('queuedMembers: an open roster member that is not the lead and not in the squad; ended members and listed ones are not queued', () => {
+  const s = busySnap({ squad: [{ name: 'a-1', persona: 'a', state: 'running', source: 'task', task: '' }], activity: {} });
+  s.members = [{ name: 'a-1' }, { name: 'b-2' }, { name: 'c-3', ended_at: '2026-11-11T10:00:00Z' }, { name: 'lead-eed839' }, { name: 'b-2' }];
+  expect(queuedMembers(s)).toEqual(['b-2']);
+  expect([...workerStates(s, liveWorkers(s, NOW))]).toEqual([['b-2', 'queued'], ['a-1', 'running']]);
+});
+
+test('withOwnerStates attaches the owner state to the items whose owner is a listed worker or a queued member', () => {
+  const states = new Map([['a-1', 'failed' as const]]);
+  expect(withOwnerStates([{ owner: 'a-1', id: 1 }, { owner: 'you', id: 2 }, { id: 3 }], states)).toEqual([{ owner: 'a-1', id: 1, ownerState: 'failed' }, { owner: 'you', id: 2 }, { id: 3 }]);
 });
 
 test('callBuckets: 12 slots of 5s by default, oldest first, edges and out-of-range', () => {

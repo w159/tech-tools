@@ -32,10 +32,11 @@ describe('team rows from the live snapshot', () => {
     expect(out[0]).toBe('  ◉ lead    waiting');
     expect(out).toContain('  ◇ leader  queued');
   });
-  test('L13: a worker with no call yet is queued ("starting") for 90 s, then running; the HUD, the band and the panel use one word', () => {
+  test('L13: a state word comes from evidence, never a clock: a host-listed worker is running at any age, a dispatched member the host does not list is queued', () => {
     const at = (ms: number) => world({ squad: [sq('a', 'running')], activity: { a: act({ mood: 'working', startedAt: NOW - ms }) } as never });
-    expect(team(at(90_000), 80).find((l) => l.includes(' a '))).toContain('queued');
-    expect(team(at(90_001), 80).find((l) => l.includes(' a '))).toContain('running');
+    for (const ms of [0, 90_000, 90_001, 3_600_000]) expect(team(at(ms), 80).find((l) => l.includes(' a '))).toContain('running');
+    const dispatched = world({ squad: [], members: [{ name: 'runner-9' }] as never });
+    expect(team(dispatched, 80).find((l) => l.includes(' runner-9 '))).toContain('queued');
   });
   test('a parked worker draws a queued row without throwing', () => {
     const out = team(world({ squad: [sq('pk', 'parked')], activity: { pk: act() } as never }), 80);

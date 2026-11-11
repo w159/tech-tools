@@ -1,30 +1,35 @@
-// Golden rows for contracts/band-fixture.ts at 120 columns, tick 0 (plain text, trailing spaces trimmed). The Claude
-// band (mod/band-golden.test.ts) and the omp mission panel (omp/mission-panel-golden.test.ts) both assert these exact
-// rows, blank spacer rows included: the text comes from mod/mission-layout.ts, so the two harnesses print the same.
-// A .ts module because the mod test host cannot read files. See band-fixture.ts for the row decisions.
+// Golden rows for the shared world (contracts/band-world.ts, through contracts/world-live.ts) at 120 columns, tick 0 (plain text, trailing
+// spaces trimmed). HAND-REVIEWED LITERAL: round2/design/evidence/gen4.py does not cover the worker table, the idle last-run row or the
+// agents noun, so these rows were rendered from the code and read against the design line by line (round2/after/truth.md).
+// The Claude band (mod/band-golden.test.ts) and the omp mission panel (omp/mission-panel-golden.test.ts) both assert these exact rows,
+// blank spacer rows included: the text comes from mod/mission-layout.ts, so the two harnesses print the same.
+// A .ts module because the mod test host cannot read files.
 //
 // The band itself (rev 4 tiers and the rich variant) is asserted against contracts/band-world-golden.ts, rows taken
 // from the design evidence and driven by contracts/band-world.ts; `tierGolden` below names them for the parity tests.
 import { band_120, band_120_rich, band_40, band_60, band_80 } from "./band-world-golden";
 
-/** Running: the band, workers (running, then thinking), the newest message, the checks footer. */
+/** Running: the band, workers (failed and waiting first, then running, queued, done), the newest message, the checks footer. */
 export const golden: string[] = [
-  "◖ ◆ ATLAS ◗  implement · phase 4/6   todo █▋░░░░░░░░ 1 of 6   ◐ 2 running",
+  "◖ ◆ ATLAS ◗  research · phase 2/4  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued",
   "",
-  " ◐ explorer-1  explorer     Grep  src/auth                                                                        1m15s",
-  " ◐ impl-auth   implementer  thinking   last Edit auth/middleware.ts                                               1m10s",
+  " ■ implementer-live    implementer  failed                                                                        1m35s",
+  " ◐ implementer-band    implementer  Read  runs.ts:17                                                                42s",
+  " ◇ runner-land         runner       queued                                                                           0s",
+  " ● implementer-layout  implementer  finished                                                                      5m51s",
+  " ● implementer-gates   implementer  finished                                                                      1m58s",
   "",
-  " impl-auth to lead-eed839   need a decision on the token ttl                                                      14:06",
-  " checks  ● completion  ■ tripwire  ● routing"
+  " implementer-layout to lead   T1 and T2 merged                                                                    10:07",
+  " checks  ● lint  ● test  ■ doctor"
 ];
 
-/** Idle: the run is closed, the band reads done, the last run follows, then the core row (core-golden.ts) and the footer.
- * The Claude band adds its key buttons to the footer only when handlers are wired; the golden test wires none. */
+/** Idle: the run is closed, every plan row done, the band reads idle and keeps the failed worker, the last run follows (it counts the failure
+ * too), then the core row (core-golden.ts) and the footer. The Claude band adds its key buttons to the footer only when handlers are wired. */
 export const idleGolden: string[] = [
-  "◖ ◆ ATLAS ◗  idle · phase 6/6   todo ██████████ 6 of 6",
-  " last run  3 workers · 1m31s · all ok",
+  "◖ ◆ ATLAS ◗  idle · phase 4/4   todo ██████████ 7 of 7   ctx █████░░░ 62%   agents ■ 1 failed",
+  " last run  1 worker · 42s · 1 failed",
   " contract  header 3/4   verdicts  1 verified · 1 refuted   offload  17.9k kept, 608 back (30x)   route  verify/low ●",
-  " checks  ● completion  ■ tripwire  ● routing"
+  " checks  ● lint  ● test  ■ doctor"
 ];
 
 /** The shared-world band at each tier (columns -> rows): 120 and 80 and 60 and 40, and the rich band at 120. */

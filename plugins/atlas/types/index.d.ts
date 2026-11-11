@@ -30,6 +30,7 @@ export interface TodoItem {
   archived?: boolean;
   evidence?: string;
   claimed_at?: number | null;   // epoch seconds
+  estimate_s?: number | null;   // the item's own estimate in seconds, when the board records one (the Board draws `of mm:ss` and the gauge only from it)
   origin?: 'session' | 'carried' | 'manual' | 'advisor' | string;
   channel?: string;
   role?: string;

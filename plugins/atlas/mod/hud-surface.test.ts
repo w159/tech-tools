@@ -3,12 +3,12 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
 import { chipCount, runsString, type Run, type Ui } from './atlas-ui';
-import { agentRows, fitStack, padRows, stateCounts, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
+import { agentRows, fitStack, padRows, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 export const worldTodos = (): TodoRow[] => world.todos.map((t) => ({ label: t.label, state: t.state, detail: t.detail, focus: t.state === 'running' }));
 export const worldAgents = (): AgentRow[] =>
-  world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, task: w.task, tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running' }));
+  world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running' }));
 const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
 const full = { spacers: true, extras: true };
@@ -111,5 +111,23 @@ describe('row budget never hides rows silently', () => {
     expect(text(fitStack({ todos: many(5), agents: worldAgents() }, opts(120), 1))[0]).toContain('SUBAGENTS');
     expect(text(fitStack({ todos: many(5), agents: [] }, opts(120), 1))[0]).toContain('TODO');
     expect(fitStack({ todos: many(5), agents: [] }, opts(120), 0)).toEqual([]);
+  });
+});
+
+describe('SUBAGENTS task column (critique-3 change 8)', () => {
+  const row = (name: string, tasks: number[]): AgentRow => ({ name, state: 'running', model: 'opus', tasks, tool: 'read a.ts', ctx: null, focus: false });
+  test('every owned id is listed; more than fit read as a count', () => {
+    expect(taskCell([])).toBe('');
+    expect(taskCell([4])).toBe('T4');
+    expect(taskCell([1, 2])).toBe('T1,T2');
+    expect(taskCell([1, 2, 3])).toBe('3 tasks');
+    const out = text(agentRows([row('a', [1, 2]), row('b', [3, 4, 5]), row('c', [])], opts(120), full));
+    expect(out.find((r) => / a /.test(r))).toContain('T1,T2');
+    expect(out.find((r) => / b /.test(r))).toContain('3 tasks');
+  });
+  test('the full form names its columns in the spacer row: AGENT STATE MODEL TASK LAST (rich: CTX instead of TASK)', () => {
+    expect(text(agentRows([row('a', [1])], opts(120), full))[1]).toMatch(/^ {4}AGENT +STATE +MODEL +TASK +LAST$/);
+    expect(text(agentRows([row('a', [1])], opts(120, true), full))[1]).toMatch(/^ {4}AGENT +STATE +CTX +MODEL +LAST$/);
+    expect(text(agentRows([row('a', [1])], opts(80), full))[1]).toBe(''); // below 100 columns the spacer stays blank
   });
 });

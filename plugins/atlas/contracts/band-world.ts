@@ -1,4 +1,6 @@
-// The single fixture world for the rev 4 design (ported from round2/design/evidence/world.json). Every number on
+// The single fixture world for the rev 4 design (ported from round2/design/evidence/world.json; the only world: contracts/hud-world.ts,
+// panel-world.ts, board-golden.ts and world-live.ts derive every input from it). `ran_s`, `elapsed_s` and `estimate_s` are the numbers behind
+// the `detail` strings (contracts world test keeps them equal); only T4 carries an estimate, so it alone reads `of 05:00`. Every number on
 // every surface derives from this one object: todo 3 of 7, phase 2/4, gates 2 of 3, five workers (1 running, 1 failed,
 // 1 queued, 2 done). Surfaces and tests import it; none of them restate a count. A .ts module because the mod test
 // host loads only code files (no fs).
@@ -37,6 +39,7 @@ export const world = {
       "label": "Wire band to host",
       "state": "done",
       "owner": "implementer-layout",
+      "ran_s": 190,
       "detail": "ran 03:10"
     },
     {
@@ -44,6 +47,7 @@ export const world = {
       "label": "Layout grid tiers",
       "state": "done",
       "owner": "implementer-layout",
+      "ran_s": 161,
       "detail": "ran 02:41"
     },
     {
@@ -51,6 +55,7 @@ export const world = {
       "label": "Gate golden tests",
       "state": "done",
       "owner": "implementer-gates",
+      "ran_s": 118,
       "detail": "ran 01:58"
     },
     {
@@ -58,6 +63,8 @@ export const world = {
       "label": "Subagents block",
       "state": "running",
       "owner": "implementer-band",
+      "elapsed_s": 42,
+      "estimate_s": 300,
       "detail": "elapsed 00:42 of 05:00"
     },
     {
@@ -85,6 +92,7 @@ export const world = {
   "workers": [
     {
       "name": "implementer-band",
+      "age_s": 42,
       "state": "running",
       "model": "opus",
       "task": "T4",
@@ -95,6 +103,7 @@ export const world = {
     },
     {
       "name": "implementer-live",
+      "age_s": 95,
       "state": "failed",
       "model": "opus",
       "task": "T6",
@@ -105,6 +114,7 @@ export const world = {
     },
     {
       "name": "runner-land",
+      "age_s": 0,
       "state": "queued",
       "model": "opus",
       "task": "T5",
@@ -115,6 +125,7 @@ export const world = {
     },
     {
       "name": "implementer-layout",
+      "age_s": 351,
       "state": "done",
       "model": "opus",
       "task": "T1",
@@ -125,6 +136,7 @@ export const world = {
     },
     {
       "name": "implementer-gates",
+      "age_s": 118,
       "state": "done",
       "model": "sonnet",
       "task": "T3",
@@ -146,6 +158,27 @@ export const world = {
     {
       "name": "doctor",
       "state": "failed"
+    }
+  ],
+  "notes": [
+    {
+      "at": "10:02",
+      "from": "lead",
+      "to": "implementer-band",
+      "text": "take T4, then run the gate tests",
+      "lead": true
+    },
+    {
+      "at": "10:05",
+      "from": "implementer-live",
+      "kind": "blocked",
+      "text": "tests red 3, need a decision on the changelog"
+    },
+    {
+      "at": "10:07",
+      "from": "implementer-layout",
+      "kind": "handoff",
+      "text": "T1 and T2 merged"
     }
   ],
   "toasts": [
@@ -238,7 +271,7 @@ export const world = {
   ]
 } as const;
 
-const WORKER_STATE: Record<string, WorkerState> = { queued: "starting", running: "running", done: "done", failed: "failed", blocked: "waiting", waiting: "waiting" };
+const WORKER_STATE: Record<string, WorkerState> = { queued: "queued", running: "running", done: "done", failed: "failed", blocked: "waiting", waiting: "waiting" };
 
 /** The world as a MissionModel for the band: phases from `world.phases`, todo counts from `world.todos`, worker counts
  * from `world.workers`, ctx from the running worker. Tick 0, so the spinner is its first frame. */
@@ -254,6 +287,7 @@ export function worldModel(cols: number, ui: Ui, over: Partial<MissionModel> = {
     phase: world.phases.find((p) => p.state === "active")!.id,
     done: world.todos.filter((t) => t.state === "done").length,
     total: world.todos.length,
+    todoBlocked: world.todos.filter((t) => t.state === "blocked").length,
     workers: world.workers.map((w) => ({ name: w.name, state: WORKER_STATE[w.state]!, secs: 0 })),
     checks: null,
     ctx: running?.ctx ?? undefined,

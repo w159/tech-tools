@@ -150,15 +150,17 @@ function waveOf(rows: RegMember[], nowSecs: number): IdleWave {
 
 const maxSeq = (notes: Note[]) => notes.reduce((m, n) => Math.max(m, n.seq ?? 0), 0);
 
-/** Lane rows: running members; before the registry lists anyone, the dispatched members not yet finished. */
+/** Lane rows: the registry's running members, then the dispatched members it does not list yet (queued: the one state rule, mod/data/live.ts). */
 function panelWorkers(root: string, live: LiveWorker[], pending: string[], nowMs: number, roles: Record<string, string>): PanelWorker[] {
-	const src: LiveWorker[] = live.length ? live : pending.map(name => ({ name }));
+	const listed = new Set(live.map(w => w.name));
+	const src: Array<LiveWorker & { queued?: boolean }> = [...live, ...pending.filter(name => !listed.has(name)).map(name => ({ name, queued: true }))];
 	return src.map(w => ({
 		name: w.name,
 		role: roles[w.name] ?? (w.role === "subagent" ? undefined : w.role), // channels.json says only "subagent"
 		secs: w.joined ? Math.max(0, Math.floor(nowMs / 1000 - w.joined)) : 0,
 		tool: laneTool(root, w.name),
 		spark: sparkBuckets(laneCalls(root, w.name), nowMs / 1000),
+		...(w.queued ? { state: "queued" as const } : {}),
 	}));
 }
 
@@ -606,7 +608,6 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			idle: idleWave(info, workers.length),
 			todos: todoItems(info.root, info.sessionId, fin),
 			nowSecs: Math.floor(now() / 1000),
-			todosExpanded: env.ATLAS_TODO_EXPANDED === "1",
 			core: coreOf(info),
 		});
 		const key = lines.join("\n");

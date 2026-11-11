@@ -7,6 +7,7 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
 import { capsule, cells, clip, countRuns, gauge, percent, ribbon, stateGlyph, stateRun, UI_STATES, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { railNo, railOf } from './rail';
 import { hasCore, tok, type CoreModel, type Verdict } from './data/core';
 
 export type PanelTab = 'route' | 'team' | 'channel' | 'gates' | 'core';
@@ -147,9 +148,8 @@ const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).leng
 
 /** `phase   research   2/4`: the lit phase and its place on the rail. */
 function phaseRow(m: PanelModel): PanelLine {
-  const i = m.phases.indexOf(m.phase);
-  const at = i >= 0 ? i + 1 : m.phase === 'done' ? m.phases.length : 0;
-  return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && at ? [r(`${m.cols >= 100 ? '   ' : ' '}${at}/${m.phases.length}`)] : [])]);
+  const rail = railOf(m.phases, m.phase); // the one rail (mod/rail.ts): the band, the HUD and omp read the same index
+  return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && (m.phase === 'done' || m.phases.includes(m.phase)) ? [r(`${m.cols >= 100 ? '   ' : ' '}${railNo(rail)}`)] : [])]);
 }
 
 /** `gates   ● lint   ● test   ■ doctor   2 of 3 green`; names that do not fit fold to the count alone. */

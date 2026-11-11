@@ -148,7 +148,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "route   team   channel   gates   core",
       "               ━━━━━━━",
       "",
-      "#atlas-board-mod  6 people · 1 unread",
+      "#atlas-board-mod  5 people · 2 unread",
       "10:02 lead               ▸ implementer-band take T4, then run the gate tests",
       "10:05 implementer-live   ▲ blocked tests red 3, need a decision on the changelog",
       "10:07 implementer-layout ● handoff T1 and T2 merged"
@@ -158,7 +158,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "route  team  channel  gates  core",
       "             ━━━━━━━",
-      "#atlas-board-mod  6 people · 1 unread",
+      "#atlas-board-mod  5 people · 2 unread",
       "10:02 lead       ▸ implementer-band take T4, then run the gate tests",
       "10:05 impleme... ▲ blocked tests red 3, need a decision on the changelog",
       "10:07 impleme... ● handoff T1 and T2 merged"
@@ -168,7 +168,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "route  team  channel  gates  core",
       "             ━━━━━━━",
-      "#atlas-board-mod  6 people · 1 unread",
+      "#atlas-board-mod  5 people · 2 unread",
       "10:02 lead       ▸ implementer-band take T4, then run...",
       "10:05 impleme... ▲ blocked tests red 3, need a decisi...",
       "10:07 impleme... ● handoff T1 and T2 merged"
