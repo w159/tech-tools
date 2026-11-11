@@ -4,8 +4,8 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import {
   asciiMode, ATLAS_GLYPHS, capsule, CHIP_W, chip, chipCount, clip, colorMode, contrast, countRuns, easedFrames, easedValue, easeOutCubic,
-  emittedPairs, gauge, gaugeEighths, gaugeParts, gaugeText, glyphTone, hexTo256, inkFor, luminance, PALETTES, percent, rail, ribbon,
-  runKind, runsCells, runsString, sgrColor, sparkline, spinnerFrame, spinnerGlyph, stateChip, stateGlyph, stateRun, STATE_ASCII,
+  emittedPairs, gauge, gaugeEighths, gaugeParts, gaugeText, glyphTone, hexTo256, hostTo256, inkFor, stable256Indices, xtermHex, luminance, PALETTES, percent, rail, ribbon,
+  runKind, runsCells, runsString, sgrColor, sparkline, spinFrameOf, spinnerFrame, spinnerGlyph, stateChip, stateGlyph, stateRun, STATE_ASCII,
   STATE_GLYPHS, STATE_TOKEN, themeName, toneHex, uiFromEnv, UI_STATES, type Ui,
 } from './atlas-ui';
 
@@ -251,6 +251,24 @@ describe('sparkline', () => {
 });
 
 describe('motion', () => {
+  test('spinFrameOf: one clock and the agent id decide the frame, so every surface shows the same glyph for the same agent', () => {
+    const ui = { theme: 'mocha', ascii: false, color: 'truecolor' } as const;
+    const glyphOn = (now: number, id: string): string => stateRun('running', ui, spinFrameOf(now, id)).t;
+    for (const id of ['alpha-explorer', 'implementer-band', 'a', '']) {
+      for (const now of [0, 99, 4_321_000, 1_700_000_123_456]) {
+        expect(glyphOn(now, id)).toBe(glyphOn(now + (99 - (now % 100)), id)); // same 100 ms bucket (two surfaces redrawing a few ms apart)
+        expect(spinFrameOf(now + 100 - (now % 100), id)).toBe(spinFrameOf(now, id) + 1); // the next bucket is the next frame
+      }
+    }
+    expect(spinFrameOf(1_000, 'alpha-explorer')).toBe(spinFrameOf(1_050, 'alpha-explorer'));
+    expect(new Set(['a', 'b', 'c', 'd'].map((id) => spinFrameOf(0, id) % 4)).size).toBe(4); // ids spread over the four phases
+    expect(spinFrameOf(1234, '')).toBe(Math.floor(1234 / 100));
+  });
+  test('hostTo256 is the host formula: the raw Mocha panel is navy 17 and the text tone 189 (seen live); stable palette colours agree with hexTo256', () => {
+    expect([hostTo256('#181825'), hostTo256('#cdd6f4')]).toEqual([17, 189]);
+    for (const i of stable256Indices()) expect([i, hexTo256(xtermHex(i)), hostTo256(xtermHex(i))]).toEqual([i, i, i]);
+    expect(stable256Indices().length).toBeGreaterThan(60);
+  });
   test('spinner: ◐◓◑◒ one frame per 100 ms, |/-\\ in ASCII, any integer frame', () => {
     expect([0, 1, 2, 3, 4].map((f) => spinnerGlyph(f))).toEqual(['◐', '◓', '◑', '◒', '◐']);
     expect([0, 1, 2, 3].map((f) => spinnerGlyph(f, true)).join('')).toBe('|/-\\');

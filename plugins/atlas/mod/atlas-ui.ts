@@ -38,7 +38,10 @@ export function toneHex(tone: Tone, theme: ThemeName = 'mocha'): string {
 }
 
 /** The foreground a painter uses for a run: the motion override when one is set, else the tone's colour. */
-export const runHex = (x: Pick<Run, 'tone' | 'fg'>, theme: ThemeName = 'mocha'): string => x.fg ?? toneHex(x.tone, theme);
+export const runHex = (x: Pick<Run, 'tone' | 'fg'>, theme: ThemeName = 'mocha', mode: ColorMode = 'truecolor'): string => {
+  const hex = x.fg ?? toneHex(x.tone, theme);
+  return mode === '256' ? fitHex(hex, theme) : hex;
+};
 
 // ---- environment ------------------------------------------------------------------------
 
@@ -94,12 +97,65 @@ export function hexTo256(hex: string): number {
   return d([r, g, b], [gv, gv, gv]) < d([r, g, b], [lvl[ri]!, lvl[gi]!, lvl[bi]!]) ? 232 + grey : cube;
 }
 
+const CUBE_LEVELS = [0, 95, 135, 175, 215, 255] as const;
+/** The #rrggbb of xterm-256 palette index `i` (16..255: the 6x6x6 cube, then the 24-step grey ramp). */
+export function xtermHex(i: number): string {
+  const grey = 8 + 10 * (i - 232);
+  const [r, g, b] = i >= 232 ? [grey, grey, grey] : [CUBE_LEVELS[Math.floor((i - 16) / 36)]!, CUBE_LEVELS[Math.floor((i - 16) / 6) % 6]!, CUBE_LEVELS[(i - 16) % 6]!];
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** The index the Claude Code host's own downsampler gives a #rrggbb (the common rgb -> ansi256 formula: grey ramp when r = g = b, else
+ * round(v / 255 * 5) per channel into the cube). Seen live: #181825 reaches the terminal as `48;5;17` (navy) and #cdd6f4 as `38;5;189`. */
+export function hostTo256(hex: string): number {
+  const [r, g, b] = rgbOf(hex);
+  if (r === g && g === b) return r < 8 ? 16 : r > 248 ? 231 : Math.round(((r - 8) / 247) * 24) + 232;
+  return 16 + 36 * Math.round((r / 255) * 5) + 6 * Math.round((g / 255) * 5) + Math.round((b / 255) * 5);
+}
+
+let stable: readonly number[] | undefined;
+/** Palette indices that Atlas's `hexTo256` and the host's `hostTo256` both give back for the index's own colour: the only colours safe
+ * to plan with, because the planned index is the one that reaches the terminal on either path. */
+export function stable256Indices(): readonly number[] {
+  stable ??= Array.from({ length: 240 }, (_, k) => k + 16).filter((i) => hexTo256(xtermHex(i)) === i && hostTo256(xtermHex(i)) === i);
+  return stable;
+}
+
+const dist2 = (a: string, b: string): number => rgbOf(a).reduce((n, v, i) => n + (v - rgbOf(b)[i]!) ** 2, 0);
+/** The stable palette colour nearest `hex` (RGB distance) whose contrast on `bg` is at least `need` (the nearest overall when none is). */
+export function stable256(hex: string, bg?: string, need = 0): string {
+  const all = stable256Indices().map(xtermHex);
+  const ok = bg && need > 0 ? all.filter((c) => contrast(c, bg) >= need) : all;
+  return (ok.length ? ok : all).reduce((best, c) => (dist2(c, hex) < dist2(best, hex) ? c : best));
+}
+
+/** A surface token's colour for `ui`: the palette hex, or in 256-colour mode the stable palette colour nearest it. Mocha panel #181825
+ * becomes the near-black grey 234 (the host's own formula turns the raw hex into the saturated navy 17). */
+export function surfaceHex(tok: Token, ui: Pick<Ui, 'theme' | 'color'>): string {
+  const hex = PALETTES[ui.theme][tok];
+  return ui.color === '256' ? stable256(hex) : hex;
+}
+
+/** `hex` as drawn in 256-colour mode on the theme's panel: the nearest stable palette colour that keeps the contrast the original had (to 4.5:1). */
+export function fitHex(hex: string, theme: ThemeName): string {
+  if (stable256Indices().some((i) => xtermHex(i) === hex)) return hex; // already a planned palette colour
+  return stable256(hex, surfaceHex('panel', { theme, color: '256' }), Math.min(NEED.text, contrast(hex, PALETTES[theme].panel)));
+}
+
 /** SGR parameter for a foreground (`38`) or background (`48`) colour; empty when colour is off. */
 export function sgrColor(hex: string, layer: 38 | 48, mode: ColorMode): string {
   if (mode === 'none') return '';
   if (mode === '256') return `${layer};5;${hexTo256(hex)}`;
   const [r, g, b] = rgbOf(hex);
   return `${layer};2;${r};${g};${b}`;
+}
+
+/** One run in ANSI, the single painter of every ANSI surface and of the motion demo: bold, strike (SGR 9), the foreground and the fill (the
+ * panel unless the run carries its own). In 256-colour mode both colours are stable palette colours. Colour off keeps bold and strike only. */
+export function paintAnsi(x: Run, ui: Ui): string {
+  if (x.t === '') return '';
+  const sgr = [x.bold ? '1' : '', x.strike ? '9' : '', sgrColor(runHex(x, ui.theme, ui.color), 38, ui.color), sgrColor(surfaceHex(x.bg ?? 'panel', ui), 48, ui.color)].filter(Boolean).join(';');
+  return sgr ? `\x1b[${sgr}m${x.t}\x1b[0m` : x.t;
 }
 
 // ---- contrast (WCAG 2.x) ------------------------------------------------------------------
@@ -120,9 +176,9 @@ export function glyphTone(tok: Token, theme: ThemeName): Token {
   return contrast(PALETTES[theme][tok], PALETTES[theme].panel) >= NEED.glyph ? tok : 'text';
 }
 /** `ink` or `white`, whichever reads better on `fill`. */
-export function inkFor(fill: Token, theme: ThemeName): 'ink' | 'white' {
-  const p = PALETTES[theme];
-  return contrast(p.ink, p[fill]) >= contrast(p.white, p[fill]) ? 'ink' : 'white';
+export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecolor'): 'ink' | 'white' {
+  const on = surfaceHex(fill, { theme, color: mode }); // the fill as drawn: in 256 colours the palette colour nearest it
+  return contrast(surfaceHex('ink', { theme, color: mode }), on) >= contrast(surfaceHex('white', { theme, color: mode }), on) ? 'ink' : 'white';
 }
 
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
@@ -217,7 +273,7 @@ export function capsule(ui: Ui): Run[] {
   if (ui.ascii) return [{ t: '[ATLAS]', tone: 'text', bold: true }];
   return [
     { t: '◖', tone: 'accent' },
-    { t: ' ◆ ATLAS ', tone: inkFor('accent', ui.theme), bg: 'accent', bold: true, chip: true },
+    { t: ' ◆ ATLAS ', tone: inkFor('accent', ui.theme, ui.color), bg: 'accent', bold: true, chip: true },
     { t: '◗', tone: 'accent' },
   ];
 }
@@ -358,7 +414,7 @@ export const CHIP_W = 11;
 export function chip(word: string, fill: Token, ui: Ui): Run {
   const body = word.toUpperCase();
   if (ui.ascii) return { t: `[${(' ' + body).padEnd(CHIP_W - 2).slice(0, CHIP_W - 2)}]`, tone: 'text', bold: true, chip: true };
-  return { t: (' ' + body.padEnd(CHIP_W - 2) + ' ').slice(0, CHIP_W), tone: inkFor(fill, ui.theme), bg: fill, bold: true, chip: true };
+  return { t: (' ' + body.padEnd(CHIP_W - 2) + ' ').slice(0, CHIP_W), tone: inkFor(fill, ui.theme, ui.color), bg: fill, bold: true, chip: true };
 }
 /** Chip of a state; queued uses the grey `queued_fill`. */
 export const stateChip = (s: UiState, ui: Ui): Run => chip(s, s === 'queued' ? 'queued_fill' : STATE_TOKEN[s], ui);
@@ -384,6 +440,13 @@ export function spinnerGlyph(frame: number, ascii = false): string {
   const f = ascii ? SPIN_ASCII : SPIN_UNICODE;
   return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
 }
+/** Spinner frame number of agent `id` at the shared clock reading `nowMs` (the snapshot's `now`): one clock, and a fixed phase per id
+ * (0..3, from its characters), so the same agent turns the same frame on every surface in one frame and two agents are not in lockstep. */
+export function spinFrameOf(nowMs: number, id = ''): number {
+  let phase = 0;
+  for (const c of id) phase = (phase + c.charCodeAt(0)) % SPIN_UNICODE.length;
+  return Math.floor(nowMs / SPINNER_MS) + phase;
+}
 /** Spinner glyph at wall-clock `nowMs`: one frame per 100 ms. */
 export const spinnerFrame = (nowMs: number, ascii = false): string => spinnerGlyph(Math.floor(nowMs / SPINNER_MS), ascii);
 
@@ -398,14 +461,16 @@ export const easedFrames = (from: number, to: number, frames = EASE_FRAMES): num
 // ---- every pair the primitives emit (consumed by the WCAG test) -------------------------------------------------------
 
 export type Pair = { kind: 'text' | 'glyph'; fg: string; bg: string; need: number; ratio: number; what: string };
-/** All fg/bg pairs the primitives can put on screen in `theme`: text tones and glyph tokens on the panel, chip and capsule inks on their fills. */
-export function emittedPairs(theme: ThemeName): Pair[] {
+/** All fg/bg pairs the primitives can put on screen in `theme`: text tones and glyph tokens on the panel, chip and capsule inks on their fills. `mode` 256 measures the palette colours that are really drawn. */
+export function emittedPairs(theme: ThemeName, mode: ColorMode = 'truecolor'): Pair[] {
   const p = PALETTES[theme];
   const out: Pair[] = [];
-  const add = (kind: Pair['kind'], fg: Token, bg: Token, what: string): number => out.push({ kind, fg: p[fg], bg: p[bg], need: NEED[kind], ratio: contrast(p[fg], p[bg]), what });
+  const hex = (fg: Token): string => (mode === '256' ? fitHex(p[fg], theme) : p[fg]);
+  const fill = (bg: Token): string => surfaceHex(bg, { theme, color: mode });
+  const add = (kind: Pair['kind'], fg: Token, bg: Token, what: string): number => out.push({ kind, fg: hex(fg), bg: fill(bg), need: NEED[kind], ratio: contrast(hex(fg), fill(bg)), what });
   for (const t of ['text', 'sub', 'muted'] as const) add('text', t, 'panel', `text ${t}`);
   for (const t of ['line', 'accent', 'ok', 'run', 'warn', 'bad', 'info', 'muted'] as const) add('glyph', glyphTone(t, theme), 'panel', `glyph ${t}`);
-  for (const f of ['accent', 'ok', 'run', 'warn', 'bad', 'info', 'queued_fill'] as const) add('text', inkFor(f, theme), f, `chip ${f}`);
+  for (const f of ['accent', 'ok', 'run', 'warn', 'bad', 'info', 'queued_fill'] as const) add('text', inkFor(f, theme, mode), f, `chip ${f}`);
   for (const st of UI_STATES) add('text', stateWordTone(st, { ascii: false, theme }), 'panel', `state word ${st}`);
   return out;
 }
