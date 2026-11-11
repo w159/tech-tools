@@ -3,7 +3,7 @@
 // panel fill is the neutral grey of the host's tone family (the raw hex reached the terminal as navy 17).
 import { describe, expect, test } from 'claude-code/testing';
 import { contrast, emittedPairs, fitHex, hexTo256, hostTo256, luminance, PALETTES, runsString, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, surfaceHex, UI_STATES, xtermHex, type Run, type ThemeName, type Token, type Ui } from './atlas-ui';
-import { animateRow, deltaE, easeSteps256, MAX_STEPS_256, MIN_STEPS_256, MIN_STEP_DE, Motion, MOTION_MS, POP_ASCII, POP_UNICODE } from './motion';
+import { animateRow, deltaE, easeSteps256, MAX_STEPS_256, MIN_STEPS_256, MIN_STEP_DE, MIN_STEP_DL, STRONG_STEP_DE, Motion, MOTION_MS, POP_ASCII, POP_UNICODE } from './motion';
 
 const RESTS: readonly Token[] = ['text', 'sub', 'muted', 'line', 'ok', 'run', 'warn', 'bad', 'info', 'accent'];
 const THEMES: readonly ThemeName[] = ['mocha', 'latte'];
@@ -39,12 +39,12 @@ describe('256-colour ease', () => {
         }
       }
     }
-    expect(eased).toBeGreaterThanOrEqual(100);
-    // Mocha: only the near-white body text has no room above it. Latte: the lead tones of running, blocked and waiting have no two palette
-    // colours MIN_STEP_DE apart between them and the rest; those rows keep their resting tone and only the glyph pops.
-    expect(skipped.every((k) => (k.startsWith('mocha/') && k.endsWith('/text')) || (k.startsWith('latte/') && /\/(running|blocked|waiting)\//.test(k)))).toBe(true);
-    expect(skipped.filter((k) => k.startsWith('latte/')).length).toBeLessThanOrEqual(14);
-    for (const state of ['done', 'failed', 'queued']) expect(easeSteps256(PALETTES.mocha[STATE_TOKEN[state as 'done']], PALETTES.mocha.ok, 'mocha').length).toBeGreaterThanOrEqual(2);
+    expect(eased).toBeGreaterThanOrEqual(40);
+    // The tones the surfaces actually fade a done row to keep a staircase on Mocha; a pair with no two palette colours MIN_STEP_DE and
+    // MIN_STEP_DL apart keeps its resting tone and only the glyph pops (Mocha body text, most of Latte).
+    for (const rest of ['sub', 'muted', 'ok'] as const) expect([rest, easeSteps256(PALETTES.mocha.ok, PALETTES.mocha[rest], 'mocha').length >= MIN_STEPS_256]).toEqual([rest, true]);
+    expect(skipped.filter((k) => k.startsWith('mocha/') && !k.endsWith('/text')).length).toBeLessThanOrEqual(30);
+    expect(easeSteps256(PALETTES.mocha[STATE_TOKEN.done], PALETTES.mocha.sub, 'mocha').length).toBeGreaterThanOrEqual(2);
   });
 
   test('a done row in 256 colours: the title and detail pass through at least 3 distinct indices, the same on both downsamplers, and settle on rest', () => {
@@ -76,14 +76,35 @@ describe('256-colour ease', () => {
     const f = animateRow(text, 'todo:a', 'running', m.ctx(1100), ui);
     expect(f.some((r) => r.fg !== undefined)).toBe(false);
   });
-  test('a done row in Latte 256 colours pops the dotted ring over a staircase of at least MIN_STEPS_256', () => {
+  test('a done row in Latte 256 colours pops the dotted ring (its staircase, if the palette has room for one, keeps every step visible)', () => {
     const ui: Ui = { theme: 'latte', ascii: false, color: '256' };
-    expect(easeSteps256(PALETTES.latte.ok, PALETTES.latte.text, 'latte').length).toBeGreaterThanOrEqual(MIN_STEPS_256);
+    const st = easeSteps256(PALETTES.latte.ok, PALETTES.latte.text, 'latte');
+    expect(st.length === 0 || st.length >= MIN_STEPS_256).toBe(true);
     const m = new Motion(true);
     m.observe('todo', [{ key: 'todo:a', state: 'running' }], 0);
     m.observe('todo', [{ key: 'todo:a', state: 'done' }], 1000);
     const f = animateRow([{ t: '●', tone: 'text' }, { t: ' wire', tone: 'text' }], 'todo:a', 'done', m.ctx(1100), ui);
     expect(runsString(f)[0]).toBe(POP_UNICODE[0]);
+  });
+});
+
+describe('256-colour ease: every step is visible on the panel (critique 8)', () => {
+  const L = (hex: string): number => { const lin = [1, 3, 5].map((i) => { const c = parseInt(hex.slice(i, i + 2), 16) / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); const y = 0.2126729 * lin[0]! + 0.7151522 * lin[1]! + 0.072175 * lin[2]!; return 116 * (y > 216 / 24389 ? Math.cbrt(y) : (24389 / 27 * y + 16) / 116) - 16; };
+  test('the first step already differs from the body tone, and neighbours differ in colour and in lightness', () => {
+    for (const theme of THEMES) {
+      const p = PALETTES[theme];
+      for (const state of UI_STATES) for (const rest of RESTS) {
+        const steps = easeSteps256(p[STATE_TOKEN[state]], p[rest], theme);
+        if (!steps.length) continue;
+        expect([theme, state, rest, deltaE(fitHex(p.text, theme), steps[0]!) >= MIN_STEP_DE]).toEqual([theme, state, rest, true]); // frame 0 is not the colour the row wore
+        for (let i = 1; i < steps.length; i++) expect([theme, state, rest, i, deltaE(steps[i]!, steps[i - 1]!) >= STRONG_STEP_DE || Math.abs(L(steps[i]!) - L(steps[i - 1]!)) >= MIN_STEP_DL - 1e-9]).toEqual([theme, state, rest, i, true]);
+      }
+    }
+  });
+  test('the done glyph and title ramps are the ones the critique asked for: no 194/193 pastel pair, no 193 to 187 hue-only step', () => {
+    const ramp = (rest: 'ok' | 'sub'): number[] => easeSteps256(PALETTES.mocha.ok, PALETTES.mocha[rest], 'mocha').map(idx);
+    expect(ramp('ok')).toEqual([231, 193]); // the glyph: white, then pale green, then its resting 151 (193 to 151: 13 L*, 24 dE)
+    for (const rest of ['ok', 'sub'] as const) { const r = ramp(rest); expect(r.includes(194) && r.includes(193)).toBe(false); expect(r.includes(193) && r.includes(187)).toBe(false); }
   });
 });
 

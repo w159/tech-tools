@@ -42,6 +42,29 @@ describe('finished workers and comms labels', () => {
     expect(run(NOW + 50_000)?.since).toBe(NOW + 30_000); // later rebuilds do not move it: the counter cannot tick
   });
 
+  test('the report-posting step is not the worker\'s last action: LAST keeps its previous distinct tool and target (critique 8)', () => {
+    let o = onSpawn(EMPTY_ORCH, 'a1', 'map', NOW, { name: 'beta', type: 'atlas:explorer' });
+    o = onToolEnd(onToolStart(o, 'a1', 'Read', NOW + 1_000, { file_path: '/repo/beta.py' }), 'a1', NOW + 2_000);
+    for (const input of [{ description: 'Post result line to lead', command: 'python3 x/atlas_todo.py note --to lead "done"' }, { command: 'python3 "/p/scripts/atlas_todo.py" complete --id 3' }]) {
+      const posting = onToolStart(o, 'a1', 'Bash', NOW + 3_000, input);
+      expect(posting.activity.a1).toMatchObject({ tool: null, lastTool: 'Read', target: 'beta.py', toolCount: 2, mood: 'working' });
+      const ended = onToolEnd(posting, 'a1', NOW + 4_000);
+      expect(ended.activity.a1).toMatchObject({ tool: null, lastTool: 'Read', target: 'beta.py' });
+    }
+    const other = onToolStart(o, 'a1', 'Bash', NOW + 3_000, { description: 'Run tests', command: 'bun test' });
+    expect(other.activity.a1).toMatchObject({ tool: 'Bash', detail: 'Run tests' }); // any other bash call is still a call
+  });
+
+  test('a pane worker (squad row only) that finished stamps its finish once, so its run time stops (critique 8)', () => {
+    const memo: Record<string, number> = {};
+    const squad: SquadAgent[] = [{ name: 'pane', persona: 'explorer', state: 'finished', source: 'mux', startedAt: NOW } as never];
+    const run = (now: number) => deriveOrchestration(base({ squad, now, finishedAt: memo })).activity.pane;
+    expect(run(NOW + 18_000)).toMatchObject({ mood: 'done', since: NOW + 18_000, startedAt: NOW });
+    expect(run(NOW + 70_000)?.since).toBe(NOW + 18_000);
+    const live: SquadAgent[] = [{ name: 'p2', persona: 'explorer', state: 'running', source: 'mux' }];
+    expect(deriveOrchestration(base({ squad: live, now: NOW + 5_000, finishedAt: memo })).activity.p2?.since).toBe(NOW + 5_000); // a running one keeps moving
+  });
+
   test('a worker the host no longer lists is finished when its own turn.complete arrived or its squad row is finished', () => {
     const done = onComplete(working('a1'), 'a1', { reason: 'answer', answer: 'ok', tokens: 1 }, NOW + 2_000);
     expect(deriveOrchestration(base({ orch: done, names: { a1: 'explore' } })).activity.explore?.mood).toBe('done');

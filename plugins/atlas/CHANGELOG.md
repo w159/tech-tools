@@ -9,6 +9,7 @@
 - Fixed (critique 8 B2): the Board's owner column drops before a title is cut; it stays only when every title fits beside it, or when the cut titles would share one head (`board-model.ts` `boardBody`).
 - Fixed (critique 8 B3): a queued row whose owner agent runs reads `running` on the Board, the TODO block and omp; `ownTodos` names the worker a plan title carries (`board-model.ts` `itemState`/`titleOwner`, `data/todos.ts`).
 - Fixed (critique 8 B4): the `▸` cursor is never drawn on a queued TODO row (`hud-surface.ts`).
+- Fixed (critique 8, slice C): a finished agent's run time on the team tab and in the done toast is its own start to finish (`endedAt` in data/live.ts), not the time since it started; pane workers stamp their finish once. LAST shows the agent's last real tool and target and skips its report-posting step (`atlas_todo.py note|complete`); the 256-colour fade needs visibly different steps (first step apart from the body tone, neighbours 20 dE and either 30 dE or 12 L*); orchestration golden regenerated.
 
 ## 17.8.0 - 2026-11-11
 

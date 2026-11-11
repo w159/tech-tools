@@ -124,7 +124,7 @@ export const MIN_STEPS_256 = 2;
 export const MAX_STEPS_256 = 3;
 /** Least CIE76 distance between two neighbours of the staircase (and from the last step to the resting tone). Palette neighbours such
  * as 194, 193, 187 are under 6 apart and read as one colour on the panel; 157, 114, 151 are well over this. */
-export const MIN_STEP_DE = 12;
+export const MIN_STEP_DE = 20;
 
 const lab = (hex: string): [number, number, number] => {
   const lin = rgb(hex).map((v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }) as [number, number, number];
@@ -139,10 +139,18 @@ const lab = (hex: string): [number, number, number] => {
 /** CIE76 distance between two #rrggbb colours: about 2.3 is a just-noticeable difference, 12 is plainly different. */
 export const deltaE = (a: string, b: string): number => { const [p, q] = [lab(a), lab(b)]; return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
 
-/** `chain` thinned to steps that are MIN_STEP_DE apart from each other and from `target`, at most MAX_STEPS_256 of them (spread evenly). */
-function spaced(chain: readonly string[], target: string): string[] {
+/** Two neighbours tell apart on the panel when they are MIN_STEP_DE apart AND either plainly different in colour (STRONG_STEP_DE: white to
+ * light green) or at least MIN_STEP_DL apart in CIE L* lightness. A pastel pair of one lightness and a small hue shift (194 to 193, 193 to 187
+ * on panel 234) fails both, whatever its CIE76 distance. */
+export const STRONG_STEP_DE = 30;
+export const MIN_STEP_DL = 12;
+const visible = (a: string, b: string): boolean => { const de = deltaE(a, b); return de >= MIN_STEP_DE && (de >= STRONG_STEP_DE || Math.abs(lab(a)[0] - lab(b)[0]) >= MIN_STEP_DL); };
+
+/** `chain` thinned to steps that are MIN_STEP_DE apart from each other, from `target` and (the first one) from `from`, the tone the row
+ * wore before the change, so the first frame already differs visibly; at most MAX_STEPS_256 of them (spread evenly). */
+function spaced(chain: readonly string[], target: string, from: string): string[] {
   const out: string[] = [];
-  for (const c of chain) if (!out.length || deltaE(out.at(-1)!, c) >= MIN_STEP_DE) out.push(c);
+  for (const c of chain) if (out.length ? visible(out.at(-1)!, c) : deltaE(from, c) >= MIN_STEP_DE) out.push(c);
   while (out.length && deltaE(out.at(-1)!, target) < MIN_STEP_DE) out.pop();
   if (out.length <= MAX_STEPS_256) return out;
   return [0, 1, 2].map((i) => out[Math.round((i * (out.length - 1)) / 2)]!);
@@ -162,6 +170,7 @@ export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): 
   const bg = surfaceHex('panel', { theme, color: '256' });
   const need = Math.min(4.5, contrast(rest, PALETTES[theme].panel));
   const target = fitHex(rest, theme);
+  const before = fitHex(PALETTES[theme].text, theme); // a row changes state from its body tone
   const toward = theme === 'latte' ? PALETTES.latte.ink : '#ffffff';
   const dir = (a: string, b: string): number => Math.sign(luminance(b) - luminance(a));
   let best: string[] = [];
@@ -176,7 +185,7 @@ export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): 
       if (c === prev || (prev && dir(prev, c) !== d) || dir(c, target) !== d) continue;
       out.push(c);
     }
-    const apart = spaced(out, target);
+    const apart = spaced(out, target, before);
     if (apart.length > best.length) best = apart;
     if (best.length >= MIN_STEPS_256) break;
   }

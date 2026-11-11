@@ -44,6 +44,11 @@ export function liveWorkers(snapshot: LiveSnapshot, now: number): LiveWorker[] {
     .sort((x, y) => ORDER[x.state] - ORDER[y.state]);
 }
 
+/** When the worker's run ended, for a duration: an ended worker's stamped finish (`since`, frozen by the builder), else `now`. A stamp
+ * at or before the start (an entry that never saw an event) or after `now` is no finish time, so the run reads as still counting. */
+export const endedAt = (w: Pick<LiveWorker, 'state' | 'since' | 'startedAt'>, now: number): number =>
+  (w.state === 'done' || w.state === 'failed') && w.since > w.startedAt && w.since <= now ? w.since : now;
+
 /** Calls per `bucketMs` slot over the last `n` slots, oldest first. */
 export function callBuckets(calls: readonly number[], now: number, n = 12, bucketMs = 5000): number[] {
   const out = new Array<number>(n).fill(0);

@@ -122,7 +122,9 @@ function lastAction(a: HudAgent, root?: string | null): string {
   const rel = (s: string): string => (base ? s.split(base).join('') : s);
   const target = rel(flat(a.target));
   if (a.tool) return `${a.tool.toLowerCase()}${target ? ` ${target}` : ''}`;
-  return rel(flat(a.lastLine)) || (a.lastTool ? `${a.lastTool.toLowerCase()}${flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '');
+  // Between calls and after the end: the last call (its target, else its intent), then the free-text report only when there was no call.
+  const call = a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${target}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
+  return call || rel(flat(a.lastLine));
 }
 
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */

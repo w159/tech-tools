@@ -120,9 +120,19 @@ const MAX_CALLS = 48; // ring cap: only the last minute of calls is kept
 export const pushCall = (calls: readonly number[] | undefined, now: number): number[] =>
   [...(calls ?? []).filter((t) => now - t < CALL_WINDOW_MS), now].slice(-MAX_CALLS);
 
-/** tool.call in flight (before next). */
+/** The worker's own report-posting step (`atlas_todo.py note|complete`, `Post result line to lead`): bookkeeping, not work, so it never becomes the LAST action. */
+const REPORT_STEP = /atlas_todo\.py["']?\s+(?:note|complete)\b|^post (?:result|report)\b/i;
+export const isReportStep = (tool: string, input: unknown): boolean => {
+  const a = (input ?? {}) as Record<string, unknown>;
+  return tool.toLowerCase() === 'bash' && (REPORT_STEP.test(oneLine(a.description)) || REPORT_STEP.test(oneLine(a.command)));
+};
+
+/** tool.call in flight (before next). A report-posting step counts as a call but leaves the tool, target and intent of the last real one in place. */
 export function onToolStart(o: Orch, agent: string, tool: string, now: number, input?: unknown): Orch {
   const prev = o.activity[agent] ?? blank(now);
+  if (isReportStep(tool, input)) {
+    return { ...o, activity: { ...o.activity, [agent]: { ...prev, since: now, toolCount: prev.toolCount + 1, mood: 'working' as const, calls: pushCall(prev.calls, now) } }, stage: workingStage(o, agent) };
+  }
   const next = { ...prev, tool, since: now, target: targetOf(input), detail: detailOf(tool, input), toolCount: prev.toolCount + 1, mood: 'working' as const, calls: pushCall(prev.calls, now) };
   return {
     ...o,
@@ -258,9 +268,11 @@ const squadOnlyEntry = (s: SquadAgent & TeamTool, now: number): ActivityEntry =>
 });
 const definedOf = <T extends object>(o: T): Partial<T> => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 
-function addMissingActivity(activity: Record<string, ActivityEntry>, i: DeriveInput): void {
+function addMissingActivity(activity: Record<string, ActivityEntry>, i: DeriveInput, memo: Record<string, number>): void {
   for (const s of i.squad) {
-    if (activity[s.name] === undefined) activity[s.name] = squadOnlyEntry(s, i.now);
+    if (activity[s.name] !== undefined) continue;
+    const e = squadOnlyEntry(s, i.now);
+    activity[s.name] = ENDED.has(e.mood) ? { ...e, since: memoSince(memo, s.name, i.now) } : e; // an ended pane worker's finish is stamped once, so its run time stops
   }
   activity[LEAD] ??= blank(i.now);
 }
@@ -275,7 +287,7 @@ function deriveActivity(i: DeriveInput): Record<string, ActivityEntry> {
     const mood = moodOf(a.mood, status.get(id), squadState.get(name), i.orch.stage[id] === 'reported');
     activity[name] = settle(a, mood, memo, name, i.now);
   }
-  addMissingActivity(activity, i);
+  addMissingActivity(activity, i, memo);
   return activity;
 }
 
