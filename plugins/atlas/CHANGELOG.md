@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The HUD Subagents block keeps agents that just finished visible for the band's 15 s linger window (`LINGER_MS`, now shared from `mod/atlas-ui.ts`) when nothing is running (a failed agent stays until cleared), instead of vanishing the moment a wave ends (`mod/hud.ts`).
 - Board labels in the 60 to 99 cell form (the shown side pane) are no longer cut at 18 cells: the state column slides right to fit the widest label (`mod/board-model.ts`, shared with omp).
 
 ### Added

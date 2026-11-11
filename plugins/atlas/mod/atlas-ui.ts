@@ -41,6 +41,8 @@ export function toneHex(tone: Tone, theme: ThemeName = 'mocha'): string {
 
 export type UiEnv = Readonly<Record<string, string | undefined>>;
 /** The host's environment, empty where no `process` exists. */
+/** A finished worker keeps its row, ticked, this long (the band and the HUD Subagents block share it). */
+export const LINGER_MS = 15_000;
 export const hostEnv = (): UiEnv => (globalThis as { process?: { env?: UiEnv } }).process?.env ?? {};
 
 /** What a surface needs to build runs: theme, ASCII mode, colour depth. */

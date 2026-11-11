@@ -6,7 +6,7 @@ import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { itemState } from './board-model';
-import { hostEnv, PALETTES, toneHex, uiFromEnv, type Run, type Ui, type UiState } from './atlas-ui';
+import { hostEnv, LINGER_MS, PALETTES, toneHex, uiFromEnv, type Run, type Ui, type UiState } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, tierOf, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import type { Segment } from './runs';
 
@@ -27,6 +27,8 @@ export type HudAgent = {
   ctx?: number | null;
   /** The state word every surface shares (liveState), when the adapter knows the worker's age; else it is derived from `state`. */
   ui?: UiState;
+  /** When the worker last changed state (ms epoch; a finished worker's end time), so a done row can linger. */
+  since?: number;
 };
 
 const GENERIC = new Set(['unknown', 'general-purpose', 'task', '']);
@@ -43,7 +45,7 @@ export function agentName(name: string, role: string, task?: string): string {
 export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[] = []): HudAgent[] {
   const listed = live.map((w) => {
     const s = squad.find((a) => a.name === w.name);
-    return { name: agentName(w.name, w.role, s?.task), role: w.role, state: w.state, ui: liveState(w), tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    return { name: agentName(w.name, w.role, s?.task), role: w.role, state: w.state, ui: liveState(w), since: w.since, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
   return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
 }
@@ -108,8 +110,10 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
 
 function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agents: AgentRow[] }; o: SurfaceOpts } {
   const plan = input.todos.filter(isPlanItem);
-  // A finished agent shows only while a wave runs (the band's rule); with nothing running the block is gone.
-  const agents = input.agents.some(isRunning) ? agentModel(input.agents, plan, input.root) : [];
+  // A finished agent shows while a wave runs, and with nothing running a done one stays LINGER_MS after it ended while a failed one stays until it is cleared (the band's rule).
+  const running = input.agents.some(isRunning);
+  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && a.since !== undefined && opts.now !== undefined && opts.now - a.since <= LINGER_MS));
+  const agents = shown.length > 0 ? agentModel(shown, plan, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
   return {
     s: { todos: todoModel(plan, opts.now ?? Date.now(), new Map(input.agents.map((a): [string, UiState] => [a.name, a.ui ?? workerUiState(a.state)]))), agents },

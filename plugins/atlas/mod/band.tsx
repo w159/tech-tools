@@ -10,7 +10,7 @@ import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from '.
 import { ownTodos, planBasis, todoCounts } from './data/todos';
 import { blockedCount } from './board-model';
 import { groupOpenCount } from './gates';
-import { hostEnv, PALETTES, toneHex, uiFromEnv, type Ui } from './atlas-ui';
+import { hostEnv, LINGER_MS, PALETTES, toneHex, uiFromEnv, type Ui } from './atlas-ui';
 import { bandLines, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
@@ -30,7 +30,6 @@ export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: Gat
 // running there, as it does in the block). `eased`: the gauge values on screen while a figure glides (band-motion.ts).
 
 const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
-const LINGER_MS = 15_000; // a finished worker keeps its row, ticked, this long
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */

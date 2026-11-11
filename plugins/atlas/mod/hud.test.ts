@@ -143,6 +143,21 @@ describe('the Subagents block is back on Claude Code', () => {
     expect(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120))).toEqual([]);
     expect(isRunning({ ...running, state: 'done' })).toBe(false);
   });
+  test('with nothing running, agents that finished within the linger window still show as done; older ones are gone', () => {
+    const done = (n: string, ago: number): HudAgent => ({ ...running, name: n, state: 'done', ui: 'done', since: 100_000 - ago });
+    const at = (ago: number) => trimmed(hudRows({ todos: [], agents: ['a-one', 'a-two', 'a-three'].map((n) => done(n, ago)) }, { ...view(120), now: 100_000 }));
+    const recent = at(2_000);
+    expect(recent[0]).toContain('SUBAGENTS');
+    expect(recent[0]).toContain('3 done');
+    expect(recent.filter((l) => /^[ ▸] ● /.test(l))).toHaveLength(3);
+    expect(at(20_000)).toEqual([]);
+  });
+  test('with nothing running, a failed agent stays however long ago it failed', () => {
+    const failed: HudAgent = { ...running, name: 'a-bad', state: 'failed', ui: 'failed', since: 100_000 - 60_000 };
+    const rows = trimmed(hudRows({ todos: [], agents: [failed] }, { ...view(120), now: 100_000 }));
+    expect(rows[0]).toContain('SUBAGENTS');
+    expect(rows.filter((l) => /^[ ▸] ■ a-bad/.test(l))).toHaveLength(1);
+  });
   test('a finished agent shows beside a running one, and the header counts every row', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [{ ...running, name: 'a-done', state: 'done', lastLine: '9 of 9 steps' }, running] }, view(120)));
     expect(rows[0]).toContain('1 running');
