@@ -1,5 +1,20 @@
 # Changelog
 
+## atlas 17.10.0 - 2026-11-11
+
+- atlas 17.10.0: fixes for hostile critique 9. Also in this release:
+  - A dispatch row closes when its agent ends, including `<slice>-<role>` members, so the 1-in-6 stall is gone.
+  - One open-work rule is shared by Stop, the gates rows, the core row and the band; the band shows `todo 5/5 · 1 open`.
+  - The Board footer names an open folded dispatch.
+  - The TODO `returned` state comes from one todoState for the HUD and the route tab, and SUBAGENTS are sorted by task.
+  - The band reads a Stop refusal on the poll that sees it, with plain reasons like `blocked: 1 todo open`, and the 110-column band keeps the contract row.
+
+  Live, 3 runs per width: TODO 80.0% (150 cols) and 79.7% (110) strict, 85.5% and 86.4% with the new `returned` rows counted right; band 95.6% and 77.0%; workers on any surface 91.3% and 89.2%. The 3x bar is met on 14 of 19 lines. Not met: per-surface never-shown (2 lines), first-appearance lag (2 lines) and the design critic (6.2, target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.
+
+## marketplace 5.15.0 - 2026-11-11
+
+- marketplace 5.15.0: atlas 17.10.0. armada and programmer are unchanged.
+
 ## atlas 17.9.0 - 2026-11-11
 
 - atlas 17.9.0: fixes for hostile critique 8. The band reads BLOCKED only when Stop refused, from a Stop verdict the completion gate now records, and a failing check without a refusal reads `<gate> warning`: 0 of 6 live runs end on a false BLOCKED, against 4 of 6 at 17.8.0. Also in this release:

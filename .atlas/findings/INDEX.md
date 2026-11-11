@@ -69,13 +69,16 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-11 | vb-L13 | rejected | L13 not fixed: HUD running vs band queued for same worker | [2026-11-11_vb-l13.md](2026-11-11_vb-l13.md) |
 | 2026-11-11 | vb-L1 | rejected | L1: old hudRows kept the completed row; test fails on old for format only | [2026-11-11_vb-l1.md](2026-11-11_vb-l1.md) |
 | 2026-11-11 | vb-gates | rejected | Gates: bun/tsc green but kit has 3 real failures (register-sidebar) absent at f4e6c29c | [2026-11-11_vb-gates.md](2026-11-11_vb-gates.md) |
+| 2026-11-11 | scorer-note-m5 | rejected | M5 note claim (whole drop = one pending/running rule) does not hold: 196 of 273 wrong frames | [2026-11-11_scorer-note-m5.md](2026-11-11_scorer-note-m5.md) |
 | 2026-11-11 | round2-b58d1c1d | verified | seat count and card name fixes, final live rerun | [2026-11-11_round2-b58d1c1d.md](2026-11-11_round2-b58d1c1d.md) |
 | 2026-11-11 | r3-sliceC | verified | round 3 slice C motion | [2026-11-11_r3-slicec.md](2026-11-11_r3-slicec.md) |
 | 2026-11-11 | r3-sliceB | verified | slice B: sidebar 1000->1001 and tally === -> !== mutations killed; 8 equivalents judged equivalent | [2026-11-11_r3-sliceb.md](2026-11-11_r3-sliceb.md) |
 | 2026-11-11 | r3-sliceA | verified | round 3 slice A host load fix | [2026-11-11_r3-slicea.md](2026-11-11_r3-slicea.md) |
 | 2026-11-11 | mutkill-verify | verified | mutation-killing tests kill claimed survivors; 3 equivalences hold | [2026-11-11_mutkill-verify.md](2026-11-11_mutkill-verify.md) |
+| 2026-11-11 | gate-s-d11 | verified | Stop gate (s) skips read-only roles (explorer, db-prober), matches D11; 2+ editing workers still counted | [2026-11-11_gate-s-d11.md](2026-11-11_gate-s-d11.md) |
 | 2026-11-11 | critic3-ui-score | rejected | Rebuilt Atlas surfaces are NOT expert grade: after mean 6.2 vs baseline 3.5; 13 cross-surface disagreements | [2026-11-11_critic3-ui-score.md](2026-11-11_critic3-ui-score.md) |
 | 2026-11-11 | band-polish-a929c761 | verified | band polish: kit 976 pass 0 real fail, bun 1838/0, tsc clean | [2026-11-11_band-polish-a929c761.md](2026-11-11_band-polish-a929c761.md) |
+| 2026-11-11 | audit-round2-numbers | rejected | Round2 audit: M5/M6 values right; lag max factors, 13-of-18 count, omitted M3 wrong | [2026-11-11_audit-round2-numbers.md](2026-11-11_audit-round2-numbers.md) |
 | 2026-11-10 | verify-be89-release | rejected | 17.5.0 tree: 10 tests fail on tree but pass on HEAD (stale tests/codex hooks json/crew.md TOC); live checks 1-4,6,8 pass | [2026-11-10_verify-be89-release.md](2026-11-10_verify-be89-release.md) |
 | 2026-11-10 | v7480-resolutions | verified | 59 conflict rows all resolved; 42 superseded/already-present rows confirmed | [2026-11-10_v7480-resolutions.md](2026-11-10_v7480-resolutions.md) |
 | 2026-11-10 | v7480-mktdesc | rejected | marketplace atlas description differs from plugin.json (contract test fails) | [2026-11-10_v7480-mktdesc.md](2026-11-10_v7480-mktdesc.md) |

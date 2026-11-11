@@ -11590,5 +11590,73 @@
     "status": "verified",
     "verified_at": "2026-11-11T09:38:21+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t7e676a-slices",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Slices A/B/C not verifiable: no implementer commits exist yet",
+    "evidence": [
+      "git log main..atlas/t7e676a/implementer-{07c3,ba06,3030} empty; all worktrees at b25f1ebf"
+    ],
+    "doc_refs": [],
+    "reproduction": "git log --oneline main..atlas/t7e676a/implementer-07c3",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-11T15:39:04+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "gate-s-d11",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Stop gate (s) skips read-only roles (explorer, db-prober), matches D11; 2+ editing workers still counted",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate_core.py:2634,2813; commit dc72b796; test_completion_gate 648 OK, test_atlas_contract 109 OK, test_dispatch_tripwire 335 OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_completion_gate; python3 -m unittest test_atlas_contract; python3 -m unittest test_dispatch_tripwire",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-11T16:52:25+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "audit-round2-numbers",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Round2 audit: M5/M6 values right; lag max factors, 13-of-18 count, omitted M3 wrong",
+    "evidence": [
+      "docs/audits/2026-11-11_atlas-round2.md:21,49-50; after metrics.json lag.max_s 150: 1.84/2.8/4.51, 110: 5.54/4.66/4.2"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -c recompute over six after metrics.json vs baseline/live-150,110 metrics.json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T17:51:32+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "scorer-note-m5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "M5 note claim (whole drop = one pending/running rule) does not hold: 196 of 273 wrong frames",
+    "evidence": [
+      "live_capture.py:721-722 rescored on live-{150,110}-74d8931b-{1,2,3}: wrong frames 44/61/38/46/42/42, rule-only 31/46/26/30/35/28"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -I rescoring script importing live_capture (build_truth/plan_at/agents_at/parse_frame) over the six runs",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-11T18:52:42+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

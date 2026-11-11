@@ -29,3 +29,7 @@ Assumption to avoid (tech-tools): I committed both files and pushed (1d1a3027) w
 Assumption to avoid (tech-tools): The earlier sed didn't run.
 §
 Assumption to avoid (tech-tools): `bun mod/motion-demo.ts --out <dir>` also needs approval, so I never ran the demo CLI myself.
+§
+Assumption to avoid (tech-tools): **Files two slices both name (A = implementer-6b4c, B = implementer-d0b8, C = implementer-140b; I assumed that mapping from the roster order, but the task file doesn't tie slices to names)**
+§
+Assumption to avoid (tech-tools): , B and C map to implementer, implementer-2 and implementer-3 in the task file. I assumed that implementer-c801, implementer-ff63 and implementer-116d follow the same order.
