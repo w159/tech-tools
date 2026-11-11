@@ -53,7 +53,7 @@ describe('core report and status', () => {
 
 // ---- hand-built models: tones, plurals, widening order, report lines (mutation-driven) ----
 const blank = (): CoreModel => ({
-  contract: { header: { ok: 0, total: 0 }, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 0, total: 0 }, openGates: 0 },
+  contract: { header: { ok: 0, total: 0 }, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 0 },
   verdicts: [], claims: [],
   ledger: { verified: 0, refuted: 0, pending: 0, claimed: 0, unchecked: 0 },
   offload: { workers: [], kept: 0, returned: 0, ratio: null },
@@ -79,11 +79,11 @@ describe('core row cells', () => {
   test('contract tallies are muted when empty, plain when complete, amber when partial; gates are not repeated here', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
-    m.contract = { header: { ok: 0, total: 0 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 0 };
+    m.contract = { header: { ok: 0, total: 0 }, evidence: { ok: 2, total: 2 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 0 };
     const empty = coreCells(m, 300);
     expect(toneOf(empty, 'no headers yet')).toBe('muted');
     expect(toneOf(empty, '2 of 2 done items carry evidence')).toBe('text');
-    m.contract = { header: { ok: 1, total: 3 }, evidence: { ok: 0, total: 2 }, verifiedDone: { ok: 0, total: 0 }, openGates: 2 };
+    m.contract = { header: { ok: 1, total: 3 }, evidence: { ok: 0, total: 2 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 2 };
     const part = coreCells(m, 300);
     expect(toneOf(part, '1 of 3 replies opened with the ATLAS header')).toBe('warn');
     expect(toneOf(part, '0 of 2 done items carry evidence')).toBe('warn');
@@ -115,7 +115,7 @@ describe('core row cells', () => {
   });
   test('with room every group widens to its full form', () => {
     const m = blank();
-    m.contract = { header: { ok: 1, total: 1 }, evidence: { ok: 1, total: 1 }, verifiedDone: { ok: 0, total: 0 }, openGates: 0 };
+    m.contract = { header: { ok: 1, total: 1 }, evidence: { ok: 1, total: 1 }, verifiedDone: { ok: 0, total: 0 }, open: 0, openGates: 0 };
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     m.ledger = { claimed: 2, verified: 1, refuted: 1, pending: 1, unchecked: 1 };
     m.offload = { workers: [worker('a'), worker('b')] as any, kept: 14_000, returned: 302, ratio: 3.2 };
@@ -167,7 +167,7 @@ describe('core report lines', () => {
   test('tallies, open gates and the empty-verdict note', () => {
     const m = blank();
     m.offload.workers = [worker('w1', { costUsd: null, model: null })] as any;
-    m.contract = { header: { ok: 1, total: 2 }, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 3, total: 3 }, openGates: 2 };
+    m.contract = { header: { ok: 1, total: 2 }, evidence: { ok: 0, total: 0 }, verifiedDone: { ok: 3, total: 3 }, open: 0, openGates: 2 };
     const r = coreReport(m).split('\n');
     expect(r).toContain('  header    1 of 2 replies opened with the ATLAS header'); // one n of m unit on every tab
     expect(r).toContain('  evidence  none done items carry evidence');

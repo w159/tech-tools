@@ -138,7 +138,7 @@ export interface Orch {
 
 /** The Atlas core as the band and pane draw it (mod/data/core.ts CoreModel; the contract holds no imports). */
 export interface CoreState {
-  contract: { header: Tally; evidence: Tally; openGates: number; verifiedDone: Tally };
+  contract: { header: Tally; evidence: Tally; open: number; openGates: number; verifiedDone: Tally };
   verdicts: { id: string; status: 'verified' | 'rejected' | 'needs-evidence'; title: string; by: string; at: number; evidence: string }[];
   claims: { owner: string; role: string; status: 'DONE' | 'FAILED' | 'BLOCKED'; at: number; matched: string | null }[];
   ledger: { verified: number; refuted: number; pending: number; claimed: number; unchecked: number };

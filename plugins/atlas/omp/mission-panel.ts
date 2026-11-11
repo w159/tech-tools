@@ -147,6 +147,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ["stop refused"] } : {}),
 		done: m.done,
 		total: m.total,
+		openWork: m.core?.contract.open,
 		todoBlocked: blockedCount(m.todos ?? [], ownerStates(m)),
 		workers,
 		note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,

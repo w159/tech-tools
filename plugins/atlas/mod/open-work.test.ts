@@ -1,7 +1,7 @@
 // Critique 9, slice A: one open-work truth. The Board fold never hides an open dispatch row (A2), and the core tab's counts, the band's
 // plan count and Stop's open-item count are stated from one store (A3; the python half is hooks/test_atlas_gates.py on the same fixture).
 import { describe, expect, test } from 'claude-code/testing';
-import { readFileSync } from 'node:fs';
+import store_fx from '../contracts/open-work-store.json';
 import { runsString, type Ui } from './atlas-ui';
 import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardText } from './board-model';
 import { coreModel, openWork } from './data/core';
@@ -9,8 +9,8 @@ import { ownTodos, planCounts, settleDispatch } from './data/todos';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const SESSION = 'adc00375';
-type Row = { id: string; content: string; status: string; owner?: string | null; origin?: string; session_id?: string; evidence?: string | null; archived?: boolean };
-const fx = JSON.parse(readFileSync(new URL('../contracts/open-work-store.json', import.meta.url), 'utf8')) as { expect: { open: number; evidence: { ok: number; total: number }; plan: { done: number; total: number } }; items: Row[] };
+type Row = { id: string; content: string; status: string; owner?: string; origin?: string; session_id?: string; evidence?: string | null; archived?: boolean };
+const fx = store_fx as unknown as { expect: { open: number; evidence: { ok: number; total: number }; plan: { done: number; total: number } }; items: Row[] };
 const store = (gamma = 'pending'): Row[] => fx.items.map((i) => ({ ...JSON.parse(JSON.stringify(i).replace('"SESSION"', JSON.stringify(SESSION))), ...(i.id === 't56c769ef' ? { status: gamma } : {}) }) as Row);
 const input = (todos: Row[]) => ({ findings: '', reports: [], logs: {}, teams: [], matrix: '', todos, header: { ok: 0, total: 0 }, openGates: 0 }) as never;
 

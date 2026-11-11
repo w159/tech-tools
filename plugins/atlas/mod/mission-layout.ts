@@ -57,6 +57,8 @@ export type MissionModel = {
   total: number;
   /** Plan items in the blocked state (the board's rule: its own status, or a waiting owner). Shown beside the todo count with its own glyph, so a blocked task never hides. */
   todoBlocked?: number;
+  /** Stop's open-item count (openWork, mod/data/core.ts). Open rows beyond the plan's own (dispatch rows the plan does not list) show as `· n open`, so `todo 5/5` never reads as all done while Stop would refuse. */
+  openWork?: number;
   /** Workers to show: running, waiting, failed and recently finished (never parked). */
   workers: readonly MissionWorker[];
   /** The newest channel message. */
@@ -163,6 +165,8 @@ function phaseIndex(m: MissionModel): number {
   return Math.max(0, m.phases.indexOf(m.phase));
 }
 
+/** ` · 1 open`: the store's open rows the plan count does not carry; empty when the plan's own open rows cover them. */
+const openMore = (m: MissionModel): string => { const n = (m.openWork ?? 0) - (m.total - m.done); return m.total && n > 0 ? ` · ${n} open` : ''; };
 const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.todo ?? (m.total ? Math.min(1, m.done / m.total) : 0), ui);
 const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
 
@@ -206,7 +210,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     ? [...flagHead(ui, st, reason.long), ...phaseSeg]
     : idle ? [r('idle', 'text', true), ...phaseSeg] : [r(m.phase, 'text', true), ...phaseSeg];
   const lead = idle ? 'idle · ' : '';
-  const todo = m.total ? `${m.done}/${m.total}` : '';
+  const todo = m.total ? `${m.done}/${m.total}${openMore(m)}` : '';
   const blockedWords = blockedRuns(m, ui, true);
   const blockedTiny = blockedRuns(m, ui, false);
   // Below GAUGE_MIN the one-row band carries figures, not gauges: an empty `░░░` track beside `0 of 5` (critique 9, the 110 band) says nothing the figure does not.
@@ -214,7 +218,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const counts = bandCounts(m, ui, true, noun, gap);
     return [
       ...cap, r('  '), ...name,
-      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${m.done} of ${m.total}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
+      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${m.done} of ${m.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
       ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge && gauges ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
       ...(counts.length ? [r(gap), ...counts] : []),
     ];
@@ -247,7 +251,7 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
   const st = runStateOf(m);
   const { flagged: isBlocked, idle, reason } = st;
   const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(isBlocked ? [r('   '), ...flagHead(ui, st, reason.long)] : idle ? [r('   '), r('idle', 'text', true)] : [])];
-  const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done} of ${m.total} · ${percent(m.done / m.total)}`, 'sub')] : [];
+  const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done} of ${m.total} · ${percent(m.done / m.total)}${openMore(m)}`, 'sub')] : [];
   const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxBar(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
   const counts = bandCounts(m, ui, true, true);
   const blocked = blockedRuns(m, ui, true);

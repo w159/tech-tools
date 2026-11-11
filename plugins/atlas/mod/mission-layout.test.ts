@@ -217,3 +217,16 @@ describe('mission-layout: the row budget', () => {
     expect(missionLines({ ...m, cols: 79 })).toHaveLength(1);
   });
 });
+
+describe('mission-layout: a full plan with open store work never reads as all done', () => {
+  test('todo 5/5 beside openWork 1 shows the open count on every band width', () => {
+    const m = model({ done: 5, total: 5, openWork: 1 });
+    for (const cols of [120, 80, 60]) expect(band({ ...m, cols })).toContain('1 open');
+    expect(band({ ...m, cols: 80 })).toContain('todo 5/5 · 1 open');
+  });
+  test('no open work beyond the plan adds nothing; the plan\'s own open rows are not counted twice', () => {
+    expect(band(model({ done: 5, total: 5, openWork: 0 }))).not.toContain('open');
+    expect(band(model({ done: 3, total: 5, openWork: 2 }))).not.toContain('open');
+    expect(band(model({ done: 3, total: 5, openWork: 3 }))).toContain('1 open');
+  });
+});
