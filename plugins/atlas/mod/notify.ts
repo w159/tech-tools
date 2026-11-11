@@ -4,7 +4,7 @@
 import { atom, read } from 'claude-code';
 import type { On } from 'claude-code';
 import type { AtlasSnapshot, PhaseId } from './contract';
-import { liveWorkers } from './data/live';
+import { endedAt, liveWorkers } from './data/live';
 import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
 import { clip, type Ui } from './atlas-ui';
@@ -57,7 +57,7 @@ export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): 
 		if (was === undefined) {
 			if (w.state === 'working') events.push({ type: 'agent-spawn', name: w.name });
 		} else if (w.state === 'done') {
-			const age = next.now - w.startedAt;
+			const age = endedAt(w, next.now) - w.startedAt; // the worker's own run, not the lag until the turn that saw it finish
 			events.push({ type: 'agent-complete', name: w.name, age: age > 0 ? formatDuration(age) : '', lastLine: w.lastLine });
 		} else if (w.state === 'failed') events.push({ type: 'agent-fail', name: w.name, lastLine: w.lastLine });
 		else if (w.state === 'blocked') events.push({ type: 'agent-blocked', name: w.name, lastLine: w.lastLine });

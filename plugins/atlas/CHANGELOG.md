@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed (critique 8, slice C): a finished agent's run time on the team tab and in the done toast is its own start to finish (`endedAt` in data/live.ts), not the time since it started; pane workers stamp their finish once. LAST shows the agent's last real tool and target and skips its report-posting step (`atlas_todo.py note|complete`); the 256-colour fade needs visibly different steps (first step apart from the body tone, neighbours 20 dE and either 30 dE or 12 L*); orchestration golden regenerated.
+
 ## 17.8.0 - 2026-11-11
 
 - Fixed: one blocker evaluation (critique 7 A1/A2): the gates tab `Team gate` row now calls the Stop gate's own `_team_gate` (red exactly when Stop blocks on (s)), and the band reason is one string at every width, `<gate> failing` or `<n> gates failing`, never `tripwire` / `2 failing` / `2 checks failing`.

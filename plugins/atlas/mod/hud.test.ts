@@ -8,7 +8,7 @@ import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_ric
 import type { TodoItem } from './contract';
 import type { Ui } from './atlas-ui';
 import { PALETTES } from './atlas-ui';
-import { agentName, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
+import { agentModel, agentName, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
 import { computeCounts, routeCounts } from './data/todos';
 import { effectiveRows, inlineBelowRows } from './register';
 import type { Segment } from './runs';
@@ -178,6 +178,11 @@ describe('the Subagents block is back on Claude Code', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [failed] }, { ...view(120), now: 100_000 }));
     expect(rows[0]).toContain('SUBAGENTS');
     expect(rows.filter((l) => /^[ ▸] ■ a-bad/.test(l))).toHaveLength(1);
+  });
+  test('LAST is the agent\'s last tool and target, not its free-text report (critique 8: three rows read the same posting step)', () => {
+    const done = (name: string, lastTool: string, target: string | null, detail: string, lastLine: string): HudAgent => ({ name, role: 'explorer', state: 'done', ui: 'done', tool: null, lastTool, target, detail, lastLine });
+    const rows = agentModel([done('alpha', 'Read', 'alpha.py', 'Read /r/alpha.py', 'Read alpha.py -> first 3 lines: 1 def'), done('beta', 'Grep', null, 'def main', ''), done('gamma', '', null, '', 'all green')], []);
+    expect(rows.map((r) => r.tool)).toEqual(['read alpha.py', 'grep def main', 'all green']); // call first, the report only when there is no call
   });
   test('a finished agent shows beside a running one, and the header counts every row', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [{ ...running, name: 'a-done', state: 'done', lastLine: '9 of 9 steps' }, running] }, view(120)));

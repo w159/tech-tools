@@ -1,6 +1,6 @@
 // sidebar-model.ts: the Claude Code SidebarModel as the host-free PanelModel (mod/panel-layout.ts).
 import type { ChannelNote } from '../contract';
-import { liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
+import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
 import { planBasis } from '../data/todos';
 import { spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
@@ -24,7 +24,7 @@ function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),
-    secs: Math.max(0, Math.round((s.now - w.startedAt) / 1000)), tools: s.activity[w.name]?.toolCount ?? 0,
+    secs: Math.max(0, Math.round((endedAt(w, s.now) - w.startedAt) / 1000)), tools: s.activity[w.name]?.toolCount ?? 0,
   };
 }
 

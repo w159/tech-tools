@@ -58,6 +58,17 @@ describe('worker age and order', () => {
     expect(byName(s, 'past')).toMatchObject({ secs: 5, tools: 7 });
     expect(byName(s, 'future').secs).toBe(0);
   });
+  test('a finished worker keeps its own run time (start to finish), not the time since it started', () => {
+    // critique 8: the team tab read 1m10s for agents whose cards read 14s to 19s; the 18 s run ended 52 s before the snapshot
+    const s = world({
+      squad: [sq('dn', 'finished'), sq('fl', 'failed'), sq('rn', 'running'), sq('nofin', 'finished')],
+      activity: { dn: act({ startedAt: NOW - 70_000, since: NOW - 52_000 }), fl: act({ startedAt: NOW - 70_000, since: NOW - 61_000 }), rn: act({ startedAt: NOW - 70_000 }), nofin: act({ startedAt: NOW - 70_000, since: NOW - 70_000 }) } as never,
+    });
+    expect(byName(s, 'dn').secs).toBe(18);
+    expect(byName(s, 'fl').secs).toBe(9);
+    expect(byName(s, 'rn').secs).toBe(70); // a running worker still counts to now
+    expect(byName(s, 'nofin').secs).toBe(70); // no finish stamp (since == start): fall back to now rather than show 0s
+  });
   test('running, waiting, failed, queued (a parked worker, then a dispatched member the host does not list), then done', () => {
     const s = world({
       squad: [sq('dn', 'finished'), sq('pk', 'parked'), sq('fl', 'failed'), sq('bl', 'running'), sq('rn', 'running')],
