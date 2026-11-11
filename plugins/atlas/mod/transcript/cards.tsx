@@ -5,7 +5,7 @@
 import type { RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from '../contract'
 import type { AgentState } from '../contract'
-import { PALETTES, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
+import { surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
 import { CARD_W, cardLines, toastRuns } from '../panel-layout'
 import { clip, cells } from '../atlas-ui'
 import { displayName } from '../hud'
@@ -67,8 +67,7 @@ const tierOf = (i: AgentInput): string => [i.model, i.effort].filter(Boolean).jo
 
 /** Run -> Text element on the rev 4 panel (or the run's own fill). */
 const cell = (x: UiRun, ui: Ui): RenderNode => {
- const p = PALETTES[ui.theme]
- return t({ ...(ui.color === 'none' ? {} : { color: runHex(x, ui.theme), backgroundColor: x.bg ? p[x.bg] : p.panel }), ...(x.bold ? { bold: true } : {}) }, x.t)
+ return t({ ...(ui.color === 'none' ? {} : { color: runHex(x, ui.theme, ui.color), backgroundColor: surfaceHex(x.bg ?? 'panel', ui) }), ...(x.bold ? { bold: true } : {}) }, x.t)
 }
 const rowEl = (runs: UiRun[], ui: Ui): RenderElement => el('Box', { flexDirection: 'row', flexShrink: 0 }, ...runs.map((x) => cell(x, ui)))
 

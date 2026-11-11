@@ -2,7 +2,7 @@
 // file paints them as Segment rows. `boardTree` is the board pane (ribbon, header, one row per item); `todoRows` is the same
 // rows without the ribbon, for the band's inline slot, capped by the row budget with a `+N more` row. Pure: rows in, Segments out.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { hostEnv, PALETTES, uiFromEnv, type Run, type Ui, runHex } from './atlas-ui';
+import { hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx } from './motion';
 import { boardBody, boardLines, boardRowsOf, type BoardLine, type BoardSource } from './board-model';
 import { rowOf, type Segment } from './runs';
@@ -14,9 +14,10 @@ export type TodoPanelOpts = { cols: number; tick: number; expanded: boolean; max
 /** A run as a Segment on the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export const runSegment = (x: Run, ui: Ui): Segment => {
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
-  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme), bg: PALETTES[ui.theme][x.bg ?? 'panel'], ...style };
+  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme, ui.color), bg: surfaceHex(x.bg ?? 'panel', ui), ...style };
 };
-const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : PALETTES[ui.theme].panel);
+/** The panel fill as drawn: in 256 colours the stable grey (index 234), not the raw hex the host turns into navy 17. */
+const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : surfaceHex('panel', ui));
 /** The line's Segments, then panel-coloured spaces to exactly `cols` cells (plain spaces with NO_COLOR). */
 function rowOfLine(l: BoardLine, cols: number, ui: Ui): Segment[] {
   const parts = l.runs.map((x) => runSegment(x, ui));

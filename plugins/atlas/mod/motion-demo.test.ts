@@ -27,7 +27,7 @@ describe('motion-demo frames', () => {
       const frames = Object.keys(files).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => files[n]!);
       expect(new Set(frames).size).toBeGreaterThanOrEqual(5);
       const row = (f: string): string => plain(f).trimEnd().split('\n').at(-1)!;
-      expect(row(frames[0]!)).toContain('·'); // the quiet dot: no state's own mark
+      expect(row(frames[0]!)).toContain('░'); // the light-shade cell: no state's own mark, and not the host's `·` separator
       for (const f of frames) expect(['◇', '◆'].some((g) => row(f).includes(g))).toBe(false); // queued and the capsule keep their glyphs
       expect(frames.at(-1)).toBe(files[`${s}-99-done.ans`]);
       expect(plain(files[`${s}-99-done.ans`]!)).toContain('●');
@@ -84,6 +84,22 @@ describe('demoMain', () => {
     expect(dirs).toEqual(['/tmp/frames']);
     expect(Object.keys(wrote)).toHaveLength(Object.keys(demoFrames(80)).length);
     expect(out.join('')).toContain('files in /tmp/frames');
+  });
+  test('C7: the colour depth follows the environment unless --color says otherwise (TERM=*256color, no COLORTERM: 256 colours)', async () => {
+    const run = async (argv: string[], env: Record<string, string>): Promise<string> => {
+      const wrote: Record<string, string> = {};
+      const io: DemoIo = { mkdir: () => {}, write: (d, n, t) => void (wrote[`${d}/${n}`] = t) };
+      const { h } = host(['bun', 'motion-demo.ts', '--out', '/o', ...argv]);
+      await demoMain({ ...h, env }, io);
+      return Object.values(wrote).join('');
+    };
+    const t256 = await run([], { TERM: 'xterm-256color' });
+    expect(t256).not.toMatch(/[34]8;2;/);
+    expect(t256).toContain('48;5;234');
+    expect(await run([], { TERM: 'xterm-256color', COLORTERM: 'truecolor' })).toMatch(/48;2;/);
+    expect(await run([], {})).toMatch(/48;2;/);
+    expect(await run(['--color', 'truecolor'], { TERM: 'xterm-256color' })).toMatch(/48;2;/);
+    expect(await run(['--color', '256'], { COLORTERM: 'truecolor' })).not.toMatch(/[34]8;2;/);
   });
   test('without --out it prints usage and exits 2', async () => {
     const { h, err, exits } = host(['bun', 'motion-demo.ts']);

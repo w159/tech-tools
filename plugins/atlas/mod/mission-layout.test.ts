@@ -141,6 +141,13 @@ describe('mission-layout: the footer', () => {
 });
 
 describe('mission-layout: the row budget', () => {
+  test('C3: planRows keeps two footer rows when they fit, one (the key row) when they do not, none under the worker', () => {
+    expect(planRows(6, 1, false, 2)).toMatchObject({ lanes: 1, footer: true, footerRows: 2 });
+    expect(planRows(5, 1, false, 2)).toMatchObject({ lanes: 1, footer: true, footerRows: 2 });
+    expect(planRows(4, 1, false, 2)).toMatchObject({ lanes: 1, footerRows: 1 });
+    expect(planRows(3, 1, false, 2)).toMatchObject({ lanes: 1, footerRows: 0, footer: false });
+    expect(planRows(4, 1, false, true)).toMatchObject({ footerRows: 1 });
+  });
   test('planRows: two slots with more workers than slots shows one lane and the "+N more" row', () => {
     expect(planRows(4, 5, false, false)).toMatchObject({ lanes: 1, more: true, ticker: false, footer: false });
     expect(planRows(3, 5, false, false)).toMatchObject({ lanes: 1, more: false }); // one slot: no room for a "+N more" row

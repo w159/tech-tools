@@ -59,15 +59,19 @@ describe('band footer buttons', () => {
     expect(buttons(t).length).toBe(0);
     expect(textOf(t)).not.toMatch(/ctrl\+x/);
   });
-  test('the footer keeps its checks on the left and the keys flush right, the row exactly the width', () => {
+  test('C3: the checks and the key buttons are two rows, each exactly the width, the keys flush right', () => {
     const gates = [{ id: 'tripwire', title: 'tripwire', lines: [{ ok: false, label: 'x' }] }] as any;
     const snapshot = busySnap({ squad: [], activity: {}, comms: [] });
-    for (const columns of [80, 120, 160]) { // at 80 the six keys leave 18 cells, so the checks give way to them; the row is still exactly the width
+    for (const columns of [80, 120, 160]) { // the checks have the whole row now, so they show at 80 too
       const t = bandTree(els, { snapshot, live: [], gates, columns, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
-      const foot = kids(t).at(-1)!;
-      if (columns > 80) expect(textOf(foot)).toContain('checks  ■ tripwire');
-      const width = kids(foot).reduce((n, k) => n + (k.kind === 'Button' ? 3 + String(k.props.label).length : [...String(k.props.children ?? '')].length), 0);
-      expect(width).toBe(columns);
+      const [checksRow, keysRow] = kids(t).slice(-2) as [Node, Node];
+      expect(textOf(checksRow)).toContain('checks  ■ tripwire');
+      expect(buttons(checksRow)).toHaveLength(0);
+      expect(textOf(keysRow)).not.toContain('checks');
+      expect(buttons(keysRow)).toHaveLength(6);
+      const width = (row: Node): number => kids(row).reduce((n, k) => n + (k.kind === 'Button' ? 3 + String(k.props.label).length : [...String(k.props.children ?? '')].length), 0);
+      expect([columns, width(checksRow)]).toEqual([columns, columns]);
+      expect([columns, width(keysRow)]).toEqual([columns, columns]);
     }
   });
   test('the hint is `ctrl+x tab`, shown after the keys only when it fits', () => {

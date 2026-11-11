@@ -5,7 +5,6 @@
 
 export const todo_120 = [
   "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3 of 7 done",
-  "progress ██████▉░░░░░░░░░ 3 of 7 · 43%",
   "  ● Wire band to host         done          ran 03:10",
   "  ● Layout grid tiers         done          ran 02:41",
   "  ● Gate golden tests         done          ran 01:58",
@@ -18,7 +17,6 @@ export const todo_120 = [
 export const todo_120_rich = [
   "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3 of 7 done",
   "● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify",
-  "progress ██████▉░░░░░░░░░ 3 of 7 · 43%",
   "  ● Wire band to host          DONE         ran 03:10",
   "  ● Layout grid tiers          DONE         ran 02:41",
   "  ● Gate golden tests          DONE         ran 01:58",
@@ -41,13 +39,13 @@ export const todo_80 = [
 
 export const todo_40 = [
   "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━ 3/7",
-  "  ● Wire band to host",
-  "  ● Layout grid tiers",
-  "  ● Gate golden tests",
-  "▸ ◐ Subagents block",
-  "  ◇ Gate tests",
-  "  ■ Changelog",
-  "  ▲ Ship board mod"
+  "  ● Wire band to host  done",
+  "  ● Layout grid tiers  done",
+  "  ● Gate golden tests  done",
+  "▸ ◐ Subagents block    running",
+  "  ◇ Gate tests         queued",
+  "  ■ Changelog          failed",
+  "  ▲ Ship board mod     blocked"
 ];
 
 export const subagents_120 = [

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Fixed (critique 6, slice C): the TODO block is one layout at every width: the ribbon holds the only count (the `progress` row is gone), every row keeps its state column down to 13 cells, and nothing opens with a blank row (`mod/hud-surface.ts`; design goldens `todo_120`, `todo_120_rich`, `todo_40` updated).
+- Fixed: the done pop no longer draws `·`, the host's own separator: it is a light-shade `░` (ASCII `+`) then the state's disc (`POP_UNICODE`, `POP_ASCII`).
+- Fixed: the band footer is two rows when both show: the `checks` row, then the key buttons and `ctrl+x tab` hint on their own row (`footerLines`; `planRows` takes a footer row count and keeps the key row longest).
+- Fixed: the side-panel tab strip never shortens a word to two letters (`rt tm ch`); where the words do not fit one row they wrap onto a second row (`stripLayout`).
+- Fixed: the channel and core tabs fill a tall pane and stop at its last row: the channel log is sized to the pane, the core sections list more rows on a tall pane and fewer when the default overflows (`mod/panel-fill.test.ts`, 30 and 40 rows).
+- Fixed: the Board pane and the transcript worker cards fill with `surfaceHex` and draw tones with `runHex(.., mode)`, so a 256-colour terminal gets index 234, never the navy 17.
+- Fixed: `bun mod/motion-demo.ts --out <dir>` follows the terminal's colour depth (`TERM=*256color` without `COLORTERM` records 256-colour frames); `--color` still wins.
+
 ## 17.7.0 - 2026-11-11
 
 - Fixed: 256-colour painting no longer burns the host CPU: `fitHex`, `surfaceHex` and `stable256` memoise on their arguments and the stable palette is built once as {hex, rgb} records plus a hex Set, so a frame costs map lookups instead of thousands of hex builds; results are byte-identical (`mod/paint-cost.test.ts`: 4000-paint workload 6038 ms -> 27 ms).

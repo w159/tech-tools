@@ -4,6 +4,7 @@ import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
 import { chipCount, runsString, type Run, type Ui } from './atlas-ui';
 import { COUNT_ORDER, type UiState } from './atlas-ui';
+import { textWidth } from './theme';
 import { agentRows, fitStack, padRows, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -40,7 +41,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const out = text(todoRows(rows, opts(120), full));
     const done = rows.filter((r) => r.state === 'done').length;
     expect(out[0]).toContain(`${done} of ${rows.length} done`);
-    expect(out[1]).toContain(`${done} of ${rows.length} · 43%`);
+    expect(out.some((l) => /^progress |· \d+%/.test(l))).toBe(false); // one count, in the ribbon
     expect(out.filter((l) => /^[ ▸] [●◐◇■▲◉] /.test(l))).toHaveLength(rows.length);
   });
   test('columns: label at 4, state at 30, meta at 44; at most one chip per row; no row wider than the surface', () => {
@@ -243,13 +244,32 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
     const l = lines([row({ name: 'alpha-explorer', task: 'read alpha.py' })], 120)[0]!;
     expect(l).toContain('read alpha.py');
   });
-  test('the TODO block has one layout at every width: ribbon, (progress row from 100 columns), then the rows with their state column; no blank row', () => {
-    for (const cols of [80, 100, 110, 150]) {
+  test('C1: the TODO block has one layout at every width: ribbon with the one count, then a row per item with its state column; no blank row, no progress row', () => {
+    for (const cols of [150, 110, 100, 80, 60, 40]) {
       const out = text(todoRows(worldTodos(), opts(cols), full));
-      expect(out[0]).toContain('TODO');
+      expect([cols, out[0]]).toEqual([cols, expect.stringContaining('TODO')]);
       expect(out.filter((l) => l === '')).toHaveLength(0);
-      if (cols >= 100) expect(out[1]).toMatch(/^progress /);
-      expect(out[cols >= 100 ? 2 : 1]).toMatch(/done/);
+      expect(out[0]).toMatch(/\d+( of |\/)\d+/); // the count is in the ribbon
+      expect(out.slice(1).filter((l) => /\d+ of \d+ done|\d+\/\d+\b(?!:)|\d+%/.test(l))).toHaveLength(0); // and only there
+      expect(out.some((l) => /^progress /.test(l))).toBe(false);
+      const rows = out.slice(1);
+      expect(rows).toHaveLength(worldTodos().length);
+      for (const l of rows) expect([cols, l]).toEqual([cols, expect.stringMatching(/(done|running|queued|failed|blocked|waiting)/)]); // the state column at every width
+      for (const l of rows) expect(textWidth(l)).toBeLessThanOrEqual(cols);
     }
   });
+  test('C1: the first row of the stack is never blank, at any width or row budget, with the TODO block first or alone', () => {
+    for (const cols of [150, 110, 80, 60, 40]) for (const maxRows of [30, 12, 8, 5, 3, 2, 1]) {
+      for (const sets of [{ todos: worldTodos(), agents: worldAgents() }, { todos: worldTodos(), agents: [] }, { todos: [], agents: worldAgents() }]) {
+        const rows = fitStack(sets, opts(cols), maxRows);
+        if (rows.length) expect([cols, maxRows, runsString(rows[0]!).trim() !== '']).toEqual([cols, maxRows, true]);
+      }
+    }
+  });
+  test('C1: a pane under 13 cells has no room for a state word and keeps the title alone', () => {
+    const out = text(todoRows(worldTodos(), opts(12), full));
+    for (const l of out.slice(1)) expect(textWidth(l)).toBeLessThanOrEqual(12);
+    expect(out.slice(1).some((l) => /done|running|queued/.test(l))).toBe(false);
+  });
+
 });

@@ -1,12 +1,12 @@
 // motion-demo.ts: renders the frames of a TODO row and an agent row going running -> done to .ans files, so they can be recorded.
 // Deterministic: the clock is injected (no Date.now), the rows are fixed, so two runs write byte-identical files.
-//   bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 100] [--color truecolor|256]
+//   bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 100] [--color truecolor|256]   (default: the terminal's depth, see colorMode)
 // Writes, per surface (todo, agent): `<surface>-00-running.ans` (the resting row before the change), `<surface>-01-t0000ms.ans` ...
 // one file per frame of the 900 ms window, `<surface>-99-done.ans` (the resting row after), and `<surface>-strip.ans` (all of them,
 // one per line, `cat` it in a terminal). Each file is the ribbon and the row exactly as the live HUD draws them (24-bit ANSI, or xterm-256 with --color 256).
 // The frames are built by `demoFrames` (pure: file name -> text); only the CLI at the bottom touches the disk, through dynamic imports
 // that the mod's tsconfig (which has no node types) never resolves.
-import { paintAnsi, spinFrameOf, uiFromEnv, type Ui } from './atlas-ui';
+import { colorMode, paintAnsi, spinFrameOf, uiFromEnv, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, hudMotionItems, type HudAgent, type HudInput } from './hud';
 import { Motion, MOTION_MS } from './motion';
@@ -55,7 +55,7 @@ export function demoFrames(cols = 100, step = 100, color: Ui['color'] = 'truecol
   return files;
 }
 
-type Host = { argv: string[]; stdout: { write(s: string): void }; stderr: { write(s: string): void }; exit(code: number): void };
+type Host = { argv: string[]; env?: Record<string, string | undefined>; stdout: { write(s: string): void }; stderr: { write(s: string): void }; exit(code: number): void };
 /** The disk, injected: the CLI loads node:fs lazily; tests pass a fake. */
 export type DemoIo = { mkdir(dir: string): void; write(dir: string, name: string, text: string): void };
 type Dyn = Record<string, (...a: never[]) => unknown>;
@@ -81,7 +81,9 @@ export async function demoMain(host: Host, io?: DemoIo): Promise<void> {
     return;
   }
   const disk = io ?? (await nodeIo());
-  const color = arg('--color') === '256' ? '256' : 'truecolor';
+  // --color wins; else the terminal's own depth (colorMode: TERM=*256color with no COLORTERM is 256 colours, as the live host reads it).
+  const flag = arg('--color');
+  const color: Ui['color'] = flag === '256' || flag === 'truecolor' ? flag : colorMode(host.env ?? {}) === '256' ? '256' : 'truecolor';
   const files = demoFrames(Number(arg('--cols') ?? 100), Number(arg('--step') ?? 100), color);
   disk.mkdir(out);
   for (const [name, text] of Object.entries(files)) disk.write(out, name, text);

@@ -66,7 +66,7 @@ describe('HUD rows', () => {
     const moved = f0.flatMap((r, i) => (shot([r]) === shot([rest[i]!]) ? [] : [i]));
     expect(moved).toHaveLength(1);
     expect(runsString(f0[moved[0]!]!)).not.toBe(runsString(rest[moved[0]!]!)); // a dot for ● at t=0
-    expect(runsString(f0[moved[0]!]!).includes('·') || runsString(f0[moved[0]!]!).trim() === '').toBe(true);
+    expect(runsString(f0[moved[0]!]!).includes('░') || runsString(f0[moved[0]!]!).trim() === '').toBe(true);
   });
   test('a TODO row that appears reveals left to right', () => {
     const mo = new Motion(true);

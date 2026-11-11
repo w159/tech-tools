@@ -45,24 +45,28 @@ describe('change 9: one tab strip on both hosts', () => {
       const om = stripOf(paintPanel(panelWorld(tab, cols, mocha, { core })).map(plain));
       expect(cc.length).toBeGreaterThan(0);
       expect(om).toEqual(cc);
-      if (cols >= 38) expect(cc).toHaveLength(1); // one strip row down to 38 cells; below that the tabs wrap rather than lose a word
+      if (cols >= 60) expect(cc).toHaveLength(1); // one strip row from 60 cells; below the tabs wrap onto a second row rather than lose a word
       expect(cc[0]!).toMatch(/^ \S/); // one cell of padding from the left rule
       expect(cc.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w))).toEqual(['r:', 't:', 'c:', 'g:', 'k:', 'o:']); // every key stays
       expect(cc.join('\n')).not.toMatch(/\w: *(\n|$)|\w: {2,}/); // no tab is ever blank
-      if (cols >= 40) expect(cc[0]!).toContain(`${L.STRIP_TABS.find((t) => t.id === tab)!.key}: ${tab === 'channel' && cols < 60 ? 'chan' : tab}`); // the lit tab keeps its word while the pane has room
+      expect(cc.join(' ')).not.toMatch(/\b[rtcgko]: (rt|tm|ch|gt|co|bd)\b/); // C4: never the two-letter form
+      expect(cc.join(' ')).toMatch(new RegExp(`\\b${L.STRIP_TABS.find((t) => t.id === tab)!.key}: (${tab}|chan)\\b`)); // the lit tab keeps its word
       // words go from the right end only: once a tab shows its word, every tab to its left does too (the lit tab is the one exception)
     });
   }
   test('at 30, 40 and 60 cells the strip is padded, whole and never wider than the pane', () => {
     for (const cols of [30, 40, 60]) {
       const { rows } = L.stripLayout(cols - 1, 'route');
-      if (cols >= 40) expect(rows).toHaveLength(1);
+      if (cols >= 60) expect(rows).toHaveLength(1);
       const row = stripOf(ccRows('route', cols))[0]!;
       expect([...row].length).toBeLessThanOrEqual(cols);
-      expect(row.startsWith(cols >= 40 ? ' r: route' : ' r: ')).toBe(true);
+      expect(row.startsWith(' r: route')).toBe(true);
     }
     expect(stripOf(ccRows('route', 60))[0]!.trim()).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
-    expect(stripOf(ccRows('route', 30)).map((x) => x.trim())).toEqual(['r: rt t: tm c: ch g: gt k: co', 'o: bd']);
+    // C4: below the one-row width the full words wrap onto a second row; the two-letter form is gone
+    expect(stripOf(ccRows('route', 30)).map((x) => x.trim())).toEqual(['r: route  t: team  c: channel', 'g: gates  k: core  o: board']);
+    expect(stripOf(ccRows('route', 40)).map((x) => x.trim())).toEqual(['r: route  t: team  c: channel  g: gates', 'k: core  o: board']);
+    expect(stripOf(ccRows('route', 110)).map((x) => x.trim())).toEqual(['r: route  t: team  c: channel  g: gates  k: core  o: board']);
   });
   test('the rule sits under the lit tab on both hosts', () => {
     for (const tab of TABS) {

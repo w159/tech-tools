@@ -35,6 +35,8 @@ export type Tier = 'full' | 'mid' | 'min';
 export const tierOf = (cols: number): Tier => (cols >= 100 ? 'full' : cols >= 80 ? 'mid' : 'min');
 export const isRich = (o: SurfaceOpts): boolean => !!o.rich && o.cols >= 120;
 
+/** The leftmost the TODO state column may start at (a title of one cell, its glyph and gaps). */
+const MIN_STATE_AT = 6;
 const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
@@ -73,12 +75,8 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const done = rows.filter((r) => r.state === 'done').length;
   const out: Run[][] = [ribbon(cols, 'TODO', tier === 'full' ? `${done} of ${rows.length} done` : `${done}/${rows.length}`, ui)];
   if (b.cap === 0) return out;
-  const frac = done / rows.length;
-  // One layout at every width: ribbon, (rail), progress row, rows. No blank rows inside the block; the progress row sits right under the ribbon.
-  if (tier === 'full' && b.extras) {
-    if (rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
-    out.push([t('progress ', 'muted'), ...gauge(16, frac, ui), t(` ${done} of ${rows.length} · ${percent(frac)}`, 'sub')]);
-  }
+  // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
+  if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
   const stateAt = todoStateAt(rows, o, tier, rich);
   const metaAt = stateAt + 14;
   const { shown, hidden } = windowRows(rows, b.cap, o.now);
@@ -88,10 +86,11 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
 }
 
 /** The state column: just past the longest title, so every title shows whole; never past the last cell a state word (or chip) still fits,
- * and, where a detail column follows (100 columns and up), never so far that the detail has under 16 cells. The 40 form has no state column. */
+ * and, where a detail column follows (100 columns and up), never so far that the detail has under 16 cells. Every width has it; only a
+ * pane under 13 cells (no room for a title and a word) drops it (0). */
 function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich: boolean): number {
-  if (tier === 'min') return 0;
   const wordW = rich ? CHIP_W : 7; // `running` and `blocked` are the longest of the six words
+  if (tier === 'min') return o.cols < MIN_STATE_AT + wordW ? 0 : Math.min(maxLen(rows.map((r) => flat(r.label))) + 2 + 4, o.cols - wordW);
   const detail = tier === 'full' && rows.some((r) => r.detail !== '');
   const last = o.cols - wordW - (detail ? 14 + 16 : 0); // the leftmost the column may start at
   return Math.min(Math.max(tier === 'full' ? 30 : 26, maxLen(rows.map((r) => flat(r.label))) + 1 + 4), Math.max(last, 12));
@@ -105,12 +104,12 @@ function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt:
 function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
   const { ui } = o;
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.owner || r.label)), t(' ')];
-  const labelW = tier === 'min' ? Math.max(1, o.cols - 4) : stateAt - 5;
+  const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
   const text = clip(flat(r.label), labelW);
   const label = r.state === 'done' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
-  if (tier === 'min') return [...head, label];
+  if (stateAt === 0) return [...head, label];
   const row = [...toCol([...head, label], stateAt), rich ? stateChip(r.state, ui) : t(r.state)];
-  if (tier === 'mid' || r.detail === '') return row;
+  if (tier !== 'full' || r.detail === '') return row;
   return [...toCol(row, metaAt), t(clip(flat(r.detail), Math.max(1, o.cols - metaAt)), 'sub')];
 }
 
