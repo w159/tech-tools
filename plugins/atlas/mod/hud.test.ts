@@ -8,7 +8,7 @@ import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_ric
 import type { TodoItem } from './contract';
 import type { Ui } from './atlas-ui';
 import { PALETTES } from './atlas-ui';
-import { agentName, hudAgents, hudBudget, hudCompactRows, hudLines, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
+import { agentName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
 import { computeCounts, routeCounts } from './data/todos';
 import { effectiveRows, inlineBelowRows } from './register';
 import type { Segment } from './runs';
@@ -283,5 +283,27 @@ describe('inline renderer budget (viewport less the rows below the AbovePrompt s
       expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('2 running'))).toBe(true);
       expect(shown.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate'))).toHaveLength(2);
     }
+  });
+});
+
+describe('mutation kills (round 2): queued names, the elapsed clock and the Subagents ribbon probe', () => {
+  const liveW = (name: string) => ({ name, role: 'implementer', state: 'working', tool: 'Read', lastTool: null, since: 0, startedAt: 0, target: null, detail: null, lastLine: '', calls: [], scope: null }) as never;
+  test('hudAgents lists a dispatched-but-unlisted worker once, and never twice when the host already lists it', () => {
+    const agents = hudAgents([liveW('impl-a')], [], ['impl-a', 'impl-b']);
+    expect(agents.map((a) => a.name)).toEqual(['impl-a', 'impl-b']);
+    expect(agents[1]).toMatchObject({ role: '', state: 'queued', ui: 'queued' });
+  });
+  test('the running todo shows elapsed mm:ss (zero padded) and its estimate', () => {
+    const row = (claimedAgo: number, est?: number) => todoModel([todo('a', 'work', 'in_progress', { claimed_at: 10_000 - claimedAgo, ...(est ? { estimate_s: est } : {}) })], 10_000_000)[0]!.detail;
+    expect(row(5)).toBe('elapsed 00:05');
+    expect(row(65, 120)).toBe('elapsed 01:05 of 02:00');
+    expect(row(3725)).toBe('elapsed 62:05');
+  });
+  test('hudListsAgents is true only when a SUBAGENTS ribbon has a row under it', () => {
+    const seg = (t: string): Segment => ({ t });
+    expect(hudListsAgents([[seg('TODO')], [seg('SUBAGENTS'), seg('1 running')], [seg('impl-a')]])).toBe(true);
+    expect(hudListsAgents([[seg('TODO')], [seg('SUBAGENTS')]])).toBe(false); // the ribbon alone: counts only
+    expect(hudListsAgents([[seg('TODO')], [seg('impl-a')]])).toBe(false);
+    expect(hudListsAgents([])).toBe(false);
   });
 });

@@ -124,6 +124,40 @@ describe('crew runs', () => {
     expect(await stateOf(fs, FIXTURE_EPOCH_MS + 15 * 60_000, 'gw-docs')).toBe('dead');
   });
 
+  // Mutation kills (round 2): RECENT_MS, the missing-mtime floor and the exit-note filter.
+  const RECENT = 30 * 60_000;
+  const T = FIXTURE_EPOCH_MS;
+  /** One run whose every present file reports mtime `mt` (`undefined`: stat finds nothing at all). */
+  const aged = (mt: number | undefined) => {
+    const fs = dirFs({
+      [`${ROOT}/.atlas/.run/crew/aged/run.json`]: JSON.stringify({ run_id: 'aged', plan: { workers: [{ name: 'w1' }] } }),
+      [`${ROOT}/.atlas/.run/crew/aged/irc/log.jsonl`]: [
+        log({ seq: 1, ts: EPOCH_S, from: 'lead', text: 'kick', kind: 'kickoff' }),
+        log({ seq: 2, ts: EPOCH_S, from: 'w1', text: 'bye', kind: 'exit' }),
+        log({ seq: 3, ts: EPOCH_S, from: 'w1', text: 'plain' }),
+      ].join('\n') + '\n',
+    });
+    return Object.assign(fs, { stat: async () => (mt === undefined ? undefined : { size: 1, mtimeMs: mt }) });
+  };
+  const liveCount = async (fs: FsLike, now: number) => (await readCrew(fs, ROOT, now)).agents.length;
+
+  test('a run is live up to exactly 30 minutes after its newest file, history one millisecond later', async () => {
+    const fs = aged(T);
+    expect(await liveCount(fs, T + RECENT)).toBe(1);
+    expect(await liveCount(fs, T + RECENT + 1)).toBe(0);
+  });
+
+  test('a file the fs cannot stat counts as mtime 0 (oldest), not 1', async () => {
+    const fs = aged(undefined);
+    expect(await liveCount(fs, RECENT)).toBe(1);
+    expect(await liveCount(fs, RECENT + 1)).toBe(0);
+  });
+
+  test('log notes keep their kind, except an exit line, which carries none', async () => {
+    const { notes } = await readCrew(aged(T), ROOT, T + 1000);
+    expect(notes.map((n) => [n.text, n.kind])).toEqual([['kick', 'kickoff'], ['bye', undefined], ['plain', undefined]]);
+  });
+
   test('crewSig changes when irc/log.jsonl grows', async () => {
     const fs = seed();
     const before = await crewSig(fs, ROOT);

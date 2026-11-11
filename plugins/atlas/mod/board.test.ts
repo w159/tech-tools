@@ -6,7 +6,8 @@ import { board_120, board_120_rich, board_80, worldBoardRows } from '../contract
 import { band_120 } from '../contracts/band-world-golden';
 import { chipCount, contrast, NEED, PALETTES, runKind, toneHex, type Ui } from './atlas-ui';
 import { bandLines, runsWidth } from './mission-layout';
-import { boardBody, boardCounts, boardLines, boardRowsOf, boardText, mmss, stateOfStatus, toBoardRow } from './board-model';
+import type { UiState } from './atlas-ui';
+import { blockedCount, boardBody, boardCounts, boardLines, boardRowsOf, boardText, mmss, stateOfStatus, toBoardRow } from './board-model';
 import { endedOf, settleDispatch } from './data/todos';
 import type { SquadAgent } from './contract';
 
@@ -163,5 +164,36 @@ describe('S1: a dispatch row follows its worker', () => {
   test('the board then draws the row done or failed, and the counts follow', () => {
     const settled = settleDispatch([dispatch({ id: '1' }), dispatch({ id: '2', owner: 'impl-b' })], { 'impl-a': 'done', 'impl-b': 'failed' });
     expect(boardRowsOf(settled).map((r) => r.state)).toEqual(['done', 'failed']);
+  });
+});
+
+describe('mutation kills (round 2): blockedCount, boardCounts, the elapsed gauge room', () => {
+  const row = (state: UiState) => ({ label: 'x', state, owner: '', detail: '' });
+  test('blockedCount counts only items whose state word is blocked (a waiting owner blocks, a finished item stays done)', () => {
+    const owners = new Map<string, UiState>([['a', 'waiting'], ['b', 'running'], ['c', 'blocked']]);
+    const items = [
+      { status: 'in_progress', owner: 'a' }, // waiting owner: blocked
+      { status: 'pending', owner: 'b' }, // running owner: queued
+      { status: 'completed', owner: 'a' }, // finished: done
+      { status: 'blocked' }, // own status
+      { status: 'pending', owner: 'c' }, // blocked owner: blocked
+      { status: 'in_progress' }, // running
+    ];
+    expect(blockedCount(items, owners)).toBe(3);
+    expect(blockedCount([], owners)).toBe(0);
+  });
+  test('boardCounts starts every state at zero and counts each row once', () => {
+    expect(boardCounts([])).toEqual({ queued: 0, running: 0, done: 0, failed: 0, blocked: 0, waiting: 0, total: 0 });
+    expect(boardCounts([row('done'), row('done'), row('failed'), row('blocked')])).toEqual({ queued: 0, running: 0, done: 2, failed: 1, blocked: 1, waiting: 0, total: 4 });
+  });
+  test('the rich elapsed gauge needs 19 cells plus the tail: drawn at exactly that room, text one cell short', () => {
+    // 100 columns leave 37 cells for the detail; `1000:00 of 1000:00` is 18, so the gauge row (8 + 10 + 1 + 18) fits to the cell.
+    const running = (secs: number, of: number) => ({ label: 'x', state: 'running' as const, owner: '', detail: '', elapsed: { secs, of } });
+    const detail = (r: ReturnType<typeof running>, cols: number) => boardText(boardLines([r], { cols, ui: ui('mocha'), rich: true })).at(-1)!.slice(62).trimEnd();
+    expect(detail(running(60_000, 60_000), 100)).toBe('elapsed ██████████ 1000:00 of 1000:00');
+    // The gauge fill is the true fraction: a task at a quarter of its estimate fills a quarter.
+    expect(detail(running(15, 60), 120)).toBe('elapsed ██▌░░░░░░░ 00:15 of 01:00');
+    // An estimate of one second still divides by one, not by a larger floor.
+    expect(detail(running(1, 1), 120)).toBe('elapsed ██████████ 00:01 of 00:01');
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
 import { chipCount, runsString, type Run, type Ui } from './atlas-ui';
-import { agentRows, fitStack, padRows, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
+import { agentRows, fitStack, padRows, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 export const worldTodos = (): TodoRow[] => world.todos.map((t) => ({ label: t.label, state: t.state, detail: t.detail, focus: t.state === 'running' }));
@@ -129,5 +129,61 @@ describe('SUBAGENTS task column (critique-3 change 8)', () => {
     expect(text(agentRows([row('a', [1])], opts(120), full))[1]).toMatch(/^ {4}AGENT +STATE +MODEL +TASK +LAST$/);
     expect(text(agentRows([row('a', [1])], opts(120, true), full))[1]).toMatch(/^ {4}AGENT +STATE +CTX +MODEL +LAST$/);
     expect(text(agentRows([row('a', [1])], opts(80), full))[1]).toBe(''); // below 100 columns the spacer stays blank
+  });
+});
+
+describe('mutation kills (round 2): order, slots, focus mark, name column cap, stacking', () => {
+  const ag = (name: string, state: AgentRow['state'] = 'running'): AgentRow => ({ name, state, model: 'opus', tasks: [], tool: '', ctx: null, focus: false });
+  const td = (label: string, state: TodoRow['state'] = 'queued', focus = false): TodoRow => ({ label, state, detail: '', focus });
+
+  test('sortAgents puts running, blocked, failed, waiting, queued, done in that order and keeps input order inside a state', () => {
+    const rows = [ag('f1', 'failed'), ag('b1', 'blocked'), ag('r1'), ag('r2'), ag('d1', 'done'), ag('q1', 'queued'), ag('w1', 'waiting'), ag('r3'), ag('b2', 'blocked')];
+    expect(sortAgents(rows).map((r) => r.name)).toEqual(['r1', 'r2', 'r3', 'b1', 'b2', 'f1', 'w1', 'q1', 'd1']);
+  });
+  test('windowRows with no slot shows nothing and counts every row hidden; one slot is only the overflow row', () => {
+    const rows = [td('a', 'running'), td('b', 'queued')];
+    expect(windowRows(rows, 0)).toEqual({ shown: [], hidden: 2 });
+    expect(windowRows(rows, 1)).toEqual({ shown: [], hidden: 2 });
+    expect(windowRows(rows, 2).shown).toHaveLength(2);
+  });
+  test('windowRows ranks blocked ahead of failed when slots run out', () => {
+    const rows = [td('f', 'failed'), td('b', 'blocked'), td('q', 'queued')];
+    expect(windowRows(rows, 2).shown.map((r) => r.label)).toEqual(['b']);
+  });
+  test('todoRows draws nothing for no rows, and a ribbon plus the row for exactly one', () => {
+    expect(todoRows([], opts(120), full)).toEqual([]);
+    const one = text(todoRows([td('only one')], opts(120), { spacers: false, extras: false }));
+    expect(one).toHaveLength(2);
+    expect(one[1]).toContain('only one');
+  });
+  test('the focus marker is a bold accent triangle (a bold > in ASCII); an unfocused row has a plain blank', () => {
+    const on = todoRows([td('a', 'running', true)], opts(120), { spacers: false, extras: false })[1]![0]!;
+    expect(on).toMatchObject({ t: '▸', tone: 'accent', bold: true });
+    const off = todoRows([td('a', 'running', false)], opts(120), { spacers: false, extras: false })[1]![0]!;
+    expect(off.t).toBe(' ');
+    expect(off.bold).toBeUndefined();
+    const asciiRow = todoRows([td('a', 'running', true)], { ...opts(120), ui: { ...ui, ascii: true } }, { spacers: false, extras: false })[1]![0]!;
+    expect(asciiRow).toMatchObject({ t: '>', bold: true });
+  });
+  test('the agent name column stops growing at 29 cells: a longer name is clipped and the state word starts at column 33', () => {
+    const rows = text(agentRows([ag('x'.repeat(60))], opts(120), { spacers: false, extras: false }));
+    expect(rows[1]!.indexOf('running')).toBe(33);
+    expect(rows[1]!.slice(4, 33).trimEnd().length).toBeLessThanOrEqual(28);
+  });
+  test('stack puts a blank row between the blocks only when spacers is on and both blocks exist', () => {
+    const s = { todos: [td('t')], agents: [ag('a')] };
+    const blanks = (b: { spacers: boolean; extras: boolean }, x: { todos: TodoRow[]; agents: AgentRow[] }) => stack(x, opts(120), b).filter((r) => r.length === 0).length;
+    const on = { spacers: true, extras: false };
+    expect(blanks(on, s)).toBe(2); // the TODO spacer under its ribbon and the separator between the blocks (the agents' spacer row holds the column words)
+    expect(blanks({ spacers: false, extras: false }, s)).toBe(0);
+    // One block alone never gets the separator row.
+    expect(blanks(on, { todos: s.todos, agents: [] })).toBe(1); // its own under-ribbon spacer only
+    expect(blanks(on, { todos: [], agents: s.agents })).toBe(0);
+  });
+  test('fitStack at two rows with two agents ends on the two bare ribbons (no spacer row to push it to one)', () => {
+    const rows = fitStack({ todos: [td('t')], agents: [ag('a'), ag('b')] }, opts(120), 2);
+    expect(text(rows).map((l) => l.trim().split(/\s+/)[2] ?? '')).toHaveLength(2);
+    expect(text(rows)[0]).toContain('TODO');
+    expect(text(rows)[1]).toContain('SUBAGENTS');
   });
 });

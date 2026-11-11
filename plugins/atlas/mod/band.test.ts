@@ -3,12 +3,13 @@
 // and keys only while idle at 80+ columns. Spec: docs/specs/2026-11-10_atlas-terminal-ui.md.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandTree, planRows, railPhase, shortTool } from './band';
+import { bandRows, bandTree, missionTree, planRows, railPhase, shortTool } from './band';
+import { worldModel } from '../contracts/band-world';
 import { PALETTES, spinnerGlyph, type Ui } from './atlas-ui';
 import { computeCounts, groupTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
-import { TONE_HEX } from './mission-layout';
+import { bandLines, runsText, TONE_HEX } from './mission-layout';
 import { textWidth } from './theme';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -459,5 +460,32 @@ describe('D2 the band count is the snapshot count', () => {
     const snapshot = busySnap({ todos: items as any, todoGroups: groupTodos(items as any, contract, 's'), counts: computeCounts(items as any, contract, 's') });
     expect(snapshot.counts).toMatchObject({ done: 1, total: 3 });
     expect(panel(160, { snapshot }).rows[0]).toContain('1 of 3');
+  });
+});
+
+describe('mutation kills (round 2): ctx clamp, bandRows, the footer gap', () => {
+  const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  test('a lead context over 100% reads 100%, never the raw figure', () => {
+    const { rows } = panel(160, { snapshot: busySnap({ contextPct: 150 }) });
+    expect(rows[0]).toContain('100%');
+    expect(rows[0]).not.toContain('150%');
+  });
+  test('bandRows is the band alone as plain text, one string per band row', () => {
+    const rows = bandRows(worldModel(160, mocha));
+    expect(rows).toEqual(bandLines(worldModel(160, mocha)).map((l) => runsText(l.runs)));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain('ATLAS');
+    expect(bandRows(worldModel(160, mocha, { rich: true, maxRows: 3 }))).toHaveLength(3);
+  });
+  test('when the checks leave no room, the gap before the key buttons is empty, not one stray cell', () => {
+    const e = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button') } as unknown as ClientElements;
+    const checks = ['completion', 'tripwire', 'routing', 'gates'].map((id) => ({ id, ok: true }));
+    const m = worldModel(80, mocha, { workers: [], checks, keysWidth: 1, maxRows: 12 });
+    const tree = missionTree(e, m, undefined, { openView: () => {}, toggleTodos: () => {} }) as unknown as Node;
+    const keysBox = (tree.props.children as Node[]).find((r) => (r.props.children as Node[]).some((c) => c.kind === 'Button'))!;
+    const kids = keysBox.props.children as Node[];
+    const beforeButtons = kids.slice(0, kids.findIndex((c) => c.kind === 'Button'));
+    // [...checks, gap, sep(0)]: the gap and the first separator are both empty strings.
+    expect(beforeButtons.filter((c) => c.props.children === '')).toHaveLength(2);
   });
 });

@@ -118,3 +118,26 @@ describe('sidebar hotkeys', () => {
     for (const b of buttons(t).filter((x) => x.props.hotkey)) expect(String(b.props.label).length).toBeGreaterThan(0);
   });
 });
+
+describe('mutation kills (round 2): idle means no worker is still going; a given ui wins over the environment', () => {
+  const only = (state: 'failed' | 'running') => {
+    const snapshot = busySnap({
+      squad: [{ name: 'runner-1', persona: 'runner', state, source: 'task', task: 't' }],
+      activity: { lead: { tool: null, since: NOW, toolCount: 0, tokens: null, mood: 'idle', lastLine: '' }, 'runner-1': { tool: state === 'running' ? 'Grep' : null, since: NOW - 1000, toolCount: 1, tokens: 1, mood: state === 'running' ? 'working' : 'failed', lastLine: '' } },
+      comms: [],
+    });
+    return bandTree(els, { snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 160, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
+  };
+  test('a band whose only worker has failed is idle: the key buttons show; with a worker running they do not', () => {
+    expect(buttons(only('failed'))).toHaveLength(6);
+    expect(buttons(only('running'))).toHaveLength(0);
+  });
+  test('missionTree paints in the model\'s own theme, not the environment\'s', async () => {
+    const { missionTree } = await import('./band');
+    const { worldModel } = await import('../contracts/band-world');
+    const { PALETTES } = await import('./atlas-ui');
+    const tree = missionTree(els, worldModel(120, { theme: 'latte', ascii: false, color: 'truecolor' })) as unknown as Node;
+    expect(tree.props.backgroundColor).toBe(PALETTES.latte.panel);
+    expect(tree.props.backgroundColor).not.toBe(PALETTES.mocha.panel);
+  });
+});
