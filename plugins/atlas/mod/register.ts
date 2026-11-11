@@ -1080,9 +1080,11 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// Unasked, the pane docks only beside a fullscreen transcript wide enough for it; checked once, at the first render that knows the viewport.
 		// Drawing is pure: the engine denies a $.state write made while ui.render dispatches (the hook is then
 		// skipped and the band never draws). The render only notes the wish; dockTick opens the pane.
+		// A terminal that starts below the floor (110 columns) and is widened later docks at the render that first fits;
+		// the check ends once it docked, so a pane the person closed stays closed.
 		if (!paneChecked && e.viewport) {
-			paneChecked = true;
 			dockWanted = shouldDock(e.viewport);
+			paneChecked = dockWanted;
 		}
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);

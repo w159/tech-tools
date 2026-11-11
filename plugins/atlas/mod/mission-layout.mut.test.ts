@@ -16,19 +16,27 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
   // widest first: the gauge forms from 120 (noun+ctx gauge, noun, ...), then the figure forms from 100 (3-gap, then 2-gap); a form is used only where the wider ones do not fit
   test('with a context figure: figures from 100 (2-gap, then 3-gap), gauges from 120 (2-gap, then the full form)', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1 }));
-    expect(at(101)).toBe(at(108)); // `3/7` is two cells shorter than `3 of 7`: the 3-gap form fits from 101
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗  research  todo 3/7 ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
-    expect(at(108)).toBe('◖ ◆ ATLAS ◗  research   todo 3/7 ▲ 1 blocked   ctx 62%   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
-    expect(at(119)).toBe(at(108));
+    // critique 12 A3: one form, one ` · ` separator from 90 to 119 columns (110 undocked and 150 docked read alike)
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ research · todo 3/7 ▲ 1 blocked · ctx 62% · ◐ 1 running · ■ 1 failed · ◇ 1 queued');
+    expect(at(95)).toBe(at(100));
+    expect(at(108)).toBe(at(100));
+    expect(at(119)).toBe(at(100));
     expect(at(120)).toBe('◖ ◆ ATLAS ◗  research  todo ███▍░░░░ 3/7 ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
     expect(at(124)).toBe('◖ ◆ ATLAS ◗  research   todo ████▎░░░░░ 3/7 ▲ 1 blocked   ctx █████░░░ 62%   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+  });
+  test('critique 12 A3: the live-run snapshot reads the same at the 110 body (105, undocked) and the 150 body (93, docked): one separator set', () => {
+    // live-110-8271cfc8-1 f0067 read `research   todo 0/5 · 1 dispatch open   ctx 7%   agents ◐ 1 running`; live-150 f0061 read `todo 0/5 · 1 dispatch open · ◐ 1 running`
+    const live = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, total: 5, done: 0, openWork: 6, openDispatch: 1, todoBlocked: 0, ctx: 0.07, workers: [{ name: 'gamma-explorer', state: 'running', secs: 0 }] }));
+    expect(live(105)).toBe(live(93));
+    expect(live(105)).not.toMatch(/ {2}/); // no multi-space separator
+    expect(live(105)).toContain('todo 0/5 · 1 dispatch open · ctx 7% · ');
   });
   test('critique 9: no gauge track below 120 columns, the same facts as figures', () => {
     for (const cols of [100, 110, 119]) expect(band(worldModel(cols, ui, { maxRows: 1 }))).not.toMatch(/[░█▌▏▎▍▋▊▉]/);
   });
-  test('without a context figure: the 3-gap figure form from 100, the gauge form from 120', () => {
+  test('without a context figure: the ` · ` figure form from 90, the gauge form from 120', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, ctx: undefined }));
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗  research   todo 3/7 ▲ 1 blocked   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ research · todo 3/7 ▲ 1 blocked · ◐ 1 running · ■ 1 failed · ◇ 1 queued');
     expect(at(119)).toBe(at(100));
     expect(at(120)).toBe('◖ ◆ ATLAS ◗  research   todo ████▎░░░░░ 3/7 ▲ 1 blocked   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
   });

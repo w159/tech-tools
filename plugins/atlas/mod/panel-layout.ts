@@ -282,6 +282,9 @@ const TITLE_MIN_W = 21; // the title column's least width (the state word starts
 /** The Board's compact form on the panel: `focus glyph title state [detail] owner`. Every task row shares one state column (cell 26) and one
  * right-aligned owner column (dropped when the panel is too narrow to keep a title of 8 cells); a title that does not fit is cut at its end (labels that share a head keep their tail); from 100 columns the reason (detail) fills the room between the state word and the owner. An open row adds its owner and detail,
  * then its evidence. */
+/** A task row prints its owner in the right-hand column unless its title already names that owner. */
+const ownerColumn = (t: PanelTodo): boolean => !!t.owner && !oneLine(t.label).includes(oneLine(t.owner));
+
 function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; wordW: number; shown?: string }): PanelLine[] {
   const key = `task:${t.id}`;
   const runs = gridRow({
@@ -289,7 +292,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
     name: { t: w.shown ?? oneLine(t.label), tone: t.state === 'done' ? 'sub' : 'text', ...(t.state === 'done' ? { strike: true } : {}) }, nameW: w.nameW, nameCut: 'end', // a done title is struck through, as in the HUD (critique 11)
     word: { t: t.word ?? t.state, tone: rowWordTone(t.state, t.word) }, wordW: w.wordW,
     ...(m.cols >= WIDE && t.detail ? { detail: { t: oneLine(t.detail) } } : {}), // wide panels show the reason in one fixed column after the state word
-    ...(w.valueW && t.owner ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
+    ...(w.valueW && ownerColumn(t) ? { value: { t: clip(oneLine(t.owner), w.valueW), tone: 'sub' as const } } : {}),
   });
   const open = m.expanded === key;
   const facts = [t.owner ? `owner ${oneLine(t.owner)}` : '', oneLine(t.detail)].filter(Boolean).join(` ${dot(m.ui)} `);
@@ -353,10 +356,13 @@ function routeBody(m: PanelModel): PanelLine[] {
   const looseShown = loose.slice(0, AGENT_ROWS);
   const room = Math.max(1, bodyRows(m, rows.length + 1) - (loose.length ? looseShown.length + 1 + (loose.length > looseShown.length ? 1 : 0) : 0));
   const ordered = m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
-  const widest = Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.map((t) => cells(oneLine(t.owner)))));
+  // The owner column goes first (critique 12 A2): a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`) prints no second copy, so the title keeps the room.
+  const widest = Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
   // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
   const todoWordW = ordered.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), WORD_W); // 8 while a row reads `returned`
-  const plan = gridPlan(m.cols, { names: [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))], word: todoWordW, value: widest, optional: true, min: 8, max: m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols }); // from 100 columns the title leaves the reason a column
+  const titleMax = m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols; // from 100 columns the title leaves the reason a column
+  const titles = [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))];
+  const plan = gridPlan(m.cols, { names: titles, word: todoWordW, value: widest, optional: true, min: Math.min(titleMax, Math.max(8, ...ordered.filter((t) => t.owner && !ownerColumn(t)).map((t) => cells(oneLine(t.label))))), max: titleMax }); // a title that names its owner stays whole: the column gives way before it is cut
   const shown: PanelLine[] = [];
   const shownTitles = labelCut(ordered.map((t) => oneLine(t.label)), plan.nameW);
   for (const [i, t] of ordered.entries()) {

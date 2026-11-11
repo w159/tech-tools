@@ -92,6 +92,24 @@ describe('sidebar open requests', () => {
     expect((await renderBand({ columns: 100, rows: 40, isFullscreen: true })).opens).toEqual([]);
   });
 
+  test('critique 12 A1: a terminal that starts at 110 (the engine refuses an unasked pane) docks at the first render once it is widened to 150, and only once', async () => {
+    const { on, pick } = captureOn();
+    const { engine, opens } = stubEngine();
+    await register(on, {});
+    await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
+    const at = (columns: number) => ({ surface: 'terminal', viewport: { columns, rows: 40, isFullscreen: true }, props: { hasSurvey: false, bodyColumns: columns } });
+    const draw = async (columns: number) => { guard.rendering = true; await pick('ui.render|AbovePrompt')(engine, at(columns), noopNext).catch(() => undefined); guard.rendering = false; await dockTick(engine); };
+    await draw(110);
+    await draw(110);
+    expect(opens).toEqual([]);
+    await draw(150);
+    expect(opens).toEqual([{ id: 'atlas', title: 'Atlas', columns: 56 }]);
+    await draw(150);
+    await draw(110);
+    await draw(150);
+    expect(opens).toHaveLength(1); // docked once: a pane the person closed stays closed
+  });
+
   test('the band render writes no $.state (the engine skips a render hook that does)', async () => {
     expect((await renderBand({ columns: 160, rows: 40, isFullscreen: true })).denied).toBe(0);
   });

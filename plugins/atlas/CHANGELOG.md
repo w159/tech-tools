@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Critique 12 A1 (110 layout): the host places an unasked pane only from 144 columns, so a 110-column terminal gets the pane only on request (`register.ts` `DOCK_MIN_COLUMNS`). The dock check no longer ends at the first render: a terminal started narrow and widened to 144+ docks at the first render that fits, once.
+- Critique 12 A2: the route tab prints no owner column on a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`), and the column gives way before such a title is cut, so `read ...` and the doubled owner are gone at 110 and 150.
+- Critique 12 A3: one band form from 90 to 119 columns (`research · todo 0/5 · 1 dispatch open · ctx 7% · ◐ 1 running`, one ` · ` separator), so 110 (body 105) and a docked 150 (body 93) read alike; the last run joins the contract row by a fixed 92-cell rule, not by the body width.
+
 ## 17.11.0 - 2026-11-11
 
 - Fixed (wave 13 follow-up): untracked the self-referencing `plugins/atlas/.claude-plugin/types` symlink that a wave 12 merge added, with a `.gitignore` rule (commit 8271cfc8).

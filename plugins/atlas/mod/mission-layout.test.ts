@@ -45,6 +45,13 @@ describe('mission-layout: critique 9, the contract row outlasts the last-run row
     expect(r[1]).toContain('last run');
     expect(r[2]).toContain('contract');
   });
+  test('critique 12 A3: a core row between 93 and 105 cells wide with the last run is split or joined the same at the 110 body (105) and the docked 150 body (93)', () => {
+    // live-110-8271cfc8-1 f0067 vs live-150-8271cfc8-1 f0063: `contract ... verdicts ...` + `last run ...` were one row at one width and two at the other
+    const mid = [{ t: ` contract  ${'x'.repeat(46)}`, tone: 'text' as const }]; // 57 cells + 3 + the last run (~37) lands between 93 and 105
+    const at = (cols: number) => rows(model({ cols, maxRows: 12, phase: 'done', done: 3, total: 3, core: mid, lastRun: { workers: 3, secs: 19, failed: 0 }, checks: [{ id: 'completion', ok: true }], keysWidth: 40 })).map((r) => (r.includes('contract') ? 'C' : '') + (r.includes('last run') ? 'L' : '')).filter(Boolean);
+    expect(at(105)).toEqual(at(93));
+    expect(at(150)).toEqual(at(93));
+  });
   test('no gauge track in the 110 band', () => {
     expect(idle(4)[0]).not.toContain('░');
   });

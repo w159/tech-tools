@@ -178,10 +178,12 @@ const openMore = (m: MissionModel): string => {
 const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.todo ?? (m.total ? Math.min(1, m.done / m.total) : 0), ui);
 const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
 
-/** Narrowest width (columns) of the wide standard forms (the first four); the compact forms below them carry their own minimum. A form also has to fit. */
-const WIDE_MIN = 100;
-/** The gauge forms need this much: between WIDE_MIN and here the band carries the same facts as figures. */
+/** The one figures-and-` · ` band form (phase word, todo, ctx, counts) starts here: below a docked 150-column terminal's transcript (93), so 110 and 150 read alike. A form also has to fit. */
+const STD_MIN = 90;
+/** The gauge forms need this much: between STD_MIN and here the band carries the same facts as figures. */
 const GAUGE_MIN = 120;
+/** The widest the core row and the last run may be together to share one row: the docked 150-column transcript is 93 wide, one cell spare. */
+const JOIN_MAX = 92;
 
 /** The one run state every form below reads. `blocked`: the lead declared it, or the Stop gate refused the stop (never inferred from a failing check alone).
  * `warn`: idle while a check fails and Stop did not refuse (`tripwire warning`). `flagged`: either, the band's attention state. */
@@ -235,12 +237,15 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const tiny = bandCounts(m, ui, false);
   const midTodo = (word: string): string => [m.total ? '' : `${word} ${phaseNo}`, todo ? `todo ${todo}` : ''].filter(Boolean).join(' · ');
   const tail = (cs: Run[]): Run[] => [...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(cs.length ? [r(' · ', 'sub'), ...cs] : [])];
+  const stdCounts = bandCounts(m, ui, true, false, ' · ');
+  const ctxSeg: Run[] = m.ctx !== undefined ? [r(' · ', 'sub'), r('ctx '), r(percent(m.ctx), 'sub')] : [];
   const compact = (word: string, cs: Run[], why: string): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word)}`, 'sub')] : [r(` ${lead}${midTodo(word)}`, 'sub')]), ...tail(cs)];
   const out: Form[] = [
     { runs: full(true, true, '   '), min: GAUGE_MIN }, { runs: full(true, false, '  ', 8), min: GAUGE_MIN },
     { runs: full(false, true, '   '), min: GAUGE_MIN }, { runs: full(false, false, '  ', 8), min: GAUGE_MIN },
-    { runs: full(true, false, '   ', 0, false), min: WIDE_MIN }, { runs: full(true, false, '  ', 0, false), min: WIDE_MIN },
-    { runs: full(false, false, '   ', 0, false), min: WIDE_MIN }, { runs: full(false, false, '  ', 0, false), min: WIDE_MIN },
+    // Critique 12 A3: from STD_MIN to 119 columns the band is one layout with one separator (` · `). The old 100-119 form (triple-space gaps, an `agents` noun)
+    // made one snapshot read differently at 110 (undocked, body 105) and 150 (docked beside the 56-column pane, body 93).
+    { runs: [...cap, r(' '), ...name, ...(m.total ? [r(` · todo ${todo}`, 'sub')] : []), ...(blockedWords.length ? [r(' '), ...blockedWords] : []), ...ctxSeg, ...(stdCounts.length ? [r(' · ', 'sub'), ...stdCounts] : [])], min: STD_MIN },
     { runs: compact('phase', counts, reason.long), min: 80 },
     { runs: compact('phase', tiny, reason.short), min: 50 },
     { runs: compact('ph', tiny, reason.short), min: 50 },
@@ -421,7 +426,9 @@ function idleLines(m: MissionModel): Line[] {
   const last = lastRunRuns(m.lastRun, runStateOf(m).flagged); // `all ok` never sits under a BLOCKED header, declared or from a failing check
   const foot = footerLines(m);
   // The last run rides the core row when both fit one row (`verdicts ... last run 3 workers`), so a 110 and a 150 band draw the same rows (critique 11: 110 had no last-run row).
-  const joined: Run[] = m.core?.length && last.length && runsWidth(m.core) + 3 + runsWidth(last) <= m.cols ? [...m.core, r('   '), ...last] : [];
+  // "Fit" is a fixed width (JOIN_MAX), not `cols`: the 110 body (105) and the docked 150 body (93) joined or split the same snapshot differently (critique 12 A3).
+  const joinW = m.core?.length && last.length ? runsWidth(m.core) + 3 + runsWidth(last) : Infinity;
+  const joined: Run[] = joinW <= Math.min(JOIN_MAX, m.cols) ? [...(m.core ?? []), r('   '), ...last] : [];
   const plan = (withLast: boolean) => {
     const lastRow: Line[] = withLast && !joined.length && last.length && m.maxRows > band.length ? [{ runs: last }] : [];
     const head = [...band, ...lastRow];

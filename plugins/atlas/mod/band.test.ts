@@ -115,7 +115,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ██▌░░░░░░░ 1/4');
-    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo 1\/4 {3}ctx 12%/); // figures, no gauge track, below 120 (critique 9)
+    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ implement · todo 1\/4 · ctx 12% · /); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3)
     expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
   });

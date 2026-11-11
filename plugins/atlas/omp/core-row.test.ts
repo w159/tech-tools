@@ -41,11 +41,16 @@ for (const cols of [160, 120] as const) {
 	});
 }
 
-test("the core row sits right under the band and carries the last run when both fit the row", () => {
+test("the core row sits right under the band; the last run shares its row only when both fit 92 cells (critique 12 A3: the same rows at every width)", () => {
 	const rows = renderPanel(panel(160, fixtureModel())).map(strip);
 	expect(rows[0]).toContain("ATLAS");
-	expect(rows[1]).toContain("contract  ");
-	expect(rows[1]).toContain("last run");
+	const at = rows.findIndex((r) => r.includes("contract  "));
+	expect(at).toBeGreaterThan(0);
+	expect(at).toBeLessThanOrEqual(2);
+	expect(rows.slice(1, 3).join("\n")).toContain("last run");
+	// the same rows at 105 and 93 columns (the 110 body and the docked 150 body)
+	const kinds = (cols: number) => renderPanel(panel(cols, fixtureModel())).map(strip).map((r) => (r.includes("contract  ") ? "contract" : r.includes("last run") ? "last" : "")).filter(Boolean).join(",");
+	for (const cols of [93, 105]) expect(kinds(cols)).toBe(kinds(160));
 });
 
 test("a running panel keeps its rows for workers: no core row", () => {

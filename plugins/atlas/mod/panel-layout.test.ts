@@ -310,3 +310,36 @@ describe('route tab names the running agents (live round2: `agents ◒ 3 running
     expect(out.join('\n')).toContain('3 more on the team tab');
   });
 });
+
+describe('critique 12 A2: the route tab drops the owner column before it cuts a title', () => {
+  // live-110-8271cfc8-2/tab-route.png: `T1 read ... done  alpha-explorer`; live-150-8271cfc8-1 mod-todo_tree.png: `T1 read alpha.py (alpha-e... done  alpha-explorer`
+  const plan = [
+    { id: 'T1', label: 'T1 read alpha.py (alpha-explorer)', state: 'done' as const, owner: 'alpha-explorer' },
+    { id: 'T2', label: 'T2 read beta.py (beta-explorer)', state: 'done' as const, owner: 'beta-explorer' },
+    { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const },
+  ];
+  const taskRows = (cols: number): string[] => rows('route', cols, { todos: plan, workers: [] }).filter((l) => /\bT\d /.test(l));
+  test('at 55 columns every title shows whole and the owner is not printed a second time', () => {
+    const out = taskRows(55);
+    expect(out.length).toBe(3);
+    expect(out[0]).toContain('T1 read alpha.py (alpha-explorer)');
+    expect(out[1]).toContain('T2 read beta.py (beta-explorer)');
+    for (const l of out) { expect(cells(l)).toBeLessThanOrEqual(55); expect(l.match(/alpha-explorer|beta-explorer/g)?.length ?? 0).toBeLessThanOrEqual(1); }
+  });
+  test('at 37 columns (the 110-column pane) a title is cut only by the pane width: no `read ...`, no owner column', () => {
+    const out = taskRows(37);
+    for (const l of out) expect(cells(l)).toBeLessThanOrEqual(37);
+    expect(out[0]).toMatch(/T1 read alpha\.py \(\S+\.\.\.\s+done/);
+    expect(out[0]).not.toMatch(/read \.\.\./);
+    expect(out.join('\n')).not.toMatch(/done\s+\S*-explorer/);
+  });
+  test('a row whose title does not name its owner keeps the owner column; one that does never prints it twice, at any width', () => {
+    const mixed = [...plan.slice(0, 1), { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const, owner: 'lead-agent' }];
+    for (const cols of [120, 80, 55]) {
+      const out = rows('route', cols, { todos: mixed, workers: [] }).filter((l) => /\bT\d /.test(l));
+      expect(out[0]!.match(/alpha-explorer/g)).toHaveLength(1);
+      if (cols >= 80) expect(out[1]).toMatch(/done\s+lead-agent$/);
+      else expect(out[1]).not.toContain('lead-agent'); // the column gives way before a title that names its owner is cut
+    }
+  });
+});
