@@ -3243,6 +3243,169 @@ class RedactHistoryTest(_DbFixture):
         self.assertNotIn("hunter2secret99", self._all_text())
 
 
+class SurvivorKillersDisplayRefMinerTest(unittest.TestCase):
+    """Kills the mutants of fix_display (early return), _reference_root
+    (marketplace-clone fallback), _FindingList.complete and the
+    mine_recurring_friction MED severity threshold."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def test_fix_display_unreadable_settings_returns_skip_lines(self):
+        path = os.path.join(self.tmp, "settings.json")
+        with open(path, "w") as f:
+            f.write("{not json")
+        out = atlas_doctor.fix_display(
+            settings_path=path,
+            env={},
+            plugin_root=os.path.join(self.tmp, "plug"),
+            project_dir=os.path.join(self.tmp, "proj"),
+            omp_agent_dir=os.path.join(self.tmp, "omp"),
+        )
+        self.assertIsInstance(out, list)
+        self.assertEqual(len(out), 1)
+        self.assertIn("SKIP display fixes", out[0])
+        self.assertIn("is not valid JSON", out[0])
+        self.assertIn("fix the JSON by hand", out[0])
+        with open(path) as f:  # never rewrites unreadable JSON
+            self.assertEqual(f.read(), "{not json")
+
+    def test_reference_root_falls_back_to_marketplace_clone(self):
+        plugins = os.path.join(self.tmp, "plugins")
+        clone = os.path.join(plugins, "mkt")
+        ref = os.path.join(clone, "plugins", "atlas")
+        os.makedirs(ref)
+        write_json(
+            os.path.join(plugins, "known_marketplaces.json"),
+            {"mkt": {"installLocation": clone}},
+        )
+        nogit = os.path.join(self.tmp, "nogit", "scripts")
+        os.makedirs(nogit)
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("ATLAS_SOURCE", "CLAUDE_PROJECT_DIR")
+        }
+        with (
+            mock.patch.dict(os.environ, env, clear=True),
+            mock.patch.object(atlas_doctor, "__file__", os.path.join(nogit, "d.py")),
+            mock.patch.object(atlas_doctor, "PLUGINS_DIR", plugins),
+            mock.patch("os.getcwd", return_value=nogit),
+        ):
+            self.assertEqual(atlas_doctor._reference_root("atlas"), ref)
+            shutil.rmtree(ref)  # clone lacks the plugin dir: no reference
+            self.assertIsNone(atlas_doctor._reference_root("atlas"))
+
+    def test_finding_list_complete_defaults_false(self):
+        fl = atlas_doctor._FindingList()
+        self.assertIs(fl.complete, False)
+        self.assertEqual(fl.evaluated, set())
+
+    def _conn(self):
+        conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(conn)
+        self.addCleanup(conn.close)
+        for i in range(100):
+            atlas_db.upsert_session_log(
+                conn,
+                f"rs{i}",
+                started_at=time.time() - 3600,
+                transcript_path="/home/u/.claude/projects/p/x.jsonl",
+            )
+            conn.execute(
+                "UPDATE session_logs SET user_prompt_count=1 WHERE session_id=?",
+                (f"rs{i}",),
+            )
+        conn.commit()
+        return conn
+
+    def test_recurring_friction_severity_threshold_is_double_min_count(self):
+        conn = self._conn()
+        for _ in range(4):  # 3 <= 4 < 6: LOW
+            atlas_db.record_friction(conn, "rs0", "user_correction")
+        for _ in range(5):  # still below 2 x min_count: LOW
+            atlas_db.record_friction(conn, "rs0", "error_report")
+        for _ in range(6):  # == 2 x min_count: MED
+            atlas_db.record_friction(conn, "rs0", "gate_block")
+        found = {
+            f["key"]: f
+            for f in atlas_doctor.mine_recurring_friction(conn, self.tmp, min_count=3)
+        }
+        self.assertEqual(found["user_correction"]["severity"], "LOW")
+        self.assertEqual(found["error_report"]["severity"], "LOW")
+        self.assertEqual(found["gate_block"]["severity"], "MED")
+
+
+class DisplayHelperSurvivorsTest(unittest.TestCase):
+    """Pins return values of the display helpers (statusline command/path, omp todo setting, renderer env source)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def _write(self, name, text):
+        fp = os.path.join(self.tmp, name)
+        with open(fp, "w", encoding="utf-8") as f:
+            f.write(text)
+        return fp
+
+    def test_statusline_command_exact_form(self):
+        self.assertEqual(
+            atlas_doctor._atlas_statusline_command("/r/p"),
+            'python3 "/r/p/scripts/atlas_statusline.py"',
+        )
+
+    def test_statusline_script_path_extracts_script_from_command(self):
+        cmd = atlas_doctor._atlas_statusline_command("/r/p")
+        self.assertEqual(
+            atlas_doctor._statusline_script_path({"command": cmd}),
+            "/r/p/scripts/atlas_statusline.py",
+        )
+        self.assertIsNone(atlas_doctor._statusline_script_path({"command": "echo hi"}))
+        self.assertIsNone(atlas_doctor._statusline_script_path(None))
+
+    def test_omp_todo_setting_json_yaml_and_error(self):
+        self.assertEqual(
+            atlas_doctor._omp_todo_setting(
+                self._write("a.json", '{"todo": {"enabled": false}}')
+            ),
+            (False, None),
+        )
+        self.assertEqual(
+            atlas_doctor._omp_todo_setting(
+                self._write("b.json", '{"todo.enabled": true}')
+            ),
+            (True, None),
+        )
+        self.assertEqual(
+            atlas_doctor._omp_todo_setting(self._write("c.json", '{"other": 1}')),
+            (None, None),
+        )
+        self.assertEqual(
+            atlas_doctor._omp_todo_setting(
+                self._write("d.yml", "todo:\n  enabled: false\n")
+            ),
+            (False, None),
+        )
+        val, err = atlas_doctor._omp_todo_setting(os.path.join(self.tmp, "missing.yml"))
+        self.assertIsNone(val)
+        self.assertIn("cannot read", err)
+
+    def test_renderer_state_reads_env_from_settings_file(self):
+        off = atlas_doctor.RENDERER_OFF_ENV
+        sp = self._write("settings.json", json.dumps({"env": {off: "1"}}))
+        mode, _layer, why = atlas_doctor._renderer_state(sp, None, {})
+        self.assertEqual((mode, why), ("inline", off))
+        sp2 = self._write(
+            "s2.json", json.dumps({"env": {atlas_doctor.RENDERER_ENV: "1"}})
+        )
+        self.assertEqual(
+            atlas_doctor._renderer_state(sp2, None, {}),
+            ("fullscreen", None, atlas_doctor.RENDERER_ENV + "=1"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
 

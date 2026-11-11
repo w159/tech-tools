@@ -5029,6 +5029,72 @@ class TeamGateUnitTest(unittest.TestCase):
             self.assertIsNone(self.dt._working_seats(tinput, self.root, "s"))
 
 
+class MutationSurvivorKillTest(unittest.TestCase):
+    """Round-2 mutation survivors in dispatch_tripwire_core: each test pins one exact value."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _findings(self, payload):
+        path = self.root.joinpath(*self.dt.FINDINGS_RELPATH)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_findings_count_non_list_findings_value_is_zero(self):
+        """A findings.json whose `findings` key is not a list counts 0, not 1."""
+        self._findings({"findings": "not-a-list"})
+        self.assertEqual(self.dt._findings_count(self.root), 0)
+        self._findings({"findings": [{"id": "a"}, {"id": "b"}]})
+        self.assertEqual(self.dt._findings_count(self.root), 2)
+
+    def test_scope_suggestion_splits_only_on_first_colon(self):
+        """`atlas:extra:implementer` is not the implementer role: no suggestion. A 2-split would trim it to one."""
+        self.assertEqual(
+            self.dt._scope_suggestion("atlas:implementer"),
+            "\nFor atlas:implementer use: SCOPE: implement/medium",
+        )
+        self.assertEqual(self.dt._scope_suggestion("atlas:extra:implementer"), "")
+
+    def test_working_seats_falls_back_to_first_resolvable_scope_when_role_absent(self):
+        """The SCOPE resolves but its team lacks the role: return that first scope, not None."""
+        tinput = {
+            "subagent_type": "atlas:implementer",
+            "prompt": "SCOPE: audit/medium\n",
+        }
+        broken = type(sys)(
+            "prompt_optimizer_core"
+        )  # no resolved_scope: the later fallback would give None
+        with patch.dict(sys.modules, {"prompt_optimizer_core": broken}):
+            got = self.dt._working_seats(tinput, self.root, "s")
+        self.assertIsNotNone(got)
+        self.assertEqual(got[:2], ("audit", "medium"))
+        self.assertIsInstance(got[2], int)
+
+    def test_merge_context_returns_one_merged_document(self):
+        def doc(ctx):
+            return json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "additionalContext": ctx,
+                    }
+                }
+            )
+
+        merged = self.dt._merge_context(doc("tripwire"), doc("extra"))
+        self.assertIsNotNone(merged)
+        self.assertTrue(merged.endswith("\n"))
+        spec = json.loads(merged)["hookSpecificOutput"]
+        self.assertEqual(spec["additionalContext"], "extra\n\ntripwire")
+
+
 class ShellTeamLaunchResetTest(unittest.TestCase):
     """2026-11-10: the lead ran one team and one crew and still got `STOP - 4 inline ops, no dispatch`.
     A Bash or ctx_shell call that runs atlas_mux.py spawn-team or atlas_crew.py run is a dispatch."""

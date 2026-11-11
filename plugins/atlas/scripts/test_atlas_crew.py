@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 import os
+import shlex
 import socket
 import sys
 import tempfile
@@ -2354,6 +2355,49 @@ class WorkerEnvAndTestFiles(unittest.TestCase):
         (self.root / "real.py").write_text("x" * 10)
         got = atlas_crew._shard_files(["ghost_b.py", "real.py", "ghost_a.py"], self.root, 2)
         self.assertEqual(got, [["real.py"], ["ghost_a.py", "ghost_b.py"]])
+
+
+class MutationSurvivorKillTests(unittest.TestCase):
+    """Round-2 mutation survivors in atlas_crew: each test pins one exact value."""
+
+    def test_self_cmd_leads_with_the_running_interpreter_else_python3(self):
+        with mock.patch.object(sys, "executable", "/opt/py/bin/python"):
+            self.assertEqual(
+                shlex.split(atlas_crew._self_cmd("worker", "--name", "x"))[:1], ["/opt/py/bin/python"]
+            )
+        with mock.patch.object(sys, "executable", ""):
+            self.assertEqual(shlex.split(atlas_crew._self_cmd("worker"))[0], "python3")
+
+    def test_local_deps_resolves_double_dot_relative_import_one_package_up(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pkg" / "sub").mkdir(parents=True)
+            (root / "pkg" / "sub" / "a.py").write_text("from .. import b\n")
+            rels = ["pkg/sub/a.py", "pkg/b.py", "pkg/sub/b.py"]
+            self.assertEqual(atlas_crew._local_deps("pkg/sub/a.py", rels, root), ["pkg/b.py"])
+
+    def test_save_stubs_creates_nested_dirs_and_tolerates_a_shared_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "proj"
+            (root / "pkg" / "sub").mkdir(parents=True)
+            (root / "pkg" / "sub" / "a.py").write_text("A = 1\n")
+            (root / "pkg" / "sub" / "b.py").write_text("B = 2\n")
+            plan = {"workers": [{"name": "a", "owns": ["pkg/sub/a.py"]}, {"name": "b", "owns": ["pkg/sub/b.py"]}]}
+            rd = Path(tmp) / "run"
+            atlas_crew.save_stubs(rd, plan, str(root))
+            self.assertEqual((rd / "stubs" / "pkg" / "sub" / "a.py").read_text(), "A = 1\n")
+            self.assertEqual((rd / "stubs" / "pkg" / "sub" / "b.py").read_text(), "B = 2\n")
+
+    def test_shard_files_counts_a_missing_file_as_zero_bytes_against_a_real_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "b.py").write_text("x")
+            got = atlas_crew._shard_files(["b.py", "m1.py", "m2.py", "m3.py"], root, 2)
+            self.assertEqual(got, [["b.py"], ["m1.py", "m2.py", "m3.py"]])
+
+    def test_worker_subcommand_defaults_round_nice_and_delay_to_zero(self):
+        args = atlas_crew.parser().parse_args(["worker", "--rundir", "r", "--name", "n"])
+        self.assertEqual((args.round, args.nice, args.delay), (0, 0, 0))
 
 
 class UsageAndSummary(unittest.TestCase):
