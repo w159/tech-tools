@@ -31,36 +31,21 @@ export const HOTKEY_W = 3;
 /** Cells between strip tabs. */
 export const STRIP_GAP = 2;
 
-/** A strip tab as drawn: its id, hotkey and the label of the form that fits (two letters once its word is cut, never empty). */
+/** A strip tab as drawn: its id, hotkey and the label of the form that fits (always a whole word: `channel` may read `chan`, no word is cut to two letters). */
 export type StripTab = { id: PanelTab | 'board'; key: string; label: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** Label forms of the strip, widest first: the words; `channel` shortened; then the words cut to two letters from the right end, one tab at a
- * time (`r: route  t: team  c: chan  g: gates  k: co  o: bd`). The first form that fits the pane on one row is drawn. */
+/** Label forms of the strip, widest first: the words; `channel` shortened; the same with one cell between tabs. The first form that fits the
+ * pane on one row is drawn; none fitting, the words wrap onto a second row (never a two-letter `rt tm ch` form). */
 const SHORT: Record<string, string> = { channel: 'chan' };
-/** The word a dropped tab keeps: two letters, so a key never stands alone (`k: co`). */
-const TINY: Record<string, string> = { route: 'rt', team: 'tm', channel: 'ch', gates: 'gt', core: 'co', board: 'bd' };
-type StripForm = { gap: number; label: (id: string, full: string) => string; drop: number };
+type StripForm = { gap: number; label: (id: string, full: string) => string };
 const STRIP_FORMS: readonly StripForm[] = [
-  { gap: STRIP_GAP, label: (_, full) => full, drop: 0 },
-  { gap: STRIP_GAP, label: (id, full) => SHORT[id] ?? full, drop: 0 },
-  ...STRIP_TABS.map((_, i): StripForm => ({ gap: 1, label: (id, full) => SHORT[id] ?? full, drop: i })),
-  { gap: 1, label: (id, full) => SHORT[id] ?? full, drop: STRIP_TABS.length },
-  { gap: 1, label: (id, full) => SHORT[id] ?? full, drop: STRIP_TABS.length + 1 }, // the lit tab too, rather than a second strip row
+  { gap: STRIP_GAP, label: (_, full) => full },
+  { gap: STRIP_GAP, label: (id, full) => SHORT[id] ?? full },
+  { gap: 1, label: (id, full) => SHORT[id] ?? full },
 ];
 const stripWidth = (tabs: readonly { label: string }[], gap: number): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + HOTKEY_W + cells(t.label), 0);
-
-/** The tabs of one form: the last `f.drop` tabs cut their word to two letters (the lit tab keeps its word, so the rule under it has a label to sit under). */
-function formTabs(f: StripForm, lit?: string): StripTab[] {
-  let left = f.drop;
-  const dropped = new Set<string>();
-  for (let i = STRIP_TABS.length - 1; i >= 0 && left > 0; i--) {
-    if (STRIP_TABS[i]!.id === lit && f.drop <= STRIP_TABS.length) continue;
-    dropped.add(STRIP_TABS[i]!.id);
-    left--;
-  }
-  return STRIP_TABS.map((t): StripTab => ({ ...t, label: dropped.has(t.id) ? (TINY[t.id] ?? t.label.slice(0, 2)) : f.label(t.id, t.label) }));
-}
+const formTabs = (f: StripForm): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t, label: f.label(t.id, t.label) }));
 
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and `gap` cells between; the rest wrap. */
 export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = STRIP_GAP): T[][] {
@@ -76,15 +61,15 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
 }
 
 /** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding: the widest label form that fits one row, else the
- * narrowest form wrapped. `lit` is the lit tab, whose word is never dropped. The rule under the lit tab is as wide as the drawn label. */
-export function stripLayout(cols: number, lit?: string): { rows: StripTab[][]; gap: number } {
+ * full words wrapped onto a second row. The rule under the lit tab is as wide as the drawn label. */
+export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number } {
   const inner = Math.max(1, cols - STRIP_PAD);
   for (const f of STRIP_FORMS) {
-    const tabs = formTabs(f, lit);
+    const tabs = formTabs(f);
     if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap };
   }
-  const last = STRIP_FORMS[STRIP_FORMS.length - 1]!;
-  return { rows: stripRows(formTabs(last, lit), inner, last.gap), gap: last.gap };
+  const wide = STRIP_FORMS[0]!;
+  return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; owner?: string; detail?: string; evidence?: string | null };
@@ -494,7 +479,7 @@ function channelBody(m: PanelModel): PanelLine[] {
     r(`#${m.channel ?? 'channel'}  `, 'text', { bold: true }),
     r(`${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`, 'muted'),
   ], m.cols));
-  const log = m.notes.slice(-Math.max(1, m.rows - 4));
+  const log = m.notes.slice(-Math.max(1, tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4)); // a tall pane: the head, the log and the foot row make exactly the pane
   const hasKind = log.some((n) => n.kind === 'blocked' || n.kind === 'handoff' || n.kind === 'done');
   const timeW = m.cols >= 50 ? Math.max(0, ...log.map((n) => cells(n.at))) : 0;
   const plan = gridPlan(m.cols, { names: log.map((n) => n.from), word: hasKind ? 7 : 0, gap: 2, value: timeW, optional: true, min: 4, max: m.cols >= 100 ? 24 : 12 });
@@ -628,6 +613,10 @@ const VERDICT: Record<Verdict['status'], { s: UiState; word: string; tone: Tone 
 };
 const VERDICT_WORD_W = Math.max(...Object.values(VERDICT).map((v) => v.word.length));
 const VERDICT_ID_W = 15;
+/** Rows each core section lists by default (the newest); a tall pane trades them against its height (coreBody). */
+const VERDICT_CAP = 8;
+const OFFLOAD_CAP = 8;
+const TEAM_CAP = 6;
 
 /** `contract`: three rows, each `glyph name  n of m`; the figure sits in the word column, whole at any width. */
 function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
@@ -642,7 +631,7 @@ function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
   ];
 }
 
-function verdictRows(c: CoreModel, m: PanelModel): PanelLine[] {
+function verdictRows(c: CoreModel, m: PanelModel, cap = VERDICT_CAP): PanelLine[] {
   const l = c.ledger;
   const none = l.verified + l.refuted + l.pending === 0;
   const figures = none
@@ -651,7 +640,7 @@ function verdictRows(c: CoreModel, m: PanelModel): PanelLine[] {
       r(`${l.verified} verified`, l.verified ? 'ok' : 'muted'), r(`${l.refuted} refuted`, l.refuted ? 'bad' : 'muted'),
       ...(l.pending ? [r(`${l.pending} open`, 'warn')] : []), ...(l.unchecked ? [r(`${l.unchecked} unchecked`, 'warn')] : []),
     ], m.ui);
-  const shown = c.verdicts.slice(-8);
+  const shown = c.verdicts.slice(-cap);
   const owners = c.claims.filter((x) => x.status === 'DONE' && x.matched === null);
   const plan = gridPlan(m.cols, { names: [...shown.map((v) => oneLine(v.id)), ...owners.map((x) => x.owner)], word: VERDICT_WORD_W, min: 6, max: VERDICT_ID_W });
   const rows = shown.flatMap((v): PanelLine[] => {
@@ -676,13 +665,13 @@ function verdictRows(c: CoreModel, m: PanelModel): PanelLine[] {
 }
 
 /** Offload in plain words: what each worker read, and what it returned to the lead. Figures keep their whole width; the name column gives way. */
-function offloadRows(c: CoreModel, m: PanelModel): PanelLine[] {
+function offloadRows(c: CoreModel, m: PanelModel, cap = OFFLOAD_CAP): PanelLine[] {
   const o = c.offload;
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
   const nothing = o.kept === 0 && o.returned === 0;
   const gone = m.workers.filter((w) => w.state === 'done' || w.state === 'failed').length; // in-process workers keep no token log: they returned, the figure is absent
   const head = flowHeading('reading', nothing ? [gone ? `${gone} worker${gone === 1 ? '' : 's'} returned, no token figures kept` : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
-  const ws = o.workers.slice(-8);
+  const ws = o.workers.slice(-cap);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);
   const cost = (w: (typeof ws)[number]): string => (w.costUsd === null ? '' : `$${w.costUsd.toFixed(2)}`);
@@ -716,8 +705,8 @@ const seatCount = (s: { count: number; ran: readonly string[] }): number => (s.r
 const SEAT_WORD_W = 10; // `as planned`
 
 /** The dispatch plan against what ran: a row per team (class/effort, name, transport), a row per seat with the verdict `as planned`, `drift` or `not run`. */
-function dispatchRows(c: CoreModel, m: PanelModel): PanelLine[] {
-  const teams = c.routes.slice(-6).reverse();
+function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] {
+  const teams = c.routes.slice(-cap).reverse();
   const head = heading('teams', [r('the plan and what ran', 'muted')], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
@@ -752,7 +741,29 @@ function dispatchRows(c: CoreModel, m: PanelModel): PanelLine[] {
 function coreBody(m: PanelModel): PanelLine[] {
   if (!hasCore(m.core)) return [line([r('(no state)', 'muted'), r('  no verdicts, workers or gates yet', 'muted')])];
   const c = m.core;
-  return [...contractRows(c, m), BLANK, ...verdictRows(c, m), BLANK, ...offloadRows(c, m), BLANK, ...dispatchRows(c, m)];
+  const build = (v: number, o: number, t: number): PanelLine[] => [...contractRows(c, m), BLANK, ...verdictRows(c, m, v), BLANK, ...offloadRows(c, m, o), BLANK, ...dispatchRows(c, m, t)];
+  const base = build(VERDICT_CAP, OFFLOAD_CAP, TEAM_CAP);
+  const room = m.rows - headerRows(m).length - 1; // one foot row stays free
+  const have = [c.verdicts.length, c.offload.workers.length, c.routes.length];
+  const spill = Math.max(have[0]! - VERDICT_CAP, have[1]! - OFFLOAD_CAP, have[2]! - TEAM_CAP);
+  if (!tall(m) || (base.length <= room && spill <= 0)) return base;
+  // A tall pane: the sections list as many rows as the pane holds. The same extra count for all three (negative: fewer than the default when the
+  // default overflows; one row of each stays) by bisection, then one more row at a time to whichever section still has data and room.
+  const caps = (k: number): [number, number, number] => [VERDICT_CAP + k, OFFLOAD_CAP + k, TEAM_CAP + k];
+  let lo = 1 - Math.min(VERDICT_CAP, OFFLOAD_CAP, TEAM_CAP);
+  let hi = Math.max(0, spill);
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (build(...caps(mid)).length <= room) lo = mid; else hi = mid - 1;
+  }
+  const at = caps(lo);
+  for (let i = 0; i < 3; i++) {
+    if (at[i]! >= have[i]!) continue;
+    const next = [...at] as [number, number, number];
+    next[i] = at[i]! + 1;
+    if (build(...next).length <= room) at[i] = next[i]!;
+  }
+  return build(...at);
 }
 
 // ---- the panel ------------------------------------------------------------------------------------------------------------------------

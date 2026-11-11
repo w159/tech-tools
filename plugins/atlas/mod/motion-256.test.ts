@@ -72,6 +72,9 @@ describe('256-colour ease', () => {
 });
 
 describe('done pop glyphs', () => {
+  test('C2: the pop glyph is never the middle dot, the host\'s own separator, in Unicode or ASCII', () => {
+    for (const g of [...POP_UNICODE, ...POP_ASCII]) expect([g, ['·', '.', '-'].includes(g)]).toEqual([g, false]);
+  });
   const other = (own: string, table: Record<string, string>): string[] => Object.entries(table).filter(([s]) => s !== own).map(([, g]) => g);
   test('no pop frame reuses a glyph that means another state, the spinner, the focus mark or the capsule', () => {
     const owned = [...other('done', STATE_GLYPHS), ...other('done', STATE_ASCII), '◐', '◓', '◑', '◒', '|', '/', '-', '\\', '▸', '>', '◆', '◖', '◗'];

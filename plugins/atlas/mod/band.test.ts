@@ -478,15 +478,16 @@ describe('mutation kills (round 2): ctx clamp, bandRows, the footer gap', () => 
     expect(rows[0]).toContain('ATLAS');
     expect(bandRows(worldModel(160, mocha, { rich: true, maxRows: 3 }))).toHaveLength(3);
   });
-  test('when the checks leave no room, the gap before the key buttons is empty, not one stray cell', () => {
+  test('C3: the key buttons own a row; the checks never share it, so the gap before the buttons is the flush-right fill', () => {
     const e = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button') } as unknown as ClientElements;
     const checks = ['completion', 'tripwire', 'routing', 'gates'].map((id) => ({ id, ok: true }));
     const m = worldModel(80, mocha, { workers: [], checks, keysWidth: 1, maxRows: 12 });
     const tree = missionTree(e, m, undefined, { openView: () => {}, toggleTodos: () => {} }) as unknown as Node;
-    const keysBox = (tree.props.children as Node[]).find((r) => (r.props.children as Node[]).some((c) => c.kind === 'Button'))!;
-    const kids = keysBox.props.children as Node[];
-    const beforeButtons = kids.slice(0, kids.findIndex((c) => c.kind === 'Button'));
-    // [...checks, gap, sep(0)]: the gap and the first separator are both empty strings.
-    expect(beforeButtons.filter((c) => c.props.children === '')).toHaveLength(2);
+    const rows = tree.props.children as Node[];
+    const keysAt = rows.findIndex((r) => (r.props.children as Node[]).some((c) => c.kind === 'Button'));
+    expect(keysAt).toBe(rows.length - 1);
+    const text = (n: Node): string => (n.kind === 'Text' ? String(n.props.children ?? '') : ((n.props.children as Node[] | undefined) ?? []).map(text).join(''));
+    expect(text(rows[keysAt]!)).not.toContain('checks');
+    expect(text(rows[keysAt - 1]!)).toContain('checks');
   });
 });

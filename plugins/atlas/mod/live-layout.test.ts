@@ -71,19 +71,23 @@ describe('2. the tab strip fits the pane and the rule sits under the lit tab', (
   const tabs = ['route', 'team', 'channel', 'gates', 'core'] as const;
   for (const cols of PANE_WIDTHS) {
     for (const tab of tabs) {
-      test(`pane ${cols}, ${tab} lit: one strip row, the rule under the lit label`, () => {
+      test(`pane ${cols}, ${tab} lit: whole words (a second strip row where one does not fit), the rule under the lit label`, () => {
         const rows = tabRows(panelWorld(tab as PanelTab, cols, ui)).map(lineText);
-        expect(rows).toHaveLength(2); // the strip and its rule; no wrapped second strip row
-        const [strip, rule] = rows as [string, string];
-        expect(hostW(strip.trimEnd())).toBeLessThanOrEqual(cols);
+        const ruleAt = rows.findIndex((r) => r.includes('━'));
+        expect(rows.filter((r) => r.includes('━'))).toHaveLength(1);
+        expect(rows.length).toBeLessThanOrEqual(3); // at most two strip rows and the rule
+        for (const r of rows) expect(hostW(r.trimEnd())).toBeLessThanOrEqual(cols);
+        expect(rows.join('\n')).not.toMatch(/\b[rtcgko]: (rt|tm|ch|gt|co|bd)\b/); // C4: no two-letter form
+        const strip = rows[ruleAt - 1]!;
+        const rule = rows[ruleAt]!;
         const at = rule.indexOf('━');
         expect(rule.replace(/ /g, '')).toMatch(/^━+$/);
         // the cells under the rule are the lit tab's drawn label, whole, right after its `k: ` hotkey and before the gap
         const entry = STRIP_TABS.find((t) => t.id === tab)!;
         const lit = strip.slice(at, at + [...rule.trim()].length);
         expect(strip.slice(at - 3, at)).toBe(`${entry.key}: `);
-        expect(strip.slice(at + lit.length, at + lit.length + 1)).toBe(' ');
-        expect(['route', 'team', 'channel', 'chan', 'gates', 'core', 'rt', 'tm', 'ch', 'gt', 'co']).toContain(lit);
+        expect(strip.slice(at + lit.length, at + lit.length + 1)).toMatch(/^ ?$/); // a gap, or the end of the row
+        expect(['route', 'team', 'channel', 'chan', 'gates', 'core']).toContain(lit);
         if (cols >= 55) expect(lit).toBe(entry.label === 'channel' ? 'chan' : entry.label);
       });
     }

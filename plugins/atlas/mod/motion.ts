@@ -110,10 +110,11 @@ export function mixHex(a: string, b: string, t: number): string {
 export const easeProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.changed) / MOTION_MS));
 export const revealProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.born) / REVEAL_MS));
 
-/** The glyph pop: a quiet dot for the first two thirds of the window, then the state's own disc lands. The dot is no state's mark on any
- * surface (queued is the open diamond, the capsule is the filled diamond), so no frame ever reads as another state. */
-export const POP_UNICODE = ['·', '·'] as const;
-export const POP_ASCII = ['.', '.'] as const;
+/** The glyph pop: a light-shade cell for the first two thirds of the window, then the state's own disc lands. The cell is no state's mark on
+ * any surface (queued is the open diamond, the capsule is the filled diamond) and not the middle dot, which is the host's own separator
+ * (`1 running · 2 done`), so no frame ever reads as another state or as a separator. ASCII: `+`. */
+export const POP_UNICODE = ['░', '░'] as const;
+export const POP_ASCII = ['+', '+'] as const;
 
 /** Whole steps of the 256-colour ease. A 24-bit ease is smooth; in 256 colours the palette is coarse, so the ease is a staircase of
  * palette colours that both Atlas's and the host's downsampler map to the same index, at least this many before the resting tone. */

@@ -40,12 +40,12 @@ test("tree: the rev 4 TODO surface, one row per plan item with its state word, t
 		{ content: "Verify: run tests", status: "abandoned" },
 		{ content: "Docs: changelog", status: "blocked" },
 	]);
-	const rows = lines.slice(2);
+	const rows = lines.slice(1);
 	expect(rows).toHaveLength(5);
 	const want: Array<[string, string]> = [["●", "trace calc module done"], ["◐", "map call paths running"], ["◇", "add mul queued"], ["■", "run tests failed"], ["▲", "changelog blocked"]];
 	rows.forEach((r, i) => expect(r.replace(/ +/g, " ").replace(/^[ ▸] ?/, "")).toBe(`${want[i]![0]} ${want[i]![1]}`));
 	expect(rows[1]!.startsWith("▸")).toBe(true);
-	expect(lines[1]).toMatch(/^progress .{16} 1 of 5 · 20%$/);
+	expect(lines.some((l) => /^progress /.test(l))).toBe(false); // one count: the ribbon's
 	expect(lines[0]).toContain("▸ TODO");
 	expect(lines[0]).toContain("1 of 5 done");
 });
@@ -191,7 +191,7 @@ test("an unchanged board is not repainted; a changed one is", () => {
 test("long item text is clipped with `...` inside the row width, and short text is kept whole", () => {
 	const long = "x".repeat(300);
 	const lines = todoTreeLines([{ content: `Research: ${long}`, status: "in_progress" }, { content: "Research: short one", status: "pending" }]).map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
-	const rows = lines.slice(2);
+	const rows = lines.slice(1);
 	expect(rows[0]).toMatch(/^▸ ◐ x+\.\.\./);
 	expect(rows[0]!.length).toBeLessThan(200);
 	expect(rows[0]).not.toContain("x".repeat(250));

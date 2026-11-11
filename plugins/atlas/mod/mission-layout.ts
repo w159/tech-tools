@@ -350,32 +350,33 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
   return [];
 }
 
-function footerLine(m: MissionModel): Line | null {
+/** The footer rows: the `checks` row and the key buttons' row, each on its own row when both show (the buttons are flush right, the band
+ * pads their gap itself). Fewer rows when only one has content; none when neither. */
+function footerLines(m: MissionModel): Line[] {
   const keys = m.keysWidth ?? 0;
-  const checks = checkRuns(m.checks, m.cols - keys - (keys ? 2 : 0), uiOf(m), keys ? m.hintWidth ?? 0 : 0);
-  if (!checks.length && !keys) return null;
-  // With keys the band pads the gap itself (flush-right buttons), so the checks stay unpadded.
-  return { runs: keys ? checks : fitRuns(checks, m.cols), keys: keys > 0 };
+  const checks = checkRuns(m.checks, m.cols, uiOf(m));
+  return [...(checks.length ? [{ runs: fitRuns(checks, m.cols) }] : []), ...(keys > 0 ? [{ runs: [], keys: true }] : [])];
 }
 
 // ---- row budget -----------------------------------------------------------------------
 
 /** Whether the message and footer stay: drop the message first, then the footer, until `need` worker rows fit. */
-function chrome(room: number, need: number, hasNote: boolean, hasFooter: boolean): [boolean, boolean] {
-  for (const [n, f] of [[hasNote, hasFooter], [false, hasFooter], [false, false]] as const) if (room - +n - +f >= need) return [n, f];
-  return [false, false];
+function chrome(room: number, need: number, hasNote: boolean, footRows: number): [boolean, number] {
+  const tries: [boolean, number][] = [[hasNote, footRows], [false, footRows], ...(footRows > 1 ? [[false, footRows - 1] as [boolean, number]] : []), [false, 0]]; // two footer rows give way to one (the key row), then none
+  for (const [n, f] of tries) if (room - +n - f >= need) return [n, f];
+  return [false, 0];
 }
 
 /** How many worker rows, message and footer rows fit `maxRows` (two head rows are fixed). Hidden workers
  * outrank the message: it gives way to the "+N more" row. */
-export function planRows(maxRows: number, nWorkers: number, hasNote: boolean, hasFooter = true): { lanes: number; ticker: boolean; footer: boolean; more: boolean } {
+export function planRows(maxRows: number, nWorkers: number, hasNote: boolean, hasFooter: boolean | number = true): { lanes: number; ticker: boolean; footer: boolean; footerRows: number; more: boolean } {
   const room = Math.max(0, maxRows - 2);
-  const [kept, footer] = chrome(room, Math.min(1, nWorkers), hasNote, hasFooter);
-  const slotsWith = room - +kept - +footer;
+  const [kept, footerRows] = chrome(room, Math.min(1, nWorkers), hasNote, Number(hasFooter));
+  const slotsWith = room - +kept - footerRows;
   const ticker = kept && !(nWorkers > slotsWith && slotsWith < 2);
-  const slots = room - +ticker - +footer;
+  const slots = room - +ticker - footerRows;
   const more = nWorkers > slots && slots >= 2;
-  return { lanes: more ? slots - 1 : Math.min(nWorkers, slots), ticker, footer, more };
+  return { lanes: more ? slots - 1 : Math.min(nWorkers, slots), ticker, footer: footerRows > 0, footerRows, more };
 }
 
 /** Workers that need attention sort first (failed, waiting), then running, thinking, queued, finished. */
@@ -389,26 +390,26 @@ function idleLines(m: MissionModel): Line[] {
   const last = lastRunRuns(m.lastRun, runStateOf(m).blocked); // `all ok` never sits under a BLOCKED header, declared or from a failing check
   const lastRow: Line[] = last.length && m.maxRows > band.length ? [{ runs: last }] : [];
   const head = [...band, ...lastRow];
-  const foot = footerLine(m);
-  const footRows = foot && m.maxRows >= head.length + 1 ? 1 : 0;
+  const foot = footerLines(m);
+  const footRows = foot.length && m.maxRows >= head.length + 1 ? Math.min(foot.length, m.maxRows - head.length) : 0;  // two footer rows when both show; the key row outlasts the checks row
   const core = m.core?.length && m.maxRows >= head.length + 1 + footRows ? [{ runs: fitRuns(m.core, m.cols) }] : [];
   const room = m.maxRows - head.length - core.length - footRows;
   const board = m.boardRows && room >= 1 ? [{ runs: [], board: Math.min(m.boardRows, room) }] : [];
-  return [...head, ...core, ...board, ...(footRows && foot ? [foot] : [])];
+  return [...head, ...core, ...board, ...foot.slice(foot.length - footRows)];
 }
 
 function runningLines(m: MissionModel): Line[] {
   const shown = m.workersInHud ? [] : byAttention(m.workers); // the HUD's Subagents block lists them; the band keeps the counts
-  const foot = footerLine(m);
+  const foot = footerLines(m);
   const band = bandLines(m);
   const boardWant = m.boardRows ?? 0;
   const board = boardWant && m.maxRows - band.length >= 4 ? Math.min(boardWant, m.maxRows - band.length - 3) : 0; // keep a worker, the message and the footer
-  const plan = planRows(m.maxRows - board - (band.length - 2), shown.length, !!m.note, !!foot);
+  const plan = planRows(m.maxRows - board - (band.length - 2), shown.length, !!m.note, foot.length);
   const c = workerCols(m);
   const head: Line[] = [...band, ...(board ? [{ runs: [], board }] : [])];
   const rows: Line[] = shown.slice(0, plan.lanes).map((w) => workerLine(w, m, c));
   const extras: Line[] = [...(plan.more ? [moreLine(shown.slice(plan.lanes), m.cols)] : []), ...(plan.ticker && m.note ? [noteLine(m.note, m.cols)] : [])];
-  const tail: Line[] = plan.footer && foot ? [foot] : [];
+  const tail: Line[] = foot.slice(foot.length - plan.footerRows); // the key row outlasts the checks row
   // Spare rows breathe: one blank under the band, then one between the workers and the message; the first to go.
   const spare = m.maxRows - (head.length - (board ? 1 : 0) + board) - rows.length - extras.length - tail.length;
   return [...head, ...(spare >= 1 ? [blank(m.cols)] : []), ...rows, ...(spare >= 2 && extras.length ? [blank(m.cols)] : []), ...extras, ...tail];

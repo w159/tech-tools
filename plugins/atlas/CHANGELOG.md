@@ -10,6 +10,13 @@
 - No false calm (B2): `last run ... all ok` never sits under a declared BLOCKED band, the team tab's lead reads `blocked` (with the band's reason) instead of `done` while a gate fails, and the core tab's `reading` line says `N workers returned, no token figures kept` instead of `returned nothing yet` once workers have returned.
 - One identity (B3): the spawn reducer records the description's `name: ` prefix as the worker's name when the Agent call gave none, and the HUD name rule drops a `type-first-three-words` guess for it.
 - Last text (B4): the HUD LAST column and the team tab `last` lines strip list markers, backticks and absolute paths (file name kept) and end on a whole word (`mod/data/lasttext.ts`); the HUD drops LAST, then MODEL, before a TASK is cut (the 18-cell TASK cap is gone).
+- Fixed (critique 6, slice C): the TODO block is one layout at every width: the ribbon holds the only count (the `progress` row is gone), every row keeps its state column down to 13 cells, and nothing opens with a blank row (`mod/hud-surface.ts`; design goldens `todo_120`, `todo_120_rich`, `todo_40` updated).
+- Fixed: the done pop no longer draws `·`, the host's own separator: it is a light-shade `░` (ASCII `+`) then the state's disc (`POP_UNICODE`, `POP_ASCII`).
+- Fixed: the band footer is two rows when both show: the `checks` row, then the key buttons and `ctrl+x tab` hint on their own row (`footerLines`; `planRows` takes a footer row count and keeps the key row longest).
+- Fixed: the side-panel tab strip never shortens a word to two letters (`rt tm ch`); where the words do not fit one row they wrap onto a second row (`stripLayout`).
+- Fixed: the channel and core tabs fill a tall pane and stop at its last row: the channel log is sized to the pane, the core sections list more rows on a tall pane and fewer when the default overflows (`mod/panel-fill.test.ts`, 30 and 40 rows).
+- Fixed: the Board pane and the transcript worker cards fill with `surfaceHex` and draw tones with `runHex(.., mode)`, so a 256-colour terminal gets index 234, never the navy 17.
+- Fixed: `bun mod/motion-demo.ts --out <dir>` follows the terminal's colour depth (`TERM=*256color` without `COLORTERM` records 256-colour frames); `--color` still wins.
 
 ## 17.7.0 - 2026-11-11
 

@@ -81,15 +81,15 @@ describe('animateRow', () => {
     const none: Ui = { ...ui, color: 'none' };
     expect(animateRow(row('running'), 'todo:a', 'running', m.ctx(1000 + 100), none).some((r) => r.fg !== undefined)).toBe(false);
   });
-  test('a row that turned done pops its glyph across the window: a quiet dot, then the disc', () => {
+  test('a row that turned done pops its glyph across the window: a light-shade cell, then the disc', () => {
     const m = new Motion(true);
     m.observe('todo', items('running'), 0);
     m.observe('todo', items('done'), 2000);
     const glyph = (dt: number): string => runsString(animateRow(row('done'), 'todo:a', 'done', m.ctx(2000 + dt), ui)).slice(2, 3);
-    expect([glyph(0), glyph(MOTION_MS * 0.45), glyph(MOTION_MS * 0.8), glyph(MOTION_MS)]).toEqual(['·', '·', '●', '●']);
+    expect([glyph(0), glyph(MOTION_MS * 0.45), glyph(MOTION_MS * 0.8), glyph(MOTION_MS)]).toEqual(['░', '░', '●', '●']);
     const a: Ui = { ...ui, ascii: true };
     const ar: Run[] = [{ t: '*', tone: 'text' }, { t: ' x', tone: 'text' }];
-    expect([0, 0.45, 0.8].map((f) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + f * MOTION_MS), a))[0])).toEqual(['.', '.', '*']);
+    expect([0, 0.45, 0.8].map((f) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + f * MOTION_MS), a))[0])).toEqual(['+', '+', '*']);
   });
   test('a new row reveals left to right over REVEAL_MS and keeps its width', () => {
     const m = new Motion(true);

@@ -1,7 +1,7 @@
 // Golden tests for transcript/cards.tsx: worker cards, wave strips, channel bubbles.
 import { expect, test } from 'claude-code/testing'
 import { fitText, textWidth } from '../theme'
-import { toneHex } from '../atlas-ui'
+import { hexTo256, hostTo256, toneHex } from '../atlas-ui'
 import { bubbleTree, notificationTree, waveTree, workerCard, goalLine, resultLine, phaseOf } from './cards'
 import type { CallLike } from './cards'
 
@@ -217,4 +217,11 @@ test('both card formats show the lead as `lead`, not its session hash name', () 
   expect(text(notificationTree('lead-a3a3ab', 'lead', 'ok', false))).not.toContain('a3a3ab')
   const c = call({ input: { subagent_type: 'atlas:explorer', name: 'lead-a3a3ab', description: 'd', prompt: PROMPT } })
   expect(text(workerCard(c, 'running')!)).not.toContain('a3a3ab')
+})
+
+test('C6: on a 256-colour terminal the card fills are stable palette colours, never the raw panel hex (navy 17 on the host)', () => {
+  const card = workerCard(call(), 'running', 60, undefined, '', { ui: { theme: 'mocha', ascii: false, color: '256' } })
+  const hexes = [...JSON.stringify(card).matchAll(/"backgroundColor":"(#[0-9a-f]{6})"/g)].map((x) => x[1]!)
+  expect(hexes.length).toBeGreaterThan(0)
+  for (const b of hexes) expect([b, hostTo256(b), hostTo256(b) === 17]).toEqual([b, hexTo256(b), false])
 })
