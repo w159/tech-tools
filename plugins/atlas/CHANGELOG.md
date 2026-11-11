@@ -37,6 +37,7 @@
 
 ### Fixed
 
+- `atlas_mux.py wait` now says plainly when `--timeout` ran out with members still running: JSON adds `timed_out` and `timeout_s` (only on timeout), and the brief reads `TIMED OUT after --timeout Xs; K still running (run wait again with a larger --timeout, or reap)` instead of `NOT finished`.
 - Theme, ASCII, colour depth and `ATLAS_BAND_RICH` now reach the band and the HUD in the live host: its hooks have no `process`, so `register.ts` reads them through `$.env` once per session (`lookOf`) and passes `ui` and `rich` down (before, only the test host's `process.env` honoured them).
 - Kit tests in `mod/register-sidebar.test.ts` follow the rev 4 band: spinner sampled at 100 ms (the old 2 s samples aliased with the 4-frame cycle), the starved and docked cases assert the fold to one summary row and the full tier, new cases for counts beside the HUD, idle, `ATLAS_BAND_RICH`, `ATLAS_ASCII`, the live rail and the eased gauge; `mod/band-polish.test.ts` covers the pure parts.
 - L21: the side panel tab strip no longer garbles at 110 columns: the host draws a hotkey button as `k: label`, so the strip budgets 3 cells per tab and wraps onto a second row (with its own rule) instead of overflowing the pane. L17: the route tab lists the plan and the running workers instead of `nothing planned` while work runs. L16: the core tab shows `ran 3 / planned 1` with `■ drift` (the data fix f4e6c29c already holds in the renderer; tested). The agents row of the route tab wraps instead of overflowing a narrow pane.

@@ -2820,6 +2820,12 @@ class WaitKillOnTimeoutTests(unittest.TestCase):
         self.assertFalse([c for c in calls if c[0] == "kill-session"])
         self.assertNotIn("killed_on_timeout", out)
 
+    def test_timeout_json_carries_timed_out_and_timeout_s(self):
+        _, out, _ = self.run_wait()
+        self.assertEqual("timeout", out["outcome"])
+        self.assertIs(True, out["timed_out"])
+        self.assertEqual(0.2, out["timeout_s"])
+
     def test_flag_kills_the_team_session_on_timeout(self):
         code, out, calls = self.run_wait(["--kill-on-timeout"])
         self.assertEqual(1, code)
@@ -4348,6 +4354,18 @@ class BriefOutputTests(unittest.TestCase):
         self.assertEqual(["a", "b"], [m["name"] for m in json.loads(full)["members"]])
         self.assertLess(len(out), len(full))
 
+    def test_wait_brief_says_timed_out_with_running_count(self):
+        import atlas_mux
+
+        out = atlas_mux._brief_wait({"ok": False, "outcome": "timeout", "timed_out": True, "timeout_s": 600.0, "team_id": "t", "elapsed_s": 600.1, "notes_worker_to_worker": 0, "members": [
+            {"name": "a", "exit": 0, "dead_without_report": False, "duration_s": 5.0, "last_status": None},
+            {"name": "b", "exit": None, "dead_without_report": False, "duration_s": None, "last_status": None},
+        ]})
+        self.assertEqual(
+            "team t: 1/2 finished, TIMED OUT after --timeout 600.0s; 1 still running (run wait again with a larger --timeout, or reap)",
+            out.splitlines()[0],
+        )
+
     def test_wait_names_dead_and_never_launched_members(self):
         import atlas_mux
 
@@ -4451,6 +4469,12 @@ class ReliabilityBaselineTests(unittest.TestCase):
         self.assertEqual("failed", out["outcome"])
         self.assertEqual(1, code)
         self.assertEqual("agent not found", out["members"][0]["failure"])
+
+    def test_wait_omits_timed_out_on_a_normal_finish(self):
+        _, out = self._wait([{"owner": "a", "ts": time.time(), "text": "STATUS: DONE\nexit 0"}])
+        self.assertEqual("done", out["outcome"])
+        self.assertNotIn("timed_out", out)
+        self.assertNotIn("timeout_s", out)
 
     def test_d3_wait_is_ok_when_every_member_exited_zero(self):
         code, out = self._wait([{"owner": "a", "ts": time.time(), "text": "STATUS: DONE\nexit 0"}])

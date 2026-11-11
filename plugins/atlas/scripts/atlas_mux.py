@@ -253,7 +253,11 @@ def _brief_spawn_team(out: dict) -> str:
 def _brief_wait(out: dict) -> str:
     rows = out["members"]
     done = sum(1 for m in rows if m["exit"] is not None)
-    lines = [f"team {out['team_id']}: {done}/{len(rows)} finished after {out['elapsed_s']}s" + ("" if out["ok"] else (", FAILED" if out.get("outcome") == "failed" else ", NOT finished"))]
+    if out.get("outcome") == "timeout":
+        running = sum(1 for m in rows if m["exit"] is None and not m["dead_without_report"])
+        lines = [f"team {out['team_id']}: {done}/{len(rows)} finished, TIMED OUT after --timeout {out.get('timeout_s')}s; {running} still running (run wait again with a larger --timeout, or reap)"]
+    else:
+        lines = [f"team {out['team_id']}: {done}/{len(rows)} finished after {out['elapsed_s']}s" + ("" if out["ok"] else (", FAILED" if out.get("outcome") == "failed" else ", NOT finished"))]
     for m in rows:
         if m.get("never_launched"):
             state = f"never launched: {m.get('launch_error')}"
@@ -2662,6 +2666,7 @@ def cmd_wait(args) -> int:
             "notes_worker_to_worker": w2w,
             "elapsed_s": round(time.time() - t0, 1),
             **({"killed_on_timeout": True} if killed_on_timeout else {}),
+            **({"timed_out": True, "timeout_s": args.timeout} if timed_out else {}),
         },
         0 if ok else 1,
         _brief_for(args, _brief_wait),
