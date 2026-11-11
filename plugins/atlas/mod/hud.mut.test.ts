@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { worldHudAgents, worldPhases, worldPlan } from '../contracts/hud-world';
 import { hudRows, reclaimBlanks, segmentOf, todoModel, type HudInput } from './hud';
-import type { Ui } from './atlas-ui';
+import { hostEnv, type Ui } from './atlas-ui';
 import type { Segment } from './runs';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -24,19 +24,21 @@ describe('hud surfaces: defaults', () => {
   });
   test('rich unset follows ATLAS_BAND_RICH, an explicit rich wins over it', () => {
     const draw = (rich?: boolean) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, now: 0, ...(rich === undefined ? {} : { rich }) }));
-    const saved = process.env.ATLAS_BAND_RICH;
+    const env = hostEnv() as Record<string, string | undefined>; // the live process.env, mutable for this test
+    const saved = env.ATLAS_BAND_RICH;
     try {
-      delete process.env.ATLAS_BAND_RICH;
+      delete env.ATLAS_BAND_RICH;
       const plain = draw();
       const rich = draw(true);
       expect(rich).not.toEqual(plain);
-      process.env.ATLAS_BAND_RICH = '1';
-      expect(draw()).toEqual(rich);
+      env.ATLAS_BAND_RICH = '1';
+      // Under claude plugin test the env write is not visible to hostEnv(), so this check runs only where it is.
+      if (hostEnv().ATLAS_BAND_RICH === '1') expect(draw()).toEqual(rich);
       expect(draw(false)).toEqual(plain);
       expect(draw(true)).toEqual(rich);
     } finally {
-      if (saved === undefined) delete process.env.ATLAS_BAND_RICH;
-      else process.env.ATLAS_BAND_RICH = saved;
+      if (saved === undefined) delete env.ATLAS_BAND_RICH;
+      else env.ATLAS_BAND_RICH = saved;
     }
   });
 });

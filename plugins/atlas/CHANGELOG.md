@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Live data path (`mod/register.ts`, `mod/notify.ts`): rebuild is serialized (one in flight, queued requests share one follow-up) and every snapshot carries a monotonic `seq` that notify and the snapshot write ignore when older, so a finish toast fires once; data-file changes reach the screen within ~100 ms through `fs.watch` when the engine offers it, with a 500 ms stat poll (was 1500 ms) as the fallback.
+- Live data path (`mod/register.ts`, `mod/notify.ts`): rebuild is serialized (one in flight, queued requests share one follow-up) and every snapshot carries a monotonic `seq` that notify and the snapshot write ignore when older, so a finish toast fires once; data-file changes are polled every 500 ms (was 1500 ms) by a cheap stat fingerprint, and a rebuild runs only when it moved.
 - Tests: new `*.mut.test.ts` files pin the seed-1105 mutation survivors of band, board-model, hud, mission-layout, sidebar and panel-layout (no source change); the equivalent mutants are explained in the test headers.
 - Added: real motion on state changes (`mod/motion.ts`): a TODO, SUBAGENTS, Board, side panel route or gate row, or a band count that changes state is drawn in its new accent, brightened, easing back to rest over 900 ms (a row turning done pops open diamond, filled diamond, disc); a new row reveals left to right over 300 ms. One pure model shared by Claude Code and omp (`Run.fg` override, `runHex` in every painter); the frame timer runs only while a transition is open, the end is the resting render byte for byte, and `ATLAS_REDUCED_MOTION=1` / `NO_COLOR` draw the resting render only. `bun mod/motion-demo.ts --out <dir>` writes the frames of a running -> done TODO and agent row as `.ans` files.
 

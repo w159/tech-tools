@@ -163,7 +163,7 @@ describe('MotionDriver: idle schedules nothing; a change runs one frame timer an
     return { t, d };
   }
   const feedOf = (state: string) => () => ({ todo: items(state) });
-  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const settle = () => (async () => { for (let i = 0; i < 50; i++) await Promise.resolve(); })();
 
   test('idle: a first sight and unchanged snapshots schedule no timer and redraw nothing', async () => {
     const { t, d } = rig();

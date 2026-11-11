@@ -1,5 +1,5 @@
 // Live data path (round 2, slice A): rebuild() is serialized and stamps a monotonic `seq`; a write to the data files reaches the
-// snapshot within ~100 ms of the file event (fs.watch when the engine has one) and a 500 ms stat poll is the fallback; an idle
+// snapshot on the next 500 ms stat-poll tick (the engine fs has no watch); an idle
 // session schedules no rebuild. Recording engine stub with an injected clock, no node: imports.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
@@ -26,13 +26,12 @@ const items = (n: number): string => JSON.stringify({ items: Array.from({ length
 
 type Timer = { at: number; fn: () => void; live: boolean };
 
-function stubEngine(opts: { watch: boolean }) {
+function stubEngine() {
   const files: Record<string, string> = { [`${ROOT}/.git`]: '', [TODOS]: items(1) };
   const mtimes: Record<string, number> = {};
   let now = 1_910_000_000_000;
   const every: { ms: number; fn: () => void }[] = [];
   const afters: Timer[] = [];
-  const watchers: { path: string; fn: () => void }[] = [];
   const rec = { reads: [] as string[], listCalls: 0, running: 0, maxRunning: 0, toasts: [] as string[] };
   let listGate: Promise<void> | null = null;
   const $ = {
@@ -51,7 +50,6 @@ function stubEngine(opts: { watch: boolean }) {
       stat: async (p: string) => { if (!(p in files)) throw new Error('missing'); return { size: files[p]!.length, mtimeMs: mtimes[p] ?? 0 }; },
       exists: async (p: string) => p in files || Object.keys(files).some((f) => f.startsWith(`${p}/`)),
       list: async (dir: string) => [...new Set(Object.keys(files).filter((p) => p.startsWith(`${dir}/`)).map((p) => p.slice(dir.length + 1).split('/')[0]!))].map((name) => ({ name })),
-      ...(opts.watch ? { watch: (path: string, fn: () => void) => { const w = { path, fn }; watchers.push(w); return { cancel() { watchers.splice(watchers.indexOf(w), 1); } }; } } : {}),
     },
     agent: {
       list: async () => {
@@ -83,7 +81,7 @@ function stubEngine(opts: { watch: boolean }) {
   };
   return {
     $: $ as unknown as EngineInterface,
-    files, mtimes, every, watchers, rec,
+    files, mtimes, every, rec,
     holdList: () => { let open!: () => void; listGate = new Promise<void>((r) => { open = r; }); return () => { listGate = null; open(); }; },
     write: (p: string, text: string) => { files[p] = text; mtimes[p] = (mtimes[p] ?? 0) + 1; },
     advance,
@@ -104,7 +102,7 @@ async function boot(s: ReturnType<typeof stubEngine>) {
 
 describe('rebuild is serialized and stamped', () => {
   test('overlapping rebuilds never run together; a pending request coalesces into one follow-up; seq only grows', async () => {
-    const s = stubEngine({ watch: false });
+    const s = stubEngine();
     await boot(s);
     const base = s.rec.listCalls;
     const seq0 = (await snapOf(s)).seq;
@@ -124,34 +122,19 @@ describe('rebuild is serialized and stamped', () => {
   });
 });
 
-describe('event driven updates', () => {
-  test('a todos.json write is on screen within 300 ms of the file event (fake watcher, injected clock)', async () => {
-    const s = stubEngine({ watch: true });
+describe('polled updates', () => {
+  test('a todos.json fingerprint change is picked up by the next rebuildTick', async () => {
+    const s = stubEngine();
     await boot(s);
     expect((await snapOf(s)).todos).toHaveLength(1);
-    expect(s.watchers.map((w) => w.path)).toContain(RUN);
     s.write(TODOS, items(3));
-    const t0 = 0;
-    s.watchers[0]!.fn(); // the file event
+    await rebuildTick(s.$);
     await settle();
-    expect((await snapOf(s)).todos).toHaveLength(1); // debounced: nothing yet
-    await s.advance(100);
     expect((await snapOf(s)).todos).toHaveLength(3);
-    expect(100 - t0).toBeLessThanOrEqual(300);
   });
 
-  test('a burst of events inside the window is one rebuild', async () => {
-    const s = stubEngine({ watch: true });
-    await boot(s);
-    const before = s.rec.reads.filter((p) => p === TODOS).length;
-    s.write(TODOS, items(2));
-    for (let i = 0; i < 5; i++) s.watchers[0]!.fn();
-    await s.advance(150);
-    expect(s.rec.reads.filter((p) => p === TODOS).length - before).toBe(1);
-  });
-
-  test('without fs.watch the stat poll runs at most every 500 ms and still picks the write up', async () => {
-    const s = stubEngine({ watch: false });
+  test('the registered poll runs at most every 500 ms and picks the write up', async () => {
+    const s = stubEngine();
     await boot(s);
     const poll = s.every.find((e) => e.ms <= 500);
     expect(poll).toBeDefined();
@@ -162,7 +145,7 @@ describe('event driven updates', () => {
   });
 
   test('an idle session schedules no rebuild, and one fingerprint check is under 2 ms', async () => {
-    const s = stubEngine({ watch: true });
+    const s = stubEngine();
     await boot(s);
     expect(s.every.find((e) => e.ms <= 500)).toBeDefined();
     await rebuildTick(s.$); // the first tick after boot records the fingerprint

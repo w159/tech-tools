@@ -35,8 +35,7 @@ import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux
 import type { LiveSnapshot, TeamTool } from './orchestra-types';
 import { descriptionName, EMPTY_ORCH, onComplete, parseWt, pushCall, type SpawnMeta, type WtRow } from './data/orchestration';
 
-const POLL_MS = 500; // the fallback poll of the cheap stat fingerprint; a rebuild runs only when it moved
-const WATCH_DEBOUNCE_MS = 100; // file events inside this window share one fingerprint check
+const POLL_MS = 500; // the poll of the cheap stat fingerprint; a rebuild runs only when it moved
 const WT_MS = 5000;
 const MUX_MS = 5000;
 const HERDR_MS = 5000;
@@ -118,8 +117,6 @@ let lastFingerprint = '';
 let rebuildRun: Promise<void> | null = null; // the rebuild in flight (see rebuild)
 let rebuildFollow: Promise<void> | null = null; // the one queued run behind it
 let rebuildSeq = 0; // stamped on each snapshot; never reset, so a re-boot's snapshots stay newer than any late write
-let watchHandles: { cancel(): void }[] = []; // fs.watch subscriptions of this session's data dir
-let watchTimer: { cancel(): void } | null = null; // the debounce for file events
 let wtAt = -Infinity; // last atlas_wt.py status run (ms clock)
 let wtRows: WtRow[] = [];
 let lastRailPhase: string | null = null; // last phase the band lit, kept through a blocked reply
@@ -523,34 +520,7 @@ export async function dockTick($: EngineInterface): Promise<void> {
 	void $.ui.open(PANE_DOCK).then(toastUnplaced($));
 }
 
-/** Event-driven update: watch the dirs the fingerprint stats (fs.watch, when the engine has one) and run a fingerprint check
- * WATCH_DEBOUNCE_MS after the first event of a burst. Without fs.watch the POLL_MS tick is the only path. Never throws. */
-function armWatch($: EngineInterface, root: string): void {
-	for (const h of watchHandles) h.cancel();
-	watchHandles = [];
-	watchTimer?.cancel();
-	watchTimer = null;
-	const fs = $.fs as unknown as { watch?: (path: string, onChange: () => void) => { cancel?: () => void; close?: () => void } | undefined };
-	if (typeof fs.watch !== 'function' || root === '') return;
-	const base = `${root.replace(/\/+$/, '')}/.atlas/.run`;
-	const onChange = (): void => {
-		if (watchTimer !== null) return;
-		watchTimer = $.clock.after(WATCH_DEBOUNCE_MS, () => {
-			watchTimer = null;
-			void rebuildTick($);
-		});
-	};
-	for (const dir of [base, `${base}/board`, `${base}/crew`]) {
-		try {
-			const h = fs.watch(dir, onChange);
-			if (h) watchHandles.push({ cancel: () => (h.cancel ?? h.close)?.call(h) });
-		} catch {
-			// a dir that does not exist yet: the poll covers it
-		}
-	}
-}
-
-/** POLL_MS tick and watcher callback: rebuild only when the data files moved. */
+/** POLL_MS tick: rebuild only when the data files moved. */
 export async function rebuildTick($: EngineInterface): Promise<void> {
 	await dockTick($);
 	if (builder === null) return;
@@ -944,7 +914,6 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					void runGates($);
 				});
 			}
-			armWatch($, rootOf(await read($, snapshotState)));
 			void runGates($);
 			void coreTick($);
 			// The tick only runs while a worker is live, so an idle session redraws nothing.
@@ -1149,10 +1118,6 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		tickTimer = null;
 		easeTimer?.cancel();
 		easeTimer = null;
-		for (const h of watchHandles) h.cancel();
-		watchHandles = [];
-		watchTimer?.cancel();
-		watchTimer = null;
 		return next(e);
 	});
 
