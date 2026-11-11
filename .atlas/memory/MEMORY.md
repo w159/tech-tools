@@ -35,3 +35,5 @@ Assumption to avoid (tech-tools): **Files two slices both name (A = implementer-
 Assumption to avoid (tech-tools): , B and C map to implementer, implementer-2 and implementer-3 in the task file. I assumed that implementer-c801, implementer-ff63 and implementer-116d follow the same order.
 §
 Assumption to avoid (tech-tools): I did not check which worker holds slice C; I assumed implementer-4518.
+§
+Assumption to avoid (tech-tools): letter)`. DELIVERABLE (this is the board note, for the lead to post or relay) I assumed the slice-to-worker mapping from the dispatch order: A = implementer-ec07, B = implementer-059e, C =...

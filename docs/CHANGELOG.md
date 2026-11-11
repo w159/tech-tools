@@ -1,5 +1,20 @@
 # Changelog
 
+## atlas 17.12.0 - 2026-11-11
+
+- atlas 17.12.0: fixes for hostile critiques 12 and 13 (wave 14). Also in this release:
+  - The band and the side panel count `n/m green` the same way (`2/3 green`), and the band reads `thinking` from the moment a prompt is sent, never `idle`.
+  - At 110 columns the host docks an unasked pane only from 144 columns; the band uses one form from 90 to 119 columns; route titles keep their text and drop a doubled owner.
+  - One routing verdict on the band, the gates tab and the core tab; the band no longer prints a zero it cannot explain, and `1 dispatch open` is not repeated beside `1 running`.
+  - The channel tab shows the real channel name again, a worker's card duration matches the team tab, a shell call reads `run atlas_todo.py` in SUBAGENTS, and a struck name in the panel strikes the name only.
+  - The header chip is drawn from a cached pattern, routine toasts come one at a time, and the last beat of a ramp is held bold.
+
+  Live, 3 runs per width on build 61858003: TODO 81.3% (150 cols) and 82.5% (110); band 94.6% and 78.1%; workers on any surface 93.6% and 92.8%; side panel gates tab back to 100%; critic 6.3 (critique 14). The 3x bar is met on 14 of 19 lines. Not met: per-surface never-shown (2 lines), first-appearance lag (2 lines) and the design critic (target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.
+
+## marketplace 5.17.0 - 2026-11-11
+
+- marketplace 5.17.0: atlas 17.12.0. armada and programmer are unchanged.
+
 ## atlas 17.11.0 - 2026-11-11
 
 - atlas 17.11.0: fixes for hostile critiques 10 and 11 (waves 12 and 13). Also in this release:

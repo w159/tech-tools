@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 17.12.0 - 2026-11-11
+
 - Band checks row counts `n/m green` (`2/3 green`) like the panel and gates tab, replacing `2 of 3 green` (critiques 12 and 13: one count format); band goldens and tests updated.
 - Regression fix (critique 13): the channel tab head keeps `this run` and also shows the real id dim (`this run · #lc-opl0e60i`), so the channel name is visible again (live 6b7f637d `channel_name_shown` false in all six runs).
 - Regression fix (critique 13): an ended worker's card duration reads the same observed run the team tab prints (startedAt to stamped finish, one rounding), not the host `duration_ms` on another clock (15s tab against 16s card); the host figure stays the fallback while the mod has not seen the worker end.

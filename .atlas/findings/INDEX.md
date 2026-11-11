@@ -65,6 +65,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
 | 2026-11-11 | wave5-verify | verified | Wave 5 live truth and side panel fixes verified; A2 kit regression fixed by updating the stillness test | [2026-11-11_wave5-verify.md](2026-11-11_wave5-verify.md) |
+| 2026-11-11 | wave13-subagents-reveal | rejected | Wave 13 claim (new SUBAGENTS row on first poll, full state) holds for timing and state word only; row is incomplete mid-reveal | [2026-11-11_wave13-subagents-reveal.md](2026-11-11_wave13-subagents-reveal.md) |
 | 2026-11-11 | wave12-phase-sync | rejected | wave 12 HUD/route-tab same glyph+colour claim refuted in live frames f0050/60/61/63 (TODO rows) | [2026-11-11_wave12-phase-sync.md](2026-11-11_wave12-phase-sync.md) |
 | 2026-11-11 | vb-L2-L11-R5-S1-L19 | verified | L2, L11, R5, S1, L19 tests fail on old code and pass on new | [2026-11-11_vb-l2-l11-r5-s1-l19.md](2026-11-11_vb-l2-l11-r5-s1-l19.md) |
 | 2026-11-11 | vb-L13 | rejected | L13 not fixed: HUD running vs band queued for same worker | [2026-11-11_vb-l13.md](2026-11-11_vb-l13.md) |
