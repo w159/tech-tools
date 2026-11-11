@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 17.7.0 - 2026-11-11
+
 - Fixed: 256-colour painting no longer burns the host CPU: `fitHex`, `surfaceHex` and `stable256` memoise on their arguments and the stable palette is built once as {hex, rgb} records plus a hex Set, so a frame costs map lookups instead of thousands of hex builds; results are byte-identical (`mod/paint-cost.test.ts`: 4000-paint workload 6038 ms -> 27 ms).
 - Fixed: the 500 ms rebuild tick no longer waits on a gate run: `gatesPoll` starts `runGates` without awaiting it (the `gatesBusy` guard and the 30 s backstop stay), so live HUD and todo rows update at the poll rate again; `GATES_MIN_MS` is 5 s so a live run does not spawn python every 2 s (`mod/register-gates-nowait.test.ts`).
 - Fixed: every painter (HUD `segmentOf`, band, side pane, omp panel, HUD, mission band and todo board) draws `runHex`/`surfaceHex`/`paintAnsi` tones, so a 256-colour terminal gets the stable palette steps and the `48;5;234` panel fill instead of the host's navy `48;5;17`; HUD and Board spinners take `spinFrameOf(now, id)`, so one agent shows one frame on both (`mod/paint-256.test.ts`, `omp/paint-256.test.ts`).

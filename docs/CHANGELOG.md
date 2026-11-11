@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.7.0 - 2026-11-11
+
+- atlas 17.7.0: round 2 follow-up. The band reads BLOCKED with its reason, last-run worker counts come from real dispatches, agent names show whole and the lead reads `lead`, the side panel tallies gates and fills its height, 256-colour terminals get stable palette colours (no navy fill on the HUD), one spinner clock, gate checks re-run within 5 s of a gate change without blocking the poll, and a palette cache that removes a CPU regression found in live runs (4000 256-colour paints 6038 ms to 27 ms). Measured against 17.5.0 with the real `claude` CLI in tmux, 3 runs per width: TODO visibility 22.5% to 97.6% (150 cols) and 23.1% to 97.5% (110), running workers on any surface 65.4% to 91.9% and 26.7% to 90.6%, events never shown on any surface 10 of 22 to 0 of 66, mutation survivors 51 of 300 to 13 of 320. The 3x (200%) bar is met on 13 of 18 targeted lines; the per-surface never-shown count, first-appearance lag and the design critic (3.5 to 5.7, target 8.2) are not met. Details in docs/audits/2026-11-11_atlas-round2.md.
+
+## marketplace 5.12.0 - 2026-11-11
+
+- marketplace 5.12.0: atlas 17.7.0. armada and programmer are unchanged.
+
 ## atlas 17.6.0 - 2026-11-11
 
 - atlas 17.6.0: round 2 of the terminal UI and reliability work. One ATLAS visual system (tokens, glyphs, gauges, one count order, one phase rail) for the band, the HUD TODO and SUBAGENTS blocks, the Board and the side panel, shared by Claude Code `mod/` and omp `omp/`. Live truth fixes from four adversarial reviews: TODO rows fill the available height, the band header reads blocked beside a blocked gate or failing check, readable agent names instead of hash ids, the route row counts agents that ran, toasts built from structured data. Reliability fixes with failing-first tests: tripwire accepts DELIVERABLE(S), read-profile workers can post board notes, `atlas_mux.py wait` reports member failures and timeouts, workers get `--plugin-dir` when atlas is not installed, doctor no longer headlines warnings as healthy, read-only audit dispatches are not team-gated. Measured against 17.5.0 with the real `claude` CLI in tmux at 150 and 110 columns: TODO visibility 22.5% to 97.8%, band count 23.0% to 92.7%, route tab 0% to 100%, gates tab 66.7% to 100%; mutation kill 83.0% to 91.3%; design critic 3.5 to 6.1. The 3x (200%) bar is met on 9 of 18 targeted lines, not all; misses are listed in docs/audits/2026-11-11_atlas-round2.md. Details in plugins/atlas/CHANGELOG.md.
