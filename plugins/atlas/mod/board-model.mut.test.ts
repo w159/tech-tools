@@ -1,5 +1,9 @@
 // Mutation-kill tests for board-model.ts (seed 1105 survivors): the `ran` and elapsed guards of toBoardRow, the compact label
 // tone, and the compact state column's right-hand bound.
+//
+// Equivalent (seed 1105, third pass), not tested: labelCut `at > 0` -> `at > 1` (board-model.ts:146). The scan only runs for a label wider than
+// `w` (the `cells(l) <= w` return above), and cells() is the sum of per-code-point widths (theme.ts textWidth), so when the scan reaches at = 1 the
+// check `used + cells(cs[0]) <= w - 3` is the whole label's width <= w - 3, which is false: the loop stops there under either bound.
 import { describe, expect, test } from 'claude-code/testing';
 import type { Ui } from './atlas-ui';
 import { blockedCount, boardBody, boardRow, toBoardRow, type BoardRow } from './board-model';
@@ -75,6 +79,18 @@ describe('boardBody: the compact state column stops one cell short of the room t
     const rows: BoardRow[] = [{ label: 'x'.repeat(70), state: 'running', owner: '', detail: '' }];
     const line = boardBody(rows, { cols: 60, ui })[0]!.runs.map((x) => x.t).join('');
     expect(line.indexOf('running')).toBe(60 - 7 - 1);
+  });
+});
+
+describe('boardRow: the elapsed gauge needs its whole width', () => {
+  // 600000 s is `10000:00`, so the tail `10000:00 of 10000:00` is 20 cells and the gauge row needs 8 + 10 + 1 + 20 = 39 of the room
+  // left of the detail column (cols - 62 - 1).
+  const nice: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  const row: BoardRow = { label: 'x', state: 'running', owner: '', detail: '', elapsed: { secs: 600000, of: 600000 } };
+  const drawsGauge = (cols: number): boolean => boardRow(row, false, { cols, ui: nice, rich: true }).some((x) => x.t === 'elapsed ');
+  test('exactly 39 cells of room draw the gauge, one fewer draws plain text', () => {
+    expect(drawsGauge(102)).toBe(true);
+    expect(drawsGauge(101)).toBe(false);
   });
 });
 

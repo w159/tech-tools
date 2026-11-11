@@ -1,5 +1,9 @@
 // Mutation-kill tests for mission-layout.ts (seed 1105 survivors): each standard form is the one that fits (its gauge and noun flags),
 // the rich band's idle and blocked words are bold, and the idle board slot gets exactly the rows the head, core and footer leave.
+//
+// Equivalent (seed 1105, third pass), not tested: spread `-` -> `+` (mission-layout.ts:101). `spread` is a module-private function with no caller:
+// `grep -rn "spread(" plugins/atlas/mod plugins/atlas/omp` finds only its definition (mission-layout.ts:100), and it is not exported or passed
+// as a value, so no input reaches it. (Dead code; deleting it is a behaviour-neutral cleanup outside this tests-only pass.)
 import { describe, expect, test } from 'claude-code/testing';
 import { worldModel } from '../contracts/band-world';
 import type { Ui } from './atlas-ui';

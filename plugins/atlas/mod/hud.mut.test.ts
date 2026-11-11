@@ -1,6 +1,9 @@
 // Mutation-kill tests for hud.ts (seed 1105 survivors): the tick and rich defaults of surfaces(), and the bold and strike flags
 // of segmentOf.
 //
+// Equivalent (seed 1105, third pass), not tested: hudMotionItems `cols: 120` -> `121` (hud.ts:159). It reads only `surfaces().s`, the todo and agent
+// rows, which are built from the input, `now` and the ui and never from a column count (hud.ts:136-150); `cols` lands only in `.o`, which it drops.
+//
 // Equivalent mutants, not tested:
 //  - hud-surface.ts:33 maxLen reduce seed `0` -> `1`: it differs only when every string is empty, and both callers floor the result
 //    (line 91: max(26|30, maxLen + 5); line 133: max(20, min(maxLen + 1, 29))), so 0 and 1 give the same column.

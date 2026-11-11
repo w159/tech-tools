@@ -44,3 +44,20 @@ describe('workerOf: the task tag', () => {
     expect(taskOf(undefined)).toBeUndefined();
   });
 });
+
+describe('workerOf: the elapsed seconds', () => {
+  test('elapsed time is the snapshot clock minus the start, in thousandths of a second rounded', () => {
+    const snap = world([sq('w')]);
+    snap.activity.w = { ...act, startedAt: NOW - 1_000_000 } as never;
+    const m = ({ snapshot: snap, gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns: 80, rows: 40, tick: 0 }) as unknown as SidebarModel;
+    expect(panelModelOf(m, ui, 80).workers.find((w) => w.name === 'w')!.secs).toBe(1000);
+  });
+});
+
+describe('panelModelOf: the default width', () => {
+  const model = (columns: number): SidebarModel => ({ snapshot: world([]), gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns, rows: 40, tick: 0 }) as unknown as SidebarModel;
+  test('is one column less than the pane, and never under ten', () => {
+    expect(panelModelOf(model(80), ui).cols).toBe(79);
+    expect(panelModelOf(model(5), ui).cols).toBe(10);
+  });
+});
