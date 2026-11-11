@@ -28,6 +28,7 @@ import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
 import { openGateCount } from "../mod/gates";
 import type { CoreModel } from "../mod/data/core";
+import { ranWorkers } from "../mod/data/runstate";
 import { ownTodos, planCounts, planPhase, settleDispatch, type Outcome } from "../mod/data/todos";
 
 export const WIDGET_KEY = "atlas-channel";
@@ -145,12 +146,14 @@ function channelMembers(root: string, channel: string): RegMember[] | undefined 
 
 const num = (v: unknown) => (typeof v === "number" ? v : undefined);
 
-/** The wave so far from registry rows: member count, first join to last finish (now while running), non-zero exits. */
-function waveOf(rows: RegMember[], nowSecs: number): IdleWave {
+/** The wave so far from registry rows: workers that ran, first join to last finish (now while running), non-zero exits.
+ * Same count rule as the band's `last run` (mod/data/runstate.ts ranWorkers): the burst's names plus every dispatch row's
+ * owner, since a finished worker drops out of the registry. */
+function waveOf(rows: RegMember[], nowSecs: number, owners: readonly string[] = []): IdleWave {
 	const joined = rows.map(m => num(m.joined)).filter((t): t is number => t !== undefined);
 	const ends = rows.map(m => num(m.ended_at) ?? nowSecs);
 	const secs = joined.length ? Math.max(0, Math.round(Math.max(...ends) - Math.min(...joined))) : undefined;
-	return { workers: rows.length, secs, failed: rows.filter(m => (num(m.exit_code) ?? 0) !== 0).length };
+	return { workers: ranWorkers(rows.flatMap(m => (typeof m.name === "string" ? [m.name] : [])), owners).length, secs, failed: rows.filter(m => (num(m.exit_code) ?? 0) !== 0).length };
 }
 
 const maxSeq = (notes: Note[]) => notes.reduce((m, n) => Math.max(m, n.seq ?? 0), 0);
@@ -585,9 +588,12 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	const header = deps.headerPhase ?? (() => undefined);
 	const trackWave = (i: ChannelOpenInfo & { root: string }) => {
 		const rows = channelMembers(i.root, i.channel) ?? [];
-		if (rows.length) wave = { channel: i.channel, ...waveOf(rows, now() / 1000) };
+		if (rows.length) wave = { channel: i.channel, ...waveOf(rows, now() / 1000, dispatchOwners(i)) };
 	};
-	const lastWave = (i: ChannelOpenInfo): IdleWave => (wave?.channel === i.channel ? wave : { workers: i.members.length, failed: 0 });
+	/** Owners of this session's dispatch rows: the band's other input to `last run` (band.tsx lastRun). */
+	const dispatchOwners = (i: ChannelOpenInfo & { root: string }): string[] =>
+		sessionTodos(i.root, i.sessionId).flatMap(t => (t.origin === "dispatch" && typeof t.owner === "string" && t.owner ? [t.owner] : []));
+	const lastWave = (i: ChannelOpenInfo & { root: string }): IdleWave => (wave?.channel === i.channel ? wave : { workers: ranWorkers(i.members, dispatchOwners(i)).length, failed: 0 });
 	/** Track the wave from the registry; once no lane is left, the idle panel shows it (or just the roster size). */
 	const idleWave = (i: ChannelOpenInfo & { root: string }, lanes: number): IdleWave | undefined => {
 		trackWave(i);

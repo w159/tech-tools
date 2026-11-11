@@ -70,7 +70,7 @@ test("task returns first (async spawn): widget keeps polling, shows late notes, 
 	const { calls, ui, timers, view } = harness();
 	f.note("lead-abc", "A", "scope: do the thing");
 	view.open(ui, { channel: CHAN, members: ["A", "B"], cwd: f.root }); // the task tool call itself returns right after this
-	expect(plain(calls[0])).toContain("lead-abc to A   scope: do the thing");
+	expect(plain(calls[0])).toContain("lead-abc to A   sent a message");
 	expect(plain(calls[0])).toMatch(lane("A"));
 	expect(timers.iv).toBeDefined();
 
@@ -82,7 +82,7 @@ test("task returns first (async spawn): widget keeps polling, shows late notes, 
 	f.note("A", "B", "touching shared.ts"); // child <-> child, written after the tool ended
 	f.note("B", "lead-abc", "start: reading it"); // child -> lead
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("B to lead-abc   start: reading it"); // one message row: the newest
+	expect(plain(calls.at(-1))).toContain("B to lead-abc   sent a message"); // one message row: the newest
 	expect(plain(calls.at(-1))).not.toContain("touching shared.ts");
 
 	f.finish(["A"]);
@@ -291,7 +291,7 @@ test("widget never exceeds omp's 10-line cap with 6 workers and 8 notes; the hea
 	expect(calls[0]!.length).toBeLessThanOrEqual(10);
 	expect(plain([calls[0]![0]!])).toContain("ATLAS");
 	expect(plain([calls[0]![0]!])).toContain("of 1");
-	expect(plain([calls[0]!.at(-1)!])).toContain("a to all   n7"); // no checks reported yet: the message row closes the panel
+	expect(plain([calls[0]!.at(-1)!])).toContain("a to all   sent a message"); // no checks reported yet: the message row closes the panel (facts only, never the text)
 	view.stop();
 });
 
@@ -328,7 +328,7 @@ test("panel: the band, workers in words, the newest message and the checks foote
 	expect(p[3]).toMatch(/^ ◓ implementer-band {2}implementer {2}thinking {3}last Edit mod\/band\.tsx +48s $/);
 	expect(p[4]).toMatch(/^ ◇ verifier-ui {7}verifier {5}queued +12s $/);
 	expect(p[5]).toBe(" ".repeat(120));
-	expect(p[6]).toMatch(/^ implementer-band to all {3}band\.tsx compiles +$/);
+	expect(p[6]).toMatch(/^ implementer-band to all {3}sent a message +$/);
 	expect(p[7]).toBe(" checks  ■ routing".padEnd(120)); // groups with no lines yet are not shown
 	expect(lines).toHaveLength(8);
 	expect(lines[7]).toContain("38;2;243;139;168"); // bad
@@ -453,7 +453,7 @@ test("team lanes: last tool_use from each worker's stream-json log, mcp prefix s
 	expect(out).toMatch(/audit-1 .*thinking {3}last Bash echo hi/); // answered: between calls
 	expect(out).toMatch(/ctx_search\s+where is the widget/);
 	expect(out).not.toContain("mcp__");
-	expect(out).toMatch(/◐ audit-3 .*Edit {2}mission-panel\.ts/); // in flight
+	expect(out).toMatch(/[◐◓◑◒] audit-3 .*Edit {2}mission-panel\.ts/); // in flight
 	const widths = (calls.at(-1) ?? []).map(l => [...stripAnsi(l)].length);
 	expect(new Set(widths).size).toBe(1); // ANSI in a lane never skews the frame
 
@@ -479,6 +479,18 @@ test("a team reaped between polls (channel gone after it was seen) ends every la
 	writeFileSync(join(f.root, ".atlas", ".run", "channels.json"), JSON.stringify({ version: 1, channels: {} }));
 	timers.iv?.();
 	expect(plain(calls.at(-1))).toContain("last run  2 workers");
+});
+
+test("idle `last run N` is the band's rule: the burst unioned with every dispatch row's owner (a finished worker leaves the registry)", () => {
+	const f = fixture();
+	live(f.root, ["w1", "w2"]);
+	const row = (id: string, owner: string, origin: string) => ({ id, content: `[research] ${id}`, status: "completed", owner, origin, session_id: "" });
+	writeFileSync(join(f.root, ".atlas", ".run", "todos.json"), JSON.stringify({ items: [row("d1", "w1", "dispatch"), row("d2", "w2", "dispatch"), row("d3", "w3", "dispatch"), row("d4", "w4", "dispatch"), row("m1", "w9", "manual")] }));
+	const { calls, ui, timers, view } = harness();
+	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root });
+	live(f.root, ["w1", "w2"], ["w1", "w2"]); // the burst ends; w3 and w4 ran earlier and the registry forgot them
+	for (let i = 0; i < 3; i++) timers.iv?.();
+	expect(plain(calls.at(-1))).toContain("last run  4 workers"); // w1, w2 plus dispatch owners w3, w4; the manual row's owner is not a dispatch
 });
 
 test("reap after the view cleared re-mounts the idle panel with the last wave, which lingers then clears", () => {
@@ -605,7 +617,7 @@ test("claude team lane: role + tool from the stream log; panefeed's calls-only <
 	timers.clock = nowS * 1000; // the harness clock starts at 0, which would age every call out of the window
 	view.open(ui, { channel: CHAN, members: ["explorer-127a"], cwd: root });
 	const lane = plain(calls.at(-1)).split("\n").find(l => l.includes("explorer-127a")) ?? "";
-	expect(lane).toMatch(/◐ explorer-127a +scout +Read {2}dispatch\.py/);
+	expect(lane).toMatch(/[◐◓◑◒] explorer-127a +scout +Read {2}dispatch\.py/);
 	expect(lane).not.toMatch(/[▁▂▃▄▅▆▇█]/); // the tool-call history is kept but no graph is drawn
 	view.stop();
 });

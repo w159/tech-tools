@@ -9,9 +9,10 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, spinnerGlyph, stateRun, uiFromEnv, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, spinFrameOf, spinnerGlyph, stateRun, uiFromEnv, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons } from './data/runstate';
+import { displayName } from './hud';
 import { fitText, formatDuration, textWidth } from './theme';
 
 export type { Run, Tone };
@@ -26,7 +27,7 @@ export const PANEL_BG = '#11111b';
 
 export type WorkerState = 'running' | 'thinking' | 'queued' | 'waiting' | 'failed' | 'done';
 export type MissionWorker = { name: string; role?: string; state: WorkerState; tool?: string; target?: string; secs: number };
-export type MissionNote = { from: string; to: string; text: string; at?: string };
+export type MissionNote = { from: string; to: string; text: string; at?: string; kind?: string };
 /** Presence and system events (a worker joining or leaving, a worktree merge) are not messages: the message row shows
  * the newest comm whose kind is not one of these (`say`, `dispatch`, `report`, or a kind the source does not state). */
 const NOT_MESSAGE = new Set(['join', 'leave', 'exit', 'merge']);
@@ -38,6 +39,8 @@ export type MissionModel = {
   cols: number;
   maxRows: number;
   tick: number;
+  /** The shared clock reading (ms): the spinner frame of a worker is spinFrameOf(now, name). Absent: the local `tick`. */
+  now?: number;
   /** `<repo>@<branch>` (or the project folder). */
   project: string;
   /** `<class>/<effort>` of the running team, when the harness knows it. */
@@ -264,9 +267,10 @@ function lastRunRuns(l: LastRun | undefined, checksFail = false): Run[] {
 
 /** The status mark: a spinner only while a tool is in flight. */
 function mark(w: MissionWorker, m: MissionModel, ui: Ui): Run {
+  const frame = m.now === undefined ? m.tick : spinFrameOf(m.now, w.name);
   switch (w.state) {
-    case 'running': return stateRun('running', ui, m.tick);
-    case 'thinking': return r(spinnerGlyph(m.tick, ui.ascii), 'muted');
+    case 'running': return stateRun('running', ui, frame);
+    case 'thinking': return r(spinnerGlyph(frame, ui.ascii), 'muted');
     case 'queued': return stateRun('queued', ui);
     case 'waiting': return stateRun('waiting', ui);
     case 'failed': return stateRun('failed', ui);
@@ -313,11 +317,16 @@ function moreLine(hidden: readonly MissionWorker[], cols: number): Line {
 
 // ---- message and footer ---------------------------------------------------------------
 
+/** What a message was, in words of our own: the line is built from who, to whom and the kind, never from the message text
+ * (a free-text body leaks list markers, paths and prompts into the band). */
+const NOTE_STATE: Record<string, string> = { dispatch: 'dispatched work', report: 'reported', say: 'sent a message' };
+export const noteState = (kind?: string): string => (kind ? NOTE_STATE[kind] : undefined) ?? 'sent a message';
+
 function noteLine(n: MissionNote, cols: number): Line {
-  const left: Run[] = [r(' '), r(n.from, 'text', true), r(' to ', 'muted'), r(n.to, 'sub'), r('   ')];
+  const left: Run[] = [r(' '), r(displayName(n.from), 'text', true), r(' to ', 'muted'), r(displayName(n.to), 'sub'), r('   ')];
   const right = n.at ? [r(` ${n.at} `, 'muted')] : [r(' ')];
   const room = cols - runsWidth(left) - runsWidth(right);
-  return { runs: [...left, ...fitRuns([r(n.text.replace(/\s+/g, ' '), 'text')], Math.max(0, room)), ...right] };
+  return { runs: [...left, ...fitRuns([r(noteState(n.kind), 'text')], Math.max(0, room)), ...right] };
 }
 
 /** `checks  ● completion  ■ tripwire  ● routing`; when that does not fit, `checks  ■ tripwire` (failures only) or
