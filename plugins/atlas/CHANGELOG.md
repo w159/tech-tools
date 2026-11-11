@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fixed: motion in 256 colours is a staircase of at least 3 distinct xterm palette steps (monotone in lightness toward the resting tone, the same index on Atlas's and the host's downsampler); a tone with no room for it (Mocha body text) keeps its colour and only the glyph pops (`easeSteps256`, `stable256`, `hostTo256` in `mod/atlas-ui.ts`, `mod/motion.ts`).
+- Fixed: the done pop is a quiet dot then the disc; it no longer starts at the open diamond, which is the queued glyph (`POP_UNICODE`, `POP_ASCII`).
+- Fixed: `mod/motion-demo.ts` draws through `hudLines` and paints with the shared `paintAnsi`, so a demo frame is the live HUD row (done titles struck, SGR 9, as the live frames are); `--color 256` records the 256-colour frames.
+- Added: `spinFrameOf(now, id)`, one clock and the agent id decide the spinner frame, so one agent shows one frame on every surface (surfaces adopt it for their `tick`).
+- Fixed: in 256 colours the panel fill is the neutral grey of the host's tone family (`48;5;234`), not the navy `48;5;17` the host made of `#181825`; chip and capsule inks are chosen on the fill as drawn (`surfaceHex`, `inkFor(..., mode)`, `emittedPairs(theme, '256')`).
 - Tests: seed-1105 second-pass mutation kills for the TS mods (`mod/band`, `board-model`, `hud`, `hud-surface`, `panel-layout`, `omp/mission-panel` `*.mut.test.ts`); four more survivors argued equivalent in the test headers.
 - Fixed: `types/index.d.ts` shared snapshot block now carries the optional `seq` field on `AtlasSnapshot`, so it is identical to `mod/contract.ts` again (`ModTypesContractSync`).
 - Tests: `test_completion_gate.py` is hermetic for the one-shot (o) phased-todo and (s) team-gate blocks (`GateOrchestrationTest` and `InProcessMainTest` use a per-test marker dir with both off) and the (n) continuation test resets the Stop-burst breaker per subtest, so the suite no longer depends on test order, xdist, tmux on PATH or machine load.

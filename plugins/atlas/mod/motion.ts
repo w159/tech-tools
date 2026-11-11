@@ -10,7 +10,7 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, easeOutCubic, hostEnv, PALETTES, STATE_TOKEN, stateGlyph, type Run, type Ui, type UiEnv, type UiState } from './atlas-ui';
+import { cells, contrast, easeOutCubic, fitHex, hostEnv, luminance, PALETTES, STATE_TOKEN, stable256, stateGlyph, surfaceHex, type Run, type Ui, type UiEnv, type UiState } from './atlas-ui';
 
 /** A state change eases back to rest over this long. */
 export const MOTION_MS = 900;
@@ -110,9 +110,50 @@ export function mixHex(a: string, b: string, t: number): string {
 export const easeProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.changed) / MOTION_MS));
 export const revealProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.born) / REVEAL_MS));
 
-/** The glyph pop: open diamond, filled diamond, then the state's own disc; the thirds of the window. */
-export const POP_UNICODE = ['◇', '◆'] as const;
-export const POP_ASCII = ['o', '+'] as const;
+/** The glyph pop: a quiet dot for the first two thirds of the window, then the state's own disc lands. The dot is no state's mark on any
+ * surface (queued is the open diamond, the capsule is the filled diamond), so no frame ever reads as another state. */
+export const POP_UNICODE = ['·', '·'] as const;
+export const POP_ASCII = ['.', '.'] as const;
+
+/** Whole steps of the 256-colour ease. A 24-bit ease is smooth; in 256 colours the palette is coarse, so the ease is a staircase of
+ * palette colours that both Atlas's and the host's downsampler map to the same index, at least this many before the resting tone. */
+export const MIN_STEPS_256 = 3;
+const LEAD_TRIES = [LEAD_WHITE, 0.6, 0.85, 0, 0.15] as const;
+const stepsCache = new Map<string, readonly string[]>();
+
+/**
+ * The staircase from `accent` (brightened toward the theme's emphasis colour) to the resting `rest` colour, as stable xterm-256 colours:
+ * distinct, lightness monotone toward `rest`, never past it, each keeping `rest`'s contrast on the panel. Empty when the palette cannot
+ * give MIN_STEPS_256 such steps for this pair (the row then keeps its resting tone and only the glyph pops).
+ */
+export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): readonly string[] {
+  const key = `${theme}|${accent}|${rest}`;
+  const hit = stepsCache.get(key);
+  if (hit) return hit;
+  const bg = surfaceHex('panel', { theme, color: '256' });
+  const need = Math.min(4.5, contrast(rest, PALETTES[theme].panel));
+  const target = fitHex(rest, theme);
+  const toward = theme === 'latte' ? PALETTES.latte.ink : '#ffffff';
+  const dir = (a: string, b: string): number => Math.sign(luminance(b) - luminance(a));
+  let best: string[] = [];
+  for (const w of LEAD_TRIES) {
+    const lead = mixHex(accent, toward, w);
+    const d = dir(lead, target) || 1;
+    const out: string[] = [];
+    for (let k = 0; k < 24; k++) {
+      const c = stable256(mixHex(lead, rest, k / 24), bg, need);
+      if (c === target) break;
+      const prev = out.at(-1);
+      if (c === prev || (prev && dir(prev, c) !== d) || dir(c, target) !== d) continue;
+      out.push(c);
+    }
+    if (out.length > best.length) best = out;
+    if (best.length >= MIN_STEPS_256) break;
+  }
+  const steps = best.length >= MIN_STEPS_256 ? best : [];
+  stepsCache.set(key, steps);
+  return steps;
+}
 
 const blankWidth = (r: Run): Run => ({ t: ' '.repeat(cells(r.t)), tone: 'text' });
 /** `runs` cut to `n` cells from the left, the rest blanked in place (the row keeps its width). A wide glyph cut in half blanks. */
@@ -172,6 +213,10 @@ export function animateRow(runs: Run[], key: string, accent: UiState, ctx: Motio
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;
         const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585b70') : palette[r.tone]);
+        if (ui.color === '256') {
+          const stairs = easeSteps256(palette[STATE_TOKEN[accent]], rest, ui.theme);
+          return stairs.length ? { ...r, fg: stairs[Math.min(stairs.length - 1, Math.floor(pc * stairs.length))]! } : r;
+        }
         return { ...r, fg: mixHex(lead, rest, t) };
       });
     }
