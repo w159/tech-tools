@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Critique 14 A1 (110 layout): the side panel tab strip is one row at the 110-column pane (38 cells): the host draws `k: ` only for a Button that has a `hotkey`, so a pane too narrow for `k: label` draws the six words bare (`route team channel gates core board`, 35 cells) and keeps every key bound on the same hotkey Buttons in a zero-width clipped layer (`mod/pane/sidebar.tsx`, `stripLayout().bare` in `mod/panel-layout.ts`; omp prints the same row). Host registration of a clipped Button is unverified offline.
+- Critique 14 A2 (110 layout): the engine docks an open made behind the person's prompt ("asked") from 110 columns, so the first `prompt.submit` of a session opens the docked pane at 110 to 143 fullscreen columns, once, with no focus, and never again after a close by hand (`register.ts` `shouldDockAsked`, `promptDockDone`, `paneClosedByPerson`).
+- Critique 14 A3 (110 layout): the SUBAGENTS column-name row and one blank row under the agents stay in every frame where the slot can hold them with a one-row band title (`register.ts` `hudSlotCap`, `hudGapRows`; `mod/hud.ts` `hudFloorRows`); the floor used to leave the names out and the band butted against the last agent row.
+- Critique 14 A4 (110 layout): route rows in a pane under 50 cells draw a title whole when it cannot sit beside its state word (the state follows on the row under it, long titles wrap on words), so no `T1 read alpha.py (alpha...` and no state jammed against a title (`mod/panel-layout.ts` `todoRows`).
+- Critique 14 A4 (110 layout): core rows in a pane under 50 cells are never cut: a sentence that does not fit beside its label goes on the row under it, verdict titles and the dispatch team name wrap on words, and the zero-figure reading line and in-process route line take a short form (`withRoom`, `pickForm` in `mod/panel-layout.ts`).
+
 ## 17.12.0 - 2026-11-11
 
 - Band checks row counts `n/m green` (`2/3 green`) like the panel and gates tab, replacing `2 of 3 green` (critiques 12 and 13: one count format); band goldens and tests updated.

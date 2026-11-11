@@ -20,7 +20,9 @@ describe('1: the tab strip never blanks a label', () => {
     test(`at ${cols} every key keeps a word`, () => {
       const rows = tabRows(model('route', cols)).map((l) => lineText(l));
       const text = rows.join('\n');
-      for (const k of ['r', 't', 'c', 'g', 'k', 'o']) expect(text).toMatch(new RegExp(`${k}: [a-z]{2,}`));
+      const bare = !/\b[rtcgko]: /.test(text); // A1: 36 cells and up draw the words alone (the keys stay bound by the host layer)
+      if (bare) for (const w of ['route', 'team', 'channel', 'gates', 'core', 'board']) expect(text).toContain(w);
+      else for (const k of ['r', 't', 'c', 'g', 'k', 'o']) expect(text).toMatch(new RegExp(`${k}: [a-z]{2,}`));
       expect(text).not.toMatch(/[a-z]: {2,}/);
       expect(text).not.toMatch(/[a-z]: *$/m);
       for (const l of rows) expect(l.length).toBeLessThanOrEqual(cols);
