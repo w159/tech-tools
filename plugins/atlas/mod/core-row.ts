@@ -54,7 +54,7 @@ function verdict(m: CoreModel, full: boolean): Cell[] {
   return [label("verdicts"), ...joinSep(parts)];
 }
 
-/** The newest route, only when it ran differently from its plan: `route  planned audit/low, ran 3 explorers`. A team that ran as planned is not news on the band
+/** The newest route, only when it ran differently from its plan: `route  planned audit team (low effort), ran 3 explorers`. A team that ran as planned is not news on the band
  * (the core tab lists every team); nothing without one. */
 function route(m: CoreModel): Cell[] {
   const r: Route | undefined = m.routes[m.routes.length - 1];
