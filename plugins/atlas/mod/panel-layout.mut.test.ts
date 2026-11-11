@@ -10,7 +10,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
 import type { Ui } from './atlas-ui';
 import type { CoreModel } from './data/core';
-import { bodyLines, type PanelModel } from './panel-layout';
+import { bodyLines, headerRows, type PanelModel } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const core = (over: Partial<CoreModel> = {}): CoreModel => ({
@@ -77,5 +77,28 @@ describe('dispatch rows: the in-process note wraps four cells inside the panel',
     const lines = bodyLines(panelWorld('core', 30, mocha, { core: c })).map((l) => l.runs.map((x) => x.t).join('').trim());
     const at = lines.findIndex((t) => t.startsWith('in-process'));
     expect(lines.slice(at, at + 2)).toEqual(['in-process dispatches are', 'not shown here']);
+  });
+});
+
+describe('headerRows: the blank before the body starts at exactly 100 columns', () => {
+  const text = (cols: number): string[] => headerRows(panelWorld('route', cols, mocha, {})).map((l) => l.runs.map((x) => x.t).join(''));
+  test('99 columns end on the tab rule, 100 add a blank row after it', () => {
+    const narrow = text(99);
+    const wide = text(100);
+    expect(wide.length).toBe(narrow.length + 1);
+    expect(narrow[narrow.length - 1]!.trim()).not.toBe('');
+    expect(wide[wide.length - 1]!.trim()).toBe('');
+  });
+});
+
+describe('routeBody: a long task title is cut to the width less 60 from 100 columns', () => {
+  const titleCells = (cols: number): number => {
+    const todos = [{ id: 't1', label: 'q'.repeat(100), state: 'queued', owner: undefined, detail: undefined, evidence: null }];
+    const rows = bodyLines(panelWorld('route', cols, mocha, { todos: todos as never, workers: [] })).map((l) => l.runs.map((x) => x.t).join(''));
+    return (rows.find((t) => t.includes('qqq'))!.match(/q+\S*/) ?? [''])[0]!.length;
+  };
+  test('at 120 columns the title column is 60 cells, at 160 the whole 100 cell title shows', () => {
+    expect(titleCells(120)).toBe(60);
+    expect(titleCells(160)).toBe(100);
   });
 });

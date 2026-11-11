@@ -43,6 +43,15 @@ describe('sidebar board tab', () => {
     for (const tick of [undefined, 0, 2]) expect(glyphRow(tick)).toContain(`${want} item-0`);
     expect(spinnerGlyph(0)).not.toBe(spinnerGlyph(1));
   });
+  test('a snapshot without a clock falls back to the pane tick for the spinner (0 when the pane has none)', () => {
+    // LiveSnapshot.now is required, so a real snapshot always takes the shared clock above; this pins the documented fallback (BoardOpts.nowMs absent: `tick`).
+    const run = [todo(0, { status: 'in_progress' })];
+    const clockless = (tick?: number) => board(run, { snapshot: { ...busySnap(), squad: [], activity: {}, comms: [], phase: 'implement', now: undefined, todos: run } as never, ...(tick === undefined ? {} : { tick }) }).join('\n');
+    expect(clockless(2)).toContain(`${spinnerGlyph(2)} item-0`);
+    expect(clockless(1)).toContain(`${spinnerGlyph(1)} item-0`);
+    expect(clockless()).toContain(`${spinnerGlyph(0)} item-0`);
+    expect(new Set([0, 1, 2].map((f) => spinnerGlyph(f))).size).toBe(3);
+  });
   test('a running item counts its time from the snapshot clock in whole seconds', () => {
     const run = [todo(0, { status: 'in_progress', claimed_at: NOW / 1000 - 90 })];
     expect(board(run).join('\n')).toContain('elapsed 01:30');
