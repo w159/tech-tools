@@ -72,6 +72,20 @@ describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   });
 });
 
+describe('critique 12: a done agent row shows its outcome, as its done plan row does', () => {
+  const todo = (over: Partial<TodoItem>): TodoItem => ({ id: 't1', content: 'T1 wire the gate (impl)', status: 'completed', owner: 'impl', ...over }) as TodoItem;
+  const agent = { name: 'impl', role: 'implementer', state: 'done', model: 'opus', lastTool: 'read', target: 'runs.ts:17', since: 1 } as unknown as HudAgent;
+  test('the evidence of the plan row it owns replaces its last call', () => {
+    expect(agentModel([agent], [todo({ evidence: 'tests green' })])[0]!.tool).toBe('tests green');
+    expect(agentModel([agent], [todo({})])[0]!.tool).toBe('read runs.ts:17'); // no evidence: the last call stays
+    expect(agentModel([agent], [todo({ evidence: 'ran 03:10' })])[0]!.tool).toBe('read runs.ts:17'); // a duration is not an outcome
+  });
+  test('a running agent keeps its current call whatever its row carries', () => {
+    const running = { ...agent, state: 'working', tool: 'edit', target: 'a.ts' } as unknown as HudAgent;
+    expect(agentModel([running], [todo({ status: 'in_progress', evidence: 'tests green' })])[0]!.tool).toBe('edit a.ts');
+  });
+});
+
 describe('L1: a completed plan row is shown as completed', () => {
   const plan = [todo('a', 'Trace the failure', 'completed'), todo('b', 'Patch the gate', 'in_progress'), todo('c', 'Run the suite', 'pending')];
   test('the done row stays in the tree with the done glyph, the word and a struck label', () => {

@@ -271,8 +271,19 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  *  to off is picked up on reload. */
 async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<AtlasSnapshot | null> {
  if (cache.envOff === undefined) cache.envOff = (await $.env.get('ATLAS_MOD')) === 'off'
- return cache.envOff ? null : await read($, snapshotState)
+ if (cache.envOff) return null
+ const snap = await read($, snapshotState)
+ if (snap) noteHeaderPattern(snap.contract.headerFirstLinePattern)
+ return snap
 }
+
+/** The contract's header pattern as the last snapshot carried it. A header chip needs nothing else from the snapshot, so a new message draws from
+ * this copy with no state read: the host paints a new message with its own row until the hook answers (critique 12 C1: 15 raw `● ATLAS | ...`
+ * frames, one frame each, always the first draw of a message), and the `await read` was a whole round trip of that wait. */
+let headerPattern = ''
+export const noteHeaderPattern = (pattern: string | undefined): void => { if (pattern) headerPattern = pattern }
+export const forgetHeaderPattern = (): void => { headerPattern = '' }
+const patternSnap = (): AtlasSnapshot | null => (headerPattern === '' ? null : ({ contract: { headerFirstLinePattern: headerPattern } } as unknown as AtlasSnapshot))
 
 /** The engine clock in ms, or null where it is unavailable. */
 async function nowMs($: EngineInterface): Promise<number | null> {
@@ -305,7 +316,8 @@ export function registerRestyle(on: On): void {
 
  on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
   try {
-   const snap = await ready($, cache)
+   // Fast path: the mod is on (env read once) and the pattern is known, so the chip is decided with no host round trip.
+   const snap = cache.envOff === false ? (patternSnap() ?? (await ready($, cache))) : await ready($, cache)
    if (snap && !e.props.isSummary) noteDrawn(snap, e.requestId, e.props.text)
    return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0) ?? next(e)) : next(e)
   } catch { return next(e) }

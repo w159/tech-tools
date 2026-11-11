@@ -7,6 +7,7 @@ import {
   noisyTree,
   drawnHeaderTally,
   forgetDrawnHeaders,
+  forgetHeaderPattern,
   assistantTree,
   durationTree,
   PHASE_RE,
@@ -464,4 +465,31 @@ test('critique 11: the header tally counts every assistant text the transcript d
   expect(drawnHeaderTally()).toEqual({ ok: 3, total: 4 })
   forgetDrawnHeaders()
   expect(drawnHeaderTally()).toEqual({ ok: 0, total: 0 })
+})
+
+test('critique 12 C1: once the pattern is known, a new message is chipped with no host state or env read (the raw frame is the wait for that round trip)', async () => {
+  forgetHeaderPattern()
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const site = regs.find((r) => r.matcher?.component === 'AssistantMessage')!
+  const base = fake$({ snapshot: snap() })
+  let calls = 0
+  const tap = (o: object): object =>
+    new Proxy(o, {
+      get: (t, k, r) => {
+        const v = Reflect.get(t, k, r)
+        return typeof v === 'function' ? (...a: unknown[]) => { calls++; return (v as (...x: unknown[]) => unknown).apply(t, a) } : v
+      },
+    })
+  const src = base.$ as unknown as { env: object; state: object }
+  const $ = { ...src, env: tap(src.env), state: tap(src.state) } as unknown as EngineInterface
+  const text = 'ATLAS | 🏁 done | 5/5'
+  const draw = (id: string) => site.hook($, { surface: 'terminal', component: 'AssistantMessage', requestId: id, props: { text } }, engineNext)
+  await draw('first') // cold: the pattern is unknown until the first snapshot read
+  const cold = calls
+  expect(cold).toBeGreaterThan(0)
+  const warm = await draw('second')
+  expect(calls).toBe(cold) // the warm path asks the host for nothing
+  expect(stringsOf(warm)).toContain('ATLAS')
+  expect(warm).not.toBe(SENTINEL)
 })

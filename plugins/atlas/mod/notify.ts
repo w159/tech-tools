@@ -30,6 +30,13 @@ const workersOf = (s: AtlasSnapshot): LiveWorker[] =>
  * mid-phrase (critique 11: `after` / `11s  +1 more` in live-110-5d6a53ef-3/frames/f0090.ans:3-4). One row the host never wraps. */
 export const TOAST_MAX = 40;
 
+/** How long a turn-boundary toast stays up, and the gap before the next routine one. The host stacks toasts: at 150 columns two live boxes
+ * (8 rows) sat over the transcript and cut `T1-T3 still`, `The`, `Each` (critique 12: live-150-8271cfc8-1/frames/f0063.ans:1-8). The mod cannot move
+ * a toast, so it keeps one up at a time: routine toasts inside the gap fold into the next one as ` +N more`. A failure, a wait or a note never waits. */
+export const TOAST_MS = 4000;
+const URGENT = new Set(['agent-fail', 'agent-blocked', 'note']);
+const HELD_MAX = 40;
+
 /** A toast and its merge facts: `bare` is the same toast without its fact (used when the fact would not fit beside the count),
  * `kind` groups toasts that a `+N more` may count (a burst of agents that finished, not every toast of the turn). */
 export type Toast = { text: string; bare?: string; kind?: string };
@@ -56,6 +63,7 @@ export function mergeToasts(items: readonly (string | Toast)[]): string | null {
 const FACT_MAX = 40;
 export const stateToast = (state: Parameters<typeof toastText>[0], name: string, fact: string, ui: Ui): string => toastText(state, name, clip(fact.replace(/\s+/g, ' ').trim(), FACT_MAX), ui);
 const factToast = (kind: string, state: Parameters<typeof toastText>[0], name: string, fact: string, ui: Ui): Toast => ({ kind, text: stateToast(state, name, fact, ui), bare: stateToast(state, name, '', ui) });
+const noteToast = (sender: string, preview: string, ui: Ui): Toast => ({ kind: 'note', text: noteToastText(sender, preview, ui) });
 
 /** Pure diff of successive snapshots; null prev (first sight) yields nothing. Never throws. */
 export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): NotifyEvent[] {
@@ -127,6 +135,8 @@ export function registerNotify(
 ): void {
 	// Per registration, not module-level: a second registerNotify (another test, a re-register) must not inherit this one's baseline.
 	let lastSnapshot: AtlasSnapshot | null = null;
+	let shownAt = Number.NEGATIVE_INFINITY; // snapshot clock of the toast on screen
+	let held: Toast[] = []; // routine toasts that fell inside the gap, folded into the next one
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
 			const snap = await read($, snapshotState);
@@ -148,7 +158,7 @@ export function registerNotify(
 							texts.push(factToast('agent-blocked', 'waiting', ev.name, 'needs a reply', ui));
 							break;
 						case 'note':
-							texts.push(noteToastText(ev.sender, clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX), ui));
+							texts.push(noteToast(ev.sender, clip(ev.preview.replace(/\s+/g, ' ').trim(), FACT_MAX), ui));
 							break;
 						case 'todo-done':
 							texts.push(factToast('todo-done', 'done', 'task', ev.text, ui));
@@ -160,8 +170,18 @@ export function registerNotify(
 							break;
 					}
 				}
-				const merged = mergeToasts(texts);
-				if (merged) $.ui.toast(merged);
+				const queued = held;
+				const all = [...queued, ...texts];
+				const urgent = texts.some((t) => typeof t !== 'string' && t.kind !== undefined && URGENT.has(t.kind));
+				if (all.length > 0 && !urgent && snap.now - shownAt < TOAST_MS) held = all.slice(-HELD_MAX);
+				else {
+					held = [];
+					const merged = mergeToasts(urgent ? [...texts, ...queued] : all);
+					if (merged) {
+						$.ui.toast(merged, { timeoutMs: TOAST_MS });
+						shownAt = snap.now;
+					}
+				}
 				lastSnapshot = snap;
 				const suggestion = nextStepSuggestion(snap);
 				if (suggestion) void $.prompt.suggest({ text: suggestion });

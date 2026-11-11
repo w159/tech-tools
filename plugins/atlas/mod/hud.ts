@@ -135,8 +135,13 @@ export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'las
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const rows = agents.map((a): AgentRow => {
+    const owned = todos.filter((t) => t.owner === a.name || (a.key !== undefined && t.owner === a.key));
     const tasks = todos.flatMap((t, i) => (t.owner === a.name || (a.key !== undefined && t.owner === a.key) ? [i + 1] : []));
-    return { name: a.name, id: a.key ?? a.name, state: a.ui ?? workerUiState(a.state), model: shortModel(a.model), tasks, tool: lastAction(a, root), ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
+    const state = a.ui ?? workerUiState(a.state);
+    // A finished worker's LAST column is its outcome, as its done plan row switches to one (critique 12: `tests green` beside `read runs.ts:17`): the evidence
+    // its plan row carries; the last call when it left none (its free-text closing line is never shown: critique 8).
+    const outcome = state === 'done' ? flat(owned.find((t) => flat(t.evidence) && !/^ran\s+[\d:]+$/.test(flat(t.evidence)))?.evidence) : ''; // a bare `ran 03:10` is a duration, not an outcome
+    return { name: a.name, id: a.key ?? a.name, state, model: shortModel(a.model), tasks, tool: outcome || lastAction(a, root), ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');

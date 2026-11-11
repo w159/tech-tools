@@ -179,11 +179,14 @@ const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
   return UI_STATES.filter((s) => n(s)).map((s) => `${n(s)} ${s}`).join(` ${dot(ui)} `);
 };
 
+/** A channel as a person reads it: a generated id (`lc-opl0e60i`, a launch code) is no name, so it reads `this run`; a named channel keeps its `#name` (critique 12). */
+export const channelLabel = (name: string | undefined, fallback = 'channel'): string => (name && /^lc-[a-z0-9]{4,}$/i.test(name) ? 'this run' : `#${name ?? fallback}`);
+
 /** The ribbon's right-hand text: what the active tab counts, always with its word. */
 function ribbonRight(m: PanelModel): string {
   if (m.tab === 'team') return m.workers.length ? countWords(m.workers, m.ui) : '';
   if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green}/${t.total}` : ''; } // `n/m` at every width: `2/4` at 110 and `1 of 4 green` at 150 was one figure in two formats (critique 11)
-  if (m.tab === 'channel') return m.channel ? `#${m.channel}` : '';
+  if (m.tab === 'channel') return m.channel ? channelLabel(m.channel) : '';
   return '';
 }
 
@@ -393,7 +396,9 @@ function workerDetail(m: PanelModel, w: PanelWorker): PanelLine[] {
   const task = [goalOf(w), w.task && goalOf(w) ? `(${w.task})` : w.task].filter(Boolean).join(' ');
   const how = [w.model, w.secs !== undefined ? shortAge(w.secs) : '', w.tools !== undefined ? `${w.tools} tool calls` : ''].filter(Boolean).join(` ${dot(m.ui)} `);
   if (!task && !how) return []; // a last step alone is what the row already says
-  const last = lastFit(w, m.cols - 4 - 6);
+  const lastRaw = lastFit(w, m.cols - 4 - 6);
+  const same = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const last = same(lastRaw, goalOf(w)) || same(lastRaw, task) ? '' : lastRaw; // `task read alpha.py` over `last read alpha.py` says it twice (critique 12)
   return [task ? ['task', task] : null, how ? ['model', how] : null, last ? ['last', last] : null]
     .filter((x): x is [string, string] => !!x)
     .map(([k, v]) => line(fitRuns([r(`    ${lab(k)}`, 'muted'), r(v, 'sub')], m.cols)));
@@ -495,7 +500,7 @@ const NOTE_LINES = 4; // rows one message may take on a tall pane
 function channelBody(m: PanelModel): PanelLine[] {
   const ind = ' '.repeat(GRID_LEAD); // the indent every other tab's rows have: the name column (critique 11: the channel head sat one cell from the border)
   const head = line(fitRuns([
-    r(`${ind}#${m.channel ?? 'channel'}  `, 'text', { bold: true }),
+    r(`${ind}${channelLabel(m.channel)}  `, 'text', { bold: true }),
     r(`${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`, 'muted'),
   ], m.cols));
   if (!m.notes.length) return [head, BLANK, line(fitRuns([r(`${ind}no messages yet`, 'muted')], m.cols)), ...wrap('workers post here when they hand off or block; type below to message the lead', Math.max(8, m.cols - GRID_LEAD - 1), 3).map((t) => line(fitRuns([r(`${ind}${t}`, 'muted')], m.cols)))];

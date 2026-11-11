@@ -10,6 +10,10 @@
 - Fixed (critique 12 B3): the panel reads `n/m` everywhere (`2/4 green`, `phase research 2/4`, `todo 3/7`), no `2 of 4 green`; design goldens updated to match.
 - Fixed (critique 12 B4): `1 dispatch open` is not repeated beside `◐ 1 running` when the open dispatch row is the running worker.
 - Fixed (critique 12 B5): `prompt.submit` marks the lead thinking (mod/discipline.ts), so the band never reads `idle` from the submit to the first model step.
+- Fixed (critique 12, C1): a new assistant message is chipped from the cached header pattern with no host state read (`restyle.tsx` `noteHeaderPattern`); the raw `● ATLAS | ...` frame is the host painting before the async hook answers.
+- Fixed (critique 12, C2): one routine toast is up at a time (4 s); toasts inside the gap fold into the next as `+N more`, failures, waits and notes never wait (`notify.ts`).
+- Fixed (critique 12, C3): the last beat of a ramp is held bold, so the 600 ms window shows three steps that each differ from rest; no step reads as the body tone (`motion.ts`).
+- Fixed (critique 12, C4/C5): the side-panel board opens with one `BOARD  5 items` row; a done agent row shows the evidence of its plan row; the team tab drops a `last` line that repeats `task`; a launch-code channel reads `this run`; the done gate gist reads `save proof that it works`.
 
 ## 17.11.0 - 2026-11-11
 

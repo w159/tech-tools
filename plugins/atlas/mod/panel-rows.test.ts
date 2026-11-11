@@ -34,6 +34,14 @@ describe('team tab: lead row, roster rows, lead tally', () => {
     expect(body('team', 80, { lead, workers: [w('a', 'done'), w('b', 'done')] }).at(-1)).toBe('    workers  0 running · 2 done');
     expect(body('team', 80, { lead, workers: [w('a', 'running'), w('b', 'waiting')] }).at(-1)).toBe('    workers  1 running · 1 waiting');
   });
+  test('critique 12: a tall pane never prints `task X` over `last X` when both say the same words', () => {
+    const same = w('alpha', 'done', { goal: 'alpha: read alpha.py', detail: 'read alpha.py', model: 'haiku', secs: 11, tools: 2 });
+    const other = w('beta', 'done', { goal: 'beta: read beta.py', detail: 'wrote the summary', model: 'haiku', secs: 12, tools: 3 });
+    const out = body('team', 120, { lead, workers: [same, other], mates: [], rows: 40 });
+    expect(out.filter((l) => /^ {4}task {2}read alpha\.py/.test(l))).toHaveLength(1);
+    expect(out.filter((l) => /^ {4}last {2}read alpha\.py/.test(l))).toHaveLength(0); // the same words: said once
+    expect(out.filter((l) => /^ {4}last {2}wrote the summary/.test(l))).toHaveLength(1); // different words: kept
+  });
   test('no workers and no roster keeps the hint, and the lead stays above it', () => {
     expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['  ◉ lead    waiting', '(no state)  nobody dispatched yet, ask the lead to start a worker', '    workers  0 running']);
     expect(body('team', 80, { lead: undefined, workers: [], mates: [] })).toEqual(['(no state)  nobody dispatched yet, ask the lead to start a worker']);
@@ -63,6 +71,11 @@ describe('channel tab: header, columns and marks', () => {
   test('one person is singular, more are plural', () => {
     expect(body('channel', 80, { people: 1, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  1 person');
     expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
+  });
+  test('critique 12: a generated launch id (`lc-opl0e60i`) is no channel name: the header and the ribbon say `this run`, a named channel keeps its #name', () => {
+    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe('    this run  2 people');
+    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] }).join('\n')).not.toContain('lc-opl0e60i');
+    expect(body('channel', 80, { channel: 'atlas-board-mod', people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
   test('a missing channel name reads #channel', () => {
     expect(body('channel', 80, { channel: undefined, people: 3, unread: 0, notes: [] })[0]).toBe('    #channel  3 people');

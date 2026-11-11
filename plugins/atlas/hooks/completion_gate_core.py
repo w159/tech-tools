@@ -1060,7 +1060,7 @@ def _unmerged_reason_part(rows: list) -> str:
 # session re-blocks as `(<letter>) still open: <gist>` instead of repeating the
 # full multi-line clause (which the model has already read this session).
 _GISTS: dict[str, str] = {
-    "a": "capture observed-behavior proof under .atlas/evidence/",
+    "a": "save proof that it works under .atlas/evidence/",
     "b": "write the verified findings.json entry (atlas_finding.py --status verified)",
     "c": "CHANGELOG missing; append a dated entry under Recent in docs/CHANGELOG.md",
     "d": "ROADMAP missing; update docs/ROADMAP.md",
