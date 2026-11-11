@@ -35,23 +35,44 @@ describe('mission-layout: A3 the count order is the shared COUNT_ORDER', () => {
   });
 });
 
-describe('mission-layout: A2 the header never reads idle or all ok beside a failing check', () => {
+describe('mission-layout: the header never reads idle or all ok beside a failing check, and BLOCKED only follows a refused Stop', () => {
   const bad = [{ id: 'completion', ok: true }, { id: 'routing', ok: false }];
   const lastRun = { workers: 4, secs: 70, failed: 0 };
   const all = (m: MissionModel): string => missionLines(m).map((l) => runsText(l.runs)).join('\n');
-  test('idle with a failing check reads blocked, in every width form', () => {
+  test('idle with a failing check reads a warning, never BLOCKED, in every width form', () => {
     for (const cols of [160, 120, 100, 80, 60, 40]) {
       const b = band(model({ cols, checks: bad, phase: 'verify', done: 3 }));
       expect(b).not.toContain('idle');
-      expect(b).toContain('BLOCKED');
+      expect(b).not.toContain('BLOCKED');
+      expect(b).toContain('routing warning');
     }
+    expect(band(model({ checks: [{ id: 'a', ok: false }, { id: 'b', ok: false }] }))).toContain('2 gates warning');
     expect(band(model({ checks: [{ id: 'routing', ok: true }] }))).toContain('idle');
     expect(band(model({ checks: null }))).toContain('idle');
   });
-  test('the rich band says blocked too', () => {
+  test('the rich band says warning too', () => {
     const b = runsText(bandLines(model({ cols: 160, rich: true, checks: bad }))[0]!.runs);
     expect(b).not.toContain('idle');
-    expect(b).toContain('BLOCKED');
+    expect(b).not.toContain('BLOCKED');
+    expect(b).toContain('routing warning');
+  });
+  test('a refused Stop reads BLOCKED with the refusing gate named, in every width form and the rich band', () => {
+    for (const cols of [160, 120, 100, 80, 60, 40]) {
+      const b = band(model({ cols, checks: bad, stopGates: ['team gate'], phase: 'verify', done: 3 }));
+      expect(b).toContain('BLOCKED');
+      expect(b).not.toContain('warning');
+      if (cols >= 60) expect(b).toContain('stop: team gate');
+    }
+    expect(band(model({ checks: null, stopGates: ['a', 'b'] }))).toContain('stop: 2 gates');
+    const rich = runsText(bandLines(model({ cols: 160, rich: true, checks: bad, stopGates: ['team gate'] }))[0]!.runs);
+    expect(rich).toContain('BLOCKED · stop: team gate');
+  });
+  test('no Stop block and no declaration: a passing or failing check alone is never BLOCKED', () => {
+    expect(band(model({ checks: bad, workers: [w('a', 'running')] }))).not.toContain('BLOCKED');
+    expect(band(model({ checks: null, stopGates: [] }))).not.toContain('BLOCKED');
+  });
+  test('a declared block still reads BLOCKED: needs you', () => {
+    expect(band(model({ blocked: true }))).toContain('BLOCKED · needs you');
   });
   test('last run does not say all ok while a check fails; it does when none fails', () => {
     expect(all(model({ checks: bad, lastRun }))).not.toContain('all ok');
@@ -78,12 +99,19 @@ describe('mission-layout: failure count on the band', () => {
 });
 
 describe('mission-layout: the lit phase', () => {
+  test('a plan count replaces the phase position: `phase 1/5 · todo 4/5` can not appear', () => {
+    for (const cols of [160, 120, 100, 80, 60]) {
+      const b = band(model({ cols, phase: 'research', done: 4, total: 5, workers: [w('a', 'running')] }));
+      expect(b).not.toMatch(/\bph(ase)? \d\/\d/);
+      expect(b).toContain('4');
+    }
+  });
   test('the first phase is 1/3; a phase off the rail still lights the first, never the second', () => {
-    expect(band(model({ phase: 'plan' }))).toContain('phase 1/3');
-    expect(band(model({ phase: 'blocked' }))).not.toContain('phase 2/3');
-    expect(band(model({ phase: 'nonsense', workers: [w('a', 'running')] }))).toContain('phase 1/3');
-    expect(band(model({ phase: 'verify' }))).toContain('phase 3/3');
-    expect(band(model({ phase: 'done' }))).toContain('phase 3/3');
+    expect(band(model({ phase: 'plan', total: 0 }))).toContain('phase 1/3');
+    expect(band(model({ phase: 'blocked', total: 0 }))).not.toContain('phase 2/3');
+    expect(band(model({ phase: 'nonsense', total: 0, workers: [w('a', 'running')] }))).toContain('phase 1/3');
+    expect(band(model({ phase: 'verify', total: 0 }))).toContain('phase 3/3');
+    expect(band(model({ phase: 'done', total: 0 }))).toContain('phase 3/3');
   });
 });
 

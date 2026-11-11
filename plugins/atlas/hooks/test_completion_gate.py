@@ -1073,6 +1073,58 @@ class InProcessMainTest(unittest.TestCase):
         self.assertIn('"decision": "block"', out)
         self.assertIn("README.md at the project root is missing", out)
 
+    # -- the Stop verdict record the band reads (critique 8: BLOCKED only when Stop blocked) --
+
+    def _verdict(self, session="sess-orch"):
+        path = os.path.join(self.tmp, ".atlas", ".run", "stop-verdict.json")
+        with open(path) as f:
+            return json.load(f)["sessions"][session]
+
+    def test_block_records_stop_verdict_with_letters(self):
+        self._satisfy_all()
+        self._log_run_write("src/app.py")
+        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertIn('"decision": "block"', out)
+        v = self._verdict()
+        self.assertTrue(v["blocked"])
+        self.assertIn("d", v["letters"])
+        self.assertGreater(v["at"], 0)
+
+    def test_a_later_block_overwrites_an_allowed_verdict(self):
+        self._satisfy_all()
+        _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertNotIn('"decision": "block"', out)
+        v = self._verdict()
+        self.assertFalse(v["blocked"])
+        self.assertEqual(v["letters"], [])
+        self._log_run_write("src/app.py")
+        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertTrue(self._verdict()["blocked"])
+
+    def test_stop_hook_active_continuation_records_allowed(self):
+        self._satisfy_all()
+        self._log_run_write("src/app.py")
+        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertTrue(self._verdict()["blocked"])
+        self._invoke(
+            {"session_id": "sess-orch", "cwd": self.tmp, "stop_hook_active": True}
+        )
+        self.assertFalse(
+            self._verdict()["blocked"]
+        )  # the continuation was let through: Stop did not block
+
+    def test_verdicts_are_kept_per_session(self):
+        self._satisfy_all()
+        self._log_run_write("src/app.py")
+        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self._invoke({"session_id": "sess-chat", "cwd": self.tmp})
+        self.assertTrue(self._verdict("sess-orch")["blocked"])
+        self.assertFalse(self._verdict("sess-chat")["blocked"])
+
     # -- (f) docs drift + (g) verifier coverage + git fail-closed -----------
 
     def test_docs_drift_condition_f(self):
@@ -1458,10 +1510,16 @@ class ScriptsDirNotResolvedTest(unittest.TestCase):
         env["PYTHONPATH"] = site
         out = subprocess.run(
             [sys.executable, os.path.join(self.link, "hooks", "completion_gate.py")],
-            input="{}", capture_output=True, text=True, env=env, timeout=60,
+            input="{}",
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
         )
         sd = [ln for ln in out.stdout.splitlines() if ln.startswith("SD=")]
-        self.assertEqual(sd, ["SD=" + os.path.join(self.link, "scripts")], out.stdout + out.stderr)
+        self.assertEqual(
+            sd, ["SD=" + os.path.join(self.link, "scripts")], out.stdout + out.stderr
+        )
 
 
 def _todo_transcript(path, todos, name="TodoWrite"):
@@ -2616,9 +2674,15 @@ class TodoBoardDrainTest(GateConditionIJTest):
         self._satisfy_everything_else()
         said = {
             "type": "assistant",
-            "message": {"role": "assistant", "content": [
-                {"type": "text", "text": "ATLAS | implement | x\nLEDGER | 1/3 | now: a | left: b"},
-            ]},
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "ATLAS | implement | x\nLEDGER | 1/3 | now: a | left: b",
+                    },
+                ],
+            },
         }
         t = self._style_attachment_transcript([said])
         r = _run_gate(
@@ -3240,7 +3304,9 @@ class GateHelperPinsTest(unittest.TestCase):
     def test_docs_name_violations_fails_open_to_empty_list(self):
         import lint_docs_names
 
-        with mock.patch.object(lint_docs_names, "changed_paths", side_effect=RuntimeError("boom")):
+        with mock.patch.object(
+            lint_docs_names, "changed_paths", side_effect=RuntimeError("boom")
+        ):
             self.assertEqual(completion_gate._docs_name_violations(Path(".")), [])
 
     def test_unmerged_reason_part_names_branches_with_commit_counts(self):
@@ -3249,14 +3315,17 @@ class GateHelperPinsTest(unittest.TestCase):
             {"branch": "worker/b", "ahead": 1, "dirty": False},
         ]
         text = completion_gate._unmerged_reason_part(rows)
-        self.assertIn("(q) Unmerged worker branches: worker/a (+2, dirty), worker/b (+1).", text)
+        self.assertIn(
+            "(q) Unmerged worker branches: worker/a (+2, dirty), worker/b (+1).", text
+        )
         self.assertIn("atlas_wt.py merge <agent>", text)
         self.assertIn("ATLAS_WT_GATE=off", text)
 
     def test_session_is_orchestrating_closes_connection_and_fails_open(self):
         conn = mock.MagicMock()
-        with mock.patch("atlas_db.connect", return_value=conn), mock.patch(
-            "atlas_db.is_orchestrating", return_value=True
+        with (
+            mock.patch("atlas_db.connect", return_value=conn),
+            mock.patch("atlas_db.is_orchestrating", return_value=True),
         ):
             self.assertIs(completion_gate._session_is_orchestrating("s"), True)
         conn.close.assert_called_once_with()
@@ -3269,11 +3338,19 @@ class GateHelperPinsTest(unittest.TestCase):
             c = atlas_db.connect(env["ATLAS_DB"])
             atlas_db.init(c)
             c.close()
-            with mock.patch.dict(os.environ, env), mock.patch.object(
-                completion_gate, "_git_changed_paths", return_value=["src/x.py"]
+            with (
+                mock.patch.dict(os.environ, env),
+                mock.patch.object(
+                    completion_gate, "_git_changed_paths", return_value=["src/x.py"]
+                ),
             ):
-                self.assertEqual(completion_gate._run_written_paths("no-such-session", Path(td)), ["src/x.py"])
-                self.assertEqual(completion_gate._run_written_paths("no-such-session"), [])
+                self.assertEqual(
+                    completion_gate._run_written_paths("no-such-session", Path(td)),
+                    ["src/x.py"],
+                )
+                self.assertEqual(
+                    completion_gate._run_written_paths("no-such-session"), []
+                )
 
     def test_check_evidence_without_directory_is_exactly_false(self):
         with tempfile.TemporaryDirectory() as td:
@@ -3291,7 +3368,9 @@ class GateHelperPinsTest(unittest.TestCase):
             atlas_db.init(c)
             c.close()
             with mock.patch.dict(os.environ, env):
-                self.assertEqual(completion_gate._test_run_credit(Path(td), "no-such-session"), 0)
+                self.assertEqual(
+                    completion_gate._test_run_credit(Path(td), "no-such-session"), 0
+                )
 
     def test_test_run_credit_is_zero_when_run_start_is_unknown(self):
         with tempfile.TemporaryDirectory() as td:
@@ -3300,10 +3379,16 @@ class GateHelperPinsTest(unittest.TestCase):
             atlas_db.init(c)
             atlas_db.start_run(c, atlas_db.register_project(c, td), "has-run")
             c.close()
-            with mock.patch.dict(os.environ, env), mock.patch(
-                "atlas_db.run_started_at", return_value=None
-            ), mock.patch.object(completion_gate, "_tests_executed_this_run", return_value=True):
-                self.assertEqual(completion_gate._test_run_credit(Path(td), "has-run"), 0)
+            with (
+                mock.patch.dict(os.environ, env),
+                mock.patch("atlas_db.run_started_at", return_value=None),
+                mock.patch.object(
+                    completion_gate, "_tests_executed_this_run", return_value=True
+                ),
+            ):
+                self.assertEqual(
+                    completion_gate._test_run_credit(Path(td), "has-run"), 0
+                )
 
     def test_switch_name_accepts_only_nonempty_strings(self):
         sw = completion_gate._switch_name
@@ -3776,7 +3861,9 @@ class ContractVisibilityTest(unittest.TestCase):
 
     def test_n_valid_header_in_flight_is_allowed(self):
         self.assertEqual(
-            self.say("ATLAS | 🔧 implement | explorer running", background_tasks=self.RUNNING),
+            self.say(
+                "ATLAS | 🔧 implement | explorer running", background_tasks=self.RUNNING
+            ),
             "",
         )
 
@@ -3803,7 +3890,9 @@ class ContractVisibilityTest(unittest.TestCase):
     def test_n_fails_open_on_non_string_last_assistant_message(self):
         for value in (5, None, ["All done."], {"text": "All done."}):
             with self.subTest(value=value):
-                self.assertEqual(self.gate({"last_assistant_message": value}).stdout, "")
+                self.assertEqual(
+                    self.gate({"last_assistant_message": value}).stdout, ""
+                )
 
     def test_n_sidechain_identified_by_agent_id_exempt(self):
         self.assertEqual(self.say("All done.", agent_id="agent-1"), "")
@@ -4022,14 +4111,24 @@ class ContractVisibilityTest(unittest.TestCase):
         )
         log = crew / "irc" / "log.jsonl"
         log.write_text(
-            json.dumps({"seq": 1, "ts": time.time(), "from": "lead", "to": "#c", "text": "go"})
+            json.dumps(
+                {"seq": 1, "ts": time.time(), "from": "lead", "to": "#c", "text": "go"}
+            )
             + "\n",
             encoding="utf-8",
         )
         self.assertIn("(p)", self.say())
         with open(log, "a", encoding="utf-8") as fh:
             fh.write(
-                json.dumps({"seq": 2, "ts": time.time(), "from": "w1", "to": "#c", "text": "DONE"})
+                json.dumps(
+                    {
+                        "seq": 2,
+                        "ts": time.time(),
+                        "from": "w1",
+                        "to": "#c",
+                        "text": "DONE",
+                    }
+                )
                 + "\n"
             )
         self._clear_marker("p")
@@ -4145,7 +4244,9 @@ class ContractVisibilityTest(unittest.TestCase):
             self.assertEqual(
                 completion_gate._inprocess_working_dispatches(self.SID_A), 1
             )
-            with mock.patch.object(completion_gate, "_tmux_available", return_value=True):
+            with mock.patch.object(
+                completion_gate, "_tmux_available", return_value=True
+            ):
                 self.assertEqual(
                     completion_gate._team_gate(Path(self.tmp), self.SID_A, None),
                     (None, False),
@@ -4171,7 +4272,9 @@ class ContractVisibilityTest(unittest.TestCase):
     def test_s_stands_down_without_tmux(self):
         self._only_dispatches("atlas:runner", "atlas:runner")
         with mock.patch.dict(os.environ, {"ATLAS_DB": self.env["ATLAS_DB"]}):
-            with mock.patch.object(completion_gate, "_tmux_available", return_value=False):
+            with mock.patch.object(
+                completion_gate, "_tmux_available", return_value=False
+            ):
                 self.assertEqual(
                     completion_gate._team_gate(Path(self.tmp), "sess-no-tmux", None),
                     (None, False),
@@ -4238,7 +4341,9 @@ class ContractVisibilityTest(unittest.TestCase):
         crew = self._crew("crew-a", lead_session=self.SID_A)
         line = dict(seq=1, ts=time.time(), to="c", text="DONE")
         line["from"] = "w1"
-        (crew / "irc" / "log.jsonl").write_text(json.dumps(line) + chr(10), encoding="utf-8")
+        (crew / "irc" / "log.jsonl").write_text(
+            json.dumps(line) + chr(10), encoding="utf-8"
+        )
         self.assertNotIn("(s) Team gate", self.say())
 
     def test_worker_session_never_gets_p(self):
@@ -4258,14 +4363,18 @@ class ContractVisibilityTest(unittest.TestCase):
             env = dict(ATLAS_DB=self.env["ATLAS_DB"])
             env[var] = "w1"
             with mock.patch.dict(os.environ, env):
-                with mock.patch.object(completion_gate, "_tmux_available", return_value=True):
+                with mock.patch.object(
+                    completion_gate, "_tmux_available", return_value=True
+                ):
                     self.assertEqual(
                         completion_gate._team_gate(Path(self.tmp), self.SID_A, None),
                         (None, False),
                     )
 
     def test_blank_worker_marker_is_not_a_worker(self):
-        with mock.patch.dict(os.environ, dict(ATLAS_WORKER_NAME="  ", ATLAS_CREW_WORKER="")):
+        with mock.patch.dict(
+            os.environ, dict(ATLAS_WORKER_NAME="  ", ATLAS_CREW_WORKER="")
+        ):
             self.assertFalse(completion_gate._is_worker_session())
         with mock.patch.dict(os.environ, dict(ATLAS_CREW_WORKER="w1")):
             self.assertTrue(completion_gate._is_worker_session())
@@ -4276,7 +4385,13 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertIn("Nineteen conditions, (a) through (s)", doc)
 
     def test_working_role_rule(self):
-        for role in ("atlas:explorer", "atlas:implementer", "Explore", "general-purpose", "atlas-explorer"):
+        for role in (
+            "atlas:explorer",
+            "atlas:implementer",
+            "Explore",
+            "general-purpose",
+            "atlas-explorer",
+        ):
             self.assertTrue(completion_gate._is_working_role(role), role)
         for role in (
             "atlas:planner",
@@ -4352,7 +4467,9 @@ class BlockLoopCapTest(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_HOOKSTATE_DIR": tmp}):
             lim = completion_gate.BLOCK_LOOP_LIMIT
             for _ in range(lim):
-                self.assertFalse(completion_gate._block_loop_exhausted("s-reset", ["c"]))
+                self.assertFalse(
+                    completion_gate._block_loop_exhausted("s-reset", ["c"])
+                )
             completion_gate._block_loop_reset("s-reset")  # a passing Stop
             got = [
                 completion_gate._block_loop_exhausted("s-reset", ["c"])
@@ -4828,7 +4945,9 @@ class StopGateArmingTest(unittest.TestCase):
             dict(session_id=self.SESSION, cwd=str(self.root)), self.env
         ).stdout
 
-    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
+    @unittest.skipIf(
+        _test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON
+    )
     def test_sed_only_edit_in_docless_armed_project_blocks_on_m(self):
         self.repo()
         self.start()
@@ -4853,7 +4972,9 @@ class StopGateArmingTest(unittest.TestCase):
             self.sed_edit()
             self.assertEqual(self.gate(), "")
 
-    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
+    @unittest.skipIf(
+        _test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON
+    )
     def test_shell_code_edit_demands_no_docs_files_in_docless_project(self):
         self.repo()
         self.start(orchestrating=True)
@@ -4891,7 +5012,9 @@ class StopGateArmingTest(unittest.TestCase):
         for frag in ("CHANGELOG.md is missing", "ROADMAP.md is missing"):
             self.assertNotIn(frag, out)
 
-    @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
+    @unittest.skipIf(
+        _test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON
+    )
     def test_non_git_project_falls_back_to_tool_events(self):
         self.put("package.json", "{}\n")  # an armed marker, but not a repo
         self.put("app.py", "x = 1\n")
@@ -4949,12 +5072,14 @@ class DocsMovedInGitRealRepoTest(unittest.TestCase):
     def _repo(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+
         def git(*a):
             subprocess.run(
                 ["git", "-C", tmp, "-c", "user.name=t", "-c", "user.email=t@t", *a],
                 check=True,
                 capture_output=True,
             )
+
         git("init", "-q")
         os.makedirs(os.path.join(tmp, "src"))
         with open(os.path.join(tmp, "src", "a.py"), "w") as f:
@@ -4983,7 +5108,13 @@ class GatePassAnalyticsTest(GateOrchestrationTest):
 
     def _gate_env(self):
         ah = os.path.join(self.tmp, "ah")
-        env = dict(self.env, ATLAS_HOME=ah, ATLAS_ANALYTICS="on", ATLAS_GATE_PHASES="off", ATLAS_GATE_COLONY="off")
+        env = dict(
+            self.env,
+            ATLAS_HOME=ah,
+            ATLAS_ANALYTICS="on",
+            ATLAS_GATE_PHASES="off",
+            ATLAS_GATE_COLONY="off",
+        )
         for var in ("CI", "GITHUB_ACTIONS", "PYTEST_CURRENT_TEST", "DO_NOT_TRACK"):
             env.pop(var, None)
         return ah, env
@@ -5025,12 +5156,18 @@ class GateBlockAnalyticsTest(GateOrchestrationTest):
 
     def test_block_records_gate_key(self):
         ah = os.path.join(self.tmp, "ah")
-        env = dict(self.env, ATLAS_HOME=ah, ATLAS_GATE_PHASES="off", ATLAS_GATE_COLONY="off")
+        env = dict(
+            self.env, ATLAS_HOME=ah, ATLAS_GATE_PHASES="off", ATLAS_GATE_COLONY="off"
+        )
         env.pop("ATLAS_ANALYTICS", None)
-        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        scripts = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "scripts"
+        )
         subprocess.run(
             [sys.executable, os.path.join(scripts, "atlas_analytics.py"), "enable"],
-            env=env, check=True, capture_output=True,
+            env=env,
+            check=True,
+            capture_output=True,
         )
         self._log_run_write("src/app.py")
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)

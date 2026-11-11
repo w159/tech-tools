@@ -129,7 +129,7 @@ test("footer: checks only, no key hints or buttons on omp", () => {
 test("idle panel: the band reads idle, the last run follows, a failed count is bold text", () => {
 	const idle = (failed: number) => model({ idle: { workers: 3, secs: 70, failed }, workers: [], phase: "done", done: 6, total: 6, maxLines: 6 });
 	const ok = rows(idle(0));
-	expect(ok[0]).toContain("idle · phase 5/5");
+	expect(ok[0]).toContain("idle   todo");
 	expect(ok[0]).toContain("6 of 6");
 	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	expect(rows(idle(2))[1]).toContain("2 failed");
@@ -159,11 +159,11 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ◐1`", () => {
+test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ◐1`", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ◐1");
+	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 1/4 · ◐1");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 

@@ -257,7 +257,8 @@ describe('one world, every surface', () => {
 
   test('the surfaces state what the check reads: every parser found its facts', () => {
     const w = worldSnapshot();
-    expect(ccBand(w)).toMatchObject({ todo: [3, 7], blocked: 1, phase: '2/4', agents: { running: 1, failed: 1, queued: 1 } });
+    expect(ccBand(w)).toMatchObject({ todo: [3, 7], blocked: 1, agents: { running: 1, failed: 1, queued: 1 } });
+    expect(ccBand(w).phase).toBeUndefined(); // a plan exists: the band states the plan count, not a second clock
     expect(Object.keys(ccBand(w).gates!).sort()).toEqual(['doctor', 'lint', 'test']);
     expect(Object.keys(ccBand(w).workers!)).toHaveLength(5);
     expect(hudFacts(w, 'cc').agents).toEqual({ queued: 1, running: 1, done: 2, failed: 1 });

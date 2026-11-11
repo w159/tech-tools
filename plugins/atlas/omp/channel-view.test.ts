@@ -322,7 +322,7 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}implement · phase 4\/5 {3}todo █████▌░░░░ 5 of 9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
+	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo █████▌░░░░ 5 of 9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
 	expect(p[2]).toMatch(/^ ◓ explorer-a324 {5}explorer {5}ctx_search {2}dispatch_tripwire\.py +1m12s $/);
 	expect(p[3]).toMatch(/^ ◓ implementer-band {2}implementer {2}thinking {3}last Edit mod\/band\.tsx +48s $/);
@@ -365,7 +365,7 @@ test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers int
 test("panel idle: the band reads idle and the last run follows, the whole thing is two rows", () => {
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle · phase 5\/5 {3}todo █████▌░░░░ 5 of 9 +$/);
+	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle {3}todo █████▌░░░░ 5 of 9 +$/);
 	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
 	expect(failed).toContain("last run  2 workers · 9s · 1 failed");
@@ -380,7 +380,7 @@ test("long worker names and roles are cut with an ellipsis in their columns, nev
 test("panel at 60 columns is the band alone", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
 	expect(p).toHaveLength(1);
-	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ phase 4/5 · todo 5/9 · ◓2");
+	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 5/9 · ◓2");
 });
 
 test("worker marks: a running worker's spinner follows the tick, thinking has a grey one; no faces", () => {
@@ -532,19 +532,19 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 		handlers.message_end?.forEach(h => h({ message: { role: "assistant", content: [{ type: "text", text }] } }, ctx));
 	const railOf = () => plain([calls.at(-1)![0]!]);
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}research · phase/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}research {3}todo/);
 	say("ATLAS | ⛭ implement 1/3 | running the team\nbody");
 	say("no header on this follow-up message");
 	say("ATLAS | x verify | sub", { cwd: root, agent: { kind: "sub" } }); // a sub's header never moves the lead's rail
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}implement · phase/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}implement {3}todo/);
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn: the old header no longer counts
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}research · phase/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}research {3}todo/);
 	writeFileSync(join(root, ".atlas", ".run", "todos.json"), JSON.stringify({ version: 1, items: [{ status: "in_progress", phase: "test" }] }));
 	say("ATLAS | ⛭ verify | x");
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}test · phase/); // the active todo outranks the header
+	expect(railOf()).toMatch(/ATLAS ◗ {2}test {3}todo/); // the active todo outranks the header
 	view.stop();
 });
 
@@ -809,11 +809,11 @@ test("only the lead's assistant text pins the rail: user messages and non-text c
 	send({ role: "assistant", content: "ATLAS | ⛭ verify | plain string content" });
 	send({ role: "assistant", content: [{ type: "tool_use", text: "ATLAS | ⛭ verify | x" }] });
 	send(null);
-	expect(railOf()).toMatch(/ATLAS ◗ {2}research · phase/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}research {3}todo/);
 	send({ role: "assistant", content: header });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}verify · phase/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}verify {3}todo/);
 	send({ role: "assistant", content: [{ type: "text", text: "ATLAS | ⛭ bogus-phase | x" }] }); // not a rail phase: ignored
-	expect(railOf()).toMatch(/ATLAS ◗ {2}verify · phase/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}verify {3}todo/);
 	view.stop();
 });
 

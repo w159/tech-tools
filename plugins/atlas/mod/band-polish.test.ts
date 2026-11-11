@@ -66,7 +66,7 @@ describe('idle band', () => {
       expect(row).not.toContain('running');
       expect(row).not.toContain('implement');
     }
-    expect(rowsOf(160, { snapshot: idleSnap(), live: [] })[0]).toContain('idle · phase 4/5');
+    expect(rowsOf(160, { snapshot: idleSnap(), live: [] })[0]).toContain('idle   todo');
   });
   test('rich idle also says idle; a running band does not', () => {
     expect(rowsOf(160, { snapshot: idleSnap(), live: [], rich: true, maxRows: 12 }).join('\n')).toContain('idle');

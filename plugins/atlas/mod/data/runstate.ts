@@ -8,11 +8,25 @@ import type { GateGroup } from '../pane/sidebar-types';
 
 /** `name`: only on a failing check, what the blocked reason calls it (the failing line's own words). */
 export type GateCheck = { id: string; ok: boolean; name?: string };
-export type GateTally = { total: number; green: number; failing: string[]; names: string[]; checks: GateCheck[] };
+/** `stop`: the completion gate's last Stop verdict for this session (the `stop-verdict` line atlas_gates.py reads from completion_gate_core's record): `gates` are the
+ * refusing gates' names, lowercased. null when no Stop has been recorded. Only a blocked Stop makes the band BLOCKED. */
+export type StopVerdict = { blocked: boolean; gates: string[] };
+export type GateTally = { total: number; green: number; failing: string[]; names: string[]; checks: GateCheck[]; stop: StopVerdict | null };
 
-const hasData = (g: GateGroup): boolean => g.lines.length > 0 || !!g.error;
+/** The id of the informational line that carries the Stop verdict: a record, never a check or a gate. */
+export const STOP_LINE = 'stop-verdict';
+
+const hasData = (g: GateGroup): boolean => g.lines.some((l) => l.id !== STOP_LINE) || !!g.error;
 
 const NAME_MAX = 16;
+/** The header contract as ONE evaluation: the core row's `n of m` replies that opened with the ATLAS header (the transcript's tally) also decides the gates tab's
+ * `Header contract` line, so `header 6 of 8` amber beside `Header contract passing` can not happen. A header group without a tally, or a tally with no replies yet, keeps its own line. */
+export function withHeaderTally<G extends { id: string; lines: readonly unknown[] }>(groups: readonly G[], header: { ok: number; total: number } | null | undefined): readonly G[] {
+  if (!header || header.total <= 0) return groups;
+  const line = { id: 'header-matched', label: 'Replies with header matched', ok: header.ok >= header.total, detail: `${header.ok} of ${header.total}` };
+  return groups.map((g) => (g.id === 'header' ? { ...g, lines: [line] } : g));
+}
+
 /** What a failing group is called in a reason: its first failing line lowercased (`team gate`) when that is short, else the group id. */
 function reasonName(g: GateGroup): string {
   const label = g.error ? '' : (g.lines.find((l) => !l.ok)?.label ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -24,16 +38,27 @@ export function gateTally(groups: readonly GateGroup[]): GateTally {
   const data = groups.filter(hasData);
   const checks = data.map((g): GateCheck => (groupOpenCount(g) === 0 ? { id: g.id, ok: true } : { id: g.id, ok: false, name: reasonName(g) }));
   const failing = checks.filter((c) => !c.ok).map((c) => c.id);
-  return { total: checks.length, green: checks.length - failing.length, failing, names: checks.filter((c) => !c.ok).map((c) => c.name!), checks };
+  return { total: checks.length, green: checks.length - failing.length, failing, names: checks.filter((c) => !c.ok).map((c) => c.name!), checks, stop: stopOf(groups) };
 }
 
-/** Why a band is blocked: the lead declared it (`needs you`) or checks fail. `short` is the form for a crowded row. */
-export function blockReasons(declared: boolean, failing: readonly string[]): { long: string; short: string } {
-  if (declared || failing.length === 0) return { long: 'needs you', short: 'needs you' };
-  // One string at every width (a crowded row drops the reason whole, never rewords it): `team gate failing`, `2 gates failing`.
-  const one = failing.length === 1 ? `${failing[0]} failing` : `${failing.length} gates failing`;
+/** The Stop verdict line in any group; `Last Stop blocked` + `Team gate, Todos drained` reads as blocked by `team gate`, `todos drained`. */
+function stopOf(groups: readonly GateGroup[]): StopVerdict | null {
+  for (const g of groups) {
+    const l = g.lines.find((x) => x.id === STOP_LINE);
+    if (l) return l.label.endsWith('blocked') ? { blocked: true, gates: (l.detail ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean) } : { blocked: false, gates: [] };
+  }
+  return null;
+}
+
+/** Why a band is BLOCKED: the lead declared it (`needs you`), or the Stop gate refused the stop (`stop: team gate`, `stop: 2 gates`). `short` is the form for a crowded row. */
+export function blockReasons(declared: boolean, stopGates: readonly string[]): { long: string; short: string } {
+  if (declared || stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
+  const one = stopGates.length === 1 ? `stop: ${stopGates[0]}` : `stop: ${stopGates.length} gates`; // one string at every width: a crowded row drops the reason whole, never rewords it
   return { long: one, short: one };
 }
+
+/** A failing check while the Stop gate did not refuse is a warning, never BLOCKED: `tripwire warning`, `2 gates warning`. */
+export const warningText = (failing: readonly string[]): string => `${failing.length === 1 ? failing[0] : `${failing.length} gates`} warning`;
 
 /** Workers that really ran: the host-listed ones plus every dispatch row's owner (the host forgets a finished worker). */
 export function ranWorkers(listed: readonly string[], dispatchOwners: readonly string[]): string[] {

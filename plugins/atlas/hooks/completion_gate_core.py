@@ -182,6 +182,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1533,7 +1534,56 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     }
 
 
+# The Stop verdict of this invocation, written for the band (mod/data/runstate.ts reads it through
+# atlas_gates.py): `letters` is the gate letters that refused the stop, [] when it was allowed.
+_STOP: dict = {}
+
+
+def _verdict_root(cwd: Path) -> Path | None:
+    root = _find_root(cwd)
+    if root is not None:
+        return root
+    with contextlib.suppress(Exception):
+        import atlas_scope
+
+        return Path(atlas_scope.project_root(str(cwd)))
+    return None
+
+
+def _write_stop_verdict(session: str, cwd: Path, letters: list) -> None:
+    """Record this session's last Stop verdict in <root>/.atlas/.run/stop-verdict.json
+    ({"sessions": {sid: {blocked, letters, at}}}, newest 20 kept). Only into an existing
+    .atlas/.run (an atlas project); fail-open: observability never wedges Stop."""
+    if not session:
+        return
+    with contextlib.suppress(Exception):
+        root = _verdict_root(cwd)
+        run = root / ".atlas" / ".run" if root is not None else None
+        if run is None or not run.is_dir():
+            return
+        path = run / "stop-verdict.json"
+        sessions: dict = {}
+        with contextlib.suppress(Exception):
+            loaded = json.loads(path.read_text(encoding="utf-8")).get("sessions")
+            if isinstance(loaded, dict):
+                sessions = loaded
+        sessions[session] = {"blocked": bool(letters), "letters": list(letters), "at": time.time()}
+        keep = sorted(sessions.items(), key=lambda kv: (kv[1] or {}).get("at", 0), reverse=True)[:20]
+        tmp = run / f".stop-verdict.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps({"sessions": dict(keep)}), encoding="utf-8")
+        os.replace(tmp, path)
+
+
 def main() -> int:
+    _STOP.clear()
+    try:
+        return _main()
+    finally:
+        if "session" in _STOP:
+            _write_stop_verdict(_STOP["session"], _STOP["cwd"], _STOP.get("letters", []))
+
+
+def _main() -> int:
     # One stdin read: load_payload(hook, raw=raw) owns parse + fault row; the
     # readability probe here only decides whether the disarm is SILENT. F3: a
     # run must not end with the gate disarmed and nothing on the model-visible
@@ -1562,6 +1612,7 @@ def main() -> int:
     try:
         if os.environ.get("ATLAS_GATE", "").lower() == "off":
             return 0
+        _STOP.update(session=str(data.get("session_id") or ""), cwd=Path(data.get("cwd") or os.getcwd()))
         # stop_hook_active and the session circuit breaker. The breaker is a
         # deliberate cap that ends a runaway Stop loop: more than
         # atlas_hook_guard.STOP_BURST_LIMIT Stops within STOP_BURST_WINDOW
@@ -1607,6 +1658,7 @@ def main() -> int:
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):
                 _record_gate_block(session, ["m"])
+                _STOP["letters"] = ["m"]
                 _record_analytics("gate.m.block")
                 print(
                     json.dumps(
@@ -1632,6 +1684,7 @@ def main() -> int:
             count, loop_exhausted = _block_loop_state(session, ["r"])
             if not loop_exhausted:
                 _record_gate_block(session, ["r"])
+                _STOP["letters"] = ["r"]
                 _record_analytics("gate.r.block")
                 notice = _block_loop_notice(count, ["r"])
                 if notice:
@@ -1652,6 +1705,7 @@ def main() -> int:
                 _note_loop_allowed(count, ["n"])
             else:
                 _record_gate_block(session, ["n"])
+                _STOP["letters"] = ["n"]
                 _record_analytics("gate.n.block")
                 repeat = _repeat_letters(["n"], session, root)
                 _mark_contract_block("seen-n", session, root)
@@ -1697,6 +1751,7 @@ def main() -> int:
             _note_loop_allowed(count, failed)
             return 0
         _record_gate_block(data.get("session_id", ""), failed)
+        _STOP["letters"] = list(failed)
         for letter in failed:
             _record_analytics(f"gate.{letter.lower()}.block")
         # F8: mark every failing letter. The first Stop per letter ships the

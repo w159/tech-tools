@@ -9,7 +9,7 @@ import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
 import { ownTodos, planBasis, todoCounts } from './data/todos';
 import { blockedCount } from './board-model';
-import { gateTally, ranWorkers } from './data/runstate';
+import { gateTally, ranWorkers, withHeaderTally } from './data/runstate';
 import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -107,14 +107,14 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const queued = queuedMembers(s).map((name): MissionWorker => ({ name, role: name.includes('-') ? name.replace(/-[^-]*$/, '') : undefined, state: 'queued', secs: 0 })); // dispatched, not listed by the host yet
   const shown = active.length || queued.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
   const { done, total } = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
-  const tally = gateTally(b.gates); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract included
+  const tally = gateTally(withHeaderTally(b.gates, b.core?.contract.header)); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract included
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
   const working = active.filter((w) => w.state === 'working' || w.state === 'blocked');
   return {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now,
     project: boardOf(s), scope: b.team,
-    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked',
+    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['gate'] } : {}),
     done, total, todoBlocked: blockedCount(planBasis(s.todos, s.sessionId), workerStates(s, b.live)),
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,

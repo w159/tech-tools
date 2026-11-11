@@ -68,7 +68,8 @@ describe('counts and gauges equal the data', () => {
     expect(row).toContain(`todo `);
     expect(row).toContain(`${done} of ${todos.length}`);
     const active = world.phases.findIndex((p) => p.state === 'active');
-    expect(row).toContain(`phase ${active + 1}/${world.phases.length}`);
+    expect(active).toBeGreaterThanOrEqual(0);
+    expect(row).not.toMatch(/phase \d\/\d/); // the plan count is the band's progress figure
     expect(row).toMatch(/1 running/);
     expect(row).toMatch(/1 failed/);
     expect(row).toMatch(/1 queued/);

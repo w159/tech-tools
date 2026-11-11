@@ -43,7 +43,8 @@ const boardTodos = [
 describe('band: the brand capsule and the facts, and nowhere else the task count', () => {
   test('reads the phase, the todo gauge and the ctx gauge and the worker counts, tick 3', () => {
     const { rows } = panel(160, { gates: [gate] });
-    expect(rows[0]).toContain('◖ ◆ ATLAS ◗  implement · phase 4/5');
+    expect(rows[0]).toContain('◖ ◆ ATLAS ◗  implement  ');
+    expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ██▌░░░░░░░ 1 of 4');
     expect(rows[0]).toContain('ctx █░░░░░░░ 12%');
     expect(rows[0]).toContain(`agents ${spinnerGlyph(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
@@ -114,8 +115,8 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ██▌░░░░░░░ 1 of 4');
-    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ phase 4\/5 · todo 1\/4 · /);
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
+    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {2}todo ██░░░░░░ 1 of 4/);
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
   });
   test('idle shows the last run under the band', () => {
@@ -382,10 +383,10 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ◒1 ■1` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ todo 1/4 · ◒1 ■1` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ phase 4/5 · todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
+    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {

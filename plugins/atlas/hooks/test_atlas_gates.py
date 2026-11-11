@@ -73,6 +73,36 @@ class AtlasGatesTest(unittest.TestCase):
     def _count(self):
         return self.conn.execute("SELECT COUNT(*) FROM friction_events").fetchone()[0]
 
+    def _write_verdict(self, session, blocked, letters):
+        run = self.root / ".atlas" / ".run"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "stop-verdict.json").write_text(
+            json.dumps({"sessions": {session: {"blocked": blocked, "letters": letters, "at": 1.0}}})
+        )
+
+    def _stop_line(self, doc):
+        comp = next(g for g in doc["groups"] if g["id"] == "completion")
+        return [l for l in comp["lines"] if l["id"] == "stop-verdict"]
+
+    def test_stop_verdict_blocked_names_the_refusing_gate(self):
+        self._write_verdict(SESSION, True, ["s", "i"])
+        _, doc = _run(self.db, self.root)
+        (line,) = self._stop_line(doc)
+        self.assertEqual(line["label"], "Last Stop blocked")
+        self.assertEqual(line["detail"], "Team gate, Todos drained")
+        self.assertTrue(line["ok"])  # a record, not a check: it never adds to the failing count
+
+    def test_stop_verdict_allowed(self):
+        self._write_verdict(SESSION, False, [])
+        _, doc = _run(self.db, self.root)
+        (line,) = self._stop_line(doc)
+        self.assertEqual(line["label"], "Last Stop allowed")
+
+    def test_no_stop_verdict_for_this_session_means_no_line(self):
+        self._write_verdict("someone-else", True, ["s"])
+        _, doc = _run(self.db, self.root)
+        self.assertEqual(self._stop_line(doc), [])
+
     def test_shape_and_fix_text(self):
         # (c) is scoped to code-shipping runs: record a non-docs write.
         import atlas_db

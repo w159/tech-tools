@@ -74,7 +74,29 @@ def _line(id_, label, ok, detail=None, fix=None) -> dict:
     return out
 
 
+def stop_verdict_line(session: str, root: Path):
+    """The completion gate's last Stop verdict for `session`, as one informational line (ok is always
+    true: it is a record, not a check). None when no verdict is stored. completion_gate_core writes it."""
+    try:
+        rec = json.loads((Path(root) / ".atlas" / ".run" / "stop-verdict.json").read_text(encoding="utf-8"))["sessions"][session]
+        blocked = bool(rec["blocked"])
+        names = [_LABELS.get(str(x), str(x)) for x in rec.get("letters") or []]
+    except Exception:  # noqa: BLE001 -- no record, or an unreadable one, means no line
+        return None
+    if blocked:
+        return _line("stop-verdict", "Last Stop blocked", True, ", ".join(names) or "gate")
+    return _line("stop-verdict", "Last Stop allowed", True)
+
+
 def completion_group(session: str, root: Path, transcript: str) -> dict:
+    g = _completion_group(session, root, transcript)
+    line = stop_verdict_line(session, root)
+    if line is not None:
+        g["lines"].append(line)
+    return g
+
+
+def _completion_group(session: str, root: Path, transcript: str) -> dict:
     import completion_gate as cg
 
     g = {"id": "completion", "title": "Completion gate", "lines": []}

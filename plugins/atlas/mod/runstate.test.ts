@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { Ui } from './atlas-ui';
 import { textWidth } from './theme';
-import { gateTally, blockReasons, ranWorkers } from './data/runstate';
+import { gateTally, blockReasons, warningText, ranWorkers } from './data/runstate';
 import { endedOf, settleDispatch } from './data/todos';
 import { bandLines, runsText, missionLines, type MissionModel } from './mission-layout';
 
@@ -37,31 +37,49 @@ describe('runstate: gates and checks are one count', () => {
   });
 });
 
-describe('runstate: blocked shows glyph, word and reason at every width', () => {
+describe('runstate: blocked shows glyph, word and reason at every width; a failing check alone is a warning', () => {
   const checks = [{ id: 'routing', ok: true }, { id: 'tripwire', ok: false }];
   for (const cols of [40, 60, 80, 120]) {
     test(`${cols} cells`, () => {
-      const t = runsText(bandLines(model({ cols, checks }))[0]!.runs);
+      const t = runsText(bandLines(model({ cols, checks, stopGates: ['tripwire'] }))[0]!.runs);
       expect(t).toContain('▲ BLOCKED');
       expect(textWidth(t)).toBeLessThanOrEqual(cols);
-      if (cols >= 60) expect(t).toContain('tripwire');
+      if (cols >= 60) expect(t).toContain('stop: tripwire');
+      const w = runsText(bandLines(model({ cols, checks }))[0]!.runs);
+      expect(w).not.toContain('BLOCKED');
+      expect(w).toContain('▲');
+      expect(textWidth(w)).toBeLessThanOrEqual(cols);
+      if (cols >= 60) expect(w).toContain('tripwire warning');
     });
   }
+  test('the tally reads the Stop verdict line and never counts it as a check', () => {
+    const stop = (label: string, detail?: string) => ({ id: 'completion', title: 'C', lines: [line(true, 'a'), { id: 'stop-verdict', label, ok: true, ...(detail ? { detail } : {}) }] });
+    expect(gateTally([stop('Last Stop blocked', 'Team gate, Todos drained')] as never).stop).toEqual({ blocked: true, gates: ['team gate', 'todos drained'] });
+    expect(gateTally([stop('Last Stop allowed')] as never).stop).toEqual({ blocked: false, gates: [] });
+    expect(gateTally(groups).stop).toBeNull();
+    const only = gateTally([{ id: 'completion', title: 'C', lines: [{ id: 'stop-verdict', label: 'Last Stop allowed', ok: true }] }] as never);
+    expect(only.total).toBe(0); // a group holding only the verdict has no data
+    expect(gateTally([stop('Last Stop blocked', 'Team gate')] as never).failing).toEqual([]); // blocked Stop is not a failing check
+  });
+  test('warningText', () => {
+    expect(warningText(['tripwire'])).toBe('tripwire warning');
+    expect(warningText(['a', 'b'])).toBe('2 gates warning');
+  });
   test('declared blocked says needs you', () => {
     expect(runsText(bandLines(model({ blocked: true, phase: 'blocked' }))[0]!.runs)).toContain('▲ BLOCKED · needs you');
   });
   test('blockReasons', () => {
-    expect(blockReasons(false, ['tripwire']).long).toBe('tripwire failing');
-    expect(blockReasons(false, ['a', 'b']).long).toBe('2 gates failing');
-    // one string at every width: the short form is the long form, never `tripwire` or `2 failing`
-    expect(blockReasons(false, ['tripwire']).short).toBe('tripwire failing');
-    expect(blockReasons(false, ['a', 'b']).short).toBe('2 gates failing');
+    expect(blockReasons(false, ['tripwire']).long).toBe('stop: tripwire');
+    expect(blockReasons(false, ['a', 'b']).long).toBe('stop: 2 gates');
+    // one string at every width: the short form is the long form, never `tripwire` or `2`
+    expect(blockReasons(false, ['tripwire']).short).toBe('stop: tripwire');
+    expect(blockReasons(false, ['a', 'b']).short).toBe('stop: 2 gates');
     expect(blockReasons(true, ['a']).long).toBe('needs you');
   });
 });
 
 describe('runstate: one vocabulary at every width', () => {
-  const m = (cols: number) => model({ cols, phase: 'build', done: 3, total: 7, workers: [{ name: 'a', state: 'running', secs: 1 }, { name: 'f', state: 'failed', secs: 1 }] });
+  const m = (cols: number) => model({ cols, phase: 'build', done: 3, total: 0, workers: [{ name: 'a', state: 'running', secs: 1 }, { name: 'f', state: 'failed', secs: 1 }] });
   for (const cols of [60, 80, 120]) {
     test(`${cols} cells use the long word`, () => {
       const t = runsText(bandLines(m(cols))[0]!.runs);

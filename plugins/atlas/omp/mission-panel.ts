@@ -10,7 +10,7 @@ import type { MotionCtx, MotionItem } from "../mod/motion";
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, parseGates } from "../mod/gates";
-import { gateTally } from "../mod/data/runstate";
+import { gateTally, withHeaderTally } from "../mod/data/runstate";
 import { hostEnv, paintAnsi, sgrColor, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
@@ -131,7 +131,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 	const last = [...m.notes].reverse().find(n => isMessageKind(n.kind));
 	const lead = channelLead(m.channel);
 	const named = (n: string) => (lead && n === "lead" ? lead : n);
-	const tally = gateTally(m.gates ?? []);
+	const tally = gateTally(withHeaderTally(m.gates ?? [], m.core?.contract.header));
 	const workers = m.idle ? [] : m.workers.map(missionWorker);
 	const rail = railOf(railIds(m.phases), m.phase);
 	return {
@@ -144,6 +144,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		phases: rail.ids,
 		phase: rail.phase,
 		blocked: m.blocked,
+		...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ["gate"] } : {}),
 		done: m.done,
 		total: m.total,
 		todoBlocked: blockedCount(m.todos ?? [], ownerStates(m)),

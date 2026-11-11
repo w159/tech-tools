@@ -11,7 +11,7 @@ import { band_120, band_120_rich, band_40, band_60, band_80 } from "./band-world
 
 /** Running: the band, workers (failed and waiting first, then running, queued, done), the newest message, the checks footer. */
 export const golden: string[] = [
-  "◖ ◆ ATLAS ◗  research · phase 2/4  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued",
+  "◖ ◆ ATLAS ◗  research  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued",
   "",
   " ■ implementer-live    implementer  failed                                                                        1m35s",
   " ◐ implementer-band    implementer  Read  runs.ts:17                                                                42s",
@@ -23,10 +23,10 @@ export const golden: string[] = [
   " checks  ● lint  ● test  ■ doctor  2 of 3 green"
 ];
 
-/** Idle with a failing check (`■ doctor`): the run is closed, every plan row done, the band reads blocked (never idle beside a failing check) and keeps the failed worker, the last run follows (it counts the failure
+/** Idle with a failing check (`■ doctor`): the run is closed, every plan row done, the band reads a warning (never idle beside a failing check, and never BLOCKED unless Stop refused) and keeps the failed worker, the last run follows (it counts the failure
  * too), then the core row (core-golden.ts) and the footer. The Claude band adds its key buttons to the footer only when handlers are wired. */
 export const idleGolden: string[] = [
-  "◖ ◆ ATLAS ◗  ▲ BLOCKED · doctor failing · phase 4/4   todo ██████████ 7 of 7   ctx █████░░░ 62%   agents ■ 1 failed",
+  "◖ ◆ ATLAS ◗  ▲ doctor warning   todo ██████████ 7 of 7   ctx █████░░░ 62%   agents ■ 1 failed",
   " last run  1 worker · 42s · 1 failed",
   " contract  3 of 4 headers   verdicts  1 verified · 1 refuted   offload  17.9k kept, 608 back (30x)   route  verify/low ●",
   " checks  ● lint  ● test  ■ doctor  2 of 3 green"

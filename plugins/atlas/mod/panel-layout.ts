@@ -12,7 +12,7 @@ import { labelCut } from './board-model';
 import { railNo, railOf } from './rail';
 import { hasCore, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
-import { blockReasons, gateTally } from './data/runstate';
+import { blockReasons, gateTally, STOP_LINE, withHeaderTally } from './data/runstate';
 import { displayName } from './hud';
 import type { GateGroup } from './pane/sidebar-types';
 
@@ -159,11 +159,13 @@ const mark = (s: UiState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): 
 };
 
 /** The gates figure, from the one definition the band uses (mod/data/runstate.ts): a group with no data is neither green nor a check. */
+/** The gates as every row reads them: the header contract line comes from the core row's own tally (one evaluation). */
+const gatesOf = (m: Pick<PanelModel, 'gates' | 'core'>): readonly PanelGate[] => withHeaderTally(m.gates, m.core?.contract.header);
 const tallyOf = (gs: readonly PanelGate[]) => gateTally(gs as unknown as readonly GateGroup[]);
 /** The groups the tally counts, in their order. */
 const countedGates = (gs: readonly PanelGate[]): PanelGate[] => {
   const ids = new Set(tallyOf(gs).checks.map((c) => c.id as string));
-  return gs.filter((g) => ids.has(g.id));
+  return gs.filter((g) => ids.has(g.id)).map((g) => (g.lines.some((l) => l.id === STOP_LINE) ? { ...g, lines: g.lines.filter((l) => l.id !== STOP_LINE) } : g)); // the Stop verdict is a record, not a gate row
 };
 /** Label column: eight cells from 100 columns, seven below (design: `phase   research   2/4` at 120, `phase  research 2/4` at 80). */
 const label = (t: string, cols: number): Run => r(pad(t, cols >= 100 ? 8 : 7), 'muted');
@@ -181,7 +183,7 @@ const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
 /** The ribbon's right-hand text: what the active tab counts, always with its word. */
 function ribbonRight(m: PanelModel): string {
   if (m.tab === 'team') return m.workers.length ? countWords(m.workers, m.ui) : '';
-  if (m.tab === 'gates') { const t = tallyOf(m.gates); return t.total ? `${t.green} of ${t.total} green` : ''; }
+  if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green} of ${t.total} green` : ''; }
   if (m.tab === 'channel') return m.channel ? `#${m.channel}` : '';
   return '';
 }
@@ -232,8 +234,8 @@ function phaseRow(m: PanelModel): PanelLine {
 
 /** `gates   ● lint   ● test   ■ doctor   2 of 3 green`; names that do not fit fold to the count alone. */
 function gatesRow(m: PanelModel): PanelLine | null {
-  const t = tallyOf(m.gates);
-  const gs = countedGates(m.gates);
+  const t = tallyOf(gatesOf(m));
+  const gs = countedGates(gatesOf(m));
   if (!t.total) return null;
   const word = `${t.green} of ${t.total} green`;
   const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), mark(groupOk(g) ? 'done' : 'failed', m), r(g.id)]);
@@ -418,15 +420,15 @@ function leadSummary(m: PanelModel): PanelLine {
   return line(fitRuns([r(' '.repeat(GRID_LEAD)), r('lead  ', 'text', { bold: true }), r(parts.join(` ${dot(m.ui)} `), 'muted')], m.cols)); // in the name column, under the lead's own row
 }
 
-/** The lead as the band would read it: while the band is BLOCKED (declared, or a gate fails with no agent running) the lead is not `done`; it reads
- * blocked, with the reason the band gives. Any other state is the lead's own. */
+/** The lead as the band would read it: while the band is BLOCKED (the lead declared it, or the Stop gate's last verdict refused the stop) the lead is not `done`; it
+ * reads blocked, with the reason the band gives. A failing check alone never blocks it (the band says warning then). Any other state is the lead's own. */
 function leadOf(m: PanelModel): PanelWorker | undefined {
   const lead = m.lead;
   if (!lead || lead.state !== 'done') return lead;
-  const t = tallyOf(m.gates);
+  const stop = tallyOf(gatesOf(m)).stop;
   const declared = m.phase === 'blocked';
-  if (!declared && (t.failing.length === 0 || m.workers.some((w) => w.state === 'running'))) return lead;
-  return { ...lead, state: 'blocked', detail: blockReasons(declared, t.names).long };
+  if (!declared && !stop?.blocked) return lead;
+  return { ...lead, state: 'blocked', detail: blockReasons(declared, stop?.gates ?? ['gate']).long };
 }
 
 function teamBody(m: PanelModel): PanelLine[] {
@@ -565,7 +567,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
 }
 
 function gatesBody(m: PanelModel): PanelLine[] {
-  const gs = countedGates(m.gates); // the groups the tally counts: one with no data is not a gate yet
+  const gs = countedGates(gatesOf(m)); // the groups the tally counts: one with no data is not a gate yet
   if (!gs.length) return [line([r('(no state)', 'muted'), r('  no gates reported yet', 'muted')])];
   const valueW = Math.max(0, ...gs.map((g) => cells(gateValue(g))));
   const longest = Math.min(24, Math.max(1, ...gs.map((g) => cells(oneLine(g.title)))));

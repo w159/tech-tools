@@ -16,16 +16,14 @@ describe('standardForms: each of the four wide forms, by the column that selects
   // widest first: noun+ctx gauge, noun, ctx gauge, neither; a form is used only where the wider ones do not fit
   test('with a context figure: the tight form (no noun, no ctx gauge), the noun form, then the full form', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1 }));
-    expect(at(113)).toBe('◖ ◆ ATLAS ◗  research · phase 2/4  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ctx 62%  ◐ 1 running  ■ 1 failed  ◇ 1 queued');
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  research · phase 2/4  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
-    expect(at(136)).toBe('◖ ◆ ATLAS ◗  research · phase 2/4   todo ████▎░░░░░ 3 of 7 ▲ 1 blocked   ctx █████░░░ 62%   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+    expect(at(101)).toBe('◖ ◆ ATLAS ◗  research  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ctx 62%  ◐ 1 running  ■ 1 failed  ◇ 1 queued');
+    expect(at(108)).toBe('◖ ◆ ATLAS ◗  research  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
+    expect(at(124)).toBe('◖ ◆ ATLAS ◗  research   todo ████▎░░░░░ 3 of 7 ▲ 1 blocked   ctx █████░░░ 62%   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
   });
   test('without a context figure: the 2-gap form, the 3-gap form without the noun, the noun form, then the full form', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, ctx: undefined }));
-    expect(at(104)).toBe('◖ ◆ ATLAS ◗  research · phase 2/4  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  ◐ 1 running  ■ 1 failed  ◇ 1 queued');
-    expect(at(110)).toBe('◖ ◆ ATLAS ◗  research · phase 2/4   todo ████▎░░░░░ 3 of 7 ▲ 1 blocked   ◐ 1 running   ■ 1 failed   ◇ 1 queued');
-    expect(at(111)).toBe('◖ ◆ ATLAS ◗  research · phase 2/4  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
-    expect(at(117)).toBe('◖ ◆ ATLAS ◗  research · phase 2/4   todo ████▎░░░░░ 3 of 7 ▲ 1 blocked   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗  research  todo ███▍░░░░ 3 of 7 ▲ 1 blocked  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
+    expect(at(105)).toBe('◖ ◆ ATLAS ◗  research   todo ████▎░░░░░ 3 of 7 ▲ 1 blocked   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
   });
 });
 
@@ -35,8 +33,8 @@ describe('richBand: the idle and blocked words are bold', () => {
     const word = bandLines(rich({}))[0]!.runs.find((x) => x.t === 'idle');
     expect(word?.bold).toBe(true);
   });
-  test('blocked by a failing check', () => {
-    const word = bandLines(rich({ checks: [{ id: 'routing', ok: false }] }))[0]!.runs.find((x) => x.t === ' BLOCKED');
+  test('blocked by a refused Stop', () => {
+    const word = bandLines(rich({ checks: [{ id: 'routing', ok: false }], stopGates: ['routing'] }))[0]!.runs.find((x) => x.t === ' BLOCKED');
     expect(word?.bold).toBe(true);
   });
 });
