@@ -8,6 +8,7 @@ import { EMPTY_ORCH } from '../data/orchestration'
 import { formatDuration, spin } from '../theme'
 import { notificationTree, resultLine } from './cards'
 import { lookOf } from '../look'
+import { agentName } from '../hud'
 import type { CardExtra } from './cards'
 
 // Read-only views of register.ts's atoms (same plugin/key): the spinner clock and spawn metadata.
@@ -76,8 +77,10 @@ const firstOf = (...xs: (string | undefined)[]): string => xs.find((x) => !!x) ?
 async function whoIs($: EngineInterface, id: string, agents: readonly AgentInfo[]): Promise<Who | undefined> {
  const row: Partial<AgentInfo> = agents.find((a) => a.id === id) ?? {}
  const meta = (await read($, orchRef)).meta[id] ?? {}
- const who = { id, type: firstOf(row.type, meta.type), status: firstOf(row.status, 'completed'), name: firstOf(meta.name, row.name, row.description, id.slice(0, 6)) }
- return who.type.startsWith('atlas:') ? who : undefined
+ const who = { id, type: firstOf(row.type, meta.type), status: firstOf(row.status, 'completed'), name: firstOf(meta.name, row.name, row.description) }
+ if (!who.type.startsWith('atlas:')) return undefined
+ // no readable name: the HUD's agentName helper gives the agent type (and a task phrase when any task text exists); the id only as a last resort
+ return who.name ? who : { ...who, name: agentName(id, who.type.slice('atlas:'.length)) }
 }
 
 /** A background launch's agent id (`async_launched` output), '' for any other result. */

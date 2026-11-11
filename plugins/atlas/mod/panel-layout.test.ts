@@ -171,9 +171,16 @@ describe('core tab', () => {
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
     expect(out).toContain('3 explorers ran, 1 planned (haiku), plan haiku/low'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
-    expect(out).toMatch(/■ {3}1x explorer +drift +3 explorers ran, 1 planned/);
+    expect(out).toMatch(/■ {3}3x explorer +drift +3 explorers ran, 1 planned/);
     expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
+  });
+  test('L16: the seat row counts the agents that ran (4x), the planned count stays in the detail sentence', () => {
+    const c = JSON.parse(JSON.stringify(core)) as CoreModel;
+    c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 4, drift: ['explorer ran 4, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku', 'haiku'] }] }];
+    const out = rows('core', 120, { core: c }).join('\n');
+    expect(out).toMatch(/■ {3}4x explorer +drift +4 explorers ran, 1 planned/);
+    expect(out).not.toContain('1x explorer');
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {
     const c = { ...core, verdicts: [], ledger: { verified: 0, refuted: 0, pending: 0, claimed: 0, unchecked: 0 } } as CoreModel;

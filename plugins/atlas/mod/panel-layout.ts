@@ -563,6 +563,9 @@ function offloadRows(c: CoreModel, m: PanelModel): PanelLine[] {
   }), m.cols)))];
 }
 
+/** The seat row's figure is how many agents ran; a seat that has not run yet shows its planned count. */
+const seatCount = (s: { count: number; ran: readonly string[] }): number => (s.ran.length || s.count);
+
 const SEAT_WORD_W = 10; // `as planned`
 
 /** The dispatch plan against what ran: a row per team (class/effort, name, transport), a row per seat with the verdict `as planned`, `drift` or `not run`. */
@@ -571,7 +574,7 @@ function dispatchRows(c: CoreModel, m: PanelModel): PanelLine[] {
   const head = heading('dispatch', [r('planned against what ran', 'muted')], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
-  const names = teams.flatMap((rt) => [`${rt.cls}/${rt.effort}`, ...rt.seats.map((s) => `  ${s.count}x ${s.role}`)]);
+  const names = teams.flatMap((rt) => [`${rt.cls}/${rt.effort}`, ...rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`)]);
   const { nameW } = gridPlan(m.cols, { names, word: SEAT_WORD_W, min: 8, max: 16 });
   const withDetail = (runs: Run[], text: string): PanelLine[] => {
     const used = rowWidth(runs);
@@ -589,7 +592,7 @@ function dispatchRows(c: CoreModel, m: PanelModel): PanelLine[] {
       // Plain words: `3 explorers ran, 1 planned (haiku), plan haiku/low`; a seat that ran another model reads `ran on opus, plan haiku/low`.
       const plan = `${s.model}/${s.effort}`;
       const detail = !s.ran.length ? `not run yet  ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${used}), plan ${plan}` : same ? `ran ${used}  ${plan}` : `ran on ${used}, plan ${plan}`;
-      const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(st, m.ui), name: { t: `  ${s.count}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
+      const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(st, m.ui), name: { t: `  ${seatCount(s)}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
       return withDetail(runs, detail);
     });
     // In-process routes have no team name or isolation to show: the sentence says how the workers ran.

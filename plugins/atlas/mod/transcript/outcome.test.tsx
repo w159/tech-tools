@@ -103,6 +103,13 @@ test('task-notification of an atlas worker that left the host list draws its res
   expect(text).toContain('finished · STATUS: DONE · 29s')
 })
 
+test('L14: a worker with no name, description or meta name reads its agent type, never the raw 6-char id', async () => {
+  const e = { surface: 'terminal', component: 'UserMessage', requestId: 'u1', props: { text: 'Agent finished', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a6839f49ee72a2b14', status: 'completed', durationMs: 29046 } } }
+  const text = strings(await sites().UserMessage!(engine([], { a6839f49ee72a2b14: { type: 'atlas:explorer' } }), e, next))
+  expect(text).toContain('explorer')
+  expect(text).not.toContain('a6839f')
+})
+
 test('task-notification of a non-atlas task keeps the engine row', async () => {
   const e = { surface: 'terminal', component: 'UserMessage', requestId: 'u2', props: { text: 'shell done', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'b9', status: 'completed' } } }
   expect(await sites().UserMessage!(engine([{ id: 'b9', type: 'general-purpose', description: 'x', status: 'completed' } as AgentInfo]), e, next)).toBe(SENTINEL)
