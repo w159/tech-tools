@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- HUD and cards: one `displayName` (the lead reads `lead`) for HUD rows and both card formats; Subagents rows never cut a name or state word (columns drop last text, task, model first); TASK column filled from the dispatch description; a finished wave lingers as one so the header count matches its rows; TODO block has no blank rows and one layout (ribbon, progress at 100+ columns, rows); boxed cards drop the model tag before cutting the name.
+
 - Tests: seed-1105 second-pass mutation kills for the TS mods (`mod/band`, `board-model`, `hud`, `hud-surface`, `panel-layout`, `omp/mission-panel` `*.mut.test.ts`); four more survivors argued equivalent in the test headers.
 - Fixed: `types/index.d.ts` shared snapshot block now carries the optional `seq` field on `AtlasSnapshot`, so it is identical to `mod/contract.ts` again (`ModTypesContractSync`).
 - Tests: `test_completion_gate.py` is hermetic for the one-shot (o) phased-todo and (s) team-gate blocks (`GateOrchestrationTest` and `InProcessMainTest` use a per-test marker dir with both off) and the (n) continuation test resets the Stop-burst breaker per subtest, so the suite no longer depends on test order, xdist, tmux on PATH or machine load.
