@@ -9,13 +9,14 @@ import type { Ui } from './atlas-ui';
 import { STOP_LINE } from './data/runstate';
 import { panelModelOf } from './pane/sidebar-model';
 import type { SidebarModel } from './pane/sidebar';
-import { failureNotes } from './data/channels';
+import { failureNotes, forgetRefusals } from './data/channels';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const sq = (name: string, state: SquadAgent['state']): SquadAgent => ({ name, persona: 'explorer', state, source: 'task' });
 const act = (mood: string) => ({ tool: null, since: NOW - 1000, startedAt: NOW - 20_000, toolCount: 1, tokens: null, mood, lastLine: '' });
-const world = (squad: SquadAgent[], notes: ChannelNote[] = []): LiveSnapshot =>
+const mkWorld = (squad: SquadAgent[], notes: ChannelNote[] = []): LiveSnapshot =>
   ({ ...busySnap(), sessionId: 's1', squad, activity: Object.fromEntries(squad.map((a) => [a.name, act(a.state === 'failed' ? 'failed' : a.state === 'finished' ? 'done' : 'working')])), comms: [], members: [], todos: [], notes, now: NOW }) as LiveSnapshot;
+const world: typeof mkWorld = (...a) => { forgetRefusals(); return mkWorld(...a); }; // a remembered Stop refusal is per run: each test world starts with none
 const refused = [{ id: 'completion', title: 'Completion gate', lines: [{ id: STOP_LINE, label: 'Last Stop blocked', ok: false, detail: 'team gate, todos drained' }] }];
 const model = (s: LiveSnapshot, gates: unknown[] = [], cols = 64): SidebarModel =>
   ({ snapshot: s, gates, ui: { recipient: null, expanded: null, draft: '', view: 'channel' }, columns: cols + 1, rows: 40, tick: 0 }) as SidebarModel;

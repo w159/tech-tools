@@ -124,7 +124,7 @@ test('non-atlas tool rows keep the engine drawing', () => {
 test('header line is drawn styled in place with the body kept', () => {
   const first = 'ATLAS | 🔧 implement 3/5 | shipping restyle'
   const text = stringsOf(assistantTree(snap(), { text: `${first}\n\nBody text here.`, isFirstOfReply: true }))
-  expect(text).toContain(' ATLAS ')
+  expect(text).not.toContain('ATLAS') // the lead header does not repeat the brand (critique 23)
   expect(text).toContain('IMPLEMENT')
   expect(text).toContain('3/5')
   expect(text).toContain('shipping restyle')
@@ -144,17 +144,21 @@ test('critique 15 C1: at 110 the ATLAS and phase chips never shrink, whatever th
   for (const cols of [66, 110, 150]) {
     const kids = rawKids(long, cols)
     expect([cols, kids.slice(0, 2).map((k) => [(k as { type: string }).type, (k as { props: Record<string, unknown> }).props.flexShrink])]).toEqual([cols, [['Box', 0], ['Box', 0]]])
-    expect(pillsOf(long, cols).slice(0, 2).map((p) => p.children[0])).toEqual([' ◆ ATLAS ', ' ◎ RESEARCH '])
+    expect(pillsOf(long, cols).slice(0, 2).map((p) => p.children[0])).toEqual(['▌', ' RESEARCH'])
   }
 })
 
-test('header is filled pills: brand on violet, phase on its hue, then the state text, no pipe', () => {
-  const [brand, phase, ...rest] = pillsOf('ATLAS | 🔧 implement 3/5 | shipping restyle', 120)
-  expect(brand!.children[0]).toBe(' ◆ ATLAS ')
-  expect(brand!.props).toMatchObject({ backgroundColor: '#cba6f7', color: '#1e1e2e', bold: true })
-  expect(phase!.children[0]).toBe(' ⚒ IMPLEMENT ')
-  expect(phase!.props).toMatchObject({ backgroundColor: '#fab387', color: '#1e1e2e' })
+test('critique 23: the lead header has no fill and no pastel: a bar in the phase colour, the word bold in 252, the state in 245', () => {
+  const [bar, word, ...rest] = pillsOf('ATLAS | 🔧 implement 3/5 | shipping restyle', 120)
+  expect(bar!.children[0]).toBe('▌')
+  expect(bar!.props.color).toBe('#af87ff') // 141, the one lavender
+  expect(word!.children[0]).toBe(' IMPLEMENT')
+  expect(word!.props).toMatchObject({ color: '#d0d0d0', bold: true }) // 252
   expect(rest.map((p) => p.children[0]).join('')).toBe(' 3/5 shipping restyle')
+  for (const p of [bar!, word!, ...rest]) expect(p.props.backgroundColor).toBeUndefined()
+  expect(rest.at(-1)!.props.color).toBe('#8a8a8a') // 245
+  expect(pillsOf('ATLAS | 🏁 done | all finished', 120)[0]!.props.color).toBe('#87d787') // 114
+  expect(pillsOf('ATLAS | ⛔ blocked | stuck', 120)[0]!.props.color).toBe('#d7af5f') // 179
 })
 
 test("critique 14 B2: the lead's sentence is never cut inside the chip; it wraps beside the pills", () => {
@@ -255,7 +259,7 @@ const fakeE = (component: string, props: Record<string, unknown> = {}) =>
 test('registerRestyle wires the four sites; without a snapshot every site no-ops', async () => {
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
-  expect(regs.length).toBe(8) // 4 sites + turn.start + ToolGroup + UserMessage + Placed
+  expect(regs.length).toBe(9) // 4 sites + turn.start + ToolGroup + UserMessage + Placed + classic MessageDisplay
   expect(regs.slice(0, 4).map((r) => r.matcher?.component)).toEqual(['Spinner', 'ToolUse', 'AssistantMessage', 'TurnDuration'])
   for (const r of regs.slice(0, 4)) {
     expect(await r.hook(fake$().$, fakeE(r.matcher?.component ?? ''), engineNext)).toBe(SENTINEL)
@@ -308,7 +312,7 @@ test('AssistantMessage draws the contract header on one styled row and keeps the
   const drawn = await regs[2]?.hook(fake$({ snapshot: snap() }).$, fakeE('AssistantMessage', { text, isFirstOfReply: true }), echoNext)
   expect(drawn).not.toBe(SENTINEL)
   const out = stringsOf(drawn)
-  for (const s of ['ATLAS', 'IMPLEMENT', '3/5', 'dedup cpWidth', 'Body text here.']) expect(out).toContain(s)
+  for (const s of ['IMPLEMENT', '3/5', 'dedup cpWidth', 'Body text here.']) expect(out).toContain(s)
 })
 
 test('header-less AssistantMessage keeps the engine drawing with no pill', async () => {
@@ -518,7 +522,7 @@ test('critique 12 C1: once the pattern is known, a new message is chipped with n
   expect(cold).toBeGreaterThan(0)
   const warm = await draw('second')
   expect(calls).toBe(cold) // the warm path asks the host for nothing
-  expect(stringsOf(warm)).toContain('ATLAS')
+  expect(stringsOf(warm)).toContain('5/5')
   expect(warm).not.toBe(SENTINEL)
 })
 

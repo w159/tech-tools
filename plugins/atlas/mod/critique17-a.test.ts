@@ -52,7 +52,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.tone).toBe('muted');
     expect(t1.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('ok');
   });
-  test('Board: the same row reads `done`, `worker killed`, amber; the dispatch row beside it does not make it green', () => {
+  test('Board: the same row reads `done`, `worker killed`, error red (critique 23); the dispatch row beside it does not make it green', () => {
     const items: BoardSource[] = [
       { content: 'T2 read ghost.py (ghost-explorer)', status: 'completed' },
       { content: 'Read ghost.py first', status: 'completed', owner: 'ghost-explorer', origin: 'dispatch', ownerState: 'failed' }, // stoprun-150-a4fad2f9-2: the lead closed the dispatch row after the Stop refusal
@@ -63,7 +63,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     const body = boardBody(rows, { cols: 120, ui });
     const row = body.find((l) => plain(l.runs).includes('T2 read ghost.py'))!;
     expect(plain(row.runs)).toMatch(/done\s+ghost-explorer\s+worker killed/);
-    expect(row.runs.find((x) => x.t.trim() === 'done')?.tone).toBe('warn');
+    expect(row.runs.find((x) => x.t.trim() === 'done')?.tone).toBe('bad');
     expect(row.runs.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
     expect(boardMotionItems(rows)[0]!.state).toBe('doubt');
   });

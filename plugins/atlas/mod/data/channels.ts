@@ -200,3 +200,26 @@ export function failureNotes(i: { workers: readonly { name: string; state: strin
 	}
 	return rows;
 }
+
+/** Critique 23: a refusal is a fact of the run, not of the moment. The gates tab's `Last Stop blocked` line is the LAST verdict, so once the lead closed the open row and Stop passed, the
+ * channel tab lost the refusal row (stoprun-150-513bb41c-2/tab-channel.png: the kill, the done and the closure, nothing between them). The refusal is remembered when the verdict is first seen
+ * blocked, with the clock of that sighting: the data carries no time of the refusal itself, so the time is APPROXIMATE (the first panel build that saw the verdict, a second or less after the Stop hook wrote it). */
+const refusals: { channel: string; ts: string; text: string }[] = [];
+const refusedBefore = new Map<string, boolean>(); // per channel: the last verdict read there
+const REFUSALS_MAX = 20;
+
+/** Record a refusal on the flip of the last verdict to blocked; the same verdict read again records nothing. `nowMs` is the snapshot clock. */
+export function noteRefusal(stop: { blocked: boolean; gates: readonly string[] } | null, nowMs: number, channel = ''): void {
+	const blocked = !!stop?.blocked;
+	if (blocked && !refusedBefore.get(channel)) {
+		const words = (stop?.gates ?? []).filter((g) => g !== '' && g !== 'stop refused');
+		refusals.push({ channel, ts: isoTs(nowMs), text: words.length ? `Stop refused: ${words.join(', ')}` : 'Stop refused' });
+		if (refusals.length > REFUSALS_MAX) refusals.shift();
+	}
+	refusedBefore.set(channel, blocked);
+}
+
+/** The refusals this session saw, oldest first, as channel rows from the stop gate. */
+export const refusalNotes = (channel = ''): ChannelNote[] => refusals.filter((x) => x.channel === channel).map((x) => ({ ts: x.ts, seq: 0, owner: 'stop gate', to: 'lead', text: x.text, channel, kind: 'blocked' }));
+
+export const forgetRefusals = (): void => { refusals.length = 0; refusedBefore.clear(); };
