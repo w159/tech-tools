@@ -86,7 +86,7 @@ describe('route tab', () => {
     expect(text).not.toContain('(no state)');
   });
   test('an empty board and nobody running is the design empty state', () => {
-    expect(rows('route', 120, { todos: [], workers: [], gates: [] })).toContain('(no state)  add one with /todo add'); // critique 14: the `todo` row above says `no tasks yet`; the hint does not say it twice
+    expect(rows('route', 120, { todos: [], workers: [], gates: [] })).toContain('    add one with /todo add'); // critique 14: the `todo` row above says `no tasks yet`; the hint does not say it twice
   });
   test('an open task row shows its evidence line, or says there is none', () => {
     const done = { id: 'd1', label: 'wire it', state: 'done' as const, evidence: 'tests green' };
@@ -135,8 +135,17 @@ describe('team tab lists the subagents by name and state', () => {
     expect(open[at + 1]).toContain('read runs.ts:17');
     expect(open[at + 2]).toContain('running 42s');
   });
+  test('critique 15 C5: a project-directory slug in an agent\'s last step never reaches the team rows', () => {
+    // live-110-95c4a588-1/tab-team.png: `last  run -home-user-tech-t`
+    for (const cols of [37, 80, 120]) {
+      const all = rows('team', cols, { workers: [{ name: 'gamma-explorer', state: 'done', detail: 'run -home-user-tech-tools-claude-worktrees-atlas-x', secs: 14, model: 'haiku', goal: 'read gamma.py' }], rows: 40 }).join('\n');
+      expect([cols, all.includes('-home-')]).toEqual([cols, false]);
+      expect([cols, /last\s+run\s*$/m.test(all)]).toEqual([cols, false]); // and no verb left alone to stand for the step
+    }
+  });
   test('nobody dispatched is the design empty state', () => {
-    expect(rows('team', 80, { workers: [] }).at(-1)).toBe('(no state)  nobody dispatched yet, ask the lead to start a worker');
+    expect(rows('team', 80, { workers: [] }).at(-1)).toBe('    nobody dispatched yet, ask the lead to start a worker'); // critique 15 C4: no `(no state)` lead-in, indented like the rows
+    expect(rows('team', 37, { workers: [] }).every((l) => cells(l) <= 37)).toBe(true);
   });
   test('rows are pressable and select the worker', () => {
     const l = bodyLines(panelWorld('team', 80, mocha)).find((x) => x.press?.name === 'implementer-band')!;
@@ -379,11 +388,22 @@ describe('critique 12 A2: the route tab drops the owner column before it cuts a 
   test('at 37 columns (the 110-column pane) every title is whole (its state under it where it does not fit), no `...`, no owner column', () => {
     const all = rows('route', 37, { todos: plan, workers: [] });
     for (const l of all) expect(cells(l)).toBeLessThanOrEqual(37);
-    const text = all.join('\n');
+    const text = all.join('\n').replace(/\s+/g, ' '); // a title wraps on a word boundary, its state closing the last line (critique 15 C2)
     expect(text).toContain('T1 read alpha.py (alpha-explorer)');
     expect(text).toContain('T2 read beta.py (beta-explorer)');
     expect(text).not.toContain('...');
     expect(text).not.toMatch(/done\s+\S*-explorer/);
+  });
+  test('critique 15 C2: at 37 columns no row is a state word alone: the title wraps, the word stays on its last line', () => {
+    // live-110-95c4a588-1/tab-route.png: `T1 read alpha.py (alpha-explorer)` over a lone `done`
+    for (const state of ['done', 'running', 'blocked'] as const) {
+      const all = rows('route', 37, { todos: plan.map((t) => ({ ...t, state })), workers: [] });
+      for (const l of all) expect([l, /^\s+(done|running|blocked|failed|queued|returned)$/.test(l)]).toEqual([l, false]);
+      for (const l of all) expect(cells(l)).toBeLessThanOrEqual(37);
+      const t1 = all.findIndex((l) => l.includes('T1 read'));
+      expect(all.slice(t1, t1 + 2).join(' ')).toMatch(new RegExp(`alpha-explorer\\)?\\s+${state}|alpha.py\\s.*${state}`));
+      expect(all.join('\n')).toContain('alpha-explorer'); // the title is still whole
+    }
   });
   test('a row whose title does not name its owner keeps the owner column; one that does never prints it twice, at any width', () => {
     const mixed = [...plan.slice(0, 1), { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const, owner: 'lead-agent' }];

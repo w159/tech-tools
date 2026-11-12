@@ -133,7 +133,20 @@ test('header line is drawn styled in place with the body kept', () => {
 })
 
 type Pill = { props: Record<string, unknown>; children: string[] }
-const pillsOf = (text: string, columns: number): Pill[] => (assistantTree(snap(), { text, isFirstOfReply: true }, columns) as unknown as { children: Pill[] }).children
+type Kid = Pill | { type: 'Box'; props: Record<string, unknown>; children: Pill[] }
+const rawKids = (text: string, columns: number): Kid[] => (assistantTree(snap(), { text, isFirstOfReply: true }, columns) as unknown as { children: Kid[] }).children
+// the two chips sit in non-shrinking Boxes; the tests read the Text inside
+const pillsOf = (text: string, columns: number): Pill[] => rawKids(text, columns).map((k) => ((k as { type?: string }).type === 'Box' ? (k as { children: Pill[] }).children[0]! : (k as Pill)))
+
+test('critique 15 C1: at 110 the ATLAS and phase chips never shrink, whatever the sentence', () => {
+  // live-110-95c4a588-1/tab-route.png: `◆ ATLA… ◎ RESEARC…` beside a long sentence; a Text cannot opt out of flex shrink, a Box can
+  const long = 'ATLAS | 🔍 research 1/5 | 3 explorers running on the auth path, the billing path and the session path, none returned yet'
+  for (const cols of [66, 110, 150]) {
+    const kids = rawKids(long, cols)
+    expect([cols, kids.slice(0, 2).map((k) => [(k as { type: string }).type, (k as { props: Record<string, unknown> }).props.flexShrink])]).toEqual([cols, [['Box', 0], ['Box', 0]]])
+    expect(pillsOf(long, cols).slice(0, 2).map((p) => p.children[0])).toEqual([' ◆ ATLAS ', ' ◎ RESEARCH '])
+  }
+})
 
 test('header is filled pills: brand on violet, phase on its hue, then the state text, no pipe', () => {
   const [brand, phase, ...rest] = pillsOf('ATLAS | 🔧 implement 3/5 | shipping restyle', 120)
