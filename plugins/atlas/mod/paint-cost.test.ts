@@ -1,7 +1,7 @@
 // Painting in 256-colour mode must stay cheap: runHex/surfaceHex/paintAnsi run once per run per frame, so the palette lookups are memoised.
 // Outputs must equal the original uncached algorithm (copied below as the reference) byte for byte.
 import { describe, expect, test } from 'claude-code/testing';
-import { contrast, fitHex, hexTo256, hostTo256, NEED, PALETTES, paintAnsi, runHex, stable256, surfaceHex, xtermHex, type ThemeName, type Token } from './atlas-ui';
+import { contrast, exactIndex, fitHex, hexTo256, hostTo256, NEED, PALETTES, paintAnsi, preImage, runHex, stable256, surfaceHex, xtermHex, type ThemeName, type Token } from './atlas-ui';
 
 const BOUND_MS = 100;
 
@@ -17,8 +17,12 @@ const stable256Ref = (hex: string, bg?: string, need = 0): string => {
   const greys = r === g && g === b ? from.filter(grey) : []; // a neutral stays a neutral (the body text #d0d0d0 is not pulled to a tinted index)
   return (greys.length ? greys : from).reduce((best, c) => (dist2(c, hex) < dist2(best, hex) ? c : best));
 };
-const surfaceRef = (tok: Token, theme: ThemeName): string => stable256Ref(PALETTES[theme][tok]);
+// Round 3: the brief's own colours are painted as their exact xterm index (handed to the host as the index's pre-image); every other colour is the original nearest-stable algorithm.
+const exactRef = (hex: string): string | undefined => { const i = exactIndex(hex); return i === undefined ? undefined : preImage(i); };
+const surfaceRef = (tok: Token, theme: ThemeName): string => exactRef(PALETTES[theme][tok]) ?? stable256Ref(PALETTES[theme][tok]);
 const fitRef = (hex: string, theme: ThemeName): string => {
+  const exact = exactRef(hex);
+  if (exact) return exact;
   if (stableRef().some((i) => xtermHex(i) === hex)) return hex;
   return stable256Ref(hex, surfaceRef('panel', theme), Math.min(NEED.text, contrast(hex, PALETTES[theme].panel)));
 };

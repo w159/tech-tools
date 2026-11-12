@@ -32,10 +32,10 @@ const mission = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150
 const band = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs);
 
 describe('A1: the band counts the plan rows the TODO header counts, and names the open dispatch row', () => {
-  test('f0090 from the store: band reads todo 5/5 and `blocked · needs: close ghost-explorer` (no plan row names the worker: its agent), never 5/6', () => {
+  test('f0090 from the store: band reads todo 5/5 and `blocked · needs: close dispatch ghost-explorer` (no plan row names the worker: its agent), never 5/6', () => {
     const out = rows(idle({ todos: stopStore }), [stopGroup('1 todo open')]).join('\n');
     expect(out).toMatch(/todo [^0-9]*5\/5/);
-    expect(out).toContain('blocked · needs: close ghost-explorer');
+    expect(out).toContain('blocked · needs: close dispatch ghost-explorer');
     expect(out).not.toContain('5/6');
     expect(out).not.toContain('1 dispatch open'); // said once, in the reason
   });
@@ -47,7 +47,7 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
       row('dg', 'pending', 'dispatch', SESSION, 'Read ghost.py first (it does not exist), then, one Read call at a time, README.md, util.py and only then report.', 'ghost-explorer'),
     ];
     const out = rows(idle({ todos: named }), [stopGroup('1 todo open')]).join('\n');
-    expect(out).toContain('blocked · needs: close T2');
+    expect(out).toContain('blocked · needs: close dispatch T2');
     expect(out).not.toMatch(/Read ghost|first|\.\.\./);
   });
   test('the reason holds while the lead declares the block: the open row is named in both frames, never `needs you` over an open row Stop refused on', () => {
@@ -63,7 +63,7 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
       expect(t).not.toContain('5/6');
       if (cols >= 80) expect(t).toContain('5/5');
     }
-    expect(band({ ...m, cols: 150 })).toContain('blocked · needs: close read ghost.py');
+    expect(band({ ...m, cols: 150 })).toContain('blocked · needs: close dispatch read ghost.py');
   });
   test('not blocked, the open dispatch row is still named beside the plan count (unchanged)', () => {
     expect(band(mission({ openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py' }))).toContain('5/5 · 1 dispatch open');

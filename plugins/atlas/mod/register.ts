@@ -11,7 +11,7 @@ import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
 import { bandSpareRows, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
-import { allSettled, easedNow, gaugeTargets, retargetAll, type GaugeMoves } from './band-motion';
+import { allSettled, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, ranSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, isRunning, reclaimBlanks, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
@@ -30,7 +30,8 @@ import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDep
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
 import { isOlder, registerNotify } from './notify';
 import { forgetPlaced, placeFinished } from './transcript/placed';
-import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
+import { EASE_FRAMES, EASE_MS, holdSpinFrame, type Ui } from './atlas-ui';
+import { IDLE_AFTER_SECS } from './mission-layout';
 import { clearLook, lookOf } from './look';
 import { Motion, MotionDriver, reducedMotion } from './motion';
 import { motionFeed } from './motion-feed';
@@ -53,7 +54,7 @@ const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: t
 // only flipped an inline fold that needed spare band rows and drew nothing in a short slot).
 export const BOARD_ID = 'atlas-board';
 const PANE_BOARD = { id: BOARD_ID, title: 'Board', rows: 14, closeOnEscape: true, focus: true } as const;
-const TICK_MS = SPINNER_MS; // one spinner frame per tick (100 ms), written only while Atlas is working: the host turn runs, a worker is live, or the lead or a plan row is busy
+const TICK_MS = 250; // the slow tick: gauges, motion and the Stop verdict (the spinner has its own beat, FRAME_MS in band-motion.ts, and waits for none of this)
 const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
 const BAND_MIN_ROWS = 7; // the Mission Control band keeps at least this many rows; the HUD takes the rest of the budget
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
@@ -411,6 +412,15 @@ export function hudSlotCap(budget: number, compact: number, floor: number, bandR
 	return running && budget > BAND_KEEP_ROWS + 1 ? Math.min(cap, budget - BAND_KEEP_ROWS) : cap;
 }
 
+
+/** The HUD rows that leave the band at least one row of the budget (band row, never the HUD, is the one thing that must not vanish: round 3). `gapOf` is the breathing blank the rows would draw.
+ * A budget below one row means the slot is closed (the band draws nothing by design), so nothing is trimmed. */
+export function fitHudToBand<R>(hud: readonly R[], budget: number, gapOf: (rows: readonly R[]) => number): readonly R[] {
+	if (budget < 1) return hud;
+	let rows = hud;
+	while (rows.length > 0 && rows.length + gapOf(rows) > budget - 1) rows = rows.slice(0, -1);
+	return rows;
+}
 /** Blank rows between the last agent row and the band: one, while the band keeps its title row. */
 export function hudGapRows(listsAgents: boolean, hudRowCount: number, budget: number): number {
 	return listsAgents && budget - hudRowCount - 1 >= BAND_KEEP_ROWS ? 1 : 0;
@@ -992,10 +1002,12 @@ async function gateGroups($: EngineInterface): Promise<GateGroup[]> {
 let booted: { interactive: boolean } | null = null;
 /** The host says a model turn is running (AbovePrompt `isWorking`, noted by the band's render). The tick reads it: a lead-only turn lists no worker, yet the spinner must run. */
 let hostWorking = false;
-/** The tick count when the current run of work began (null while nothing works), and how long the last run took: the band's `working 0:42` and `done 1:12`. */
-let workStartTick: number | null = null;
-let lastRanSecs: number | undefined;
-const secsOfTicks = (n: number): number => Math.floor((n * TICK_MS) / 1000);
+/** The run clock (band-motion.ts): wall-clock start, end and frozen duration of Atlas's work, read by every render. */
+let runClock: RunClock = newRunClock();
+/** The last beat of the frame loop (`$.clock.now()`), for the watchdog; the loop itself, and whether the rest-to-idle redraw has been made for the current rest. */
+let lastBeatMs = 0;
+let frameTimer: { cancel(): void } | null = null;
+let idleFlipped = true;
 
 /** Atlas is working right now: the host turn is running, a worker is live, the lead is mid-turn on its own work, or a plan row runs. The one rule the tick and the band share. */
 export function isWorkingNow(snap: LiveSnapshot, host: boolean): boolean {
@@ -1004,16 +1016,36 @@ export function isWorkingNow(snap: LiveSnapshot, host: boolean): boolean {
 	return activeCount(live) > 0 || leadBusy(snap) || planBusy(planBasis(snap.todos ?? [], snap.sessionId), workerStates(snap, live));
 }
 
-/** One spinner tick: advance the shared frame while Atlas works, stop on the tick it does not. Called from the one boot timer. */
-async function spinTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
-	const at = await read($, spinnerTickState);
-	if (isWorkingNow(snap, hostWorking)) {
-		if (workStartTick === null) workStartTick = at;
-		await update($, spinnerTickState, (n) => n + 1);
-	} else if (workStartTick !== null) {
-		lastRanSecs = secsOfTicks(at - workStartTick);
-		workStartTick = null;
-		await update($, spinnerTickState, (n) => n + 1); // one last redraw: the band reads `done 1:12` or `idle`, not the last spinner frame
+/** One beat of the frame loop: step the run clock, and redraw (one frame, the counter is the shared frame index of every surface) while Atlas works, on the beat a run ends,
+ * and once when a finished run rests long enough to read `idle`. It reads the snapshot but waits for no store update, poll or timer of any other kind. */
+async function frameBeat($: EngineInterface): Promise<void> {
+	const now = await $.clock.now();
+	lastBeatMs = now;
+	const snap = await read($, snapshotState);
+	if (!snap) return;
+	const working = isWorkingNow(snap as LiveSnapshot, hostWorking);
+	const before = runClock;
+	runClock = stepRun(runClock, working, now);
+	const ended = before.startMs !== null && runClock.startMs === null;
+	if (ended) idleFlipped = false;
+	const rest = restSecsOf(runClock, now);
+	const flip = !idleFlipped && rest !== undefined && rest >= IDLE_AFTER_SECS;
+	if (flip) idleFlipped = true;
+	if (working || runClock.startMs !== null || ended || flip) await update($, spinnerTickState, (n) => n + 1);
+}
+/** (Re)start the frame loop. `$.clock.every` ends when the host refuses a period, so the slow tick and the poll call this when the beat went stale. */
+function armFrameLoop($: EngineInterface): void {
+	frameTimer?.cancel();
+	frameTimer = $.clock.every(FRAME_MS, () => {
+		void frameBeat($).catch(() => undefined);
+	});
+}
+/** The watchdog: a loop that stopped beating is armed again. */
+async function ensureFrameLoop($: EngineInterface): Promise<void> {
+	if (!tickTimer) return; // the session ended: nothing re-arms the loop behind it
+	if (!frameTimer || beatStale(lastBeatMs, await $.clock.now())) {
+		lastBeatMs = await $.clock.now();
+		armFrameLoop($);
 	}
 }
 /** The spinner tick's look at the Stop verdict: the fast path of gatesPoll, plus the urgent gate run it queues (gatesPoll would start it on the next 500 ms poll). */
@@ -1068,6 +1100,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
 				$.clock.every(POLL_MS, () => {
 					void rebuildTick($);
+					void ensureFrameLoop($).catch(() => undefined); // a second watchdog: the poll is an interval of its own
 				});
 				$.clock.every(HERDR_MS, () => {
 					void herdrTick($);
@@ -1082,15 +1115,18 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 			}
 			void runGates($);
 			void coreTick($);
-			// The tick only runs while Atlas works (a host turn, a live worker, a busy lead), so an idle session redraws nothing.
+			// The frame loop: the spinner and the run clock beat on their own `$.clock.every`, never behind a store update (an idle session writes nothing; see frameBeat).
+			lastBeatMs = await $.clock.now();
+			armFrameLoop($);
+			// The slow tick: gauges, motion and the Stop verdict, plus the loop's watchdog.
 			tickTimer?.cancel();
 			tickTimer = $.clock.every(TICK_MS, () => {
 				void (async () => {
+					await ensureFrameLoop($);
 					const snap = await read($, snapshotState);
 					if (!snap) return;
 					await easeTick($, snap as LiveSnapshot);
 					await motionTick($, snap as LiveSnapshot);
-					await spinTick($, snap as LiveSnapshot);
 					if (isWorkingNow(snap as LiveSnapshot, hostWorking)) await verdictFast($, snap as LiveSnapshot); // the Stop hook runs inside a busy turn: read its write on this tick
 				})().catch(() => undefined);
 			});
@@ -1233,6 +1269,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
 		const look = await lookOf($);
 		const tick = await read($, spinnerTickState);
+		const clockNow = await $.clock.now();
+		const release = holdSpinFrame(tick); // every surface of this render turns frame `tick`: one index for the band, the HUD rows, the SUBAGENTS header and the pane
+		try {
 		const motionCtx = motion?.ctx(); // the frame clock the motion driver stamped: the HUD, the band and the pane draw one frame, never a render apart
 		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now, motion: motionCtx }; // the board's clock too: one `claimed_at`, one elapsed
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
@@ -1245,12 +1284,14 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true, ...(workStartTick !== null ? { workSecs: secsOfTicks(tick - workStartTick) } : {}), ...(lastRanSecs !== undefined ? { ranSecs: lastRanSecs } : {}), columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || runClock.startMs !== null, ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(ranSecsOf(runClock) !== undefined ? { ranSecs: ranSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
 		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed);
 		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
 		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
-		const hud = hudOn ? reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandIn(rows as Segment[][])), drawHud) as Segment[][] : [];
+		const hudFull = hudOn ? reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandIn(rows as Segment[][])), drawHud) as Segment[][] : [];
+		// The band row never goes: whatever the HUD drew, at least one row of the budget stays for the band (a frame with no band was the hole in the readout).
+		const hud = (e.props.maxRows === undefined ? hudFull : fitHudToBand(hudFull, budget, (rows) => hudGapRows(hudListsAgents(rows as Segment[][]), rows.length, budget))) as Segment[][];
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
 		const compact = hudCompactRows(hudIn, columns);
 		const floor = hudFloorRows(hudIn, columns, snapshot.now);
@@ -1268,6 +1309,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// One blank row between the last agent row and the band (A3), in the HUD's own panel fill.
 		const gapRow = hudGapRows(hudListsAgents(hud), hud.length, budget) > 0 ? [rowOf(els, [segmentOf({ t: ' '.repeat(columns), tone: 'text' }, look.ui)], columns)] : [];
 		return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(hud.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: [...hud.map((r) => rowOf(els, r, columns)), ...gapRow] })] : []), band, await next(e)] });
+		} finally {
+			release();
+		}
 	});
 
 	// The Atlas sidebar: a native tree, so its elements join the engine's focus ring.
@@ -1278,9 +1322,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const look = await lookOf($);
 		await read($, easeTickState); // a transition bumps it each frame: the pane redraws mid-transition too
 		const paneMotion = motion?.ctx();
+		const paneTick = await read($, spinnerTickState);
+		const releasePane = holdSpinFrame(paneTick); // the same frame index as the band's render
+		try {
 		if (e.requestId === BOARD_ID) {
 			return boardTree($.ui.resolve(e), withOwnerStates(ownTodos(snapshot.todos ?? [], snapshot.sessionId), workerStates(snapshot, liveWorkers(snapshot, snapshot.now))), {
-				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: await read($, spinnerTickState), now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
+				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: paneTick, now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
 			});
 		}
 		return sidebarTree($.ui.resolve(e), {
@@ -1291,9 +1338,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
-			tick: await read($, spinnerTickState),
+			tick: paneTick,
 			motion: paneMotion,
 		}, sidebarHandlers($, e.surface));
+		} finally {
+			releasePane();
+		}
 	});
 
 	// A tree this plugin drew was refused: surface it in the debug log and once as a toast.
@@ -1320,6 +1370,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('session.end', (_$, e, next) => {
 		tickTimer?.cancel();
 		tickTimer = null;
+		frameTimer?.cancel();
+		frameTimer = null;
+		runClock = newRunClock(); // a new session starts its work clock from nothing
+		idleFlipped = true;
 		easeTimer?.cancel();
 		easeTimer = null;
 		return next(e);

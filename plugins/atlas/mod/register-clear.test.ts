@@ -87,7 +87,7 @@ describe('/clear re-boot', () => {
     expect(seen.resolved).toBe(1); // band draws again
     expect((await snapshotOf(engine))?.sessionId).toBe('bbbbbb-session-B');
     expect(seen.commands).toBe(commands); // commands survive a clear: not registered twice
-    expect(seen.timers).toBe(timers + 1); // only the spinner tick (session.end cancelled it) is re-armed
+    expect(seen.timers).toBe(timers + 2); // only the frame loop and the slow tick (session.end cancelled both) are re-armed
   });
 
   test('a classic SessionStart that is not a clear changes nothing', async () => {

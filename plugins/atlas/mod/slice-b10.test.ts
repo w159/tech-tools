@@ -44,7 +44,7 @@ describe('B2: the band never reads idle while a turn is running', () => {
     for (const cols of [160, 120, 100, 80, 60, 40]) {
       const b = band(model({ cols, busy: true }));
       expect(b).not.toContain('idle');
-      if (cols >= 100) expect(b).toContain('build');
+      if (cols >= 100) expect(b).toMatch(/working/); // round 3: the lead is `working`; the phase word is the rail's, not the one-row band's
     }
     expect(band(model({ cols: 160, rich: true, busy: true }))).not.toContain('idle');
     expect(all(model({ busy: true }))).not.toContain('idle');

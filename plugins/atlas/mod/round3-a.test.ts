@@ -53,30 +53,32 @@ describe('round 3 A2: the band lead has four states', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols} columns: working, done, idle and blocked each lead with their glyph and word`, () => {
       expect(lead(model({ cols, busy: true, turnSecs: 36, workers: live }))).toMatch(/^◐ working 0:36/);
-      expect(lead(model({ cols, phase: 'done', done: 5, total: 5, ranSecs: 62 }))).toMatch(/^● done 5\/5 · 1:02/);
+      expect(lead(model({ cols, phase: 'done', done: 5, total: 5, ranSecs: 62 }))).toMatch(/^● done · 1:02/);
       expect(lead(model({ cols, phase: 'research', done: 0, total: 0 }))).toMatch(/^○ idle/);
       expect(lead(model({ cols, blocked: true, openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>))).toMatch(/^▲ blocked · /);
     });
   }
   test('blocked names what it needs, and keeps moving while the host fixes it', () => {
     const m = model({ stopGates: ['dispatch T2 read x open'], openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>);
-    expect(lead(m)).toMatch(/^▲ blocked · needs: close T2/);
-    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · needs: close T2 · ◐ fixing/);
+    expect(lead(m)).toMatch(/^▲ blocked · needs: close dispatch T2/);
+    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · needs: close dispatch T2 · ◐ fixing/);
     expect(lead({ ...m, busy: true, tick: 1 })).toContain('◓ fixing');
     expect(head({ ...m, ui: { ...ui, ascii: true } })).not.toMatch(/[◐◓◑◒]/);
   });
-  test('needsOf: a dispatch row reads as the task to close, retry stop as stop again, others stay in the gate words', () => {
-    expect(needsOf('dispatch T2 read ghost.py open')).toBe('needs: close T2');
-    expect(needsOf('dispatch fix the thing open')).toBe('needs: close fix the thing');
-    expect(needsOf('retry stop')).toBe('needs: stop again');
+  test('needsOf: a dispatch row reads as the task to close, retry stop as the spinner word retrying, others stay in the gate words', () => {
+    expect(needsOf('dispatch T2 read ghost.py open')).toBe('needs: close dispatch T2');
+    expect(needsOf('dispatch T2 read ghost.py open', 'short')).toBe('needs: close T2');
+    expect(needsOf('dispatch T2 read ghost.py open', 'bare')).toBe('close T2');
+    expect(needsOf('dispatch fix the thing open')).toBe('needs: close dispatch fix the thing');
+    expect(needsOf('retry stop')).toBe('retrying');
     expect(needsOf('routing')).toBe('routing');
   });
   test('a gate warning never leads: idle and done lead with their own word, the warning is the second segment', () => {
     const checks = [{ id: 'doctor', ok: false, name: 'doctor' }];
     const idle = lead(model({ phase: 'research', done: 0, total: 0, checks }));
-    expect(idle).toMatch(/^○ idle · ▲ doctor warning/);
-    const done = lead(model({ phase: 'done', done: 7, total: 7, ranSecs: 42, checks }));
-    expect(done).toMatch(/^● done 7\/7 · 0:42 · ▲ doctor warning/);
+    expect(idle).toMatch(/^○ idle\b.* · △ 1 gate to check/);
+    const done = lead(model({ cols: 110, phase: 'done', done: 7, total: 7, ranSecs: 42, checks }));
+    expect(done).toMatch(/^● done · 0:42 · todo 7\/7 · △ 1 gate to check/);
     expect(head(model({ busy: true, workers: live, checks }))).not.toMatch(/^◖ ◆ ATLAS ◗\s+▲/);
   });
 });
@@ -124,11 +126,11 @@ describe('round 3 A4: the brand chip is a solid pill', () => {
     const body = runs.slice(1, -1);
     expect(body.every((x) => x.bg === 'accent' && x.bold === true && x.tone !== 'accent')).toBe(true);
   });
-  test('the lit letter is a hole in the pill, and only while working and not reduced', () => {
-    expect(wordmark(ui, 2).filter((x) => x.bg === 'panel').map((x) => x.t)).toEqual(['L']);
+  test('the pill stays solid: no letter is a hole, working or not, reduced motion or not (the inverted letter read as a stray cursor)', () => {
+    expect(wordmark(ui, 2).some((x) => x.bg === 'panel')).toBe(false);
     expect(wordmark(ui).some((x) => x.bg === 'panel')).toBe(false);
     const holes = (m: MissionModel) => bandLines(m)[0]!.runs.filter((x) => x.bg === 'panel' && x.bold && 'ATLAS'.includes(x.t) && x.t.length === 1).length;
-    expect(holes(model({ busy: true, workers: live }))).toBe(1);
+    for (const tick of [0, 1, 2, 3, 4]) expect(holes(model({ busy: true, workers: live, tick }))).toBe(0);
     expect(holes(model({ busy: true, workers: live, still: true }))).toBe(0);
   });
 });

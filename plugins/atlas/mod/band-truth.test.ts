@@ -95,8 +95,8 @@ describe('critique 12 B2: the routing verdict has one source', () => {
   const gates = [grp('completion', true), grp('routing', true)];
   test('core drift makes the routing check warn on the band, the same group the gates tab shows', () => {
     const done = idle({ todos: doneStore(), activity: lead(null, 'done') });
-    expect(rows(done, gates, 150, core(0)).join('\n')).not.toContain('▲ routing');
-    expect(rows(done, gates, 150, driftCore).join('\n')).toContain('▲ routing');
+    expect(rows(done, gates, 150, core(0)).join('\n')).not.toContain('△ routing');
+    expect(rows(done, gates, 150, driftCore).join('\n')).toContain('△ routing');
   });
   test('withCoreTally adds the drift line to the routing group only when a route drifted', () => {
     expect(gateTally(withCoreTally(gates as never, core(0) as never) as never).green).toBe(2);
@@ -112,9 +112,9 @@ describe('B4: one warning mark and one layout at every width', () => {
   test('the band head and the checks row mark a failing check with the same glyph', () => {
     const out = rows(done(), gates, 150, core(0));
     expect(gateTally(gates as never).green).toBe(2);
-    expect(out[0]).toContain('▲');
+    expect(out[0]).toContain('△');
     const checks = glyphsOf(out, ' checks ');
-    expect(checks).toContain('▲ completion');
+    expect(checks).toContain('△ completion');
     expect(checks).not.toContain('■');
   });
   test('110 and 150 draw the same rows: head, the core row carrying the last run, checks, keys', () => {

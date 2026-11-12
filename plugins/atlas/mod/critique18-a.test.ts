@@ -23,13 +23,13 @@ describe('A1: a reason never contradicts the todo figure beside it', () => {
     for (const cols of [62, 80, 110, 150]) {
       const t = closed(cols);
       expect([cols, /todo open/.test(t)]).toEqual([cols, false]);
-      expect(t).toContain('blocked · needs: stop again');
+      expect(t).toMatch(/blocked · ◐ retrying/);
       expect(t).toMatch(/todo [^\d]*5\/5/);
     }
   });
   test('f0102 and f0113 are one state: the open dispatch row is named while it is open', () => {
     const open = row(m(110, { stopGates: ['1 todo open'], openWork: 1, openDispatch: 1, openDispatchTitle: 'T2 read ghost.py', workers: [failed] }));
-    expect(open).toContain('blocked · needs: close T2');
+    expect(open).toContain('blocked · needs: close dispatch T2');
     expect(open).not.toMatch(/\b1 todo open\b/);
   });
   test('n/n with another open row reads `stop refused` (the todo figure names the row); a plan with open rows keeps `1 todo open` beside a count that is not n/n', () => {

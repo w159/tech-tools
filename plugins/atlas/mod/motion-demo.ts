@@ -25,6 +25,9 @@ const TODO = (state: 'running' | 'done', now: number, outcome = false): TodoItem
 const AGENT = (state: 'running' | 'done', now: number): HudAgent => ({ name: NAME, role: 'implementer', state: state === 'done' ? 'done' : 'working', model: 'opus', ...(state === 'running' ? { tool: 'read', target: 'runs.ts:17' } : { since: now, lastLine: 'read runs.ts:17' }) }); // a finished agent's LAST column turns to the outcome of the plan row it owns (critique 14)
 
 type Shown = 'running' | 'done';
+/** The row a strip line shows: the last line that is the row itself, not the box's bottom border, a blank gap or a bare header (round 3: the HUD closes its blocks with a `└───┘` border, and a strip of `lines.at(-1)` held that border six times). */
+const bare = (l: string): string => l.replace(/\x1b\[[0-9;]*m/g, '');
+const rowOf = (lines: readonly string[]): string => [...lines].reverse().find((l) => bare(l).trim() !== '' && !/^[└┌]/.test(bare(l))) ?? lines.at(-1) ?? '';
 /** The HUD input of a surface: `todo` shows the plan row, `agent` the Subagents row. */
 export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number): HudInput => (surface === 'todo' ? { todos: [TODO(state, now)], agents: [] } : { todos: [TODO(state, now, true)], agents: [AGENT(state, now)] }); // the agent owns the plan row: its done LAST column is the outcome that row carries
 const FEED = { 'todo': 'hud-todo', 'agent': 'hud-agents' } as const;
@@ -45,7 +48,7 @@ export function demoFrames(cols = 100, step = MOTION_STEP_MS, color: Ui['color']
     const frame = (label: string, file: string, state: Shown, now: number, motion: ReturnType<Motion['ctx']>): void => {
       const lines = hudLines(demoInput(surface, state, now), { cols, maxRows: 20, ui, tick: 0, now, ...(motion ? { motion } : {}) }).map((r) => r.map((x) => paintAnsi(x, ui)).join(''));
       put(file, lines);
-      strip.push(`${label.padEnd(8)} ${lines.at(-1)}`);
+      strip.push(`${label.padEnd(8)} ${rowOf(lines)}`);
     };
     frame('running', `${surface}-00-running.ans`, 'running', 0, undefined);
     let n = 1;

@@ -112,7 +112,7 @@ describe('256-colour ease: every step is visible on the panel (critique 8)', () 
   });
   test('the done glyph and title ramps are the ones the critique asked for: no 194/193 pastel pair, no 193 to 187 hue-only step', () => {
     const ramp = (rest: 'ok' | 'sub'): number[] => easeSteps256(PALETTES.mocha.ok, PALETTES.mocha[rest], 'mocha').map(idx);
-    expect(ramp('ok')).toEqual([231, 194]); // the glyph: white, then pale green, then its resting 151
+    expect(ramp('ok')).toEqual([194, 151]); // the glyph: pale green, then mid green, then its resting 114 (the brief's exact ok index; white is within a step of the body tone 252)
     for (const rest of ['ok', 'sub'] as const) { const r = ramp(rest); expect(r.includes(194) && r.includes(193)).toBe(false); expect(r.includes(193) && r.includes(187)).toBe(false); }
   });
 });

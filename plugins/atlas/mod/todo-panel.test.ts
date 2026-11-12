@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { board_120, board_120_rich, board_80, WORLD_NOW, worldItems } from '../contracts/board-golden';
-import { hexTo256, hostTo256, PALETTES, toneHex, type Ui } from './atlas-ui';
+import { hexTo256, hostTo256, PALETTES, sgrColor, toneHex, type Ui } from './atlas-ui';
 import { boardTree, runSegment, todoRows } from './todo-panel';
 import { textWidth } from './theme';
 import type { Segment } from './runs';
@@ -106,13 +106,13 @@ describe('C6: no navy on 256-colour terminals', () => {
   test('the slot rows and the Board pane fill with the stable grey (index 234), never the raw hex the host turns into 17', () => {
     const rows = todoRows(worldItems(), o(120, { ui: ui256 }));
     expect(rows.length).toBeGreaterThan(0);
-    for (const r of rows) for (const b of fills(r)) expect([b, hostTo256(b)]).toEqual([b, 234]);
+    for (const r of rows) for (const b of fills(r)) expect([b, [234, 141].includes(hostTo256(b))]).toEqual([b, true]); // the stable grey, or the one lavender (141) of an ATLAS chip
     const mk = (kind: string) => (props: Record<string, unknown>) => ({ kind, props });
     const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button'), Input: mk('Input') } as unknown as ClientElements;
     const tree256 = JSON.stringify(boardTree(els, worldItems(), { cols: 80, rows: 20, tick: 0, now: WORLD_NOW, ui: ui256 }));
     const hexes = [...tree256.matchAll(/"backgroundColor":"(#[0-9a-f]{6})"/g)].map((x) => x[1]!);
     expect(hexes.length).toBeGreaterThan(0);
-    for (const b of hexes) expect([b, hostTo256(b), hostTo256(b) === 17]).toEqual([b, hexTo256(b), false]); // a stable colour (host and Atlas agree), never navy 17
+    for (const b of hexes) expect([b, `48;5;${hostTo256(b)}`, hostTo256(b) === 17]).toEqual([b, sgrColor(b, 48, '256'), false]); // a stable colour (host and Atlas agree), never navy 17
     expect(hexes.filter((b) => hexTo256(b) === 234).length).toBeGreaterThan(0);
   });
   test('truecolor keeps the palette hex', () => {

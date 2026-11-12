@@ -23,7 +23,7 @@ test("band: the todo gauge reads `N/M`, ctx shows only when known, no board mean
 
 test("band names the capsule, the phase and the worker count; no project, scope or clock", () => {
 	const h = head(model({ team: "fix/low", elapsedSecs: 59, workers: Array.from({ length: 8 }, (_, i) => worker(`implementer-000${i}`)) }));
-	expect(h).toContain("◖ ◆ ATLAS ◗  ◐ working 0:59   implement · phase 4/5");
+	expect(h).toContain("◖ ◆ ATLAS ◗  ◐ working 0:59   phase 4/5");
 	expect(h).toContain("◐ 8 running");
 	expect(h).not.toMatch(/demo@master|fix\/low|00:59/);
 });
@@ -124,14 +124,14 @@ test("the message row drops before the footer when rows run short", () => {
 
 test("footer: checks only, no key hints or buttons on omp", () => {
 	const r = rows(model({ gates: [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }, { id: "routing", title: "r", lines: [{ ok: true, label: "y" }] }] as never, notes: [{ from: "a", to: "b", text: "hi" }] }));
-	expect(r.at(-1)).toBe(" checks  ▲ tripwire  ● routing  1/2 green".padEnd(140));
+	expect(r.at(-1)).toBe(" checks  △ tripwire  ● routing  1/2 green".padEnd(140));
 	expect(r.join("\n")).not.toMatch(/r: route|ctrl\+x/);
 });
 
 test("idle panel: the band reads idle, the last run follows, a failed count is bold text", () => {
 	const idle = (failed: number) => model({ idle: { workers: 3, secs: 70, failed }, workers: [], phase: "done", done: 6, total: 6, maxLines: 6 });
 	const ok = rows(idle(0));
-	expect(ok[0]).toContain("● done 6/6 · 1:10   todo");
+	expect(ok[0]).toContain("● done · 1:10   todo");
 	expect(ok[0]).toContain("6/6");
 	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	expect(rows(idle(2))[1]).toContain("2 failed");
