@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import {
-  asciiMode, ATLAS_GLYPHS, capsule, CHIP_W, chip, chipCount, clip, colorMode, contrast, countRuns, easedFrames, easedValue, easeOutCubic,
+  asciiMode, ATLAS_GLYPHS, capsule, GLYPH5, SPIN_FRAMES, CHIP_W, chip, chipCount, clip, colorMode, contrast, countRuns, easedFrames, easedValue, easeOutCubic,
   emittedPairs, gauge, gaugeEighths, gaugeParts, gaugeText, glyphTone, hexTo256, hostTo256, inkFor, stable256Indices, xtermHex, luminance, PALETTES, percent, rail, ribbon,
   runKind, runsCells, runsString, sgrColor, sparkline, spinFrameOf, spinnerFrame, spinnerGlyph, stateChip, stateGlyph, stateRun, STATE_ASCII,
   STATE_GLYPHS, STATE_TOKEN, themeName, toneHex, uiFromEnv, UI_STATES, type Ui,
@@ -20,7 +20,7 @@ describe('tokens', () => {
       expect(Object.keys(PALETTES[theme]).sort()).toEqual(['accent', 'bad', 'base', 'block', 'info', 'ink', 'line', 'muted', 'ok', 'panel', 'queued_fill', 'run', 'sub', 'text', 'warn', 'white']);
       for (const hex of Object.values(PALETTES[theme])) expect(hex).toMatch(/^#[0-9a-f]{6}$/);
     }
-    expect(PALETTES.mocha).toMatchObject({ panel: '#181825', text: '#cdd6f4', accent: '#cba6f7', line: '#7f849c' });
+    expect(PALETTES.mocha).toMatchObject({ panel: '#181825', text: '#d0d0d0', run: '#d0d0d0', accent: '#af87ff', ok: '#87d787', warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', ink: '#1c1c1c', line: '#7f849c' }); // round 3: 252, 141, 114, 179, 203, 234
     expect(PALETTES.latte).toMatchObject({ panel: '#e6e9ef', text: '#4c4f69', accent: '#8534ee', queued_fill: '#bcc0cc' });
   });
   test('toneHex maps legacy dim to a readable colour in each theme', () => {
@@ -82,7 +82,7 @@ describe('contrast', () => {
       for (const p of pairs) expect([theme, p.what, p.ratio >= p.need]).toEqual([theme, p.what, true]);
       const min = (kind: 'text' | 'glyph') => Math.min(...pairs.filter((p) => p.kind === kind).map((p) => p.ratio));
       // The measured minimums of rev 4 (evidence/contrast-results.txt).
-      expect(min('text')).toBeGreaterThanOrEqual(theme === 'mocha' ? 6.219 : 4.91);
+      expect(min('text')).toBeGreaterThanOrEqual(theme === 'mocha' ? 5.08 : 4.91);
       expect(min('glyph')).toBeGreaterThanOrEqual(theme === 'mocha' ? 4.75 : 3.078);
     }
   });
@@ -116,7 +116,7 @@ describe('contrast', () => {
 describe('state vocabulary', () => {
   test('six lowercase words, each one glyph, one ASCII mark and one token', () => {
     expect([...UI_STATES]).toEqual(['queued', 'running', 'done', 'failed', 'blocked', 'waiting']);
-    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇⠋●■▣◉');
+    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇◐●■▲◉');
     expect(UI_STATES.map((s) => STATE_ASCII[s]).join('')).toBe('o|*x#?');
     expect(new Set(UI_STATES.map((s) => STATE_GLYPHS[s])).size).toBe(6); // failed is the solid square, blocked the boxed one (critique 17 A2): no two states share a mark
     expect(STATE_TOKEN).toEqual({ queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' });
@@ -125,7 +125,7 @@ describe('state vocabulary', () => {
   test('stateRun: token colour, text where under 3:1 or in ASCII; running takes the spinner frame', () => {
     expect(stateRun('failed', mocha)).toEqual({ t: '■', tone: 'bad' });
     expect(stateRun('done', latte)).toEqual({ t: '●', tone: 'text' });
-    expect(stateRun('running', mocha, 1).t).toBe('⠙');
+    expect(stateRun('running', mocha, 1).t).toBe('◓');
     expect(stateRun('running', ascii, 1)).toEqual({ t: '/', tone: 'text' });
     expect(stateRun('blocked', ascii)).toEqual({ t: '#', tone: 'text' });
     expect(stateGlyph('queued', ascii)).toBe('o');
@@ -269,14 +269,18 @@ describe('motion', () => {
     for (const i of stable256Indices()) expect([i, hexTo256(xtermHex(i)), hostTo256(xtermHex(i))]).toEqual([i, i, i]);
     expect(stable256Indices().length).toBeGreaterThan(60);
   });
-  test('spinner: ten braille frames, one frame per 100 ms, |/-\\ in ASCII, any integer frame', () => {
-    expect([0, 1, 2, 3, 4].map((f) => spinnerGlyph(f))).toEqual(['⠋', '⠙', '⠹', '⠸', '⠼']);
+  test('spinner: the four circle quarters, one frame per 100 ms, |/-\\ in ASCII, any integer frame, no braille', () => {
+    expect([0, 1, 2, 3, 4].map((f) => spinnerGlyph(f))).toEqual(['◐', '◓', '◑', '◒', '◐']);
     expect([0, 1, 2, 3].map((f) => spinnerGlyph(f, true)).join('')).toBe('|/-\\');
-    expect(spinnerGlyph(-1)).toBe('⠏');
-    expect(spinnerFrame(0)).toBe('⠋');
-    expect(spinnerFrame(99)).toBe('⠋');
-    expect(spinnerFrame(100)).toBe('⠙');
+    expect(spinnerGlyph(-1)).toBe('◒');
+    expect(spinnerFrame(0)).toBe('◐');
+    expect(spinnerFrame(99)).toBe('◐');
+    expect(spinnerFrame(100)).toBe('◓');
     expect(spinnerFrame(350, true)).toBe('\\');
+    expect(SPIN_FRAMES.join('')).toBe('◐◓◑◒');
+    expect(/[\u2800-\u28ff]/.test(ATLAS_GLYPHS)).toBe(false); // the cmap-checked glyph list carries no braille either
+    expect(STATE_GLYPHS.running).toBe(SPIN_FRAMES[0]); // a row's running mark is the spinner's first frame
+    expect(GLYPH5.running).toBe(SPIN_FRAMES[0]);
   });
   test('eased gauge: ease-out cubic over 160 ms, six frames, ends on the target', () => {
     expect(easeOutCubic(0)).toBe(0);

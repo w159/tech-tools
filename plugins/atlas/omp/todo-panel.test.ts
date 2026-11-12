@@ -53,7 +53,7 @@ test("colours come from the shared tokens: done glyph ok, struck label sub, runn
 
 test("the running row spins with the tick", () => {
 	const glyph = (tick: number) => strip(todoLines(items, o(120, { tick }))[4]!).slice(2, 3);
-	expect([0, 1, 2, 3].map(glyph)).toEqual(["⠋", "⠙", "⠹", "⠸"]);
+	expect([0, 1, 2, 3].map(glyph)).toEqual(["◐", "◓", "◑", "◒"]);
 });
 
 test("NO_COLOR: no colour escapes, only bold and strike", () => {
@@ -64,11 +64,11 @@ test("NO_COLOR: no colour escapes, only bold and strike", () => {
 
 test("renderPanel puts the board under the band: header and one row per todo within the line budget", () => {
 	const model: PanelModel = {
-		width: 120, maxLines: 14, phase: "implement", spin: "◆", laneSpin: "⠋", tick: 0, done: 3, total: 7, workers: [], notes: [], gates: [],
+		width: 120, maxLines: 14, phase: "implement", spin: "◆", laneSpin: "◐", tick: 0, done: 3, total: 7, workers: [], notes: [], gates: [],
 		channel: "demo@master/lead-1", todos: items, todosExpanded: true, ui: mocha, idle: { workers: 1, failed: 0 },
 	};
 	const rows = renderPanel(model).map(strip).map(r => r.trimEnd());
 	expect(rows.some(r => /^ITEM +STATE +OWNER +DETAIL$/.test(r))).toBe(true);
-	expect(rows.filter(r => /^[ ▸] [●⠋⠙⠹⠸◇■▣▲] /.test(r)).length).toBe(7);
+	expect(rows.filter(r => /^[ ▸] [●◐◓◑◒◇■▲▲] /.test(r)).length).toBe(7);
 	for (const l of renderPanel(model)) expect(visibleWidth(l)).toBe(120);
 });

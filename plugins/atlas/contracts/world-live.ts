@@ -76,10 +76,10 @@ export function worldOmp(width: number, over: Record<string, unknown> = {}): any
   const workers = world.workers.map((w) => ({
     name: w.name, secs: w.age_s, role: w.name.split("-")[0]!,
     ...(w.state === "running" ? { tool: { tool: "Read", target: "runs.ts:17", active: true } } : {}),
-    ...(w.state === "queued" ? { state: "queued" as const } : w.state === "failed" ? { state: "failed" as const } : w.state === "done" ? { state: "done" as const } : {}),
+    ...(w.state === "queued" ? { state: "queued" as const } : w.state === "failed" ? { state: "failed" as const, tool: { tool: "Read", target: "runs.ts:9", active: false } } : w.state === "done" ? { state: "done" as const } : {}),
   }));
   return {
-    width, maxLines: 12, phase: world.phases.find((p) => p.state === "active")!.id, phases: worldContractPhases(), spin: "◆", laneSpin: "⠋", tick: 0,
+    width, maxLines: 12, phase: world.phases.find((p) => p.state === "active")!.id, phases: worldContractPhases(), spin: "◆", laneSpin: "◐", tick: 0,
     done: world.todos.filter((t) => t.state === "done").length, total: world.todos.length, workers,
     notes: worldNotes().map((n) => ({ from: n.owner, to: n.to ?? "lead", text: n.text, ts: Date.parse(n.ts) / 1000, ...(n.kind ? { kind: n.kind } : {}) })),
     gates: worldGates() as never, channel: CHANNEL, ctx: world.workers.find((w) => w.state === "running")!.ctx!, todos: worldTodos().map((t) => ({ ...t, status: t.status })) as never, nowSecs: WORLD_NOW,

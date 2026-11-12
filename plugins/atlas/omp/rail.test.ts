@@ -25,7 +25,7 @@ test("a finished run lights the end of the rail; an off-rail phase keeps the las
 });
 
 test("the omp band counts the same rail: no sixth `done` step, `phase 4/5` for implement", () => {
-	const m = { width: 120, maxLines: 4, phase: "implement", spin: "◆", laneSpin: "⠋", tick: 0, done: 0, total: 0, workers: [], notes: [], gates: [], channel: "d@m/l", ui: { theme: "mocha", ascii: false, color: "truecolor" } } as never;
+	const m = { width: 120, maxLines: 4, phase: "implement", spin: "◆", laneSpin: "◐", tick: 0, done: 0, total: 0, workers: [], notes: [], gates: [], channel: "d@m/l", ui: { theme: "mocha", ascii: false, color: "truecolor" } } as never;
 	expect(strip(renderPanel(m)[0]!)).toContain("phase 4/5");
 	expect(strip(renderPanel({ ...(m as object), phases: ["research", "theory", "build", "verify"], phase: "build" } as never)[0]!)).toContain("phase 3/4");
 });

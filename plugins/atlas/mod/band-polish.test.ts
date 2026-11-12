@@ -36,7 +36,7 @@ describe('band beside the Subagents block: counts only', () => {
     expect(all).not.toContain('implementer'); // no role column: the HUD block carries it
     expect(rows[0]).toContain('1 running');
     expect(rows[0]).toContain('1 failed');
-    const listed = rows.slice(1).filter((r) => /^\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇■▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/.test(r));
+    const listed = rows.slice(1).filter((r) => /^\s*[◐◓◑◒◐◓◑◒◐◓◇■▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/.test(r));
     expect(listed).toHaveLength(NAMES.length);
     for (const n of NAMES) expect(listed.filter((r) => r.includes(n))).toHaveLength(1);
     expect(rowsOf(160, { workersInHud: true, maxRows: 1, snapshot: busySnap({ comms: [] }) })).toHaveLength(1);
@@ -158,7 +158,7 @@ describe('band counts what the HUD counts (critique-3 change 4)', () => {
   test('a blocked task has its own glyph and count beside the todo count, with the agents noun in front of the agent counts', () => {
     const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
     expect(head).toContain('todo ');
-    expect(head).toMatch(/1\/3 · ▣ 1 blocked/);
+    expect(head).toMatch(/1\/3 · ▲ 1 blocked/);
     expect(head).toMatch(/agents .*1 running/);
     expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/working .* todo 1\/3 · /); // rev 5: at 79 the state word leads and the blocked count is the segment that gives way
   });
@@ -173,6 +173,6 @@ describe('band counts what the HUD counts (critique-3 change 4)', () => {
     const head = rowsOf(200, { snapshot, live: failedOnly })[0]!;
     expect(head).toContain('idle');
     expect(head).toMatch(/1 failed/);
-    expect(head).toMatch(/▣ 1 blocked/);
+    expect(head).toMatch(/▲ 1 blocked/);
   });
 });

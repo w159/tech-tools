@@ -65,16 +65,16 @@ describe('B3: a row the store holds as pending never reads failed', () => {
   });
 });
 
-describe('B3: blocked has its own colour, distinct from failed', () => {
-  test('the state token, the glyph, the word and the HUD row all differ from failed in every theme', () => {
-    expect(STATE_TOKEN.blocked).not.toBe(STATE_TOKEN.failed);
-    expect(rowWordTone('blocked')).not.toBe(rowWordTone('failed'));
+describe('B3 (round 3): blocked and failed share the one error colour; the glyph and the word tell them apart', () => {
+  test('the state token resolves to one error hex, the word tone is shared, the glyph differs, in every theme', () => {
+    expect(rowWordTone('blocked')).toBe(rowWordTone('failed'));
     for (const theme of ['mocha', 'latte'] as const) {
       const u: Ui = { theme, ascii: false, color: 'truecolor' };
-      expect(PALETTES[theme][STATE_TOKEN.blocked]).not.toBe(PALETTES[theme][STATE_TOKEN.failed]);
-      expect(stateRun('blocked', u).tone).not.toBe(stateRun('failed', u).tone);
+      expect(PALETTES[theme][STATE_TOKEN.blocked]).toBe(PALETTES[theme][STATE_TOKEN.failed]);
+      expect(stateRun('blocked', u).t).not.toBe(stateRun('failed', u).t);
       expect(contrast(PALETTES[theme][STATE_TOKEN.blocked], PALETTES[theme].panel)).toBeGreaterThanOrEqual(3);
     }
+    expect(PALETTES.mocha.bad).toBe('#ff5f5f'); // error 203
     const rows = hudLines({ todos: plan(), agents }, { cols: 150, maxRows: 12, ui, now: NOW });
     const toneOf = (needle: string, word: string) => rows.find((r) => runsString(r).includes(needle))!.find((x) => x.t.trim() === word)!.tone;
     const glyphOf = (needle: string) => rows.find((r) => runsString(r).includes(needle))![2]!.tone;
@@ -118,7 +118,7 @@ describe('B5 / critique 19 C1: the 110 board keeps the owner with its row and sa
   ];
   test('37 cells (critique 19 C1): each owner is the sub-line under its own row, with the row\'s reason and age; no detached list', () => {
     const text = boardText(boardLines(boardRowsOf(src, 400), { cols: 37, ui, ribbon: false, title: false }));
-    const rows = text.filter((r) => /^\s*[●◇▣■◐] T\d/.test(r));
+    const rows = text.filter((r) => /^\s*[●◇▲■◐] T\d/.test(r));
     expect(rows).toHaveLength(3);
     const under = (title: string): string => text[text.findIndex((r) => r.includes(title)) + 1]!;
     expect(under('T1 read alpha.py')).toMatch(/^\s+alpha-explorer$/);

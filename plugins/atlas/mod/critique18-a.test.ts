@@ -23,19 +23,19 @@ describe('A1: a reason never contradicts the todo figure beside it', () => {
     for (const cols of [62, 80, 110, 150]) {
       const t = closed(cols);
       expect([cols, /todo open/.test(t)]).toEqual([cols, false]);
-      expect(t).toContain('blocked: retry stop');
+      expect(t).toContain('blocked · needs: stop again');
       expect(t).toMatch(/todo [^\d]*5\/5/);
     }
   });
   test('f0102 and f0113 are one state: the open dispatch row is named while it is open', () => {
     const open = row(m(110, { stopGates: ['1 todo open'], openWork: 1, openDispatch: 1, openDispatchTitle: 'T2 read ghost.py', workers: [failed] }));
-    expect(open).toContain('blocked: dispatch T2 read ghost.py open');
+    expect(open).toContain('blocked · needs: close T2');
     expect(open).not.toMatch(/\b1 todo open\b/);
   });
   test('n/n with another open row reads `stop refused` (the todo figure names the row); a plan with open rows keeps `1 todo open` beside a count that is not n/n', () => {
-    expect(row(m(110, { stopGates: ['1 todo open'], openWork: 1, openDispatch: 0 }))).toContain('blocked: stop refused');
+    expect(row(m(110, { stopGates: ['1 todo open'], openWork: 1, openDispatch: 0 }))).toContain('blocked · stop refused');
     const planOpen = row(m(110, { stopGates: ['1 todo open'], done: 4, total: 5, openWork: 1 }));
-    expect(planOpen).toContain('blocked: 1 todo open');
+    expect(planOpen).toContain('blocked · 1 todo open');
     expect(planOpen).toContain('todo 4/5');
   });
   test('blockReasons: no open-now context keeps the gate words', () => {
@@ -48,7 +48,7 @@ describe('A1: a reason never contradicts the todo figure beside it', () => {
 describe('A2: the gates figure counts the green marks drawn', () => {
   // stoprun-150-562576ed-2 f0097: `checks ◇ completion ● tripwire ▲ routing ● header 3/4 green` with 2 green marks.
   const checks = [{ id: 'completion', ok: true, pending: true }, { id: 'tripwire', ok: true }, { id: 'routing', ok: false, name: 'routing' }, { id: 'header', ok: true }];
-  const footer = (cols: number): string => runsText(missionLines(m(cols, { maxRows: 6, workers: [], checks, done: 1, total: 5 })).flatMap((l) => l.runs)).replace(/\s+/g, ' ');
+  const footer = (cols: number): string => missionLines(m(cols, { maxRows: 6, workers: [], checks, done: 1, total: 5 })).map((l) => runsText(l.runs)).filter((t) => t.includes('checks')).join(' ').replace(/\s+/g, ' '); // the checks row only: the band row leads with its own `●`
   test('the band footer says 2/4 green beside two ● marks', () => {
     const t = footer(150);
     expect(t).toContain('2/4 green');
@@ -67,23 +67,23 @@ describe('A2: the gates figure counts the green marks drawn', () => {
 });
 
 describe('A3: a middle dot between band segments, and a count never loses its word to a bare glyph', () => {
-  // stoprun-150-562576ed-3 tab-route.ans:40: `todo 4/5 ▣ 1 blocked · ■ 1 failed`; stoprun-150-562576ed-2 tab-board.png (82 columns): `... · ■2`, `▣ 1 blocked` lost.
+  // stoprun-150-562576ed-3 tab-route.ans:40: `todo 4/5 ▲ 1 blocked · ■ 1 failed`; stoprun-150-562576ed-2 tab-board.png (82 columns): `... · ■2`, `▲ 1 blocked` lost.
   const warn = (cols: number): string => row(m(cols, { phase: 'research', done: 1, total: 5, openWork: 2, openDispatch: 2, todoBlocked: 1, checks: [{ id: 'routing', ok: false, name: 'routing' }], workers: [{ ...failed, name: 'beta-explorer' }, failed] }));
-  test('no `n ▣ 1 blocked` without a dot at any width', () => {
-    for (let cols = 40; cols <= 150; cols++) expect([cols, /\d ▣ \d+ blocked/.test(warn(cols))]).toEqual([cols, false]);
-    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · ▣ 1 blocked');
+  test('no `n ▲ 1 blocked` without a dot at any width', () => {
+    for (let cols = 40; cols <= 150; cols++) expect([cols, /\d ▲ \d+ blocked/.test(warn(cols))]).toEqual([cols, false]);
+    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · ▲ 1 blocked');
   });
   test('82 columns (the tab open): the words stay, a lower-priority segment goes', () => {
     const t = warn(82);
     expect(t).toMatch(/■ 2 failed/);
-    expect(t).toMatch(/▣ 1 blocked/);
+    expect(t).toMatch(/▲ 1 blocked/);
     expect(t).not.toMatch(/■2/);
     expect(t).not.toContain('dispatches open');
   });
   test('no bare glyph-and-number count while a form with the words fits', () => {
-    for (let cols = 60; cols <= 150; cols++) {
+    for (let cols = 62; cols <= 150; cols++) { // 62: the lead `○ idle · ▲ routing warning` is 7 cells longer than the old bare warning
       const t = warn(cols);
-      expect([cols, /[■▣⠋]\d/.test(t)]).toEqual([cols, false]);
+      expect([cols, /[■▲◐]\d/.test(t)]).toEqual([cols, false]);
       expect([cols, cells(t.trimEnd()) <= cols]).toEqual([cols, true]);
     }
   });
@@ -102,7 +102,7 @@ describe('A4: the lead waits on the person', () => {
     expect(asksUser(null)).toBe(false);
   });
   test('a declared block reads `needs you` and the route phase reads blocked, not `research`', () => {
-    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).toContain('! blocked: needs you');
+    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).toContain('▲ blocked · needs you');
     const route = bodyLines(panelWorld('route', 120, ui, { phase: 'blocked' as never, workers: [], todos: [] })).map(lineText).find((l) => l.trimStart().startsWith('phase'))!;
     expect(route).toContain('blocked');
   });

@@ -59,7 +59,7 @@ test('MOCHA palette and phaseHue', () => {
   expect(MOCHA).toEqual({
     panel: '#11111b', panel2: '#181825', base: '#1e1e2e', text: '#cdd6f4', muted: '#6c7086', dim: '#45475a',
     violet: '#cba6f7', teal: '#94e2d5', sky: '#89dceb', blue: '#89b4fa', green: '#a6e3a1', peach: '#fab387',
-    red: '#f38ba8', yellow: '#f9e2af', pink: '#f5c2e7', grey: '#585b70', grey2: '#313244', white: '#ffffff',
+    red: '#ff5f5f', yellow: '#f9e2af', pink: '#f5c2e7', grey: '#585b70', grey2: '#313244', white: '#ffffff',
   });
   expect(['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'].map(phaseHue)).toEqual([
     MOCHA.blue, MOCHA.violet, MOCHA.yellow, MOCHA.sky, MOCHA.peach, MOCHA.green, MOCHA.teal, MOCHA.red,
@@ -97,27 +97,16 @@ describe('blink', () => {
   });
 });
 
-test('spin: default braille frames, per-phase tables, wrap, negative, fractional', () => {
-  const braille = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  expect(braille.map((_, i) => spin(i))).toEqual(braille);
-  expect(spin(10)).toBe('⠋');
-  expect(spin(-1)).toBe('⠙');
-  expect(spin(2.9)).toBe('⠹');
-  expect(spin(1, 'unknown-phase')).toBe('⠙');
-  expect(spin(1, '')).toBe('⠙');
-  const tables: Record<string, string[]> = {
-    research: ['◜', '◠', '◝', '◞', '◡', '◟'],
-    theory: ['✶', '✷', '✸', '✹', '✺', '✻'],
-    test: ['⠁', '⠂', '⠄', '⡀', '⢀', '⠠'],
-    implement: ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟'],
-    verify: ['◐', '◓', '◑', '◒', '◔', '◕'],
-  };
-  for (const [p, frames] of Object.entries(tables)) {
-    expect(frames.map((_, i) => spin(i, p))).toEqual(frames);
-    expect(spin(6, p)).toBe(frames[0]!);
-    expect(spin(7, p)).toBe(frames[1]!);
-  }
-  expect(spin(0, 'done')).toBe('⠋');
+test('spin: one set for every phase, the circle quarters; wrap, negative, fractional', () => {
+  const circles = ['◐', '◓', '◑', '◒'];
+  expect(circles.map((_, i) => spin(i))).toEqual(circles);
+  expect(spin(4)).toBe('◐');
+  expect(spin(-1)).toBe('◒'); // negative frames wrap from the end
+  expect(spin(2.9)).toBe('◑');
+  expect(spin(1, 'unknown-phase')).toBe('◓');
+  expect(spin(1, '')).toBe('◓');
+  for (const p of ['research', 'theory', 'test', 'implement', 'verify', 'done']) expect(circles.map((_, i) => spin(i, p))).toEqual(circles); // no per-phase table: one family on a screen
+  expect(/[\u2800-\u28ff]/.test(['research', 'test', 'implement'].flatMap((p) => circles.map((_, i) => spin(i, p))).join(''))).toBe(false); // and no braille anywhere
 });
 
 test('rangeWidth: zero wins over wide, wide is 2, else 1; spans are inclusive', () => {

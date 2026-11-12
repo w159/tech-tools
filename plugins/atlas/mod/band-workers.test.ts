@@ -1,10 +1,10 @@
 // Band worker rows (critique 18 Band #3, critique 19 Band 1-3). Shapes come from live frames of the 232567af capture runs:
 //   live-150-232567af-1 f0068 (band 93 cells beside the docked pane, 3 explorers running, band slot of 2 rows: ribbon + 1)
 //   live-110-232567af-1 f0065 (band 61 cells beside the pane, same three explorers)
-//   stoprun-150-232567af-1 f0093 (band count glyph ⠸ against the HUD row ⠋)
+//   stoprun-150-232567af-1 f0093 (band count glyph ◒ against the HUD row ◐)
 //   stoprun-110-232567af-2 f0101 (blocked band at 61 cells: the todo figure and the failed count dropped)
 // The scorer (round2/tools/live_capture.py, parse_frame rev 4, line 659) reads a band worker row as
-// `^\s*([⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S` on the lines under the band ribbon, state from the glyph.
+// `^\s*([◐◓◑◒◐◓◑◒◐◓◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S` on the lines under the band ribbon, state from the glyph.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { spinFrameOf, type Ui } from './atlas-ui';
@@ -19,8 +19,8 @@ const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, prop
 const els = { Box: mk('Box'), Text: mk('Text') } as unknown as ClientElements;
 const text = (row: Node): string => (row.props.children as Node[]).map((t) => t.props.children).join('');
 const UI: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const SCORER_ROW = /^\s*([⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py:659
-const SPIN = '⠋⠙⠹⠸';
+const SCORER_ROW = /^\s*([◐◓◑◒◐◓◑◒◐◓◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py:659
+const SPIN = '◐◓◑◒';
 
 const explorer = (name: string, over: Partial<LiveWorker> = {}): LiveWorker => ({
   name, role: 'explorer', state: 'working', tool: 'Read', lastTool: null, since: NOW - 12_000, startedAt: NOW - 12_000, target: `${name.split('-')[0]}.py`, lastLine: '', calls: [], scope: null, ...over,
@@ -127,7 +127,7 @@ describe('band worker rows beside the Subagents block (live frame shape: band sl
   });
 });
 
-describe('band count glyph (critique 19 Band 3: ⠸ in the band against ⠋ in the HUD row)', () => {
+describe('band count glyph (critique 19 Band 3: ◒ in the band against ◐ in the HUD row)', () => {
   test('one running worker: the count and the worker row turn the same frame', () => {
     const one = [explorer('alpha-explorer')];
     for (let tick = 0; tick < 4; tick++) {
@@ -154,13 +154,13 @@ describe('blocked band at 61 cells (critique 19 Band 2: todo and failed dropped)
   };
   test('the 61-cell band keeps the todo figure and the failed count beside the blocked reason', () => {
     const row = blockedAt(61);
-    expect(row).toContain('blocked:');
+    expect(row).toContain('blocked');
     expect(row).toContain('T2');
     expect(row).toContain('todo 5/5');
     expect(row).toMatch(/■\s?1/);
   });
   test('wide bands keep the whole reason', () => {
-    expect(blockedAt(93)).toContain('dispatch T2 read ghost.py open');
+    expect(blockedAt(93)).toContain('blocked · needs: close T2');
   });
 });
 

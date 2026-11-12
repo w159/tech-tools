@@ -7,7 +7,7 @@ import { reducedMotion } from './motion';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const SPIN = '[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]';
+const SPIN = '[◐◓◑◒◐◓◑◒◐◓]';
 const PHASES = ['research', 'plan', 'build', 'verify', 'done'] as const;
 const run = (n: number): MissionWorker[] => Array.from({ length: n }, (_, i) => ({ name: `e${i}-explorer`, state: 'running', secs: 4 }));
 const model = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150, maxRows: 1, tick: 0, project: 'p', phases: PHASES, phase: 'build', done: 3, total: 7, workers: [], checks: null, ui, ...over });
@@ -37,21 +37,21 @@ describe('A2: working', () => {
 });
 
 describe('A2: idle, done and needs-you', () => {
-  test('idle reads `· idle` and carries no spinner and no clock', () => {
+  test('idle reads `○ idle` and carries no spinner and no clock', () => {
     const t = head(model({ phase: 'research', done: 0, total: 0 }));
-    expect(t).toContain('· idle');
+    expect(t).toContain('○ idle');
     expect(t).not.toMatch(new RegExp(SPIN));
     expect(t).not.toMatch(/\d:\d\d/);
   });
-  test('done reads `✓ done` with how long the run took', () => {
+  test('done reads `● done n/m · clock`: the plan figure, then how long the run took', () => {
     const t = head(model({ phase: 'done', done: 7, total: 7, ranSecs: 70 }));
-    expect(t).toContain('✓ done 1:10');
+    expect(t).toContain('● done 7/7 · 1:10');
     expect(t).not.toMatch(new RegExp(SPIN));
   });
   for (const cols of [150, 110]) {
     test(`needs-you (blocked) at ${cols} columns keeps the mark, the word and the reason`, () => {
     const t = head(model({ cols, checks: [{ id: 'routing', ok: false, name: 'routing' }], stopGates: ['routing'] }));
-    expect(t).toMatch(/! blocked/);
+    expect(t).toMatch(/▲ blocked/);
     expect(t).not.toMatch(new RegExp(SPIN + ' working'));
     });
   }
@@ -76,7 +76,7 @@ describe('A3: the wordmark sweep and the reduced-motion off switch', () => {
   const litLetter = (m: MissionModel): number => {
     const runs = bandLines(m)[0]!.runs;
     const at = runs.findIndex((x) => x.t === 'A');
-    return [...WORDMARK].findIndex((_, i) => runs[at + i]!.tone === 'text');
+    return [...WORDMARK].findIndex((_, i) => runs[at + i]!.bg === 'panel');
   };
   test('while working one letter of ATLAS is lit and the lit letter walks left to right, one step per 200 ms (two frames)', () => {
     const lit = [0, 2, 4, 6, 8].map((tick) => litLetter(model({ busy: true, tick })));

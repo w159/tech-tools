@@ -41,7 +41,7 @@ describe('team tab focus mark', () => {
 describe('channel log word column', () => {
   const only = (kind: PanelNote['kind']): string => strip(body('channel', 120, { notes: [note({ kind, from: 'a' })] }))[1]!;
   test('a lone blocked, handoff or done note brings the word column; a lone plain note has none', () => {
-    expect(only('blocked')).toBe('  ▣ a  blocked hello');
+    expect(only('blocked')).toBe('  ▲ a  blocked hello');
     expect(only('handoff')).toBe('  ● a  handoff hello');
     expect(only('done')).toBe('  ● a  done    hello');
     expect(only(undefined)).toBe('    a hello');

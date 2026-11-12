@@ -71,7 +71,7 @@ describe('4: each route section is labelled by what it lists', () => {
     const rows = body('route', 100);
     const agents = rows.findIndex((l) => l.startsWith(' agents'));
     const todo = rows.findIndex((l) => l.startsWith(' todo'));
-    const first = rows.findIndex((l) => /^[▸ ] [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇●■▣▲◉] /.test(l));
+    const first = rows.findIndex((l) => /^[▸ ] [◐◓◑◒◐◓◑◒◐◓◇●■▲▲◉] /.test(l));
     expect(agents).toBeGreaterThan(-1);
     expect(agents).toBeLessThan(todo);
     expect(todo).toBeLessThan(first);
@@ -128,7 +128,7 @@ describe('7: the Board', () => {
       expect(text.some((l) => l.includes('alpha-explorer'))).toBe(true); // critique 15 B5: at 80 it stands under its row instead of vanishing
       expect(text.some((l) => l.includes('gamma-explorer'))).toBe(true);
       if (cols >= 80) expect(text.some((l) => l.includes('...'))).toBe(false); // 80 and 99: no title is cut
-      const bodyRows = text.filter((l) => /^[▸ ] [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇●■▣▲◉] /.test(l));
+      const bodyRows = text.filter((l) => /^[▸ ] [◐◓◑◒◐◓◑◒◐◓◇●■▲▲◉] /.test(l));
       const labels = bodyRows.map((l) => l.replace(/\s+(done|running|queued|failed|blocked|waiting)\s.*$/, ''));
       // Labels are cut at the end only, so the long rows share one head; the owner column is what tells them apart.
       expect(new Set(bodyRows.map((l) => l.replace(/^.{4}/, ''))).size).toBe(bodyRows.length);

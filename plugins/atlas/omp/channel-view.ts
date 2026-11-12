@@ -94,19 +94,12 @@ export function formatNote(n: Note, max = MAX_LINE): string {
 	return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
-const SPIN = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-// Mirror of PHASE_FRAMES in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin().
-const PHASE_FRAMES: Record<string, string[]> = {
-	research: ["◜", "◠", "◝", "◞", "◡", "◟"],
-	theory: ["✶", "✷", "✸", "✹", "✺", "✻"],
-	test: ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠"],
-	implement: ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟"],
-	verify: ["◐", "◓", "◑", "◒", "◔", "◕"],
-};
+// Mirror of SPIN in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin(). One set for every phase: the circle quarters.
+const SPIN = ["◐", "◓", "◑", "◒"];
 
-export function spinFrame(n: number, phase?: string): string {
-	const f = (phase && PHASE_FRAMES[phase]) || SPIN;
-	return f[Math.abs(Math.floor(n)) % f.length] ?? SPIN[0];
+export function spinFrame(n: number, _phase?: string): string {
+	const f = Number.isFinite(n) ? Math.floor(n) : 0; // a non-finite counter falls back to the first frame
+	return SPIN[((f % SPIN.length) + SPIN.length) % SPIN.length]!;
 }
 
 export interface LiveWorker {

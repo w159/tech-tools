@@ -34,13 +34,13 @@ test("spawnText resolves with the command's stdout and rejects on a nonzero exit
 
 test("bandText returns the band rows as trimmed plain text", () => {
 	const m: PanelModel = {
-		width: 140, maxLines: 12, phase: "implement", spin: "◆", laneSpin: "⠋", tick: 0, done: 0, total: 0,
+		width: 140, maxLines: 12, phase: "implement", spin: "◆", laneSpin: "◐", tick: 0, done: 0, total: 0,
 		workers: [{ name: "implementer-0001", secs: 30, role: "implementer", tool: { tool: "edit", target: "a.ts", active: true } }], notes: [], gates: [], channel: "demo@master/lead-1", ui: mocha,
 	};
 	const rows = bandText(m, 140);
 	expect(Array.isArray(rows)).toBe(true);
 	expect(rows.length).toBeGreaterThan(0);
-	expect(rows[0]).toContain("◖ ◆ ATLAS ◗  ⠋ working");
+	expect(rows[0]).toContain("◖ ◆ ATLAS ◗  ◐ working");
 	expect(rows[0]).toContain("implement");
 	for (const r of rows) {
 		expect(r).toBe(r.trimEnd());

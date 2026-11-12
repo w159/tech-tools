@@ -18,7 +18,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');
 const lines = (rows: Segment[][]): string[] => rows.map(text);
 // The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
-const unspin = (l: string): string => l.replace(/(─ )[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/, '$1@SPIN@').replace(/[◐◓◑◒]/g, '◐'); // the title's spinner glyph is `@SPIN@` in the golden; a row's mark is the first circle
+const unspin = (l: string): string => l.replace(/(─ )[◐◓◑◒◐◓◑◒◐◓◑◒◐◓]/, '$1@SPIN@').replace(/[◐◓◑◒]/g, '◐'); // the title's spinner glyph is `@SPIN@` in the golden; a row's mark is the first circle
 const trimmed = (rows: Segment[][]): string[] => lines(rows).map((l) => unspin(l.trimEnd()));
 const todo = (id: string, content: string, status: string, extra: Partial<TodoItem> | string = {}): TodoItem => ({ id, content, status, ...(typeof extra === 'string' ? { phase: extra as TodoItem['phase'] } : extra) });
 

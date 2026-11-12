@@ -31,8 +31,8 @@ const { renderPanel } = await ompLoad('mission-panel');
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
-const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['⠋', '⠙', '⠹', '⠸', '◐', '◓', '◑', '◒'].map((g): [string, UiState] => [g, 'running'])]);
-const G = '[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠼⠴⠦⠧⠇⠏◇●■▣▲◉]';
+const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['◐', '◓', '◑', '◒', '◐', '◓', '◑', '◒'].map((g): [string, UiState] => [g, 'running'])]);
+const G = '[◐◓◑◒◐◓◑◒◐◓◑◒◐◓◐◓◑◒◐◓◇●■▲▲◉]';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -76,7 +76,7 @@ const todoOf = (text: string): [number, number] | undefined => {
 const GATE_NAMES = world.gates.map((g) => g.name).join('|');
 const gatePairs = (text: string): Record<string, boolean> => {
   const out: Record<string, boolean> = {};
-  for (const m of text.matchAll(new RegExp(`([●■▣▲]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
+  for (const m of text.matchAll(new RegExp(`([●■▲▲]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
   return out;
 };
 /** Rows `glyph name  word`: the glyph must agree with the word. */
@@ -107,7 +107,7 @@ const railOf = (text: string): Facts['rail'] => {
 type Inputs = { band: LiveSnapshot; hud: LiveSnapshot; board: LiveSnapshot; panel: LiveSnapshot };
 
 /** The band's agent counts: after the `agents` noun when it is drawn, else the whole row less the todo group's own blocked count (the noun gives way to the state word on a crowded row). */
-const bandCounts = (head: string): ReturnType<typeof counts> => counts(head.includes('agents') ? head.slice(head.indexOf('agents')) : head.replace(/▣ \d+ blocked/g, ''));
+const bandCounts = (head: string): ReturnType<typeof counts> => counts(head.includes('agents') ? head.slice(head.indexOf('agents')) : head.replace(/▲ \d+ blocked/g, ''));
 
 function ccBand(s: LiveSnapshot): Facts {
   const rows = rowsOfTree(bandTree(els, { snapshot: s, live: liveWorkers(s, s.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12, ui }));

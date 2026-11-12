@@ -6,7 +6,7 @@ import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTI
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const row = (state: 'running' | 'done' = 'done'): Run[] => [
-  { t: '▸', tone: 'accent', bold: true }, { t: ' ', tone: 'text' }, { t: state === 'done' ? '●' : '⠋', tone: state === 'done' ? 'ok' : 'run' }, { t: ' ', tone: 'text' },
+  { t: '▸', tone: 'accent', bold: true }, { t: ' ', tone: 'text' }, { t: state === 'done' ? '●' : '◐', tone: state === 'done' ? 'ok' : 'run' }, { t: ' ', tone: 'text' },
   { t: 'wire the gate', tone: state === 'done' ? 'sub' : 'text', ...(state === 'done' ? { strike: true } : {}) }, { t: '          ', tone: 'text' }, { t: state, tone: 'muted' }, { t: '    ', tone: 'text' },
 ];
 const items = (s: string): MotionItem[] => [{ key: 'todo:a', state: s }];
@@ -68,10 +68,10 @@ describe('animateRow', () => {
   test('the first frame leads from the state accent, brightened; the last frames land on the resting tone', () => {
     const m = changed();
     const r0 = animateRow(row('running'), 'todo:a', 'running', m.ctx(1000), ui).find((r) => r.t === 'wire the gate')!;
-    const lead = mixHex('#89b4fa', '#ffffff', 0.35);
+    const lead = mixHex('#d0d0d0', '#ffffff', 0.35); // running is the body tone (252) now, so its lead is the body brightened
     expect(r0.fg).toBe(lead);
     const late = animateRow(row('running'), 'todo:a', 'running', m.ctx(1000 + MOTION_MS - 1), ui).find((r) => r.t === 'wire the gate')!;
-    expect(late.fg).toBe(mixHex(lead, '#cdd6f4', easeOutCubic((MOTION_MS - 2 * MOTION_STEP_MS) / MOTION_MS))); // the last beat holds the previous beat's colour: it drops the weight only (critique 18)
+    expect(late.fg).toBe(mixHex(lead, '#d0d0d0', easeOutCubic((MOTION_MS - 2 * MOTION_STEP_MS) / MOTION_MS))); // the last beat holds the previous beat's colour: it drops the weight only (critique 18)
   });
   test('256-colour keeps stepping through palette entries; no colour skips the ease', () => {
     const m = changed();
@@ -105,7 +105,7 @@ describe('animateRow', () => {
     // the marks and the state word are there from the first frame; only the name grows in (critique 11: no `ru` / `runni`)
     const first = runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000), ui, { pop: false }));
     expect(first).not.toContain('wire');
-    expect(first).toContain('▸ ⠋');
+    expect(first).toContain('▸ ◐');
     expect(first).toContain('running');
     for (const dt of [0, 80, 160, 240, REVEAL_MS - 1]) expect(runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000 + dt), ui, { pop: false }))).toContain('running');
   });

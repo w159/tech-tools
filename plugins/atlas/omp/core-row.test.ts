@@ -19,7 +19,7 @@ const panel = (width: number, core: PanelModel["core"], workers = 0): PanelModel
 	maxLines: 10,
 	phase: "implement",
 	spin: "◆",
-	laneSpin: "⠋",
+	laneSpin: "◐",
 	tick: 0,
 	done: 0,
 	total: 0,
@@ -61,9 +61,9 @@ test("a running panel keeps its rows for workers: no core row", () => {
 
 test("labels are muted and only what is off takes colour (mocha hex as foreground)", () => {
 	const row = renderPanel(panel(160, fixtureModel())).find((r) => r.includes("verdicts  "))!;
-	expect(row).toContain("38;2;147;153;178"); // muted #9399b2 behind the labels
-	expect(row).toContain("38;2;243;139;168"); // bad #f38ba8: the refuted claim
-	expect(row).toContain("38;2;166;227;161"); // ok #a6e3a1: the verified claim
+	expect(row).toContain("38;2;138;138;138"); // muted #8a8a8a behind the labels
+	expect(row).toContain("38;2;255;95;95"); // bad 203: the refuted claim
+	expect(row).toContain("38;2;135;215;135"); // ok #a6e3a1: the verified claim
 	expect(row).not.toContain("48;2;203;166;247"); // no filled chip backgrounds
 });
 
