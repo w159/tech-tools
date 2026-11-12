@@ -9,8 +9,8 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, uiFromEnv, warnMark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
-import { animateRow, BAND_OPTS, type MotionCtx, type MotionItem } from './motion';
+import { atColumn, clip, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, gauge, padEnd, PALETTES, percent, rail, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, sweepIndex, uiFromEnv, warnMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons, warningText } from './data/runstate';
 import { displayName } from './hud';
 import { fitText, formatDuration, textWidth } from './theme';
@@ -98,6 +98,12 @@ export type MissionModel = {
   eased?: { todo?: number; ctx?: number };
   /** Motion view (mod/motion.ts): a count that changed is drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
+  /** Seconds the turn has been working (the host's turn clock, ticked each second): the `0:42` after `working`. Absent: the oldest running worker's age. */
+  turnSecs?: number;
+  /** Seconds the last run took: the `1:12` after `done`. Absent: the last wave's. */
+  ranSecs?: number;
+  /** No wordmark sweep (ATLAS_REDUCED_MOTION, NO_COLOR); the spinner frames still step. Absent: read from the environment. */
+  still?: boolean;
 };
 
 const MID = 80; // below this, only the band
@@ -206,7 +212,8 @@ const JOIN_MAX = 92;
 
 /** The one run state every form below reads. `blocked`: the lead declared it, or the Stop gate refused the stop (never inferred from a failing check alone).
  * `warn`: idle while a check fails and Stop did not refuse (`tripwire warning`). `flagged`: either, the band's attention state. */
-export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; reason: { long: string; short: string } } {
+export type BandKind = 'working' | 'idle' | 'done' | 'blocked' | 'warn';
+export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; kind: BandKind; reason: { long: string; short: string } } {
   const stopGates = m.stopGates ?? [];
   const blocked = !!m.blocked || stopGates.length > 0;
   const quiet = !blocked && !isRunning(m) && !m.busy;
@@ -215,33 +222,53 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? warningText(failing) : undefined;
   // The reason is read against the figure beside it (critique 18 A1): a plan that reads n/n never sits beside `1 todo open`.
   const now = { allDone: m.total > 0 && m.done >= m.total, openLeft: Math.max(0, (m.openWork ?? 0) - (m.total - m.done)) };
-  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now) };
+  // The state the band leads with: blocked (the lead or Stop says so), working (a turn, a worker or a running plan row), a warning, done (the plan is full and nothing runs), else idle.
+  const kind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : warn ? 'warn' : m.phase === 'done' || (m.total > 0 && m.done >= m.total) ? 'done' : 'idle';
+  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, kind, reason: blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now) };
 }
 
-/** `▲ blocked: 1 todo open`: glyph, the word and, when given, the reason in plain words (what Stop said). One form at every width. */
-const blockedHead = (ui: Ui, reason?: string): Run[] => [stateRun('blocked', ui), r(reason ? ' blocked:' : ' blocked', 'text', true), ...(reason ? [r(` ${reason}`, 'sub')] : [])];
-/** `▲ tripwire warning`: the attention glyph and the warning, no BLOCKED word. */
-const warnHead = (ui: Ui, warn: string): Run[] => [warnMark(ui), r(` ${warn}`, 'warn', true)];
-/** The head of a flagged band: BLOCKED with its reason, or the warning. */
-const flagHead = (ui: Ui, st: { blocked: boolean; warn?: string }, reason?: string): Run[] => (st.blocked ? blockedHead(ui, reason) : warnHead(ui, st.warn ?? ''));
+/** The spinner frame the band turns: the shared clock (the HUD, the panel and the counts turn the same one), else the local tick. */
+const bandFrame = (m: MissionModel): number => (m.now === undefined ? m.tick : spinFrameOf(m.now));
+
+/** The wordmark ribbon `◖ ◆ ATLAS ◗`, once, at the left end of the band. While Atlas works one letter is lit and moves right every 200 ms; still otherwise (and with reduced motion). */
+function ribbonOf(m: MissionModel, ui: Ui, kind: BandKind): Run[] {
+  const still = m.still ?? reducedMotion();
+  return wordmark(ui, kind === 'working' && !still ? sweepIndex(bandFrame(m)) : undefined);
+}
+
+/** The attention mark of a blocked or warning band: `!` in the warn tone (ASCII the same). */
+const attn = (ui: Ui): Run => ({ t: GLYPH5.blocked, tone: ui.ascii ? 'text' : 'warn' });
+
+/** The state the band leads with, by glyph AND word (never colour alone): `⠹ working 0:42`, `· idle`, `✓ done 1:12`, `! blocked: <reason>`, `! <n> warning` (the scorer maps neither mark, so the words carry the state).
+ * Working turns the spinner and counts up; warn text is never bold. `elapsed` false drops the clock (the tightest forms). */
+function stateRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, reason?: string, elapsed = true): Run[] {
+  const clockOf = (secs: number | undefined): Run[] => (elapsed && secs !== undefined ? [r(` ${elapsedClock(secs)}`, 'dim')] : []);
+  switch (st.kind) {
+    case 'working': return [{ t: spinnerGlyph(bandFrame(m), ui.ascii), tone: ui.ascii ? 'text' : 'accent' }, r(' '), r('working', 'text', true), ...clockOf(m.turnSecs ?? m.elapsedSecs), ...(st.warn ? [r(' · '), warnMark(ui), r(` ${st.warn}`, 'warn')] : [])]; // a failing check never hides behind the spinner
+    case 'done': return [{ t: ui.ascii ? GLYPH5_ASCII.done : GLYPH5.done, tone: ui.ascii ? 'text' : 'ok' }, r(' '), r('done', 'ok', true), ...clockOf(m.ranSecs ?? m.lastRun?.secs)];
+    case 'blocked': return [attn(ui), r(reason ? ' blocked:' : ' blocked', 'warn'), ...(reason ? [r(` ${reason}`, 'sub')] : [])];
+    case 'warn': return [warnMark(ui), r(` ${st.warn ?? ''}`, 'warn')];
+    case 'idle': return [{ t: ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'dim' }, r(' '), r('idle', 'dim')];
+  }
+}
 
 type Form = { runs: Run[]; min: number };
 
 /** The standard forms, widest first: 120 (the design's look; then a tight one for a crowded row: 2-cell gaps, ctx as a figure, an 8-cell todo gauge; each with and without the `agents` noun), 80, then the 60 and 40 column forms. The long word `phase` is used wherever it fits; `ph` only when it does not. A blocked band keeps its glyph, word and reason at every width. */
 function standardForms(m: MissionModel, ui: Ui): Form[] {
-  const cap = capsule(ui);
   const idx = phaseIndex(m);
   const n = m.phases.length;
   const phaseNo = `${Math.min(idx + 1, n)}/${n}`;
   const st = runStateOf(m);
-  const { flagged: blocked, idle, reason } = st;
+  const { flagged: blocked, reason } = st;
+  const cap = ribbonOf(m, ui, st.kind);
+  const head = (why?: string, elapsed = true): Run[] => [r(' '), ...stateRuns(m, ui, st, why, elapsed)];
   // `phase n/m` is dropped when a plan exists: the lead's reply header and the plan's done count are two clocks, and `phase 1/5 · todo 4/5` reads as one run
   // contradicting itself. The plan count is the progress figure then; the phase word (and the rich band's rail) still say where the lead is.
   const phaseSeg: Run[] = m.total ? [] : [r(` · phase ${phaseNo}`, 'sub')];
-  const name: Run[] = blocked
-    ? [...flagHead(ui, st, reason.long), ...phaseSeg]
-    : idle ? [r('idle', 'text', true), ...phaseSeg] : [r(m.phase, 'text', true), ...phaseSeg];
-  const lead = idle ? 'idle · ' : '';
+  // Working names the phase as its first fact; the other states keep `phase n/m` only when no plan carries the progress.
+  const nameWith = (sep: string): Run[] => [...stateRuns(m, ui, st, reason.long), ...(st.kind === 'working' && m.phase !== 'done' ? [r(sep), r(m.phase, 'sub')] : []), ...phaseSeg]; // a stale `done` phase is no fact of a run that works
+  const name = nameWith(' · ');
   const fig = figure(m);
   const todoAt = (withOpen: boolean): string => (m.total ? `${fig.done}/${fig.total}${withOpen ? openMore(m) : ''}` : '');
   const todo = todoAt(true);
@@ -251,7 +278,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const full = (noun: boolean, ctxGauge: boolean, gap: string, gw = 10, gauges = true): Run[] => {
     const counts = bandCounts(m, ui, true, noun, gap);
     return [
-      ...cap, r('  '), ...name,
+      ...cap, r('  '), ...nameWith(gap),
       ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${fig.done}/${fig.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [glue, ...blockedWords] : [])] : []),
       ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge && gauges ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
       ...(counts.length ? [r(gap), ...counts] : []),
@@ -270,7 +297,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const KEEPS: readonly Keep[] = [{ open: true, bw: true, ctx: true, q: true }, { open: true, bw: true, ctx: false, q: true }, { open: false, bw: true, ctx: false, q: true }, { open: false, bw: true, ctx: false, q: false }, { open: false, bw: false, ctx: false, q: true }];
   const countsOf = (k: Keep): Run[] => (k.q ? stdCounts : stdNoQueued);
   const bwTail = (cs: Run[], bw: boolean): Run[] => [...(bw && blockedWords.length ? [glue, ...blockedWords] : []), ...tail(cs)];
-  const compact = (word: string, cs: Run[], why: string, k: Keep): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word, k.open)}`, 'sub')] : [r(` ${lead}${midTodo(word, k.open)}`, 'sub')]), ...bwTail(cs, k.bw)];
+  const compact = (word: string, cs: Run[], why: string, k: Keep): Run[] => [...cap, ...head(why), ...(midTodo(word, k.open) ? [r(` · ${midTodo(word, k.open)}`, 'sub')] : []), ...bwTail(cs, k.bw)];
   const out: Form[] = [
     { runs: full(true, true, '   '), min: GAUGE_MIN }, { runs: full(true, false, '  ', 8), min: GAUGE_MIN },
     { runs: full(false, true, '   '), min: GAUGE_MIN }, { runs: full(false, false, '  ', 8), min: GAUGE_MIN },
@@ -283,22 +310,21 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   ];
   if (blocked) {
     const todoPart = (open: boolean): Run[] => (m.total ? [r(` · todo ${todoAt(open)}`, 'sub')] : []);
-    const small = (...parts: Run[][]): Run[] => [...cap, r(' '), ...flagHead(ui, st, reason.short), ...parts.flat()];
-    // Critique 17 A4: the narrow forms keep the words as long as they fit (`◖ ◆ ATLAS ◗ ▣ blocked: ... · todo 4/5 · ■ 1 failed`), so the row never stops at `todo 4/5 · ■1` with columns to spare.
+    const small = (...parts: Run[][]): Run[] => [...cap, ...head(reason.short), ...parts.flat()];
+    // Critique 17 A4: the narrow forms keep the words as long as they fit (`◖ ◆ ATLAS ◗ ! blocked: ... · todo 4/5 · ■ 1 failed`), so the row never stops at `todo 4/5 · ■1` with columns to spare.
     out.push(
       ...KEEPS.slice(1).map((k): Form => ({ runs: small(todoPart(k.open), bwTail(countsOf(k), k.bw)), min: 0 })),
       { runs: small(todoPart(false), bwTail(tiny, true)), min: 0 }, // critique 19 Band 2: at 61 cells the todo figure and the agent counts (`■1`) stay beside the reason, they are not dropped for it
-      { runs: small(todoPart(true), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), tail(tiny)), min: 0 }, { runs: small(todoPart(false)), min: 0 }, { runs: small(), min: 0 }, { runs: [...cap, r(' '), ...flagHead(ui, st)], min: 0 });
-  } else out.push({ runs: [...cap, r(`${idle ? ' idle' : ''}${todo ? `${quiet(m) ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...tail(tiny)], min: 0 });
+      { runs: small(todoPart(true), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), tail(tiny)), min: 0 }, { runs: small(todoPart(false)), min: 0 }, { runs: small(), min: 0 }, { runs: [...cap, ...head(undefined, false)], min: 0 });
+  } else out.push({ runs: [...cap, ...head(), ...(todo ? [r(` · todo ${todo}`, 'sub')] : []), ...tail(tiny)], min: 0 }, { runs: [...cap, ...head(), ...(todo ? [r(` · todo ${todo}`, 'sub')] : [])], min: 0 }, { runs: [...cap, ...head()], min: 0 }, { runs: [...cap, ...head(undefined, false)], min: 0 });
   return out;
 }
-const quiet = (m: MissionModel): boolean => !m.blocked && !m.stopGates?.length && !isRunning(m) && !m.busy;
 
 /** The rich band: the capsule and the numbered phase rail, a blank row, then the todo and ctx gauges and the counts. */
 function richBand(m: MissionModel, ui: Ui): Line[] {
   const st = runStateOf(m);
-  const { flagged: isBlocked, idle, reason } = st;
-  const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(isBlocked ? [r('   '), ...flagHead(ui, st, reason.long)] : idle ? [r('   '), r('idle', 'text', true)] : [])];
+  const { reason } = st;
+  const head: Run[] = [...ribbonOf(m, ui, st.kind), r('  '), ...stateRuns(m, ui, st, reason.long), r('   '), ...rail(m.phases, phaseIndex(m), ui)];
   const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${figure(m).done}/${figure(m).total} · ${percent(figure(m).done / figure(m).total)}${openMore(m)}`, 'sub')] : [];
   const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxBar(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
   const counts = bandCounts(m, ui, true, true);

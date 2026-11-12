@@ -83,6 +83,7 @@ export function worldOmp(width: number, over: Record<string, unknown> = {}): any
     done: world.todos.filter((t) => t.state === "done").length, total: world.todos.length, workers,
     notes: worldNotes().map((n) => ({ from: n.owner, to: n.to ?? "lead", text: n.text, ts: Date.parse(n.ts) / 1000, ...(n.kind ? { kind: n.kind } : {}) })),
     gates: worldGates() as never, channel: CHANNEL, ctx: world.workers.find((w) => w.state === "running")!.ctx!, todos: worldTodos().map((t) => ({ ...t, status: t.status })) as never, nowSecs: WORLD_NOW,
+    elapsedSecs: 42, // the oldest running worker's age, as the Claude Code band reads it from the snapshot
     ...over,
   };
 }

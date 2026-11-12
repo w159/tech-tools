@@ -83,7 +83,7 @@ describe('A3: a middle dot between band segments, and a count never loses its wo
   test('no bare glyph-and-number count while a form with the words fits', () => {
     for (let cols = 60; cols <= 150; cols++) {
       const t = warn(cols);
-      expect([cols, /[■▣◐]\d/.test(t)]).toEqual([cols, false]);
+      expect([cols, /[■▣⠋]\d/.test(t)]).toEqual([cols, false]);
       expect([cols, cells(t.trimEnd()) <= cols]).toEqual([cols, true]);
     }
   });
@@ -102,7 +102,7 @@ describe('A4: the lead waits on the person', () => {
     expect(asksUser(null)).toBe(false);
   });
   test('a declared block reads `needs you` and the route phase reads blocked, not `research`', () => {
-    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).toContain('▣ blocked: needs you');
+    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).toContain('! blocked: needs you');
     const route = bodyLines(panelWorld('route', 120, ui, { phase: 'blocked' as never, workers: [], todos: [] })).map(lineText).find((l) => l.trimStart().startsWith('phase'))!;
     expect(route).toContain('blocked');
   });

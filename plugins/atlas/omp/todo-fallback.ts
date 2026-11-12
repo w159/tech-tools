@@ -73,6 +73,7 @@ export function registerTodoFallback(pi: Pick<ExtensionAPI, "on">, deps: Fallbac
 	const clock = deps.now ?? Date.now;
 	const motion = new Motion(!reducedMotion(env));
 	let anim: unknown;
+	let spinIv: unknown; // the spinner timer: runs only while a plan row is in progress
 	let native = false;
 	let ctx: Ctx | undefined;
 	let poll: unknown;
@@ -92,14 +93,22 @@ export function registerTodoFallback(pi: Pick<ExtensionAPI, "on">, deps: Fallbac
 		if (anim !== undefined) clearFrame(anim);
 		anim = undefined;
 	};
+	const stopSpin = () => {
+		if (spinIv !== undefined) clearFrame(spinIv);
+		spinIv = undefined;
+	};
 	const stopPoll = () => {
 		if (poll !== undefined) clearIv(poll);
 		poll = undefined;
 		stopAnim();
+		stopSpin();
 	};
 	const paint = () => {
 		try {
-			if (native || !ctx?.cwd) return set(undefined);
+			if (native || !ctx?.cwd) {
+				stopSpin();
+				return set(undefined);
+			}
 			const id = ctx.sessionManager?.getSessionId?.();
 			const rows = sessionTodos(boardRoot(ctx.cwd, env), typeof id === "string" && id.trim() ? id : undefined);
 			const input = { todos: planOf(rows), agents: [] };
@@ -109,6 +118,9 @@ export function registerTodoFallback(pi: Pick<ExtensionAPI, "on">, deps: Fallbac
 			set(lines.length ? lines : undefined);
 			if (motion.animating(at)) anim ??= setFrame(paint, FRAME_MS);
 			else stopAnim();
+			// A running row turns its spinner every frame on its own timer (the 2 s poll is for data); the timer is gone on the paint nothing runs.
+			if (rows.some((r) => r.status === "in_progress")) spinIv ??= setFrame(paint, FRAME_MS);
+			else stopSpin();
 		} catch {
 			// fail soft: a bad board never breaks the session
 		}

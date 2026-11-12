@@ -48,7 +48,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain(' agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
+    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 failed');
     expect(body('team', 120, { lead, mates }).some((l) => /^ {2}◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {
@@ -115,7 +115,7 @@ describe('channel tab: header, columns and marks', () => {
   test('a blocked note word reads the block tone like rowWordTone; handoff and done stay ok', () => {
     const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' })] }));
     const word = (i: number, t: string) => l[i]!.runs.find((x) => x.t.trim() === t)!.tone;
-    expect([word(1, 'blocked'), word(2, 'handoff'), word(3, 'done')]).toEqual(['block', 'ok', 'ok']);
+    expect([word(1, 'blocked'), word(2, 'handoff'), word(3, 'done')]).toEqual(['warn', 'ok', 'ok']);
   });
   test('no persona colour: a nick is bold text whoever speaks', () => {
     const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ from: 'implementer-live' }), note({ from: 'lead' })] }));

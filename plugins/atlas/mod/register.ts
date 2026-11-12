@@ -20,7 +20,7 @@ import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';
-import { asksUser } from './data/runstate';
+import { asksUser, leadBusy, planBusy } from './data/runstate';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -52,7 +52,7 @@ const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: t
 // only flipped an inline fold that needed spare band rows and drew nothing in a short slot).
 export const BOARD_ID = 'atlas-board';
 const PANE_BOARD = { id: BOARD_ID, title: 'Board', rows: 14, closeOnEscape: true, focus: true } as const;
-const TICK_MS = SPINNER_MS; // one spinner frame per tick (design rev 4: 100 ms), written only while a worker is live
+const TICK_MS = SPINNER_MS; // one spinner frame per tick (100 ms), written only while Atlas is working: the host turn runs, a worker is live, or the lead or a plan row is busy
 const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
 const BAND_MIN_ROWS = 7; // the Mission Control band keeps at least this many rows; the HUD takes the rest of the budget
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
@@ -958,6 +958,32 @@ async function gateGroups($: EngineInterface): Promise<GateGroup[]> {
 // flag across the clear (module scope survives it, the atoms do not); `wired` keeps
 // commands and the long-lived timers from being registered a second time.
 let booted: { interactive: boolean } | null = null;
+/** The host says a model turn is running (AbovePrompt `isWorking`, noted by the band's render). The tick reads it: a lead-only turn lists no worker, yet the spinner must run. */
+let hostWorking = false;
+/** The tick count when the current run of work began (null while nothing works), and how long the last run took: the band's `working 0:42` and `done 1:12`. */
+let workStartTick: number | null = null;
+let lastRanSecs: number | undefined;
+const secsOfTicks = (n: number): number => Math.floor((n * TICK_MS) / 1000);
+
+/** Atlas is working right now: the host turn is running, a worker is live, the lead is mid-turn on its own work, or a plan row runs. The one rule the tick and the band share. */
+export function isWorkingNow(snap: LiveSnapshot, host: boolean): boolean {
+	if (host) return true;
+	const live = liveWorkers(snap, snap.now);
+	return activeCount(live) > 0 || leadBusy(snap) || planBusy(planBasis(snap.todos ?? [], snap.sessionId), workerStates(snap, live));
+}
+
+/** One spinner tick: advance the shared frame while Atlas works, stop on the tick it does not. Called from the one boot timer. */
+async function spinTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
+	const at = await read($, spinnerTickState);
+	if (isWorkingNow(snap, hostWorking)) {
+		if (workStartTick === null) workStartTick = at;
+		await update($, spinnerTickState, (n) => n + 1);
+	} else if (workStartTick !== null) {
+		lastRanSecs = secsOfTicks(at - workStartTick);
+		workStartTick = null;
+		await update($, spinnerTickState, (n) => n + 1); // one last redraw: the band reads `done 1:12` or `idle`, not the last spinner frame
+	}
+}
 let wired = false;
 async function boot($: EngineInterface, cwd: string, interactive: boolean): Promise<void> {
 	shownFailures.clear(); // a new session may toast its failures again
@@ -1019,7 +1045,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 			}
 			void runGates($);
 			void coreTick($);
-			// The tick only runs while a worker is live, so an idle session redraws nothing.
+			// The tick only runs while Atlas works (a host turn, a live worker, a busy lead), so an idle session redraws nothing.
 			tickTimer?.cancel();
 			tickTimer = $.clock.every(TICK_MS, () => {
 				void (async () => {
@@ -1027,7 +1053,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					if (!snap) return;
 					await easeTick($, snap as LiveSnapshot);
 					await motionTick($, snap as LiveSnapshot);
-					if (activeCount(liveWorkers(snap, Date.now())) > 0) await update($, spinnerTickState, (n) => n + 1);
+					await spinTick($, snap as LiveSnapshot);
 				})().catch(() => undefined);
 			});
 		}
@@ -1162,6 +1188,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const els = $.ui.resolve(e);
 		const columns = e.props.bodyColumns; // measured live: with the docked pane open, viewport.columns is the transcript's own width (143) and bodyColumns is that less the engine's five (138)
 		const live = liveWorkers(snapshot, snapshot.now); // one clock for the band, the HUD, the board and the pane
+			hostWorking = e.props.isWorking === true; // noted for the tick: the host's turn runs even when no worker is listed
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		// The HUD draws the TODO tree and the Subagents block (rev 4 design); below 80 columns the block gives way to the band's counts.
 		const agents = hudAgents(live, snapshot.squad, queuedMembers(snapshot));
@@ -1180,7 +1207,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true, ...(workStartTick !== null ? { workSecs: secsOfTicks(tick - workStartTick) } : {}), ...(lastRanSecs !== undefined ? { ranSecs: lastRanSecs } : {}), columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
 		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed);
 		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });

@@ -21,12 +21,12 @@ describe('tokens', () => {
       for (const hex of Object.values(PALETTES[theme])) expect(hex).toMatch(/^#[0-9a-f]{6}$/);
     }
     expect(PALETTES.mocha).toMatchObject({ panel: '#181825', text: '#cdd6f4', accent: '#cba6f7', line: '#7f849c' });
-    expect(PALETTES.latte).toMatchObject({ panel: '#e6e9ef', text: '#4c4f69', accent: '#8839ef', queued_fill: '#bcc0cc' });
+    expect(PALETTES.latte).toMatchObject({ panel: '#e6e9ef', text: '#4c4f69', accent: '#8534ee', queued_fill: '#bcc0cc' });
   });
   test('toneHex maps legacy dim to a readable colour in each theme', () => {
     expect(toneHex('dim', 'mocha')).toBe('#585b70');
     expect(toneHex('dim', 'latte')).toBe(PALETTES.latte.muted);
-    expect(toneHex('accent', 'latte')).toBe('#8839ef');
+    expect(toneHex('accent', 'latte')).toBe('#8534ee');
   });
 });
 
@@ -116,7 +116,7 @@ describe('contrast', () => {
 describe('state vocabulary', () => {
   test('six lowercase words, each one glyph, one ASCII mark and one token', () => {
     expect([...UI_STATES]).toEqual(['queued', 'running', 'done', 'failed', 'blocked', 'waiting']);
-    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇◐●■▣◉');
+    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇⠋●■▣◉');
     expect(UI_STATES.map((s) => STATE_ASCII[s]).join('')).toBe('o|*x#?');
     expect(new Set(UI_STATES.map((s) => STATE_GLYPHS[s])).size).toBe(6); // failed is the solid square, blocked the boxed one (critique 17 A2): no two states share a mark
     expect(STATE_TOKEN).toEqual({ queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' });
@@ -125,7 +125,7 @@ describe('state vocabulary', () => {
   test('stateRun: token colour, text where under 3:1 or in ASCII; running takes the spinner frame', () => {
     expect(stateRun('failed', mocha)).toEqual({ t: '■', tone: 'bad' });
     expect(stateRun('done', latte)).toEqual({ t: '●', tone: 'text' });
-    expect(stateRun('running', mocha, 1).t).toBe('◓');
+    expect(stateRun('running', mocha, 1).t).toBe('⠙');
     expect(stateRun('running', ascii, 1)).toEqual({ t: '/', tone: 'text' });
     expect(stateRun('blocked', ascii)).toEqual({ t: '#', tone: 'text' });
     expect(stateGlyph('queued', ascii)).toBe('o');
@@ -261,7 +261,7 @@ describe('motion', () => {
       }
     }
     expect(spinFrameOf(1_000, 'alpha-explorer')).toBe(spinFrameOf(1_050, 'alpha-explorer'));
-    expect(new Set(['a', 'b', 'c', 'd'].map((id) => spinFrameOf(0, id) % 4)).size).toBe(4); // ids spread over the four phases
+    expect(new Set(['a', 'b', 'c', 'd'].map((id) => spinFrameOf(0, id))).size).toBe(1); // rev 5: the id is ignored, one shared phase
     expect(spinFrameOf(1234, '')).toBe(Math.floor(1234 / 100));
   });
   test('hostTo256 is the host formula: the raw Mocha panel is navy 17 and the text tone 189 (seen live); stable palette colours agree with hexTo256', () => {
@@ -269,13 +269,13 @@ describe('motion', () => {
     for (const i of stable256Indices()) expect([i, hexTo256(xtermHex(i)), hostTo256(xtermHex(i))]).toEqual([i, i, i]);
     expect(stable256Indices().length).toBeGreaterThan(60);
   });
-  test('spinner: ◐◓◑◒ one frame per 100 ms, |/-\\ in ASCII, any integer frame', () => {
-    expect([0, 1, 2, 3, 4].map((f) => spinnerGlyph(f))).toEqual(['◐', '◓', '◑', '◒', '◐']);
+  test('spinner: ten braille frames, one frame per 100 ms, |/-\\ in ASCII, any integer frame', () => {
+    expect([0, 1, 2, 3, 4].map((f) => spinnerGlyph(f))).toEqual(['⠋', '⠙', '⠹', '⠸', '⠼']);
     expect([0, 1, 2, 3].map((f) => spinnerGlyph(f, true)).join('')).toBe('|/-\\');
-    expect(spinnerGlyph(-1)).toBe('◒');
-    expect(spinnerFrame(0)).toBe('◐');
-    expect(spinnerFrame(99)).toBe('◐');
-    expect(spinnerFrame(100)).toBe('◓');
+    expect(spinnerGlyph(-1)).toBe('⠏');
+    expect(spinnerFrame(0)).toBe('⠋');
+    expect(spinnerFrame(99)).toBe('⠋');
+    expect(spinnerFrame(100)).toBe('⠙');
     expect(spinnerFrame(350, true)).toBe('\\');
   });
   test('eased gauge: ease-out cubic over 160 ms, six frames, ends on the target', () => {

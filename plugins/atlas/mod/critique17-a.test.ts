@@ -27,7 +27,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(markOf('done', DONE_DOUBT)).toBe('doubt');
     expect(markOf('done')).toBe('done');
     expect(rowWordTone('done', DONE_DOUBT)).toBe('warn');
-    expect(rowWordTone('done')).toBe('sub');
+    expect(rowWordTone('done')).toBe('muted');
     expect(stateRun(markOf('done', DONE_DOUBT), ui).tone).toBe('warn');
     expect(stateRun('done', ui).tone).toBe('ok');
     expect(stateGlyph('doubt', ui)).toBe(STATE_GLYPHS.done);
@@ -145,7 +145,7 @@ describe('A4: the band names the open row by its plan title and never leaves col
   const row = (mm: MissionModel): string => runsText(bandLines(mm)[0]!.runs);
   test('93 columns: the named open row, the todo figure and the failed count with its word', () => {
     const t = row(m(93));
-    expect(t).toContain('▣ blocked: dispatch T2 read ghost.py open');
+    expect(t).toContain('! blocked: dispatch T2 read ghost.py open');
     expect(t).toContain('todo 4/5');
     expect(t).toMatch(/▣ 1 blocked/);
     expect(t).toMatch(/■ 1 failed/);

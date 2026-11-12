@@ -42,7 +42,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const done = rows.filter((r) => r.state === 'done').length;
     expect(out[0]).toContain(`${done}/${rows.length}`);
     expect(out.some((l) => /^progress |· \d+%/.test(l))).toBe(false); // one count, in the ribbon
-    expect(out.filter((l) => /^[ ▸] [●◐◇■▣▲◉] /.test(l))).toHaveLength(rows.length);
+    expect(out.filter((l) => /^[ ▸] [●⠋◇■▣▲◉] /.test(l))).toHaveLength(rows.length);
   });
   test('columns: label at 4, state at 30, meta at 44; at most one chip per row; no row wider than the surface', () => {
     for (const rich of [false, true]) {

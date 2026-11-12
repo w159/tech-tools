@@ -16,11 +16,11 @@ const rows = (m: MissionModel): string[] => missionLines(m).map((l) => runsText(
 const band = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs);
 
 describe('mission-layout: bold is opt-in', () => {
-  test('the muted `todo ` label is not bold; the phase name is', () => {
+  test('the muted `todo ` label is not bold; the state word is', () => {
     const runs = bandLines(model({ workers: [w('a', 'running')] }))[0]!.runs;
     const label = runs.find((x) => x.t === 'todo ')!;
     expect(label.bold).toBeUndefined();
-    expect(runs.find((x) => x.t === 'build')!.bold).toBe(true);
+    expect(runs.find((x) => x.t === 'working')!.bold).toBe(true);
     expect(runs.filter((x) => x.bold).length).toBeLessThan(runs.length / 2);
   });
 });

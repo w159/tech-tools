@@ -31,8 +31,8 @@ const { renderPanel } = await ompLoad('mission-panel');
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
-const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['◐', '◓', '◑', '◒'].map((g): [string, UiState] => [g, 'running'])]);
-const G = '[◐◓◑◒◇●■▣▲◉]';
+const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['⠋', '⠙', '⠹', '⠸'].map((g): [string, UiState] => [g, 'running'])]);
+const G = '[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠼⠴⠦⠧⠇⠏◇●■▣▲◉]';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -106,12 +106,15 @@ const railOf = (text: string): Facts['rail'] => {
 
 type Inputs = { band: LiveSnapshot; hud: LiveSnapshot; board: LiveSnapshot; panel: LiveSnapshot };
 
+/** The band's agent counts: after the `agents` noun when it is drawn, else the whole row less the todo group's own blocked count (the noun gives way to the state word on a crowded row). */
+const bandCounts = (head: string): ReturnType<typeof counts> => counts(head.includes('agents') ? head.slice(head.indexOf('agents')) : head.replace(/▣ \d+ blocked/g, ''));
+
 function ccBand(s: LiveSnapshot): Facts {
   const rows = rowsOfTree(bandTree(els, { snapshot: s, live: liveWorkers(s, s.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12, ui }));
   const head = rows[0]!;
   return {
     todo: todoOf(head), blocked: Number(/(\d+) blocked/.exec(head)?.[1] ?? 0), phase: /phase (\d+\/\d+)/.exec(head)?.[1],
-    agents: counts(head.slice(head.indexOf('agents'))), gates: gatePairs(rows.find((r) => r.includes('checks')) ?? ''),
+    agents: bandCounts(head), gates: gatePairs(rows.find((r) => r.includes('checks')) ?? ''),
     workers: stateRows(rows.slice(1), new RegExp(`^ (${G}) (\\S+)`)),
   };
 }
@@ -120,7 +123,7 @@ function ompBand(): Facts {
   const head = rows[0]!;
   return {
     todo: todoOf(head), blocked: Number(/(\d+) blocked/.exec(head)?.[1] ?? 0), phase: /phase (\d+\/\d+)/.exec(head)?.[1],
-    agents: counts(head.slice(head.indexOf('agents'))), gates: gatePairs(rows.find((r: string) => r.includes('checks')) ?? ''),
+    agents: bandCounts(head), gates: gatePairs(rows.find((r: string) => r.includes('checks')) ?? ''),
     workers: stateRows(rows.slice(1), new RegExp(`^ (${G}) (\\S+)`)),
   };
 }

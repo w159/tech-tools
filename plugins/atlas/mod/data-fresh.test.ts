@@ -33,6 +33,6 @@ describe('step 5: spinner frames come from the shared clock and the worker name'
     const mark = (name: string) => rows(model({ tick: 0, now, workers: [w(name)] })).find((x) => x.includes(name))!.trim()[0];
     for (const name of ['alpha-explorer', 'beta-explorer', 'gamma-explorer']) expect(mark(name)).toBe(spinnerGlyph(spinFrameOf(now, name), false));
     const glyphs = new Set(['alpha-explorer', 'beta-explorer', 'gamma-explorer', 'delta', 'epsilon'].map(mark));
-    expect(glyphs.size).toBeGreaterThan(1); // two agents are not in lockstep
+    expect(glyphs.size).toBe(1); // rev 5: one shared phase, every agent turns together
   });
 });

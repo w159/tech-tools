@@ -7,7 +7,7 @@
 // vocabulary, the brand capsule, ribbon, phase rail, eighth-quantised gauge, fixed-width chip, sparkline, spinner and
 // eased gauge. Source of truth for strings, widths and colours: docs design rev 4 (round2/design/evidence/gen4.py).
 
-import { textWidth } from './theme';
+import { DONE_GLYPH, textWidth } from './theme';
 
 // ---- tokens ---------------------------------------------------------------------------
 
@@ -27,7 +27,7 @@ export const PALETTES: Record<ThemeName, Record<Token, string>> = {
   },
   latte: {
     base: '#eff1f5', panel: '#e6e9ef', text: '#4c4f69', sub: '#5c5f77', muted: '#5c5f77', line: '#7c7f93', ok: '#40a02b', run: '#1e66f5',
-    warn: '#df8e1d', bad: '#d20f39', block: '#a84300', info: '#179299', accent: '#8839ef', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff',
+    warn: '#df8e1d', bad: '#d20f39', block: '#a84300', info: '#179299', accent: '#8534ee', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff',
   },
 };
 
@@ -214,10 +214,10 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
  * each is one cell wide and present in DejaVu Sans Mono (mod/fixtures/dejavu-sans-mono-glyphs.ts); keep this a single-line literal,
  * mod/fixtures/check_glyph_cmap.py reads it. */
-export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃';
+export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏○▰▱';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲▁▂▃▄▅▆▇◌◍◃']);
+const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲▁▂▃▄▅▆▇◌◍◃⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏○▰▱', DONE_GLYPH]);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -227,7 +227,7 @@ export type UiState = 'queued' | 'running' | 'done' | 'failed' | 'blocked' | 'wa
 export const UI_STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 /** The one order states are counted and ranked in on every surface (band, HUD, board): attention first, finished last. */
 export const COUNT_ORDER: readonly UiState[] = ['running', 'blocked', 'failed', 'waiting', 'queued', 'done'];
-export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '▣', waiting: '◉' }; // critique 17 A2: blocked is the boxed square, failed the solid one
+export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '⠋', done: '●', failed: '■', blocked: '▣', waiting: '◉' }; // critique 17 A2: blocked is the boxed square, failed the solid one
 export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: 'x', blocked: '#', waiting: '?' };
 export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' }; // critique 18 B3: blocked has its own token (orange), distinct from failed (red) and from the doubted done (amber)
 
@@ -251,8 +251,8 @@ export const markOf = (state: UiState, word?: string): MarkState => (word === RE
 export const motionState = (state: UiState, word?: string): string => (markOf(state, word) === 'doubt' ? 'doubt' : state);
 /** The token of a mark: the state's own, the accent for `returned`, the amber warn for `doubt`. */
 export const markToken = (s: MarkState): Token => (s === RETURNED ? 'accent' : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
-/** The one tone of a row's state WORD on every surface (HUD, side panel): failed and blocked red, `returned` accent, a doubted done amber, the rest the quiet sub tone. */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' ? 'bad' : state === 'blocked' ? 'block' : 'sub');
+/** The one tone of a row's state WORD on every surface (HUD, side panel, board). */
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'text' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' ? 'bad' : state === 'blocked' || state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
 
 export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
@@ -350,6 +350,52 @@ export function ribbon(cols: number, surface: string, right: string, ui: Ui): Ru
 /** `◆ ATLAS` without the capsule: the small mark for surfaces that are not a ribbon (toast, worker card). The capsule stays once per
  * screen, at the left end of a ribbon. ASCII: `ATLAS`. */
 export const brandMark = (ui: Pick<Ui, 'ascii'>): Run[] => (ui.ascii ? [{ t: 'ATLAS', tone: 'text', bold: true }] : [{ t: '◆ ', tone: 'accent' }, { t: 'ATLAS', tone: 'accent', bold: true }]);
+
+// ---- rev 5 tokens: palette, glyphs, wordmark, title rule, meter ---------------------------------------------------------
+
+/** The rev 5 palette as hex (xterm-256 index in the comment). The Mocha tokens still carry the Catppuccin hexes: the motion ramps and their 256-colour tests are tuned to them (swap PALETTES.mocha to these in one place when the ramps are retuned). */
+export const PALETTE5 = { accent: '#af87ff' /* 141 */, rule: '#303030' /* 236 */, dim: '#585858' /* 240 */, secondary: '#8a8a8a' /* 245 */, body: '#d0d0d0' /* 252 */, ok: '#87d787' /* 114 */, warn: '#d7af5f' /* 179 */, error: '#ff5f5f' /* 203 */ } as const;
+/** The tone a surface draws with, by role (use these, not hex): the accent for the wordmark, the active tab and focus only; body normal text; secondary quiet text; dim timestamps, counts and done rows. */
+export const TONE5 = { accent: 'accent', body: 'text', secondary: 'sub', dim: 'dim', ok: 'ok', warn: 'warn', error: 'bad' } as const satisfies Record<string, Tone>;
+/** The rev 5 glyph set. Rows the capture scorer reads in fmt 4 (TODO, SUBAGENTS, board and band worker rows) still draw STATE_GLYPHS: it maps only the old marks. */
+export const GLYPH5 = { running: '⠋', done: DONE_GLYPH, queued: '○', blocked: '!', failed: '■', /* the spec's ✗ measures two cells in the host's width table (theme.ts textWidth) and the capture scorer maps ■ */ idle: '·', meterOn: '▰', meterOff: '▱' } as const;
+export const GLYPH5_ASCII = { done: '+', queued: 'o', blocked: '!', failed: 'x', idle: '.', meterOn: '#', meterOff: '-' } as const;
+
+/** `m:ss`, or `h:mm:ss` from an hour: the elapsed clock of a run. */
+export function elapsedClock(secs: number): string {
+  const s = Math.max(0, Math.floor(Number.isFinite(secs) ? secs : 0));
+  const [h, m, r] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
+}
+
+export const WORDMARK = 'ATLAS';
+/** The lit letter of the wordmark sweep at spinner frame `frame`: one step per 200 ms (two frames), left to right, wrapping. */
+export const sweepIndex = (frame: number): number => ((Math.floor(frame / 2) % WORDMARK.length) + WORDMARK.length) % WORDMARK.length;
+/** The band's wordmark: the ribbon `◖ ◆ ATLAS ◗` once; the diamond and letters in the accent, the caps in the quiet 236 neutral. `lit` (0..4) draws that letter
+ * in body text, the accent sweep while Atlas works; absent: static. ASCII: `[ATLAS]`. */
+export function wordmark(ui: Ui, lit?: number): Run[] {
+  if (ui.ascii) return [{ t: '[ATLAS]', tone: 'text' }];
+  const letters = [...WORDMARK].map((c, i): Run => (i === lit ? { t: c, tone: 'text' } : { t: c, tone: 'accent' }));
+  return [{ t: '◖', tone: 'line', fg: PALETTE5.rule }, { t: ' ', tone: 'text' }, { t: '◆', tone: 'accent' }, { t: ' ', tone: 'text' }, ...letters, { t: ' ', tone: 'text' }, { t: '◗', tone: 'line', fg: PALETTE5.rule }];
+}
+
+/** A section title with a thin rule to the right edge, exactly `cols` cells: the title bold in body text, then the rule in the 236 neutral, `right` (dim) after it. ASCII: `-`. */
+export function titleRule(title: string, cols: number, ui: Pick<Ui, 'ascii'>, right = ''): Run[] {
+  const t = clip(title, Math.max(0, cols - 2));
+  const tail = right ? ` ${right}` : '';
+  const fill = Math.max(0, cols - cells(t) - 1 - cells(tail));
+  const rule: Run = ui.ascii ? { t: '-'.repeat(fill), tone: 'dim' } : { t: '─'.repeat(fill), tone: 'line', fg: PALETTE5.rule };
+  const out: Run[] = [{ t, tone: 'text', bold: true }, { t: ' ', tone: 'text' }, rule, ...(tail ? [{ t: tail, tone: 'dim' } as Run] : [])];
+  return out.filter((x) => x.t !== '');
+}
+
+/** The progress meter `▰▰▰▱▱` (filled for `value` 0..1), `width` cells. ASCII: `###--`. */
+export function meter(width: number, value: number, ui: Pick<Ui, 'ascii'>): Run[] {
+  const w = Math.max(0, Math.floor(width));
+  const on = Math.round(w * Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0)));
+  const [a, b] = ui.ascii ? [GLYPH5_ASCII.meterOn, GLYPH5_ASCII.meterOff] : [GLYPH5.meterOn, GLYPH5.meterOff];
+  return [{ t: a.repeat(on), tone: 'accent' } as Run, { t: b.repeat(w - on), tone: 'dim' } as Run].filter((x) => x.t !== '');
+}
 
 // ---- row grammar --------------------------------------------------------------------------------------
 
@@ -493,19 +539,18 @@ export function sparkline(values: readonly number[], peak: number, ascii = false
 // ---- motion (pure functions of time) -------------------------------------------------------------------------------
 
 export const SPINNER_MS = 100;
-const SPIN_UNICODE = ['◐', '◓', '◑', '◒'] as const;
+/** The one working signal (rev 5): the ten-frame braille spinner (bubbles MiniDot), one frame per SPINNER_MS, on every surface. */
+export const SPIN_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const SPIN_ASCII = ['|', '/', '-', '\\'] as const;
 /** Spinner frame by frame number (any integer). */
 export function spinnerGlyph(frame: number, ascii = false): string {
-  const f = ascii ? SPIN_ASCII : SPIN_UNICODE;
+  const f = ascii ? SPIN_ASCII : SPIN_FRAMES;
   return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
 }
-/** Spinner frame number of agent `id` at the shared clock reading `nowMs` (the snapshot's `now`): one clock, and a fixed phase per id
- * (0..3, from its characters), so the same agent turns the same frame on every surface in one frame and two agents are not in lockstep. */
-export function spinFrameOf(nowMs: number, id = ''): number {
-  let phase = 0;
-  for (const c of id) phase = (phase + c.charCodeAt(0)) % SPIN_UNICODE.length;
-  return Math.floor(nowMs / SPINNER_MS) + phase;
+/** Spinner frame number at the shared clock reading `nowMs`: ONE phase for every surface in a frame. The `id` argument is kept for the callers that still pass an
+ * agent's name and is ignored: per-row offsets read as spinners out of phase (critique, 17.13.0). */
+export function spinFrameOf(nowMs: number, _id = ''): number {
+  return Math.floor(nowMs / SPINNER_MS);
 }
 /** The one spinner clock: the snapshot's `now` moved on by the ticker (one SPINNER_MS per tick), so a spinner turns between data polls.
  * Every surface turns spinFrameOf(spinClock(snapshot.now, tick), the agent's squad name); none reads `now` alone or a display name. */

@@ -51,7 +51,7 @@ describe('256-colour panel fill', () => {
 });
 
 describe('one agent, one spinner frame', () => {
-  const glyphOf = (runs: readonly { t: string }[]): string => runs.map((r) => r.t).join('').match(/[◐◓◑◒]/)![0];
+  const glyphOf = (runs: readonly { t: string }[]): string => runs.map((r) => r.t).join('').match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)![0];
   test('HUD agent row and Board row at the same now and tick turn the frame spinFrameOf(spinClock(now, tick)) names', () => {
     const agents = [{ name: 'alpha', role: 'implementer', state: 'running', model: 'sonnet' }];
     for (const now of [1_000_000, 1_000_100, 1_000_200, 1_000_300, 1_000_450]) {

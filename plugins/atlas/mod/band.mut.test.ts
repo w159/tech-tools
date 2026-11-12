@@ -44,14 +44,14 @@ describe('band mutation kills', () => {
     // bandTree takes the same default: it never draws more rows than the 12 budget
     expect((bandTree(els, model()) as unknown as Node).props.children.length).toBeLessThanOrEqual(12);
   });
-  test('seg: the bold flag of a run reaches the painted Text (the ATLAS capsule is bold)', () => {
+  test('seg: the bold flag of a run reaches the painted Text (the state word is bold)', () => {
     const bold: string[] = [];
     const walk = (n: Node): void => {
       if (n.kind === 'Text' && n.props.bold === true) bold.push(String(n.props.children));
       if (Array.isArray(n.props.children)) for (const c of n.props.children as Node[]) walk(c);
     };
     walk(missionTree(els, worldModel(120, mocha, { maxRows: 12 })) as unknown as Node);
-    expect(bold.some((t) => t.includes('ATLAS'))).toBe(true);
+    expect(bold.some((t) => t.includes('working') || t.includes('idle'))).toBe(true);
   });
   test('boardOf: a snapshot with neither channel nor root still builds (project falls back to atlas)', () => {
     const snapshot = { ...busySnap(), root: undefined, channel: undefined } as never;

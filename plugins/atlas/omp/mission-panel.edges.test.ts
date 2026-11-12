@@ -40,7 +40,8 @@ test("bandText returns the band rows as trimmed plain text", () => {
 	const rows = bandText(m, 140);
 	expect(Array.isArray(rows)).toBe(true);
 	expect(rows.length).toBeGreaterThan(0);
-	expect(rows[0]).toContain("◖ ◆ ATLAS ◗  implement");
+	expect(rows[0]).toContain("◖ ◆ ATLAS ◗  ⠋ working");
+	expect(rows[0]).toContain("implement");
 	for (const r of rows) {
 		expect(r).toBe(r.trimEnd());
 		expect(r).not.toContain("\x1b");

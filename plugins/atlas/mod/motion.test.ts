@@ -6,7 +6,7 @@ import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTI
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const row = (state: 'running' | 'done' = 'done'): Run[] => [
-  { t: '▸', tone: 'accent', bold: true }, { t: ' ', tone: 'text' }, { t: state === 'done' ? '●' : '◐', tone: state === 'done' ? 'ok' : 'run' }, { t: ' ', tone: 'text' },
+  { t: '▸', tone: 'accent', bold: true }, { t: ' ', tone: 'text' }, { t: state === 'done' ? '●' : '⠋', tone: state === 'done' ? 'ok' : 'run' }, { t: ' ', tone: 'text' },
   { t: 'wire the gate', tone: state === 'done' ? 'sub' : 'text', ...(state === 'done' ? { strike: true } : {}) }, { t: '          ', tone: 'text' }, { t: state, tone: 'muted' }, { t: '    ', tone: 'text' },
 ];
 const items = (s: string): MotionItem[] => [{ key: 'todo:a', state: s }];
@@ -105,7 +105,7 @@ describe('animateRow', () => {
     // the marks and the state word are there from the first frame; only the name grows in (critique 11: no `ru` / `runni`)
     const first = runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000), ui, { pop: false }));
     expect(first).not.toContain('wire');
-    expect(first).toContain('▸ ◐');
+    expect(first).toContain('▸ ⠋');
     expect(first).toContain('running');
     for (const dt of [0, 80, 160, 240, REVEAL_MS - 1]) expect(runsString(animateRow(resting, 'todo:a', 'queued', m.ctx(3000 + dt), ui, { pop: false }))).toContain('running');
   });

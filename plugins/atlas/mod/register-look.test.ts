@@ -97,7 +97,7 @@ test('B2 ATLAS_ASCII from $.env draws the side panel and the board in plain ASCI
   const side = await pane($, 'atlas', 'Atlas', 'team');
   const board = await pane($, 'atlas-board', 'Board');
   for (const [name, text] of [['side', side], ['board', board]] as const) {
-    expect([name, /[◖◗◆●◐◓◑◒■▣▲◇━]/u.test(text)]).toEqual([name, false]);
+    expect([name, /[◖◗◆●⠋⠙⠹⠸■▣▲◇━]/u.test(text)]).toEqual([name, false]);
   }
 });
 

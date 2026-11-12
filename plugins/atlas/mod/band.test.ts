@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandRows, bandTree, missionTree, planRows, railPhase, shortTool } from './band';
 import { worldModel } from '../contracts/band-world';
-import { PALETTES, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
+import { PALETTE5, PALETTES, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { computeCounts, groupTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
@@ -45,7 +45,7 @@ const boardTodos = [
 describe('band: the brand capsule and the facts, and nowhere else the task count', () => {
   test('reads the phase, the todo gauge and the ctx gauge and the worker counts, tick 3', () => {
     const { rows } = panel(160, { gates: [gate] });
-    expect(rows[0]).toContain('◖ ◆ ATLAS ◗  implement  ');
+    expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ${spin(3)} working 0:42   implement   `); // the state word and the clock lead, then the phase
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ██▌░░░░░░░ 1/4');
     expect(rows[0]).toContain('ctx █░░░░░░░ 12%');
@@ -65,13 +65,14 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(rows[0]).toContain('2/11');
     expect(rows[0]).not.toContain('13');
   });
-  test('capsule: caps accent on the panel, the middle ink on accent fill; every other cell is on the panel; no cost', () => {
+  test('wordmark: the diamond and letters in the accent, the caps in the quiet 236 neutral, no fill anywhere; every cell is on the panel; no cost', () => {
     const { rowNodes, all } = panel(160);
     const head = rowNodes[0]!;
     const mocha = PALETTES.mocha;
-    expect(cellOf(head, '◖').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
-    expect(cellOf(head, '◆ ATLAS').props).toMatchObject({ color: mocha.ink, backgroundColor: mocha.accent, bold: true });
-    expect(cells(head).filter((t) => t.props.backgroundColor !== mocha.panel)).toHaveLength(1); // the capsule fill is the only fill
+    expect(cellOf(head, '◖').props).toMatchObject({ color: PALETTE5.rule, backgroundColor: mocha.panel });
+    expect(cellOf(head, '◗').props).toMatchObject({ color: PALETTE5.rule, backgroundColor: mocha.panel });
+    expect(cellOf(head, '◆').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
+    expect(cells(head).filter((t) => t.props.backgroundColor !== mocha.panel)).toHaveLength(0); // no chip: the wordmark is a quiet frame
     expect(all).not.toMatch(/\$/);
     expect(cells(rowNodes[1]!).every((t) => t.props.backgroundColor === mocha.panel)).toBe(true);
   });
@@ -88,7 +89,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('latte paints the latte panel; ASCII swaps the capsule; NO_COLOR keeps words and drops every colour', () => {
     const latte = panel(160, { ui: { theme: 'latte', ascii: false, color: 'truecolor' } });
     expect(cells(latte.rowNodes[0]!).filter((t) => t.props.backgroundColor === PALETTES.latte.panel).length).toBeGreaterThan(3);
-    expect(cellOf(latte.rowNodes[0]!, '◆ ATLAS').props.backgroundColor).toBe(PALETTES.latte.accent);
+    expect(cellOf(latte.rowNodes[0]!, '◆').props.color).toBe(PALETTES.latte.accent);
     const ascii = panel(160, { ui: { theme: 'mocha', ascii: true, color: 'truecolor' } });
     expect(ascii.rows[0]).toContain('[ATLAS]');
     expect(ascii.rows[0]).not.toMatch(/[◖◗◆]/);
@@ -96,18 +97,18 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(plain.rows[0]).toContain('◖ ◆ ATLAS ◗');
     expect(cells(plain.rowNodes[0]!).every((t) => t.props.color === undefined && t.props.backgroundColor === undefined)).toBe(true);
   });
-  test('blocked reads `▣ blocked: needs you` and the phase rail keeps the last real phase lit', () => {
+  test('blocked reads `! blocked: needs you` and the phase rail keeps the last real phase lit', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
     const { rows } = panel(160, { snapshot, live: [], lastPhase: 'implement', rich: true });
     expect(rows[0]).toContain('▸ 4 implement');
     const band = panel(160, { snapshot, live: [], lastPhase: 'implement' }).rows[0]!;
-    expect(band).toContain('▣ blocked: needs you');
+    expect(band).toContain('! blocked: needs you');
     expect(band).not.toContain('idle');
   });
   test('rich: capsule with the numbered phase rail, a blank row, then the gauges', () => {
     const { rows, rowNodes } = panel(160, { rich: true });
-    expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ● 1 research  ──  ● 2 theory  ──  ● 3 test  ──  ▸ 4 implement  ──  ◇ 5 verify`);
+    expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ${spin(3)} working 0:42   ● 1 research  ──  ● 2 theory  ──  ● 3 test  ──  ▸ 4 implement  ──  ◇ 5 verify`);
     expect(rows[1]!.trim()).toBe('');
     expect(rows[2]).toMatch(/^todo ████░░░░░░░░░░░░ 1\/4 · 25% {2,}ctx █▎░░░░░░░░ 12%/);
     expect(cellOf(rowNodes[0]!, '▸').props).toMatchObject({ color: TONE_HEX.accent, bold: true });
@@ -117,9 +118,9 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ██▌░░░░░░░ 1/4');
-    expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ implement · todo 1\/4 · ctx 12% · /); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3)
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
-    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spin(3)}1 ■1 ◉1`); // below 50 columns the glyph forms are the last fallback
+    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · implement · todo 1/4 · ctx 12% · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3)
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
+    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4`); // 40 columns: the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
   });
   test('idle shows the last run under the band', () => {
     const snapshot = busySnap({ comms: [] });
@@ -310,7 +311,7 @@ describe('the board slot', () => {
     expect(rows.length).toBeLessThanOrEqual(8);
     expect(rows.some((r) => r.includes('runner-1'))).toBe(true);
     expect(rows.at(-1)).toContain('checks');
-    const boardRows = (rs: string[]) => rs.filter((r) => /^[ ▸] [●◐◓◑◒◇■▣▲] .* (done|running|queued|failed|blocked) /.test(r) && !/(runner|implementer|explorer) {2,}/.test(r)).length;
+    const boardRows = (rs: string[]) => rs.filter((r) => /^[ ▸] [●⠋⠙⠹⠸◇■▣▲] .* (done|running|queued|failed|blocked) /.test(r) && !/(runner|implementer|explorer) {2,}/.test(r)).length;
     expect(boardRows(roomy)).toBe(3);
     expect(boardRows(rows)).toBeLessThanOrEqual(boardRows(roomy)); // the board's header and three items fit in the 8 rows beside the attention worker and the footer
   });
@@ -385,10 +386,10 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ todo 1/4 · ◒ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠸ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
+    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {

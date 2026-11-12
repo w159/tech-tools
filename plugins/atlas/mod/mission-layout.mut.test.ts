@@ -17,15 +17,16 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
   test('with a context figure: figures from 100 (2-gap, then 3-gap), gauges from 120 (2-gap, then the full form)', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1 }));
     // critique 12 A3: one form, one ` · ` separator from 90 to 119 columns (110 undocked and 150 docked read alike)
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗ research · todo 3/7 · ▣ 1 blocked · ctx 62% · ◐ 1 running · ■ 1 failed · ◇ 1 queued');
-    expect(at(95)).toBe(at(100));
-    expect(at(108)).toBe(at(100));
-    expect(at(119)).toBe(at(100));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  research  todo ███▍░░░░ 3/7 · ▣ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
-    expect(at(124)).toBe('◖ ◆ ATLAS ◗  research   todo ████▎░░░░░ 3/7 · ▣ 1 blocked   ctx █████░░░ 62%   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · research · todo 3/7 · ▣ 1 blocked · ⠋ 1 running · ■ 1 failed · ◇ 1 queued'); // rev 5: the state word leads, so the ctx figure is the first segment to give way
+    expect(at(95)).toBe('◖ ◆ ATLAS ◗ ⠋ working · research · todo 3/7 · ▣ 1 blocked · ⠋ 1 running · ■ 1 failed'); // the queued count gives way first
+    expect(at(108)).toBe('◖ ◆ ATLAS ◗ ⠋ working · research · todo 3/7 · ▣ 1 blocked · ctx 62% · ⠋ 1 running · ■ 1 failed · ◇ 1 queued');
+    expect(at(119)).toBe(at(108));
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working  research  todo ███▍░░░░ 3/7 · ▣ 1 blocked  ctx 62%  agents ⠋ 1 running  ■ 1 failed  ◇ 1 queued');
+    expect(at(134)).toBe(at(120)); // the state word widens the full form: it starts at 135
+    expect(at(135)).toBe('◖ ◆ ATLAS ◗  ⠋ working   research   todo ████▎░░░░░ 3/7 · ▣ 1 blocked   ctx █████░░░ 62%   agents ⠋ 1 running   ■ 1 failed   ◇ 1 queued');
   });
   test('critique 12 A3: the live-run snapshot reads the same at the 110 body (105, undocked) and the 150 body (93, docked): one separator set', () => {
-    // live-110-8271cfc8-1 f0067 read `research   todo 0/5 · 1 dispatch open   ctx 7%   agents ◐ 1 running`; live-150 f0061 read `todo 0/5 · 1 dispatch open · ◐ 1 running` (merge: two open dispatch rows against one running worker, so B4 does not fold the count away)
+    // live-110-8271cfc8-1 f0067 read `research   todo 0/5 · 1 dispatch open   ctx 7%   agents ⠋ 1 running`; live-150 f0061 read `todo 0/5 · 1 dispatch open · ⠋ 1 running` (merge: two open dispatch rows against one running worker, so B4 does not fold the count away)
     const live = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, total: 5, done: 0, openWork: 7, openDispatch: 2, todoBlocked: 0, ctx: 0.07, workers: [{ name: 'gamma-explorer', state: 'running', secs: 0 }] }));
     expect(live(105)).toBe(live(93));
     expect(live(105)).not.toMatch(/ {2}/); // no multi-space separator
@@ -36,21 +37,23 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
   });
   test('without a context figure: the ` · ` figure form from 90, the gauge form from 120', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, ctx: undefined }));
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗ research · todo 3/7 · ▣ 1 blocked · ◐ 1 running · ■ 1 failed · ◇ 1 queued');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · research · todo 3/7 · ▣ 1 blocked · ⠋ 1 running · ■ 1 failed · ◇ 1 queued');
     expect(at(119)).toBe(at(100));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  research   todo ████▎░░░░░ 3/7 · ▣ 1 blocked   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working   research   todo ████▎░░░░░ 3/7 · ▣ 1 blocked   agents ⠋ 1 running   ■ 1 failed   ◇ 1 queued');
   });
 });
 
-describe('richBand: the idle and blocked words are bold', () => {
+describe('richBand: the idle and blocked words', () => {
   const rich = (over: Partial<MissionModel>): MissionModel => worldModel(160, ui, { maxRows: 3, rich: true, workers: [], ...over });
   test('idle', () => {
     const word = bandLines(rich({}))[0]!.runs.find((x) => x.t === 'idle');
-    expect(word?.bold).toBe(true);
+    expect(word?.tone).toBe('dim');
+    expect(word?.bold).toBeUndefined(); // rev 5: idle is quiet
   });
   test('blocked by a refused Stop', () => {
     const word = bandLines(rich({ checks: [{ id: 'routing', ok: false }], stopGates: ['routing'] }))[0]!.runs.find((x) => x.t === ' blocked:');
-    expect(word?.bold).toBe(true);
+    expect(word?.tone).toBe('warn');
+    expect(word?.bold).toBeUndefined(); // warn text is never bold
   });
 });
 
