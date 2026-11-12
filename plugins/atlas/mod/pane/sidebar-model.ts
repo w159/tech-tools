@@ -34,7 +34,7 @@ function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),
-    secs: Math.max(0, Math.round((endedAt(w, s.now) - w.startedAt) / 1000)), startMs: w.startedAt, endMs: endedAt(w, s.now), tools: s.activity[w.name]?.toolCount ?? 0,
+    secs: Math.max(0, Math.floor((endedAt(w, s.now) - w.startedAt) / 1000)), startMs: w.startedAt, endMs: endedAt(w, s.now), tools: s.activity[w.name]?.toolCount ?? 0,
   };
 }
 

@@ -6,7 +6,7 @@ import { ownTodos } from './data/todos';
 import { hudPhases } from './band';
 import { runsString, type Ui } from './atlas-ui';
 import { busySnap, NOW } from './live_fixture';
-import { Motion, MOTION_MS } from './motion';
+import { Motion, windowOf } from './motion';
 import { motionFeed } from './motion-feed';
 import type { TodoItem } from './contract';
 
@@ -38,7 +38,7 @@ describe('motionFeed', () => {
     const rest = hudLines(input, view);
     const frame = hudLines(input, { ...view, motion: m.ctx(NOW + 5000) });
     expect(frame.map(runsString)).not.toEqual(rest.map(runsString)); // the glyph pop opens on the open diamond
-    expect(hudLines(input, { ...view, motion: m.ctx(NOW + 5000 + MOTION_MS) })).toEqual(rest);
+    expect(hudLines(input, { ...view, motion: m.ctx(NOW + 5000 + windowOf({ state: 'done' })) })).toEqual(rest);
   });
   test('an unchanged snapshot reports identical items', () => {
     expect(motionFeed(snapWith('in_progress'), [], null, ui)).toEqual(motionFeed(snapWith('in_progress'), [], null, ui));

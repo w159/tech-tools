@@ -124,7 +124,7 @@ describe('L2: the plan is not cut to "N more todos not shown"', () => {
       const rows = trimmed(hudRows({ todos: big, agents: [] }, view(120, false, h)));
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => /Step \d+/.test(l)).length;
-      const hidden = Number(/(\d+) more todos?/.exec(rows.join('\n'))?.[1] ?? 0);
+      const hidden = Number(/\+(\d+) more/.exec(rows.join('\n'))?.[1] ?? 0);
       const folded = Number(/TODO .*· (\d+) done/.exec(rows[0] ?? '')?.[1] ?? 0); // critique 17 B4: finished rows fold into a `2 done` count, every open row stays
       if (rows.length > 1) expect(shown + hidden + folded).toBe(12);
     }
@@ -338,14 +338,15 @@ describe('inline renderer budget (viewport less the rows below the AbovePrompt s
     expect(shown.some((l) => l.includes('TODO'))).toBe(true);
     expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('1 running'))).toBe(true);
   });
-  test('24 and 30 rows with 2 running agents and a long plan: the HUD fits and keeps the TODO, SUBAGENTS and both agents', () => {
+  test('24 and 30 rows with 2 running agents and a long plan: the HUD fits and keeps the TODO, SUBAGENTS, the column names and an agent row (the count of the rest rides the ribbon)', () => {
     for (const rows of [24, 30]) {
       const eff = effectiveRows(rows, { rows, isFullscreen: false }, 4, 2);
       const shown = hudAt(rows);
       expect(shown.length).toBeLessThanOrEqual(eff);
       expect(shown.some((l) => l.includes('TODO'))).toBe(true);
       expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('2 running'))).toBe(true);
-      expect(shown.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate'))).toHaveLength(2);
+      expect(shown.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+      expect(shown.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate')).length).toBeGreaterThanOrEqual(1);
     }
   });
 });

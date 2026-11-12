@@ -24,6 +24,18 @@ export const MOTION_STEP_MS = 200;
 /** A state change eases back to rest over this long: MAX_BEATS held steps, 800 ms. The frame sampled at 600 ms is still a beat of the ramp, so it differs from
  * the resting row (critique 14: with a 600 ms window the 600 ms frame equalled the final frame). */
 export const MOTION_MS = MAX_BEATS * MOTION_STEP_MS;
+/** The done mark holds its highlighted first state this long before the ease starts (critique 27: the 200 ms fade appeared in 0 of the live frames at a 500 ms capture period).
+ * At most one redraw per MOTION_FRAME_MS (10 a second) is spent on it: the hold is a frozen first beat, not more frames. */
+export const DONE_HOLD_MS = 1000;
+/** How long an entry's window lasts: the ease, and for a done mark the hold in front of it. */
+export const windowOf = (e: { state: string }): number => (e.state === 'done' ? MOTION_MS + DONE_HOLD_MS - MOTION_STEP_MS : MOTION_MS);
+/** The real time since the change at which `ease` ms of the ease have passed: the inverse of easedMs, so a sampler can step the beats of a done mark (the hold sits in front of beat 1). */
+export const sinceChange = (state: string, ease: number): number => (state === 'done' && ease >= MOTION_STEP_MS ? ease + DONE_HOLD_MS - MOTION_STEP_MS : ease);
+/** Time into the ease: 0 for the whole hold of a done mark (its first beat is held DONE_HOLD_MS, the later beats MOTION_STEP_MS each), real time since the change otherwise. */
+export const easedMs = (e: { state: string; changed: number }, now: number): number => {
+  const d = Math.max(0, now - e.changed);
+  return e.state === 'done' ? (d < DONE_HOLD_MS ? 0 : d - (DONE_HOLD_MS - MOTION_STEP_MS)) : d;
+};
 /** A new row reveals left to right over this long. */
 export const REVEAL_MS = 300;
 /** How far toward white the lead-in starts from the accent. */
@@ -58,7 +70,7 @@ export type Track = ReadonlyMap<string, Entry>;
 /** The track after seeing `items` at `now`. `prev` undefined is a first sight: every row is simply there (at rest). A key not seen before
  * is born now; a key whose state moved is changed now; a key that is gone is dropped. An unchanged track returns `prev` itself. */
 export function stepTrack(prev: Track | undefined, items: readonly MotionItem[], now: number): Track {
-  const rest = now - MOTION_MS;
+  const rest = now - (MOTION_MS + DONE_HOLD_MS);
   const next = new Map<string, Entry>();
   let same = prev !== undefined && prev.size === items.length;
   for (const it of items) {
@@ -73,7 +85,7 @@ export function stepTrack(prev: Track | undefined, items: readonly MotionItem[],
 /** Whether any entry of `track` is still inside its window at `now`. */
 export const trackBusy = (track: Track | undefined, now: number): boolean => {
   if (!track) return false;
-  for (const e of track.values()) if (now < e.changed + MOTION_MS || now < e.born + REVEAL_MS) return true;
+  for (const e of track.values()) if (now < e.changed + windowOf(e) || now < e.born + REVEAL_MS) return true;
   return false;
 };
 
@@ -149,7 +161,7 @@ export function mixHex(a: string, b: string, t: number): string {
 }
 
 /** Progress of the colour ease (0 at the change, 1 at rest) and of the reveal. */
-export const easeProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.changed) / MOTION_MS));
+export const easeProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, easedMs(e, now) / MOTION_MS));
 export const revealProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.born) / REVEAL_MS));
 
 /** The glyph pop: a dotted ring, then a half-filled one, across the first two thirds of the window, then the state's own disc lands. No
@@ -159,13 +171,12 @@ export const revealProgress = (e: Entry, now: number): number => Math.min(1, Mat
 export const POP_UNICODE = ['◌', '◍'] as const;
 export const POP_ASCII = ['@', '@'] as const;
 
-/** Whole steps of the 256-colour ease. A 24-bit ease is smooth; in 256 colours the palette is coarse, so the ease is a staircase of
- * palette colours that both Atlas's and the host's downsampler map to the same index, at least this many before the resting tone. */
-export const MIN_STEPS_256 = 2;
-/** At most this many steps: more only crowd the 900 ms window with neighbours the eye cannot tell apart. */
-export const MAX_STEPS_256 = 3;
-/** Least CIE76 distance between two neighbours of the staircase (and from the last step to the resting tone). Palette neighbours such
- * as 194, 193, 187 are under 6 apart and read as one colour on the panel; 157, 114, 151 are well over this. */
+/** Steps of the 256-colour ease before the resting tone: one, white (231). A 24-bit ease is smooth; the 256-colour palette has no neighbours worth stepping through (critique 26: 194,
+ * 151, 147, 211 on screen), so the ease is white, then rest. */
+export const MIN_STEPS_256 = 1;
+/** At most this many steps before the resting tone. */
+export const MAX_STEPS_256 = 1;
+/** Least CIE76 distance between the white lead-in and the resting tone for the fade to be drawn. */
 export const MIN_STEP_DE = 14;
 
 const lab = (hex: string): [number, number, number] => {
@@ -188,51 +199,21 @@ export const STRONG_STEP_DE = 22;
 export const MIN_STEP_DL = 8;
 const visible = (a: string, b: string): boolean => { const de = deltaE(a, b); return de >= MIN_STEP_DE && (de >= STRONG_STEP_DE || Math.abs(lab(a)[0] - lab(b)[0]) >= MIN_STEP_DL); };
 
-/** `chain` thinned to steps that are MIN_STEP_DE apart from each other, from `target` and (the first one) from `from`, the tone the row
- * wore before the change, so the first frame already differs visibly; at most MAX_STEPS_256 of them (spread evenly). */
-function spaced(chain: readonly string[], target: string, from: string): string[] {
-  const out: string[] = [];
-  // Never a step that reads as the body tone `from`, at any position: a mid-step of 189 on a `returned` row looked uncoloured beside its resting neighbour (critique 12).
-  for (const c of chain) if (deltaE(from, c) >= MIN_STEP_DE && (out.length ? visible(out.at(-1)!, c) : true)) out.push(c);
-  while (out.length && deltaE(out.at(-1)!, target) < MIN_STEP_DE) out.pop();
-  if (out.length <= MAX_STEPS_256) return out;
-  return [0, 1, 2].map((i) => out[Math.round((i * (out.length - 1)) / 2)]!);
-}
-const LEAD_TRIES = [LEAD_WHITE, 0.6, 0.85, 0, 0.15] as const;
 const stepsCache = new Map<string, readonly string[]>();
 
 /**
- * The staircase from `accent` (brightened toward the theme's emphasis colour) to the resting `rest` colour, as stable xterm-256 colours:
- * distinct, lightness monotone toward `rest`, never past it, each keeping `rest`'s contrast on the panel. Empty when the palette cannot
- * give MIN_STEPS_256 such steps for this pair (the row then keeps its resting tone and only the glyph pops).
+ * The 256-colour lead-in of an ease: ONE step, white (the theme's emphasis colour; ink on Latte), then the resting tone. Critique 26 (live-150-a5fa582a-1 f0082, f0083 and 63 more
+ * frames): a staircase of `stable256` neighbours put 194, 151, 147, 211, 216, 247 on screen, colours no palette names. The fade now lands only on the brief's indices (141, 114, 179,
+ * 203, 236, 240, 245, 252) and 231, the white it starts from. Empty when the white is not visibly apart from the resting tone (the row keeps its tone; only the glyph pops).
+ * `accent` is kept for the callers: the state's hue is the resting tone's job, the lead-in is white for every state.
  */
-export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): readonly string[] {
-  const key = `${theme}|${accent}|${rest}`;
+export function easeSteps256(_accent: string, rest: string, theme: Ui['theme']): readonly string[] {
+  const key = `${theme}|${rest}`;
   const hit = stepsCache.get(key);
   if (hit) return hit;
-  const bg = surfaceHex('panel', { theme, color: '256' });
-  const need = Math.min(4.5, contrast(rest, PALETTES[theme].panel));
-  const target = drawnHex(fitHex(rest, theme)); // the colour the terminal draws for the resting tone (an exact-index tone is handed to the host as its pre-image)
-  const before = drawnHex(fitHex(PALETTES[theme].text, theme)); // a row changes state from its body tone
-  const toward = theme === 'latte' ? PALETTES.latte.ink : '#ffffff';
-  const dir = (a: string, b: string): number => Math.sign(luminance(b) - luminance(a));
-  let best: string[] = [];
-  for (const w of LEAD_TRIES) {
-    const lead = mixHex(accent, toward, w);
-    const d = dir(lead, target) || 1;
-    const out: string[] = [];
-    for (let k = 0; k < 64; k++) {
-      const c = stable256(mixHex(lead, rest, k / 64), bg, need);
-      if (c === target) break;
-      const prev = out.at(-1);
-      if (c === prev || (prev && dir(prev, c) !== d) || dir(c, target) !== d) continue;
-      out.push(c);
-    }
-    const apart = spaced(out, target, before);
-    if (apart.length > best.length) best = apart;
-    if (best.length >= MIN_STEPS_256) break;
-  }
-  const steps = best.length >= MIN_STEPS_256 ? best : [];
+  const target = fitHex(rest, theme);
+  const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
+  const steps = visible(lead, target) ? [lead] : [];
   stepsCache.set(key, steps);
   return steps;
 }
@@ -308,18 +289,11 @@ export function ramp256(accent: string, rest: string, theme: Ui['theme'], lifted
   const key = `${theme}|${accent}|${rest}|${lifted}`;
   const hit = rampCache.get(key);
   if (hit) return hit;
-  const stairs = easeSteps256(accent, rest, theme);
-  const out: string[] = [...stairs];
-  if (out.length) {
-    const target = fitHex(rest, theme);
-    const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
-    const d = Math.sign(luminance(target) - luminance(out[0]!));
-    if (d !== 0 && deltaE(lead, out[0]!) >= MIN_STEP_DE && Math.sign(luminance(out[0]!) - luminance(lead)) === d) out.unshift(lead);
-    // A lifted run is bold while its colour moves and drops the weight on the very frame its colour lands on rest (critique 19: bold fell one step after 146 landed,
-    // motion-232567af/todo-strip.ans:4-5). The rest colour is the last step; the staircase keeps MAX_BEATS - 1 steps before it.
-    if (lifted) { out.length = Math.min(out.length, MAX_BEATS - 1); out.push(target); }
-  }
-  const ramp = out.slice(0, MAX_BEATS);
+  const lead = easeSteps256(accent, rest, theme);
+  const target = fitHex(rest, theme);
+  // White, then the resting tone. A lifted run is bold while its colour moves and drops the weight on the very frame its colour lands on rest (critique 19: bold fell one step after 146 landed,
+  // motion-232567af/todo-strip.ans:4-5), so a lifted run ends on the resting tone as its own beat; a plain run rests on the frame after the white.
+  const ramp = lead.length ? (lifted ? [...lead, target] : [...lead]) : [];
   rampCache.set(key, ramp);
   return ramp;
 }
@@ -337,12 +311,12 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
   if (pc >= 1 && pr >= 1) return runs;
   let out = runs;
   if (pc < 1) {
-    const beat = Math.max(0, Math.floor((ctx.now - e.changed) / MOTION_STEP_MS)); // one beat per held step: the staircase and the pop both step on it
+    const beat = Math.max(0, Math.floor(easedMs(e, ctx.now) / MOTION_STEP_MS)); // one beat per held step: the staircase and the pop both step on it
     if (ui.color !== 'none') {
       const palette = PALETTES[ui.theme];
       const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
       // The weight falls on the last beat (`weighted`): the colour holds the previous beat's mix then, so one frame never moves both (critique 18: bold dropped as the text stepped 151 to 146).
-      const t = easeOutCubic(beat >= MAX_BEATS - 1 ? easeProgress(e, e.changed + (beat - 1) * MOTION_STEP_MS) : pc);
+      const t = easeOutCubic(beat >= MAX_BEATS - 1 ? Math.min(1, Math.max(0, ((beat - 1) * MOTION_STEP_MS) / MOTION_MS)) : pc);
       const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '' && !calm.has(r));
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;

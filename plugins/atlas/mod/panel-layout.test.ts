@@ -133,7 +133,7 @@ describe('team tab lists the subagents by name and state', () => {
     const at = open.findIndex((l) => l.includes('implementer-band'));
     expect(open[at + 1]).toMatch(/^ {4}task {2}T4/); // wave 24: a row is one line; the rows under it open on a press
     expect(open.slice(at + 1, at + 6).join('\n')).toContain('read runs.ts:17');
-    expect(open.slice(at + 1, at + 6).join('\n')).toContain('running 42s');
+    expect(open.slice(at + 1, at + 6).join('\n')).toContain('running 0:42');
     expect(bodyLines(panelWorld('team', 80, mocha, {})).map(lineText).filter((l) => l.includes('runs.ts'))).toHaveLength(0); // closed at 80: the one row, no detail (the 120-column row adds its last step)
   });
   test('critique 15 C5: a project-directory slug in an agent\'s last step never reaches the team rows', () => {
@@ -387,24 +387,23 @@ describe('critique 12 A2: the route tab drops the owner column before it cuts a 
     expect(out[1]).toContain('T2 read beta.py (beta-explorer)');
     for (const l of out) { expect(cells(l)).toBeLessThanOrEqual(55); expect(l.match(/alpha-explorer|beta-explorer/g)?.length ?? 0).toBeLessThanOrEqual(1); }
   });
-  test('at 37 columns (the 110-column pane) every row is one line: the title without its `(owner)`, then its state; no `...`, no owner anywhere (critique 17 B5)', () => {
+  test('at 37 columns (the 110-column pane) every row is one line: the task is cut with `…`, the agent name stays whole, then its state; no `...` (critique 26)', () => {
     const all = rows('route', 37, { todos: plan, workers: [] });
     for (const l of all) expect(cells(l)).toBeLessThanOrEqual(37);
     const text = all.join('\n').replace(/\s+/g, ' ');
-    expect(all.find((l) => l.includes('T1 read alpha.py'))).toMatch(/T1 read alpha\.py\s+done$/); // live: `T1 read alpha.py` / `(alpha-explorer) done` was a staircase
-    expect(all.find((l) => l.includes('T2 read beta.py'))).toMatch(/T2 read beta\.py\s+done$/);
+    expect(all.find((l) => l.includes('T1 read'))).toMatch(/T1 read.*\(alpha-explorer\)\s+done$/);
+    expect(all.find((l) => l.includes('T2 read'))).toMatch(/T2 read.*\(beta-explorer\)\s+done$/);
     expect(text).not.toContain('...');
-    expect(text).not.toContain('-explorer');
+    expect(text).toContain('alpha-explorer'); // the name, never the task, is what survives the cut
   });
-  test('critique 15 C2: at 37 columns no row is a state word alone: the title wraps, the word stays on its last line', () => {
-    // live-110-95c4a588-1/tab-route.png: `T1 read alpha.py (alpha-explorer)` over a lone `done`
+  test('critique 26: at 37 columns no row wraps and none is a state word alone: the task is cut, the name and the word stay on the one row', () => {
     for (const state of ['done', 'running', 'blocked'] as const) {
       const all = rows('route', 37, { todos: plan.map((t) => ({ ...t, state })), workers: [] });
       for (const l of all) expect([l, /^\s+(done|running|blocked|failed|queued|returned)$/.test(l)]).toEqual([l, false]);
       for (const l of all) expect(cells(l)).toBeLessThanOrEqual(37);
-      const t1 = all.findIndex((l) => l.includes('T1 read'));
-      expect(all.slice(t1, t1 + 2).join(' ')).toMatch(new RegExp(`alpha.py\\s.*${state}`));
-      expect(all.join('\n')).toContain('T1 read alpha.py'); // the title is still whole; the owner is the team tab's (critique 17 B5)
+      expect(all.filter((l) => /\bT\d /.test(l))).toHaveLength(plan.length); // one row per task
+      const t1 = all.find((l) => l.includes('T1 read'))!;
+      expect(t1).toMatch(new RegExp(`\\(alpha-explorer\\)\\s+${state}$`));
     }
   });
   test('a row whose title does not name its owner keeps the owner column; one that does never prints it twice, at any width', () => {

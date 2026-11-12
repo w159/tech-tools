@@ -36,18 +36,25 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect(rows[0]).not.toMatch(/· \d+ done/);
     expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r))).toHaveLength(3);
   });
-  test('when the rows truly do not fit, open rows keep their place and the ribbon says how many were left out', () => {
+  test('when the rows truly do not fit, decoration goes first (critique 26): the blank and the rules, then a finished row folds into the count, then agent rows (names stay), then open plan rows', () => {
     const open = (n: number): string[] => hud(93, n).filter((r) => PLAN_ROW.test(r) && !/T1 /.test(r));
-    const eleven = hud(93, 11); // the blank and the column names go first (round 5), then a finished row folds into the count; both closing rules stay
+    const eleven = hud(93, 11); // the closing rules go before any row: every plan row, T1 included, and the column names stay
     expect(open(11)).toHaveLength(4);
-    expect(eleven[0]).toMatch(/1 done/);
-    expect(eleven.some((r) => /AGENT\s+STATE/.test(r))).toBe(false); // the names went first
-    expect(eleven.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(2);
-    expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5); // one row more: every row, T1 included
-    const ten = hud(93, 10); // then open rows are cut and the ribbon counts them
-    expect(open(10)).toHaveLength(3);
-    expect(ten[0]).toMatch(/2 more todos not shown/);
-    expect(ten.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(2);
+    expect(eleven[0]).not.toMatch(/done/);
+    expect(eleven.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    expect(eleven.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(0);
+    expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
+    const ten = hud(93, 10); // then the finished row folds into the title
+    expect(open(10)).toHaveLength(4);
+    expect(ten[0]).toMatch(/1 done/);
+    expect(ten.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    const nine = hud(93, 9); // then agent rows go (the running count rides the ribbon), the names stay with the rows that show
+    expect(open(9)).toHaveLength(4);
+    expect(nine.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r))).toHaveLength(2);
+    expect(nine.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    const seven = hud(93, 7); // then the open plan rows are counted on the title, one wording at every width
+    expect(seven[0]).toMatch(/1\/5 · \+2 more/);
+    expect(hud(93, 4).filter((r) => PLAN_ROW.test(r))).toHaveLength(0); // the plan is its title alone, the agent keeps its row and the names
   });
 });
 

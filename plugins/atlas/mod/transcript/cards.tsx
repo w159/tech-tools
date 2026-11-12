@@ -4,7 +4,7 @@
 
 import type { RenderElement, RenderNode } from 'claude-code'
 import type { AgentState } from '../contract'
-import { PALETTE5, surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
+import { hexIn, PALETTE5, surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
 import { CARD_W, toastRuns } from '../panel-layout'
 import { cells } from '../atlas-ui'
 import { clipE as clip } from '../board-model'
@@ -140,9 +140,9 @@ const waveLayout = (columns: number, count: number): { side: boolean; w: number 
  const side = columns > 0 && share >= CARD_W + 1
  return { side, w: side ? CARD_W : columns > 0 ? Math.min(RAIL_W, columns) : 0 }
 }
-const waveHeader = (calls: ReadonlyArray<CallLike>, n: number) => {
+const waveHeader = (calls: ReadonlyArray<CallLike>, n: number, ui: Ui) => {
  const live = calls.filter((c) => c.isRunning).length
- return t({ color: PALETTE5.body, bold: true }, `WAVE ${n} · ${calls.length} workers${live ? ` · ${live} running` : ' · finished'}`)
+ return t({ color: hexIn(PALETTE5.body, ui), bold: true }, `WAVE ${n} · ${calls.length} workers${live ? ` · ${live} running` : ' · finished'}`)
 }
 
 /** WAVE strip: 2+ calls, all atlas Agent/Task. */
@@ -150,23 +150,21 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
  if (calls.length < 2 || !calls.every(isAtlasWorker)) return null
  const { side, w } = waveLayout(columns, calls.length)
  const cards = calls.map((c) => workerCard(c, phaseOf(c, 'finished').state, w, undefined, '', { wave: n, ...(ui ? { ui } : {}) }) as RenderElement)
- return el('Box', { flexDirection: 'column' }, waveHeader(calls, n),
+ return el('Box', { flexDirection: 'column' }, waveHeader(calls, n, ui ?? uiFromEnv()),
   el('Box', { flexDirection: side ? 'row' : 'column', flexWrap: 'wrap' }, ...cards))
 }
 
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer  outcome` (state, name, role, outcome). */
-export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), aged = false): RenderElement {
- if (failed) return failedTree(name, outcome, ui, aged)
- const runs = toastRuns('done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui, true) // the finish card keeps `◆ ATLAS` (dim, 240): the scorer finds a card by it
- // An old card (critique 17 C3: cards held full colour for 40 frames) keeps its words and drops to the muted tone, unbold: the run has moved on.
- // The rail `▌` is the card's state colour and stays (critique 21: older cards turned wholly grey and lost it); the glyph run and the state word beside it stay too, and so does the brand mark: one grey (240) on every card, old or new (critique 25: two greys).
- const word = runs.findIndex((x) => x.t === 'done')
- return rowEl(aged ? runs.map((x, i) => (i === 0 || i === word || i === word - 1 || x.tone === 'dim' ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
+export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false): RenderElement {
+ if (failed) return failedTree(name, outcome, ui)
+ // One grey per role on every card, old or new (critique 26: the name read 245 on two cards and 252 on the third, an old card having dimmed its name and fact): the name is body text (252),
+ // the role and the fact are secondary (245), the brand mark is 240. A card keeps these for good; the transcript scrolls it away. `_aged` is kept for the callers (transcript/placed.ts).
+ return rowEl(toastRuns('done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui, true), ui) // the finish card keeps `◆ ATLAS` (dim, 240): the scorer finds a card by it
 }
 
 /** A failure card carries one verb (critique 19 B4: `■ failed ghost-explorer explorer killed · 6s` said it twice): the end word the outcome leads with (`killed`, `failed`) is the state word,
- * the rest (`· 6s`, or the worker's own line) follows the name. An aged card keeps its glyph and word in the failure colour; only the name and the rest go muted. */
-function failedTree(name: string, outcome: string, ui: Ui, aged: boolean): RenderElement {
+ * the rest (`· 6s`, or the worker's own line) follows the name. The same greys as the finish card. */
+function failedTree(name: string, outcome: string, ui: Ui): RenderElement {
  const m = /^\s*(killed|failed)\b[\s·:.,;-]*([\s\S]*)$/i.exec(stripStatus(outcome))
  const verb = m ? m[1]!.toLowerCase() : 'failed'
  const rest = clip((m ? m[2]! : stripStatus(outcome)).replace(/\s+/g, ' ').trim(), 80)
@@ -174,19 +172,18 @@ function failedTree(name: string, outcome: string, ui: Ui, aged: boolean): Rende
  const word = head.findIndex((x) => x.t === 'failed')
  const runs: UiRun[] = head.map((x, i) => (i === word ? { ...x, t: verb } : x))
  if (rest) runs.push({ t: ` · ${rest}`, tone: 'sub' })
- const stays = (i: number): boolean => i === 0 || (i <= word && i >= word - 1) || head[i]?.tone === 'dim' // the rail, the brand, the glyph run and the state word
- return rowEl(aged ? runs.map((x, i) => (stays(i) ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
+ return rowEl(runs, ui)
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */
-export function bubbleTree(text: string, from: string | undefined, to = 'lead', columns = 0): RenderElement | null {
+export function bubbleTree(text: string, from: string | undefined, to = 'lead', columns = 0, ui: Ui = uiFromEnv()): RenderElement | null {
  if (!from || !text) return null
  const lines = text.split('\n').slice(0, 8)
  const bar = Array(lines.length + 1).fill('▌').join('\n')
  const body = columns > 4 ? lines.map((l) => fitText(l, columns - 3)).join('\n') : lines.join('\n')
  return el('Box', { flexDirection: 'row' },
-  t({ color: PALETTE5.secondary }, bar),
+  t({ color: hexIn(PALETTE5.secondary, ui) }, bar),
   el('Box', { flexDirection: 'column', paddingLeft: 1 },
-   t({ color: PALETTE5.body, bold: true }, `#atlas ${from} › ${to}`),
-   t({ color: PALETTE5.body }, body)))
+   t({ color: hexIn(PALETTE5.body, ui), bold: true }, `#atlas ${from} › ${to}`),
+   t({ color: hexIn(PALETTE5.body, ui) }, body)))
 }

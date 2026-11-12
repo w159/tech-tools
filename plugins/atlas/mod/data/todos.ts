@@ -256,19 +256,29 @@ export function planPhase<T extends { status?: string; phase?: string }>(items: 
     ?? [...plan].reverse().find((it) => it.status === 'completed' && it.phase)?.phase;
 }
 
+/** A dispatch row of this session the store has not closed: Stop counts it and the band says `1 dispatch open`. Archived rows do not count. */
+export const dispatchOpen = (items: readonly object[], sessionId?: string): boolean =>
+  items.some((it) => {
+    const r = it as { origin?: string; archived?: boolean; status?: string; session_id?: string };
+    return r.origin === 'dispatch' && !r.archived && r.status !== 'completed' && (sessionId === undefined || !r.session_id || r.session_id === sessionId);
+  });
+
 /** Current phase: the lead's reply header (the chip the transcript draws) > the active todo > a finished plan (`done`) > the earliest open row's phase > the last completed row's phase > 'research' (nothing has run).
- * Critique 15: the route said `phase research 1/5` and `phase done 5/5` while the chip said IMPLEMENT; one phase for every surface means the chip decides. */
+ * Critique 15: the route said `phase research 1/5` and `phase done 5/5` while the chip said IMPLEMENT; one phase for every surface means the chip decides.
+ * `open`: work is still open behind the plan (a dispatch row not closed, a worker listed running). Nothing reads `done` then, whoever says so: the band reads `working`, and a panel that said
+ * `phase done` beside it stated something false (critique 27, stoprun-150-46d4825c-1 f0109:6 to f0113:6: `phase done` over `working 0:54 · todo 5/5 · 1 dispatch open`). */
 export function currentPhase(
   items: TodoItem[],
   headerPhase: PhaseId | null,
   sessionId?: string,
+  open = false,
 ): { phase: PhaseId; source: 'header' | 'todo' | 'default' } {
-  if (headerPhase) return { phase: headerPhase, source: 'header' };
+  if (headerPhase && !(open && headerPhase === 'done')) return { phase: headerPhase, source: 'header' };
   const plan = planBasis(items, sessionId);
   const active = plan.find((it) => it.status === 'in_progress');
   if (active?.phase) return { phase: active.phase, source: 'todo' };
-  if (!active && plan.length > 0 && plan.every((it) => it.status === 'completed')) return { phase: 'done', source: 'todo' };
-  const last = planPhase(plan);
+  if (!open && !active && plan.length > 0 && plan.every((it) => it.status === 'completed')) return { phase: 'done', source: 'todo' };
+  const last = open ? (plan.find((it) => it.status !== 'completed' && it.phase)?.phase ?? [...plan].reverse().find((it) => it.phase)?.phase) : planPhase(plan); // open work: a finished plan names its own last phase, never `done`
   return last ? { phase: last as PhaseId, source: 'todo' } : { phase: 'research', source: 'default' };
 }
 

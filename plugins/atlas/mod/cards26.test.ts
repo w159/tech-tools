@@ -24,7 +24,7 @@ describe('the board timeline is a Gantt', () => {
   test('bars take the state colour: running 141, done 114, failed 203; the time axis closes the chart', () => {
     const tone = (i: number) => lines[i]!.runs.find((r) => r.t.includes('━'))?.tone;
     expect([tone(0), tone(2), tone(4)]).toEqual(['ok', 'accent', 'bad']);
-    expect(text.at(-1)).toMatch(/0s ─+ 20s$/);
+    expect(text.at(-1)).toMatch(/0:00 ─+ 0:20$/);
   });
   test('critique 25: the axis scales to the longest bar end: no bar runs past the hairline, and the hairline ends where the longest bar does', () => {
     for (const cols of [60, 80, 120]) {
@@ -34,7 +34,7 @@ describe('the board timeline is a Gantt', () => {
       const hairlineEnd = axis.lastIndexOf('─');
       expect([cols, Math.max(...barEnds) <= hairlineEnd]).toEqual([cols, true]);
       expect([cols, hairlineEnd - Math.max(...barEnds) <= 1]).toEqual([cols, true]); // the hairline stops at the longest bar's end (the label follows it)
-      expect(axis).toMatch(/0s ─+ 20s$/);
+      expect(axis).toMatch(/0:00 ─+ 0:20$/);
     }
   });
   test('a pane with no room for a name and a bar draws no chart', () => {

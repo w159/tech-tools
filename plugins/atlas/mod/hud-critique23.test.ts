@@ -40,11 +40,14 @@ describe('every plan row the slot holds is drawn', () => {
     }
   }
   for (const cols of [150, 110]) for (const [name, input] of Object.entries(STATES)) {
-    test(`${cols} columns, ${name}, a host slot of 12 rows (the least that holds the boxes): both boxes stay closed, the band keeps its rows, the plan folds before a rule goes`, () => {
+    test(`${cols} columns, ${name}, a host slot of 12 rows (the live capture's): every plan row, the column names and an agent row stay, the rules go first, the band keeps its row`, () => {
       const cap = hudSlotCap(12, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
       const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
-      expect([hud.filter((l) => l.startsWith('╭─ ') && l.endsWith('╮')).length, hud.filter((l) => l.startsWith('╰') && l.endsWith('╯')).length]).toEqual([2, 2]);
-      expect(planRows(hud).length).toBeGreaterThanOrEqual(3);
+      expect(planRows(hud)).toHaveLength(5); // critique 26: `1 more todo not shown` beside a slot that held every row
+      expect(hud.some((l) => /not shown|\+\d+ more/.test(l))).toBe(false);
+      expect(hud.some((l) => /^\s+AGENT\s+STATE/.test(l))).toBe(true);
+      expect(hud.filter((l) => /^[▸ ]\s*\S (alpha|beta|gamma)-explorer /.test(l)).length).toBeGreaterThanOrEqual(1);
+      expect(hud.filter((l) => l.startsWith('╰') && l.endsWith('╯'))).toHaveLength(0);
       const gap = hudGapRows(hud.some((l) => l.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, 12);
       expect(12 - hud.length - gap).toBeGreaterThanOrEqual(1);
     });

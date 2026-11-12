@@ -81,6 +81,9 @@ export function stepRun(c: RunClock, working: boolean, now: number, sig: BeatSig
 export const workSecsOf = (c: RunClock, now: number): number | undefined => (c.startMs === null ? undefined : Math.max(0, Math.floor((now - c.startMs) / 1000)));
 /** Whole seconds the last run took (frozen); undefined before any run ended. */
 export const ranSecsOf = (c: RunClock): number | undefined => (c.ranMs === undefined ? undefined : Math.floor(c.ranMs / 1000));
+/** The figure `done` and `idle` read: a closed run's frozen time, and for a run whose clock has not closed yet (the host's turn ended, the next beat has not run) the span that beat will freeze,
+ * `lastSeenMs - startMs`. Without it the first `done` frame had no figure and fell back to the worker wave's span: `done . 0:20`, then `1:05` (critique 27, stoprun-150-46d4825c-1 f0130:24 and f0131:24). */
+export const finalSecsOf = (c: RunClock): number | undefined => (c.startMs !== null ? Math.max(0, Math.floor((c.lastSeenMs - c.startMs) / 1000)) : ranSecsOf(c));
 /** Whole seconds at rest since the last run ended; undefined while one runs or before any ended. */
 export const restSecsOf = (c: RunClock, now: number): number | undefined => (c.startMs === null && c.endedMs !== undefined ? Math.max(0, Math.floor((now - c.endedMs) / 1000)) : undefined);
 /** The frame loop is stale: Atlas is working, yet no beat landed for STALE_BEATS frames. */

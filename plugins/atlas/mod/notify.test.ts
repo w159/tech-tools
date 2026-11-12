@@ -224,20 +224,20 @@ describe('diffSnapshots details', () => {
 	test('a completed worker carries its age and last line', () => {
 		const prev = withActivity({ now: 0, squad: [agent('a', 'running')] }, { a: act({ startedAt: 0 }) });
 		const next = withActivity({ now: 252_000, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 0, lastLine: 'all green' }) });
-		expect(diffSnapshots(prev, next)).toEqual([{ type: 'agent-complete', name: 'a', age: '4m12s', lastLine: 'all green' }]);
+		expect(diffSnapshots(prev, next)).toEqual([{ type: 'agent-complete', name: 'a', age: '4:12', lastLine: 'all green' }]);
 	});
 	test('the toast age is the worker\'s own run (start to finish), not start to the turn that noticed it (critique 8: toast 32s, card 18s)', () => {
 		const prev = withActivity({ now: 20_000, squad: [agent('a', 'running')] }, { a: act({ startedAt: 2_000 }) });
 		const next = withActivity({ now: 34_000, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 2_000, since: 20_000, lastLine: 'x' }) });
-		expect(diffSnapshots(prev, next)).toEqual([{ type: 'agent-complete', name: 'a', age: '18s', lastLine: 'x' }]);
+		expect(diffSnapshots(prev, next)).toEqual([{ type: 'agent-complete', name: 'a', age: '0:18', lastLine: 'x' }]);
 	});
-	test('a one millisecond age is "0s", a zero or negative one is blank', () => {
+	test('a one millisecond age is "0:00", a zero or negative one is blank', () => {
 		const at = (now: number) => {
 			const prev = withActivity({ now: 0, squad: [agent('a', 'running')] }, { a: act({ startedAt: 1000 }) });
 			const next = withActivity({ now, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 1000 }) });
 			return (diffSnapshots(prev, next)[0] as { age: string }).age;
 		};
-		expect(at(1001)).toBe('0s');
+		expect(at(1001)).toBe('0:00');
 		expect(at(1000)).toBe('');
 		expect(at(999)).toBe('');
 	});

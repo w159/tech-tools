@@ -39,11 +39,11 @@ describe('clipMiddle (atlas-ui)', () => {
 });
 
 describe('change 6: the route tab is the Board compact form', () => {
-  // 38 is the 110-column pane: a title that cannot sit beside its state word is drawn whole there and its state follows (A4, mod/panel-a4.test.ts)
-  test('at 38 a long title is drawn whole over its rows and the state word follows it, never pushed off', () => {
+  // 38 is the 110-column pane: one row per task there; the task is cut with `…` and the owner's name rides the title whole (critique 26, A4 in mod/panel-a4.test.ts)
+  test('at 38 a long title is cut on its one row, the owner kept whole and the state word beside it, never pushed off', () => {
     const rows = body('route', 38, { todos: plan });
     const text = rows.join(' ').replace(/\s+/g, ' ');
-    expect(text).toContain('Wire the band to the host and verify');
+    expect(text).toContain('Wire t… (implementer-band) running');
     expect(text).toMatch(/running/);
     for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(38);
     expect(taskRows(rows)).toHaveLength(4);
@@ -67,7 +67,7 @@ describe('change 6: the route tab is the Board compact form', () => {
     });
     test(`at ${cols} rows keep the Board's item order (no done-last reshuffle)`, () => {
       const rows = taskRows(body('route', cols, { todos: plan }));
-      expect(rows.map((l) => /Shipped|Wire|Gate|Changelog/.exec(l)?.[0])).toEqual(['Shipped', 'Wire', 'Gate', 'Changelog']);
+      expect(rows.map((l) => /Shipped|implementer-layout|Wire|Gate|runner-land|Changelog|Change/.exec(l)?.[0])).toEqual([cols < 50 ? 'implementer-layout' : 'Shipped', 'Wire', cols < 50 ? 'runner-land' : 'Gate', cols < 50 ? 'Change' : 'Changelog']);
     });
   }
   for (const cols of [120, 80, 56]) {
@@ -83,7 +83,7 @@ describe('change 6: the route tab is the Board compact form', () => {
       const row = taskRows(body('route', cols, { todos }))[0]!;
       expect(row).toContain('T1 read alph');
       expect(row).not.toMatch(/\S…\S|\.\.\./);
-      expect(row).toMatch(/… +done/);
+      expect(row).toMatch(/…[^…]*\(alpha-explorer\) +done|… +done/); // the task is cut; the owner named in the title stays whole
     }
   });
   test('B2: the owner column is whole whenever it was given room, at every width the column exists', () => {

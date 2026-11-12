@@ -132,26 +132,30 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
     expect(planRows(out)).toBe(5);
     expect(corners(out)).toEqual([2, 2]);
   });
-  test('13 rows lose the blank first, 12 the column names next; the five plan rows, the three agents and both closed boxes stay', () => {
+  test('13 rows lose the blank first, 12 the closing rules next (and the corners with them); the five plan rows, the three agents and the column names stay (critique 26)', () => {
     const thirteen = rows(plan, agents, { maxRows: 13 }).map(text);
     expect(thirteen).toHaveLength(13);
     expect(thirteen.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
     expect(thirteen.filter((r) => r.trim() === '')).toHaveLength(0);
+    expect(corners(thirteen)).toEqual([2, 2]);
     const out = rows(plan, agents, { maxRows: 12 }).map(text);
-    expect(out).toHaveLength(12);
-    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(false);
+    expect(out.length).toBeLessThanOrEqual(12);
+    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
     expect(out.filter((r) => r.trim() === '')).toHaveLength(0);
+    expect(corners(out)).toEqual([0, 0]); // critique 27: both rules go together and so do the corners: no box is left open at the bottom
+    expect(out.filter((r) => r.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(r))).toHaveLength(2);
     for (const o of [thirteen, out]) {
       expect(agentLines(o)).toBe(3);
       expect(planRows(o)).toBe(5);
-      expect(corners(o)).toEqual([2, 2]);
     }
   });
-  test('a tighter slot gives up the column names, then the blank, then plan rows, and keeps every agent row', () => {
+  test('a tighter slot keeps the column names and every plan row, and windows the agents to the rows that fit (the running count rides the ribbon)', () => {
     const out = rows(plan, agents, { maxRows: 9 }).map(text);
     expect(out.length).toBeLessThanOrEqual(9);
-    expect(out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length).toBe(3);
-    expect(out.some((r) => /more todos? not shown|\+\d+ more/.test(r))).toBe(true);
+    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    expect(planRows(out)).toBe(5);
+    expect(out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length).toBeGreaterThanOrEqual(1);
+    expect(out.some((r) => /not shown/.test(r))).toBe(false);
   });
   test('an agent with no task and no last call reads `-` in TASK and LAST, at 150 and at 110 (61-cell pane)', () => {
     const bare = [ag('lone-explorer', 'queued', { model: 'haiku' })];

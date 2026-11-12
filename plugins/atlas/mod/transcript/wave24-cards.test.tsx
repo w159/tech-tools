@@ -18,7 +18,7 @@ const walk = (n: unknown, out: El[] = []): El[] => {
 const text = (n: unknown): string => (Array.isArray(n) ? n.map(text).join('') : n && typeof n === 'object' ? text((n as El).children) : typeof n === 'string' || typeof n === 'number' ? String(n) : '')
 const cellsOf = (n: unknown): El[] => ((n as El).children as El[])
 
-test('a faded done card keeps its state colour on the rail, the glyph and the word; the rest goes muted', () => {
+test('a faded done card is drawn exactly as a fresh one: one grey on every card (critique 26)', () => {
   const fresh = cellsOf(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui))
   const aged = cellsOf(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui, true))
   expect(text(aged[0])).toBe('▌')
@@ -26,7 +26,7 @@ test('a faded done card keeps its state colour on the rail, the glyph and the wo
   const word = (cs: El[]): El => cs.find((x) => text(x) === 'done')!
   expect(word(aged).props.color).toBe(word(fresh).props.color)
   const name = (cs: El[]): El => cs.find((x) => text(x).includes('wave-a'))!
-  expect(name(aged).props.color).not.toBe(name(fresh).props.color)
+  expect(name(aged).props.color).toBe(name(fresh).props.color)
 })
 
 const snap = { contract: { headerFirstLinePattern: (contract as { headerFirstLinePattern: string }).headerFirstLinePattern } } as unknown as AtlasSnapshot
@@ -35,9 +35,9 @@ const DONE = 'ATLAS | 🏁 done | 5/5 board items complete'
 test('a header still streaming draws the bar from `ATLAS |`, then the phase word once it is whole', () => {
   const bar = text(assistantTree(snap, { text: 'ATLAS |' }, 100))
   expect(bar).toBe('▌')
-  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 do' }, 100))).not.toContain('DONE')
-  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 done | ' }, 100))).toContain('DONE')
-  expect(text(assistantTree(snap, { text: DONE }, 100))).toContain('DONE')
+  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 do' }, 100))).not.toContain('done')
+  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 done | ' }, 100))).toContain('done')
+  expect(text(assistantTree(snap, { text: DONE }, 100))).toContain('done')
 })
 
 test('a `⚑ DONE` chip a Stop refusal overturned is struck through and marked superseded; a fresh one is not', () => {
@@ -46,7 +46,7 @@ test('a `⚑ DONE` chip a Stop refusal overturned is struck through and marked s
   expect(walk(fresh).some((e) => e.props.strikethrough === true)).toBe(false)
   const dead = assistantTree(snap, { text: DONE }, 100, true)!
   expect(text(dead)).toContain('superseded')
-  expect(text(dead)).toContain('DONE') // the word stays readable
+  expect(text(dead)).toContain('done') // the word stays readable
   expect(walk(dead).some((e) => e.props.strikethrough === true)).toBe(true)
 })
 

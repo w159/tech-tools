@@ -112,7 +112,7 @@ describe('step 2: a rounded box that never changes shape', () => {
     expect(out.filter((l) => /^\+-+\+$/.test(l))).toHaveLength(2);
     for (const l of out.filter((x) => x.trim() !== '')) expect(cells(l)).toBeLessThanOrEqual(110);
   });
-  test('a short budget drops the blank, then the column names, then folds the finished rows; both rules and both corners stay at every height the blocks show (round 5)', () => {
+  test('a short budget drops the blank, then the closing rules, then folds the finished rows; both boxes lose their corners with their rules, and the column names stay while an agent row shows (critique 26)', () => {
     for (const cols of [150, 110]) {
       const input: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'completed', OWNERS[1]), todo(3, 'in_progress', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: OWNERS.map((n, i) => agent(n, i < 2 ? 'done' : 'working', i < 2 ? 'done' : 'running', { tool: 'Read', target: `${n.split('-')[0]}.py` })) };
       const at = (n: number): string[] => text(draw(input, cols, n));
@@ -122,17 +122,16 @@ describe('step 2: a rounded box that never changes shape', () => {
       for (let n = 14; n >= 8; n--) {
         const out = at(n);
         expect([cols, n, out.length <= n]).toEqual([cols, n, true]);
-        expect([cols, n, corners(out)]).toEqual([cols, n, [2, 2, 2]]); // two tops with their `╮` and two bottoms with their `╯`, whatever the slot
+        expect([cols, n, corners(out)]).toEqual([cols, n, n >= 13 ? [2, 2, 2] : [0, 0, 0]]); // the bottoms are the first decoration after the blank, and they go with the tops and their `╮`: a box is closed on both blocks or drawn open on both (critique 27)
+        expect([cols, n, out.some((l) => /AGENT\s+STATE/.test(l))]).toEqual([cols, n, true]);
       }
-      expect(at(14).some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
       expect(at(14).filter((l) => l === '')).toHaveLength(1);
       expect(at(13).filter((l) => l === '')).toHaveLength(0); // the blank goes first
-      expect(at(13).some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
       expect(plan(at(13))).toHaveLength(5); // every plan row stays
-      expect(at(12).some((l) => /AGENT\s+STATE/.test(l))).toBe(false); // then the column names
-      expect(plan(at(12))).toHaveLength(5);
-      expect(at(11)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
-      expect(plan(at(11)).some((l) => /T[12] read/.test(l))).toBe(false);
+      expect(plan(at(12))).toHaveLength(5); // then the rules; still every plan row
+      expect(plan(at(11))).toHaveLength(5);
+      expect(at(10)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
+      expect(plan(at(10)).some((l) => /T[12] read/.test(l))).toBe(false);
       expect(plan(at(8)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place
     }
   });
@@ -219,25 +218,26 @@ describe('step 3: honest rows', () => {
   });
 });
 
-describe('step 4: `returned` is the done disc and the dim word', () => {
+describe('step 4 (critique 27): `returned` is the neutral `◉` and the word in 245, never the green done disc', () => {
   const returnedInput: HudInput = { todos: [todo(1, 'in_progress', OWNERS[0]), todo(2, 'in_progress', OWNERS[1])], agents: [agent(OWNERS[0]!, 'working', 'running', { tool: 'Read', target: 'a.py' }), agent(OWNERS[1]!, 'done', 'done', { lastLine: 'x' })] };
   for (const cols of WIDTHS) {
-    test(`${cols} columns: the row reads \`● T2 ... returned\`, the glyph is the done mark in the ok tone, the word is dim, and the scorer counts no unknown glyph`, () => {
+    test(`${cols} columns: the row reads \`◉ T2 ... returned\`, the glyph is the neutral mark in the body tone, the word is secondary, and the scorer counts no unknown glyph`, () => {
       const rows = draw(returnedInput, cols);
       const row = rows.find((r) => runsString(r).includes('T2 read beta.py'))!;
       expect(runsString(row)).not.toContain('◃');
-      const glyph = row.find((x) => x.t === '●')!;
-      expect(glyph.tone).toBe('ok');
+      expect(row.some((x) => x.t === '●')).toBe(false);
+      const glyph = row.find((x) => x.t === '◉')!;
+      expect(glyph.tone).toBe('text');
       const word = row.find((x) => x.t === 'returned')!;
-      expect(word.tone).toBe('dim');
+      expect(word.tone).toBe('sub');
       const v = scorerView(text(rows));
       expect(v.unknown).toEqual([]);
-      expect(v.todo.get('T2')).toBe('●');
+      expect(v.todo.get('T2')).toBe('◉');
     });
   }
-  test('ASCII: the done mark and the word', () => {
+  test('ASCII: the neutral mark and the word', () => {
     const out = text(hudLines(returnedInput, { cols: 110, maxRows: 40, ui: { theme: 'mocha', ascii: true, color: 'none' }, now: NOW }));
-    expect(out.find((l) => l.includes('T2 read beta.py'))).toMatch(/^ {2}\* T2 .* returned$/);
+    expect(out.find((l) => l.includes('T2 read beta.py'))).toMatch(/^ {2}\? T2 .* returned$/);
   });
 });
 

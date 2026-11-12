@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, countRuns, DONE_KILLED, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, countRuns, DONE_KILLED, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
@@ -115,7 +115,7 @@ const r = (t: string, tone: Tone = 'text', o: Partial<Run> = {}): Run => ({ t, t
 const line = (runs: Run[], press?: Press): PanelLine => (press ? { runs, press } : { runs });
 export const BLANK: PanelLine = { runs: [] };
 /** A row's runs mid-transition when the model carries a motion view (key: the row's entry; accent: the state that leads). */
-const moving = (runs: Run[], key: string, accent: MarkState, m: Pick<PanelModel, 'motion' | 'ui'>): Run[] => animateRow(runs, key, accent, m.motion, m.ui);
+const moving = (runs: Run[], key: string, accent: MarkState, m: Pick<PanelModel, 'motion' | 'ui'>): Run[] => animateRow(runs, key, accent, m.motion, m.ui, { reveal: false }); // a new row never blanks its name while it appears (critique 26: `⠧                running`)
 const rowWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 const pad = (t: string, n: number): string => t + ' '.repeat(Math.max(0, n - cells(t)));
 const cut = (t: string, n: number): string => pad(clipE(t, n), n);
@@ -310,6 +310,23 @@ const withoutOwner = (t: PanelTodo): PanelTodo => {
   return t.owner && label.endsWith(tail) ? { ...t, label: label.slice(0, -tail.length) } : t;
 };
 
+/** The task with its owner in the title (`T1 read alpha.py (alpha-explorer)`): the narrow pane has no owner column, so the name rides the title and is never the part that is cut. */
+const withOwnerInTitle = (t: PanelTodo): PanelTodo => {
+  const label = oneLine(t.label);
+  return t.owner && !label.includes(oneLine(t.owner)) ? { ...t, label: `${label} (${oneLine(t.owner)})` } : t;
+};
+/** A title cut to `width` cells that keeps its trailing `(owner)` whole: the task text gives way (`T1 read a… (alpha-explorer)`), then the plan id alone beside the name; the name is never cut or dropped. */
+const keepOwnerCut = (label: string, width: number): string => {
+  const m = /^(.*?)( \([\w.-]+\))$/.exec(label);
+  if (cells(label) <= width || !m) return label;
+  const head = m[1]!;
+  const tail = m[2]!;
+  const room = width - cells(tail);
+  if (room >= 6) return `${clipE(head, room)}${tail}`;
+  const first = `${head.split(' ')[0]!}${tail}`;
+  return cells(first) <= width ? first : clipE(tail.trim().slice(1, -1), width); // the task gives way entirely before the name is cut
+};
+
 const TODO_GAP = 2; // cells between a title and its state word where the title spills (critique 14: `...(alpha... done` had one); the one-row grammar keeps its single cell
 const SPILL_BELOW = 50; // panes narrower than this (the 110-column pane is 37) draw a title that cannot sit beside its state whole, state under it
 
@@ -320,7 +337,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   // else (the narrow pane, where the row spills) the word follows the title on its own line. From 100 columns the reason column says it.
   const doubt = markOf(t.state, t.word) === 'doubt';
   const spelled = doubt && (w.doubtWord === true || m.cols < SPILL_BELOW);
-  const wordRun = { t: spelled ? DONE_KILLED : t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
+  const wordRun = { t: spelled ? (m.cols < SPILL_BELOW ? 'killed' : DONE_KILLED) : t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
   const settled = t.state === 'done' && markOf(t.state, t.word) !== 'doubt'; // a done row whose worker failed (critique 17 A1) is not struck through
   const nameCell = { tone: settled ? 'sub' as const : 'text' as const }; // a done title is dim, never struck through (the HUD draws none; critique 22)
   const accent = markOf(t.state, t.word);
@@ -328,7 +345,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   // A title that does not fit beside its state word is drawn whole and its state follows it (critique 14, the 110-column pane: `T1 read alpha.py (alpha...` was cut
   // while the title fit the pane). A pane from SPILL_BELOW columns keeps the one-row form: it has the room.
   const room = m.cols - GRID_LEAD - (w.wordW + 1) - (w.valueW ? w.valueW + 1 : 0); // the title column's widest possible width
-  const spill = m.cols < SPILL_BELOW && (spelled || cells(full) > w.nameW || (cells(full) === w.nameW && w.nameW >= room)); // too long, or filling the column and jammed against the word
+  const spill = false; // a row is one line at every width (critique 26: the killed row wrapped at 110 columns): the task is cut with `…`, the name and the state never wrap
   let rows: PanelLine[];
   if (spill) {
     const width = Math.max(8, m.cols - GRID_LEAD);
@@ -427,7 +444,7 @@ function routeBody(m: PanelModel): PanelLine[] {
   // A narrow pane (the 110-column pane is 37) drops the owner: the title's `(alpha-explorer)` and the owner column both go, the team tab names the owner (critique 17: the title wrapped
   // to `T1 read alpha.py` / `(alpha-explorer) done`, a staircase that doubled the row height).
   const narrow = m.cols < SPILL_BELOW;
-  let ordered = narrow ? m.todos.map(withoutOwner) : m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
+  let ordered = narrow ? m.todos.map(withOwnerInTitle) : m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
   const layout = (os: readonly PanelTodo[]) => {
     // The owner column goes first (critique 12 A2): a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`) prints no second copy, so the title keeps the room.
     const widest = narrow ? 0 : Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...os.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
@@ -447,7 +464,7 @@ function routeBody(m: PanelModel): PanelLine[] {
   if (!narrow && ordered.some(cutOwner)) { ordered = ordered.map(withoutOwner); lay = layout(ordered); }
   const { doubtWord, todoWordW, plan } = lay;
   const shown: PanelLine[] = [];
-  const shownTitles = labelCut(ordered.map((t) => oneLine(t.label)), plan.nameW);
+  const shownTitles = labelCut(ordered.map((t) => oneLine(t.label)), plan.nameW).map((x, i) => keepOwnerCut(oneLine(ordered[i]!.label), plan.nameW) !== oneLine(ordered[i]!.label) ? keepOwnerCut(oneLine(ordered[i]!.label), plan.nameW) : x);
   for (const [i, t] of ordered.entries()) {
     const rs = todoRows(m, t, { ...plan, wordW: todoWordW, shown: shownTitles[i]!, doubtWord });
     if (shown.length + rs.length > room) break;
@@ -465,7 +482,7 @@ function routeBody(m: PanelModel): PanelLine[] {
 
 // ---- team (subagents by name and state) -----------------------------------------------------------------------------------
 
-export const shortAge = (secs: number): string => (secs < 60 ? `${Math.max(0, Math.floor(secs))}s` : secs < 3600 ? `${Math.floor(secs / 60)}m${String(Math.floor(secs % 60)).padStart(2, '0')}s` : `${Math.floor(secs / 3600)}h${String(Math.floor((secs % 3600) / 60)).padStart(2, '0')}m`);
+export const shortAge = (secs: number): string => elapsedClock(secs); // `0:14`: the one clock of an agent's run (atlas-ui elapsedClock)
 
 /** An agent's dispatch description without its `name: ` prefix (`board-auditor: audit the items` reads `audit the items`). */
 const goalOf = (w: PanelWorker): string => oneLine(w.goal).replace(/^[a-z0-9]+(?:[-_.][a-z0-9]+)*:\s+/i, '');

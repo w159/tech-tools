@@ -117,10 +117,12 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r))).toHaveLength(3);
     expect(hud.some((r) => /\bT[1-5] step/.test(r)) && hud[0]!.includes('3 done')).toBe(hud.filter((r) => /\bT[1-5] step/.test(r)).length < 5);
   });
-  test('all open (the live frame): the band still keeps a row and every agent stays', () => {
+  test('all open (the live frame): the band still keeps a row, every plan row and the column names stay, and an agent row shows', () => {
     const { hud, band } = slot(plan(['in_progress', 'in_progress', 'in_progress', 'pending', 'pending']), 61, 10);
     expect(band).toBeGreaterThanOrEqual(1);
-    expect(hud.filter((r) => /-explorer\s+running/.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => /\bT[1-5] step/.test(r))).toHaveLength(5);
+    expect(hud.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    expect(hud.filter((r) => /-explorer\s+running/.test(r)).length).toBeGreaterThanOrEqual(1);
     expect(hud.length).toBeLessThanOrEqual(9);
   });
   test('a roomy slot is unchanged (hudBudget still floors at the compact form)', () => {
@@ -137,10 +139,10 @@ describe('B5: route rows do not wrap at 110, and one strip form serves every tab
   ];
   test('37 cells (the 110-column pane): one row per task, title then state, no owner on its own line', () => {
     const rows = bodyLines(panelWorld('route', 37, ui, { todos, workers: [], rows: 40 })).map((l) => lineText(l).trimEnd());
-    const t1 = rows.findIndex((r) => r.includes('T1 read alpha.py'));
-    expect(rows[t1]).toMatch(/T1 read alpha\.py\s+done$/);
-    const t2 = rows.findIndex((r) => r.includes('T2 read ghost.py'));
-    expect(rows[t2]).toMatch(/T2 read ghost\.py\s+blocked$/);
+    const t1 = rows.findIndex((r) => r.includes('T1 read'));
+    expect(rows[t1]).toMatch(/T1 read.*\(alpha-explorer\)\s+done$/); // the task is cut, the agent's name never (critique 26)
+    const t2 = rows.findIndex((r) => r.includes('T2 read'));
+    expect(rows[t2]).toMatch(/T2 read.*\(ghost-explorer\)\s+blocked$/);
     expect(rows.some((r) => /^\s+\(alpha-explorer\)/.test(r))).toBe(false);
     for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(37);
   });

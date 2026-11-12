@@ -88,10 +88,11 @@ describe('round 3 A2: the band lead has four states', () => {
 
 describe('round 3 A2: a closed failure is a dim record, not a red mark', () => {
   const failed: MissionWorker[] = [{ name: 'a-explorer', state: 'failed', secs: 9 }];
-  test('while the dispatch row is open the count is `■ 1 failed`; once it closes it is `● 1 closed`', () => {
+  test('while the dispatch row is open the count is `■ 1 failed`; once it closes it is the word `1 closed` with no glyph (critique 26: the done disc means done)', () => {
     expect(head(model({ workers: failed }))).toContain('■ 1 failed');
     const t = head(model({ workers: failed, closed: 1 }));
-    expect(t).toContain('● 1 closed');
+    expect(t).toContain('1 closed');
+    expect(t).not.toContain('● 1 closed');
     expect(t).not.toContain('■ 1 failed');
     const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => x.t === '1 closed')?.tone;
     expect(tone).toBe('dim');
@@ -153,7 +154,7 @@ describe('round 3 A5: the band lists its workers in the scorer\'s row shape', ()
       expect(wr).toHaveLength(4);
       for (const r of wr) expect(r).not.toMatch(/│/);
       expect(wr.map((r) => scorer.exec(r)![3])).toEqual(expect.arrayContaining(['running', 'failed', 'queued', 'done']));
-      expect(wr.find((r) => r.includes('impl-a'))).toMatch(/running {2}read runs\.ts:17 +00:42$/);
+      expect(wr.find((r) => r.includes('impl-a'))).toMatch(/running {2}read runs\.ts:17 +0:42$/);
     });
   }
   test('with no room (a one-row band) there are no worker rows', () => {

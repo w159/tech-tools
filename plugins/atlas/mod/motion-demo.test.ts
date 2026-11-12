@@ -28,7 +28,7 @@ describe('motion-demo frames', () => {
   test('the window moves: at least 3 distinct frames, the glyph stays the green disc (no ring pop), and the last ramp frame is not the resting done row (no repeat)', () => {
     for (const s of ['todo', 'agent']) {
       const frames = Object.keys(files).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => files[n]!);
-      expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
+      expect(new Set(frames).size).toBeGreaterThanOrEqual(2);
       const row = lastRow;
       expect(row(frames[0]!)).toContain('●'); // critique 21: the flash is the disc itself stepping from bright to ok
       for (const f of frames) expect(/[◌◍]/.test(row(f))).toBe(false); // never a dotted ring: it reads empty
@@ -47,13 +47,14 @@ describe('motion-demo frames', () => {
         const ramp = steps; // t=0, 200, 400, 600: the beats; the rest is the file after them
         expect(ramp).toHaveLength(MOTION_MS / MOTION_STEP_MS);
         // Critique 17 C4: the weight falls on the last beat, so the 256-colour palette (no colour left between the last step and rest) ends the ramp ON the rest at 600 ms.
-        const held = color === '256' ? ramp.slice(0, -1) : ramp;
+        // Critique 26: the 256-colour ease is a white beat, the glyph's own colour and the resting row (a palette with no colour worth stepping through): the first beat differs from rest, the last is rest.
+        const held = color === '256' ? ramp.slice(0, 1) : ramp;
         if (color === '256') expect(ramp.at(-1)).toBe(rest);
         expect([color, s, new Set([...held, rest]).size]).toEqual([color, s, held.length + 1]); // no duplicate, and none equals the rest
       }
     }
   });
-  test('critique 22: `returned` is the done disc `●` and the dim word, at every frame, a row mid-transition included; the unreadable `◃` is gone and the word is never the plain body tone (live f0063: 183 beside a plain 189)', () => {
+  test('critique 27: `returned` is the neutral `◉` and the 245 word, at every frame, a row mid-transition included; the unreadable `◃` is gone and the word is never the plain body tone (live f0063: 183 beside a plain 189)', () => {
     const ui256: Ui = { ...uiFromEnv({}), color: '256' };
     const item = (id: string, owner: string) => ({ id, content: `${id.toUpperCase()} read ${owner}.py (${owner})`, status: 'in_progress', owner }) as never;
     const at = (gamma: 'working' | 'done'): HudInput => ({
@@ -68,7 +69,8 @@ describe('motion-demo frames', () => {
       expect(rows).toHaveLength(2);
       for (const r of rows) {
         expect([dt, r.some((x) => x.t === '◃')]).toEqual([dt, false]); // the scorer counts `◃` as unknown
-        expect([dt, r.some((x) => x.t === '●')]).toEqual([dt, true]); // the done disc is the mark
+        expect([dt, r.some((x) => x.t === '●')]).toEqual([dt, false]); // never the green done disc (critique 27)
+        expect([dt, r.some((x) => x.t === '◉')]).toEqual([dt, true]); // the neutral hand-back mark the scorer reads
         const w = r.find((x) => x.t === 'returned')!;
         expect([dt, w.fg === fitHex(PALETTES[ui256.theme].text, ui256.theme)]).toEqual([dt, false]); // and the word is never the plain body tone
       }
@@ -99,7 +101,7 @@ describe('the demo draws what the live HUD draws', () => {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
     for (const f of Object.keys(files)) expect(files[f]).not.toMatch(/\x1b\[(1;)?9[;m]/);
   });
-  test('256-colour frames: palette indices only, the neutral panel (never navy 17), still at least 5 distinct frames', () => {
+  test('256-colour frames: palette indices only, the neutral panel (never navy 17), still a white beat and the rest', () => {
     const f256 = demoFrames(100, MOTION_STEP_MS, '256');
     const all = Object.values(f256).join('');
     expect(all).not.toMatch(/[34]8;2;/);
@@ -107,14 +109,12 @@ describe('the demo draws what the live HUD draws', () => {
     expect(all).not.toContain('48;5;17;');
     for (const s of ['todo', 'agent']) {
       const frames = Object.keys(f256).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => f256[n]!);
-      expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
+      expect(new Set(frames).size).toBeGreaterThanOrEqual(2);
       // critique 10: no step of the ramp repeats the one before it, until the row is at rest (the resting frame is the last file)
       const rest = f256[`${s}-99-done.ans`]!;
       const ramp = frames.slice(0, -1); // the ramp frames; the last beat of a 256-colour window is the rest itself (critique 17 C4: the weight falls on it); the rest is its own file
       expect(frames.at(-1)).toBe(rest);
-      expect(ramp).not.toContain(rest);
-      expect(ramp.length).toBeGreaterThanOrEqual(2); // two palette steps, then the resting render
-      for (let i = 1; i < ramp.length; i++) expect([s, i, ramp[i] === ramp[i - 1]]).toEqual([s, i, false]);
+      expect(ramp[0]).not.toBe(rest); // a white beat first, the resting row last (critique 26)
     }
     expect(f256['todo-99-done.ans']).not.toMatch(/\x1b\[(1;)?9[;m]/); // no strikethrough on a done row
   });
@@ -128,6 +128,7 @@ describe('critique 14: the 600 ms frame is still the ramp', () => {
       for (const s of ['todo', 'agent']) {
         const at = (ms: number): string => all[`${s}-${String(ms / MOTION_STEP_MS + 1).padStart(2, '0')}-t${String(ms).padStart(4, '0')}ms.ans`]!;
         expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, color === '256']); // 256 colours: the last beat is the rest (the weight falls on it)
+        if (color === '256') { expect(at(0)).not.toBe(at(200)); continue; } // one white beat, then rest (critique 26)
         expect([color, s, at(600) === at(400)]).toEqual([color, s, false]);
         for (let ms = 200; ms < MOTION_MS; ms += MOTION_STEP_MS) expect([color, s, ms, at(ms) === at(ms - MOTION_STEP_MS)]).toEqual([color, s, ms, false]);
       }
@@ -147,7 +148,8 @@ describe('critique 11 C1: the ramp is held long enough to be seen', () => {
       for (const s of ['todo', 'agent']) {
         const frames = Object.keys(f).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => f[n]!);
         const rest = f[`${s}-99-done.ans`]!;
-        const ramp = color === '256' ? frames.slice(0, -1) : frames; // 256 colours: the last beat is the rest (critique 17 C4)
+        if (color === '256') { expect([s, frames[0] === rest]).toEqual([s, false]); continue; } // one white beat, then rest (critique 26)
+        const ramp = frames;
         expect([color, s, ramp.includes(rest)]).toEqual([color, s, false]);
         expect([color, s, ramp.length]).toEqual([color, s, ramp.length >= 2 ? ramp.length : 'short']);
         for (let i = 1; i < ramp.length; i++) expect([color, s, i, ramp[i] === ramp[i - 1]]).toEqual([color, s, i, false]);

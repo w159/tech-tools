@@ -9,7 +9,7 @@ import { worldBoardRows } from "../contracts/board-golden";
 import { runHex, sgrColor, type Ui } from "../mod/atlas-ui";
 import { boardBody, boardMotionItems, boardRowsOf } from "../mod/board-model";
 import { hudLines, hudMotionItems, hudRows, type HudInput } from "../mod/hud";
-import { Motion, MOTION_MS } from "../mod/motion";
+import { Motion, MOTION_MS, sinceChange, windowOf } from "../mod/motion";
 import { boardLines } from "./todo-panel";
 import { paintHud } from "./hud-paint";
 import { TODO_WIDGET_KEY, registerTodoFallback } from "./todo-fallback";
@@ -27,7 +27,7 @@ const motionAt = (dt: number) => {
 };
 
 test("parity: every frame of a TODO transition has the same text and the same colours in omp ANSI as in the Claude Code segments", () => {
-	for (const dt of [0, 100, 300, 600, MOTION_MS]) {
+	for (const dt of [0, 100, 300, 600, windowOf({ state: "done" })]) {
 		const view = { cols: 120, maxRows: 60, ui, now: T0 + dt, motion: motionAt(dt) };
 		const cc = hudRows(input("completed"), view);
 		const omp = paintHud(input("completed"), view);
@@ -46,8 +46,8 @@ test("parity: omp's board frames are the shared board runs, painted", () => {
 	const m = new Motion(true);
 	m.observe("board", boardMotionItems(prev), 0);
 	m.observe("board", boardMotionItems(rows), T0);
-	const frames = [0, 100, 300, 600].map(dt => {
-		const motion = m.ctx(T0 + dt);
+	const frames = [0, 200, 400, 600].map(dt => {
+		const motion = m.ctx(T0 + sinceChange("done", dt)); // a done mark holds its first beat
 		const mod = boardBody(rows, { cols: 120, ui, motion });
 		return { fg: mod.flatMap(l => l.runs.filter(x => x.t.trim()).map(x => runHex(x, "mocha"))).join(","), text: mod.map(l => l.runs.map(x => x.t).join("")) };
 	});
@@ -107,7 +107,7 @@ test("fallback widget: idle schedules no frame timer; a state change runs it, dr
 	h.t.poll?.();
 	expect(h.t.frame).toBeDefined(); // the change opens a window
 	const shots = new Set<string>();
-	for (let dt = 0; dt < MOTION_MS; dt += 100) {
+	for (let dt = 0; dt < windowOf({ state: "done" }); dt += 100) {
 		h.t.frame?.();
 		shots.add((h.widgets.at(-1) ?? []).join("\n"));
 		h.t.clock += 100;
