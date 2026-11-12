@@ -2,7 +2,7 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { animateRow, calmRun, MOTION_MS, MOTION_STEP_MS, type MotionCtx } from './motion';
+import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
@@ -22,7 +22,7 @@ const ROW_SPIN = '◐◓◑◒';
 /** The glyph a HUD row turns at spinner `frame`: the four-frame mark while the scorer needs it, else the shared braille spinner. */
 export const rowSpinnerGlyph = (frame: number, ascii = false): string => (SCORER_READS_CIRCLES && !ascii ? [...ROW_SPIN][((Math.floor(frame) % 4) + 4) % 4]! : spinnerGlyph(frame, ascii));
 function markRun(s: MarkState, o: Pick<SurfaceOpts, 'now' | 'tick' | 'ui'>): Run {
-  if (s === RETURNED) return stateRun('done', o.ui); // `returned` is a finished hand-back: the done mark and the dim word, never the unreadable hand-back arrow the scorer counts as unknown
+  if (s === RETURNED) return stateRun(RETURNED, o.ui); // `returned` is a hand-back, not a finish: the neutral `◉` (one the scorer reads) in body 252 and the word in 245, never the green done mark (critique 27, live-150-46d4825c-1 f0085:26)
   const base = stateRun(s, o.ui, spinOf(o));
   if (s === 'doubt') return o.ui.ascii ? base : { ...base, tone: 'bad' }; // a closed row whose worker was killed keeps the done mark in the error 203, not the amber of a warning
   return s === 'running' ? { ...base, t: rowSpinnerGlyph(spinOf(o), o.ui.ascii) } : base;
@@ -52,11 +52,12 @@ const titleRun = (text: string, ui: Pick<Ui, 'theme'>): Run => ({ t: text, tone:
 /** The top edge of a box: `╭─ brand ▸ TITLE  count mid ────────╮` in exactly `cols` cells, the same shape in every state. The brand and the rule are quiet 240, the title bold 252, the count and the `mid` runs (the meter,
  * the spinner and counts) sit inside the rule, and the rule ends in a right corner on the LAST cell of the tree (`bodyColumns`). The host draws its `[-]` in the five cells it adds to the right of the tree's
  * first row (host types AbovePrompt, .claude-plugin/types/claude-code/index.d.ts:11227 and :11262-11270: `bodyColumns` is the column less the engine's five, which hold the `[-]`; the mod cannot draw in them and
- * the types give a mod no way to place text inside them), so the corner stands against the host's cells and `[-]` sits right of it, never inside the rule. Wider than `cols` when the parts and the corner do not fit; callers try narrower forms. */
-export function titleRow(cols: number, title: string, count: string, mid: readonly Run[], ui: Ui): Run[] {
-  const left: Run[] = [dimRun(ui.ascii ? '+- ' : '╭─ ', ui), ...brand(ui), dimRun(ui.ascii ? ' > ' : ' ▸ ', ui), titleRun(title, ui), ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), ...(mid.length > 0 ? [dimRun(' ', ui), ...mid] : []), dimRun(' ', ui)];
+ * the types give a mod no way to place text inside them), so the corner stands against the host's cells and `[-]` sits right of it, never inside the rule. Wider than `cols` when the parts and the corner do not fit; callers try narrower forms.
+ * `flat`: a block drawn with no bottom rule has no box to open, so its ribbon has no corners either (a top edge with nothing to close it was a box left open: critique 27, live-150-46d4825c-1 f0065:25-36). */
+export function titleRow(cols: number, title: string, count: string, mid: readonly Run[], ui: Ui, flat = false): Run[] {
+  const left: Run[] = [dimRun(ui.ascii ? (flat ? '-- ' : '+- ') : flat ? '── ' : '╭─ ', ui), ...brand(ui), dimRun(ui.ascii ? ' > ' : ' ▸ ', ui), titleRun(title, ui), ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), ...(mid.length > 0 ? [dimRun(' ', ui), ...mid] : []), dimRun(' ', ui)];
   const room = Math.max(1, cols - runsCells(left) - 1); // the rule to the cell before the corner
-  return [...left, dimRun((ui.ascii ? '-' : RULE).repeat(room) + (ui.ascii ? '+' : '╮'), ui)];
+  return [...left, dimRun((ui.ascii ? '-' : RULE).repeat(room) + (flat ? (ui.ascii ? '-' : RULE) : ui.ascii ? '+' : '╮'), ui)];
 }
 /** The bottom edge that closes a box: `╰────╯` in exactly `cols` cells in the 240 neutral (ASCII `+---+`), under the last row of a block in every state. The capture scorer skips a row with no space after its first character. */
 export const bottomRule = (cols: number, ui: Ui): Run[] => {
@@ -68,7 +69,7 @@ export const bottomRule = (cols: number, ui: Ui): Run[] => {
  * (phase-sync.test.ts); rev 5 asks that table for: running `text`, finished and queued `muted`, failed `bad`, blocked/waiting/doubt `warn`, returned `text`. Weight: the running word
  * is bold, a warning never is. `worker failed` (a pending row whose worker died) is the error tone. */
 function wordStyle(r: Pick<TodoRow, 'state' | 'word'>): { tone: Run['tone']; bold?: boolean } {
-  const tone = r.word === WORKER_DOWN || isDoubt(r) ? 'bad' : r.word === RETURNED ? 'dim' : rowWordTone(r.state, r.word); // a doubted done is the error tone in the HUD (`closed · worker killed`) // `returned` is the dim word beside the done mark
+  const tone = r.word === WORKER_DOWN || isDoubt(r) ? 'bad' : r.word === RETURNED ? 'sub' : rowWordTone(r.state, r.word); // a doubted done is the error tone in the HUD (`closed · worker killed`) // `returned` is the secondary 245 word beside its neutral mark
   return r.state === 'running' && r.word === undefined ? { tone, bold: true } : { tone };
 }
 export type SurfaceOpts = {
@@ -148,9 +149,6 @@ export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: 
   return { shown: rows.filter((_, i) => picked.has(i)), hidden: rows.length - picked.size };
 }
 
-/** The overflow row, in plain words: `  2 more todos not shown`. */
-const more = (n: number, what: string): Run[] => [t(`  ${n} more ${what} not shown`, 'muted')];
-
 // ---- TODO ------------------------------------------------------------------------------------------------
 
 export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
@@ -162,7 +160,8 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const figure = planFigure(done, rows.length, rows.filter((r) => r.word === RETURNED).length); // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
   const meter = meterRuns(done, rows.length, ui);
   /** The title in the first form that fits: the count text with the meter, then without it. */
-  const head = (forms: readonly string[]): Run[] => [...forms.map((f) => titleRow(cols, 'TODO', f, meter, ui)), ...forms.map((f) => titleRow(cols, 'TODO', f, [], ui))].find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'TODO', '', [], ui);
+  const flatRibbon = b.close === false;
+  const head = (forms: readonly string[]): Run[] => [...forms.map((f) => titleRow(cols, 'TODO', f, meter, ui, flatRibbon)), ...forms.map((f) => titleRow(cols, 'TODO', f, [], ui, flatRibbon))].find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'TODO', '', [], ui, flatRibbon);
   if (b.cap === 0) return [head([`${figure} · +${rows.length} more`, figure])]; // every row folded onto the ribbon: the count says how many
   // Every slot holds a row: what does not fit is counted on the ribbon, not on a row of its own (critique 16: `3 more todos not shown` under 2 drawn rows, with room for a third).
   // A short budget folds the finished rows first: the ribbon counts them (`3/5 · 3 done`) and every open row keeps its place (critique 17: the 110 slot lost its band row and its blank to rows already done).
@@ -192,7 +191,7 @@ function settling(r: TodoRow, o: SurfaceOpts): boolean {
   if (r.state !== 'done' || r.key === undefined || !o.motion) return false;
   const e = o.motion.entry(r.key);
   const age = e ? o.motion.now - e.changed : -1;
-  return e !== undefined && e.state === 'done' && e.changed > e.born && age >= 0 && age < MOTION_MS - MOTION_STEP_MS;
+  return e !== undefined && e.state === 'done' && e.changed > e.born && age >= 0 && easedMs(e, o.motion.now) < MOTION_MS - MOTION_STEP_MS; // the held first beat of a done mark counts as settling
 }
 
 /** The detail column's text for every drawn row, all-or-none: every cell whole when the widest fits `cols - metaAt`, else every cell that does not fit ends in `…` (never `...`, never a
@@ -280,7 +279,14 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
   // The working signal rides the title, inside the rule: the band lead's braille spinner (the shared clock and frame) before the counts while any agent runs.
   const spin: Run[] = rows.some((r) => r.state === 'running') ? [stateRun('running', ui, spinOf(o), true), t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
-  const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...spin, t(c, 'sub')] : spin.slice(0, 1), ui);
+  // A row the cap leaves out is counted on the title, in the one wording the TODO ribbon uses (`+2 more`), at every width: the title never says `3 running` over one drawn row without saying where the other two are
+  // (critique 27, live-110-46d4825c-1 f0070:28-30). It is the last thing to give way on a narrow title.
+  const hidden = windowRows(rows, b.cap, undefined, false).hidden;
+  const rest = hidden > 0 ? `+${hidden} more` : '';
+  const titled = (c: string): Run[] => {
+    const text = [c, rest].filter((x) => x !== '').join(' · ');
+    return titleRow(cols, 'SUBAGENTS', '', text ? [...spin, t(text, 'sub')] : spin.slice(0, 1), ui, b.close === false);
+  };
   const head = counts.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
   const out: Run[][] = [head];
   if (b.cap === 0) return out;
@@ -291,9 +297,8 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const stateAt = NAME_AT + nameW + AGENT_GUTTER;
   const plan = agentCols(rows, o, rich, stateAt);
   if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the column names: `stack` always asks for them (k9s), so every drawn HUD prints them; only a budget that cannot hold them asks for `header: false`
-  const { shown, hidden } = windowRows(rows, b.cap, undefined, b.quiet !== true);
+  const { shown } = windowRows(rows, b.cap, undefined, false);
   for (const r of shown) out.push(agentRow(r, o, rich, stateAt, nameW, plan));
-  if (hidden > 0 && b.quiet !== true) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
   if (b.close === true && shown.length > 0) out.push(bottomRule(cols, ui));
   return out;
 }
@@ -434,11 +439,13 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   const n = s.todos.length;
   const m = s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean };
-  // A rows-over-decoration ladder (critique 26: `1 more todo not shown` beside a slot that held every row): the rail, the blank between the blocks, the two bottom rules together (a box is closed on
-  // both blocks or on neither), then the finished plan rows (counted on the title, `3/5 · 3 done`). The SUBAGENTS column names stay while an agent row shows; what folds next is agent rows (down to
-  // one, the running count rides the ribbon), then plan rows (counted on the title, `0/5 · +2 more`), the last agent's box last.
-  const open = { spacers: false, extras: false, close: false } as const; // no blank, no rail, no bottom rules
-  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, { spacers: false, extras: false, close: true }, open, { ...open, foldDone: true }];
+  // A rows-over-decoration ladder (critique 26: `1 more todo not shown` beside a slot that held every row): the rail, the blank between the blocks, then the two bottom rules, together. A box is closed on both
+  // blocks or drawn open on both, and an open block's ribbon has no corners: three agents running dropped both `╰───╯` rules while the `╭─` ribbons stayed, boxes with a top and no bottom (critique 27,
+  // live-150-46d4825c-1 f0065:25-36). Then finished plan rows (counted on the title, `3/5 · 3 done`). The SUBAGENTS column names stay while an agent row shows; what folds next is agent rows (down to one, the
+  // title counts the rest: `3 running · +2 more`), then plan rows (counted on the title, `0/5 · +2 more`), the last agent's box last.
+  const closed = { spacers: false, extras: false, close: true } as const; // no blank, no rail, both bottom rules
+  const open = { spacers: false, extras: false, close: false } as const; // no blank, no rail, no bottom rules and so no corners
+  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, closed, open, { ...open, foldDone: true }];
   for (let cap = m - 1; cap >= 1; cap--) tries.push({ ...open, foldDone: true, agentCap: cap, quiet: true });
   const keep = m > 0 ? { agentCap: Math.min(m, 1), quiet: true } : {};
   for (let cap = n - 1; cap >= 0; cap--) tries.push({ ...open, todoCap: cap, ...keep }); // a cap is a count of rows: the rest is counted on the title

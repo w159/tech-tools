@@ -132,7 +132,7 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
     expect(planRows(out)).toBe(5);
     expect(corners(out)).toEqual([2, 2]);
   });
-  test('13 rows lose the blank first, 12 the closing rules next; the five plan rows, the three agents and the column names stay (critique 26)', () => {
+  test('13 rows lose the blank first, 12 the closing rules next (and the corners with them); the five plan rows, the three agents and the column names stay (critique 26)', () => {
     const thirteen = rows(plan, agents, { maxRows: 13 }).map(text);
     expect(thirteen).toHaveLength(13);
     expect(thirteen.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
@@ -142,7 +142,8 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
     expect(out.length).toBeLessThanOrEqual(12);
     expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
     expect(out.filter((r) => r.trim() === '')).toHaveLength(0);
-    expect(corners(out)).toEqual([2, 0]);
+    expect(corners(out)).toEqual([0, 0]); // critique 27: both rules go together and so do the corners: no box is left open at the bottom
+    expect(out.filter((r) => r.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(r))).toHaveLength(2);
     for (const o of [thirteen, out]) {
       expect(agentLines(o)).toBe(3);
       expect(planRows(o)).toBe(5);

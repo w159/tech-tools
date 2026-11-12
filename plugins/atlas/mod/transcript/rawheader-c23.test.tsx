@@ -46,16 +46,16 @@ test('C23: every batch of the streamed reply leaves MessageDisplay without the p
   const out: string[] = []
   for (const f of STREAM) out.push(await shown(f))
   expect(out.filter((d) => RAW.test(d))).toEqual([])
-  expect(out[0]).toBe('▌ research · 0/3 explorers returned\n\nThe three atlas:explorer agents (alpha, beta, gamma) are\nrunning in the background.\n')
+  expect(out[0]).toBe('research · 0/3 explorers returned\n\nThe three atlas:explorer agents (alpha, beta, gamma) are\nrunning in the background.\n')
   expect(out[1]).toBe(STREAM[1]!.delta)
   expect(out[2]).toBe('')
 })
 
 test('C23: a reply that is the header alone (first and final flush at once) is rewritten too', async () => {
   const shown = display()
-  expect(await shown(DONE_ONLY)).toBe('▌ done · all finished')
+  expect(await shown(DONE_ONLY)).toBe('done · all finished')
   expect(RAW.test(await shown({ index: 0, final: true, delta: 'ATLAS | 🔍 research 3/5 | 3/5 dispatched' }))).toBe(false)
-  expect(await shown({ index: 0, final: true, delta: 'ATLAS | 🔍 research 3/5 | 3/5 dispatched' })).toBe('▌ research 3/5 · 3/5 dispatched')
+  expect(await shown({ index: 0, final: true, delta: 'ATLAS | 🔍 research 3/5 | 3/5 dispatched' })).toBe('research 3/5 · 3/5 dispatched')
 })
 
 test('C23: prose, a later batch, ATLAS_MOD=off and an unknown phase are left exactly as the host has them', async () => {
@@ -71,7 +71,7 @@ test('C23: prose, a later batch, ATLAS_MOD=off and an unknown phase are left exa
 
 test("C23: another plugin's rewrite of the batch is the source, not the raw delta", async () => {
   const shown = display()
-  expect(await shown({ index: 0, final: true, delta: 'x' }, { displayContent: 'ATLAS | 🏁 done | other' })).toBe('▌ done · other')
+  expect(await shown({ index: 0, final: true, delta: 'x' }, { displayContent: 'ATLAS | 🏁 done | other' })).toBe('done · other')
 })
 
 test('C23: the transcript draws the same chip from the display form the host may hand back as the message text, and from the contract form', () => {

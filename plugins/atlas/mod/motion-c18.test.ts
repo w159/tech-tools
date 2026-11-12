@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
 import { hudLines, hudMotionItems } from './hud';
 import { DEMO_AGENT, demoInput } from './motion-demo';
-import { deltaE, Motion, MOTION_MS, MOTION_STEP_MS } from './motion';
+import { deltaE, Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
 
 const fitOrSelf = (hex: string): string => (/^#[0-9a-f]{6}$/i.test(hex) ? hex : '#000000');
 
@@ -17,8 +17,8 @@ function frames(surface: 'todo' | 'agent', color: Ui['color']): { rest: Run[]; b
   feed('done', T0);
   const draw = (now: number, motion?: ReturnType<Motion['ctx']>): Run[] => hudLines(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui, tick: 0, now, ...(motion ? { motion } : {}) }).flat();
   const beats: Run[][] = [];
-  for (let dt = 0; dt < MOTION_MS; dt += MOTION_STEP_MS) beats.push(draw(T0 + dt, m.ctx(T0 + dt)));
-  return { rest: draw(T0 + MOTION_MS), beats };
+  for (let dt = 0; dt < MOTION_MS; dt += MOTION_STEP_MS) beats.push(draw(T0 + sinceChange('done', dt), m.ctx(T0 + sinceChange('done', dt)))); // dt is time into the ease: a done mark holds its first beat
+  return { rest: draw(T0 + windowOf({ state: 'done' })), beats };
 }
 const run = (runs: Run[], text: string): Run => runs.find((r) => r.t === text)!;
 

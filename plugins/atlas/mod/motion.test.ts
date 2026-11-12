@@ -2,7 +2,7 @@
 // byte for byte, idle scheduling nothing, a new row revealing left to right, a done row popping its glyph, reduced motion.
 import { describe, expect, test } from 'claude-code/testing';
 import { cells, easeOutCubic, runsCells, runsString, sgrColor, type Run, type Ui } from './atlas-ui';
-import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, reducedMotion, REVEAL_MS, revealRuns, stepTrack, trackBusy, type MotionItem } from './motion';
+import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, reducedMotion, sinceChange, REVEAL_MS, revealRuns, stepTrack, trackBusy, type MotionItem } from './motion';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const row = (state: 'running' | 'done' = 'done'): Run[] => [
@@ -85,11 +85,11 @@ describe('animateRow', () => {
     const m = new Motion(true);
     m.observe('todo', items('running'), 0);
     m.observe('todo', items('done'), 2000);
-    const glyph = (dt: number): string => runsString(animateRow(row('done'), 'todo:a', 'done', m.ctx(2000 + dt), ui)).slice(2, 3);
-    expect([glyph(0), glyph(MOTION_STEP_MS), glyph(2 * MOTION_STEP_MS), glyph(MOTION_MS)]).toEqual(['◌', '◍', '●', '●']); // one pop frame per beat
+    const glyph = (dt: number): string => runsString(animateRow(row('done'), 'todo:a', 'done', m.ctx(2000 + sinceChange('done', dt)), ui)).slice(2, 3);
+    expect([glyph(0), glyph(MOTION_STEP_MS - 1), glyph(MOTION_STEP_MS), glyph(2 * MOTION_STEP_MS), glyph(MOTION_MS)]).toEqual(['◌', '◌', '◍', '●', '●']); // one pop frame per beat, the first held (DONE_HOLD_MS)
     const a: Ui = { ...ui, ascii: true };
     const ar: Run[] = [{ t: '*', tone: 'text' }, { t: ' x', tone: 'text' }];
-    expect([0, 1, 2].map((b) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + b * MOTION_STEP_MS), a))[0])).toEqual(['@', '@', '*']);
+    expect([0, 1, 2].map((b) => runsString(animateRow(ar, 'todo:a', 'done', m.ctx(2000 + sinceChange('done', b * MOTION_STEP_MS)), a))[0])).toEqual(['@', '@', '*']);
   });
   test('a new row reveals left to right over REVEAL_MS and keeps its width', () => {
     const m = new Motion(true);

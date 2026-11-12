@@ -10,7 +10,7 @@ import { ownTodos } from './data/todos';
 import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from './atlas-ui';
 import { rowSpinnerGlyph } from './hud-surface';
 import { busySnap, NOW } from './live_fixture';
-import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS } from './motion';
+import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
 import { motionFeed } from './motion-feed';
 import { panelModelOf } from './pane/sidebar-model';
 import type { TodoItem } from './contract';
@@ -57,7 +57,7 @@ describe('A1: the HUD and the route tab draw the same mark and colour for the sa
       for (const [k, v] of Object.entries(motionFeed(before, [], null, ui))) m.observe(k, v, NOW);
       for (const [k, v] of Object.entries(motionFeed(after, [], null, ui))) m.observe(k, v, NOW + 5000);
       const seen = new Set<string>();
-      for (const dt of [-MOTION_FRAME_MS, 0, 100, 200, 300, 400, MOTION_MS]) {
+      for (const dt of [-MOTION_FRAME_MS, 0, 100, 200, 300, 400, 1000, 1200, windowOf({ state: 'done' })]) {
         const s = surfaces({ ...after, now: NOW + 5000 + dt }, ui, m.ctx(NOW + 5000 + dt));
         for (const [label, word] of [['wire the gate', 'done'], ['map the auth flow', 'done'], ['edit auth middleware', 'returned']] as const) {
           const [h, p] = [markOf(rowWith(s.hud, label), word), markOf(rowWith(s.panel, label), word)];
@@ -66,7 +66,7 @@ describe('A1: the HUD and the route tab draw the same mark and colour for the sa
           // pop glyph is read as the disc it lands on, so the colour and the word are still compared beat by beat.
           expect([name, dt, label, /^[◌◍@]/.test(h)]).toEqual([name, dt, label, false]);
           // Critique 22: the HUD draws a hand-back as the done disc and the dim word `returned` (the scorer counts `◃` as unknown); the panel and the board keep their own mark until their slices follow.
-          if (word === 'returned') expect([name, dt, label, /^[●*]/.test(h)]).toEqual([name, dt, label, true]);
+          if (word === 'returned') expect([name, dt, label, /^[◉?]/.test(h)]).toEqual([name, dt, label, true]); // critique 27: the neutral hand-back mark, never the green done disc
           else expect([name, dt, label, h]).toEqual([name, dt, label, p.replace(/^◌|^◍/, '●').replace(/^@/, '*')]);
           seen.add(h);
         }
@@ -95,8 +95,8 @@ describe('A2: `returned` has a mark of its own', () => {
       for (const rows of [s.hud, s.panel]) {
         const row = rowWith(rows, 'edit auth middleware');
         const glyph = row.find((r) => [...r.t.trim()].length === 1 && ENDS.has(r.t.trim()))!;
-        // the hand-back is the done disc on the HUD, the panel and the board alike (critique 22, wave 25)
-        expect(glyph.t.trim()).toBe(ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done);
+        // the hand-back is the neutral `◉` (the scorer's waiting mark) on the HUD, the panel and the board alike, never the green done disc (critique 27)
+        expect(glyph.t.trim()).toBe(ui.ascii ? STATE_ASCII.waiting : STATE_GLYPHS.waiting);
         expect(row.find((r) => r.t.trim() === 'returned')!.tone).not.toBe('warn');
         if (!ui.ascii) expect(glyph.tone).not.toBe('warn');
       }
@@ -119,7 +119,7 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
       const { m, after } = observed(ui);
       const rest = shot(surfaces(after, ui, undefined).hud);
       const beats: string[] = [];
-      for (let dt = 0; dt < MOTION_MS; dt += MOTION_STEP_MS) beats.push(shot(surfaces({ ...after, now: NOW + 5000 + dt }, ui, m.ctx(NOW + 5000 + dt)).hud));
+      for (let dt = 0; dt < MOTION_MS; dt += MOTION_STEP_MS) beats.push(shot(surfaces({ ...after, now: NOW + 5000 + sinceChange('done', dt) }, ui, m.ctx(NOW + 5000 + sinceChange('done', dt))).hud)); // dt is time into the ease: a done mark holds its first beat
       const at = beats.indexOf(rest);
       const ramp = beats.slice(0, at < 0 ? beats.length : at);
       // Critique 26: the 256-colour ease is the white lead-in held, then the resting row (the palette has no colour worth stepping through); a held beat repeats its neighbour there.

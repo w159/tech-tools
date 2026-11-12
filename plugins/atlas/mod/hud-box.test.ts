@@ -102,8 +102,9 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
     expect(nine.filter((r) => r === '')).toEqual([]);
     expect(names(nine)).toBe(true);
     expect(nine[0]).not.toMatch(/done/);
-    const eight = rows(8); // the closing rules go; every row and the names stay
-    expect(tops(eight)).toBe(2);
+    const eight = rows(8); // the closing rules go, and the corners with them; every row and the names stay
+    expect(tops(eight)).toBe(0);
+    expect(eight.filter((r) => r.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(r))).toHaveLength(2);
     expect(eight.filter((r) => r === edge)).toHaveLength(0);
     expect(names(eight)).toBe(true);
     expect(eight.filter((r) => /^\s*[●◇◐] T\d item/.test(r))).toHaveLength(3);

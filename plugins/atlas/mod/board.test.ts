@@ -248,13 +248,13 @@ describe('S1: a dispatch row follows its worker', () => {
       const rows = boardRowsOf([{ content: 'x', status, origin: 'dispatch', owner: 'w' }]);
       for (const cols of [38, 80, 110]) {
         const line = boardText(boardBody(rows, { cols, ui: ui('mocha') }))[cols >= 100 ? 1 : 0]!;
-        expect([status, cols, line.includes('●'), /\bdone\b/.test(line)]).toEqual([status, cols, status === 'ended', false]); // an ended row wears the done disc and the dim word `returned` (as the HUD does), never the word `done`
+        expect([status, cols, line.includes('●'), line.includes('◉'), /\bdone\b/.test(line)]).toEqual([status, cols, false, status === 'ended', false]); // an ended row wears the neutral `◉` and the 245 word `returned` (as the HUD does), never the green done disc nor the word `done`
       }
     }
   });
   test('an ended row names itself in the state column (plain and rich) and says why in the detail', () => {
     const rows = boardRowsOf([{ content: 'x', status: 'ended', origin: 'dispatch', owner: 'w' }]);
-    expect(boardText(boardBody(rows, { cols: 110, ui: ui('mocha') }))[1]).toMatch(/^ {2}● x +returned +w +agent ended, row still open$/);
+    expect(boardText(boardBody(rows, { cols: 110, ui: ui('mocha') }))[1]).toMatch(/^ {2}◉ x +returned +w +agent ended, row still open$/);
     const rich = boardBody(rows, { cols: 110, ui: ui('mocha'), rich: true })[1]!.runs.find((x) => x.chip)!;
     expect(rich.t).toBe(' RETURNED  ');
     expect(rich.bg).toBe('text'); // returned is the body tone: an ended row is not an accent state
@@ -296,10 +296,10 @@ describe('returned never draws the amber warning mark on the Board (wave 12 inte
   const rows = boardRowsOf([{ content: 'x', status: 'ended', origin: 'dispatch', owner: 'w' }]);
   test('plain and ASCII rows lead with the returned mark, not the blocked triangle', () => {
     expect(boardText(boardBody(rows, { cols: 110, ui: ui('mocha') }))[1]).not.toContain('▲');
-    expect(boardText(boardBody(rows, { cols: 110, ui: { ...ui('mocha'), ascii: true } }))[1]).toMatch(/^ {2}\* x +returned/);
+    expect(boardText(boardBody(rows, { cols: 110, ui: { ...ui('mocha'), ascii: true } }))[1]).toMatch(/^ {2}\? x +returned/);
   });
   test('the mark run is the returned glyph in the accent tone', () => {
-    const head = boardBody(rows, { cols: 110, ui: ui('mocha') })[1]!.runs.find((x) => x.t === '●')!;
+    const head = boardBody(rows, { cols: 110, ui: ui('mocha') })[1]!.runs.find((x) => x.t === '◉')!;
     expect(head.tone).not.toBe('warn');
   });
 });

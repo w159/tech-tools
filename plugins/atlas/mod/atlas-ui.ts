@@ -291,12 +291,12 @@ export type MarkState = UiState | typeof RETURNED | 'doubt';
 export const markOf = (state: UiState, word?: string): MarkState => (word === RETURNED ? RETURNED : state === 'done' && word === DONE_DOUBT ? 'doubt' : state);
 /** What the Motion tracks for a row: its state, except a doubted done, which is its own entry (it leads amber and never pops the done disc). */
 export const motionState = (state: UiState, word?: string): string => (markOf(state, word) === 'doubt' ? 'doubt' : state);
-/** The token of a mark: the state's own, body text for `returned` (the glyph and its word share one tone, motion included), the error red for `doubt`. */
-export const markToken = (s: MarkState): Token => (s === RETURNED ? STATE_TOKEN.done : s === 'doubt' ? 'bad' : STATE_TOKEN[s]);
+/** The token of a mark: the state's own, body text 252 for `returned` (a neutral mark, never the green of a finished row; its word is the secondary 245), the error red for `doubt`. */
+export const markToken = (s: MarkState): Token => (s === RETURNED ? 'text' : s === 'doubt' ? 'bad' : STATE_TOKEN[s]);
 /** The one tone of a row's state WORD on every surface (HUD, side panel, board). */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'dim' : markOf(state, word) === 'doubt' ? 'bad' : state === 'failed' || state === 'blocked' ? 'bad' : state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'sub' : markOf(state, word) === 'doubt' ? 'bad' : state === 'failed' || state === 'blocked' ? 'bad' : state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
 
-export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
+export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? STATE_ASCII.waiting : STATE_GLYPHS.waiting) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
 export function stateRun(s: MarkState, ui: Ui, spinFrame = 0, braille = false): Run {
   const g = s === 'running' ? (braille ? leadSpinnerGlyph(spinFrame, ui.ascii) : spinnerGlyph(spinFrame, ui.ascii)) : stateGlyph(s, ui);

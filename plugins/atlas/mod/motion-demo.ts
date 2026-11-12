@@ -9,7 +9,7 @@
 import { colorMode, paintAnsi, uiFromEnv, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, hudMotionItems, type HudAgent, type HudInput } from './hud';
-import { Motion, MOTION_MS, MOTION_STEP_MS } from './motion';
+import { Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
 
 /** The demo draws through the live HUD (hudLines) and paints with the live ANSI painter (paintAnsi): same builder, same options, same
  * strike on done titles, so a recorded frame is what the terminal shows. `forced` is the colour depth the CLI asks for. */
@@ -52,8 +52,8 @@ export function demoFrames(cols = 100, step = MOTION_STEP_MS, color: Ui['color']
     };
     frame('running', `${surface}-00-running.ans`, 'running', 0, undefined);
     let n = 1;
-    for (let dt = 0; dt < MOTION_MS; dt += step) frame(`t=${String(dt).padStart(3, '0')}ms`, `${surface}-${String(n++).padStart(2, '0')}-t${String(dt).padStart(4, '0')}ms.ans`, 'done', 1000 + dt, m.ctx(1000 + dt));
-    frame('done', `${surface}-99-done.ans`, 'done', 1000 + MOTION_MS, undefined);
+    for (let dt = 0; dt < MOTION_MS; dt += step) frame(`t=${String(dt).padStart(3, '0')}ms`, `${surface}-${String(n++).padStart(2, '0')}-t${String(dt).padStart(4, '0')}ms.ans`, 'done', 1000 + sinceChange('done', dt), m.ctx(1000 + sinceChange('done', dt))); // dt is time into the ease: a done mark holds its first beat before it moves
+    frame('done', `${surface}-99-done.ans`, 'done', 1000 + windowOf({ state: 'done' }), undefined);
     put(`${surface}-strip.ans`, strip);
   }
   return files;

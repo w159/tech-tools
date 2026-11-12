@@ -125,7 +125,7 @@ test('header line is drawn styled in place with the body kept', () => {
   const first = 'ATLAS | 🔧 implement 3/5 | shipping restyle'
   const text = stringsOf(assistantTree(snap(), { text: `${first}\n\nBody text here.`, isFirstOfReply: true }))
   expect(text).not.toContain('ATLAS') // the lead header does not repeat the brand (critique 23)
-  expect(text).toContain('IMPLEMENT')
+  expect(text).toContain('implement')
   expect(text).toContain('3/5')
   expect(text).toContain('shipping restyle')
   expect(text).toContain('Body text here.')
@@ -144,7 +144,7 @@ test('critique 15 C1: at 110 the ATLAS and phase chips never shrink, whatever th
   for (const cols of [66, 110, 150]) {
     const kids = rawKids(long, cols)
     expect([cols, kids.slice(0, 2).map((k) => [(k as { type: string }).type, (k as { props: Record<string, unknown> }).props.flexShrink])]).toEqual([cols, [['Box', 0], ['Box', 0]]])
-    expect(pillsOf(long, cols).slice(0, 2).map((p) => p.children[0])).toEqual(['▌', ' RESEARCH'])
+    expect(pillsOf(long, cols).slice(0, 2).map((p) => p.children[0])).toEqual(['▌', ' research'])
   }
 })
 
@@ -152,7 +152,7 @@ test('critique 23: the lead header has no fill and no pastel: a bar in the phase
   const [bar, word, ...rest] = pillsOf('ATLAS | 🔧 implement 3/5 | shipping restyle', 120)
   expect(bar!.children[0]).toBe('▌')
   expect(bar!.props.color).toBe('#af87ff') // 141, the one lavender
-  expect(word!.children[0]).toBe(' IMPLEMENT')
+  expect(word!.children[0]).toBe(' implement')
   expect(word!.props).toMatchObject({ color: '#d0d0d0', bold: true }) // 252
   expect(rest.map((p) => p.children[0]).join('')).toBe(' 3/5 shipping restyle')
   for (const p of [bar!, word!, ...rest]) expect(p.props.backgroundColor).toBeUndefined()
@@ -198,8 +198,8 @@ test('a header with no valid phase draws no pill, never the snapshot phase', () 
 
 test('the pill shows the phase the header states, not a phase word in its sentence', () => {
   const text = stringsOf(assistantTree(snap({ phase: 'verify' }), { text: 'ATLAS | 🔧 implement 2/9 | text containing the word verify', isFirstOfReply: true }))
-  expect(text).toContain('IMPLEMENT')
-  expect(text).not.toContain('VERIFY')
+  expect(text).toContain('implement')
+  expect(text).not.toContain('▌ verify')
 })
 
 // ---- TurnDuration receipt ----
@@ -328,7 +328,7 @@ test('AssistantMessage draws the contract header on one styled row and keeps the
   const drawn = await regs[2]?.hook(fake$({ snapshot: snap() }).$, fakeE('AssistantMessage', { text, isFirstOfReply: true }), echoNext)
   expect(drawn).not.toBe(SENTINEL)
   const out = stringsOf(drawn)
-  for (const s of ['IMPLEMENT', '3/5', 'dedup cpWidth', 'Body text here.']) expect(out).toContain(s)
+  for (const s of ['implement', '3/5', 'dedup cpWidth', 'Body text here.']) expect(out).toContain(s)
 })
 
 test('header-less AssistantMessage keeps the engine drawing with no pill', async () => {
@@ -420,7 +420,7 @@ test('assistantTree: an unknown phase word gives null (no snapshot fallback), ba
   expect(assistantTree(s, { text: 'ATLAS | ✅ underway | state' }, 120)).toBeNull()
   const tree = assistantTree(s, { text: 'ATLAS | ✅ verify | state' }, 120)!
   expect(tree.type).toBe('Box')
-  expect(stringsOf(tree)).toContain('VERIFY')
+  expect(stringsOf(tree)).toContain('verify')
   expect((tree as { props: Record<string, unknown> }).props.flexDirection).toBe('row')
   expect(assistantTree(snap({ contract: { ...snap().contract, headerFirstLinePattern: '(' } }), { text: 'ATLAS | x | y' })).toBeNull()
   expect(assistantTree(snap(), { text: '' })).toBeNull()
@@ -567,7 +567,7 @@ test('C1: before any turn.start the first draw still resolves to a chip, and mod
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
   const first = await regs[2]!.hook(fake$({ snapshot: snap() }).$, fakeE('AssistantMessage', { text: 'ATLAS | 🏁 done | 5/5' }), engineNext)
-  expect(stringsOf(first)).toContain('DONE')
+  expect(stringsOf(first)).toContain('done')
   const offRegs: Reg[] = []
   registerRestyle(fakeOn(offRegs))
   const off = fake$({ env: 'off', snapshot: snap() }).$

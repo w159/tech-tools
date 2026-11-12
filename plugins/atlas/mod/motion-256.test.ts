@@ -3,7 +3,7 @@
 // panel fill is the neutral grey of the host's tone family (the raw hex reached the terminal as navy 17).
 import { describe, expect, test } from 'claude-code/testing';
 import { contrast, emittedPairs, fitHex, hexTo256, hostTo256, luminance, PALETTES, runsString, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, surfaceHex, UI_STATES, xtermHex, type Run, type ThemeName, type Token, type Ui } from './atlas-ui';
-import { animateRow, deltaE, easeSteps256, MAX_STEPS_256, MIN_STEPS_256, MIN_STEP_DE, MIN_STEP_DL, STRONG_STEP_DE, Motion, MOTION_MS, POP_ASCII, POP_UNICODE } from './motion';
+import { animateRow, deltaE, easeSteps256, MAX_STEPS_256, MIN_STEPS_256, MIN_STEP_DE, MIN_STEP_DL, STRONG_STEP_DE, Motion, MOTION_MS, windowOf, POP_ASCII, POP_UNICODE } from './motion';
 
 const RESTS: readonly Token[] = ['text', 'sub', 'muted', 'line', 'ok', 'run', 'warn', 'bad', 'info', 'accent'];
 const THEMES: readonly ThemeName[] = ['mocha', 'latte'];
@@ -42,7 +42,7 @@ describe('256-colour ease', () => {
     for (const word of ['wire the gate', 'tests green']) {
       const seen: string[] = [];
       let boldOff = false;
-      for (let dt = 0; dt < MOTION_MS; dt += 50) {
+      for (let dt = 0; dt < windowOf({ state: 'done' }); dt += 50) {
         const run = animateRow(resting, 'todo:a', 'done', m.ctx(1000 + dt), ui, { pop: false, reveal: false }).find((r) => r.t === word)!;
         const fg = run.fg;
         expect(fg).toBeDefined(); // critique 16: every beat of the window is a step; the last one is the resting tone held bold (never a bold that arrives late)
@@ -54,7 +54,7 @@ describe('256-colour ease', () => {
       expect(new Set(seen.map(idx)).size).toBeGreaterThanOrEqual(MIN_STEPS_256);
       expect(seen.length).toBe(new Set(seen).size); // a staircase: no step comes back
     }
-    expect(animateRow(resting, 'todo:a', 'done', m.ctx(1000 + MOTION_MS), ui)).toBe(resting);
+    expect(animateRow(resting, 'todo:a', 'done', m.ctx(1000 + windowOf({ state: 'done' })), ui)).toBe(resting);
   });
 
   test('a tone whose white lead-in is not visibly apart from rest keeps its resting colour (no fg on any frame)', () => {

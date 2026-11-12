@@ -54,7 +54,7 @@ describe('motion-demo frames', () => {
       }
     }
   });
-  test('critique 22: `returned` is the done disc `●` and the dim word, at every frame, a row mid-transition included; the unreadable `◃` is gone and the word is never the plain body tone (live f0063: 183 beside a plain 189)', () => {
+  test('critique 27: `returned` is the neutral `◉` and the 245 word, at every frame, a row mid-transition included; the unreadable `◃` is gone and the word is never the plain body tone (live f0063: 183 beside a plain 189)', () => {
     const ui256: Ui = { ...uiFromEnv({}), color: '256' };
     const item = (id: string, owner: string) => ({ id, content: `${id.toUpperCase()} read ${owner}.py (${owner})`, status: 'in_progress', owner }) as never;
     const at = (gamma: 'working' | 'done'): HudInput => ({
@@ -69,7 +69,8 @@ describe('motion-demo frames', () => {
       expect(rows).toHaveLength(2);
       for (const r of rows) {
         expect([dt, r.some((x) => x.t === '◃')]).toEqual([dt, false]); // the scorer counts `◃` as unknown
-        expect([dt, r.some((x) => x.t === '●')]).toEqual([dt, true]); // the done disc is the mark
+        expect([dt, r.some((x) => x.t === '●')]).toEqual([dt, false]); // never the green done disc (critique 27)
+        expect([dt, r.some((x) => x.t === '◉')]).toEqual([dt, true]); // the neutral hand-back mark the scorer reads
         const w = r.find((x) => x.t === 'returned')!;
         expect([dt, w.fg === fitHex(PALETTES[ui256.theme].text, ui256.theme)]).toEqual([dt, false]); // and the word is never the plain body tone
       }
