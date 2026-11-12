@@ -225,13 +225,13 @@ test('C2: the card placed for a worker the lead stopped reads killed with its ru
   const $ = stopped()
   await placeFinished({ ...($ as object), ui: { place: async ({ id }: { id: string }) => { ids.push(id); return { isPlaced: true, requestId: id } } } } as unknown as EngineInterface, before, after)
   const cards = ids.map((id) => flat(placedTree(id, uiFromEnv())))
-  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('■ killed  ghost-explorer · 9s')
-  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('■ failed  beta-explorer · 9s')
+  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('■ killed   ghost-explorer · 9s')
+  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('■ failed   beta-explorer · 9s')
 })
 
 test('C3: the host row of a stopped task with no duration_ms carries the run the HUD prints, like a done card', async () => {
   const row = flat(await sites().UserMessage!(stopped(), stoppedNoDuration('k1'), next))
-  expect(row).toContain('■ killed  ghost-explorer · 9s')
+  expect(row).toContain('■ killed   ghost-explorer · 9s')
 })
 const stoppedNoDuration = (requestId: string) => ({ surface: 'terminal', component: 'UserMessage', requestId, props: { text: 'Agent stopped', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', status: 'killed' } } })
 

@@ -19,7 +19,8 @@ describe('C5: content plus fill reaches the foot row', () => {
         const used = panelLines(m).length;
         const fill = fillRows(m, bodyLines(m).length);
         expect([tab, rows, used + fill.length]).toEqual([tab, rows, rows - 1]);
-        for (const l of fill) expect(l.runs.length === 0 || lineText(l).trim() === '').toBe(true); // blank rows: the panel surface, no ink
+        for (const l of fill.slice(0, -1)) expect(l.runs.length === 0 || lineText(l).trim() === '').toBe(true); // blank rows: the panel surface, no ink
+        if (fill.length >= 2) expect(lineText(fill[fill.length - 1]!).trim()).toBe('keys  r t c g k o'); // C1: the one dim key hint on the last spare row
       });
     }
   }

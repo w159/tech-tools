@@ -112,7 +112,7 @@ describe('sidebar hotkeys', () => {
     expect(rows).toHaveLength(1); // `chan` for `channel` makes the whole strip 55 cells: no wrapped second row
     for (const row of rows) {
       const kidsOf = row.props.children as Node[];
-      const w = kidsOf.reduce((n, c) => n + (c.kind === 'Button' ? 3 + [...String(c.props.label)].length : String(c.props.children).length), 0); // `k: label` plus the gaps
+      const w = kidsOf.reduce((n, c) => n + (c.kind === 'Button' ? (c.props.hotkey ? 3 : 0) + [...String(c.props.label)].length : c.kind === 'Box' ? 0 : String(c.props.children).length), 0); // the names plus the gaps (the key layer is a zero-width Box)
       expect(w).toBeLessThanOrEqual(55);
     }
   });

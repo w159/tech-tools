@@ -27,9 +27,9 @@ describe('C5: the tab strip stays on one line at the 110 column pane', () => {
       expect([cols, new Set(forms).size]).toEqual([cols, 1]);
     }
   });
-  test('where the keys fit they are drawn, as before (53 cells and up)', () => {
-    expect(headerRows(panelWorld('route', 120, ui)).slice(2, 3).map(lineText)[0]!.trim()).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
-    expect(lineText(tabRows(panelWorld('team', 54, ui))[0]!).trim()).toBe('r: route t: team c: channel g: gates k: core o: board');
+  test('design rev 5 C1: the keys are never drawn in the strip, at any width (53 cells and up too)', () => {
+    expect(headerRows(panelWorld('route', 120, ui)).slice(2, 3).map(lineText)[0]!.trim()).toBe('route  team  channel  gates  core  board');
+    expect(lineText(tabRows(panelWorld('team', 54, ui))[0]!).trim()).toBe('route  team  channel  gates  core  board');
   });
   test('words alone on one row down to 35 cells, then the full words wrap (never a shortened word)', () => {
     expect(stripLayout(36, 'route').rows).toHaveLength(1);

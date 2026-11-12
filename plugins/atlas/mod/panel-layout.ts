@@ -38,19 +38,16 @@ export const STRIP_PAD = 1;
 /** Forms of the strip, widest first: the words; the same with one cell between tabs. The first form that fits the pane on one row is drawn;
  * none fitting, the words wrap onto a second row (never a shortened `chan` or a two-letter `rt tm ch` form). */
 type StripForm = { gap: number; label: (id: string, full: string) => string };
-const STRIP_FORMS: readonly StripForm[] = [
-  { gap: STRIP_GAP, label: (_, full) => full },
-  { gap: 1, label: (_, full) => full },
-];
-const stripWidth = (tabs: readonly { label: string }[], gap: number, prefix: number = HOTKEY_W): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + prefix + cells(t.label), 0);
+const STRIP_FORMS: readonly StripForm[] = [{ gap: STRIP_GAP, label: (_, full) => full }];
+const stripWidth = (tabs: readonly { label: string }[], gap: number, prefix: number = 0): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + prefix + cells(t.label), 0);
 const formTabs = (f: StripForm): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t, label: f.label(t.id, t.label) }));
 
-/** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus the `k: ` prefix and `gap` cells between; the rest wrap. */
-export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = STRIP_GAP): T[][] {
+/** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus `prefix` cells and `gap` cells between; the rest wrap. */
+export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = STRIP_GAP, prefix: number = HOTKEY_W): T[][] {
   const rows: T[][] = [];
   let used = 0;
   for (const it of items) {
-    const w = HOTKEY_W + cells(it.label);
+    const w = prefix + cells(it.label);
     if (!rows.length || (rows[rows.length - 1]!.length && used + gap + w > inner)) { rows.push([]); used = 0; }
     rows[rows.length - 1]!.push(it);
     used += (rows[rows.length - 1]!.length > 1 ? gap : 0) + w;
@@ -58,23 +55,17 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
   return rows;
 }
 
-/** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding: the widest label form that fits one row, else the
- * full words wrapped onto a second row. The rule under the lit tab is as wide as the drawn label. */
-export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number; /** True when the `k: ` prefix is not drawn (the keys stay bound; see mod/pane/sidebar.tsx): the words alone fit one row where the prefixed forms do not. */ bare: boolean } {
+/** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding (design rev 5, C1): the names alone, two spaces between, on one row down to 35 cells (one space
+ * between below that), else the whole names wrapped. The key letters are never drawn in the strip: they stay bound (mod/pane/sidebar.tsx's zero-width layer), the band footer names
+ * them and a dim line at the pane foot repeats them where there is room. The form depends on the width only, never on the lit tab. `bare` is therefore always true. */
+export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number; /** Always true: the `k: ` prefix is never drawn. */ bare: boolean } {
   const inner = Math.max(1, cols - STRIP_PAD);
-  for (const f of STRIP_FORMS) {
-    const tabs = formTabs(f);
-    if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap, bare: false };
-  }
   const wide = STRIP_FORMS[0]!;
-  // Critique 18: the 110-column pane is about 38 cells and the prefixed strip wrapped onto two lines on every tab. The six whole words alone fit one row down to 35 cells: the form
-  // depends on the width only (never on the lit tab, which critique 17 asked for), the keys stay bound (mod/pane/sidebar.tsx's zero-width layer) and the band footer names them.
   for (const gap of [wide.gap, 1]) {
     const words = formTabs(wide);
     if (stripWidth(words, gap, 0) <= inner) return { rows: [words], gap, bare: true };
   }
-  // Narrower still, one form on every tab (critique 17: the board wrapped the strip to two rows and the route tab dropped the keys to one): the keys stay on screen and wrap.
-  return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap, bare: false };
+  return { rows: stripRows(formTabs(wide), inner, wide.gap, 0), gap: wide.gap, bare: true };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
@@ -212,10 +203,10 @@ export function ribbonRow(m: PanelModel, view?: { title: string; right: string }
   return line(ribbon(m.cols, view?.title ?? 'SIDEPANEL', fitsRight || keep ? right : '', m.ui));
 }
 
-/** The tab strip and the rule under the lit tab: `r: route  t: team  c: channel  g: gates  k: core  o: board`, `━━━━━` under the lit one. A
- * strip that does not fit wraps onto a second row (the rule sits under the row that holds the lit tab). */
+/** The tab strip and the rule under the lit tab (design rev 5, C1): `route  team  channel  gates  core  board`, the lit name bold accent with `━━━━━` in accent under it, the rest
+ * dim. No key letters (see stripLayout). A strip too narrow for one row wraps (the rule sits under the row that holds the lit tab). */
 export function tabRows(m: PanelModel): PanelLine[] {
-  const { rows, gap: g, bare } = stripLayout(m.cols, m.tab);
+  const { rows, gap: g } = stripLayout(m.cols, m.tab);
   const gap = r(' '.repeat(g));
   const lead = r(' '.repeat(STRIP_PAD));
   return rows.flatMap((row): PanelLine[] => {
@@ -224,8 +215,8 @@ export function tabRows(m: PanelModel): PanelLine[] {
     row.forEach((t, i) => {
       const on = t.id === m.tab;
       if (i) { strip.push(gap); under.push(gap); }
-      strip.push(...(bare ? [] : [r(`${t.key}: `, 'muted')]), on ? r(t.label, 'text', { bold: true }) : r(t.label, 'muted'));
-      under.push(...(bare ? [] : [r(' '.repeat(HOTKEY_W))]), on ? r((m.ui.ascii ? '-' : '━').repeat(cells(t.label)), 'accent') : r(' '.repeat(cells(t.label))));
+      strip.push(on ? r(t.label, 'accent', { bold: true }) : r(t.label, 'muted'));
+      under.push(on ? r((m.ui.ascii ? '-' : '━').repeat(cells(t.label)), 'accent') : r(' '.repeat(cells(t.label))));
     });
     return [line(fitRuns(strip, m.cols)), ...(row.some((t) => t.id === m.tab) ? [line(fitRuns(under, m.cols))] : [])];
   });
@@ -416,7 +407,7 @@ function routeBody(m: PanelModel): PanelLine[] {
     const running = listed.length ? [] : team.filter((w) => w.state === 'running');
     const nameW = Math.min(nameCap(m.cols), Math.max(...running.map((w) => cells(nameOf(w))), 1));
     if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
-    else if (!m.workers.length) rows.push(BLANK, ...emptyHint(m, 'add one with /todo add')); // the `todo` row above already says `no tasks yet`
+    else if (!m.workers.length) rows.push(BLANK, ...indentedHint(m, 'add one with /todo add')); // the `todo` row above already says `no tasks yet`
     return rows;
   }
   // Agents that work but hold no plan row (the plan rows carry no owner while the agents are host-spawned): a group under the plan names them, in the HUD Subagents state words.
@@ -523,19 +514,25 @@ export function workersByTask(m: Pick<PanelModel, 'todos' | 'workers'>): PanelWo
 }
 
 /** An empty tab's one sentence, indented like the rows it stands in for and wrapped to the pane (critique 15: an unindented `(no state)` lead-in was the only thing at the margin). */
-const emptyHint = (m: PanelModel, text: string): PanelLine[] => wrap(text, Math.max(8, m.cols - GRID_LEAD), 3).map((l) => line([r(' '.repeat(GRID_LEAD)), r(l, 'muted')]));
+/** A hint under a row that already says the pane is empty (the route tab's todo row): indented like the rows it stands in for, wrapped to the pane. */
+const indentedHint = (m: PanelModel, text: string): PanelLine[] => wrap(text, Math.max(8, m.cols - GRID_LEAD), 3).map((l) => line([r(' '.repeat(GRID_LEAD)), r(l, 'muted')]));
+/** An empty tab's one sentence (design rev 5, C2): dim and centred in the pane, nothing else under it. */
+const emptyHint = (m: PanelModel, text: string): PanelLine[] => {
+  const t = clip(text, Math.max(8, m.cols - 2));
+  return [line([r(' '.repeat(Math.max(1, Math.floor((m.cols - cells(t)) / 2)))), r(t, 'muted')])];
+};
 
 function teamBody(m: PanelModel): PanelLine[] {
   const mates = m.mates ?? [];
   const lead = leadOf(m);
   const workers = workersByTask(m);
   const everyone = [...(lead ? [lead] : []), ...workers, ...mates];
-  if (!everyone.length) return emptyHint(m, 'nobody dispatched yet, ask the lead to start a worker');
+  if (!everyone.length) return emptyHint(m, 'nobody dispatched yet');
   const cap = Math.max(18, Math.min(40, m.cols - GRID_LEAD - 2 - (m.cols >= WIDE ? 12 : 10) - 1 - (m.cols >= WIDE ? 28 : 0)));
   const nameW = Math.min(cap, Math.max(6, ...everyone.map((w) => cells(nameOf(w)))));
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[], more: ReadonlySet<string>): PanelLine[] => ws.flatMap((w) => workerRows(m, w, Math.min(nameW, Math.max(6, m.cols - 14)), w.name === focusName, more.has(w.name)));
-  const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet, ask the lead to start a worker') : [];
+  const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet') : [];
   const build = (more: ReadonlySet<string>): PanelLine[] => [...(lead ? rows([lead], more) : []), ...hint, ...rows(workers, more), ...rows(mates, more), ...(m.lead ? [leadSummary(m)] : [])];
   const base = build(new Set());
   if (!tall(m)) return base;
@@ -579,7 +576,7 @@ function channelBody(m: PanelModel): PanelLine[] {
       : [r(`${ind}${channelLabel(m.channel)}  `, 'text', { bold: true })]),
     r(`${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`, 'muted'),
   ], m.cols));
-  if (!m.notes.length) return [head, BLANK, line(fitRuns([r(`${ind}no messages yet`, 'muted')], m.cols)), ...wrap('workers post here when they hand off or block; type below to message the lead', Math.max(8, m.cols - GRID_LEAD - 1), 3).map((t) => line(fitRuns([r(`${ind}${t}`, 'muted')], m.cols)))];
+  if (!m.notes.length) return [head, BLANK, ...emptyHint(m, 'no messages yet')];
   const log = m.notes.slice(-Math.max(1, tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4)); // a tall pane: the head, the log and the foot row make exactly the pane
   const hasKind = log.some((n) => n.kind === 'blocked' || n.kind === 'handoff' || n.kind === 'done');
   const timeW = m.cols >= 50 ? Math.max(0, ...log.map((n) => cells(n.at))) : 0;
@@ -629,19 +626,22 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
   const open = m.expanded === key;
   const [first = '', ...more] = wrap(oneLine(ln.label), Math.max(8, m.cols - 6));
   const extra = open ? [ln.detail, ln.fix ? `fix: ${ln.fix} (press to copy)` : undefined].filter((x): x is string => !!x) : [];
+  const mk = ln.pending ? stateRun('queued', m.ui) : ln.ok ? stateRun('done', m.ui) : warnMark(m.ui);
   return [
-    line(moving(gridRow({ cols: m.cols, ui: m.ui, mark: ln.pending ? stateRun('queued', m.ui) : ln.ok ? stateRun('done', m.ui) : warnMark(m.ui), name: { t: `  ${first}` }, nameW: cells(first) + 2 }), key, ln.ok ? 'done' : 'blocked', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
+    // Design rev 5, C2: a check hangs under its group's title: the mark sits at the title's first letter, the label two cells on.
+    line(moving([r(' '.repeat(GRID_LEAD)), { ...mk, t: `${mk.t} ` }, r(first)], key, ln.ok ? 'done' : 'blocked', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
     ...more.map((t) => note(`  ${t}`, m)), ...extra.map((t) => note(`  ${oneLine(t)}`, m)),
   ];
 }
 
 const GATE_WORD_W = 7; // `passing` and `warning`
-/** `2/3 green`: the group's checks that pass, the value column (the `n/m` the tab ribbon uses); empty while the group passes. */
+/** `2/3`: the group's checks that pass over its checks, the value column of every group (design rev 5, C2: a count per group, dim while the group passes, warn while it fails). */
 const gateValue = (g: PanelGate): string => {
-  if (!groupFailing(g)) return '';
-  // Critique 19 C4: the header contract is judged over replies, not lines: `7/8 replies` (the transcript's own tally), never `0/1 green` beside 7 chips.
+  if (!g.lines.length) return '';
+  // Critique 19 C4: the header contract is judged over replies, not lines: `7/8 replies` (the transcript's own tally, the unit named while it fails), never `0/1` beside 7 chips.
   const tally = g.id === 'header' ? /^(\d+) of (\d+)$/.exec(g.lines.find((l) => l.id === 'header-matched')?.detail ?? '') : null;
-  return tally ? `${tally[1]}/${tally[2]} replies` : `${g.lines.length - groupFailing(g)}/${g.lines.length} green`;
+  if (tally) return groupFailing(g) ? `${tally[1]}/${tally[2]} replies` : `${tally[1]}/${tally[2]}`;
+  return `${g.lines.length - groupFailing(g)}/${g.lines.length}`;
 };
 
 function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: boolean, all = false): PanelLine[] {
@@ -661,7 +661,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
   const runs = gridRow({
     cols: m.cols, ui: m.ui, mark: groupMark(g, m.ui),
     name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'warn' : pend ? 'muted' : 'ok' }, wordW: GATE_WORD_W,
-    ...(fits && tail ? { detail: { t: tail } } : {}), ...(value ? { value: { t: value, tone: 'warn' as const } } : {}),
+    ...(fits && tail ? { detail: { t: tail } } : {}), ...(value ? { value: { t: value, tone: bad ? 'warn' as const : 'muted' as const } } : {}),
   });
   return [
     line(fitRuns(moving(runs, key, groupOk(g) ? 'done' : 'blocked', m), m.cols), { kind: 'toggle', key }),
@@ -673,7 +673,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
 
 function gatesBody(m: PanelModel): PanelLine[] {
   const gs = countedGates(gatesOf(m)); // the groups the tally counts: one with no data is not a gate yet
-  if (!gs.length) return [line([r('(no state)', 'muted'), r('  no gates reported yet', 'muted')])];
+  if (!gs.length) return emptyHint(m, 'no gates reported yet');
   const valueW = Math.max(0, ...gs.map((g) => cells(gateValue(g))));
   const longest = Math.min(24, Math.max(1, ...gs.map((g) => cells(oneLine(g.title)))));
   // The failing count is the first column to go: the name keeps its whole width, the count moves into the row below.
@@ -897,7 +897,7 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
 }
 
 function coreBody(m: PanelModel): PanelLine[] {
-  if (!hasCore(m.core)) return [line([r('(no state)', 'muted'), r('  no verdicts, workers or gates yet', 'muted')])];
+  if (!hasCore(m.core)) return emptyHint(m, 'no verdicts, workers or gates yet');
   const c = m.core;
   const build = (v: number, o: number, t: number): PanelLine[] => [...contractRows(c, m), BLANK, ...verdictRows(c, m, v), BLANK, ...offloadRows(c, m, o), BLANK, ...dispatchRows(c, m, t)];
   const base = build(VERDICT_CAP, OFFLOAD_CAP, TEAM_CAP);
@@ -944,7 +944,11 @@ const FILLED: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'cor
  * message field is that row). Only on a tab that has fewer rows than the pane; never negative, so a body taller than the pane is untouched. */
 export function fillRows(m: PanelModel, bodyLen: number): PanelLine[] {
   const n = FILLED.has(m.tab) ? m.rows - 1 - headerRows(m).length - bodyLen : 0;
-  return n > 0 ? Array.from({ length: n }, () => BLANK) : [];
+  if (n <= 0) return [];
+  const fill = Array.from({ length: n }, () => BLANK);
+  // Design rev 5, C1: the strip names no keys, so the last spare row (above the message field) names them once, dim.
+  if (n >= 2) fill[n - 1] = line([r(' '.repeat(STRIP_PAD)), r(`keys  ${STRIP_TABS.map((t) => t.key).join(' ')}`, 'muted')]);
+  return fill;
 }
 /** Every row of the panel: ribbon, blank, tab strip, rule, blank, then the active tab. */
 export const panelLines = (m: PanelModel): PanelLine[] =>
@@ -1006,6 +1010,9 @@ export function cardLines(c: CardModel, cols = 120): Run[][] {
   return [top, ...rows, [edge(`${b.bl}${b.h.repeat(w - 2)}${b.br}`)]];
 }
 
+/** Cells the state word of a rail card (and a toast) takes before the two-cell gap and the name: the widest word is `waiting` / `running` / `blocked`. */
+export const CARD_WORD_W = 7;
+
 /** The head of a toast: a left bar in `tone` (`▌`, `|` in ASCII), then the ATLAS mark. */
 const toastHead = (tone: Tone, ui: Ui): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...brandMark(ui), r('  ')];
 
@@ -1013,7 +1020,8 @@ const toastHead = (tone: Tone, ui: Ui): Run[] => [r(ui.ascii ? '|' : '▌', ui.a
  * name, one fact. No full stop. */
 export function toastRuns(state: UiState, name: string, fact: string, ui: Ui): Run[] {
   const g = stateRun(state, ui);
-  return [...toastHead(g.tone, ui), { ...g, t: `${g.t} ` }, r(state, stateWordTone(state, ui), { bold: true }), r(`  ${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
+  // Design rev 5, C3: the state word sits in a fixed-width column (CARD_WORD_W), so the name starts at the same cell on every card; `failed` and `killed` are the same width.
+  return [...toastHead(g.tone, ui), { ...g, t: `${g.t} ` }, r(state, stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
 }
 export const toastText = (state: UiState, name: string, fact: string, ui: Ui): string => runsText(toastRuns(state, name, fact, ui));
 

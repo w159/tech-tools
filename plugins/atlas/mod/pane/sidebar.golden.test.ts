@@ -19,12 +19,12 @@ describe('sidebar golden text', () => {
       expect(r[0]).toContain('ATLAS');
       expect(r[0]).toContain('SIDEPANEL');
       expect(r[1]!.trim()).toBe('');
-      expect(r[2]).toBe(' r: route  t: team  c: channel  g: gates  k: core  o: board');
+      expect(r[2]).toBe(' route  team  channel  gates  core  board');
     }
   });
   test('the lit tab is ruled by a heavy line under its label only', () => {
-    expect(rows('route')[3]!.trimEnd()).toBe('    ━━━━━');
-    expect(rows('team')[3]!.trim()).toBe('━━━━');
+    expect(rows('route')[3]!.trimEnd()).toBe(' ━━━━━');
+    expect(rows('team')[3]!.trimEnd()).toBe('        ━━━━');
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
@@ -66,12 +66,12 @@ describe('sidebar golden text', () => {
   test('gates: group rows with failing lines in words, copy fix when expanded', () => {
     const t = goldenText('gates');
     expect(t).toContain('Completion gate');
-    expect(t).toContain('1/2 green');
+    expect(t).toMatch(/Completion gate.* 1\/2\n/);
     expect(goldenText('gatesExpanded')).toContain('verification coverage');
     expect(goldenText('gatesExpanded')).toContain('run the hooks suite');
   });
-  test('core: the empty ledger reads (no state) rather than a blank pane', () => {
-    expect(goldenText('core')).toContain('(no state)');
+  test('core: the empty ledger says so in one centred line rather than a blank pane', () => {
+    expect(goldenText('core')).toContain('no verdicts, workers or gates yet');
   });
   test('an empty squad reads as nothing running, not a blank pane', () => {
     expect(goldenText('empty').trim().length).toBeGreaterThan(0);

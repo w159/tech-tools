@@ -28,16 +28,16 @@ export const sidepanelDesign: Record<number, string[]> = {
  "80": [
   "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
   "",
-  "r: route  t: team  c: channel  g: gates  k: core  o: board",
-  "   ━━━━━",
+  "route  team  channel  gates  core  board",
+  "━━━━━",
   " phase  research",
   " gates  ● lint   ● test   ▲ doctor   2/3 green"
  ],
  "120": [
   "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
   "",
-  "r: route  t: team  c: channel  g: gates  k: core  o: board",
-  "   ━━━━━",
+  "route  team  channel  gates  core  board",
+  "━━━━━",
   "",
   " phase  research",
   " gates  ● lint   ● test   ▲ doctor   2/3 green"
@@ -62,8 +62,8 @@ export const cardDesign: Record<number, string[]> = {
  ]
 };
 export const toastDesign: string[] = [
-  "▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps",
-  "▌ ◆ ATLAS  ■ failed  implementer-live  tests red 3"
+  "▌ ◆ ATLAS  ● done     implementer-layout  9 of 9 steps",
+  "▌ ◆ ATLAS  ■ failed   implementer-live  tests red 3"
 ];
 export const subagentsDesign: Record<number, string[]> = {
  "80": [
@@ -86,8 +86,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "   ━━━━━",
+      "route  team  channel  gates  core  board",
+      "━━━━━",
       "",
       " phase  research",
       " gates  ● lint   ● test   ▲ doctor   2/3 green",
@@ -110,8 +110,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "   ━━━━━",
+      "route  team  channel  gates  core  board",
+      "━━━━━",
       " phase  research",
       " gates  ● lint   ● test   ▲ doctor   2/3 green",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
@@ -133,8 +133,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route t: team c: channel g: gates k: core o: board",
-      "   ━━━━━",
+      "route  team  channel  gates  core  board",
+      "━━━━━",
       " phase  research",
       " gates  ● lint   ● test   ▲ doctor   2/3 green",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
@@ -158,8 +158,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1 queued · 1 running · 2 done · 1 failed",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "             ━━━━",
+      "route  team  channel  gates  core  board",
+      "       ━━━━",
       "",
       "  ● implementer-layout  done        opus      T1    9 of 9 steps",
       "    task  T1",
@@ -185,8 +185,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━ 1 queued · 1 running · 2 done · 1 failed",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "             ━━━━",
+      "route  team  channel  gates  core  board",
+      "       ━━━━",
       "  ● implementer-layout  done",
       "    task  T1",
       "    model opus · 42s",
@@ -211,8 +211,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route t: team c: channel g: gates k: core o: board",
-      "            ━━━━",
+      "route  team  channel  gates  core  board",
+      "       ━━━━",
       "  ● implementer-layout  done",
       "    task  T1",
       "    model opus · 42s",
@@ -239,8 +239,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #atlas-board-mod",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "                      ━━━━━━━",
+      "route  team  channel  gates  core  board",
+      "             ━━━━━━━",
       "",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                        ▸ implementer-band take T4, then run the gate tests                                10:02",
@@ -250,8 +250,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #atlas-board-mod",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "                      ━━━━━━━",
+      "route  team  channel  gates  core  board",
+      "             ━━━━━━━",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                                                   10:02",
       "    ▸ implementer-band take T4, then run the gate tests",
@@ -261,8 +261,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━ #atlas-board-mod",
       "",
-      "r: route t: team c: channel g: gates k: core o: board",
-      "                    ━━━━━━━",
+      "route  team  channel  gates  core  board",
+      "             ━━━━━━━",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                           10:02",
       "    ▸ implementer-band take T4, then run the gate",
@@ -276,47 +276,47 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "                                  ━━━━━",
+      "route  team  channel  gates  core  board",
+      "                      ━━━━━",
       "",
-      "  ● lint    passing",
-      "  ●   lint",
-      "  ● test    passing",
-      "  ●   test",
-      "  ▲ doctor  warning                                                                                            0/1 green",
-      "  ▲   doctor"
+      "  ● lint    passing                                                                                                  1/1",
+      "    ● lint",
+      "  ● test    passing                                                                                                  1/1",
+      "    ● test",
+      "  ▲ doctor  warning                                                                                                  0/1",
+      "    ▲ doctor"
     ],
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "                                  ━━━━━",
-      "  ● lint    passing",
-      "  ●   lint",
-      "  ● test    passing",
-      "  ●   test",
-      "  ▲ doctor  warning                                                    0/1 green",
-      "  ▲   doctor"
+      "route  team  channel  gates  core  board",
+      "                      ━━━━━",
+      "  ● lint    passing                                                          1/1",
+      "    ● lint",
+      "  ● test    passing                                                          1/1",
+      "    ● test",
+      "  ▲ doctor  warning                                                          0/1",
+      "    ▲ doctor"
     ],
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━ 2/3",
       "",
-      "r: route t: team c: channel g: gates k: core o: board",
-      "                               ━━━━━",
-      "  ● lint    passing",
-      "  ●   lint",
-      "  ● test    passing",
-      "  ●   test",
-      "  ▲ doctor  warning                            0/1 green",
-      "  ▲   doctor"
+      "route  team  channel  gates  core  board",
+      "                      ━━━━━",
+      "  ● lint    passing                                  1/1",
+      "    ● lint",
+      "  ● test    passing                                  1/1",
+      "    ● test",
+      "  ▲ doctor  warning                                  0/1",
+      "    ▲ doctor"
     ]
   },
   core: {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "                                            ━━━━",
+      "route  team  channel  gates  core  board",
+      "                             ━━━━",
       "",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
@@ -343,8 +343,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route  t: team  c: channel  g: gates  k: core  o: board",
-      "                                            ━━━━",
+      "route  team  channel  gates  core  board",
+      "                             ━━━━",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",
@@ -371,8 +371,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
-      "r: route t: team c: channel g: gates k: core o: board",
-      "                                        ━━━━",
+      "route  team  channel  gates  core  board",
+      "                             ━━━━",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Rev 5 slice C1 (side panel tab strip): the strip is names only (`route  team  channel  gates  core  board`) at every width, the lit name bold accent with a one-row accent rule under it, the rest dim; the `r:`-style key letters are gone from the strip (the keys stay bound on the zero-width layer), a dim `keys  r t c g k o` line sits on the last spare row of a tall pane, and the board ribbon is always the `SIDEPANEL ▸ BOARD` breadcrumb the capture scorer reads as the pane. Goldens regenerated: contracts/panel-golden.ts strip and rule rows, mod/pane/sidebar.golden-fixture.ts.
+- Rev 5 slice C2 (empty states, gates): an empty team, channel, gates or core pane says so in one dim centred line (no wrapped hint, no `(no state)` lead-in); every gates group row carries its bare `n/m` count in one right-aligned column (dim while it passes, warn while it fails) and its checks hang under the bold title, the mark under the title's first letter.
+- Rev 5 slice C3 (transcript cards): the state word of a rail card and toast sits in a 7-cell column (`CARD_WORD_W`) so the name starts at the same cell on every card; an aged failed card keeps the error colour on its rail, glyph and word.
+
 ## 17.13.0 - 2026-11-12
 
 - Round 2 waves 15 to 20 (fixes for critiques 14 to 19). Live, 3 runs per width on build 4b5b5a94: TODO 81.2% (150 cols) and 78.5% (110); band 94.5% and 92.2%; workers on any surface 94.0% and 91.4%; side panel route, team, gates and channel tabs 100%; events never shown per surface 14 of 111 (150) and 18 of 110 (110); critic 6.5 (critique 20). The 3x bar is met on 16 of 19 lines; not met: first-appearance lag (2 lines) and the design critic (target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.

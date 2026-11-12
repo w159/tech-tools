@@ -172,7 +172,7 @@ function failedTree(name: string, outcome: string, ui: Ui, aged: boolean): Rende
  const word = head.findIndex((x) => x.t === 'failed')
  const runs: UiRun[] = head.map((x, i) => (i === word ? { ...x, t: verb } : x))
  if (rest) runs.push({ t: ` · ${rest}`, tone: 'sub' })
- const stays = (i: number): boolean => i <= word && i >= word - 1 // the glyph run and the state word
+ const stays = (i: number): boolean => i === 0 || (i <= word && i >= word - 1) // the rail, the glyph run and the state word
  return rowEl(aged ? runs.map((x, i) => (stays(i) ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
 }
 

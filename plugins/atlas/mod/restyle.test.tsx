@@ -361,10 +361,10 @@ test('with no listed agent the card status falls back from the call flags', () =
   const s = snap()
   const label = (over: Record<string, unknown>) => stringsOf(toolUseTree(s, taskProps(over), []))
   expect(label({ isRunning: true })).toContain('running')
-  expect(label({ isErrored: true })).toContain('failed  impl-auth')
+  expect(label({ isErrored: true })).toContain('failed   impl-auth')
   expect(label({ isInterrupted: true })).toContain('blocked  impl-auth')
   expect(label({ output: undefined })).toContain('pending')
-  expect(label({ output: 'ok' })).toContain('done  impl-auth')
+  expect(label({ output: 'ok' })).toContain('done     impl-auth')
 })
 
 test('a listed agent is found by name, and its status wins over the call flags', () => {
@@ -449,7 +449,7 @@ test('ToolGroup: two atlas dispatches draw as a numbered wave, anything else sta
   const group = (calls: unknown[]) => regs[5]!.hook(live, fakeE('ToolGroup', { calls }), engineNext)
   const first = stringsOf(await group([call('t1', 'a'), call('t2', 'b')]))
   expect(first).toContain('WAVE 1')
-  expect(first).toContain('done  a')
+  expect(first).toContain('done     a')
   expect(await group([call('t3', 'a')])).toBe(SENTINEL)
   expect(await group([])).toBe(SENTINEL)
   const offRegs: Reg[] = []
