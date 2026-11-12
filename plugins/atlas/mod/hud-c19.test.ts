@@ -62,7 +62,7 @@ describe('B2: one grid across frames', () => {
   });
   test('a retry owns the item: TASK reads `T3`, and LAST starts a gap after it (never `read beta.py report returned`)', () => {
     const rows = frame([ag('beta-explorer', 'failed', { lastTool: 'Read' }), ag('beta-explorer #2', 'working', { ui: 'running', tool: 'ToolSearch', target: 'select:x', task: 'beta-explorer: read beta.py' })]);
-    const retry = rows.find((r) => r.includes('beta-explorer #2'))!;
+    const retry = rows.find((r) => r.includes('beta-explorer #2') && r.includes('haiku'))!;
     expect(retry).toMatch(/haiku\s+T3\s+preparing/);
     expect(retry).not.toContain('read beta.py');
     const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
