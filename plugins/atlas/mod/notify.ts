@@ -88,7 +88,7 @@ export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): 
 	const seenSeqs = new Set((prev.notes ?? []).map((n) => n?.seq));
 	for (const n of next.notes ?? []) {
 		if (!n || seenSeqs.has(n.seq)) continue;
-		if (!/lead|human/i.test(n.to ?? '')) continue;
+		if (!/human/i.test(n.to ?? '')) continue; // a note to the lead is the lead's to read; only the person needs a toast
 		events.push({ type: 'note', sender: n.owner ?? 'unknown', preview: (n.text ?? '').slice(0, 60) });
 	}
 
@@ -147,7 +147,7 @@ export function registerNotify(
 						// the transcript and cut the names (critique 14 B4: `alpha-expl... +1 more`). The HUD rows, the band and the finish card the mod places
 						// in the transcript (transcript/placed.ts) say it in surfaces the mod owns; the host toast stays for what needs the person.
 						case 'agent-fail':
-							texts.push(factToast('agent-fail', 'failed', ev.name, '', ui));
+							// no toast: a failure is no wait (critique 16 C2: the host box over the failed card cut it to `explorer failed ·`): the card, HUD row, band and board say it
 							break;
 						case 'agent-blocked':
 							texts.push(factToast('agent-blocked', 'waiting', ev.name, 'needs a reply', ui));

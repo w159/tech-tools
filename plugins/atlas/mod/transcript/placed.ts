@@ -41,7 +41,9 @@ export function finishedWorkers(prev: AtlasSnapshot | null, next: AtlasSnapshot)
   const out: FinishedWorker[] = []
   for (const w of workersOf(next)) {
     const was = before.get(w.name)
-    if (was === undefined || was === w.state || (w.state !== 'done' && w.state !== 'failed')) continue
+    // First sight of a worker is no finish, unless it is failed: a killed worker drops out of the host list, so the build that shows it failed can be the
+    // first that lists it (critique 16 C4: no failed card in stoprun-110-e4a8186a-3). A done worker first seen done is an old row, not a finish.
+    if ((was === undefined && w.state !== 'failed') || was === w.state || (w.state !== 'done' && w.state !== 'failed')) continue
     if (was === 'failed') continue // failure is terminal: a failed worker read done later (critique 15: the killed ghost-explorer) gets no done card
     out.push({ name: w.name, role: w.role, failed: w.state === 'failed', durationMs: Math.max(0, endedAt(w, next.now) - w.startedAt) })
   }

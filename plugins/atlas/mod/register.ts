@@ -21,12 +21,12 @@ import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
-import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
+import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
 import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDeps } from './discipline';
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
-import { isOlder, mergeToasts, registerNotify, stateToast } from './notify';
+import { isOlder, registerNotify } from './notify';
 import { forgetPlaced, placeFinished } from './transcript/placed';
 import { EASE_FRAMES, EASE_MS, SPINNER_MS, type Ui } from './atlas-ui';
 import { clearLook, lookOf } from './look';
@@ -916,21 +916,14 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	});
 }
 
-/** Toasts for what moved since the last read: new verdicts, workers whose offload finished. The first read toasts nothing.
- * State first, then the name, then one fact (notify.ts stateToast), merged into one toast per read (mergeToasts). */
-function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null, ui: Ui): void {
+/** What moved since the last read: a refuted verdict plays its sound. No host toast for a verdict or an offload that finished (critique 16 C2: the host box over
+ * the transcript came back in the stop runs); the core tab says it. The first read does nothing. */
+function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null): void {
 	if (seen === null) return;
-	const texts: string[] = [];
 	for (const v of m.verdicts) {
 		if (seen.has(`${v.id}:${v.status}`)) continue;
-		if (v.status === 'rejected') {
-			texts.push(stateToast('failed', v.id, `refuted: ${v.title}`, ui));
-			if (soundOn()) void $.audio.play({ asset: 'mod/fx/fail.wav' }).catch(() => {});
-		} else texts.push(v.status === 'verified' ? stateToast('done', v.id, `verified: ${v.title}`, ui) : stateToast('waiting', v.id, 'needs evidence', ui));
+		if (v.status === 'rejected' && soundOn()) void $.audio.play({ asset: 'mod/fx/fail.wav' }).catch(() => {});
 	}
-	for (const w of m.offload.workers) if (w.finished && !coreFinished[w.name]) texts.push(stateToast('done', w.name, `${tok(w.kept)} kept, ${tok(w.returned)} back`, ui));
-	const toast = mergeToasts(texts);
-	if (toast) $.ui.toast(toast);
 }
 
 /** MUX_MS tick (interactive sessions, never from a render): rebuild the core, toast what moved, store it when it changed. */
@@ -940,7 +933,7 @@ export async function coreTick($: EngineInterface): Promise<void> {
 		const built = await buildCore($);
 		if (built === null) return;
 		const first = coreSeen === null;
-		coreToasts($, built, coreSeen, (await lookOf($)).ui);
+		coreToasts($, built, coreSeen);
 		if (coreFindingsOk) coreSeen = new Set(built.verdicts.map((v) => `${v.id}:${v.status}`)); // a missing findings.json keeps the seen set
 		coreFinished = Object.fromEntries(built.offload.workers.map((w) => [w.name, w.finished]));
 		const model = hasCore(built) ? built : null;

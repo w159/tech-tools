@@ -20,17 +20,17 @@ describe('motion-demo frames', () => {
       expect(names).toContain(`${s}-00-running.ans`);
       expect(names).toContain(`${s}-99-done.ans`);
       expect(names).toContain(`${s}-strip.ans`);
-      expect(names.filter((n) => /-t\d{4}ms\.ans$/.test(n))).toHaveLength(MOTION_MS / MOTION_STEP_MS + 1);
+      expect(names.filter((n) => /-t\d{4}ms\.ans$/.test(n))).toHaveLength(MOTION_MS / MOTION_STEP_MS); // the frame at MOTION_MS is the rest: it is the `99-done` file, never repeated as a ramp frame
     }
   });
-  test('the window moves: at least 3 distinct frames, the glyph pops, and the last frame is the resting done row byte for byte', () => {
+  test('the window moves: at least 3 distinct frames, the glyph pops, and the last ramp frame is not the resting done row (no repeat)', () => {
     for (const s of ['todo', 'agent']) {
       const frames = Object.keys(files).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => files[n]!);
       expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
       const row = (f: string): string => plain(f).trimEnd().split('\n').at(-1)!;
       expect(row(frames[0]!)).toContain('◌'); // the dotted ring: no state's own mark, no bar track, and not the host's `·` separator
       for (const f of frames) expect(['◇', '◆'].some((g) => row(f).includes(g))).toBe(false); // queued and the capsule keep their glyphs
-      expect(frames.at(-1)).toBe(files[`${s}-99-done.ans`]);
+      expect(frames.at(-1)).not.toBe(files[`${s}-99-done.ans`]);
       expect(plain(files[`${s}-99-done.ans`]!)).toContain('●');
       expect(plain(files[`${s}-00-running.ans`]!)).toContain('◐');
     }
@@ -41,9 +41,8 @@ describe('motion-demo frames', () => {
       for (const s of ['todo', 'agent']) {
         const steps = Object.keys(all).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => all[n]!);
         const rest = all[`${s}-99-done.ans`]!;
-        const ramp = steps.slice(0, -1); // t=0, 200, 400: the beats; the frame at 600 ms is the rest
+        const ramp = steps; // t=0, 200, 400, 600: the beats; the rest is the file after them
         expect(ramp).toHaveLength(MOTION_MS / MOTION_STEP_MS);
-        expect(steps.at(-1)).toBe(rest);
         expect([color, s, new Set([...ramp, rest]).size]).toEqual([color, s, ramp.length + 1]); // no duplicate, and none equals the rest
       }
     }
@@ -105,7 +104,8 @@ describe('the demo draws what the live HUD draws', () => {
       expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
       // critique 10: no step of the ramp repeats the one before it, until the row is at rest (the resting frame is the last file)
       const rest = f256[`${s}-99-done.ans`]!;
-      const ramp = frames.slice(0, frames.findIndex((f) => f === rest));
+      const ramp = frames; // every ramp frame; the rest is its own file
+      expect(ramp).not.toContain(rest);
       expect(ramp.length).toBeGreaterThanOrEqual(2); // two palette steps, then the resting render
       for (let i = 1; i < ramp.length; i++) expect([s, i, ramp[i] === ramp[i - 1]]).toEqual([s, i, false]);
     }
@@ -122,7 +122,7 @@ describe('critique 14: the 600 ms frame is still the ramp', () => {
         const at = (ms: number): string => all[`${s}-${String(ms / MOTION_STEP_MS + 1).padStart(2, '0')}-t${String(ms).padStart(4, '0')}ms.ans`]!;
         expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, false]);
         expect([color, s, at(600) === at(400)]).toEqual([color, s, false]);
-        for (let ms = 200; ms <= MOTION_MS; ms += MOTION_STEP_MS) expect([color, s, ms, at(ms) === at(ms - MOTION_STEP_MS)]).toEqual([color, s, ms, false]);
+        for (let ms = 200; ms < MOTION_MS; ms += MOTION_STEP_MS) expect([color, s, ms, at(ms) === at(ms - MOTION_STEP_MS)]).toEqual([color, s, ms, false]);
       }
     }
   });
@@ -140,7 +140,8 @@ describe('critique 11 C1: the ramp is held long enough to be seen', () => {
       for (const s of ['todo', 'agent']) {
         const frames = Object.keys(f).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => f[n]!);
         const rest = f[`${s}-99-done.ans`]!;
-        const ramp = frames.slice(0, frames.findIndex((x) => x === rest));
+        const ramp = frames;
+        expect([color, s, ramp.includes(rest)]).toEqual([color, s, false]);
         expect([color, s, ramp.length]).toEqual([color, s, ramp.length >= 2 ? ramp.length : 'short']);
         for (let i = 1; i < ramp.length; i++) expect([color, s, i, ramp[i] === ramp[i - 1]]).toEqual([color, s, i, false]);
       }

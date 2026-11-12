@@ -18,14 +18,15 @@ const uiOf = (color: Ui['color']): Ui => ({ ...uiFromEnv({}), color });
 /** The demo agent's name (the spinner phase and the row key derive from it). */
 export const DEMO_AGENT = 'implementer-band';
 const NAME = DEMO_AGENT;
-const TODO = (state: 'running' | 'done', now: number): TodoItem => ({
-  id: 't1', content: 'wire the gate', status: state === 'done' ? 'completed' : 'in_progress', owner: NAME, ...(state === 'done' ? { evidence: 'tests green', completed_at: now / 1000 } : { claimed_at: now / 1000 - 72 }),
+/** The TODO strip's third column is the owner in every frame (critique 16: `implementer-band` then `tests green` read as two columns); only the agent strip carries the outcome, in its LAST column. */
+const TODO = (state: 'running' | 'done', now: number, outcome = false): TodoItem => ({
+  id: 't1', content: 'wire the gate', status: state === 'done' ? 'completed' : 'in_progress', owner: NAME, ...(state === 'done' ? { ...(outcome ? { evidence: 'tests green' } : {}), completed_at: now / 1000 } : { claimed_at: now / 1000 - 72 }),
 } as TodoItem);
 const AGENT = (state: 'running' | 'done', now: number): HudAgent => ({ name: NAME, role: 'implementer', state: state === 'done' ? 'done' : 'working', model: 'opus', ...(state === 'running' ? { tool: 'read', target: 'runs.ts:17' } : { since: now, lastLine: 'read runs.ts:17' }) }); // a finished agent's LAST column turns to the outcome of the plan row it owns (critique 14)
 
 type Shown = 'running' | 'done';
 /** The HUD input of a surface: `todo` shows the plan row, `agent` the Subagents row. */
-export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number): HudInput => (surface === 'todo' ? { todos: [TODO(state, now)], agents: [] } : { todos: [TODO(state, now)], agents: [AGENT(state, now)] }); // the agent owns the plan row: its done LAST column is the outcome that row carries
+export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number): HudInput => (surface === 'todo' ? { todos: [TODO(state, now)], agents: [] } : { todos: [TODO(state, now, true)], agents: [AGENT(state, now)] }); // the agent owns the plan row: its done LAST column is the outcome that row carries
 const FEED = { 'todo': 'hud-todo', 'agent': 'hud-agents' } as const;
 
 /** File name -> text of every frame of both rows, for colour depth `color` (default truecolor). */
@@ -48,7 +49,7 @@ export function demoFrames(cols = 100, step = MOTION_STEP_MS, color: Ui['color']
     };
     frame('running', `${surface}-00-running.ans`, 'running', 0, undefined);
     let n = 1;
-    for (let dt = 0; dt <= MOTION_MS; dt += step) frame(`t=${String(dt).padStart(3, '0')}ms`, `${surface}-${String(n++).padStart(2, '0')}-t${String(dt).padStart(4, '0')}ms.ans`, 'done', 1000 + dt, m.ctx(1000 + dt));
+    for (let dt = 0; dt < MOTION_MS; dt += step) frame(`t=${String(dt).padStart(3, '0')}ms`, `${surface}-${String(n++).padStart(2, '0')}-t${String(dt).padStart(4, '0')}ms.ans`, 'done', 1000 + dt, m.ctx(1000 + dt));
     frame('done', `${surface}-99-done.ans`, 'done', 1000 + MOTION_MS, undefined);
     put(`${surface}-strip.ans`, strip);
   }
