@@ -88,11 +88,15 @@ Terms used below: a "colony" is the set of named worker subagents a lead session
 Every image below is a real capture of the installed plugin, taken from a tmux
 session or the browser.
 
-**Mission Control band.** The band above the prompt leads with one of four
-states (`◐ working 0:42`, `● done · 1:08`, `○ idle · last run 1:08`,
-`▲ blocked · needs: close dispatch T2`), then `todo N/M`, the running agents and,
-when a gate fails, a `△ 2 gates to check` segment. Set `ATLAS_BAND_RICH=1` for the
-tall form with the phase rail. The HUD below it draws the TODO and SUBAGENTS boxes.
+**Mission Control band.** The band is the first row above the prompt. It leads
+with one of four states (`⠋ working 0:42`, `● done · 1:08`,
+`○ idle · last run 1:08`, `▲ blocked · needs: close dispatch T2`), then
+`todo N/M`, the running agents and, when a gate fails, a `△ 2 gates to check`
+segment. The `⠋` is a braille spinner that steps every 100 ms. The run clock
+starts at your prompt and stops when Claude Code reports its turn idle. Set
+`ATLAS_BAND_RICH=1` for the tall form with the phase rail. The HUD under the band
+draws the TODO and SUBAGENTS boxes: closed rounded boxes, with SUBAGENTS as a
+table of `AGENT STATE MODEL TASK LAST RESULT` (MODEL from 120 columns).
 
 ![Band with two running workers](img/showcase/cc-band-running.png)
 
