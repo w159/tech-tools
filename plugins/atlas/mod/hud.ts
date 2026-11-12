@@ -146,17 +146,24 @@ export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'las
   return call || rel(flat(a.lastLine));
 }
 
+/** The one LAST text of an agent, for the HUD row and the team tab: a finished worker's is its outcome (critique 12: `tests green` beside `read runs.ts:17`): the evidence its plan
+ * or dispatch row carries (a bare `ran 03:10` is a duration, not an outcome); with none, a finished worker that made calls reports `report returned`, never its last tool call
+ * (critique 14), and its closing line stays when it made no call. A live or failed worker's is its current (else last) call, in plain words (critique 16: the HUD said
+ * `read util.py` and the team tab `failed` for one agent). `evidence`: the evidence of every row the agent owns, plan rows first. */
+export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, state: UiState, evidence: readonly (string | null | undefined)[], root?: string | null): string {
+  const outcome = state === 'done' ? flat(evidence.find((e) => flat(e) && !/^ran\s+[\d:]+$/.test(flat(e)))) : '';
+  return outcome || (state === 'done' && a.lastTool ? 'report returned' : lastAction(a, root));
+}
+
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
+  const plan = todos.filter(isPlanItem); // T-numbers count plan rows; the hook's dispatch row of a worker holds its report, which is the outcome a finished row shows
   const rows = agents.map((a): AgentRow => {
-    const owned = todos.filter((t) => t.owner === a.name || (a.key !== undefined && t.owner === a.key));
-    const tasks = todos.flatMap((t, i) => (t.owner === a.name || (a.key !== undefined && t.owner === a.key) ? [i + 1] : []));
+    const mine = (t: TodoItem): boolean => t.owner === a.name || (a.key !== undefined && t.owner === a.key);
+    const owned = [...plan.filter(mine), ...todos.filter((t) => !isPlanItem(t) && mine(t))];
+    const tasks = plan.flatMap((t, i) => (mine(t) ? [i + 1] : []));
     const state = a.ui ?? workerUiState(a.state);
-    // A finished worker's LAST column is its outcome, as its done plan row switches to one (critique 12: `tests green` beside `read runs.ts:17`): the evidence
-    // its plan row carries; the last call when it left none (its free-text closing line is never shown: critique 8).
-    const outcome = state === 'done' ? flat(owned.find((t) => flat(t.evidence) && !/^ran\s+[\d:]+$/.test(flat(t.evidence)))?.evidence) : ''; // a bare `ran 03:10` is a duration, not an outcome
-    // With none, a finished worker that made calls reports `report returned`: an outcome, never its last tool call (critique 14: `read alpha.py` beside `done`). Its closing line, when it made no call, stays.
-    const last = outcome || (state === 'done' && a.lastTool ? 'report returned' : lastAction(a, root));
+    const last = lastOf(a, state, owned.map((t) => t.evidence), root);
     return { name: a.name, id: a.key ?? a.name, state, model: shortModel(a.model), tasks, tool: last, ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
   });
   const sorted = sortAgents(rows);
@@ -172,8 +179,10 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   // The finished wave lingers as one: while its newest member is within LINGER_MS every done agent shows, so the header count and the rows keep matching the band.
   const newestDone = input.agents.reduce((n, a) => (a.state === 'done' && a.since !== undefined ? Math.max(n, a.since) : n), -Infinity);
   const waveLingers = opts.now !== undefined && opts.now - newestDone <= LINGER_MS;
-  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && waveLingers));
-  const agents = shown.length > 0 ? agentModel(shown, plan, input.root) : [];
+  // A failed agent is kept until cleared, and the wave it belonged to stays with it: the final block lists the done siblings too, so its count matches the route's (critique 16: `1 failed` over `2 done ■ 1 failed`).
+  const anyFailed = input.agents.some((a) => a.state === 'failed');
+  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && (waveLingers || anyFailed)));
+  const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {

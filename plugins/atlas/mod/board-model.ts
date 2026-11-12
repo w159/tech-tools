@@ -59,7 +59,7 @@ export function itemState(status: string, ownerState?: UiState): UiState {
   const own = stateOfStatus(status);
   if (own === 'done') return own;
   if (own === 'queued' && ownerState === 'running') return 'running'; // the owner is at work: a row still reading queued says running
-  if (ownerState === 'failed') return 'failed';
+  if (ownerState === 'failed') return status === 'blocked' ? 'blocked' : 'failed'; // the lead's own `blocked` is its word for the row (critique 16: T2 blocked read failed); the killed agent keeps its own failed row
   if (ownerState === 'waiting' || ownerState === 'blocked') return 'blocked';
   return own;
 }
@@ -127,7 +127,7 @@ function foldBoard(items: readonly BoardSource[]): { rows: BoardSource[]; folded
     count++;
     if (!finished(d.status)) open++;
     if (finished(p.status)) continue;
-    const pick = (FOLD_RANK[d.status] ?? 0) > (FOLD_RANK[p.status] ?? 1) ? foldStatus(d.status) : p.status;
+    const pick = p.status !== 'blocked' && (FOLD_RANK[d.status] ?? 0) > (FOLD_RANK[p.status] ?? 1) ? foldStatus(d.status) : p.status; // a plan row the lead marked blocked stays blocked under a failed dispatch row
     folded[at] = { ...p, status: pick, claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
   }
   return { rows: [...folded, ...alone], folded: count, open };

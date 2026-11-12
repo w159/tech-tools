@@ -460,7 +460,7 @@ function workerRows(m: PanelModel, w: PanelWorker, nameW: number, focus: boolean
   const runs = gridRow({
     cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name),
     name: { t: nameOf(w), bold: true }, nameW, gap: 2,
-    word: { t: w.state, tone: w.state === 'failed' ? 'bad' : w.state === 'blocked' ? 'warn' : 'sub' }, wordW: wide ? 12 : 10, tail,
+    word: { t: w.state, tone: rowWordTone(w.state) }, wordW: wide ? 12 : 10, tail, // the one word tone of every surface (atlas-ui rowWordTone)
   });
   const out = [line(fitRuns(moving(runs, key, w.state, m), m.cols), { kind: 'worker', key, name: w.name })];
   if (m.expanded === key) {

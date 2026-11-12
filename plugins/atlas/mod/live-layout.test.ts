@@ -173,8 +173,10 @@ describe('5. the plan row budget and the overflow row', () => {
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
     const rows = hudLines(input, view(88, 8)).map(runsString);
     const more = rows.find((r) => /\d+ more todos?/.test(r))!;
-    expect(more.trim()).toMatch(/^\d+ more todos? not shown$/);
+    expect(more).toMatch(/▸ TODO ━+ 0\/5 · \d+ more todos? not shown ━+/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
+    const planRows = rows.filter((r) => /T\d /.test(r) && !r.includes('haiku')).length;
+    expect(planRows + Number(/(\d+) more/.exec(more)![1])).toBe(5); // every slot holds a row: shown plus counted is the whole plan
   });
   test('a plan longer than five still keeps its window and counts the rest', () => {
     const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));
@@ -196,7 +198,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   test('the band at the live budget spends rows on blanks while the plan is cut', () => {
     const cap = hudBudget(budget, hudCompactRows(hudIn, 88), 7, true);
     const first = draw(cap);
-    expect(first.map(runsString).some((r) => /\d+ more todos not shown/.test(r))).toBe(true); // the defect
+    expect(first.map(runsString).some((r) => /\d+ more todos? not shown/.test(r))).toBe(true); // the defect
     expect(bandSpareRows(bandModel(budget - first.length))).toBeGreaterThan(0);
   });
   test('reclaimBlanks shows every plan row once the blanks are handed over, and the band loses only blanks', () => {

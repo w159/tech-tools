@@ -58,9 +58,9 @@ export function stateCounts(states: readonly UiState[]): string {
 const PRIORITY = Object.fromEntries(COUNT_ORDER.map((s, i) => [s, i])) as Record<UiState, number>;
 
 /** The `slots` rows to draw, in their own order, and how many were left out. `slots` includes the overflow row when something is hidden. */
-export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: readonly T[], slots: number | undefined, now?: number): { shown: T[]; hidden: number } {
+export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: readonly T[], slots: number | undefined, now?: number, overflowRow = true): { shown: T[]; hidden: number } {
   if (slots === undefined || slots >= rows.length) return { shown: [...rows], hidden: 0 };
-  const keep = Math.max(0, slots - 1);
+  const keep = overflowRow ? Math.max(0, slots - 1) : slots; // `overflowRow` false: the count of the rest rides the ribbon, so every slot holds a row
   const fresh = (r: T): boolean => r.state === 'done' && now !== undefined && r.doneAt !== undefined && now - r.doneAt <= LINGER_MS;
   const rank = (r: T): number => (fresh(r) ? PRIORITY.running : PRIORITY[r.state]);
   const ranked = rows.map((row, i) => ({ row, i })).sort((a, b) => rank(a.row) - rank(b.row) || (a.row.state === 'done' ? (b.row.doneAt ?? 0) - (a.row.doneAt ?? 0) || b.i - a.i : a.i - b.i));
@@ -79,15 +79,17 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const tier = tierOf(cols);
   const rich = isRich(o);
   const done = rows.filter((r) => r.state === 'done').length;
-  const out: Run[][] = [ribbon(cols, 'TODO', planFigure(done, rows.length, rows.filter((r) => r.word === RETURNED).length), ui)]; // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
-  if (b.cap === 0) return out;
+  const figure = planFigure(done, rows.length, rows.filter((r) => r.word === RETURNED).length); // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
+  if (b.cap === 0) return [ribbon(cols, 'TODO', figure, ui)];
+  // Every slot holds a row: what does not fit is counted on the ribbon, not on a row of its own (critique 16: `3 more todos not shown` under 2 drawn rows, with room for a third).
+  const { shown, hidden } = windowRows(rows, b.cap, o.now, false);
+  const forms = hidden > 0 ? [`${figure} · ${hidden} more ${hidden === 1 ? 'todo' : 'todos'} not shown`, `${figure} · +${hidden} more`, figure] : [figure];
+  const out: Run[][] = [forms.map((f) => ribbon(cols, 'TODO', f, ui)).find((r) => runsCells(r) <= cols) ?? ribbon(cols, 'TODO', '', ui)];
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
   const stateAt = todoStateAt(rows, o, tier, rich);
   const metaAt = stateAt + 14;
-  const { shown, hidden } = windowRows(rows, b.cap, o.now);
   for (const r of shown) out.push(todoRow(r, o, tier, rich, stateAt, metaAt));
-  if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'todo' : 'todos'));
   return out;
 }
 
@@ -167,6 +169,10 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   return out;
 }
 
+/** The short form of an outcome that does not fit the LAST column whole: a lone leading word with `...` (`report...`, `read...`) says nothing (critique 16: LAST cut to `read...` at 110). */
+const SHORT_LAST: Readonly<Record<string, string>> = { 'report returned': 'reported' };
+const lastFor = (text: string, room: number): string => (cells(text) > room && SHORT_LAST[text] !== undefined ? SHORT_LAST[text]! : text);
+
 const TASK_W = 5; // `T1,T2`: the task column's width when every agent's ids fit
 /** Every owned id (`T1,T2`) when they fit `width`, else the count (`3 tasks`); an agent that owns none shows nothing. */
 export const taskCell = (tasks: readonly number[], width: number = TASK_W): string => {
@@ -239,13 +245,14 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   const cell = (text: string, at: number | undefined, width: number, words = false): void => {
     if (text === '' || at === undefined) return;
     const room = Math.max(1, Math.min(width, cols - at));
-    const shown = words ? clipWords(flat(text), room) : clip(flat(text), room);
+    const cut = words ? clipWords(flat(text), room) : clip(flat(text), room);
+    const shown = words && /^\S{1,6}\.\.\.$/.test(cut) && /\s/.test(flat(text)) ? '' : cut; // a short bare verb and `...` of a longer text (`read...`, `report...`) is no information: draw nothing
     if (shown !== '') row = [...toCol(row, at), t(shown, 'sub')];
   };
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
   cell(r.model, plan.model, plan.modelW);
   if (!rich) cell(taskText(r), plan.task, plan.taskW, true);
-  cell(lastText(r.tool), plan.last, cols, true);
+  cell(lastFor(lastText(r.tool), plan.last === undefined ? 0 : cols - plan.last), plan.last, cols, true);
   return row;
 }
 
@@ -292,7 +299,7 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
   const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
   tries.push({ spacers: false, extras: false, header: false }); // the column-name row is the first row dropped: it never costs the plan a row or the band its summary row
-  for (let cap = n - 1; cap >= 0; cap--) if (cap !== 1) tries.push({ spacers: false, extras: false, todoCap: cap, header: false });
+  for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap, header: false }); // a cap is a count of rows: the rest is counted on the ribbon
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).
   tries.push({ spacers: false, extras: false, hideTodo: true });
   for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, agentCap: cap });
