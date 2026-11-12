@@ -149,7 +149,7 @@ describe('row budget never hides rows silently', () => {
       const rows = text(fitStack({ todos, agents: worldAgents() }, opts(120), h));
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => / Item \d+/.test(l)).length;
-      const hidden = Number(/\+(\d+) more/.exec(rows.join("\n"))?.[1] ?? 0) + Number(/TODO .*· (\d+) done/.exec(rows[0] ?? '')?.[1] ?? 0); // finished rows fold into `N done` (critique 17 B4)
+      const hidden = Number(/\+(\d+) more/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) + Number(/TODO .*· (\d+) done/.exec(rows[0] ?? '')?.[1] ?? 0); // finished rows fold into `N done` (critique 17 B4)
       if (rows.some((l) => l.includes('TODO') && !l.includes('SUBAGENTS')) && (shown > 0 || hidden > 0)) expect(shown + hidden).toBe(30);
     }
   });
@@ -337,7 +337,8 @@ describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
     expect(blank.filter((l) => l.includes('queued')).length).toBe(3);
     const bare = at(9); // then the closing rules; every plan row, the names and both agents stay
     expect(bare.length).toBeLessThanOrEqual(9);
-    expect([tops(bare), bottoms(bare)]).toEqual([2, 0]);
+    expect([tops(bare), bottoms(bare)]).toEqual([0, 0]); // the rules go from both boxes together, and the ribbons lose their corners with them
+    expect(bare.filter((l) => l.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(l))).toHaveLength(2);
     expect(names(bare)).toBe(true);
     expect(bare.filter((l) => l.includes('queued')).length).toBe(3);
     expect(bare.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);

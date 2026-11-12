@@ -176,7 +176,7 @@ describe('5. the plan row budget and the overflow row', () => {
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
     const rows = hudLines(input, view(88, 8)).map(runsString);
     const more = rows.find((r) => /\+\d+ more/.test(r))!;
-    expect(more).toMatch(/▸ TODO {2}0\/5 · \+\d+ more ▱+ ─+╮/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
+    expect(more).toMatch(/▸ TODO {2}0\/5 · \+\d+ more ▱+ ─+$/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
     const planRows = rows.filter((r) => PLAN_ROW.test(r)).length;
     expect(planRows + Number(/(\d+) more/.exec(more)![1])).toBe(5); // every slot holds a row: shown plus counted is the whole plan

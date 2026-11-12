@@ -10,17 +10,20 @@ import { runsCells, runsString, type Run, type Ui, type UiState } from './atlas-
 import { boardBody, boardMotionItems, type BoardRow } from './board-model';
 import { hudLines, hudMotionItems, type HudInput } from './hud';
 import { bandLines, bandMotionItems } from './mission-layout';
-import { Motion, MOTION_MS, type MotionCtx, type MotionItem } from './motion';
+import { Motion, sinceChange, windowOf, type MotionCtx, type MotionItem } from './motion';
 import { bodyLines, panelMotionItems, type PanelModel } from './panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const T0 = 1000;
-const DTS = [0, 100, 200, 300] as const;
+// Time into the ease of the four frames: every case here turns a row done except the band count, and a done mark holds its first beat (DONE_HOLD_MS), so the frames are beats, not clock ticks.
+const EASE = [0, 200, 400, 600] as const;
+const atEase = (c: { done?: boolean }, ease: number): number => T0 + (c.done === false ? ease : sinceChange('done', ease));
+const endOf = (c: { done?: boolean }): number => (c.done === false ? 800 : windowOf({ state: 'done' }));
 
 /** Every run with the colour it is painted in: two frames that differ here differ on screen. */
 const shot = (rows: readonly (readonly Run[])[]): string => rows.map((r) => r.map((x) => `${x.fg ?? x.tone}${x.bg ?? ''}${x.bold ? 'b' : ''}${x.strike ? 's' : ''}|${x.t}`).join('')).join('\n');
 
-type Case = { name: string; surface: string; before: () => MotionItem[]; after: () => MotionItem[]; render: (m: MotionCtx | undefined) => Run[][] };
+type Case = { done?: false; name: string; surface: string; before: () => MotionItem[]; after: () => MotionItem[]; render: (m: MotionCtx | undefined) => Run[][] };
 
 function check(c: Case): void {
   test(`${c.name}: a state change draws at least 3 distinct in-between frames; the end is the resting render`, () => {
@@ -29,13 +32,13 @@ function check(c: Case): void {
     mo.observe(c.surface, c.after(), T0);
     expect(mo.animating(T0)).toBe(true);
     const resting = c.render(undefined);
-    const frames = DTS.map((dt) => shot(c.render(mo.ctx(T0 + dt))));
+    const frames = EASE.map((dt) => shot(c.render(mo.ctx(atEase(c, dt)))));
     expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
-    for (const dt of DTS) expect(c.render(mo.ctx(T0 + dt)).map((r) => runsCells(r))).toEqual(resting.map((r) => runsCells(r))); // colour and glyph move, no row changes width
+    for (const dt of EASE) expect(c.render(mo.ctx(atEase(c, dt))).map((r) => runsCells(r))).toEqual(resting.map((r) => runsCells(r))); // colour and glyph move, no row changes width
     expect(frames).not.toContain(shot(resting));
-    expect(shot(c.render(mo.ctx(T0 + MOTION_MS)))).toBe(shot(resting));
-    expect(JSON.stringify(c.render(mo.ctx(T0 + MOTION_MS + 5000)))).toBe(JSON.stringify(resting));
-    expect(mo.animating(T0 + MOTION_MS)).toBe(false);
+    expect(shot(c.render(mo.ctx(T0 + endOf(c))))).toBe(shot(resting));
+    expect(JSON.stringify(c.render(mo.ctx(T0 + endOf(c) + 5000)))).toBe(JSON.stringify(resting));
+    expect(mo.animating(T0 + endOf(c))).toBe(false);
   });
 }
 
@@ -69,14 +72,14 @@ describe('HUD rows', () => {
     expect(done).toContain('●');
     expect(done).not.toMatch(/[◌◍]/); // critique 21: the dotted rings read empty
     // the cursor and the bold label hold from t=0 through the fade (critique 21: the ▸ vanished at t=0, the bold dropped a step late), and fall together on the last beat
-    for (const dt of [0, 200, 399]) {
+    for (const dt of [0, 200, 999, 1000, 1399]) {
       const row = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + dt)))[moved[0]!]!;
       expect([dt, runsString(row).startsWith('▸ ●')]).toEqual([dt, true]);
       expect([dt, row.find((x) => x.t.includes('Subagents block'))!.bold]).toEqual([dt, true]);
       const next = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + dt)))[moved[1]!]!;
       expect([dt, next.find((x) => x.t.includes('Gate tests'))!.bold ?? false]).toEqual([dt, false]); // the next open row's focus waits for the fade
     }
-    const last = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + 600)));
+    const last = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + sinceChange('done', 600))));
     expect(runsString(last[moved[0]!]!).startsWith('▸')).toBe(false); // the cursor and the weight fall together on the last beat
     expect(last[moved[0]!]!.find((x) => x.t.includes('Subagents block'))!.bold ?? false).toBe(false);
     expect(last[moved[1]!]!.find((x) => x.t.includes('Gate tests'))!.bold).toBe(true);
@@ -125,7 +128,7 @@ describe('Board rows', () => {
     mo.observe('board', boardMotionItems(boardRows('queued')), 0);
     mo.observe('board', boardMotionItems(boardRows('done')), T0);
     const w = (rows: Run[][]): number[] => rows.map((r) => runsString(r).length);
-    for (const dt of DTS) expect(w(boardBody(boardRows('done'), { cols: 120, ui, motion: mo.ctx(T0 + dt) }).map((l) => l.runs))).toEqual(w(boardBody(boardRows('done'), { cols: 120, ui }).map((l) => l.runs)));
+    for (const dt of EASE) expect(w(boardBody(boardRows('done'), { cols: 120, ui, motion: mo.ctx(atEase({}, dt)) }).map((l) => l.runs))).toEqual(w(boardBody(boardRows('done'), { cols: 120, ui }).map((l) => l.runs)));
   });
 });
 
@@ -166,7 +169,7 @@ const bandAt = (running: number, m?: MotionCtx) => {
 };
 describe('band counts', () => {
   check({
-    name: 'band running count', surface: 'band',
+    name: 'band running count', surface: 'band', done: false,
     before: () => bandMotionItems(bandAt(2)), after: () => bandMotionItems(bandAt(1)),
     render: (m) => bandLines(bandAt(1, m)).map((l) => l.runs),
   });

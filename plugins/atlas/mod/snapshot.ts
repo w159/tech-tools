@@ -7,7 +7,7 @@ import type {
 } from './contract';
 import { boardRoot, leadChannelName } from './data/root';
 import { readCrew } from './data/crew';
-import { computeCounts, currentPhase, endedOf, groupTodos, readTodos, settleDispatch, type TodosCache, type TodosError } from './data/todos';
+import { computeCounts, currentPhase, dispatchOpen, endedOf, groupTodos, readTodos, settleDispatch, type TodosCache, type TodosError } from './data/todos';
 import { NoteReader, readRoster } from './data/channels';
 import { loadContract, loadPersonas } from './data/personas';
 import { deriveOrchestration, EMPTY_ORCH, type Orch, type WtRow } from './data/orchestration';
@@ -149,7 +149,7 @@ export class SnapshotBuilder {
     const squad = mergeSquad(this.members, notes, panes, [...crew.agents, ...live.taskAgents, ...(live.mux ?? [])], live.now);
     // S1: a dispatch row follows its worker, so the band count, the board and the side panel agree once the worker ends.
     const todos = settleDispatch(read.items, endedOf(squad, live.orch));
-    const phase = currentPhase(todos, live.headerPhase, this.sessionId);
+    const phase = currentPhase(todos, live.headerPhase, this.sessionId, dispatchOpen(todos, this.sessionId) || squad.some((a) => a.state === 'running' || a.state === 'spawning')); // nothing reads `done` while a dispatch row is open or a worker runs
     return {
       ...orchestrate(notes, squad),
       ...passthrough,

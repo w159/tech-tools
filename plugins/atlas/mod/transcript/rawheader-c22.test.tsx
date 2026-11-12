@@ -52,6 +52,6 @@ test('C22: every prefix of those lines, from `ATLAS |` on, is the chip on its fi
 
 test('C22: the chip is drawn with the raw header words gone: no `|` and no `● ` host bullet in the tree', () => {
   const text = flat(draw('ATLAS | ⛔ blocked | ghost-explorer stopped, T2 open\n\nghost-explorer was stopped before it read anything.'))
-  expect(text).toContain('BLOCKED')
+  expect(text).toContain('blocked')
   expect(text).not.toMatch(/ATLAS \||● ATLAS/)
 })

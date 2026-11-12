@@ -1,5 +1,4 @@
-// Layout regressions of a5fa582a (live captures): TODO rows folded while the slot had room, the SUBAGENTS header dropped, the band moving between rows, the panel
-// saying blocked before the band, `▲ blocked ... ▲ 1 blocked`, and `● 1 closed`.
+// Layout regressions of a5fa582a (live captures): TODO rows folded while the slot had room, the SUBAGENTS header dropped, the band moving between rows, `▲ blocked ... ▲ 1 blocked`, and `● 1 closed`.
 import { describe, expect, test } from 'claude-code/testing';
 import { runsString, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
@@ -8,7 +7,7 @@ import { hudLines, hudRunRows, hudWantRows, type HudAgent, type HudInput } from 
 import { bandLines, runsText, type MissionModel } from './mission-layout';
 import { bandRowCount } from './band';
 import { busySnap } from './live_fixture';
-import { BLOCKED_HOLD_MS, BLOCKED_REST, blockedShown, markBlocked, maskBlocked, slotHold } from './register';
+import { slotHold } from './register';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const todo = (id: string, content: string, status: string): TodoItem => ({ id, content, status });
@@ -74,27 +73,6 @@ describe('layout28 item 3b: the idle band has one height at every width', () => 
     const snapshot = busySnap({ squad: [], activity: {}, comms: [] });
     const rows = [60, 79, 80, 150].map((columns) => bandRowCount({ snapshot, live: [], gates: [], columns, tick: 0, maxRows: 12 }, true));
     expect(new Set(rows).size).toBe(1);
-  });
-});
-
-describe('layout28 item 4: the panel does not say blocked before the band can', () => {
-  test('a change shows the old state for BLOCKED_HOLD_MS and the new one after', () => {
-    let m = markBlocked(BLOCKED_REST, true, 1000);
-    expect(blockedShown(m, 1000)).toBe(false);
-    expect(blockedShown(m, 1000 + BLOCKED_HOLD_MS - 1)).toBe(false);
-    expect(blockedShown(m, 1000 + BLOCKED_HOLD_MS)).toBe(true);
-    expect(markBlocked(m, true, 1100)).toBe(m);
-    m = markBlocked(m, false, 5000);
-    expect(blockedShown(m, 5000)).toBe(true);
-    expect(blockedShown(m, 5000 + BLOCKED_HOLD_MS)).toBe(false);
-  });
-  test('maskBlocked puts back the last phase and a Stop verdict that reads allowed, and passes through when shown', () => {
-    const snap = { phase: 'blocked' };
-    const groups = [{ lines: [{ id: 'stop-verdict', label: 'Stop blocked', detail: 'x' as string | undefined }] }];
-    expect(maskBlocked(snap, groups, true, 'build').snapshot).toBe(snap);
-    const masked = maskBlocked(snap, groups, false, 'build');
-    expect(masked.snapshot.phase).toBe('build');
-    expect(masked.groups[0]!.lines[0]!.label).toBe('Last Stop allowed');
   });
 });
 

@@ -4,7 +4,7 @@
 // Why the display form exists (critique 23, 37 raw frames in 11 of 12 runs): while a reply streams, the host paints each flushed batch of whole lines itself and
 // does not ask `ui.render` for the message until it is complete (live-110-513bb41c-1 f0062-f0064: the raw `● ATLAS | 🔍 research | ...` row stands three 0.5 s frames
 // while the body streams under it, and the chip arrives at f0065). `MessageDisplay` is the one host event that sees those batches and may rewrite them for the screen
-// alone, so the first batch is rewritten to `▌ research 1/3 · state`: never a pipe, never an emoji. The stored message, the model and the Stop gate keep the contract form.
+// alone, so the first batch is rewritten to `research 1/3 · state`: never a pipe, never an emoji. The stored message, the model and the Stop gate keep the contract form.
 //
 // The chip itself is drawn from either form: no fill, a 1-cell bar in the phase colour, the phase word bold in body text, the state in the secondary grey.
 
@@ -17,14 +17,15 @@ export interface Lead { phase: PhaseId; count: string; sentence: string; first: 
 
 const PHASE_ALT = PHASES.join('|')
 const PHASE_IN_LINE = new RegExp(`\\b(${PHASE_ALT})\\b`)
-/** The display form: `▌ research 3/5 · state`. */
-const DISPLAY_RE = new RegExp(`^▌ (${PHASE_ALT})(?: (\\d+/\\d+))?(?: · (.*))?$`)
+/** The display form: `research 3/5 · state`, which the host paints after its own `●` bullet. The bar form `▌ research 3/5 · state` (what an earlier build wrote) is still read; the form with no bar needs the
+ * count or the ` · ` so that a plain first line that is only a phase word (`done`) is no header. */
+const DISPLAY_RE = new RegExp(`^(?:▌ (${PHASE_ALT})(?: (\\d+/\\d+))?(?: · (.*))?|(${PHASE_ALT})(?: (\\d+/\\d+)(?: · (.*))?| · (.*)))$`)
 
 /** The header the first line of `text` pins, in either form; null when the first line is neither. `pattern` is the contract's `headerFirstLinePattern`. */
 export function leadOf(text: string, pattern: string): Lead | null {
   const first = text.split('\n', 1)[0] ?? ''
   const shown = DISPLAY_RE.exec(first)
-  if (shown) return { phase: shown[1] as PhaseId, count: shown[2] ?? '', sentence: (shown[3] ?? '').trim(), first, form: 'display' }
+  if (shown) return { phase: (shown[1] ?? shown[4]) as PhaseId, count: shown[2] ?? shown[5] ?? '', sentence: (shown[3] ?? shown[6] ?? shown[7] ?? '').trim(), first, form: 'display' }
   if (pattern === '') return null
   let re: RegExp
   try { re = new RegExp(pattern) } catch { return null }
@@ -35,8 +36,9 @@ export function leadOf(text: string, pattern: string): Lead | null {
   return { phase: phase as PhaseId, count: /(\d+)\s*\/\s*(\d+)/.exec(mid)?.slice(1, 3).join('/') ?? '', sentence: tail.join('|').trim(), first, form: 'contract' }
 }
 
-/** `▌ research 3/5 · state`: the header as the host's own streaming row may show it (plain text: that row takes no colour). */
-export const displayLine = (l: Lead): string => `▌ ${l.phase}${l.count ? ` ${l.count}` : ''}${l.sentence ? ` · ${l.sentence}` : ''}`
+/** `research 3/5 · state`: the header as the host's own streaming row shows it (plain text: that row takes no colour). The host draws its own `●` before the row, so the line carries no bar of its own:
+ * `● ▌ research · waiting on 3 explorers` put two marks on one line (critique 27, live-150-46d4825c-1 f0065:23). */
+export const displayLine = (l: Lead): string => `${l.phase}${l.count ? ` ${l.count}` : ''}${l.sentence ? ` · ${l.sentence}` : ''}`
 
 /** A MessageDisplay batch with its first line rewritten from the contract form to the display form; null when the batch holds no header (or already the display form). */
 export function displayDelta(delta: string, pattern: string): string | null {
@@ -59,12 +61,12 @@ export const leadTone = (phase: PhaseId): 'accent' | 'ok' | 'bad' => (phase === 
 
 export interface LeadOpts { ui: Ui; columns: number; /** A done chip a Stop refusal overturned: the word is struck and quiet, and says why. */ superseded?: boolean; /** The previous header was this phase: no word, a quiet bar and the state. */ quiet?: boolean }
 
-/** The chip's row: `▌ RESEARCH 3/5 state`. No background. Under 40 columns the bar and the word only. */
+/** The chip's row: `▌ research 3/5 state`, the phase word in lower case like the band's. No background. Under 40 columns the bar and the word only. */
 export function leadRow(l: Lead, o: LeadOpts): RenderElement {
   const paint = (tone: 'accent' | 'ok' | 'bad' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: runHex({ tone }, o.ui.theme, o.ui.color) })
   const dead = o.superseded === true
   const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'sub' : leadTone(l.phase)) }, '▌')
-  const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${l.phase.toUpperCase()}`)
+  const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${l.phase}`)
   const count = l.count ? [txt({ ...fixed, ...paint('sub') }, ` ${l.count}`)] : []
   const state = l.sentence ? [txt({ wrap: 'wrap', ...paint('sub') }, ` ${l.sentence}`)] : []
   const narrow = o.columns > 0 && o.columns < 40

@@ -24,6 +24,18 @@ export const MOTION_STEP_MS = 200;
 /** A state change eases back to rest over this long: MAX_BEATS held steps, 800 ms. The frame sampled at 600 ms is still a beat of the ramp, so it differs from
  * the resting row (critique 14: with a 600 ms window the 600 ms frame equalled the final frame). */
 export const MOTION_MS = MAX_BEATS * MOTION_STEP_MS;
+/** The done mark holds its highlighted first state this long before the ease starts (critique 27: the 200 ms fade appeared in 0 of the live frames at a 500 ms capture period).
+ * At most one redraw per MOTION_FRAME_MS (10 a second) is spent on it: the hold is a frozen first beat, not more frames. */
+export const DONE_HOLD_MS = 1000;
+/** How long an entry's window lasts: the ease, and for a done mark the hold in front of it. */
+export const windowOf = (e: { state: string }): number => (e.state === 'done' ? MOTION_MS + DONE_HOLD_MS - MOTION_STEP_MS : MOTION_MS);
+/** The real time since the change at which `ease` ms of the ease have passed: the inverse of easedMs, so a sampler can step the beats of a done mark (the hold sits in front of beat 1). */
+export const sinceChange = (state: string, ease: number): number => (state === 'done' && ease >= MOTION_STEP_MS ? ease + DONE_HOLD_MS - MOTION_STEP_MS : ease);
+/** Time into the ease: 0 for the whole hold of a done mark (its first beat is held DONE_HOLD_MS, the later beats MOTION_STEP_MS each), real time since the change otherwise. */
+export const easedMs = (e: { state: string; changed: number }, now: number): number => {
+  const d = Math.max(0, now - e.changed);
+  return e.state === 'done' ? (d < DONE_HOLD_MS ? 0 : d - (DONE_HOLD_MS - MOTION_STEP_MS)) : d;
+};
 /** A new row reveals left to right over this long. */
 export const REVEAL_MS = 300;
 /** How far toward white the lead-in starts from the accent. */
@@ -58,7 +70,7 @@ export type Track = ReadonlyMap<string, Entry>;
 /** The track after seeing `items` at `now`. `prev` undefined is a first sight: every row is simply there (at rest). A key not seen before
  * is born now; a key whose state moved is changed now; a key that is gone is dropped. An unchanged track returns `prev` itself. */
 export function stepTrack(prev: Track | undefined, items: readonly MotionItem[], now: number): Track {
-  const rest = now - MOTION_MS;
+  const rest = now - (MOTION_MS + DONE_HOLD_MS);
   const next = new Map<string, Entry>();
   let same = prev !== undefined && prev.size === items.length;
   for (const it of items) {
@@ -73,7 +85,7 @@ export function stepTrack(prev: Track | undefined, items: readonly MotionItem[],
 /** Whether any entry of `track` is still inside its window at `now`. */
 export const trackBusy = (track: Track | undefined, now: number): boolean => {
   if (!track) return false;
-  for (const e of track.values()) if (now < e.changed + MOTION_MS || now < e.born + REVEAL_MS) return true;
+  for (const e of track.values()) if (now < e.changed + windowOf(e) || now < e.born + REVEAL_MS) return true;
   return false;
 };
 
@@ -149,7 +161,7 @@ export function mixHex(a: string, b: string, t: number): string {
 }
 
 /** Progress of the colour ease (0 at the change, 1 at rest) and of the reveal. */
-export const easeProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.changed) / MOTION_MS));
+export const easeProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, easedMs(e, now) / MOTION_MS));
 export const revealProgress = (e: Entry, now: number): number => Math.min(1, Math.max(0, (now - e.born) / REVEAL_MS));
 
 /** The glyph pop: a dotted ring, then a half-filled one, across the first two thirds of the window, then the state's own disc lands. No
@@ -299,12 +311,12 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
   if (pc >= 1 && pr >= 1) return runs;
   let out = runs;
   if (pc < 1) {
-    const beat = Math.max(0, Math.floor((ctx.now - e.changed) / MOTION_STEP_MS)); // one beat per held step: the staircase and the pop both step on it
+    const beat = Math.max(0, Math.floor(easedMs(e, ctx.now) / MOTION_STEP_MS)); // one beat per held step: the staircase and the pop both step on it
     if (ui.color !== 'none') {
       const palette = PALETTES[ui.theme];
       const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
       // The weight falls on the last beat (`weighted`): the colour holds the previous beat's mix then, so one frame never moves both (critique 18: bold dropped as the text stepped 151 to 146).
-      const t = easeOutCubic(beat >= MAX_BEATS - 1 ? easeProgress(e, e.changed + (beat - 1) * MOTION_STEP_MS) : pc);
+      const t = easeOutCubic(beat >= MAX_BEATS - 1 ? Math.min(1, Math.max(0, ((beat - 1) * MOTION_STEP_MS) / MOTION_MS)) : pc);
       const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '' && !calm.has(r));
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;

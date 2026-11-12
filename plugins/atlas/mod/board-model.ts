@@ -274,7 +274,7 @@ function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
   const word = o.doubtWord ? spelledWord(row) : plainWord(row);
   if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + (o.wordW ?? STATE_W) + 2), r(clipE(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
-  const stateCell = o.rich ? (row.word ? chip(word, row.word === RETURNED ? 'text' : markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word, doubt ? 'bad' : row.word === RETURNED ? 'dim' : 'text');
+  const stateCell = o.rich ? (row.word ? chip(word, row.word === RETURNED ? 'text' : markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word, doubt ? 'bad' : row.word === RETURNED ? 'sub' : 'text');
   const withState = to([...withLabel, stateCell], COL.owner);
   const owner = to([...withState, ...(row.owner ? [r(clipE(row.owner, OWNER_W), 'sub')] : [])], COL.detail);
   return [...owner, ...detailRuns(row, o, Math.max(0, o.cols - COL.detail - 1))];

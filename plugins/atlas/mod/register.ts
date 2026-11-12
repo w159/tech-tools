@@ -11,8 +11,8 @@ import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
 import { bandRowCount, bandSpareRows, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
-import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, ranSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
-import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudRunRows, hudWantRows, isRunning, reclaimBlanks, segmentOf } from './hud';
+import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
+import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudHoldRows, hudWantRows, isRunning, reclaimBlanks, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -1036,42 +1036,25 @@ let lastBeatMs = 0;
 let frameTimer: { cancel(): void } | null = null;
 let idleFlipped = true;
 
-// ---- the blocked flip, one frame for the band and the panel ---------------------------------------------------------------------
-// The side panel redraws on a write of the state it read at up to thirty a second, the AbovePrompt band at ten (index.d.ts, `$.ui.invalidate`: "ten a second at most, thirty in the terminal for a shown
-// pane"). Both read the same snapshot and gate groups, so a Stop refusal reached the panel up to a band frame before it reached the band (critique 25 and 26: `phase blocked` over a band that still read
-// `working`). The data cannot be made to reach the band sooner, so the panel is held back: it shows the state the band could already have drawn (BLOCKED_HOLD_MS is over one band redraw).
-export const BLOCKED_HOLD_MS = 250;
-/** `now`: the state in the data. `shown`: what the surfaces drew before it changed, kept for BLOCKED_HOLD_MS. `at`: when `now` last changed. */
-export type BlockedMark = { now: boolean; shown: boolean; at: number };
-export const BLOCKED_REST: BlockedMark = { now: false, shown: false, at: 0 };
-/** The blocked state as the panel may draw it: the data's once it has stood for BLOCKED_HOLD_MS, else the state before the change. */
-export const blockedShown = (m: BlockedMark, now: number): boolean => (now - m.at >= BLOCKED_HOLD_MS ? m.now : m.shown);
-/** The mark after a look at `blocked` at `now`: the same object while nothing changed. */
-export const markBlocked = (m: BlockedMark, blocked: boolean, now: number): BlockedMark => (m.now === blocked ? m : { now: blocked, shown: blockedShown(m, now), at: now });
-/** The snapshot and gate groups the panel draws while it must not yet say blocked: the rail's last phase for `blocked`, and a Stop verdict that reads allowed. Unchanged when it may. */
-export function maskBlocked<S extends { phase: string }, G extends { lines: readonly { id: string; label: string }[] }>(snapshot: S, groups: readonly G[], show: boolean, lastPhase: string | null): { snapshot: S; groups: readonly G[] } {
-	if (show) return { snapshot, groups };
-	const relabel = (g: G): G => (g.lines.some((l) => l.id === 'stop-verdict' && l.label.endsWith('blocked')) ? { ...g, lines: g.lines.map((l) => (l.id === 'stop-verdict' ? { ...l, label: 'Last Stop allowed', detail: undefined } : l)) } : g);
-	return { snapshot: snapshot.phase === 'blocked' && lastPhase !== null ? { ...snapshot, phase: lastPhase } : snapshot, groups: groups.map(relabel) };
-}
-let blockedMark: BlockedMark = BLOCKED_REST;
+// ---- the blocked flip ------------------------------------------------------------------------------------------------------------
+// The panel and the band read the same snapshot and gate groups, so a Stop refusal reaches both on the data's own write. An earlier build held the panel back for 250 ms and drew the rail's last phase
+// in the meantime (BLOCKED_HOLD_MS, maskBlocked): that drew a phase the snapshot did not hold, and with a finished plan it drew `done` over a band that read `working` (critique 27, stoprun-150-46d4825c-1
+// f0109:6 to f0114:6). The panel now draws the snapshot as it is; this only asks for one more redraw when the blocked state changes, since the panel is not otherwise drawn again when nothing else moves.
 let blockedDrawn = false;
-/** Test seam: forget the mark. */
-export const resetBlockedMark = (): void => { blockedMark = BLOCKED_REST; blockedDrawn = false; };
-/** Look at the blocked state (the snapshot's phase, the Stop verdict) and, when the panel's view of it changed, redraw (the panel is not otherwise drawn again when nothing else moves). Called on every beat, tick and poll. */
+/** Test seam: forget the last blocked state drawn. */
+export const resetBlockedMark = (): void => { blockedDrawn = false; };
+/** Look at the blocked state (the snapshot's phase, the Stop verdict) and redraw when it changed. Called on every beat, tick and poll. */
 async function observeBlocked($: EngineInterface): Promise<void> {
 	const snap = await read($, snapshotState);
 	if (!snap) return;
 	const gates = await gateGroups($);
 	const blocked = snap.phase === 'blocked' || gateTally(withCoreTally(gates, await read($, coreState))).stop?.blocked === true;
-	const now = await $.clock.now();
-	blockedMark = markBlocked(blockedMark, blocked, now);
-	const shown = blockedShown(blockedMark, now);
-	if (shown !== blockedDrawn) {
-		blockedDrawn = shown;
+	if (blocked !== blockedDrawn) {
+		blockedDrawn = blocked;
 		await update($, easeTickState, (n) => n + 1);
 	}
 }
+
 
 /** Atlas is working right now: the host turn is running, a worker is live, the lead is mid-turn on its own work, or a plan row runs. The one rule the tick and the band share. */
 export function isWorkingNow(snap: LiveSnapshot, host: boolean, hostIdle = false): boolean {
@@ -1361,7 +1344,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(ranSecsOf(runClock) !== undefined ? { ranSecs: ranSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
 		const want = hudWantRows(hudIn, columns, snapshot.now);
 		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed, want);
@@ -1388,9 +1371,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const blankRow = (): RenderElement => rowOf(els, [segmentOf({ t: ' '.repeat(columns), tone: 'text' }, look.ui)], columns);
 		const gapRow = hudGapRows(hudListsAgents(hud), hud.length, budget) > 0 ? [blankRow()] : [];
 		// One slot height for the whole run: the band sits at the top of a bottom-anchored slot, so a HUD that grows (the SUBAGENTS block appearing) or an idle row that goes would move it on screen.
-		const runOn = e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null);
+		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
 		const used = bandRowCount(bandIn(hud), true) + gapRow.length + hud.length;
-		slotHeld = hudOn && e.props.maxRows !== undefined ? slotHold(slotHeld, runOn, used, BAND_KEEP_ROWS + 1 + hudRunRows(hudIn, columns, snapshot.now), budget) : 0;
+		slotHeld = hudOn && e.props.maxRows !== undefined ? slotHold(slotHeld, runOn, used, BAND_KEEP_ROWS + 1 + hudHoldRows(hudIn, columns, snapshot.now, snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0), budget) : 0;
 		const pad = Array.from({ length: Math.max(0, slotHeld - used) }, blankRow);
 		return atlasSlot(els, { band, gapRow, hud: hud.map((r) => rowOf(els, r, columns)), pad, below: await next(e) });
 		} finally {
@@ -1415,12 +1398,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: paneFrame, now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
 			});
 		}
-		const paneNow = await $.clock.now();
-		const masked = maskBlocked(snapshot, await gateGroups($), blockedShown(blockedMark, paneNow), lastRailPhase); // the panel never says blocked before the band could (see BLOCKED_HOLD_MS)
 		return sidebarTree($.ui.resolve(e), {
-			snapshot: masked.snapshot,
+			snapshot,
 			look: look.ui,
-			gates: masked.groups as GateGroup[],
+			gates: await gateGroups($),
 			core: await read($, coreState),
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,

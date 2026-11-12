@@ -35,9 +35,9 @@ const DONE = 'ATLAS | 🏁 done | 5/5 board items complete'
 test('a header still streaming draws the bar from `ATLAS |`, then the phase word once it is whole', () => {
   const bar = text(assistantTree(snap, { text: 'ATLAS |' }, 100))
   expect(bar).toBe('▌')
-  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 do' }, 100))).not.toContain('DONE')
-  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 done | ' }, 100))).toContain('DONE')
-  expect(text(assistantTree(snap, { text: DONE }, 100))).toContain('DONE')
+  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 do' }, 100))).not.toContain('done')
+  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 done | ' }, 100))).toContain('done')
+  expect(text(assistantTree(snap, { text: DONE }, 100))).toContain('done')
 })
 
 test('a `⚑ DONE` chip a Stop refusal overturned is struck through and marked superseded; a fresh one is not', () => {
@@ -46,7 +46,7 @@ test('a `⚑ DONE` chip a Stop refusal overturned is struck through and marked s
   expect(walk(fresh).some((e) => e.props.strikethrough === true)).toBe(false)
   const dead = assistantTree(snap, { text: DONE }, 100, true)!
   expect(text(dead)).toContain('superseded')
-  expect(text(dead)).toContain('DONE') // the word stays readable
+  expect(text(dead)).toContain('done') // the word stays readable
   expect(walk(dead).some((e) => e.props.strikethrough === true)).toBe(true)
 })
 
