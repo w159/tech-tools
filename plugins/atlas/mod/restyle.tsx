@@ -5,6 +5,7 @@
 
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
+import operatingContract from '../contracts/operating-contract.json'
 import { BRAND } from './contract'
 import { PHASES } from './intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
@@ -16,7 +17,7 @@ import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
-import { hideNotification, placedTree } from './transcript/placed'
+import { cardAged, hideNotification, placedTree } from './transcript/placed'
 import { lookOf } from './look'
 import type { Outcome } from './transcript/outcome'
 
@@ -276,8 +277,12 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  *  `cache` holds the per-registration ATLAS_MOD read; registerRestyle owns one.
  *  ponytail: read once per registration (one per session); a mid-session flip
  *  to off is picked up on reload. */
+async function primeEnv($: EngineInterface, cache: { envOff?: boolean }): Promise<void> {
+ if (cache.envOff === undefined) cache.envOff = await $.env.get('ATLAS_MOD').then((v) => v === 'off', () => false)
+}
+
 async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<AtlasSnapshot | null> {
- if (cache.envOff === undefined) cache.envOff = (await $.env.get('ATLAS_MOD')) === 'off'
+ await primeEnv($, cache)
  if (cache.envOff) return null
  const snap = await read($, snapshotState)
  if (snap) noteHeaderPattern(snap.contract.headerFirstLinePattern)
@@ -287,7 +292,8 @@ async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<A
 /** The contract's header pattern as the last snapshot carried it. A header chip needs nothing else from the snapshot, so a new message draws from
  * this copy with no state read: the host paints a new message with its own row until the hook answers (critique 12 C1: 15 raw `● ATLAS | ...`
  * frames, one frame each, always the first draw of a message), and the `await read` was a whole round trip of that wait. */
-let headerPattern = ''
+const bundledPattern = (operatingContract as { headerFirstLinePattern?: string }).headerFirstLinePattern ?? '' // read from the contract file at load, not copied
+let headerPattern = bundledPattern
 export const noteHeaderPattern = (pattern: string | undefined): void => { if (pattern) headerPattern = pattern }
 export const forgetHeaderPattern = (): void => { headerPattern = '' }
 const patternSnap = (): AtlasSnapshot | null => (headerPattern === '' ? null : ({ contract: { headerFirstLinePattern: headerPattern } } as unknown as AtlasSnapshot))
@@ -321,12 +327,17 @@ export function registerRestyle(on: On): void {
   } catch { return next(e) }
  })
 
- on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-  try {
-   // Fast path: the mod is on (env read once) and the pattern is known, so the chip is decided with no host round trip.
-   const snap = cache.envOff === false ? (patternSnap() ?? (await ready($, cache))) : await ready($, cache)
+ // Critique 17 C1: the host paints a new message raw until this hook answers, and an async function answers a tick late even when it awaits nothing.
+ // With the env read primed (turn.start, Spinner, ToolUse) and the pattern loaded from the contract at module load, the answer is returned synchronously.
+ on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => {
+  const draw = (snap: AtlasSnapshot | null) => {
    if (snap && !e.props.isSummary) noteDrawn(snap, e.requestId, e.props.text)
    return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0) ?? next(e)) : next(e)
+  }
+  try {
+   const known = cache.envOff === false ? patternSnap() : null
+   if (known) return draw(known)
+   return ready($, cache).then(draw, () => next(e))
   } catch { return next(e) }
  })
 
@@ -341,6 +352,7 @@ export function registerRestyle(on: On): void {
  // it, so a new turn starts without one (the engine allows one un-matchered turn.start per module: this one).
  // ponytail: turn.start carries no loop id, so a subagent's turn start clears it too; the next answer restores it.
  on('turn.start', async ($, e, next) => {
+  await primeEnv($, cache) // so this turn's first AssistantMessage draw answers synchronously
   tracker.turnStart = await nowMs($)
   await update($, headerPhaseState, () => null).catch(() => undefined)
   return next(e)
@@ -364,8 +376,9 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
   try {
    if (e.props.isExpanded || e.props.origin?.kind === 'composer') return next(e)
-   if (!(await ready($, cache))) return next(e)
-   if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name))) ?? next(e)
+   const snap = await ready($, cache)
+   if (!snap) return next(e)
+   if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name), () => cardAged(`n-${e.requestId}`, snap.now))) ?? next(e)
    return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0) ?? next(e)
   } catch { return next(e) }
  })
@@ -374,7 +387,8 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'Placed' }, async ($, e, next) => {
   try {
    if (e.props.plugin !== 'atlas') return next(e)
-   return placedTree(e.props.id, (await lookOf($)).ui) ?? next(e)
+   const now = ((await read($, snapshotState)) as AtlasSnapshot | null)?.now ?? 0 // read while drawing: the card redraws as the snapshot's clock moves
+   return placedTree(e.props.id, (await lookOf($)).ui, cardAged(e.props.id, now)) ?? next(e)
   } catch { return next(e) }
  })
 }

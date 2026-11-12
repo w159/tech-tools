@@ -2,7 +2,7 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { animateRow, type MotionCtx } from './motion';
+import { animateRow, calmRun, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { planFigure } from './board-model';
 import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
@@ -242,16 +242,16 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.id ?? r.name)), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state, rowWordTone(r.state))];
   /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. */
-  const cell = (text: string, at: number | undefined, width: number, words = false): void => {
+  const cell = (text: string, at: number | undefined, width: number, words = false, still = false): void => {
     if (text === '' || at === undefined) return;
     const room = Math.max(1, Math.min(width, cols - at));
     const cut = words ? clipWords(flat(text), room) : clip(flat(text), room);
     const shown = words && /^\S{1,6}\.\.\.$/.test(cut) && /\s/.test(flat(text)) ? '' : cut; // a short bare verb and `...` of a longer text (`read...`, `report...`) is no information: draw nothing
-    if (shown !== '') row = [...toCol(row, at), t(shown, 'sub')];
+    if (shown !== '') row = [...toCol(row, at), still ? calmRun(t(shown, 'sub')) : t(shown, 'sub')]; // MODEL and TASK never change with the state: the motion leaves them be
   };
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
-  cell(r.model, plan.model, plan.modelW);
-  if (!rich) cell(taskText(r), plan.task, plan.taskW, true);
+  cell(r.model, plan.model, plan.modelW, false, true);
+  if (!rich) cell(taskText(r), plan.task, plan.taskW, true, true);
   cell(lastFor(lastText(r.tool), plan.last === undefined ? 0 : cols - plan.last), plan.last, cols, true);
   return row;
 }

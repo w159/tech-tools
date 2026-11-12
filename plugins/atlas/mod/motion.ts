@@ -90,17 +90,25 @@ export class Motion {
   }
 
   private stamped = 0;
-  /** The frame clock: the reading the driver took at its last tick. Every surface draws a frame from this one number (`ctx()` with no
-   * argument), so the HUD and the side panel are never a render apart: the same row is on the same beat of its transition in both. */
+  private shown = 0;
+  /** The driver's last reading of the clock. */
   stamp(now: number): void {
     this.stamped = now;
   }
+  /** Publish the stamped reading as the frame the surfaces draw. Done in step with the redraw it asks for (a frame, or a changed snapshot), never between: the
+   * HUD and the side panel render at different instants of one redraw, and a stamp that landed between the two put the panel a beat ahead (critique 17 C4:
+   * T3 `◍`/193 in the panel, `◌`/231 in the HUD, one frame). */
+  commit(): void {
+    this.shown = this.stamped;
+  }
+  /** The frame clock: the reading published at the last commit. Every surface draws a frame from this one number (`ctx()` with no
+   * argument), so the HUD and the side panel are never a render apart: the same row is on the same beat of its transition in both. */
   get frameAt(): number {
-    return this.stamped;
+    return this.shown;
   }
 
   /** The view a builder reads at `now` (default: the frame clock); undefined when motion is off, so builders return the resting render untouched. */
-  ctx(now: number = this.stamped): MotionCtx | undefined {
+  ctx(now: number = this.shown): MotionCtx | undefined {
     if (!this.enabled) return undefined;
     return { now, entry: (key) => { for (const t of this.tracks.values()) { const e = t.get(key); if (e) return e; } return undefined; } };
   }
@@ -267,6 +275,14 @@ export type AnimateOpts = {
  * (critique 12). Critique 16 (motion-e4a8186a/todo-strip.ans:4-7): bold that arrives on the LAST beats read 231, 193, bold 193, bold 151,
  * 151, a brightness pop at 400-600 ms; held from the first beat it falls with the colour instead. */
 const lift = (r: Run): Run => (r.bold !== true ? { ...r, bold: true } : r);
+/** The weight of a beat: held bold while the colour moves, and back to the row's own weight on the LAST beat of the window, so the rest frame changes
+ * colour at most and never weight (critique 17 C4: 231, 193, 151, 151 bold, then 151 plain, a weight pop at rest). */
+const weighted = (r: Run, beat: number): Run => (beat >= MAX_BEATS - 1 ? r : lift(r));
+
+/** Runs a row builder marked as not changing with the row's state (an agent's MODEL and TASK): `animateRow` leaves them at their tone, so a done row
+ * flashes only what the change touched (critique 17 C4: MODEL and TASK flashed 231 though they never change). Identity, so mark the run `animateRow` receives. */
+const calm = new WeakSet<Run>();
+export const calmRun = (r: Run): Run => { calm.add(r); return r; };
 
 const rampCache = new Map<string, readonly string[]>();
 /**
@@ -310,16 +326,16 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
       const palette = PALETTES[ui.theme];
       const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
       const t = easeOutCubic(pc);
-      const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '');
+      const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '' && !calm.has(r));
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;
         const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585b70') : palette[r.tone]);
         if (ui.color === '256') {
           const steps = ramp256(palette[markToken(accent)], rest, ui.theme, r.bold !== true);
           // No staircase for this pair: the row keeps its tone (the glyph pop still moves).
-          return steps.length ? lift({ ...r, fg: steps[Math.min(beat, steps.length - 1)]! }) : r;
+          return steps.length ? weighted({ ...r, fg: steps[Math.min(beat, steps.length - 1)]! }, beat) : r;
         }
-        return lift({ ...r, fg: mixHex(lead, rest, t) });
+        return weighted({ ...r, fg: mixHex(lead, rest, t) }, beat);
       });
     }
     if (o.pop !== false && accent === 'done' && e.state === 'done') {
@@ -363,10 +379,12 @@ export class MotionDriver {
     if (!this.motion.enabled) return;
     const now = await this.clock();
     this.motion.stamp(now);
-    if (source !== this.seen) {
+    const changed = source !== this.seen;
+    if (changed) {
       this.seen = source;
       for (const [surface, items] of Object.entries(await feed())) this.motion.observe(surface, items, now);
     }
+    if (changed || !this.timer) this.motion.commit(); // while a frame timer runs, only its frames publish the clock
     if (!this.motion.animating(now) || this.timer) return;
     this.timer = this.every(MOTION_FRAME_MS, () => void this.frame().catch(() => undefined));
   }
@@ -384,7 +402,8 @@ export class MotionDriver {
   private async frame(): Promise<void> {
     const now = await this.clock();
     const busy = this.motion.animating(now);
-    this.motion.stamp(now); // before the redraw: every surface the redraw touches reads this one reading
+    this.motion.stamp(now);
+    this.motion.commit(); // before the redraw: every surface the redraw touches reads this one reading
     await this.redraw();
     if (!busy) this.stop();
   }

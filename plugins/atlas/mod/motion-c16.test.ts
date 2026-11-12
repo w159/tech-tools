@@ -52,16 +52,44 @@ describe('critique 16 C5: the ramp falls and never pops', () => {
     for (const s of ['todo', 'agent']) {
       const frames = ramp(all, s);
       const rest = all[`${s}-99-done.ans`]!;
+      // Critique 17 C4: the weight falls on the LAST beat of the window, so the rest frame changes colour at most, never weight. In 24-bit colour that beat is
+      // still a step short of rest; in 256 colours the palette has no colour left between the last step and rest, so the last beat IS the resting row and
+      // the ramp is three distinct beats (0, 200, 400 ms) and the resting beat.
+      const last = frames.length - 1;
+      const settled = color === '256' ? frames.slice(0, last) : frames;
       test(`${color}/${s}: spans at least 600 ms, no frame repeats its neighbour or the rest, the 600 ms frame is not the final one`, () => {
         expect(frames.length * MOTION_STEP_MS).toBeGreaterThanOrEqual(600);
         expect(MOTION_MS).toBeGreaterThan(600);
-        expect(frames[600 / MOTION_STEP_MS]).not.toBe(rest);
-        expect(rampFaults(frames, rest, [])).toEqual([]);
+        if (color === '256') expect(frames[600 / MOTION_STEP_MS]).toBe(rest);
+        else expect(frames[600 / MOTION_STEP_MS]).not.toBe(rest);
+        expect(settled.length * MOTION_STEP_MS).toBeGreaterThanOrEqual(600 - MOTION_STEP_MS);
+        expect(rampFaults(settled, rest, [])).toEqual([]);
       });
       test(`${color}/${s}: bold only ever falls and the foreground only ever moves toward rest (no bold pop at 400-600 ms)`, () => {
-        expect(rampFaults(frames, rest, ['wire the gate', 'done'])).toEqual([]);
+        expect(rampFaults(settled, rest, ['wire the gate', 'done'])).toEqual([]);
+      });
+      test(`${color}/${s}: the weight of the last frame of the window is the weight of the rest (no weight pop at rest)`, () => {
+        for (const word of ['wire the gate', 'done', '●'].filter((w) => s === 'todo' || w !== 'wire the gate')) {
+          expect([word, runOf(frames[last]!, word).bold]).toEqual([word, runOf(rest, word).bold]);
+        }
       });
     }
+  }
+});
+
+// Critique 17 C4 (motion-a4fad2f9/agent-strip.ans:2): MODEL (`opus`) and TASK (`T1`) flashed 231 and bold though they never change; only the state mark,
+// the state word and what changed (the name, LAST) take the ramp.
+describe('critique 17 C4: the agent strip flashes only what changed', () => {
+  for (const color of ['256', 'truecolor'] as const) {
+    test(`${color}: MODEL and TASK keep their resting colour and weight at every beat; the state word still ramps`, () => {
+      const all = demoFrames(100, MOTION_STEP_MS, color);
+      const rest = all['agent-99-done.ans']!;
+      const agentRow = (f: string): string => f.trimEnd().split('\n').at(-1)!; // the strip's last line is the agent row; the plan row above it is not part of this ramp
+      for (const f of ramp(all, 'agent')) {
+        for (const word of ['opus', 'T1']) expect([word, runOf(agentRow(f), word)]).toEqual([word, runOf(agentRow(rest), word)]);
+      }
+      expect(runOf(agentRow(ramp(all, 'agent')[0]!), 'done')).not.toEqual(runOf(agentRow(rest), 'done'));
+    });
   }
 });
 

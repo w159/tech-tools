@@ -6,7 +6,7 @@ import type { AtlasSnapshot, SquadAgent } from '../contract'
 import { registerRestyle } from '../restyle'
 import { memState } from '../test_helpers'
 import { uiFromEnv } from '../atlas-ui'
-import { finishedWorkers, forgetPlaced, hideNotification, placeFinished, placedTree } from './placed'
+import { cardAged, finishedWorkers, forgetPlaced, hideNotification, placeFinished, placedTree } from './placed'
 
 const snap = (now: number, squad: SquadAgent[], over: Record<string, unknown> = {}): AtlasSnapshot => ({
   root: null, sessionId: 's1', channel: 'c', todos: [], notes: [], members: [], squad, contextPct: 0, now,
@@ -201,6 +201,65 @@ test('A1: a worker the host lists completed with no failure anywhere still reads
   forgetPlaced()
   const row = flat(await sites().UserMessage!(killed({ squad: [worker('ghost-explorer', 'finished')] }), stoppedNotice('ok1', 'completed'), next))
   expect(row).toMatch(/explorer finished/)
+})
+
+// critique 17 C2/C3: stoprun-150-a4fad2f9-1 f0057 drew the mod-placed `ghost-explorer explorer failed · 9s` where the lead had stopped the task (every other
+// stop run's card read `explorer killed`), and the host row's `explorer killed` (f0085.ans:5) carried no duration where a done card has `· 15s`.
+function stopped(): EngineInterface {
+  const s = live(30_000, [worker('ghost-explorer', 'failed')], { 'ghost-explorer': act({ startedAt: 21_000, since: 30_000, mood: 'failed' }) })
+  return {
+    env: { get: async () => undefined },
+    state: memState({ 'atlas/snapshot': s, 'atlas/killed': ['a1'], 'atlas/orch': { activity: {}, comms: [], stage: {}, meta: { a1: { name: 'ghost-explorer', type: 'atlas:explorer' } } } }),
+    agent: { list: async () => [] },
+    session: { messages: async () => [] },
+    ui: { place: async ({ id }: { id: string }) => ({ isPlaced: true, requestId: id }) },
+  } as unknown as EngineInterface
+}
+
+test('C2: the card placed for a worker the lead stopped reads killed with its run time; one nobody stopped still reads failed', async () => {
+  const before = snap(21_000, [worker('ghost-explorer', 'running'), worker('beta-explorer', 'running')])
+  const after = live(30_000, [worker('ghost-explorer', 'failed'), worker('beta-explorer', 'failed')], {
+    'ghost-explorer': act({ startedAt: 21_000, since: 30_000, mood: 'failed' }), 'beta-explorer': act({ startedAt: 21_000, since: 30_000, mood: 'failed' }),
+  })
+  const ids: string[] = []
+  const $ = stopped()
+  await placeFinished({ ...($ as object), ui: { place: async ({ id }: { id: string }) => { ids.push(id); return { isPlaced: true, requestId: id } } } } as unknown as EngineInterface, before, after)
+  const cards = ids.map((id) => flat(placedTree(id, uiFromEnv())))
+  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('explorer killed · 9s')
+  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('explorer failed · 9s')
+})
+
+test('C3: the host row of a stopped task with no duration_ms carries the run the HUD prints, like a done card', async () => {
+  const row = flat(await sites().UserMessage!(stopped(), stoppedNoDuration('k1'), next))
+  expect(row).toContain('explorer killed · 9s')
+})
+const stoppedNoDuration = (requestId: string) => ({ surface: 'terminal', component: 'UserMessage', requestId, props: { text: 'Agent stopped', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', status: 'killed' } } })
+
+test('C3: a card keeps full colour while its run is current and dims to muted 20 s on, or 5 s after a later card; the words never change', async () => {
+  const ids: string[] = []
+  await placeFinished(engine(ids), snap(0, [worker('a', 'running'), worker('b', 'running')]), snap(9000, [worker('a', 'finished'), worker('b', 'finished')]))
+  const ui = uiFromEnv()
+  const fresh = placedTree(ids[0]!, ui)
+  const old = placedTree(ids[0]!, ui, true)
+  expect(flat(old)).toBe(flat(fresh))
+  expect(strings(old)).not.toBe(strings(fresh))
+  expect(cardAged(ids[0]!, 100_000)).toBe(false) // first draw
+  expect(cardAged(ids[1]!, 101_000)).toBe(false) // a later card, but not yet 5 s on
+  expect(cardAged(ids[0]!, 104_000)).toBe(false)
+  expect(cardAged(ids[0]!, 105_500)).toBe(true) // superseded for 5 s
+  expect(cardAged(ids[1]!, 105_500)).toBe(false) // the newest card stays full colour...
+  expect(cardAged(ids[1]!, 121_500)).toBe(true) // ...until 20 s
+  expect(cardAged('never', 0)).toBe(false) // no clock, no dimming
+})
+
+test('C3: the Placed site dims an old card by the snapshot clock', async () => {
+  const ids: string[] = []
+  await placeFinished(engine(ids), snap(0, [worker('alpha-explorer', 'running')]), snap(13_000, [worker('alpha-explorer', 'finished')], { activity: {} }))
+  const at = (now: number) => ({ ...host(), state: memState({ 'atlas/snapshot': snap(now, []), 'atlas/orch': { activity: {}, comms: [], stage: {}, meta: {} } }) }) as unknown as EngineInterface
+  const site = sites().Placed!
+  const first = strings(await site(at(100_000), placedEvent('atlas', ids[0]!), next))
+  expect(strings(await site(at(110_000), placedEvent('atlas', ids[0]!), next))).toBe(first)
+  expect(strings(await site(at(121_000), placedEvent('atlas', ids[0]!), next))).not.toBe(first)
 })
 
 test('B3/L15: the host notification row for a worker whose card is placed draws nothing; with no card it draws the result row', async () => {

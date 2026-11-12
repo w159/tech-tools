@@ -43,7 +43,10 @@ describe('motion-demo frames', () => {
         const rest = all[`${s}-99-done.ans`]!;
         const ramp = steps; // t=0, 200, 400, 600: the beats; the rest is the file after them
         expect(ramp).toHaveLength(MOTION_MS / MOTION_STEP_MS);
-        expect([color, s, new Set([...ramp, rest]).size]).toEqual([color, s, ramp.length + 1]); // no duplicate, and none equals the rest
+        // Critique 17 C4: the weight falls on the last beat, so the 256-colour palette (no colour left between the last step and rest) ends the ramp ON the rest at 600 ms.
+        const held = color === '256' ? ramp.slice(0, -1) : ramp;
+        if (color === '256') expect(ramp.at(-1)).toBe(rest);
+        expect([color, s, new Set([...held, rest]).size]).toEqual([color, s, held.length + 1]); // no duplicate, and none equals the rest
       }
     }
   });
@@ -104,7 +107,8 @@ describe('the demo draws what the live HUD draws', () => {
       expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
       // critique 10: no step of the ramp repeats the one before it, until the row is at rest (the resting frame is the last file)
       const rest = f256[`${s}-99-done.ans`]!;
-      const ramp = frames; // every ramp frame; the rest is its own file
+      const ramp = frames.slice(0, -1); // the ramp frames; the last beat of a 256-colour window is the rest itself (critique 17 C4: the weight falls on it); the rest is its own file
+      expect(frames.at(-1)).toBe(rest);
       expect(ramp).not.toContain(rest);
       expect(ramp.length).toBeGreaterThanOrEqual(2); // two palette steps, then the resting render
       for (let i = 1; i < ramp.length; i++) expect([s, i, ramp[i] === ramp[i - 1]]).toEqual([s, i, false]);
@@ -120,7 +124,7 @@ describe('critique 14: the 600 ms frame is still the ramp', () => {
       const all = demoFrames(100, MOTION_STEP_MS, color);
       for (const s of ['todo', 'agent']) {
         const at = (ms: number): string => all[`${s}-${String(ms / MOTION_STEP_MS + 1).padStart(2, '0')}-t${String(ms).padStart(4, '0')}ms.ans`]!;
-        expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, false]);
+        expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, color === '256']); // 256 colours: the last beat is the rest (the weight falls on it)
         expect([color, s, at(600) === at(400)]).toEqual([color, s, false]);
         for (let ms = 200; ms < MOTION_MS; ms += MOTION_STEP_MS) expect([color, s, ms, at(ms) === at(ms - MOTION_STEP_MS)]).toEqual([color, s, ms, false]);
       }
@@ -140,7 +144,7 @@ describe('critique 11 C1: the ramp is held long enough to be seen', () => {
       for (const s of ['todo', 'agent']) {
         const frames = Object.keys(f).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => f[n]!);
         const rest = f[`${s}-99-done.ans`]!;
-        const ramp = frames;
+        const ramp = color === '256' ? frames.slice(0, -1) : frames; // 256 colours: the last beat is the rest (critique 17 C4)
         expect([color, s, ramp.includes(rest)]).toEqual([color, s, false]);
         expect([color, s, ramp.length]).toEqual([color, s, ramp.length >= 2 ? ramp.length : 'short']);
         for (let i = 1; i < ramp.length; i++) expect([color, s, i, ramp[i] === ramp[i - 1]]).toEqual([color, s, i, false]);

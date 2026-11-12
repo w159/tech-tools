@@ -155,9 +155,10 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 }
 
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer  outcome` (state, name, role, outcome). */
-export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv()): RenderElement {
+export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), aged = false): RenderElement {
  const runs = toastRuns(failed ? 'failed' : 'done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui)
- return rowEl(runs, ui)
+ // An old card (critique 17 C3: cards held full colour for 40 frames) keeps its words and drops to the muted tone, unbold: the run has moved on.
+ return rowEl(aged ? runs.map((x) => ({ ...x, tone: 'muted' as const, bold: false })) : runs, ui)
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */
