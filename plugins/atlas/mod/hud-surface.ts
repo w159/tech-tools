@@ -2,7 +2,7 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { animateRow, type MotionCtx } from './motion';
+import { animateRow, revealProgress, revealRuns, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { planFigure } from './board-model';
 import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
@@ -29,7 +29,7 @@ export type SurfaceOpts = {
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
 /** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so it outlives the blank rows. */
-export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean };
+export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean };
 
 const t = (text: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run => ({ t: text, tone, ...extra });
 const BLANK: Run[] = [];
@@ -57,12 +57,14 @@ export function stateCounts(states: readonly UiState[]): string {
  * A row that completed within LINGER_MS of `now` ranks with running rows, so a task that just finished is not hidden behind the queue. */
 const PRIORITY = Object.fromEntries(COUNT_ORDER.map((s, i) => [s, i])) as Record<UiState, number>;
 
+/** A done row that completed within LINGER_MS of `now`. */
+const isFresh = (r: { state: UiState; doneAt?: number }, now?: number): boolean => r.state === 'done' && now !== undefined && r.doneAt !== undefined && now - r.doneAt <= LINGER_MS;
+
 /** The `slots` rows to draw, in their own order, and how many were left out. `slots` includes the overflow row when something is hidden. */
 export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: readonly T[], slots: number | undefined, now?: number, overflowRow = true): { shown: T[]; hidden: number } {
   if (slots === undefined || slots >= rows.length) return { shown: [...rows], hidden: 0 };
   const keep = overflowRow ? Math.max(0, slots - 1) : slots; // `overflowRow` false: the count of the rest rides the ribbon, so every slot holds a row
-  const fresh = (r: T): boolean => r.state === 'done' && now !== undefined && r.doneAt !== undefined && now - r.doneAt <= LINGER_MS;
-  const rank = (r: T): number => (fresh(r) ? PRIORITY.running : PRIORITY[r.state]);
+  const rank = (r: T): number => (isFresh(r, now) ? PRIORITY.running : PRIORITY[r.state]);
   const ranked = rows.map((row, i) => ({ row, i })).sort((a, b) => rank(a.row) - rank(b.row) || (a.row.state === 'done' ? (b.row.doneAt ?? 0) - (a.row.doneAt ?? 0) || b.i - a.i : a.i - b.i));
   const picked = new Set(ranked.slice(0, keep).map((x) => x.i));
   return { shown: rows.filter((_, i) => picked.has(i)), hidden: rows.length - picked.size };
@@ -82,8 +84,12 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const figure = planFigure(done, rows.length, rows.filter((r) => r.word === RETURNED).length); // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
   if (b.cap === 0) return [ribbon(cols, 'TODO', figure, ui)];
   // Every slot holds a row: what does not fit is counted on the ribbon, not on a row of its own (critique 16: `3 more todos not shown` under 2 drawn rows, with room for a third).
-  const { shown, hidden } = windowRows(rows, b.cap, o.now, false);
-  const forms = hidden > 0 ? [`${figure} · ${hidden} more ${hidden === 1 ? 'todo' : 'todos'} not shown`, `${figure} · +${hidden} more`, figure] : [figure];
+  // A short budget folds the finished rows first: the ribbon counts them (`3/5 · 3 done`) and every open row keeps its place (critique 17: the 110 slot lost its band row and its blank to rows already done).
+  const stays = (r: TodoRow): boolean => r.state !== 'done' || isFresh(r, o.now); // a row that completed within LINGER_MS keeps its place, as when the plan windows
+  const foldable = rows.filter((r) => !stays(r)).length;
+  const fold = b.foldDone === true && foldable > 0 && foldable < rows.length; // a plan that is all done keeps its rows
+  const { shown, hidden } = fold ? { shown: rows.filter(stays), hidden: foldable } : windowRows(rows, b.cap, o.now, false);
+  const forms = hidden > 0 ? [fold ? `${figure} · ${hidden} done` : `${figure} · ${hidden} more ${hidden === 1 ? 'todo' : 'todos'} not shown`, ...(fold ? [] : [`${figure} · +${hidden} more`]), figure] : [figure];
   const out: Run[][] = [forms.map((f) => ribbon(cols, 'TODO', f, ui)).find((r) => runsCells(r) <= cols) ?? ribbon(cols, 'TODO', '', ui)];
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
@@ -159,7 +165,8 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   if (b.cap === 0) return out;
   const wordW = rich ? CHIP_W : 7;
   // The name column holds the longest name whole (19 cells at least, for alignment); only a name that alone overflows the row is end-clipped.
-  const nameW = Math.max(1, Math.min(Math.max(19, maxLen(rows.map((r) => flat(r.name)))), cols - 5 - wordW));
+  // Under 80 columns (the 110-column transcript is 61) the column is as wide as the longest name: 5 cells more for LAST (critique 17: LAST was dropped there).
+  const nameW = Math.max(1, Math.min(Math.max(cols >= 80 ? 19 : 8, maxLen(rows.map((r) => flat(r.name)))), cols - 5 - wordW));
   const stateAt = nameW + 5;
   const plan = agentCols(rows, o, rich, stateAt);
   if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
@@ -232,9 +239,18 @@ function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, plan: Agent
   return row;
 }
 
+/** The name run of an agent row: after the focus mark, a blank, the state glyph and a blank. */
+const NAME_AT = 4;
 function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const runs = agentRowResting(r, o, rich, stateAt, nameW, plan);
-  return r.key === undefined ? runs : animateRow(runs, r.key, r.state, o.motion, o.ui);
+  if (r.key === undefined) return runs;
+  // A new row reveals its NAME only: MODEL, TASK and LAST are whole on every frame (critique 17: `gamma-explor` with both columns blank).
+  const moved = animateRow(runs, r.key, r.state, o.motion, o.ui, { reveal: false });
+  const entry = o.motion?.entry(r.key);
+  const pr = entry && o.motion ? revealProgress(entry, o.motion.now) : 1;
+  const name = moved[NAME_AT];
+  if (pr >= 1 || !name) return moved;
+  return moved.map((x, i) => (i === NAME_AT ? revealRuns([x], Math.ceil(pr * cells(name.t)))[0]! : x));
 }
 
 function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
@@ -261,8 +277,8 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
 export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] };
 
 /** Both blocks stacked (a blank between them when `spacers`). */
-export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean }): Run[][] {
-  const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap });
+export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean }): Run[][] {
+  const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}) });
   const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
   return [...todo, ...(b.spacers && todo.length > 0 && agents.length > 0 ? [BLANK] : []), ...agents];
 }
@@ -295,9 +311,10 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
   const n = s.todos.length;
   const m = s.agents.length;
-  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean };
+  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean };
   // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
+  // Finished rows fold into a count before the blank, the column names or an open row go (critique 17, B4).
+  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, foldDone: true }, { spacers: true, extras: false, header: false }, { spacers: true, extras: false, header: false, foldDone: true }, { spacers: false, extras: true }, { spacers: false, extras: false }];
   tries.push({ spacers: false, extras: false, header: false }); // the column-name row is the first row dropped: it never costs the plan a row or the band its summary row
   for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap, header: false }); // a cap is a count of rows: the rest is counted on the ribbon
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).

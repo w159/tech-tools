@@ -93,7 +93,7 @@ describe('B4: LAST is an outcome for a finished row and the current action for a
       const rows = text(hudLines({ todos: plan, agents: live }, { cols, maxRows: 30, ui, now: NOW }));
       for (const r of rows) expect(r).not.toMatch(/\b[a-z]{1,6}\.\.\./); // `read...`, `report...`
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
-      if (cols === 61) { expect(lastOf(rows, 'alpha-explorer')).toContain('read alpha.py'); expect(lastOf(rows, 'gamma-explorer')).toContain('reported'); }
+      if (cols === 61) { expect(lastOf(rows, 'alpha-explorer')).toContain('read alpha.py'); expect(lastOf(rows, 'gamma-explorer')).toContain('report returned'); } // critique 17: the name column is as wide as the names under 80 columns, so the whole outcome fits
     }
   });
 });
@@ -108,15 +108,15 @@ describe('B4: the team and channel tabs say what the HUD says', () => {
     const snap = world([sq('ghost-explorer', 'failed')], { notes: [], members: [{ name: 'lead-104043' }, { name: 'ghost-explorer' }] });
     expect(model(snap).people).toBe(1);
   });
-  test('a failed worker row on the team tab names its last call, as the HUD LAST does (HUD `read util.py`, team `last failed`)', () => {
+  test('a failed worker row on the team tab reads `killed`, as the HUD LAST does', () => {
     const snap = world([sq('ghost-explorer', 'failed')], { notes: [], members: [] });
     const w = model(snap).workers.find((x) => x.name === 'ghost-explorer')!;
     expect(w.state).toBe('failed');
-    expect(w.detail).toBe('read util.py');
+    expect(w.detail).toBe('killed'); // critique 17: the call it was making is not what happened to it
   });
   test('a done worker row on the team tab reads the evidence of its dispatch row, as the HUD LAST does', () => {
     const snap = world([sq('alpha-explorer', 'finished')], { notes: [], members: [], todos: [{ id: 'd1', content: 'Read alpha.py', status: 'completed', owner: 'alpha-explorer', origin: 'dispatch', session_id: '', evidence: '1. Read `/tmp/p/alpha.py` -> alpha_one (line 1)' }] });
-    expect(model(snap).workers.find((x) => x.name === 'alpha-explorer')!.detail).toBe('Read alpha.py -> alpha_one (line 1)');
+    expect(model(snap).workers.find((x) => x.name === 'alpha-explorer')!.detail).toBe('alpha_one (line 1)'); // the result of the echo, not the echo (critique 17)
   });
 });
 
@@ -128,8 +128,8 @@ describe('B3: the final SUBAGENTS block keeps the agents that finished', () => {
     expect(rows.some((r) => r.includes('SUBAGENTS') && r.includes('1 failed') && r.includes('2 done'))).toBe(true);
     for (const n of ['alpha-explorer', 'ghost-explorer', 'beta-explorer']) expect(rows.some((r) => r.includes(` ${n} `))).toBe(true);
   });
-  test('with no failure the finished wave still leaves after it lingered', () => {
+  test('with no failure the finished wave stays after it lingered (critique 17 B3)', () => {
     const rows = text(hudLines({ todos: PLAN, agents: settled.filter((a) => a.state === 'done') }, { cols: 120, maxRows: 30, ui, now: NOW }));
-    expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(false);
+    expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);
   });
 });

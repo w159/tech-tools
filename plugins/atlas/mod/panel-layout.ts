@@ -61,16 +61,14 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
 
 /** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding: the widest label form that fits one row, else the
  * full words wrapped onto a second row. The rule under the lit tab is as wide as the drawn label. */
-export function stripLayout(cols: number, lit?: string): { rows: StripTab[][]; gap: number; /** True when the `k: ` prefix is not drawn (the keys stay bound; see mod/pane/sidebar.tsx): the words alone fit one row where the prefixed forms do not. */ bare: boolean } {
+export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number; /** True when the `k: ` prefix is not drawn (the keys stay bound; see mod/pane/sidebar.tsx): the words alone fit one row where the prefixed forms do not. */ bare: boolean } {
   const inner = Math.max(1, cols - STRIP_PAD);
   for (const f of STRIP_FORMS) {
     const tabs = formTabs(f);
     if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap, bare: false };
   }
-  const bareTabs = formTabs(STRIP_FORMS[1]!);
-  // The board view keeps its keys on screen (`r: route`), wrapped onto a second row: the Board pane's tab strip is the only place that names the hotkeys
-  // once the board has replaced the view the person was on (live 110: bare words under `▸ BOARD` left the pane unidentifiable, board 0.0).
-  if (lit !== 'board' && stripWidth(bareTabs, 1, 0) <= inner) return { rows: [bareTabs], gap: 1, bare: true };
+  // One form on every tab (critique 17: the board wrapped the strip to two rows and the route tab dropped the keys to one): the keys stay on screen and wrap. The scorer finds the pane by
+  // `r: route`, and the Board pane's strip is the only place that names the hotkeys once the board has replaced the view the person was on.
   const wide = STRIP_FORMS[0]!;
   return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap, bare: false };
 }
@@ -300,6 +298,13 @@ const TITLE_MIN_W = 21; // the title column's least width (the state word starts
 /** A task row prints its owner in the right-hand column unless its title already names that owner. */
 const ownerColumn = (t: PanelTodo): boolean => !!t.owner && !oneLine(t.label).includes(oneLine(t.owner));
 
+/** The task without the `(owner)` its title ends with: `T1 read alpha.py (alpha-explorer)` reads `T1 read alpha.py`. */
+const withoutOwner = (t: PanelTodo): PanelTodo => {
+  const label = oneLine(t.label);
+  const tail = ` (${t.owner ?? ''})`;
+  return t.owner && label.endsWith(tail) ? { ...t, label: label.slice(0, -tail.length) } : t;
+};
+
 const TODO_GAP = 2; // cells between a title and its state word where the title spills (critique 14: `...(alpha... done` had one); the one-row grammar keeps its single cell
 const SPILL_BELOW = 50; // panes narrower than this (the 110-column pane is 37) draw a title that cannot sit beside its state whole, state under it
 
@@ -409,9 +414,12 @@ function routeBody(m: PanelModel): PanelLine[] {
   const loose = listed.length ? [] : team.filter((w) => w.state !== 'done' && w.state !== 'queued' && !owners.has(w.name));
   const looseShown = loose.slice(0, AGENT_ROWS);
   const room = Math.max(1, bodyRows(m, rows.length + 1) - (loose.length ? looseShown.length + 1 + (loose.length > looseShown.length ? 1 : 0) : 0));
-  const ordered = m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
+  // A narrow pane (the 110-column pane is 37) drops the owner: the title's `(alpha-explorer)` and the owner column both go, the team tab names the owner (critique 17: the title wrapped
+  // to `T1 read alpha.py` / `(alpha-explorer) done`, a staircase that doubled the row height).
+  const narrow = m.cols < SPILL_BELOW;
+  const ordered = narrow ? m.todos.map(withoutOwner) : m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
   // The owner column goes first (critique 12 A2): a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`) prints no second copy, so the title keeps the room.
-  const widest = Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
+  const widest = narrow ? 0 : Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
   // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
   const todoWordW = ordered.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), WORD_W); // 8 while a row reads `returned`
   const titleMax = m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols; // from 100 columns the title leaves the reason a column

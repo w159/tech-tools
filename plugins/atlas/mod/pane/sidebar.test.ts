@@ -89,21 +89,16 @@ describe('sidebar shell', () => {
     }
   });
 
-  test('A1: at 110 columns (38 inner) the strip is one row of bare words and every key stays bound on a zero-width layer', () => {
+  test('critique 17 B5: at 110 columns (38 inner) the strip is the keyed form wrapped to two rows, every tab a hotkey Button, no zero-width layer', () => {
     const t = tree({ columns: 38 }, 'gates');
     const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
-    expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs']); // one row: no `tabs:1`
-    const visible = kids(rowsOf[0]!).filter((c) => c.kind === 'Button');
+    expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs', 'tabs:1']);
+    const visible = rowsOf.flatMap((r) => kids(r).filter((c) => c.kind === 'Button'));
     expect(visible.map((b) => b.props.label)).toEqual(['route', 'team', 'channel', 'gates', 'core', 'board']);
-    expect(visible.some((b) => b.props.hotkey)).toBe(false); // the host draws `k: ` only for a hotkey: none here
-    const layer = kids(rowsOf[0]!).find(KEYS_W0)!;
-    expect(layer.props).toMatchObject({ position: 'absolute', overflow: 'hidden', width: 0 });
-    expect(kids(layer).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
-    kids(layer).find((b) => b.props.hotkey === 't')!.props.onPress();
+    expect(visible.map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']); // the host draws `k: ` for each
+    expect(rowsOf.some((r) => kids(r).some(KEYS_W0))).toBe(false);
+    visible.find((b) => b.props.hotkey === 't')!.props.onPress();
     expect(calls).toContain('view:team');
-    // the drawn row is the words and the gaps only: it fits the 37 cells after the pad
-    const w = kids(rowsOf[0]!).reduce((n, c) => n + (KEYS_W0(c) ? 0 : c.kind === 'Button' ? hostW(c) : String(c.props.children).length), 0);
-    expect(w).toBeLessThanOrEqual(37);
   });
 
   test('L21: stripRows keeps every tab, in order, and wraps instead of overflowing', () => {
