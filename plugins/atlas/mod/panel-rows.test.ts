@@ -43,8 +43,8 @@ describe('team tab: lead row, roster rows, lead tally', () => {
     expect(out.filter((l) => /^ {4}last {2}wrote the summary/.test(l))).toHaveLength(1); // different words: kept
   });
   test('no workers and no roster keeps the hint, and the lead stays above it', () => {
-    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['  ◉ lead    waiting', '(no state)  nobody dispatched yet, ask the lead to start a worker', '    workers  0 running']);
-    expect(body('team', 80, { lead: undefined, workers: [], mates: [] })).toEqual(['(no state)  nobody dispatched yet, ask the lead to start a worker']);
+    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['  ◉ lead    waiting', '    nobody dispatched yet, ask the lead to start a worker', '    workers  0 running']);
+    expect(body('team', 80, { lead: undefined, workers: [], mates: [] })).toEqual(['    nobody dispatched yet, ask the lead to start a worker']);
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');

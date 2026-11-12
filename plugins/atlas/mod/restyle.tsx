@@ -204,7 +204,9 @@ function tailOf(nm: RegExpExecArray | null, sentence: string): RenderNode[] {
 
 /** Filled pills then the state text, never a glued pipe; under 40 columns the two pills only. */
 function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, sentence: string, columns: number): RenderNode[] {
- const kids = pills(mid, phase)
+ // Each chip sits in its own non-shrinking Box: a Text cannot opt out of flex shrink, so with a long sentence beside it the host cut the chips
+ // (`◆ ATLA… ◎ RESEARC…` at 110, critique 15 C2). The sentence is what gives way.
+ const kids = pills(mid, phase).map((chip): RenderNode => ({ type: 'Box', props: { flexShrink: 0 }, children: [chip] }))
  return isNarrow(columns) ? kids : [...kids, ...tailOf(nm, sentence)]
 }
 

@@ -24,11 +24,12 @@ describe('A4: route rows at the 110-column pane', () => {
     test(`pane ${cols}: no title is cut, no row overflows, the state word keeps a gap`, () => {
       const rows = route(cols);
       const text = rows.join('\n');
-      for (const t of LIVE) expect(text).toContain(t.label); // every title whole
+      for (const t of LIVE) expect(text.replace(/\s+/g, ' ')).toContain(t.label); // every title whole (it may wrap across rows, critique 15 C2)
       expect(text).not.toContain('...');
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       for (const r of rows.filter((x) => /T\d /.test(x) && / done\s*$/.test(x))) expect(r).toMatch(/\S {2,}done\s*$/); // a gap of two before the word
-      expect(rows.filter((r) => /^\s+done\s*$/.test(r)).length + rows.filter((r) => /T\d .*\S {2,}done\s*$/.test(r)).length).toBe(5); // every task shows its state, beside or under its title
+      expect(rows.filter((r) => /^\s+done\s*$/.test(r))).toHaveLength(0); // the state is never a row of its own (critique 15 C2)
+      expect(rows.filter((r) => /\S {2,}done\s*$/.test(r))).toHaveLength(5); // every task shows its state, closing its title's last line
     });
   }
   test('a pane with room keeps one row per task (nothing moves to a second row)', () => {

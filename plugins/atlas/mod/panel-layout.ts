@@ -307,7 +307,8 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   let rows: PanelLine[];
   if (spill) {
     const width = Math.max(8, m.cols - GRID_LEAD);
-    const lines = cells(full) <= width ? [full] : wrap(full, width, 3);
+    // The title wraps, never the state: it wraps narrower by the gap and the word, so the word closes the last title line (critique 15 C2).
+    const lines = cells(full) + TODO_GAP + cells(wordRun.t) <= width ? [full] : wrap(full, Math.max(8, width - TODO_GAP - cells(wordRun.t)), 3);
     const head = gridRow({ cols: m.cols, ui: m.ui, mark: glyph, name: { t: lines[0]!, ...nameCell }, nameW: Math.min(width, cells(lines[0]!)), nameCut: 'end' });
     const wordTail = [r(' '.repeat(TODO_GAP)), r(wordRun.t, wordRun.tone)];
     const lastW = cells(lines[lines.length - 1]!);
@@ -390,7 +391,7 @@ function routeBody(m: PanelModel): PanelLine[] {
     const running = listed.length ? [] : team.filter((w) => w.state === 'running');
     const nameW = Math.min(nameCap(m.cols), Math.max(...running.map((w) => cells(nameOf(w))), 1));
     if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
-    else if (!m.workers.length) rows.push(BLANK, line([r('(no state)', 'muted'), r('  add one with /todo add', 'muted')])); // the `todo` row above already says `no tasks yet`
+    else if (!m.workers.length) rows.push(BLANK, ...emptyHint(m, 'add one with /todo add')); // the `todo` row above already says `no tasks yet`
     return rows;
   }
   // Agents that work but hold no plan row (the plan rows carry no owner while the agents are host-spawned): a group under the plan names them, in the HUD Subagents state words.
@@ -491,17 +492,20 @@ export function workersByTask(m: Pick<PanelModel, 'todos' | 'workers'>): PanelWo
   return sortAgents(m.workers.map((w) => { const owned = m.todos.flatMap((t, i) => (t.owner === w.name ? [i + 1] : [])); return { w, tasks: owned.length ? owned : tag(w) }; })).map((x) => x.w);
 }
 
+/** An empty tab's one sentence, indented like the rows it stands in for and wrapped to the pane (critique 15: an unindented `(no state)` lead-in was the only thing at the margin). */
+const emptyHint = (m: PanelModel, text: string): PanelLine[] => wrap(text, Math.max(8, m.cols - GRID_LEAD), 3).map((l) => line([r(' '.repeat(GRID_LEAD)), r(l, 'muted')]));
+
 function teamBody(m: PanelModel): PanelLine[] {
   const mates = m.mates ?? [];
   const lead = leadOf(m);
   const workers = workersByTask(m);
   const everyone = [...(lead ? [lead] : []), ...workers, ...mates];
-  if (!everyone.length) return [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])];
+  if (!everyone.length) return emptyHint(m, 'nobody dispatched yet, ask the lead to start a worker');
   const cap = Math.max(18, Math.min(40, m.cols - GRID_LEAD - 2 - (m.cols >= WIDE ? 12 : 10) - 1 - (m.cols >= WIDE ? 28 : 0)));
   const nameW = Math.min(cap, Math.max(6, ...everyone.map((w) => cells(nameOf(w)))));
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[], more: ReadonlySet<string>): PanelLine[] => ws.flatMap((w) => workerRows(m, w, Math.min(nameW, Math.max(6, m.cols - 14)), w.name === focusName, more.has(w.name)));
-  const hint = !m.workers.length && !mates.length ? [line([r('(no state)', 'muted'), r('  nobody dispatched yet, ask the lead to start a worker', 'muted')])] : [];
+  const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet, ask the lead to start a worker') : [];
   const build = (more: ReadonlySet<string>): PanelLine[] => [...(lead ? rows([lead], more) : []), ...hint, ...rows(workers, more), ...rows(mates, more), ...(m.lead ? [leadSummary(m)] : [])];
   const base = build(new Set());
   if (!tall(m)) return base;

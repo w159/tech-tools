@@ -5,13 +5,17 @@ import { cells } from '../atlas-ui';
 
 const MARKER = new RegExp(`^\\s*(?:[-*${String.fromCharCode(0x2022)}]|\\d{1,3}[.)])\\s+`); // a dash, star, bullet or `1.` / `2)` that heads the text
 const ABS_PATH = /(^|[\s(=:])\/(?:[^\s/]+\/)+([^\s/]+)/g;
+const SLUG_PATH = /(^|\s)-(?:home|Users|root|tmp|var|mnt|opt|private)(?:-\S*)?/g; // a project directory as the host names it (`-home-user-tech-tools`): a path with its slashes turned to dashes
 const DOUBLED = /^(\p{L}[\p{L}\d_]*)\s+\1(?=\s|$)/iu; // `read Read gamma.py`: the tool word and the target's own verb
 
 /** `1. \`atlas_todo.py list\` -> ok` reads `atlas_todo.py list -> ok`; `Read /a/b/c.ts:9` reads `Read c.ts:9`; `read Read c.ts` reads `read c.ts`. */
 export function lastText(text: string | null | undefined): string {
   let s = (text ?? '').replace(/\s+/g, ' ').trim();
   for (let prev = ''; prev !== s; ) { prev = s; s = s.replace(MARKER, ''); }
-  return s.replace(/`/g, '').replace(ABS_PATH, '$1$2').replace(DOUBLED, '$1').trim();
+  const clean = s.replace(/`/g, '').replace(ABS_PATH, '$1$2').replace(DOUBLED, '$1').trim();
+  const bare = clean.replace(SLUG_PATH, '$1').replace(/\s+/g, ' ').trim();
+  // A slug is no step: drop it, and the lone verb it leaves (`run`) says nothing, so the whole text goes (critique 15 C5).
+  return bare === clean ? clean : /\s/.test(bare) ? bare : '';
 }
 
 const DANGLING = /(?:\s+(?:to|the|a|an|of|in|on|for|with|and|or|by|at|from|is|are))*\s*(?:->|[,;:])?$/i; // a cut that ends on a connector or a clause mark reads as cut mid-thought
