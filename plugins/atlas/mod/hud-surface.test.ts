@@ -27,8 +27,8 @@ describe('TODO surface goldens (rev 4)', () => {
     const rows = text(todoRows(worldTodos(), opts(60), full));
     expect(rows.slice(1, -1)).toEqual(todo_40.slice(1, -1));
     expect(rows[0]!.length).toBe(60); // the title rule runs to the last cell, where the host draws its `[-]`
-    expect(rows[0]!).toMatch(/TODO {2}3\/7 ▰{3}▱{5} ─+╮$/); // critique 21: the count and the meter sit INSIDE the rule, which runs on to the corner at the edge
-    expect(rows.at(-1)).toBe(`╰${'─'.repeat(58)}╯`); // the box closes at the width of the surface
+    expect(rows[0]!).toMatch(/TODO {2}3\/7 ▰{3}▱{5} ─+$/); // critique 21: the count and the meter sit INSIDE the rule, which runs on to the corner at the edge
+    expect(rows.at(-1)).toBe(`╰${'─'.repeat(59)}`); // the box closes at the width of the surface
   });
   test('completed rows are drawn as done: a green disc, the word, and quiet 247 text that is never struck through (critique 21)', () => {
     const rows = todoRows(worldTodos(), opts(120), full);
@@ -47,7 +47,7 @@ describe('TODO surface goldens (rev 4)', () => {
       const t = text(todoRows(worldTodos(), opts(cols), full));
       const a = text(agentRows(worldAgents(), opts(cols), full));
       for (const rows of [t, a]) {
-        expect(rows.at(-1)).toBe(`╰${'─'.repeat(cols - 2)}╯`);
+        expect(rows.at(-1)).toBe(`╰${'─'.repeat(cols - 1)}`);
         expect(rows.slice(1, -1).some((r) => /[│]/.test(r))).toBe(false);
       }
     }
@@ -62,7 +62,7 @@ describe('TODO surface goldens (rev 4)', () => {
       const line = runsString(t);
       expect(line.startsWith('╭─ ◖ ◆ ATLAS ◗ ▸ TODO')).toBe(true);
       expect(runsCells(t)).toBe(cols);
-      expect(line.endsWith('─╮')).toBe(true);
+      expect(line.endsWith('─')).toBe(true); // no right corner: the host's [-] ends the rule
       expect(line.indexOf('▰')).toBeLessThan(line.lastIndexOf('─'));
       expect(line.indexOf('3/7')).toBeLessThan(line.indexOf('▰'));
     }
@@ -291,7 +291,7 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
       expect(out[0]).toMatch(/\d+( of |\/)\d+/); // the count is in the ribbon
       expect(out.slice(1).filter((l) => /\d+ of \d+ done|\d+\/\d+\b(?!:)|\d+%/.test(l))).toHaveLength(0); // and only there
       expect(out.some((l) => /^progress /.test(l))).toBe(false);
-      expect(out.at(-1)).toBe(`╰${'─'.repeat(cols - 2)}╯`); // the box closes (critique 21)
+      expect(out.at(-1)).toBe(`╰${'─'.repeat(cols - 1)}`); // the box closes (critique 21)
       const rows = out.slice(1, -1);
       expect(rows).toHaveLength(worldTodos().length);
       for (const l of rows) expect([cols, l]).toEqual([cols, expect.stringMatching(/(done|running|queued|failed|blocked|waiting)/)]); // the state column at every width
@@ -316,22 +316,32 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
 
 describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
   const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py', ctx: null, focus: false, ...o });
-  test('B5 (round 3): the closing rules and the column names outrank the blank between TODO and SUBAGENTS at 110 columns; the blank comes back with one more row, and a tighter slot caps the plan, never a rule or the names', () => {
+  test('B5 (round 4): a short slot gives up the closing rules, then the column names, then the blank, then plan rows; every plan row and every agent row outranks them', () => {
     const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
-    const out = text(fitStack({ todos, agents: rows }, opts(110), 10)); // title + 3 plan rows + rule + title + column names + 2 agents + rule: no room for the blank
-    expect(out.length).toBe(10);
-    expect(out[4]).toMatch(/^╰─+╯$/);
-    expect(out[5]).toContain('SUBAGENTS');
-    expect(out[6]).toMatch(/^ {4}AGENT +STATE/);
-    expect(out.at(-1)).toMatch(/^╰─+╯$/);
-    const roomy = text(fitStack({ todos, agents: rows }, opts(110), 11)); // one more row: the blank comes back
-    expect(roomy[4]).toMatch(/^╰─+╯$/);
-    expect(roomy[5]).toBe('');
-    expect(roomy.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
-    const tight = text(fitStack({ todos, agents: rows }, opts(110), 9)); // no room for the whole plan beside the names: the plan is capped, the rules stay
-    expect(tight.some((l) => /^ {4}AGENT +STATE/.test(l))).toBe(true);
-    expect(tight.filter((l) => /^╰─+╯$/.test(l))).toHaveLength(2);
+    const at = (n: number): string[] => text(fitStack({ todos, agents: rows }, opts(110), n));
+    const full = at(11); // title + 3 plan rows + rule + blank + title + column names + 2 agents + rule
+    expect(full).toHaveLength(11);
+    expect(full[4]).toMatch(/^╰─+$/);
+    expect(full[5]).toBe('');
+    expect(full.at(-1)).toMatch(/^╰─+$/);
+    for (const n of [10, 9]) { // the rules go together: both blocks closed, or neither
+      const out = at(n);
+      expect([n, out.length]).toEqual([n, 9]);
+      expect(out.filter((l) => /^╰─+$/.test(l))).toHaveLength(0);
+      expect(out[4]).toBe('');
+      expect(out.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
+      expect(out.filter((l) => l.includes('queued')).length).toBe(3);
+    }
+    const bare = at(8); // then the column names
+    expect(bare).toHaveLength(8);
+    expect(bare.some((l) => /AGENT +STATE/.test(l))).toBe(false);
+    expect(bare[4]).toBe('');
+    const packed = at(7); // then the blank
+    expect(packed).toHaveLength(7);
+    expect(packed.filter((l) => l === '')).toHaveLength(0);
+    expect(packed.filter((l) => l.includes('queued')).length).toBe(3);
+    const tight = at(6); // only then plan rows, counted on the title
     expect(tight.filter((l) => l.includes('queued')).length).toBe(2);
     expect(tight[0]).toMatch(/1 more todo not shown/);
   });
@@ -371,22 +381,24 @@ describe('critique 11 C4: the TODO box', () => {
   test('the title rule of every block runs to the last cell, so the host\'s [-] ends it (live PNGs: [-] floated past a gap); the count and meter sit inside it', () => {
     for (const cols of [80, 110, 150]) {
       const first = fitStack({ todos: live(), agents: [] }, opts(cols), 10)[0]!;
-      expect(runsString(first)).toMatch(/ ▰+▱* ─+╮$/);
+      expect(runsString(first)).toMatch(/ ▰+▱* ─+$/);
       expect(textWidth(runsString(first))).toBe(cols);
     }
     const second = fitStack({ todos: live(), agents: worldAgents() }, opts(110), 20).find((r) => runsString(r).includes('SUBAGENTS'))!;
-    expect(runsString(second)).toMatch(/ ─+╮$/);
+    expect(runsString(second)).toMatch(/ ─+$/);
     expect(textWidth(runsString(second))).toBe(110);
   });
-  test('a 110 column budget of 13 rows keeps all 5 plan rows, both boxes closed, the column names and 3 agents; the blank is the row that goes (critique 18, round 3)', () => {
+  test('a 110 column budget of 13 rows keeps all 5 plan rows, the blank, the column names and 3 agents; the closing rules are the rows that go (critique 23)', () => {
     const todos: TodoRow[] = [1, 2, 3, 4, 5].map((i) => ({ label: `T${i} item`, state: 'queued', detail: '', focus: false }));
     const agents = ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map((name): AgentRow => ({ name, state: 'done', model: 'haiku', tasks: [], tool: 'read x.py', ctx: null, focus: false }));
     const out = text(fitStack({ todos, agents }, opts(110), 13));
-    expect(out.length).toBe(13);
-    expect(out[6]).toMatch(/^╰─+╯$/);
+    expect(out.length).toBe(12);
+    expect(out[6]).toBe('');
     expect(out[7]).toContain('SUBAGENTS');
     expect(out[8]).toMatch(/^ {4}AGENT +STATE/);
-    expect(out.at(-1)).toMatch(/^╰─+╯$/);
+    expect(out.filter((l) => /^╰─+$/.test(l))).toHaveLength(0);
     expect(out.filter((l) => l.includes('queued')).length).toBe(5); // all five plan rows still show
+    expect(out.filter((l) => /explorer +done/.test(l))).toHaveLength(3);
+    expect(text(fitStack({ todos, agents }, opts(110), 14))).toHaveLength(14); // one more row: both boxes close
   });
 });

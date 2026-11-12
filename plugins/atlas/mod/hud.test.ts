@@ -265,8 +265,8 @@ describe('hud row budget', () => {
     expect(hudLines({ todos: [], agents: [] }, view(120))).toEqual([]);
   });
   test('hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows', () => {
-    expect(hudCompactRows({ todos: plan, agents })).toBe(6 + 5 + 2); // both closing rules (the box never changes shape, critique 22); TODO ribbon, 4 rows and the overflow row (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents and the overflow row
-    expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 6 + 5))).join('\n')).toContain('AGENT'); // one row beyond the floor: the column names return
+    expect(hudCompactRows({ todos: plan, agents })).toBe(6 + 5); // no closing rules (decoration goes first, critique 23); TODO ribbon and 5 rows (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents and the overflow row
+    expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 6 + 5 + 1))).join('\n')).toContain('AGENT'); // one row beyond the floor: the blank returns beside the column names
     for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
     expect(hudBudget(1, 7, 7, true)).toBe(1);
     expect(hudBudget(2, 7)).toBe(2);

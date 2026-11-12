@@ -165,14 +165,14 @@ describe('4. no fold marker', () => {
 
 describe('5. the plan row budget and the overflow row', () => {
   test('five todos and three agents: the compact form holds all five plan rows', () => {
-    // ribbon + 5 plan rows + its closing rule + agents ribbon + the column names + 3 agents + its closing rule = 13 rows (critique 18: the names are part of the floor; round 3: so are the rules)
-    expect(hudCompactRows(input, 88)).toBe(13);
+    // ribbon + 5 plan rows + the blank + agents ribbon + the column names + 3 agents = 11 rows (critique 23: the closing rules are decoration and go first)
+    expect(hudCompactRows(input, 88)).toBe(11);
     const rows = hudLines(input, view(88, hudBudget(15, hudCompactRows(input, 88), 7, true))).map(runsString);
     expect(rows.filter((r) => /T\d /.test(r) && !r.includes('haiku'))).toHaveLength(5);
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
   });
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
-    const rows = hudLines(input, view(88, 10)).map(runsString);
+    const rows = hudLines(input, view(88, 6)).map(runsString);
     const more = rows.find((r) => /\d+ more todos?/.test(r))!;
     expect(more).toMatch(/▸ TODO {2}0\/5 · \d+ more todos? not shown ▱+ ─+/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
@@ -192,7 +192,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
   const hudIn: HudInput = { todos: planDone, agents };
   const budget = 18; // the live frame's 15 slot rows less the host's line (14), plus the Subagents column-header row and its blank, plus the two closing rules (round 3)
-  const cap = 11; // a slot that cuts the plan: the floor holds the column names, both rules and all five plan rows now (critique 18), so only a slot below it cuts
+  const cap = 8; // a slot that cuts the plan: the floor holds the column names and the open plan rows, so only a slot well below the five-row form cuts (critique 23)
   const snapshot = busySnap();
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
   const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));

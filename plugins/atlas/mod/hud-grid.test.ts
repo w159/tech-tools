@@ -48,7 +48,7 @@ describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
   test('MODEL is never blank: an agent the squad gave no model reads `-`', () => {
     const rows = agentModel(stop.agents, stop.todos);
     expect(rows.find((r) => r.name === 'ghost-explorer')!.model).toBe('-');
-    const drawn = hudLines(stop, { cols: 61, maxRows: 30, ui, rich: false, now: NOW }).map(runsString);
+    const drawn = hudLines(stop, { cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString); // 150: at 61 cells MODEL gives its cells to LAST (critique 23)
     expect(drawn.find((r) => r.includes('ghost-explorer') && /failed\s+-/.test(r))).toMatch(/failed\s+-\s+T2/);
   });
 });

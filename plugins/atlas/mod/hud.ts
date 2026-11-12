@@ -306,19 +306,26 @@ export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
   return hudLines(input, { ...opts, ui }).map((r) => r.filter((x) => x.t !== '').map((x) => segmentOf(x, ui)));
 }
 
-/** Rows of the compact form: the plan's ribbon with up to five rows, the Subagents ribbon with up to two agents. What the HUD keeps whatever the band is given. */
+/** Rows of the compact form: the plan's ribbon with up to five rows, the Subagents ribbon with up to two agents, the column names, no closing rules (the rules are decoration and go first). What the HUD keeps whatever the band is given. */
 export const hudCompactRows = (input: HudInput, cols = 120): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length; // critique 18: the column names are part of the floor, so the slot never drops them while the block shows (fitRows still drops them in a slot with no room)
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length; // critique 18: the column names are part of the floor, so the slot never drops them while the block shows (fitRows still drops them in a slot with no room)
 };
 
-/** Rows of the compact form WITH the Subagents column names and the blank between the blocks: what the register gives the HUD when the slot can hold them
+/** Rows of the compact form WITH the blank between the blocks: what the register gives the HUD when the slot can hold it
  * and the band still keeps its title row (register.ts hudSlotCap). `now`: the draw's clock, so a lingering finished wave counts (hudCompactRows has none and leaves it out). */
 export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length; // the box never changes shape (critique 22): both rounded bottom rules are in the floor, so register.ts hudSlotCap sizes the band's rows from the closed boxes
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length;
+};
+
+/** Rows of the roomy form: every plan row and every agent row, the blank between the blocks, the column names and both closing rules (no rail). What the HUD asks of the slot: the register gives it
+ * this many whenever the band can keep its title row, so a slot that fits the plan never prints `N more todos not shown` (critique 23: `live-150-1/f0060:24`). `now`: the draw's clock. */
+export const hudWantRows = (input: HudInput, cols = 120, now?: number): number => {
+  const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
+  return stack({ todos: s.todos, agents: s.agents }, o, { spacers: true, extras: false, header: true, close: true }).length;
 };
 
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */
