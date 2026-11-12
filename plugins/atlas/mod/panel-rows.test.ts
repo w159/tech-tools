@@ -203,7 +203,7 @@ describe('core tab: caps, notes and figures', () => {
     c.verdicts = [verdict('a')] as never;
     c.claims = [{ owner: 'lonely', status: 'DONE', at: 9, matched: null }, { owner: 'matched', status: 'DONE', at: 8, matched: 'a' }, { owner: 'failed', status: 'FAILED', at: 7, matched: null }] as never;
     const out = core(c);
-    expect(out).toContain('  ▲ lonely unchecked      says done, no verdict yet');
+    expect(out).toContain('  △ lonely unchecked      says done, no verdict yet');
     expect(out.join('\n')).not.toContain('matched ');
     expect(out.join('\n')).not.toContain('failed ');
   });

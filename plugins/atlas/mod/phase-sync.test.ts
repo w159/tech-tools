@@ -95,8 +95,8 @@ describe('A2: `returned` has a mark of its own', () => {
       for (const rows of [s.hud, s.panel]) {
         const row = rowWith(rows, 'edit auth middleware');
         const glyph = row.find((r) => [...r.t.trim()].length === 1 && ENDS.has(r.t.trim()))!;
-        // the HUD's hand-back is the done disc (critique 22), the panel keeps the hand-back arrow
-        expect(glyph.t.trim()).toBe(rows === s.hud ? (ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done) : ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH);
+        // the hand-back is the done disc on the HUD, the panel and the board alike (critique 22, wave 25)
+        expect(glyph.t.trim()).toBe(ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done);
         expect(row.find((r) => r.t.trim() === 'returned')!.tone).not.toBe('warn');
         if (!ui.ascii) expect(glyph.tone).not.toBe('warn');
       }

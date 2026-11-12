@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, countRuns, DONE_KILLED, GRID_LEAD, meter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, countRuns, DONE_KILLED, GRID_LEAD, meter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
@@ -237,7 +237,7 @@ export const headerRows = (m: PanelModel): PanelLine[] => [ribbonRow(m), BLANK, 
 const groupOk = (g: PanelGate): boolean => !g.error && g.lines.every((l) => l.ok);
 /** A group that passes but for conditions only Stop decides: `◇ pending`, neither the green mark nor the warning. */
 const groupPending = (g: PanelGate): boolean => groupOk(g) && g.lines.some((l) => l.pending);
-const groupMark = (g: PanelGate, ui: Ui): Run => (groupPending(g) ? stateRun('queued', ui) : groupOk(g) ? stateRun('done', ui) : warnMark(ui));
+const groupMark = (g: PanelGate, ui: Ui): Run => (groupPending(g) ? stateRun('queued', ui) : groupOk(g) ? stateRun('done', ui) : gateMark(ui));
 const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).length;
 
 /** `phase   research   2/4`: the lit phase and its place on the rail. While the Stop gate refused the stop (or the lead declared it) the phase is `blocked` with no rail
@@ -255,7 +255,7 @@ function gatesRow(m: PanelModel): PanelLine | null {
   const gs = countedGates(gatesOf(m));
   if (!t.total) return null;
   const word = `${t.green}/${t.total} green`;
-  const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), groupPending(g) ? { ...stateRun('queued', m.ui), t: `${stateRun('queued', m.ui).t} ` } : groupOk(g) ? mark('done', m) : { ...warnMark(m.ui), t: `${warnMark(m.ui).t} ` }, r(g.id)]);
+  const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), groupPending(g) ? { ...stateRun('queued', m.ui), t: `${stateRun('queued', m.ui).t} ` } : groupOk(g) ? mark('done', m) : { ...gateMark(m.ui), t: `${gateMark(m.ui).t} ` }, r(g.id)]);
   const full = [label('gates', m.cols), ...names, r(`   ${word}`)];
   if (rowWidth(full) <= m.cols) return line(full);
   return line([label('gates', m.cols), r(word)]);
@@ -699,7 +699,7 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
   // The verified line says what the core tab says (one source, verifiedFigure): a short figure the Stop gate waives is `◇ 0/5 not required`, never a green `●` beside a core `verified 0/5`.
   const vf = ln.id === VERIFIED_GATE ? verifiedFigure(m) : null;
   const waived = !!vf?.waived;
-  const mk = ln.pending || waived ? stateRun('queued', m.ui) : ln.ok ? stateRun('done', m.ui) : warnMark(m.ui);
+  const mk = ln.pending || waived ? stateRun('queued', m.ui) : ln.ok ? stateRun('done', m.ui) : gateMark(m.ui);
   const figure = waived && vf ? `${vf.ok}/${vf.total} not required` : '';
   const beside = figure && cells(first) + GRID_LEAD + 2 + 2 + cells(figure) <= m.cols - 1;
   return [
@@ -881,7 +881,7 @@ function verdictRows(c: CoreModel, m: PanelModel, cap = VERDICT_CAP): PanelLine[
     ];
   });
   const unchecked = owners.map((x) => line(fitRuns(gridRow({
-    cols: m.cols, ui: m.ui, mark: warnMark(m.ui), name: { t: x.owner }, nameW: plan.nameW,
+    cols: m.cols, ui: m.ui, mark: gateMark(m.ui), name: { t: x.owner }, nameW: plan.nameW,
     word: { t: 'unchecked', tone: 'warn' }, wordW: VERDICT_WORD_W, detail: { t: 'says done, no verdict yet' },
   }), m.cols)));
   return [heading('verdicts', figures, m), ...(rows.length || unchecked.length || none ? [...rows, ...unchecked] : [line([r('    no verdict recorded yet', 'muted')])])];
@@ -952,7 +952,7 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
     // A team that ran differently says what happened, in words: `planned audit team (low effort), ran 3 explorers` (data/core plannedText, the band's wording).
     const headName = rt.drift.length ? plannedText(rt) : teamName;
     const headLines = cells(headName) <= m.cols - GRID_LEAD ? [headName] : wrap(headName, Math.max(8, m.cols - GRID_LEAD), 3); // a name wider than the pane wraps on its words, it is never cut
-    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? warnMark(m.ui) : null, name: { t: headLines[0]!, bold: true }, nameW: Math.min(cells(headLines[0]!), Math.max(1, m.cols - GRID_LEAD)) });
+    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? gateMark(m.ui) : null, name: { t: headLines[0]!, bold: true }, nameW: Math.min(cells(headLines[0]!), Math.max(1, m.cols - GRID_LEAD)) });
     const headMore = headLines.slice(1).map((t) => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(t, 'text', { bold: true })], m.cols)));
     const seats = rt.seats.flatMap((s): PanelLine[] => {
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');

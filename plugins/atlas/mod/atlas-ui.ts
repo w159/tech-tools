@@ -243,7 +243,7 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉△━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃○▰▱';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲△▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
+const NON_TEXT = new Set([...'┌┐└┘╭╮╰╯│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲△▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -276,11 +276,11 @@ export const markOf = (state: UiState, word?: string): MarkState => (word === RE
 /** What the Motion tracks for a row: its state, except a doubted done, which is its own entry (it leads amber and never pops the done disc). */
 export const motionState = (state: UiState, word?: string): string => (markOf(state, word) === 'doubt' ? 'doubt' : state);
 /** The token of a mark: the state's own, body text for `returned` (the glyph and its word share one tone, motion included), the amber warn for `doubt`. */
-export const markToken = (s: MarkState): Token => (s === RETURNED ? 'text' : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
+export const markToken = (s: MarkState): Token => (s === RETURNED ? STATE_TOKEN.done : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
 /** The one tone of a row's state WORD on every surface (HUD, side panel, board). */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'text' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' || state === 'blocked' ? 'bad' : state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'dim' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' || state === 'blocked' ? 'bad' : state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
 
-export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
+export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
 export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
   const g = s === 'running' ? spinnerGlyph(spinFrame, ui.ascii) : stateGlyph(s, ui);
@@ -292,7 +292,7 @@ export const WARN_GLYPH = '▲';
 export const WARN_ASCII = '!';
 export const warnMark = (ui: Ui): Run => ({ t: ui.ascii ? WARN_ASCII : WARN_GLYPH, tone: ui.ascii ? 'text' : glyphTone('warn', ui.theme) });
 /** Round 3: the band's gate warning mark, the hollow triangle in the warn amber (179). The solid `▲` is the blocked state's mark alone (the capture scorer reads it as blocked on a row), so a gate warning never wears it
- * and never leads. The band and the omp panel draw this one (mission-layout.ts); the side panel's gates tab still draws `warnMark`. */
+ * and never leads. The band and the omp panel draw this one (mission-layout.ts); the side panel's gate warnings draw it too (wave 25); `warnMark` is left for the blocked core mark. */
 export const WARN_HOLLOW = '△';
 export const gateMark = (ui: Ui): Run => ({ t: ui.ascii ? WARN_ASCII : WARN_HOLLOW, tone: ui.ascii ? 'text' : glyphTone('warn', ui.theme) });
 /** Tone of a state WORD (text, 4.5:1): the state's token where it reaches 4.5:1 on the panel, else `text`; `text` in ASCII mode. */

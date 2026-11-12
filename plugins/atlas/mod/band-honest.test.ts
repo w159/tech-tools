@@ -56,6 +56,21 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
   });
 });
 
+describe('scorer markers: the band line matches the scorer\'s todo regex in every state', () => {
+  const SCORER = /\btodo\b\D*?(\d+)\s*(?:of|\/)\s*(\d+)/;
+  for (const [name, over] of Object.entries(STATES)) {
+    for (const cols of [80, 110, 150]) {
+      test(`${name} at ${cols}: ribbon \`◖ ◆ ATLAS ◗\` leads and the scorer regex reads the plan figure`, () => {
+        const t = head(model({ cols, ...over }));
+        expect(t.startsWith('◖ ◆ ATLAS ◗')).toBe(true);
+        const m = SCORER.exec(t);
+        expect(m).not.toBeNull();
+        expect([Number(m![1]), Number(m![2])]).toEqual([over.done ?? 3, over.total ?? 5]);
+      });
+    }
+  }
+});
+
 describe('step 2: the run clock', () => {
   test('a run that flickers (a gap under the grace) keeps one start; the clock never resets to 0:00', () => {
     let c = stepRun(newRunClock(), true, 1_000);
@@ -155,6 +170,7 @@ describe('step 6: the motion demo strips show the rows, not the bottom border', 
       for (const l of lines) {
         expect(l).toContain(text);
         expect(l).not.toContain('└');
+        expect(l).not.toContain('╰');
       }
     }
   });

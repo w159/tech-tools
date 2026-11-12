@@ -32,7 +32,7 @@ describe('A3: header n of m and the Header contract row are one evaluation', () 
   });
   test('the gates tab reads the core tally: core amber 6 of 8 never sits beside a passing Header contract', () => {
     const rows = text('gates', { gates: [headerPass] as never, core: core(6, 8) }).join('\n');
-    expect(rows).toMatch(/▲ Header contract +warning/);
+    expect(rows).toMatch(/△ Header contract +warning/);
     expect(rows).not.toContain('Last reply header matched');
     expect(rows).toContain('6/8 replies'); // critique 19 C4: the figure is the reply tally, not the one line's `0/1 green`
     const all = text('gates', { gates: [headerPass] as never, core: core(8, 8) }).join('\n');

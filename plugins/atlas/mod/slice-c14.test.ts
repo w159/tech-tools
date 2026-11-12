@@ -71,7 +71,7 @@ describe('C3: the core tab and the gates tab say one thing', () => {
     const rows = out({ gates: gates(true, true) });
     for (const key of ['3 explorers ran, the plan said 1']) {
       const row = rows.find((l) => l.includes(key))!;
-      expect([key, row.includes('▲'), row.includes('■')]).toEqual([key, true, false]);
+      expect([key, row.includes('△'), row.includes('■')]).toEqual([key, true, false]);
     }
   });
   test('gates say evidence and verified findings are fine for this run: the core rows do not flag them', () => {

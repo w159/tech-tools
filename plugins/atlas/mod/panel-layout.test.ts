@@ -159,7 +159,7 @@ describe('gates tab', () => {
   const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
   test('a group says how many fail in words and shows the first fix', () => {
     const row = rows('gates', 100, { gates: g() }).at(-1)!;
-    expect(row).toMatch(/^ {2}▲ Completion gate {2}warning run the hooks suite +1\/2$/);
+    expect(row).toMatch(/^ {2}△ Completion gate {2}warning run the hooks suite +1\/2$/);
     expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });
   test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {
@@ -169,7 +169,7 @@ describe('gates tab', () => {
   });
   test('an open group lists its lines; an open failing line shows the fix and copies it on a second press', () => {
     const open = bodyLines(panelWorld('gates', 100, mocha, { gates: g(), expanded: 'gate:verify' })).map((l) => ({ t: lineText(l), p: l.press }));
-    expect(open.map((x) => x.t)).toContain('    ▲ verification coverage');
+    expect(open.map((x) => x.t)).toContain('    △ verification coverage');
     expect(open.map((x) => x.t)).toContain('      fix: run the hooks suite (press to copy)');
     expect(open.find((x) => x.p?.key === 'gate:verify')?.p?.copy).toBe('run the hooks suite');
   });
