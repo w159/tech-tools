@@ -32,7 +32,8 @@ export function liveWorkers(snapshot: LiveSnapshot, now: number): LiveWorker[] {
     .map((a): LiveWorker => {
       const act = snapshot.activity[a.name];
       // Host-listed completion wins over a stale 'blocked' mood; only live squad states can be blocked.
-      const state = a.state === 'finished' ? 'done'
+      // Failure is terminal: a worker the activity record failed (a killed task) is never read done, whatever the squad row says later.
+      const state = a.state === 'finished' ? (act?.mood === 'failed' ? 'failed' : 'done')
         : a.state === 'failed' || a.state === 'dead' ? 'failed'
         : a.state === 'parked' ? 'parked'
         : act?.mood === 'blocked' || a.state === 'input' || a.state === 'stuck' ? 'blocked'

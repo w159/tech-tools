@@ -5,7 +5,7 @@ import type { AgentInfo, EngineInterface, On } from 'claude-code'
 import { registerRestyle } from '../restyle'
 import type { AtlasSnapshot } from '../contract'
 import { memState } from '../test_helpers'
-import { cardExtra, launchedId, notifiedMs, outcomeText, reportOf } from './outcome'
+import { cardExtra, forgetFailed, launchedId, notifiedMs, outcomeText, reportOf } from './outcome'
 import { spin } from '../theme'
 
 const SNAP = {
@@ -39,6 +39,7 @@ const SENTINEL = { type: 'Text', props: {}, children: [] }
 const next = async () => SENTINEL
 
 function engine(agents: AgentInfo[], meta: Record<string, unknown> = {}, tick: number | null = 3): EngineInterface {
+  forgetFailed() // the failed-id memo is module state: every test starts without it
   return {
    env: { get: async () => undefined },
    state: memState({ 'atlas/snapshot': SNAP, ...(tick === null ? {} : { 'atlas/spinnerTick': tick }), 'atlas/orch': { activity: {}, comms: [], stage: {}, meta } }),
@@ -98,6 +99,7 @@ test("critique 14 B3: a worker the mod saw end (the HUD's signal) reads done on 
   const failed = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'failed', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
   expect((await cardExtra(failed, e.props.output, [e.agent], new Map())).ended).toBe('failed')
   expect(strings(await sites().ToolUse!(failed, e, next))).toContain('failed')
+  forgetFailed() // an id that failed stays failed (critique 15 A1): the next case is a fresh worker
   const working = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'working', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
   expect(await cardExtra(working, e.props.output, [e.agent], new Map())).toEqual({ mark: spin(3, 'implement') })
 })

@@ -399,6 +399,14 @@ describe('live 6b7f637d: a shell call is never the LAST column text (critique 13
     expect(lastAction({ tool: null, target: cmd, detail: null, lastTool: 'Bash', lastLine: '' })).toBe('run atlas_todo.py');
     expect(lastAction({ tool: 'Bash', target: 'ls -la /tmp/x', detail: null, lastTool: null, lastLine: '' })).toBe('run ls');
   });
+  // critique 15 A4: the event keeps 40 chars of the command as `target`, which cut the script path mid-name: `last run -home-user-tech-t`
+  test('A4: a command cut at 40 chars reads the script from the full command, else the interpreter, never a path fragment', () => {
+    const cut = cmd.slice(0, 40);
+    expect(cut).toBe('python3 "/tmp/claude-0/-home-user-tech-t');
+    expect(lastAction({ tool: 'Bash', target: cut, detail: cmd, lastTool: null, lastLine: '' })).toBe('run atlas_todo.py');
+    expect(lastAction({ tool: null, target: cut, detail: cmd, lastTool: 'Bash', lastLine: '' })).toBe('run atlas_todo.py');
+    expect(lastAction({ tool: 'Bash', target: cut, detail: null, lastTool: null, lastLine: '' })).toBe('run python3');
+  });
   test('other tools keep `tool target`', () => {
     expect(lastAction({ tool: 'Read', target: 'alpha.py', detail: null, lastTool: null, lastLine: '' })).toBe('read alpha.py');
   });

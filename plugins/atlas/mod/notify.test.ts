@@ -70,6 +70,8 @@ describe('diffSnapshots', () => {
 		const failed = snap({ squad: [agent('a', 'failed')] });
 		expect(diffSnapshots(snap({ squad: [agent('a', 'running')] }), failed)).toEqual([{ type: 'agent-fail', name: 'a', lastLine: '' }]);
 		expect(diffSnapshots(failed, snap({ squad: [agent('a', 'failed')] }))).toEqual([]);
+		// critique 15 A1: failure is terminal, a failed worker later read as finished raises no done toast
+		expect(diffSnapshots(failed, snap({ squad: [agent('a', 'finished')] }))).toEqual([]);
 	});
 
 	test('new working agent toasts spawn; a new already-finished one is not a completion', () => {

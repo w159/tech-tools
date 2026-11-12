@@ -20,6 +20,13 @@ test('host-finished worker is done even when its activity mood is blocked', () =
   expect(liveWorkers(s, NOW).find((w) => w.name === 'probe-park')?.state).toBe('done');
 });
 
+test('critique 15 A1: failure is terminal, a worker the activity record failed is not read done when the squad row later says finished', () => {
+  const s = busySnap({ squad: [], activity: {} });
+  s.squad.push({ name: 'ghost-explorer', persona: 'explorer', state: 'finished', source: 'task' });
+  s.activity['ghost-explorer'] = { mood: 'failed', tool: null, since: NOW, toolCount: 0, tokens: null, lastLine: '' } as unknown as (typeof s.activity)[string];
+  expect(liveWorkers(s, NOW).find((w) => w.name === 'ghost-explorer')?.state).toBe('failed');
+});
+
 test('liveWorkers carries startedAt, target, and a distinct parked state outside the working count', () => {
   const s = busySnap();
   s.activity['explorer-1'] = { ...s.activity['explorer-1']!, since: NOW - 3_000, startedAt: NOW - 300_000, target: 'auth.ts' };

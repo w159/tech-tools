@@ -9,7 +9,7 @@ import type { AtlasSnapshot } from '../contract'
 import type { LiveSnapshot } from '../orchestra-types'
 import { endedAt, liveWorkers } from '../data/live'
 import { notificationTree } from './cards'
-import { outcomeText } from './outcome'
+import { forgetFailed, outcomeText } from './outcome'
 import type { Ui } from '../atlas-ui'
 
 /** One finished worker, as the card needs it. */
@@ -23,6 +23,8 @@ const rows = new Map<string, PlacedRow>() // placed id -> card
 const unclaimed = new Map<string, number>() // worker name -> cards placed that no host notification has claimed yet
 const heard = new Map<string, number>() // worker name -> host notifications drawn before any card was placed
 const decided = new Map<string, boolean>() // notification requestId -> hidden: one decision per message, however often it redraws
+const owed = new Map<string, { w: FinishedWorker; tries: number }>() // worker name -> a finish whose card the host refused: retried on the next builds
+const MAX_TRIES = 30
 let counter = 0
 
 const bump = (m: Map<string, number>, k: string, by: number): void => { m.set(k, Math.max(0, (m.get(k) ?? 0) + by)) }
@@ -40,6 +42,7 @@ export function finishedWorkers(prev: AtlasSnapshot | null, next: AtlasSnapshot)
   for (const w of workersOf(next)) {
     const was = before.get(w.name)
     if (was === undefined || was === w.state || (w.state !== 'done' && w.state !== 'failed')) continue
+    if (was === 'failed') continue // failure is terminal: a failed worker read done later (critique 15: the killed ghost-explorer) gets no done card
     out.push({ name: w.name, role: w.role, failed: w.state === 'failed', durationMs: Math.max(0, endedAt(w, next.now) - w.startedAt) })
   }
   return out
@@ -48,9 +51,14 @@ export function finishedWorkers(prev: AtlasSnapshot | null, next: AtlasSnapshot)
 /** `finished · 13s` / `failed · 13s`, the words the host's own row carries. */
 const textOf = (w: FinishedWorker): string => outcomeText({ status: w.failed ? 'failed' : 'completed', line: '', ...(w.durationMs > 0 ? { durationMs: w.durationMs } : {}) })
 
-/** Place a card for each worker that finished between `prev` and `next`. Never throws: a card is display only. */
+/** Place a card for each worker that finished between `prev` and `next`, and for each finish whose place the host refused on an earlier build
+ * (critique 15 A2: one refused place lost the failed card for good in 3 of 6 stop runs). Never throws: a card is display only. */
 export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | null, next: AtlasSnapshot): Promise<void> {
-  for (const w of finishedWorkers(prev, next)) {
+  const fresh = finishedWorkers(prev, next)
+  const todo = [...fresh, ...[...owed.values()].map((o) => o.w).filter((o) => !fresh.some((f) => f.name === o.name))]
+  for (const w of todo) {
+    const tries = (owed.get(w.name)?.tries ?? 0) + 1
+    owed.delete(w.name)
     try {
       if ((heard.get(w.name) ?? 0) > 0) { bump(heard, w.name, -1); continue } // the host row already drew this finish
       const id = `done-${w.name.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 50)}-${++counter}`
@@ -58,9 +66,10 @@ export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | nu
       capped(rows)
       const res = await $.ui.place({ id })
       if (res.isPlaced) bump(unclaimed, w.name, 1)
-      else rows.delete(id)
+      else { rows.delete(id); if (tries < MAX_TRIES) owed.set(w.name, { w, tries }) }
     } catch {
-      // no surface to place into: the host's notification row draws the finish
+      // no surface to place into: the host's notification row draws the finish; the card is tried again on the next build
+      if (tries < MAX_TRIES) owed.set(w.name, { w, tries })
     }
   }
 }
@@ -85,5 +94,5 @@ export function hideNotification(requestId: string, name: string): boolean {
 
 /** Forget every placed card and decision (a new session, a test). */
 export function forgetPlaced(): void {
-  rows.clear(); unclaimed.clear(); heard.clear(); decided.clear(); counter = 0
+  rows.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); counter = 0; forgetFailed()
 }

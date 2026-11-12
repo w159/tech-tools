@@ -126,9 +126,12 @@ const INTERPRETERS = new Set(['python', 'python3', 'node', 'bun', 'bash', 'sh', 
 const shellCall = (command: string): string => {
   const words = (command.match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((w) => w.replace(/^["']|["']$/g, ''));
   const first = words[0] ?? '';
-  const word = INTERPRETERS.has(first.split('/').pop() ?? first) ? (words.slice(1).find((w) => !w.startsWith('-')) ?? first) : first;
+  const named = (w: string): boolean => !w.startsWith('-') && !(w.split('/').pop() ?? w).startsWith('-'); // `-home-user-tech-t`: a path cut mid-name is no script
+  const word = INTERPRETERS.has(first.split('/').pop() ?? first) ? (words.slice(1).find(named) ?? first) : first;
   return `run ${word.split('/').pop() || 'shell'}`;
 };
+/** The event keeps 40 chars of a command as `target`; the full command rides in `detail` when the call had no description. */
+const wholeCommand = (target: string, detail: string | null | undefined): string => { const d = flat(detail); return target !== '' && d.startsWith(target) ? d : target; };
 const isShell = (tool: string | null | undefined): boolean => (tool ?? '').toLowerCase() === 'bash';
 
 /** The agent's current call (`read runs.ts:17`), else its last line, else its last call. */
@@ -136,9 +139,10 @@ export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'las
   const base = root ? `${root.replace(/\/+$/, '')}/` : '';
   const rel = (s: string): string => (base ? s.split(base).join('') : s);
   const target = rel(flat(a.target));
-  if (a.tool) return isShell(a.tool) && target ? shellCall(target) : `${a.tool.toLowerCase()}${target ? ` ${target}` : ''}`;
+  const command = wholeCommand(target, a.detail != null ? rel(flat(a.detail)) : a.detail);
+  if (a.tool) return isShell(a.tool) && target ? shellCall(command) : `${a.tool.toLowerCase()}${target ? ` ${target}` : ''}`;
   // Between calls and after the end: the last call (its target, else its intent), then the free-text report only when there was no call.
-  const call = isShell(a.lastTool) && target ? shellCall(target) : a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${target}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
+  const call = isShell(a.lastTool) && target ? shellCall(command) : a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${target}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
   return call || rel(flat(a.lastLine));
 }
 
