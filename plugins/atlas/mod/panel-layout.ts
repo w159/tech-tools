@@ -6,9 +6,9 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, countRuns, DONE_KILLED, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, countRuns, DONE_KILLED, GRID_LEAD, meter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
-import { ELLIPSIS, clipE, labelCut, planFigure } from './board-model';
+import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runstate';
@@ -153,7 +153,7 @@ const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : 
 /** The state glyph of agent `id` on its row. */
 const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => stateRun(s, m.ui, frameOf(m, id));
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
-const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal));
+const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal)) || ELLIPSIS; // a worker is never a blank cell: whole name, or `…` (critique 22: `◐ running` with no AGENT)
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
 const nameCap = (cols: number): number => Math.max(18, Math.min(40, cols - GRID_LEAD - 2 - 7 - 6));
 
@@ -186,13 +186,13 @@ const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
 };
 
 /** A channel as a person reads it: a generated id (`lc-opl0e60i`, a launch code) is no name, so it reads `this run`; a named channel keeps its `#name` (critique 12). */
-export const channelLabel = (name: string | undefined, fallback = 'channel'): string => (name && /^lc-[a-z0-9]{4,}$/i.test(name) ? 'this run' : `#${name ?? fallback}`);
+export const channelLabel = (name: string | undefined, fallback = 'channel'): string => (name && /^lc-[\w-]{4,}$/i.test(name) ? 'this run' : `#${name ?? fallback}`);
 
 /** The ribbon's right-hand text: what the active tab counts, always with its word. */
 function ribbonRight(m: PanelModel): string {
   if (m.tab === 'team') return m.lead ? '' : m.workers.length ? countWords(m.workers, m.ui) : ''; // with a lead the tally is the `workers` row under it: once, at every width (critique 14: `3 done` twice)
   if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green}/${t.total}` : ''; } // `n/m` at every width: `2/4` at 110 and `1 of 4 green` at 150 was one figure in two formats (critique 11)
-  if (m.tab === 'channel') return m.channel ? channelLabel(m.channel) : '';
+  if (m.tab === 'channel') return m.channel && channelLabel(m.channel) !== 'this run' ? channelLabel(m.channel) : ''; // the head row says `this run` once; the ribbon names only a real channel
   return '';
 }
 
@@ -201,13 +201,13 @@ export function ribbonRow(m: PanelModel, view?: { title: string; right: string }
   if (m.cols < 34) {
     const cap = capsule(m.ui);
     const fill = Math.max(0, m.cols - rowWidth(cap) - 1);
-    return line(fitRuns([...cap, r(' '), m.ui.ascii ? r('-'.repeat(fill), 'muted') : r('━'.repeat(fill), 'line')], m.cols));
+    return line(fitRuns([...cap, r(' '), m.ui.ascii ? r('-'.repeat(fill), 'muted') : r('─'.repeat(fill), 'dim')], m.cols));
   }
   const right = view ? view.right : ribbonRight(m);
   const fitsRight = right && m.cols >= 40 + cells(right);
   // The gates figure (`17/18`) never drops from the header while the capsule and title fit beside it.
   const keep = !view && m.tab === 'gates' && !!right && m.cols >= 32 + cells(right);
-  return line(ribbon(m.cols, view?.title ?? 'SIDEPANEL', fitsRight || keep ? right : '', m.ui));
+  return line(lightRibbon(ribbon(m.cols, view?.title ?? 'SIDEPANEL', fitsRight || keep ? right : '', m.ui), m.ui));
 }
 
 /** The tab strip and the rule under the lit tab (design rev 5, C1): `route  team  channel  gates  core  board`, the lit name bold accent with `━━━━━` in accent under it, the rest
@@ -265,7 +265,7 @@ function todoCount(m: PanelModel): PanelLine {
   const done = m.todos.filter((t) => t.state === 'done').length;
   const total = m.todos.length;
   if (!total) return line([label('todo', m.cols), r('no tasks yet', 'muted')]);
-  const g = m.cols >= 40 ? [...gauge(10, done / total, m.ui, 'ok', 'muted'), r(' ')] : []; // the ok tone fills and the muted tone is the track: quieter than any state word
+  const g = m.cols >= 40 ? [...meter(10, done / total, m.ui), r(' ')] : []; // the HUD's `▰▱` meter (atlas-ui meter()), never the `████░░` gauge
   return line([label('todo', m.cols), ...g, r(planFigure(done, total, m.todos.filter((t) => t.word === RETURNED).length))]);
 }
 
@@ -320,7 +320,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   const spelled = doubt && (w.doubtWord === true || m.cols < SPILL_BELOW);
   const wordRun = { t: spelled ? DONE_KILLED : t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
   const settled = t.state === 'done' && markOf(t.state, t.word) !== 'doubt'; // a done row whose worker failed (critique 17 A1) is not struck through
-  const nameCell = { tone: settled ? 'sub' as const : 'text' as const, ...(settled ? { strike: true } : {}) }; // a done title is struck through, as in the HUD (critique 11)
+  const nameCell = { tone: settled ? 'sub' as const : 'text' as const }; // a done title is dim, never struck through (the HUD draws none; critique 22)
   const accent = markOf(t.state, t.word);
   const glyph = stateMark(accent, m, t.owner || t.id);
   // A title that does not fit beside its state word is drawn whole and its state follows it (critique 14, the 110-column pane: `T1 read alpha.py (alpha...` was cut
@@ -338,7 +338,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
     const inline = lastW + TODO_GAP + cells(wordRun.t) <= width;
     const owner = w.valueW && ownerColumn(t) ? clipE(oneLine(t.owner), w.valueW) : '';
     const ownerTail = (used: number): Run[] => (owner && used + TODO_GAP + cells(owner) <= width ? [r(' '.repeat(TODO_GAP)), r(owner, 'sub')] : []);
-    const cont = lines.slice(1).map((l, i, a): Run[] => [r(' '.repeat(GRID_LEAD)), r(l, nameCell.tone, nameCell.strike ? { strike: true } : {}), ...(inline && i === a.length - 1 ? wordTail : [])]);
+    const cont = lines.slice(1).map((l, i, a): Run[] => [r(' '.repeat(GRID_LEAD)), r(l, nameCell.tone), ...(inline && i === a.length - 1 ? wordTail : [])]);
     const tail: Run[][] = inline ? [] : [[r(' '.repeat(GRID_LEAD)), r(wordRun.t, wordRun.tone), ...ownerTail(cells(wordRun.t))]];
     const firstRuns = [...head, ...(inline && lines.length === 1 ? wordTail : [])];
     rows = [moving(firstRuns, key, accent, m), ...cont, ...tail].map((runs, i) => line(fitRuns(runs, m.cols), i === 0 ? { kind: 'toggle', key } : undefined));
@@ -547,6 +547,14 @@ export function workersByTask(m: Pick<PanelModel, 'todos' | 'workers'>): PanelWo
 /** A hint under a row that already says the pane is empty (the route tab's todo row): indented like the rows it stands in for, wrapped to the pane. */
 const indentedHint = (m: PanelModel, text: string): PanelLine[] => wrap(text, Math.max(8, m.cols - GRID_LEAD), 3).map((l) => line([r(' '.repeat(GRID_LEAD)), r(l, 'muted')]));
 /** An empty tab's one sentence (design rev 5, C2): dim and centred in the pane, nothing else under it. */
+/** One dim line in the middle of the pane's body (an empty channel or board): centred across the width and down the rows the pane has left. */
+export function centred(m: Pick<PanelModel, 'cols' | 'rows'>, text: string): PanelLine[] {
+  const t = clipE(text, Math.max(1, m.cols - 2));
+  const lead = Math.max(0, Math.floor((m.cols - cells(t)) / 2));
+  const above = Math.max(1, Math.floor((m.rows - 8) / 2));
+  return [...Array.from({ length: above }, () => BLANK), line([r(' '.repeat(lead)), r(t, 'dim')])];
+}
+
 export const emptyHint = (m: PanelModel, text: string): PanelLine[] => {
   const t = clipE(text, Math.max(8, m.cols - 2));
   return [line([r(' '.repeat(Math.max(1, Math.floor((m.cols - cells(t)) / 2)))), r(t, 'muted')])];
@@ -609,7 +617,7 @@ function channelBody(m: PanelModel): PanelLine[] {
     r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted'),
     ...(id && gap >= 2 ? [r(' '.repeat(gap)), r(id, 'dim')] : []),
   ], m.cols));
-  if (!m.notes.length) return [head, BLANK, ...emptyHint(m, 'no messages yet')];
+  if (!m.notes.length) return [head, ...centred(m, 'no messages yet')];
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane
   const timeW = m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(n.at))) : 0;
@@ -1074,11 +1082,11 @@ export function cardLines(c: CardModel, cols = 120): Run[][] {
   const hasSteps = !!c.steps && c.steps.total > 0;
   if (c.steps && hasSteps) {
     const v = c.steps.done / c.steps.total;
-    rows.push(body([rowLabel('steps'), ...gauge(gaugeW, v, c.ui, 'info'), r(` ${c.steps.done} of ${c.steps.total} ${dot(c.ui)} ${percent(v)}`)]));
+    rows.push(body([rowLabel('steps'), ...meter(gaugeW, v, c.ui), r(` ${c.steps.done} of ${c.steps.total} ${dot(c.ui)} ${percent(v)}`)]));
   }
   if (c.ctx !== undefined) {
     if (hasSteps) rows.push(body([])); // gauges on adjacent rows touch and merge into one stepped block
-    rows.push(body([rowLabel('ctx'), ...gauge(gaugeW, c.ctx, c.ui, 'info'), r(` ${percent(c.ctx)}`)]));
+    rows.push(body([rowLabel('ctx'), ...meter(gaugeW, c.ctx, c.ui), r(` ${percent(c.ctx)}`)]));
   }
   return [top, ...rows, [edge(`${b.bl}${b.h.repeat(w - 2)}${b.br}`)]];
 }
@@ -1087,7 +1095,7 @@ export function cardLines(c: CardModel, cols = 120): Run[][] {
 export const CARD_WORD_W = 7;
 
 /** The head of a toast: a left bar in `tone` (`▌`, `|` in ASCII), then the ATLAS mark. */
-const toastHead = (tone: Tone, ui: Ui): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...brandMark(ui), r('  ')];
+const toastHead = (tone: Tone, ui: Ui): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...(ui.ascii ? brandMark(ui) : [r('◆ ', 'dim'), r('ATLAS', 'dim')]), r('  ')]; // the mark is dim: the one solid chip belongs to the band, a card repeats only the name (critique 22: ten ATLAS marks on one screen)
 
 /** `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps`: the bar and the state word in the state's tone, then the mark, the state, the
  * name, one fact. No full stop. */

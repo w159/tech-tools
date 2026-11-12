@@ -121,12 +121,13 @@ describe('board goldens', () => {
       }
     }
   });
-  test('the running row is the focus: marker, bold label; done labels are struck', () => {
+  test('the running row is the focus: marker, bold label; done labels are dim, never struck', () => {
     const rows = boardLines(worldBoardRows(), { cols: 120, ui: ui('mocha') });
     const running = rows[6]!.runs;
     expect(running[0]).toMatchObject({ t: '▸', tone: 'accent', bold: true });
     expect(running.find((x) => x.t === 'Subagents block')).toMatchObject({ tone: 'text', bold: true });
-    expect(rows[3]!.runs.find((x) => x.t === 'Wire band to host')).toMatchObject({ tone: 'sub', strike: true });
+    expect(rows[3]!.runs.find((x) => x.t === 'Wire band to host')).toMatchObject({ tone: 'sub' });
+    expect(rows[3]!.runs.some((x) => x.strike)).toBe(false); // critique 22: no strikethrough anywhere on the board
   });
   test('a long owner is cut to 18 cells and a long label to its column, so no cell runs into the next', () => {
     const lines = boardLines([{ label: 'L'.repeat(60), state: 'queued', owner: 'o'.repeat(40), detail: 'd' }], { cols: 120, ui: ui('mocha') });
@@ -157,7 +158,8 @@ describe('chips and contrast', () => {
         for (const r of boardLines(worldBoardRows(), { cols, ui: ui(theme), rich }).flatMap((l) => l.runs)) {
           if (!r.t.trim()) continue;
           const ratio = contrast(toneHex(r.tone, theme), r.bg ? toneHex(r.bg, theme) : p.panel);
-          expect([theme, cols, r.t, ratio >= (r.chip ? NEED.text : NEED[runKind(r.t)])]).toEqual([theme, cols, r.t, true]);
+          if (/^▱+$/.test(r.t)) continue; // the meter's empty track is the quiet tone on purpose (the HUD draws the same)
+          expect([theme, cols, r.t, ratio >= (r.chip ? NEED.text : /^[─━]+$/.test(r.t) ? NEED.glyph : NEED[runKind(r.t)])]).toEqual([theme, cols, r.t, true]);
           checked++;
         }
       }
@@ -282,11 +284,11 @@ describe('mutation kills (round 2): blockedCount, boardCounts, the elapsed gauge
     // 100 columns leave 37 cells for the detail; `1000:00 of 1000:00` is 18, so the gauge row (8 + 10 + 1 + 18) fits to the cell.
     const running = (secs: number, of: number) => ({ label: 'x', state: 'running' as const, owner: '', detail: '', elapsed: { secs, of } });
     const detail = (r: ReturnType<typeof running>, cols: number) => boardText(boardLines([r], { cols, ui: ui('mocha'), rich: true })).at(-1)!.slice(62).trimEnd();
-    expect(detail(running(60_000, 60_000), 100)).toBe('elapsed ██████████ 1000:00 of 1000:00');
-    // The gauge fill is the true fraction: a task at a quarter of its estimate fills a quarter.
-    expect(detail(running(15, 60), 120)).toBe('elapsed ██▌░░░░░░░ 00:15 of 01:00');
+    expect(detail(running(60_000, 60_000), 100)).toBe('elapsed ▰▰▰▰▰▰▰▰▰▰ 1000:00 of 1000:00');
+    // The meter fill is the true fraction (rounded to a cell): a task at a quarter of its estimate fills three of ten.
+    expect(detail(running(15, 60), 120)).toBe('elapsed ▰▰▰▱▱▱▱▱▱▱ 00:15 of 01:00');
     // An estimate of one second still divides by one, not by a larger floor.
-    expect(detail(running(1, 1), 120)).toBe('elapsed ██████████ 00:01 of 00:01');
+    expect(detail(running(1, 1), 120)).toBe('elapsed ▰▰▰▰▰▰▰▰▰▰ 00:01 of 00:01');
   });
 });
 

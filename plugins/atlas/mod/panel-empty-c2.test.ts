@@ -23,7 +23,7 @@ describe('C2: an empty pane is one dim centred line', () => {
         expect(sayRow).toHaveLength(1);
         const text = lineText(sayRow[0]!);
         expect(text).not.toContain('(no state)');
-        expect(sayRow[0]!.runs.filter((x) => x.t.trim()).every((x) => x.tone === 'muted' && !x.bold)).toBe(true);
+        expect(sayRow[0]!.runs.filter((x) => x.t.trim()).every((x) => (x.tone === 'muted' || x.tone === 'dim') && !x.bold)).toBe(true);
         const left = text.length - text.trimStart().length;
         const right = cols - left - cells(text.trim());
         expect(Math.abs(left - right)).toBeLessThanOrEqual(1); // centred in the pane

@@ -5,10 +5,10 @@
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
-import { emptyHint, HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
+import { centred, HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { boardFolded, boardLines, boardOpenFolded, boardRibbon, boardRowsOf } from '../board-model';
+import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardTimeline } from '../board-model';
 import { gateTally } from '../data/runstate';
 import { noteStopVerdict } from '../transcript/superseded';
 import { panelModelOf } from './sidebar-model';
@@ -59,7 +59,8 @@ function boardItems(m: SidebarModel) {
 /** The board view's ribbon words. Where the strip is the bare one-row form (no `r: route` keys on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
  * tells the pane from a toast box by `r: route` or `▸ SIDEPANEL` and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
 export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { title: string; right: string } {
-  const b = boardRibbon(boardRowsOf(boardItems(model), Math.floor(model.snapshot.now / 1000)));
+  // The count is said once, by the summary row in the body (`5 items · 3 dispatches`), not again in the ribbon (critique 22: `5 items` twice).
+  const b = { title: 'BOARD', right: '' };
   return stripLayout(cols).bare ? { ...b, title: ui.ascii ? 'SIDEPANEL > BOARD' : 'SIDEPANEL ▸ BOARD' } : b;
 }
 
@@ -71,8 +72,12 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const stop = gateTally(m.gates as never).stop;
   const lines = items.length
     ? boardLines(boardRowsOf(items, Math.floor(s.now / 1000)), { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, dispatches: items.filter((i) => i.origin === 'dispatch').length, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
-    : emptyHint(pm, 'nothing on the board yet');
-  const shown = lines.length <= max ? lines : [...lines.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${lines.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
+    : centred(pm, 'nothing on the board yet');
+  // Under the rows, what fills the pane: one timeline row per agent (`alpha-explorer ━━━━━━━━ 14s ●`), as many as the spare height holds.
+  const spare = max - lines.length - 2;
+  const timeline = items.length && spare >= 2 ? boardTimeline(pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs })), { cols, ui, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }) }, spare - 1) : [];
+  const body = timeline.length ? [...lines, { runs: [{ t: ' ', tone: 'text' as const }] }, ...timeline] : lines;
+  const shown = body.length <= max ? body : [...body.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${body.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: shown.map((l) => lineEl(els, { runs: l.runs }, m, on, ui)) });
 }
 

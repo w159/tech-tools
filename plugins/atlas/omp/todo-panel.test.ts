@@ -42,11 +42,12 @@ test("[] without todos, without room or folded; a short slot ends in +N more", (
 	expect(short[3]!.trimEnd()).toBe("  +5 more");
 });
 
-test("colours come from the shared tokens: done glyph ok, struck label sub, running marker accent bold, chip on its fill", () => {
+test("colours come from the shared tokens: done glyph ok, dim label sub, running marker accent bold, chip on its fill", () => {
 	const line = (i: number, rich = false) => todoLines(items, o(120, { rich }))[i]!;
 	const fg = (hex: string) => sgrColor(hex, 38, "truecolor");
 	expect(line(1)).toContain(`${fg(PALETTES.mocha.ok)};${sgrColor(PALETTES.mocha.panel, 48, "truecolor")}m●`);
-	expect(line(1)).toContain(`9;${fg(PALETTES.mocha.sub)}`); // strike, then the sub colour
+	expect(line(1)).toContain(fg(PALETTES.mocha.sub)); // the sub colour, never struck (critique 22)
+	expect(line(1)).not.toContain("\x1b[9m");
 	expect(line(4)).toContain(`1;${fg(toneHex("accent", "mocha"))}`);
 	expect(line(1, true)).toContain(sgrColor(PALETTES.mocha.ok, 48, "truecolor")); // the DONE chip fill
 });
@@ -56,10 +57,10 @@ test("the running row spins with the tick", () => {
 	expect([0, 1, 2, 3].map(glyph)).toEqual(["◐", "◓", "◑", "◒"]);
 });
 
-test("NO_COLOR: no colour escapes, only bold and strike", () => {
+test("NO_COLOR: no colour escapes, only bold", () => {
 	const lines = todoLines(items, o(120, { ui: { ...mocha, color: "none" } }));
 	for (const l of lines) expect(l).not.toMatch(/\x1b\[[0-9;]*(38|48);/);
-	expect(lines[1]).toContain("\x1b[9m");
+	expect(lines.join("")).not.toContain("\x1b[9m"); // no strikethrough on any row (critique 22)
 });
 
 test("renderPanel puts the board under the band: header and one row per todo within the line budget", () => {
