@@ -208,6 +208,10 @@ export function fitHex(hex: string, theme: ThemeName): string {
   return out;
 }
 
+/** A #rrggbb handed to a host element (Text color, a fill), as it must be handed for `ui`: in 256-colour mode the brief colour's pre-image, so the host's own downsampler lands on the brief's
+ * index (critique 26: the raw accent #af87ff reached the terminal as 147, ok as 151, error as 210 and body text as 251). Truecolor keeps the hex. */
+export const hexIn = (hex: string, ui: Pick<Ui, 'theme' | 'color'>): string => (ui.color === '256' ? fitHex(hex, ui.theme) : hex);
+
 /** SGR parameter for a foreground (`38`) or background (`48`) colour; empty when colour is off. */
 export function sgrColor(hex: string, layer: 38 | 48, mode: ColorMode): string {
   if (mode === 'none') return '';
@@ -411,6 +415,10 @@ export function elapsedClock(secs: number): string {
   const [h, m, r] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}` : `${m}:${String(r).padStart(2, '0')}`;
 }
+
+/** An agent's run as the one clock every surface prints (card, toast, HUD, board, panel, band): whole seconds between its two timestamps, floored, `0:14`. Critique 26: the card said `15s`
+ * (rounded, a different clock) where SUBAGENTS said `0:14`, and the board `11s` for `0:10`. */
+export const msClock = (ms: number): string => elapsedClock(ms / 1000);
 
 export const WORDMARK = 'ATLAS';
 /** Retired (round 3): the lit-letter sweep read as a stray cursor. Kept so old callers compile; nothing draws it. */
@@ -626,7 +634,7 @@ let shared: number | null = null;
 let holds = 0;
 /** Share `frame` until the returned release runs. Renders overlap (the band and the side panel draw concurrently), so holds count: the frame clears when the last release runs. */
 export function holdSpinFrame(frame: number): () => void {
-  shared = Math.floor(frame);
+  if (holds === 0 || shared === null) shared = Math.floor(frame); // the first holder wins: a render that starts while another draws turns the same frame
   holds++;
   let open = true;
   return () => {

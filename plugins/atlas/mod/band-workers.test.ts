@@ -99,7 +99,7 @@ describe('band worker rows beside the Subagents block (live frame shape: band sl
 
   test('the clock column counts from snapshot.now', () => {
     const rows = rowsOf(93, 2, [explorer('alpha-explorer', { startedAt: NOW - 12_000 })]);
-    expect(rows[1]).toContain('00:12');
+    expect(rows[1]).toContain('0:12');
   });
 
   test('a long name is clipped in cells, the row stays exactly as wide as the band', () => {

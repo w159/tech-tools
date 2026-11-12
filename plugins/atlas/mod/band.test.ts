@@ -133,7 +133,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const live = liveWorkers(snapshot, NOW).map((w) => ({ ...w, state: 'done' as const, startedAt: NOW - 100_000, since: NOW - 30_000 }));
     const { rows } = panel(160, { snapshot, live });
     expect(rows[0]).not.toMatch(/running|failed/);
-    expect(rows[1]).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
+    expect(rows[1]).toMatch(/^ last run {2}3 workers · 1:10 · all ok +$/);
   });
   test('a failed worker turns the last run into a bold failed count', () => {
     const live = liveWorkers(busySnap(), NOW).map((w, i) => ({ ...w, state: i ? ('done' as const) : ('failed' as const), startedAt: NOW - 60_000, since: NOW - 30_000 }));
@@ -146,7 +146,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const live = liveWorkers(snapshot, NOW).map((w, i) => ({ ...w, state: 'done' as const, startedAt: i < 2 ? NOW - 300_000 : NOW - 40_000, since: NOW - 20_000 }));
     const last = panel(160, { snapshot: busySnap({ squad: [], activity: {}, comms: [], todos: [] }), live }).rows[1]!;
     expect(last).toContain('last run  1 worker ');
-    expect(last).toContain('20s');
+    expect(last).toContain('0:20');
   });
 });
 
@@ -216,7 +216,7 @@ describe('workers: a row each, in words', () => {
     }
   });
   test('the elapsed time ends the row', () => {
-    for (const columns of [80, 100, 160, 200]) expect(panel(columns).rows.find((r) => r.includes('explorer-1'))).toMatch(/ 00:42 $/);
+    for (const columns of [80, 100, 160, 200]) expect(panel(columns).rows.find((r) => r.includes('explorer-1'))).toMatch(/ 0:42 $/);
   });
   test('shortTool strips mcp server prefixes', () => {
     expect(shortTool('mcp__lean-ctx__ctx_shell')).toBe('ctx_shell');

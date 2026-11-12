@@ -7,7 +7,8 @@ import type { AgentInfo, EngineInterface, RenderElement } from 'claude-code'
 import { EMPTY_ORCH } from '../data/orchestration'
 import { endedAt, liveWorkers } from '../data/live'
 import type { ActivityEntry, LiveSnapshot } from '../orchestra-types'
-import { formatDuration, spin } from '../theme'
+import { spin } from '../theme'
+import { msClock } from '../atlas-ui'
 import { notificationTree, resultLine, stripStatus } from './cards'
 import { lookOf } from '../look'
 import { agentName } from '../hud'
@@ -97,7 +98,7 @@ export function outcomeText(o: Outcome): string {
 /** The lifecycle word, owned here: the notification row leads with it, the card uses it as its row label. */
 const endedWord = (o: Outcome): string => (o.status === 'completed' || o.status === 'idle' ? 'finished' : o.status)
 /** `29s`: the report line (its `STATUS: DONE` shout cut: the state word says it) and duration, without the lifecycle word. */
-const outcomeDetail = (o: Outcome): string => [stripStatus(o.line), o.durationMs !== undefined ? formatDuration(o.durationMs) : ''].filter(Boolean).join(' · ')
+const outcomeDetail = (o: Outcome): string => [stripStatus(o.line), o.durationMs !== undefined ? msClock(o.durationMs) : ''].filter(Boolean).join(' · ')
 
 const rows = (r: unknown): Msg[] => (Array.isArray(r) ? (r as Msg[]) : [])
 
@@ -112,8 +113,8 @@ async function observedMs($: EngineInterface, id: string): Promise<number | unde
  return a && (a.mood === 'done' || a.mood === 'failed') && a.startedAt !== undefined && a.since > a.startedAt ? a.since - a.startedAt : undefined
 }
 
-/** The run the HUD and the team tab print for a worker the snapshot shows ended (data/live: first sight to the stamped finish), for a stopped worker whose
- * task-notification carries no `duration_ms` (critique 17 C3: `explorer killed` with no `· 15s` where a done card has one). */
+/** The run the HUD and the team tab print for a worker the snapshot shows ended (data/live: first sight to the stamped finish): the card reads the same two timestamps
+ * (critique 26: `15s` on the card, `0:14` in SUBAGENTS), and a stopped worker whose task-notification carries no `duration_ms` still gets its figure (critique 17 C3). */
 async function snapshotMs($: EngineInterface, name: string): Promise<number | undefined> {
  const s = ((await read($, snapshotRef)) ?? null) as unknown as LiveSnapshot | null
  if (!s || !Array.isArray(s.squad)) return undefined
@@ -124,7 +125,8 @@ async function snapshotMs($: EngineInterface, name: string): Promise<number | un
 
 async function readOutcome($: EngineInterface, who: Who, memo: Map<string, Outcome>, durationMs?: number): Promise<Outcome> {
  const line = reportOf(rows(await $.session.messages({ agentId: who.id }).catch(() => [])))
- const ms = (await observedMs($, who.id)) ?? durationMs ?? notifiedMs(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id) ?? (BAD_STATUS.test(who.status) ? await snapshotMs($, who.name) : undefined)
+ // One source for an agent's run: the mod's own two timestamps (the snapshot the HUD and the panel read, then the orch record), and only then the host's figures, which count from another clock.
+ const ms = (await snapshotMs($, who.name)) ?? (await observedMs($, who.id)) ?? durationMs ?? notifiedMs(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id)
  const o: Outcome = { status: who.status, line, ...(ms !== undefined ? { durationMs: ms } : {}) }
  if (ms !== undefined) memo.set(`${who.id}:${who.status}`, o)
  return o

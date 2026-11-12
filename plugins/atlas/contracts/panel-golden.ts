@@ -67,18 +67,18 @@ export const toastDesign: string[] = [
 ];
 export const subagentsDesign: Record<number, string[]> = {
  "80": [
-  "  ● implementer-layout  done     42s",
-  "  ● implementer-gates   done     42s",
-  "▸ ⠋ implementer-band    running  42s",
+  "  ● implementer-layout  done     0:42",
+  "  ● implementer-gates   done     0:42",
+  "▸ ⠋ implementer-band    running  0:42",
   "  ◇ runner-land         queued",
-  "  ■ implementer-live    failed   42s"
+  "  ■ implementer-live    failed   0:42"
  ],
  "120": [
-  "  ● implementer-layout  done     42s  9 of 9 steps",
-  "  ● implementer-gates   done     42s  golden tests written",
-  "▸ ⠋ implementer-band    running  42s  read runs.ts:17",
-  "  ◇ runner-land         queued        waits on implementer-live",
-  "  ■ implementer-live    failed   42s  tests red 3"
+  "  ● implementer-layout  done     0:42  9 of 9 steps",
+  "  ● implementer-gates   done     0:42  golden tests written",
+  "▸ ⠋ implementer-band    running  0:42  read runs.ts:17",
+  "  ◇ runner-land         queued         waits on implementer-live",
+  "  ■ implementer-live    failed   0:42  tests red 3"
  ]
 };
 export const tabGolden: Record<string, Record<number, string[]>> = {
@@ -161,33 +161,33 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "route  team  channel  gates  core  board",
       "       ━━━━",
       "",
-      "  ● implementer-layout  done     42s  9 of 9 steps",
-      "  ● implementer-gates   done     42s  golden tests written",
-      "▸ ⠋ implementer-band    running  42s  read runs.ts:17",
-      "  ◇ runner-land         queued        waits on implementer-live",
-      "  ■ implementer-live    failed   42s  tests red 3",
+      "  ● implementer-layout  done     0:42  9 of 9 steps",
+      "  ● implementer-gates   done     0:42  golden tests written",
+      "▸ ⠋ implementer-band    running  0:42  read runs.ts:17",
+      "  ◇ runner-land         queued         waits on implementer-live",
+      "  ■ implementer-live    failed   0:42  tests red 3",
     ],
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── 1 queued · 1 running · 2 done · 1 failed",
       "",
       "route  team  channel  gates  core  board",
       "       ━━━━",
-      "  ● implementer-layout  done     42s",
-      "  ● implementer-gates   done     42s",
-      "▸ ⠋ implementer-band    running  42s",
+      "  ● implementer-layout  done     0:42",
+      "  ● implementer-gates   done     0:42",
+      "▸ ⠋ implementer-band    running  0:42",
       "  ◇ runner-land         queued",
-      "  ■ implementer-live    failed   42s",
+      "  ■ implementer-live    failed   0:42",
     ],
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────",
       "",
       "route  team  channel  gates  core  board",
       "       ━━━━",
-      "  ● implementer-layout  done     42s",
-      "  ● implementer-gates   done     42s",
-      "▸ ⠋ implementer-band    running  42s",
+      "  ● implementer-layout  done     0:42",
+      "  ● implementer-gates   done     0:42",
+      "▸ ⠋ implementer-band    running  0:42",
       "  ◇ runner-land         queued",
-      "  ■ implementer-live    failed   42s",
+      "  ■ implementer-live    failed   0:42",
     ],
   },
   channel: {
@@ -367,22 +367,22 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
  * waiting lead (role lead, detail idle) and one roster member `leader` (queued, idle). Trailing spaces trimmed; spinner frame 0. */
 export const teamLiveGolden: Record<number, string[]> = {
   120: [
-    "  ◉ lead                waiting       idle",
-    "  ● implementer-layout  done     42s  9 of 9 steps",
-    "  ● implementer-gates   done     42s  golden tests written",
-    "▸ ⠋ implementer-band    running  42s  read runs.ts:17",
-    "  ◇ runner-land         queued        waits on implementer-live",
-    "  ■ implementer-live    failed   42s  tests red 3",
-    "  ◇ leader              queued        idle",
+    "  ◉ lead                waiting        idle",
+    "  ● implementer-layout  done     0:42  9 of 9 steps",
+    "  ● implementer-gates   done     0:42  golden tests written",
+    "▸ ⠋ implementer-band    running  0:42  read runs.ts:17",
+    "  ◇ runner-land         queued         waits on implementer-live",
+    "  ■ implementer-live    failed   0:42  tests red 3",
+    "  ◇ leader              queued         idle",
     "    workers  1 queued · 1 running · 2 done · 1 failed"
   ],
   80: [
     "  ◉ lead                waiting",
-    "  ● implementer-layout  done     42s",
-    "  ● implementer-gates   done     42s",
-    "▸ ⠋ implementer-band    running  42s",
+    "  ● implementer-layout  done     0:42",
+    "  ● implementer-gates   done     0:42",
+    "▸ ⠋ implementer-band    running  0:42",
     "  ◇ runner-land         queued",
-    "  ■ implementer-live    failed   42s",
+    "  ■ implementer-live    failed   0:42",
     "  ◇ leader              queued",
     "    workers  1 queued · 1 running · 2 done · 1 failed"
   ],

@@ -67,7 +67,7 @@ test('reportOf takes the SubagentHandback STATUS line, else the last assistant t
 test('notifiedMs reads duration_ms of the notification naming the agent; outcomeText joins word, line, duration', () => {
   expect(notifiedMs(['hello', NOTICE], 'a1')).toBe(29046)
   expect(notifiedMs([NOTICE], 'zz')).toBeUndefined()
-  expect(outcomeText({ status: 'completed', line: 'STATUS: DONE', durationMs: 29046 })).toBe('finished · 29s')
+  expect(outcomeText({ status: 'completed', line: 'STATUS: DONE', durationMs: 29046 })).toBe('finished · 0:29')
   expect(outcomeText({ status: 'failed', line: '' })).toBe('failed')
 })
 
@@ -84,7 +84,7 @@ test('background launch card: an ended worker reads done on the rail, its durati
   const out = strings(await sites().ToolUse!(engine([e.agent]), e, next))
   const rows = (JSON.parse(out) as { children: Array<{ children: Array<{ children: string[] }> }> }).children.map((r) => r.children.map((c) => c.children.join('')).join(''))
   expect(rows).toHaveLength(1) // the rail card, one row (critique 16 C3)
-  expect(rows[0]).toMatch(/^▌ ● done {5}wave-a {2}29s/u)
+  expect(rows[0]).toMatch(/^▌ ● done {5}wave-a {2}0:29/u)
   expect(out).not.toContain('finished');
 })
 
@@ -92,7 +92,7 @@ test("critique 14 B3: a worker the mod saw end (the HUD's signal) reads done on 
   const e = launched('running')
   const eng = engine([e.agent])
   const ended = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'done', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
-  expect(await cardExtra(ended, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '15s' })
+  expect(await cardExtra(ended, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '0:14' })
   const out = strings(await sites().ToolUse!(ended, e, next))
   expect(out).toContain('done')
   expect(out).not.toContain('running')
@@ -117,7 +117,7 @@ test('task-notification of an atlas worker that left the host list draws its res
   const text = strings(await sites().UserMessage!(engine([], { a1: { name: 'wave-a', type: 'atlas:explorer' } }), e, next))
   expect(text).toContain('wave-a')
   expect(text).toContain('explorer')
-  expect(text).toContain('finished · 29s')
+  expect(text).toContain('finished · 0:29')
   expect(text).not.toContain('STATUS')
 })
 
@@ -163,7 +163,7 @@ test('an outcome is memoized only once its duration is known', async () => {
   const e = launched('completed');
   const memo = new Map();
   const known = await cardExtra(engine([e.agent]), e.props.output, [e.agent], memo);
-  expect(known).toEqual({ ended: 'finished', outcome: '29s' });
+  expect(known).toEqual({ ended: 'finished', outcome: '0:29' });
   expect([...memo.keys()]).toEqual(['a1:completed']);
   const noDuration = { ...engine([e.agent]), session: { messages: async (a?: { agentId?: string }) => (a?.agentId ? CHILD : []) } } as unknown as EngineInterface;
   const fresh = new Map();
@@ -175,8 +175,8 @@ test('live 6b7f637d: the card and the team tab read ONE duration, the worker\'s 
   const e = launched('completed');
   const eng = engine([e.agent]);
   const withActivity = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'done', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface;
-  // the team tab prints round((since - startedAt) / 1000) = 15s; the host said 29046 ms
-  expect(await cardExtra(withActivity, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '15s' });
+  // the team tab prints floor((since - startedAt) / 1000) = 0:14; the host said 29046 ms
+  expect(await cardExtra(withActivity, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '0:14' });
   const running = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'working', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface;
-  expect(await cardExtra(running, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '29s' }); // a worker the mod still sees running keeps the host figure
+  expect(await cardExtra(running, e.props.output, [e.agent], new Map())).toEqual({ ended: 'finished', outcome: '0:29' }); // a worker the mod still sees running keeps the host figure
 });

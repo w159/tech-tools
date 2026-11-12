@@ -19,7 +19,7 @@ import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
 import { cardAged, hideNotification, placedTree } from './transcript/placed'
 import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
-import { elapsedClock, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
+import { elapsedClock, hexIn, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
 import { displayDelta, leadOf, leadRow, partialLead } from './transcript/leadheader'
 import type { Outcome } from './transcript/outcome'
 
@@ -110,14 +110,14 @@ const toolTarget = (input: unknown): string =>
 
 
 /** `Bash npm test ▸ 48.2kB` for a finished call whose output is huge; null keeps the engine's row. */
-export function noisyTree(props: ToolUsePropsLike & { output?: unknown }): RenderElement | null {
+export function noisyTree(props: ToolUsePropsLike & { output?: unknown }, ui: Ui = uiFromEnv()): RenderElement | null {
   if (!isNoisyCandidate(props)) return null
   const size = outputSize(props.output)
   if (size < NOISY_BYTES) return null
   return txt({},
-    txt({ color: PALETTE5.body, bold: true }, `${props.tool} `),
-    txt({ color: PALETTE5.secondary }, toolTarget(props.input)),
-    txt({ color: PALETTE5.secondary, inverse: true }, ` ▸ ${fmtBytes(size)} `),
+    txt({ color: hexIn(PALETTE5.body, ui), bold: true }, `${props.tool} `),
+    txt({ color: hexIn(PALETTE5.secondary, ui) }, toolTarget(props.input)),
+    txt({ color: hexIn(PALETTE5.secondary, ui), inverse: true }, ` ▸ ${fmtBytes(size)} `),
   )
 }
 
@@ -153,7 +153,7 @@ function agentStatus(
 
 /** Deployment card: bordered `◆ impl-auth · implementer · sonnet·low ● running`. Null keeps the engine's row. */
 export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[], columns = 0, extra: CardExtra = {}): RenderElement | null {
- if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props)
+ if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props, extra.ui ?? uiFromEnv())
  const input = (props.input ?? {}) as { subagentType?: string; subagent_type?: string; name?: string; description?: string }
  const persona = personaFor(snap, input.subagentType ?? input.subagent_type)
  if (!persona) return null
@@ -241,7 +241,7 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
 
 // ---- TurnDuration: `▸ 4:12 · +3 done · 2 workers · ctx 41%` (the band's clock format, frozen once drawn) ----
 
-export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null): RenderElement {
+export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null, ui: Ui = uiFromEnv()): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
  const measured = tracker.turnStart != null && now != null ? Math.max(0, now - tracker.turnStart) : null
  const durationMs = measured === null ? props.durationMs : Math.min(props.durationMs, measured)
@@ -255,7 +255,7 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  ].filter((part): part is string => part !== null)
  tracker.done = snap.counts.done
  return txt({ dimColor: true },
-  txt({ color: PALETTE5.dim }, `${MARK} `),
+  txt({ color: hexIn(PALETTE5.dim, ui) }, `${MARK} `),
   parts.join(' · '),
  )
 }
@@ -349,7 +349,7 @@ export function registerRestyle(on: On): void {
    if (kept) return kept
    const snap = await ready($, cache)
    if (!snap) return next(e)
-   const tree = durationTree(snap, e.props, tracker, await nowMs($))
+   const tree = durationTree(snap, e.props, tracker, await nowMs($), (await lookOf($)).ui)
    if (e.requestId) frozenFooters.set(e.requestId, tree)
    return tree
   } catch { return next(e) }
@@ -385,7 +385,7 @@ export function registerRestyle(on: On): void {
    const snap = await ready($, cache)
    if (!snap) return next(e)
    if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name), () => cardAged(`n-${e.requestId}`, snap.now))) ?? next(e)
-   return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0) ?? next(e)
+   return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0, (await lookOf($)).ui) ?? next(e)
   } catch { return next(e) }
  })
 

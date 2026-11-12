@@ -7,11 +7,10 @@ import type { AtlasSnapshot, PhaseId } from './contract';
 import { endedAt, liveWorkers } from './data/live';
 import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
-import { cells, type Ui } from './atlas-ui';
+import { cells, msClock, type Ui } from './atlas-ui';
 import { clipE as clip } from './board-model';
 import { lookOf } from './look';
 import { noteToastText, toastText } from './panel-layout';
-import { formatDuration } from './theme';
 
 export type NotifyEvent =
 	| { type: 'agent-spawn'; name: string }
@@ -80,7 +79,7 @@ export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): 
 		} else if (w.state === 'done') {
 			if (was === 'failed') continue; // failure is terminal: a failed worker read done later raises no done toast
 			const age = endedAt(w, next.now) - w.startedAt; // the worker's own run, not the lag until the turn that saw it finish
-			events.push({ type: 'agent-complete', name: w.name, age: age > 0 ? formatDuration(age) : '', lastLine: w.lastLine });
+			events.push({ type: 'agent-complete', name: w.name, age: age > 0 ? msClock(age) : '', lastLine: w.lastLine });
 		} else if (w.state === 'failed') events.push({ type: 'agent-fail', name: w.name, lastLine: w.lastLine });
 		else if (w.state === 'blocked') events.push({ type: 'agent-blocked', name: w.name, lastLine: w.lastLine });
 	}

@@ -56,13 +56,15 @@ describe('critique 16 C5: the ramp falls and never pops', () => {
       // still a step short of rest; in 256 colours the palette has no colour left between the last step and rest, so the last beat IS the resting row and
       // the ramp is three distinct beats (0, 200, 400 ms) and the resting beat.
       const last = frames.length - 1;
-      const settled = color === '256' ? frames.slice(0, last) : frames;
+      // Critique 26: the 256-colour ease is one white beat (231) then the resting row, so only that beat is held apart from rest.
+      const settled = color === '256' ? frames.slice(0, 1) : frames; // the white beat; the glyph's own colour and the rest follow
       test(`${color}/${s}: spans at least 600 ms, no frame repeats its neighbour or the rest, the 600 ms frame is not the final one`, () => {
         expect(frames.length * MOTION_STEP_MS).toBeGreaterThanOrEqual(600);
         expect(MOTION_MS).toBeGreaterThan(600);
         if (color === '256') expect(frames[600 / MOTION_STEP_MS]).toBe(rest);
         else expect(frames[600 / MOTION_STEP_MS]).not.toBe(rest);
-        expect(settled.length * MOTION_STEP_MS).toBeGreaterThanOrEqual(600 - MOTION_STEP_MS);
+        if (color === '256') expect(settled[0]).not.toBe(rest);
+        else expect(settled.length * MOTION_STEP_MS).toBeGreaterThanOrEqual(600 - MOTION_STEP_MS);
         expect(rampFaults(settled, rest, [])).toEqual([]);
       });
       test(`${color}/${s}: bold only ever falls and the foreground only ever moves toward rest (no bold pop at 400-600 ms)`, () => {

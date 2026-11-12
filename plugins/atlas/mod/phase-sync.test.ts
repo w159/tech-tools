@@ -122,8 +122,9 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
       for (let dt = 0; dt < MOTION_MS; dt += MOTION_STEP_MS) beats.push(shot(surfaces({ ...after, now: NOW + 5000 + dt }, ui, m.ctx(NOW + 5000 + dt)).hud));
       const at = beats.indexOf(rest);
       const ramp = beats.slice(0, at < 0 ? beats.length : at);
-      expect(ramp.length).toBeGreaterThanOrEqual(2);
-      for (let i = 1; i < ramp.length; i++) expect([name, i, ramp[i] === ramp[i - 1]]).toEqual([name, i, false]);
+      // Critique 26: the 256-colour ease is the white lead-in held, then the resting row (the palette has no colour worth stepping through); a held beat repeats its neighbour there.
+      expect(ramp.length).toBeGreaterThanOrEqual(ui.color === '256' ? 1 : 2);
+      if (ui.color !== '256') for (let i = 1; i < ramp.length; i++) expect([name, i, ramp[i] === ramp[i - 1]]).toEqual([name, i, false]);
       for (let i = at + 1; at >= 0 && i < beats.length; i++) expect(beats[i]).toBe(rest); // once at rest, it stays there
     });
     test(`${name}: the state word of a HUD row is faded in the window, as in the side panel`, () => {

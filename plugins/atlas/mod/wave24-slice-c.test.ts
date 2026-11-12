@@ -83,9 +83,9 @@ describe('team tab (step 2)', () => {
     const col = (re: RegExp): number[] => out.map((l) => l.search(re));
     expect(new Set(col(/ (explorer|verifier|runner)  /)).size).toBe(1); // the role column
     expect(new Set(col(/  (running|failed|done|queued)( |$)/)).size).toBe(1); // the state word column
-    expect(out[0]).toMatch(/alpha +explorer +running +42s$/);
-    expect(out[1]).toMatch(/ghost-explorer +explorer +failed +2m15s$/);
-    expect(out[2]).toMatch(/beta +verifier +done +1h01m$/);
+    expect(out[0]).toMatch(/alpha +explorer +running +0:42$/);
+    expect(out[1]).toMatch(/ghost-explorer +explorer +failed +2:15$/);
+    expect(out[2]).toMatch(/beta +verifier +done +1:01:40$/);
     expect(out[3]).toMatch(/gamma +runner +queued$/); // a queued agent has not started: no elapsed time
   });
   test('a tall pane does not stretch the team into four rows per agent: the detail opens on a press', () => {

@@ -57,7 +57,7 @@ test('B3: the card is placed in the build that shows the worker done (the HUD ro
   const row = flat(placedTree(ids[0]!, uiFromEnv()))
   expect(row).toMatch(CARD)
   expect(row).toContain('alpha-explorer')
-  expect(row).toContain('explorer finished · 13s')
+  expect(row).toContain('explorer finished · 0:13')
   expect(placedTree('done-missing-9', uiFromEnv())).toBeNull()
 })
 
@@ -225,24 +225,24 @@ test('C2: the card placed for a worker the lead stopped reads killed with its ru
   const $ = stopped()
   await placeFinished({ ...($ as object), ui: { place: async ({ id }: { id: string }) => { ids.push(id); return { isPlaced: true, requestId: id } } } } as unknown as EngineInterface, before, after)
   const cards = ids.map((id) => flat(placedTree(id, uiFromEnv())))
-  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('■ killed   ghost-explorer · 9s')
-  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('■ failed   beta-explorer · 9s')
+  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('■ killed   ghost-explorer · 0:09')
+  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('■ failed   beta-explorer · 0:09')
 })
 
 test('C3: the host row of a stopped task with no duration_ms carries the run the HUD prints, like a done card', async () => {
   const row = flat(await sites().UserMessage!(stopped(), stoppedNoDuration('k1'), next))
-  expect(row).toContain('■ killed   ghost-explorer · 9s')
+  expect(row).toContain('■ killed   ghost-explorer · 0:09')
 })
 const stoppedNoDuration = (requestId: string) => ({ surface: 'terminal', component: 'UserMessage', requestId, props: { text: 'Agent stopped', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', status: 'killed' } } })
 
-test('C3: a card keeps full colour while its run is current and dims to muted 20 s on, or 5 s after a later card; the words never change', async () => {
+test('C3: a card never recolours with age (critique 26: one text grey on every card); cardAged still times the card out; the words never change', async () => {
   const ids: string[] = []
   await placeFinished(engine(ids), snap(0, [worker('a', 'running'), worker('b', 'running')]), snap(9000, [worker('a', 'finished'), worker('b', 'finished')]))
   const ui = uiFromEnv()
   const fresh = placedTree(ids[0]!, ui)
   const old = placedTree(ids[0]!, ui, true)
   expect(flat(old)).toBe(flat(fresh))
-  expect(strings(old)).not.toBe(strings(fresh))
+  expect(strings(old)).toBe(strings(fresh))
   expect(cardAged(ids[0]!, 100_000)).toBe(false) // first draw
   expect(cardAged(ids[1]!, 101_000)).toBe(false) // a later card, but not yet 5 s on
   expect(cardAged(ids[0]!, 104_000)).toBe(false)
@@ -252,14 +252,14 @@ test('C3: a card keeps full colour while its run is current and dims to muted 20
   expect(cardAged('never', 0)).toBe(false) // no clock, no dimming
 })
 
-test('C3: the Placed site dims an old card by the snapshot clock', async () => {
+test('C3: the Placed site draws an old card in the same greys as a new one', async () => {
   const ids: string[] = []
   await placeFinished(engine(ids), snap(0, [worker('alpha-explorer', 'running')]), snap(13_000, [worker('alpha-explorer', 'finished')], { activity: {} }))
   const at = (now: number) => ({ ...host(), state: memState({ 'atlas/snapshot': snap(now, []), 'atlas/orch': { activity: {}, comms: [], stage: {}, meta: {} } }) }) as unknown as EngineInterface
   const site = sites().Placed!
   const first = strings(await site(at(100_000), placedEvent('atlas', ids[0]!), next))
   expect(strings(await site(at(110_000), placedEvent('atlas', ids[0]!), next))).toBe(first)
-  expect(strings(await site(at(121_000), placedEvent('atlas', ids[0]!), next))).not.toBe(first)
+  expect(strings(await site(at(121_000), placedEvent('atlas', ids[0]!), next))).toBe(first)
 })
 
 test('B3/L15: the host notification row for a worker whose card is placed draws nothing; with no card it draws the result row', async () => {

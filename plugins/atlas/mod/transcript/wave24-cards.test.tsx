@@ -18,7 +18,7 @@ const walk = (n: unknown, out: El[] = []): El[] => {
 const text = (n: unknown): string => (Array.isArray(n) ? n.map(text).join('') : n && typeof n === 'object' ? text((n as El).children) : typeof n === 'string' || typeof n === 'number' ? String(n) : '')
 const cellsOf = (n: unknown): El[] => ((n as El).children as El[])
 
-test('a faded done card keeps its state colour on the rail, the glyph and the word; the rest goes muted', () => {
+test('a faded done card is drawn exactly as a fresh one: one grey on every card (critique 26)', () => {
   const fresh = cellsOf(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui))
   const aged = cellsOf(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui, true))
   expect(text(aged[0])).toBe('▌')
@@ -26,7 +26,7 @@ test('a faded done card keeps its state colour on the rail, the glyph and the wo
   const word = (cs: El[]): El => cs.find((x) => text(x) === 'done')!
   expect(word(aged).props.color).toBe(word(fresh).props.color)
   const name = (cs: El[]): El => cs.find((x) => text(x).includes('wave-a'))!
-  expect(name(aged).props.color).not.toBe(name(fresh).props.color)
+  expect(name(aged).props.color).toBe(name(fresh).props.color)
 })
 
 const snap = { contract: { headerFirstLinePattern: (contract as { headerFirstLinePattern: string }).headerFirstLinePattern } } as unknown as AtlasSnapshot

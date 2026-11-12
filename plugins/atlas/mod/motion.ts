@@ -159,13 +159,12 @@ export const revealProgress = (e: Entry, now: number): number => Math.min(1, Mat
 export const POP_UNICODE = ['◌', '◍'] as const;
 export const POP_ASCII = ['@', '@'] as const;
 
-/** Whole steps of the 256-colour ease. A 24-bit ease is smooth; in 256 colours the palette is coarse, so the ease is a staircase of
- * palette colours that both Atlas's and the host's downsampler map to the same index, at least this many before the resting tone. */
-export const MIN_STEPS_256 = 2;
-/** At most this many steps: more only crowd the 900 ms window with neighbours the eye cannot tell apart. */
-export const MAX_STEPS_256 = 3;
-/** Least CIE76 distance between two neighbours of the staircase (and from the last step to the resting tone). Palette neighbours such
- * as 194, 193, 187 are under 6 apart and read as one colour on the panel; 157, 114, 151 are well over this. */
+/** Steps of the 256-colour ease before the resting tone: one, white (231). A 24-bit ease is smooth; the 256-colour palette has no neighbours worth stepping through (critique 26: 194,
+ * 151, 147, 211 on screen), so the ease is white, then rest. */
+export const MIN_STEPS_256 = 1;
+/** At most this many steps before the resting tone. */
+export const MAX_STEPS_256 = 1;
+/** Least CIE76 distance between the white lead-in and the resting tone for the fade to be drawn. */
 export const MIN_STEP_DE = 14;
 
 const lab = (hex: string): [number, number, number] => {
@@ -188,51 +187,21 @@ export const STRONG_STEP_DE = 22;
 export const MIN_STEP_DL = 8;
 const visible = (a: string, b: string): boolean => { const de = deltaE(a, b); return de >= MIN_STEP_DE && (de >= STRONG_STEP_DE || Math.abs(lab(a)[0] - lab(b)[0]) >= MIN_STEP_DL); };
 
-/** `chain` thinned to steps that are MIN_STEP_DE apart from each other, from `target` and (the first one) from `from`, the tone the row
- * wore before the change, so the first frame already differs visibly; at most MAX_STEPS_256 of them (spread evenly). */
-function spaced(chain: readonly string[], target: string, from: string): string[] {
-  const out: string[] = [];
-  // Never a step that reads as the body tone `from`, at any position: a mid-step of 189 on a `returned` row looked uncoloured beside its resting neighbour (critique 12).
-  for (const c of chain) if (deltaE(from, c) >= MIN_STEP_DE && (out.length ? visible(out.at(-1)!, c) : true)) out.push(c);
-  while (out.length && deltaE(out.at(-1)!, target) < MIN_STEP_DE) out.pop();
-  if (out.length <= MAX_STEPS_256) return out;
-  return [0, 1, 2].map((i) => out[Math.round((i * (out.length - 1)) / 2)]!);
-}
-const LEAD_TRIES = [LEAD_WHITE, 0.6, 0.85, 0, 0.15] as const;
 const stepsCache = new Map<string, readonly string[]>();
 
 /**
- * The staircase from `accent` (brightened toward the theme's emphasis colour) to the resting `rest` colour, as stable xterm-256 colours:
- * distinct, lightness monotone toward `rest`, never past it, each keeping `rest`'s contrast on the panel. Empty when the palette cannot
- * give MIN_STEPS_256 such steps for this pair (the row then keeps its resting tone and only the glyph pops).
+ * The 256-colour lead-in of an ease: ONE step, white (the theme's emphasis colour; ink on Latte), then the resting tone. Critique 26 (live-150-a5fa582a-1 f0082, f0083 and 63 more
+ * frames): a staircase of `stable256` neighbours put 194, 151, 147, 211, 216, 247 on screen, colours no palette names. The fade now lands only on the brief's indices (141, 114, 179,
+ * 203, 236, 240, 245, 252) and 231, the white it starts from. Empty when the white is not visibly apart from the resting tone (the row keeps its tone; only the glyph pops).
+ * `accent` is kept for the callers: the state's hue is the resting tone's job, the lead-in is white for every state.
  */
-export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): readonly string[] {
-  const key = `${theme}|${accent}|${rest}`;
+export function easeSteps256(_accent: string, rest: string, theme: Ui['theme']): readonly string[] {
+  const key = `${theme}|${rest}`;
   const hit = stepsCache.get(key);
   if (hit) return hit;
-  const bg = surfaceHex('panel', { theme, color: '256' });
-  const need = Math.min(4.5, contrast(rest, PALETTES[theme].panel));
-  const target = drawnHex(fitHex(rest, theme)); // the colour the terminal draws for the resting tone (an exact-index tone is handed to the host as its pre-image)
-  const before = drawnHex(fitHex(PALETTES[theme].text, theme)); // a row changes state from its body tone
-  const toward = theme === 'latte' ? PALETTES.latte.ink : '#ffffff';
-  const dir = (a: string, b: string): number => Math.sign(luminance(b) - luminance(a));
-  let best: string[] = [];
-  for (const w of LEAD_TRIES) {
-    const lead = mixHex(accent, toward, w);
-    const d = dir(lead, target) || 1;
-    const out: string[] = [];
-    for (let k = 0; k < 64; k++) {
-      const c = stable256(mixHex(lead, rest, k / 64), bg, need);
-      if (c === target) break;
-      const prev = out.at(-1);
-      if (c === prev || (prev && dir(prev, c) !== d) || dir(c, target) !== d) continue;
-      out.push(c);
-    }
-    const apart = spaced(out, target, before);
-    if (apart.length > best.length) best = apart;
-    if (best.length >= MIN_STEPS_256) break;
-  }
-  const steps = best.length >= MIN_STEPS_256 ? best : [];
+  const target = fitHex(rest, theme);
+  const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
+  const steps = visible(lead, target) ? [lead] : [];
   stepsCache.set(key, steps);
   return steps;
 }
@@ -308,18 +277,11 @@ export function ramp256(accent: string, rest: string, theme: Ui['theme'], lifted
   const key = `${theme}|${accent}|${rest}|${lifted}`;
   const hit = rampCache.get(key);
   if (hit) return hit;
-  const stairs = easeSteps256(accent, rest, theme);
-  const out: string[] = [...stairs];
-  if (out.length) {
-    const target = fitHex(rest, theme);
-    const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
-    const d = Math.sign(luminance(target) - luminance(out[0]!));
-    if (d !== 0 && deltaE(lead, out[0]!) >= MIN_STEP_DE && Math.sign(luminance(out[0]!) - luminance(lead)) === d) out.unshift(lead);
-    // A lifted run is bold while its colour moves and drops the weight on the very frame its colour lands on rest (critique 19: bold fell one step after 146 landed,
-    // motion-232567af/todo-strip.ans:4-5). The rest colour is the last step; the staircase keeps MAX_BEATS - 1 steps before it.
-    if (lifted) { out.length = Math.min(out.length, MAX_BEATS - 1); out.push(target); }
-  }
-  const ramp = out.slice(0, MAX_BEATS);
+  const lead = easeSteps256(accent, rest, theme);
+  const target = fitHex(rest, theme);
+  // White, then the resting tone. A lifted run is bold while its colour moves and drops the weight on the very frame its colour lands on rest (critique 19: bold fell one step after 146 landed,
+  // motion-232567af/todo-strip.ans:4-5), so a lifted run ends on the resting tone as its own beat; a plain run rests on the frame after the white.
+  const ramp = lead.length ? (lifted ? [...lead, target] : [...lead]) : [];
   rampCache.set(key, ramp);
   return ramp;
 }
