@@ -335,6 +335,15 @@ export const hudWantRows = (input: HudInput, cols = 120, now?: number): number =
   return stack({ todos: s.todos, agents: s.agents }, o, { spacers: true, extras: false, header: true, close: true }).length;
 };
 
+/** Rows the HUD asks for over a whole run (register.ts slotHold): `hudWantRows` of the plan with the SUBAGENTS block it will gain. A plan of two rows or more is assumed to dispatch, so the block is counted
+ * with up to three agents before the first one is listed, and the slot (and so the band above it) is the height it keeps to the run's end instead of growing when the agents arrive. */
+export const hudRunRows = (input: HudInput, cols = 120, now?: number): number => {
+  const expected = input.todos.length >= 2 ? Math.min(3, input.todos.length) : 0;
+  const pad = Math.max(0, expected - input.agents.length);
+  const agents = pad > 0 ? [...input.agents, ...Array.from({ length: pad }, (_, i): HudAgent => ({ name: `agent-${i + 1}`, role: 'agent', state: 'working', model: '', ui: 'running' }))] : input.agents;
+  return hudWantRows({ ...input, agents }, cols, now);
+};
+
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */
 export const hudBudget = (maxRows: number, compact: number, bandRows = 7, running = false): number => {
   if (maxRows <= 0) return 0;

@@ -175,8 +175,8 @@ describe('5. the plan row budget and the overflow row', () => {
   });
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
     const rows = hudLines(input, view(88, 8)).map(runsString);
-    const more = rows.find((r) => /\d+ more todos?/.test(r))!;
-    expect(more).toMatch(/▸ TODO {2}0\/5 · \d+ more todos? not shown ▱+ ─+╮/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
+    const more = rows.find((r) => /\+\d+ more/.test(r))!;
+    expect(more).toMatch(/▸ TODO {2}0\/5 · \+\d+ more ▱+ ─+╮/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
     const planRows = rows.filter((r) => PLAN_ROW.test(r)).length;
     expect(planRows + Number(/(\d+) more/.exec(more)![1])).toBe(5); // every slot holds a row: shown plus counted is the whole plan
@@ -184,7 +184,7 @@ describe('5. the plan row budget and the overflow row', () => {
   test('a plan longer than five still keeps its window and counts the rest', () => {
     const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));
     const rows = hudLines({ todos: many, agents: [] }, view(88, hudCompactRows({ todos: many, agents: [] }, 88))).map(runsString);
-    expect(rows.some((r) => /\d+ more todos not shown/.test(r))).toBe(true);
+    expect(rows.some((r) => /\+\d+ more/.test(r))).toBe(true);
   });
 });
 
@@ -194,14 +194,14 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
   const hudIn: HudInput = { todos: planDone, agents };
   const budget = 18; // the live frame's 15 slot rows less the host's line (14), plus the Subagents column-header row and its blank, plus the two closing rules (round 3)
-  const cap = 10; // a slot that cuts the plan: the closing rules stay, so only a slot well below the five-row form cuts (round 5)
+  const cap = 6; // a slot that cuts the plan: the rules and the blank go before a row (critique 26), so only a slot well below the five-row form cuts
   const snapshot = busySnap();
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
   const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));
 
   test('the band at the live budget spends rows on blanks while the plan is cut', () => {
     const first = draw(cap);
-    expect(first.map(runsString).some((r) => /\d+ more todos? not shown/.test(r))).toBe(true); // the defect
+    expect(first.map(runsString).some((r) => /\+\d+ more/.test(r))).toBe(true); // the defect
     expect(bandSpareRows(bandModel(budget - first.length))).toBeGreaterThan(0);
   });
   test('reclaimBlanks shows every plan row once the blanks are handed over, and the band loses only blanks', () => {
@@ -220,8 +220,8 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   test('a HUD that already fits, or a band with no blanks, is returned as it was', () => {
     const all = draw(30);
     expect(reclaimBlanks(all, 30, 30, () => 3, draw)).toBe(all);
-    const cut = draw(10);
-    expect(reclaimBlanks(cut, 10, 14, () => 0, draw)).toBe(cut);
+    const cut = draw(6);
+    expect(reclaimBlanks(cut, 6, 14, () => 0, draw)).toBe(cut);
     expect(reclaimBlanks([], 8, 14, () => 3, draw)).toEqual([]);
   });
 });
@@ -260,7 +260,7 @@ describe('5d. a task that just completed stays in the folded plan', () => {
     const rows = hudLines({ todos: plan, agents: [] }, { cols: 104, maxRows: 4, ui, rich: false, now: NOW }).map(runsString);
     expect(rows.some((r) => r.includes('T3 read gamma.py'))).toBe(true);
     expect(rows.some((r) => r.includes('T2 read beta.py'))).toBe(true);
-    expect(rows.some((r) => /\d+ more todos? not shown/.test(r))).toBe(true);
+    expect(rows.some((r) => /\+\d+ more/.test(r))).toBe(true);
   });
 });
 

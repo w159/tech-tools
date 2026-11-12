@@ -212,18 +212,38 @@ export function bandSpareRows(b: BandModel): number {
   return blanks + Math.max(0, maxRows - drawn);
 }
 
-export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): RenderElement {
+/** The band's lines and the model behind them. `on`: the handlers are wired. The idle footer then always holds its key row, so the row count of an idle band never depends on the width. */
+function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: MissionModel; lines: Line[] } | null {
   const cols = Math.max(1, b.columns);
   const maxRows = b.maxRows ?? 12;
   const ui = b.ui ?? uiFromEnv();
-  if (maxRows < 1) return panel(els, [], cols, ui); // the HUD can take the whole slot: draw nothing rather than a row past the budget
+  if (maxRows < 1) return null; // the HUD can take the whole slot: draw nothing rather than a row past the budget
   const m = missionModel({ ...b, maxRows, ui });
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
-  const keys = !!on && idle && cols >= 80; // keys while idle; omp has none, a running band keeps its rows for workers
+  const keys = on && idle; // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0, hintWidth: textWidth(BAND_HINT) + 3 });
+  // The narrow form (one band row, no footer) still ends in the key row, blank under 80 columns: an idle band is as tall at 79 columns as at 80, so it never moves when the pane docks.
+  if (keys && !lines.some((l) => l.keys) && lines.reduce((n, l) => n + (l.board ?? 1), 0) < maxRows) lines.push({ runs: [], keys: true });
+  return { cols, ui, m, lines };
+}
+
+/** The board slot's rows: the todo list at the rows the layout gave it. */
+const boardRowsOf = (b: BandModel, m: MissionModel, cols: number, ui: Ui, rows: number): Segment[][] =>
+  todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: rows, now: Math.floor(b.snapshot.now / 1000), nowMs: spinClock(b.snapshot.now, b.tick), ui, rich: m.rich, motion: b.motion });
+
+/** Rows the band draws for `b`: what the slot holds above the HUD (register.ts pads the slot to one height for the whole run from it). */
+export function bandRowCount(b: BandModel, on = false): number {
+  const plan = bandPlan(b, on);
+  return plan ? plan.lines.reduce((n, l) => n + (l.board ? boardRowsOf(b, plan.m, plan.cols, plan.ui, l.board).length : 1), 0) : 0;
+}
+
+export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): RenderElement {
+  const plan = bandPlan(b, !!on);
+  if (!plan) return panel(els, [], Math.max(1, b.columns), b.ui ?? uiFromEnv());
+  const { cols, ui, m, lines } = plan;
   const rows: Row[] = lines.flatMap((l): Row[] => {
-    if (l.board) return todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: l.board, now: Math.floor(b.snapshot.now / 1000), nowMs: spinClock(b.snapshot.now, b.tick), ui, rich: m.rich, motion: b.motion });
-    if (l.keys && on) return [keysRow(els, l, cols, on, ui)];
+    if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
+    if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
     return [segs(l, ui)];
   });
   return panel(els, rows, cols, ui);

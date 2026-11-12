@@ -88,10 +88,11 @@ describe('round 3 A2: the band lead has four states', () => {
 
 describe('round 3 A2: a closed failure is a dim record, not a red mark', () => {
   const failed: MissionWorker[] = [{ name: 'a-explorer', state: 'failed', secs: 9 }];
-  test('while the dispatch row is open the count is `■ 1 failed`; once it closes it is `● 1 closed`', () => {
+  test('while the dispatch row is open the count is `■ 1 failed`; once it closes it is the word `1 closed` with no glyph (critique 26: the done disc means done)', () => {
     expect(head(model({ workers: failed }))).toContain('■ 1 failed');
     const t = head(model({ workers: failed, closed: 1 }));
-    expect(t).toContain('● 1 closed');
+    expect(t).toContain('1 closed');
+    expect(t).not.toContain('● 1 closed');
     expect(t).not.toContain('■ 1 failed');
     const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => x.t === '1 closed')?.tone;
     expect(tone).toBe('dim');
