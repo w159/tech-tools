@@ -77,6 +77,7 @@ export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): 
 		if (was === undefined) {
 			if (w.state === 'working') events.push({ type: 'agent-spawn', name: w.name });
 		} else if (w.state === 'done') {
+			if (was === 'failed') continue; // failure is terminal: a failed worker read done later raises no done toast
 			const age = endedAt(w, next.now) - w.startedAt; // the worker's own run, not the lag until the turn that saw it finish
 			events.push({ type: 'agent-complete', name: w.name, age: age > 0 ? formatDuration(age) : '', lastLine: w.lastLine });
 		} else if (w.state === 'failed') events.push({ type: 'agent-fail', name: w.name, lastLine: w.lastLine });

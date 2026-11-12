@@ -5,7 +5,7 @@
 import { atom, read } from 'claude-code'
 import type { AgentInfo, EngineInterface, RenderElement } from 'claude-code'
 import { EMPTY_ORCH } from '../data/orchestration'
-import type { ActivityEntry } from '../orchestra-types'
+import type { ActivityEntry, LiveSnapshot } from '../orchestra-types'
 import { formatDuration, spin } from '../theme'
 import { notificationTree, resultLine, stripStatus } from './cards'
 import { lookOf } from '../look'
@@ -15,6 +15,7 @@ import type { CardExtra } from './cards'
 // Read-only views of register.ts's atoms (same plugin/key): the spinner clock and spawn metadata.
 const spinnerTick = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0)
 const orchRef = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH)
+const snapshotRef = atom({ plugin: 'atlas', key: 'snapshot' } as const, null)
 
 interface Outcome { status: string; line: string; durationMs?: number }
 type Msg = { role: string; text: string; toolUses?: ReadonlyArray<{ tool: string; input: Record<string, unknown> }> }
@@ -26,6 +27,26 @@ const ENDED = new Set(['completed', 'failed', 'killed', 'idle'])
 
 /** The mod's own end moods (orch activity) as the host status they stand for. */
 const MOD_ENDED: Record<string, string> = { done: 'completed', failed: 'failed' }
+
+/** Host words for a task that did not succeed (a stopped task ends `killed`; other hosts say stopped, cancelled, aborted). */
+const BAD_STATUS = /^(failed|killed|stopped|cancell?ed|aborted|errored?)$/i
+const badWord = (w: string | undefined): string | undefined => (w && BAD_STATUS.test(w.trim()) ? (/^(failed|errored?)$/i.test(w.trim()) ? 'failed' : 'killed') : undefined)
+
+/** Ids of workers seen failed: failure is terminal, so once any surface saw one fail no later row reads it finished (critique 15 A1:
+ * the killed ghost-explorer ended as a green `explorer finished` card once the host dropped its row and its notification came up 31 s later). */
+const failedSeen = new Set<string>()
+export const noteFailed = (key: string): void => { if (key) failedSeen.add(key) }
+export const forgetFailed = (): void => failedSeen.clear()
+
+/** `<status>` of the task-notification naming `agentId`, from the lead transcript's texts. */
+export function notifiedStatus(texts: readonly string[], agentId: string): string | undefined {
+ for (const t of [...texts].reverse()) {
+  const at = t.indexOf(`<task-id>${agentId}</task-id>`)
+  const st = at < 0 ? null : /<status>([^<]*)<\/status>/.exec(t.slice(at))
+  if (st) return st[1]!.trim()
+ }
+ return undefined
+}
 
 const handback = (m: Msg): string => {
  const call = [...(m.toolUses ?? [])].reverse().find((u) => u.tool === 'SubagentHandback')
@@ -82,15 +103,29 @@ async function readOutcome($: EngineInterface, who: Who, memo: Map<string, Outco
 
 const firstOf = (...xs: (string | undefined)[]): string => xs.find((x) => !!x) ?? ''
 
+/** The end word of a failed worker (`failed`, `killed`) from every source the mod holds, else undefined: the task's own status, the host row, the sticky
+ * memo, the mod's end record (orch activity), the snapshot's squad row and activity, and (when `notified`) the task-notification in the lead transcript. */
+async function failureOf($: EngineInterface, who: Who, taskStatus: string | undefined, notified: boolean): Promise<string | undefined> {
+ const host = badWord(taskStatus) ?? badWord(who.status)
+ const known = host ?? (failedSeen.has(who.id) ? 'failed' : undefined) // by id only: a later worker may reuse a name
+ const snap = ((await read($, snapshotRef)) ?? null) as unknown as Partial<LiveSnapshot> | null
+ const recorded = (await read($, orchRef)).activity[who.id]?.mood === 'failed' || snap?.activity?.[who.name]?.mood === 'failed' || (snap?.squad ?? []).some((a) => a.name === who.name && (a.state === 'failed' || a.state === 'dead'))
+ const word = known ?? (recorded ? 'failed' : undefined) ?? (notified ? badWord(notifiedStatus(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id)) : undefined)
+ if (word) noteFailed(who.id)
+ return word
+}
+
 /** An atlas worker by host id: spawn metadata names it (the band's label), the host row gives its status; a
- * finished worker drops out of the host list, so a missing row reads completed. */
-async function whoIs($: EngineInterface, id: string, agents: readonly AgentInfo[]): Promise<Who | undefined> {
+ * finished worker drops out of the host list, so a missing row reads completed unless a failure is on record. */
+async function whoIs($: EngineInterface, id: string, agents: readonly AgentInfo[], taskStatus?: string, notified = false): Promise<Who | undefined> {
  const row: Partial<AgentInfo> = agents.find((a) => a.id === id) ?? {}
  const meta = (await read($, orchRef)).meta[id] ?? {}
- const who = { id, type: firstOf(row.type, meta.type), status: firstOf(row.status, 'completed'), name: firstOf(meta.name, row.name, row.description) }
- if (!who.type.startsWith('atlas:')) return undefined
+ const base = { id, type: firstOf(row.type, meta.type), status: firstOf(row.status, 'completed'), name: firstOf(meta.name, row.name, row.description) }
+ if (!base.type.startsWith('atlas:')) return undefined
  // no readable name: the HUD's agentName helper gives the agent type (and a task phrase when any task text exists); the id only as a last resort
- return who.name ? who : { ...who, name: agentName(id, who.type.slice('atlas:'.length)) }
+ const who = base.name ? base : { ...base, name: agentName(id, base.type.slice('atlas:'.length)) }
+ const failed = await failureOf($, who, taskStatus, notified)
+ return failed ? { ...who, status: failed } : who
 }
 
 /** A background launch's agent id (`async_launched` output), '' for any other result. */
@@ -115,10 +150,10 @@ export async function cardExtra($: EngineInterface, output: unknown, agents: rea
 /** Notification row for a background atlas worker; null leaves any other task's row to the engine. `hide` says the worker's finish card is
  * already in the transcript (transcript/placed.ts): the host's row then draws nothing, so a finish is one card. */
 export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean): Promise<RenderElement | null> {
- const who = await whoIs($, task.id ?? '', await $.agent.list().catch(() => [] as AgentInfo[]))
+ const who = await whoIs($, task.id ?? '', await $.agent.list().catch(() => [] as AgentInfo[]), task.status, true)
  if (!who) return null
  if (hide?.(who.name)) return { type: 'Text', props: {}, children: [] }
- const o = await workerOutcome($, { ...who, status: firstOf(task.status, who.status) }, memo, task.durationMs)
+ const o = await workerOutcome($, { ...who, status: badWord(who.status) ?? firstOf(task.status, who.status) }, memo, task.durationMs)
  return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui)
 }
 const FAILED = new Set(['failed', 'killed'])

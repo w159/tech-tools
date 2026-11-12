@@ -93,6 +93,29 @@ test('a place the host refuses leaves the host row to draw the finish', async ()
   await placeFinished(throwing, snap(0, [worker('b', 'running')]), snap(9000, [worker('b', 'finished')])) // never throws
 })
 
+// critique 15 A1/A2: the killed worker (stoprun-150-95c4a588-2 and -3) got no failed card, and a green one 31 s later.
+test('A1: failure is terminal, a failed worker later read as finished places no done card', async () => {
+  const ids: string[] = []
+  const failed = snap(0, [worker('ghost-explorer', 'failed')])
+  const later = snap(31_000, [worker('ghost-explorer', 'finished')])
+  expect(finishedWorkers(failed, later)).toEqual([])
+  await placeFinished(engine(ids), failed, later)
+  expect(ids).toEqual([])
+})
+
+test('A2: a place the host refused is retried on the next build, so the failed card still lands', async () => {
+  const ids: string[] = []
+  const running = snap(0, [worker('ghost-explorer', 'running')])
+  const failed = snap(5000, [worker('ghost-explorer', 'failed')])
+  await placeFinished(engine(ids, false), running, failed) // the one build that saw the transition: the host refuses
+  expect(ids).toEqual(['done-ghost-explorer-1'])
+  await placeFinished(engine(ids), failed, snap(5500, [worker('ghost-explorer', 'failed')])) // nothing moved, the card is still owed
+  expect(ids).toHaveLength(2)
+  expect(flat(placedTree(ids[1]!, uiFromEnv()))).toContain('explorer failed')
+  await placeFinished(engine(ids), failed, snap(6000, [worker('ghost-explorer', 'failed')]))
+  expect(ids).toHaveLength(2) // placed once: nothing owed any more
+})
+
 // ---- the render sites ----
 
 type Hook = (d: unknown, e: unknown, n: (x?: unknown) => unknown) => Promise<unknown>
@@ -127,6 +150,42 @@ test('the Placed site draws the mod\'s own card and passes another plugin\'s row
   expect(flat(out)).toMatch(CARD)
   expect(await sites().Placed!(host(), placedEvent('other', ids[0]!), next)).toBe(SENTINEL)
   expect(await sites().Placed!(host(), placedEvent('atlas', 'done-nope-7'), next)).toBe(SENTINEL)
+})
+
+// stoprun-150-95c4a588-1/frames/tab-team.ans:10: the host's notification row for the killed task read `● done ghost-explorer explorer finished · 5s`, 31 s after the kill.
+function killed(over: { rows?: AgentInfo[]; squad?: SquadAgent[]; messages?: unknown[]; mood?: string } = {}): EngineInterface {
+  const activity = over.mood ? { a1: { mood: over.mood, startedAt: 1000, since: 6000, tool: null, toolCount: 0, tokens: null, lastLine: '' } } : {}
+  return {
+    env: { get: async () => undefined },
+    state: memState({ 'atlas/snapshot': snap(0, over.squad ?? []), 'atlas/orch': { activity, comms: [], stage: {}, meta: { a1: { name: 'ghost-explorer', type: 'atlas:explorer' } } } }),
+    agent: { list: async () => over.rows ?? [] },
+    session: { messages: async (a?: { agentId?: string }) => (a?.agentId ? [] : over.messages ?? []) },
+  } as unknown as EngineInterface
+}
+const stoppedNotice = (requestId: string, status?: string) => ({ surface: 'terminal', component: 'UserMessage', requestId, props: { text: 'Agent stopped', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', ...(status ? { status } : {}), durationMs: 5000 } } })
+
+test('A1: the notification row of a killed task reads failed, never finished, whichever source says it', async () => {
+  const h = sites().UserMessage!
+  const FINISHED = /explorer finished/
+  for (const [label, eng, status] of [
+    ['task status killed', killed(), 'killed'],
+    ['task status stopped', killed(), 'stopped'],
+    ['host row killed, task status completed', killed({ rows: [{ id: 'a1', type: 'atlas:explorer', description: 'x', status: 'killed', name: 'ghost-explorer' } as AgentInfo] }), 'completed'],
+    ['row dropped, squad says dead', killed({ squad: [worker('ghost-explorer', 'dead')] }), 'completed'],
+    ['row dropped, squad says failed', killed({ squad: [worker('ghost-explorer', 'failed')] }), undefined],
+    ['row dropped, the mod recorded the failure', killed({ mood: 'failed' }), undefined],
+    ['row dropped, the lead transcript notification says killed', killed({ messages: [{ role: 'user', text: '<task-notification>\n<task-id>a1</task-id>\n<status>killed</status>\n</task-notification>', toolUses: [] }] }), 'completed'],
+  ] as const) {
+    forgetPlaced()
+    const row = flat(await h(eng, stoppedNotice(`k-${label}`, status), next))
+    expect([label, FINISHED.test(row), /explorer (failed|killed|stopped)/.test(row)]).toEqual([label, false, true])
+  }
+})
+
+test('A1: a worker the host lists completed with no failure anywhere still reads finished', async () => {
+  forgetPlaced()
+  const row = flat(await sites().UserMessage!(killed({ squad: [worker('ghost-explorer', 'finished')] }), stoppedNotice('ok1', 'completed'), next))
+  expect(row).toMatch(/explorer finished/)
 })
 
 test('B3/L15: the host notification row for a worker whose card is placed draws nothing; with no card it draws the result row', async () => {
