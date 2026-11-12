@@ -521,3 +521,36 @@ test('critique 12 C1: once the pattern is known, a new message is chipped with n
   expect(stringsOf(warm)).toContain('ATLAS')
   expect(warm).not.toBe(SENTINEL)
 })
+
+// ---- critique 17 C1: the first AssistantMessage answer is synchronous ----
+
+test('C1: with the env primed by turn.start, the first AssistantMessage draw is a chip returned synchronously (no promise, no state read)', async () => {
+  forgetDrawnHeaders()
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs)) // fresh registration: no snapshot was ever read; the pattern comes from contracts/operating-contract.json
+  let stateReads = 0
+  const base = fake$({ snapshot: snap() }).$
+  const $ = { ...(base as object), state: { ...(base.state as object), get: async () => { stateReads += 1; return null } } } as unknown as EngineInterface
+  await regs[4]!.hook($, {}, echoNext) // turn.start
+  stateReads = 0
+  const lines = ['ATLAS | 🔍 research | 0/3 explorers returned', 'ATLAS | ⛔ blocked | Stop gate open', 'ATLAS | 🏁 done | 5/5']
+  let raw = 0
+  for (const text of lines) {
+    const out = regs[2]!.hook($, fakeE('AssistantMessage', { text }), engineNext) as unknown
+    if (out instanceof Promise || stringsOf(out).includes('ATLAS |')) raw += 1
+  }
+  expect(raw).toBe(0)
+  expect(stateReads).toBe(0)
+})
+
+test('C1: before any turn.start the first draw still resolves to a chip, and mod-off still passes through', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const first = await regs[2]!.hook(fake$({ snapshot: snap() }).$, fakeE('AssistantMessage', { text: 'ATLAS | 🏁 done | 5/5' }), engineNext)
+  expect(stringsOf(first)).toContain('DONE')
+  const offRegs: Reg[] = []
+  registerRestyle(fakeOn(offRegs))
+  const off = fake$({ env: 'off', snapshot: snap() }).$
+  await offRegs[4]!.hook(off, {}, echoNext)
+  expect(await offRegs[2]!.hook(off, fakeE('AssistantMessage', { text: 'ATLAS | 🏁 done | 5/5' }), engineNext)).toBe(SENTINEL)
+})

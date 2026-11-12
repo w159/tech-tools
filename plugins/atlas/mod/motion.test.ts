@@ -193,6 +193,28 @@ describe('MotionDriver: idle schedules nothing; a change runs one frame timer an
     await settle();
     expect([t.redraws, t.cancelled, d.running]).toEqual([4, 1, false]); // the resting render, then no timer
   });
+  // Critique 17 C4 (stoprun-150-a4fad2f9-2/frames/f0078.ans:15 vs :27): T3 was `◍`/193 in the panel and `◌`/231 in the HUD, one frame. The two surfaces render
+  // at different instants of one redraw; a driver stamp that landed between them put the second a beat ahead. The frame they read moves only with a frame or a changed snapshot.
+  test('C4: two surfaces rendering either side of a driver tick that asked for no redraw draw the same frame', async () => {
+    const { t, d } = rig();
+    const snap = {};
+    await d.step(snap, feedOf('queued'));
+    t.now = 1000;
+    const changed = {};
+    await d.step(changed, feedOf('running')); // the change: published
+    t.now = 1100;
+    t.fn?.();
+    await settle(); // a frame at 100 ms: published
+    const hud = d.motion.ctx()!.now;
+    t.now = 1250; // a tick, nothing changed: the frame timer owns the redraw
+    await d.step(changed, feedOf('running'));
+    const panel = d.motion.ctx()!.now;
+    expect([hud, panel]).toEqual([1100, 1100]);
+    t.now = 1300;
+    t.fn?.();
+    await settle();
+    expect(d.motion.ctx()!.now).toBe(1300);
+  });
   test('reduced motion: nothing is observed, scheduled or redrawn', async () => {
     const { t, d } = rig(false);
     await d.step({}, feedOf('queued'));

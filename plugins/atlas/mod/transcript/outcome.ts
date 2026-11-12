@@ -5,6 +5,7 @@
 import { atom, read } from 'claude-code'
 import type { AgentInfo, EngineInterface, RenderElement } from 'claude-code'
 import { EMPTY_ORCH } from '../data/orchestration'
+import { endedAt, liveWorkers } from '../data/live'
 import type { ActivityEntry, LiveSnapshot } from '../orchestra-types'
 import { formatDuration, spin } from '../theme'
 import { notificationTree, resultLine, stripStatus } from './cards'
@@ -16,6 +17,24 @@ import type { CardExtra } from './cards'
 const spinnerTick = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0)
 const orchRef = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH)
 const snapshotRef = atom({ plugin: 'atlas', key: 'snapshot' } as const, null)
+const killedRef = atom({ plugin: 'atlas', key: 'killed' } as const, [] as string[]) // ids/names a TaskStop ended (discipline.ts)
+
+/** Ids and names of workers the lead stopped (TaskStop) or the host lists `killed`: their finish card reads `killed`, the word the host's own row
+ * uses, not the `failed` a mod-placed card said (critique 17 C2: `explorer failed · 3s` where a stopped worker's card is `explorer killed`). Never throws. */
+export async function killedNames($: EngineInterface): Promise<Set<string>> {
+ const out = new Set<string>()
+ try {
+  const meta = (await read($, orchRef)).meta
+  for (const raw of (await read($, killedRef)) ?? []) { out.add(raw); const n = meta[raw]?.name; if (n) out.add(n) }
+  for (const a of await $.agent.list().catch(() => [] as AgentInfo[])) {
+   if (a.status !== 'killed') continue
+   out.add(a.id)
+   const n = meta[a.id]?.name ?? a.name
+   if (n) out.add(n)
+  }
+ } catch { /* a card is display only */ }
+ return out
+}
 
 interface Outcome { status: string; line: string; durationMs?: number }
 type Msg = { role: string; text: string; toolUses?: ReadonlyArray<{ tool: string; input: Record<string, unknown> }> }
@@ -93,9 +112,19 @@ async function observedMs($: EngineInterface, id: string): Promise<number | unde
  return a && (a.mood === 'done' || a.mood === 'failed') && a.startedAt !== undefined && a.since > a.startedAt ? a.since - a.startedAt : undefined
 }
 
+/** The run the HUD and the team tab print for a worker the snapshot shows ended (data/live: first sight to the stamped finish), for a stopped worker whose
+ * task-notification carries no `duration_ms` (critique 17 C3: `explorer killed` with no `· 15s` where a done card has one). */
+async function snapshotMs($: EngineInterface, name: string): Promise<number | undefined> {
+ const s = ((await read($, snapshotRef)) ?? null) as unknown as LiveSnapshot | null
+ if (!s || !Array.isArray(s.squad)) return undefined
+ const w = liveWorkers({ ...s, activity: s.activity ?? {} }, s.now).find((x) => x.name === name)
+ const ms = w && (w.state === 'failed' || w.state === 'done') ? endedAt(w, s.now) - w.startedAt : 0
+ return ms > 0 ? ms : undefined
+}
+
 async function readOutcome($: EngineInterface, who: Who, memo: Map<string, Outcome>, durationMs?: number): Promise<Outcome> {
  const line = reportOf(rows(await $.session.messages({ agentId: who.id }).catch(() => [])))
- const ms = (await observedMs($, who.id)) ?? durationMs ?? notifiedMs(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id)
+ const ms = (await observedMs($, who.id)) ?? durationMs ?? notifiedMs(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id) ?? (BAD_STATUS.test(who.status) ? await snapshotMs($, who.name) : undefined)
  const o: Outcome = { status: who.status, line, ...(ms !== undefined ? { durationMs: ms } : {}) }
  if (ms !== undefined) memo.set(`${who.id}:${who.status}`, o)
  return o
@@ -149,12 +178,12 @@ export async function cardExtra($: EngineInterface, output: unknown, agents: rea
 
 /** Notification row for a background atlas worker; null leaves any other task's row to the engine. `hide` says the worker's finish card is
  * already in the transcript (transcript/placed.ts): the host's row then draws nothing, so a finish is one card. */
-export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean): Promise<RenderElement | null> {
+export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean, aged?: () => boolean): Promise<RenderElement | null> {
  const who = await whoIs($, task.id ?? '', await $.agent.list().catch(() => [] as AgentInfo[]), task.status, true)
  if (!who) return null
  if (hide?.(who.name)) return { type: 'Text', props: {}, children: [] }
  const o = await workerOutcome($, { ...who, status: badWord(who.status) ?? firstOf(task.status, who.status) }, memo, task.durationMs)
- return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui)
+ return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui, aged?.() ?? false)
 }
 const FAILED = new Set(['failed', 'killed'])
 
