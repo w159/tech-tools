@@ -44,7 +44,8 @@ describe('C5: the core tab says what happened', () => {
     for (const w of [37, 60, 80, 120]) expect([w, body('core', w, { core: c }).join('\n').includes('drift')]).toEqual([w, false]);
   });
   test('the seat row says "off plan" where it used to say "drift" and then "differs"', () => {
-    expect(text).toMatch(/3 explorers +too many +planned on haiku/);
+    expect(text).toContain('planned on haiku');
+    expect(text).not.toMatch(/too many/); // critique 21: the heading's sentence is the one place the count is said
   });
 });
 

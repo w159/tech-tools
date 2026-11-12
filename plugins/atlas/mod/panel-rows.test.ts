@@ -37,7 +37,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   test('critique 12: a tall pane never prints `task X` over `last X` when both say the same words', () => {
     const same = w('alpha', 'done', { goal: 'alpha: read alpha.py', detail: 'read alpha.py', model: 'haiku', secs: 11, tools: 2 });
     const other = w('beta', 'done', { goal: 'beta: read beta.py', detail: 'wrote the summary', model: 'haiku', secs: 12, tools: 3 });
-    const out = body('team', 120, { lead, workers: [same, other], mates: [], rows: 40 });
+    const out = [...body('team', 120, { lead, workers: [same, other], mates: [], rows: 40, expanded: 'worker:alpha' }), ...body('team', 120, { lead, workers: [same, other], mates: [], rows: 40, expanded: 'worker:beta' })]; // wave 24: one row per agent; the detail rows open on a press
     expect(out.filter((l) => /^ {4}task {2}read alpha\.py/.test(l))).toHaveLength(1);
     expect(out.filter((l) => /^ {4}last {2}read alpha\.py/.test(l))).toHaveLength(0); // the same words: said once
     expect(out.filter((l) => /^ {4}last {2}wrote the summary/.test(l))).toHaveLength(1); // different words: kept
@@ -73,7 +73,7 @@ describe('channel tab: header, columns and marks', () => {
     expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
   test('critique 12: a generated launch id (`lc-opl0e60i`) is no channel name: the ribbon says `this run`, the header keeps the words and also the real name (`this run · #lc-opl0e60i`, live 6b7f637d lost channel_name_shown), a named channel keeps its #name', () => {
-    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe('    this run · #lc-opl0e60i  2 people');
+    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe(`    this run  2 people${' '.repeat(45)}#lc-opl0e60i`);
     expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] }).join('\n')).toContain('#lc-opl0e60i');
     expect(body('channel', 80, { channel: 'atlas-board-mod', people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
@@ -88,12 +88,12 @@ describe('channel tab: header, columns and marks', () => {
     expect(body('channel', 50, { notes: [note()] })[1]).toBe('    lead hello                               10:02'); // the right-aligned value column
     expect(body('channel', 49, { notes: [note()] })[1]).toBe('    lead hello');
   });
-  test('the nick column is 4 cells at least, 10 at most below 100 columns, 18 from 100, cut with an ellipsis', () => {
+  test('a name is whole (30 cells below 100 columns, 24 from 100) and a longer one is cut at its end with one ellipsis', () => {
     const first = (cols: number, from: string): string => body('channel', cols, { notes: [note({ from })] })[1]!.replace(/ +10:02$/, '');
     expect(first(80, 'ab')).toBe('    ab hello');
-    expect(first(80, 'implementer-band')).toBe('    implement... hello'); // cut at its end, never in the middle
+    expect(first(80, 'implementer-band')).toBe('    implementer-band hello'); // wave 24: a name is never cut for the text beside it
     expect(first(120, 'implementer-band')).toBe('    implementer-band hello');
-    expect(first(120, 'x'.repeat(30))).toBe(`    ${'x'.repeat(21)}... hello`);
+    expect(first(120, 'x'.repeat(30))).toBe(`    ${'x'.repeat(23)}\u2026 hello`);
   });
   test('the nick column is as wide as the widest nick shown in the log', () => {
     const out = body('channel', 80, { notes: [note({ from: 'ab' }), note({ from: 'abcdefg', text: 'two' })] });

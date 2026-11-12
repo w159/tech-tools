@@ -131,9 +131,10 @@ describe('board goldens', () => {
   test('a long owner is cut to 18 cells and a long label to its column, so no cell runs into the next', () => {
     const lines = boardLines([{ label: 'L'.repeat(60), state: 'queued', owner: 'o'.repeat(40), detail: 'd' }], { cols: 120, ui: ui('mocha') });
     const row = boardText(lines)[3]!;
-    expect(row.indexOf('...')).toBeGreaterThan(0);
+    expect(row.indexOf('…')).toBeGreaterThan(0); // one ellipsis, never `...` (wave 24)
+    expect(row).not.toContain('...');
     expect(row.slice(30, 42)).toBe('queued      ');
-    expect(row.slice(42, 62)).toBe(`${'o'.repeat(15)}...  `);
+    expect(row.slice(42, 62)).toBe(`${'o'.repeat(17)}…  `);
     expect(row.slice(62)).toBe('d');
   });
 });

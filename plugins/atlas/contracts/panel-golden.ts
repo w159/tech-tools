@@ -67,18 +67,18 @@ export const toastDesign: string[] = [
 ];
 export const subagentsDesign: Record<number, string[]> = {
  "80": [
-  "  ● implementer-layout  done",
-  "  ● implementer-gates   done",
-  "▸ ◐ implementer-band    running",
+  "  ● implementer-layout  done     42s",
+  "  ● implementer-gates   done     42s",
+  "▸ ◐ implementer-band    running  42s",
   "  ◇ runner-land         queued",
-  "  ■ implementer-live    failed"
+  "  ■ implementer-live    failed   42s"
  ],
  "120": [
-  "  ● implementer-layout  done        opus      T1    9 of 9 steps",
-  "  ● implementer-gates   done        sonnet    T3    golden tests written",
-  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
-  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
-  "  ■ implementer-live    failed      opus      T6    tests red 3"
+  "  ● implementer-layout  done     42s  9 of 9 steps",
+  "  ● implementer-gates   done     42s  golden tests written",
+  "▸ ◐ implementer-band    running  42s  read runs.ts:17",
+  "  ◇ runner-land         queued        waits on implementer-live",
+  "  ■ implementer-live    failed   42s  tests red 3"
  ]
 };
 export const tabGolden: Record<string, Record<number, string[]>> = {
@@ -105,7 +105,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◐ Subagents block       running elapsed 00:42 of 05:00                                                implementer-band",
       "  ◇ Gate tests            queued  after Subagents block                                                      runner-land",
       "  ■ Changelog             failed  tests red 3                                                           implementer-live",
-      "  ▲ Ship board mod        blocked needs your approval                                                                you"
+      "  ▣ Ship board mod        blocked needs your approval                                                                you"
     ],
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -128,7 +128,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◐ Subagents block       running                               implementer-band",
       "  ◇ Gate tests            queued                                     runner-land",
       "  ■ Changelog             failed                                implementer-live",
-      "  ▲ Ship board mod        blocked                                            you"
+      "  ▣ Ship board mod        blocked                                            you"
     ],
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -151,7 +151,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◐ Subagents block       running       implementer-band",
       "  ◇ Gate tests            queued             runner-land",
       "  ■ Changelog             failed        implementer-live",
-      "  ▲ Ship board mod        blocked                    you"
+      "  ▣ Ship board mod        blocked                    you"
     ]
   },
   team: {
@@ -161,78 +161,33 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "route  team  channel  gates  core  board",
       "       ━━━━",
       "",
-      "  ● implementer-layout  done        opus      T1    9 of 9 steps",
-      "    task  T1",
-      "    model opus · 42s",
-      "    last  9 of 9 steps",
-      "  ● implementer-gates   done        sonnet    T3    golden tests written",
-      "    task  T3",
-      "    model sonnet · 42s",
-      "    last  golden tests written",
-      "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
-      "    task  T4",
-      "    model opus · 42s",
-      "    last  read runs.ts:17",
-      "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
-      "    task  T5",
-      "    model opus · 42s",
-      "    last  waits on implementer-live",
-      "  ■ implementer-live    failed      opus      T6    tests red 3",
-      "    task  T6",
-      "    model opus · 42s",
-      "    last  tests red 3"
+      "  ● implementer-layout  done     42s  9 of 9 steps",
+      "  ● implementer-gates   done     42s  golden tests written",
+      "▸ ◐ implementer-band    running  42s  read runs.ts:17",
+      "  ◇ runner-land         queued        waits on implementer-live",
+      "  ■ implementer-live    failed   42s  tests red 3"
     ],
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━ 1 queued · 1 running · 2 done · 1 failed",
       "",
       "route  team  channel  gates  core  board",
       "       ━━━━",
-      "  ● implementer-layout  done",
-      "    task  T1",
-      "    model opus · 42s",
-      "    last  9 of 9 steps",
-      "  ● implementer-gates   done",
-      "    task  T3",
-      "    model sonnet · 42s",
-      "    last  golden tests written",
-      "▸ ◐ implementer-band    running",
-      "    task  T4",
-      "    model opus · 42s",
-      "    last  read runs.ts:17",
+      "  ● implementer-layout  done     42s",
+      "  ● implementer-gates   done     42s",
+      "▸ ◐ implementer-band    running  42s",
       "  ◇ runner-land         queued",
-      "    task  T5",
-      "    model opus · 42s",
-      "    last  waits on implementer-live",
-      "  ■ implementer-live    failed",
-      "    task  T6",
-      "    model opus · 42s",
-      "    last  tests red 3"
+      "  ■ implementer-live    failed   42s"
     ],
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
       "",
       "route  team  channel  gates  core  board",
       "       ━━━━",
-      "  ● implementer-layout  done",
-      "    task  T1",
-      "    model opus · 42s",
-      "    last  9 of 9 steps",
-      "  ● implementer-gates   done",
-      "    task  T3",
-      "    model sonnet · 42s",
-      "    last  golden tests written",
-      "▸ ◐ implementer-band    running",
-      "    task  T4",
-      "    model opus · 42s",
-      "    last  read runs.ts:17",
+      "  ● implementer-layout  done     42s",
+      "  ● implementer-gates   done     42s",
+      "▸ ◐ implementer-band    running  42s",
       "  ◇ runner-land         queued",
-      "    task  T5",
-      "    model opus · 42s",
-      "    last  waits on implementer-live",
-      "  ■ implementer-live    failed",
-      "    task  T6",
-      "    model opus · 42s",
-      "    last  tests red 3"
+      "  ■ implementer-live    failed   42s"
     ]
   },
   channel: {
@@ -244,7 +199,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                        ▸ implementer-band take T4, then run the gate tests                                10:02",
-      "  ▲ implementer-live    blocked tests red 3, need a decision on the changelog                                      10:05",
+      "  ▣ implementer-live    blocked tests red 3, need a decision on the changelog                                      10:05",
       "  ● implementer-layout  handoff T1 and T2 merged                                                                   10:07"
     ],
     80: [
@@ -255,8 +210,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                                                   10:02",
       "    ▸ implementer-band take T4, then run the gate tests",
-      "  ▲ implement...  blocked tests red 3, need a decision on the changelog    10:05",
-      "  ● implement...  handoff T1 and T2 merged                                 10:07"
+      "  ▣ implementer-live    blocked                                            10:05",
+      "    tests red 3, need a decision on the changelog",
+      "  ● implementer-layout  handoff T1 and T2 merged                           10:07"
     ],
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━ #atlas-board-mod",
@@ -267,9 +223,10 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    lead                                           10:02",
       "    ▸ implementer-band take T4, then run the gate",
       "    tests",
-      "  ▲ implement...  blocked                          10:05",
+      "  ▣ implementer-live    blocked                    10:05",
       "    tests red 3, need a decision on the changelog",
-      "  ● implement...  handoff T1 and T2 merged         10:07"
+      "  ● implementer-layout  handoff                    10:07",
+      "    T1 and T2 merged"
     ]
   },
   gates: {
@@ -350,8 +307,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◇ verified none yet",
       "",
       "    verdicts  1 verified · 1 refuted",
-      "  ● mean-fix      verified       calc.mean fixed for [2,4,6],[],[1,2],[5]; un...",
-      "  ■ mean-iterable refuted        calc.mean does not accept iterators; mean(it...",
+      "  ● mean-fix      verified       calc.mean fixed for [2,4,6],[],[1,2],[5]; un…",
+      "  ■ mean-iterable refuted        calc.mean does not accept iterators; mean(it…",
       "",
       "    reading  17.9k tokens read by workers, 608 returned to the lead",
       "             3% of what they read",
@@ -378,8 +335,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◇ verified none yet",
       "",
       "    verdicts  1 verified · 1 refuted",
-      "  ● mean-fix      verified       calc.mean fixed for ...",
-      "  ■ mean-iterable refuted        calc.mean does not a...",
+      "  ● mean-fix      verified       calc.mean fixed for …",
+      "  ■ mean-iterable refuted        calc.mean does not a…",
       "",
       "    reading  17.9k tokens read by workers",
       "             608 returned to the lead",
@@ -410,53 +367,23 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
  * waiting lead (role lead, detail idle) and one roster member `leader` (queued, idle). Trailing spaces trimmed; spinner frame 0. */
 export const teamLiveGolden: Record<number, string[]> = {
   120: [
-    "  ◉ lead                waiting                     idle",
-    "  ● implementer-layout  done        opus      T1    9 of 9 steps",
-    "    task  T1",
-    "    model opus · 42s",
-    "    last  9 of 9 steps",
-    "  ● implementer-gates   done        sonnet    T3    golden tests written",
-    "    task  T3",
-    "    model sonnet · 42s",
-    "    last  golden tests written",
-    "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
-    "    task  T4",
-    "    model opus · 42s",
-    "    last  read runs.ts:17",
-    "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
-    "    task  T5",
-    "    model opus · 42s",
-    "    last  waits on implementer-live",
-    "  ■ implementer-live    failed      opus      T6    tests red 3",
-    "    task  T6",
-    "    model opus · 42s",
-    "    last  tests red 3",
-    "  ◇ leader              queued                      idle",
-    "    workers  1 queued · 1 running · 2 done · 1 failed",
+    "  ◉ lead                waiting       idle",
+    "  ● implementer-layout  done     42s  9 of 9 steps",
+    "  ● implementer-gates   done     42s  golden tests written",
+    "▸ ◐ implementer-band    running  42s  read runs.ts:17",
+    "  ◇ runner-land         queued        waits on implementer-live",
+    "  ■ implementer-live    failed   42s  tests red 3",
+    "  ◇ leader              queued        idle",
+    "    workers  1 queued · 1 running · 2 done · 1 failed"
   ],
   80: [
     "  ◉ lead                waiting",
-    "  ● implementer-layout  done",
-    "    task  T1",
-    "    model opus · 42s",
-    "    last  9 of 9 steps",
-    "  ● implementer-gates   done",
-    "    task  T3",
-    "    model sonnet · 42s",
-    "    last  golden tests written",
-    "▸ ◐ implementer-band    running",
-    "    task  T4",
-    "    model opus · 42s",
-    "    last  read runs.ts:17",
+    "  ● implementer-layout  done     42s",
+    "  ● implementer-gates   done     42s",
+    "▸ ◐ implementer-band    running  42s",
     "  ◇ runner-land         queued",
-    "    task  T5",
-    "    model opus · 42s",
-    "    last  waits on implementer-live",
-    "  ■ implementer-live    failed",
-    "    task  T6",
-    "    model opus · 42s",
-    "    last  tests red 3",
+    "  ■ implementer-live    failed   42s",
     "  ◇ leader              queued",
-    "    workers  1 queued · 1 running · 2 done · 1 failed",
+    "    workers  1 queued · 1 running · 2 done · 1 failed"
   ],
 };

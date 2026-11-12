@@ -69,9 +69,9 @@ describe('offload model column', () => {
     bodyLines(panelWorld('core', 120, mocha, { core: core({ offload: { workers: [worker(model)], kept: 30, returned: 5, ratio: 0.17 } as never }) }))
       .map((l) => l.runs.map((x) => x.t).join('')).find((t) => t.includes('wk '))!;
   test('a model name over 12 cells is cut to 12 with an ellipsis, 12 or fewer stands whole', () => {
-    expect(lineOf('claude-abcdefghijklmnopq')).toContain('abcdefghi...');
+    expect(lineOf('claude-abcdefghijklmnopq')).toContain('abcdefghijk…');
     expect(lineOf('claude-abcdefghijkl')).toContain('abcdefghijkl');
-    expect(lineOf('claude-abcdefghijkl')).not.toContain('...');
+    expect(lineOf('claude-abcdefghijkl')).not.toMatch(/\.\.\.|…/);
     expect(lineOf(null)).toContain('?');
   });
 });

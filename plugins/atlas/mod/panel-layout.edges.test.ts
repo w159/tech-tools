@@ -52,8 +52,8 @@ describe('channel log word column', () => {
 });
 
 describe('wrap', () => {
-  test('is two lines by default and the second is cut with `...` when text is left over', () => {
-    expect(wrap('alpha beta gamma delta epsilon zeta eta theta', 12)).toEqual(['alpha beta', 'gamma del...']);
+  test('is two lines by default and the second is cut with `…` when text is left over', () => {
+    expect(wrap('alpha beta gamma delta epsilon zeta eta theta', 12)).toEqual(['alpha beta', 'gamma delta…']);
     expect(wrap('alpha beta gamma delta epsilon zeta eta theta', 12, 4)).toHaveLength(4);
     expect(wrap('alpha beta gamma', 12)).toEqual(['alpha beta', 'gamma']);
   });
@@ -65,7 +65,7 @@ describe('core tab dispatch rows', () => {
     c.routes = [route('t1', { cls: 'implement', effort: 'medium', seats: [{ role: 'completeness-critic', count: 1, model: 'sonnet', effort: 'low', ran: ['sonnet'] }] })] as never;
     expect(body('core', 120, { core: c }).filter((l) => /implement|critic|complete/.test(l))).toEqual([
       '    implement team (medium effort) t1  tmux, shared, max 1',
-      '  ●   1 completen... as planned ran sonnet, low effort',
+      '  ●   1 completenes… as planned ran sonnet, low effort',
     ]);
   });
   test('a detail is whole at every width: it fits after the row or wraps under it, and is never clipped by one cell', () => {

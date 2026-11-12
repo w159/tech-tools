@@ -61,8 +61,8 @@ describe('change 6: the route tab is the Board compact form', () => {
     test(`at ${cols} a long title is clipped at its end: its start survives, the state word is never pushed off`, () => {
       if (cols < 50) return; // the narrow pane spills long titles (above)
       const row = taskRows(body('route', cols, { todos: plan }))[1]!;
-      expect(row).toMatch(/Wire the band .*\S\.\.\. +running/);
-      expect(row).not.toMatch(/\S\.\.\.\S/);
+      expect(row).toMatch(/Wire the band .*\S… +running/); // one `…` marks the cut (wave 24), never the ASCII `...`
+      expect(row).not.toMatch(/\S…\S|\.\.\./);
       expect(row).toContain('running');
     });
     test(`at ${cols} rows keep the Board's item order (no done-last reshuffle)`, () => {
@@ -82,8 +82,8 @@ describe('change 6: the route tab is the Board compact form', () => {
     for (const cols of [110, 80, 56]) {
       const row = taskRows(body('route', cols, { todos }))[0]!;
       expect(row).toContain('T1 read alph');
-      expect(row).not.toMatch(/\S\.\.\.\S/);
-      expect(row).toMatch(/\.\.\. +done/);
+      expect(row).not.toMatch(/\S…\S|\.\.\./);
+      expect(row).toMatch(/… +done/);
     }
   });
   test('B2: the owner column is whole whenever it was given room, at every width the column exists', () => {
@@ -125,7 +125,7 @@ describe('change 7: the core tab in plain words, numbers whole', () => {
   test('at 38 a worker name is cut at its end, its figures stay whole', () => {
     const row = body('core', 38).find((l) => /impl/.test(l) && /\d\.\dk|\$0/.test(l))!;
     expect(row).toBeDefined();
-    expect(row).toMatch(/impl\S*\.\.\./);
+    expect(row).toMatch(/impl\S*…/);
   });
   test('the figures are the right-aligned value column', () => {
     for (const cols of [120, 80]) {
