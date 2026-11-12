@@ -93,7 +93,7 @@ describe('HUD rows', () => {
 });
 
 describe('a new SUBAGENTS row (critique 11 A5)', () => {
-  test('its state word and glyph are whole on every reveal frame; only the name grows in', () => {
+  test('its name, state word and glyph are whole on every frame of the entry: the AGENT cell is never blank or cut (critique 22)', () => {
     const full = hudInput('pending', 'working');
     const fewer: HudInput = { ...full, agents: full.agents.slice(0, -1) };
     const added = full.agents[full.agents.length - 1]!;
@@ -108,8 +108,7 @@ describe('a new SUBAGENTS row (critique 11 A5)', () => {
       const line = runsString(hudLines(full, hudView(mo.ctx(T0 + dt)))[at]!);
       expect(line).toContain(word);
     }
-    const first = runsString(hudLines(full, hudView(mo.ctx(T0)))[at]!);
-    expect(first).not.toContain(added.name); // the name is what reveals
+    for (const dt of [0, 50, 100, 150, 200, 299]) expect(runsString(hudLines(full, hudView(mo.ctx(T0 + dt)))[at]!)).toContain(added.name);
   });
 });
 

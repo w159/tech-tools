@@ -17,7 +17,7 @@ const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const phases = worldPhases();
 const block = (rows: string[]) => rows.slice(rows.findIndex(l => l.includes("SUBAGENTS")));
 
-// Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) and a `└───┘` rule closes each block, so the goldens are the rows as drawn.
+// Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) and a `╰───╯` rule closes each block, so the goldens are the rows as drawn.
 const edge = (rows: readonly string[]): string[] => [...rows];
 test("omp TODO surface equals the design goldens at 120, 120 rich, 80 and 40; 60 uses the 40 form", () => {
 	const input = { todos: worldPlan(), agents: [], phases };

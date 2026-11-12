@@ -27,7 +27,7 @@ const worldAgents = worldHudAgents;
 const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
 const phases = worldPhases();
 
-// Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) with the count and meter inside it, and a `└───┘` rule closes the block, so the goldens are the rows as drawn.
+// Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) with the count and meter inside it, and a `╰───╯` rule closes the block, so the goldens are the rows as drawn.
 const edge = (rows: readonly string[]): string[] => [...rows];
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
@@ -265,7 +265,7 @@ describe('hud row budget', () => {
     expect(hudLines({ todos: [], agents: [] }, view(120))).toEqual([]);
   });
   test('hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows', () => {
-    expect(hudCompactRows({ todos: plan, agents })).toBe(6 + 5); // TODO ribbon, 4 rows and the overflow row (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents and the overflow row
+    expect(hudCompactRows({ todos: plan, agents })).toBe(6 + 5 + 2); // both closing rules (the box never changes shape, critique 22); TODO ribbon, 4 rows and the overflow row (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents and the overflow row
     expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 6 + 5))).join('\n')).toContain('AGENT'); // one row beyond the floor: the column names return
     for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
     expect(hudBudget(1, 7, 7, true)).toBe(1);

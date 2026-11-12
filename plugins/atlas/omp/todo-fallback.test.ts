@@ -41,7 +41,7 @@ test("tree: the rev 4 TODO surface, one row per plan item with its state word, t
 		{ content: "Docs: changelog", status: "blocked" },
 	]);
 	const rows = lines.slice(1, -1);
-	expect(lines.at(-1)).toMatch(/^└─+┘$/); // the box closes (critique 21)
+	expect(lines.at(-1)).toMatch(/^╰─+╯$/); // the box closes (critique 21)
 	expect(rows).toHaveLength(5);
 	const want: Array<[string, string]> = [["●", "trace calc module done"], ["◐", "map call paths running"], ["◇", "add mul queued"], ["■", "run tests failed"], ["▲", "changelog blocked"]];
 	rows.forEach((r, i) => expect(r.replace(/ +/g, " ").replace(/^[ ▸] ?/, "")).toBe(`${want[i]![0]} ${want[i]![1]}`));
