@@ -30,8 +30,8 @@ const f0104 = (): HudInput => ({
 });
 
 describe('A1: a completed row is drawn while ten rows hold it (f0104)', () => {
-  test('150 columns, 11 rows, four agents: all five rows show, T1 included, with no `done` fold on the ribbon', () => {
-    const rows = hud(f0104(), 150, 11);
+  test('150 columns, 12 rows (the column names take one), four agents: all five rows show, T1 included, with no `done` fold on the ribbon', () => {
+    const rows = hud(f0104(), 150, 12);
     expect(rows.filter((r) => /\bT[1-5] /.test(r) && !/haiku/.test(r))).toHaveLength(5);
     expect(rowOf(rows, 'T1 read alpha.py')).toMatch(/done/);
     expect(rows[0]).toContain('1/5');
@@ -41,11 +41,12 @@ describe('A1: a completed row is drawn while ten rows hold it (f0104)', () => {
 });
 
 describe('A4: the gap row between TODO and SUBAGENTS stays while an agent runs (f0093, f0104)', () => {
-  test('f0093 shape: five plan rows and three agents in 11 rows keep the blank (the column names make way)', () => {
+  test('f0093 shape: five plan rows and three agents in 12 rows keep the blank and the column names (rev 5: the names outrank the blank in 11)', () => {
     const input: HudInput = { todos: [item(1, 'pending', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'pending', 'T2 read ghost.py (ghost-explorer)', names[1]), item(3, 'pending', 'T3 read beta.py (beta-explorer)', names[2]), item(4, 'pending', 'T4 combine the reports'), item(5, 'pending', 'T5 write the final summary')], agents: [agent(names[0]!, 'working', 'running'), agent(names[1]!, 'failed', 'failed'), agent(names[2]!, 'done', 'done')] };
-    const rows = hud(input, 150, 11);
+    const rows = hud(input, 150, 12);
     const at = rows.findIndex((r) => r.includes('SUBAGENTS'));
-    expect(rows).toHaveLength(11);
+    expect(rows).toHaveLength(12);
+    expect(rows[at + 1]).toMatch(/AGENT\s+STATE/);
     expect(rows[at - 1]!.trim()).toBe('');
     expect(rows.filter((r) => /\bT[1-5] /.test(r) && !/haiku/.test(r))).toHaveLength(5);
     expect(rows.filter((r) => /-explorer/.test(r) && /haiku/.test(r))).toHaveLength(3);

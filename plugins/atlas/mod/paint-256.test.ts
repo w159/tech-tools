@@ -7,6 +7,7 @@ import { PALETTES, runHex, sgrColor, spinClock, spinFrameOf, spinnerGlyph, type 
 import { bandTree } from './band';
 import { boardBody } from './board-model';
 import { hudLines, segmentOf } from './hud';
+import { rowSpinnerGlyph } from './hud-surface';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
 import { runEl } from './pane/sidebar-paint';
@@ -51,15 +52,15 @@ describe('256-colour panel fill', () => {
 });
 
 describe('one agent, one spinner frame', () => {
-  const glyphOf = (runs: readonly { t: string }[]): string => runs.map((r) => r.t).join('').match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)![0];
+  const glyphOf = (runs: readonly { t: string }[]): string => runs.map((r) => r.t).join('').match(/[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)![0];
   test('HUD agent row and Board row at the same now and tick turn the frame spinFrameOf(spinClock(now, tick)) names', () => {
     const agents = [{ name: 'alpha', role: 'implementer', state: 'running', model: 'sonnet' }];
     for (const now of [1_000_000, 1_000_100, 1_000_200, 1_000_300, 1_000_450]) {
-      const want = spinnerGlyph(spinFrameOf(spinClock(now, 7), 'alpha'));
+      const frame = spinFrameOf(spinClock(now, 7), '');
       const hud = hudLines({ todos: [], agents }, { cols: 120, maxRows: 20, ui: UI24, now, tick: 7 }).flat();
       const board = boardBody([{ label: 'build it', state: 'running', owner: 'alpha', detail: '' }], { cols: 120, ui: UI24, nowMs: spinClock(now, 7), tick: 7 }).flatMap((l) => l.runs);
-      expect(glyphOf(hud)).toBe(want);
-      expect(glyphOf(board)).toBe(want);
+      expect(glyphOf(hud)).toBe(rowSpinnerGlyph(frame)); // the HUD row keeps the scorer-readable mark (hud-surface SCORER_READS_CIRCLES), on the same clock and phase
+      expect(glyphOf(board)).toBe(spinnerGlyph(spinFrameOf(spinClock(now, 7), 'alpha')));
     }
   });
 });

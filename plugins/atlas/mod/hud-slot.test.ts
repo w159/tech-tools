@@ -41,10 +41,10 @@ describe('A3: the SUBAGENTS column header and the blank before the band', () => 
       }
     }
   }
-  test('a slot too small for the header and a band row leaves the band its row (no gap, header dropped before the plan)', () => {
+  test('a slot too small for the whole plan, the header and a band row leaves the band its row (no gap); the plan is capped, the header stays (rev 5)', () => {
     const cap = hudSlotCap(11, hudCompactRows(running, 104), hudFloorRows(running, 104, Date.now()), 7, true, true);
     expect(cap).toBe(Math.min(hudBudget(11, hudCompactRows(running, 104), 7, true), 10)); // critique 18: the compact floor holds the column names, the running clamp keeps the band row
-    expect(draw(running, 104, cap).some((r) => /AGENT\s+STATE/.test(r))).toBe(false); // and only a slot with no room for them drops them
+    expect(draw(running, 104, cap).some((r) => /AGENT\s+STATE/.test(r))).toBe(true); // the column names stay while the grid shows: the plan gives the row up
     expect(hudGapRows(true, 10, 11)).toBe(0);
   });
   test('no agents listed: the plan alone gets the old budget and no gap', () => {

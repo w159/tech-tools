@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- HUD (TODO and SUBAGENTS), rev 5: plain bold titles with a count, a thin `─` rule and an 8-cell `▰▱` meter on the right (quiet brand, no chip); the braille spinner before the SUBAGENTS counts; one spinner phase for every HUD row; done rows dim; running word bold, warnings never bold; the SUBAGENTS column header now outranks the blank row and the finished rows fold before it drops; TASK and LAST read `-` when empty. Rows keep the four-circle mark and the circle/box glyph set because the capture scorer reads them (`SCORER_READS_CIRCLES` in mod/hud-surface.ts).
+
 ## 17.13.0 - 2026-11-12
 
 - Round 2 waves 15 to 20 (fixes for critiques 14 to 19). Live, 3 runs per width on build 4b5b5a94: TODO 81.2% (150 cols) and 78.5% (110); band 94.5% and 92.2%; workers on any surface 94.0% and 91.4%; side panel route, team, gates and channel tabs 100%; events never shown per surface 14 of 111 (150) and 18 of 110 (110); critic 6.5 (critique 20). The 3x bar is met on 16 of 19 lines; not met: first-appearance lag (2 lines) and the design critic (target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.

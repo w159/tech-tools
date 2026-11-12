@@ -7,7 +7,8 @@ import { hudAgents, hudLines, type HudInput } from './hud';
 import { hudPhases } from './band';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
-import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinnerGlyph, type Run, type Ui } from './atlas-ui';
+import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from './atlas-ui';
+import { rowSpinnerGlyph } from './hud-surface';
 import { busySnap, NOW } from './live_fixture';
 import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS } from './motion';
 import { motionFeed } from './motion-feed';
@@ -24,7 +25,7 @@ const snapOf = (statuses: readonly [string, string, string]): LiveSnapshot =>
     activity: { ...busySnap().activity, 'impl-auth': { ...busySnap().activity['impl-auth']!, mood: 'done' as const } },
   });
 
-const ENDS = new Set([...Object.values(STATE_GLYPHS), ...Object.values(STATE_ASCII), RETURNED_GLYPH, RETURNED_ASCII, '◌', '◍', '@', ...[0, 1, 2, 3].flatMap((f) => [spinnerGlyph(f), spinnerGlyph(f, true)])]);
+const ENDS = new Set([...Object.values(STATE_GLYPHS), ...Object.values(STATE_ASCII), RETURNED_GLYPH, RETURNED_ASCII, '◌', '◍', '@', ...[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].flatMap((f) => [spinnerGlyph(f), spinnerGlyph(f, true), rowSpinnerGlyph(f)])]);
 const paint = (r: Run): string => `${r.fg ?? r.tone}`;
 /** What a row draws as its mark and its state word: the glyph character and colour, the word and its colour. */
 function markOf(runs: readonly Run[], word: string): string {
@@ -72,7 +73,10 @@ describe('A1: the HUD and the route tab draw the same mark and colour for the sa
     const ui = UIS[0]![1];
     for (const dt of [0, 100, 200, 300]) {
       const s = surfaces({ ...snapOf(['in_progress', 'pending', 'in_progress']), now: NOW + dt }, ui, undefined);
-      expect([dt, markOf(rowWith(s.hud, 'wire the gate'), 'running')]).toEqual([dt, markOf(rowWith(s.panel, 'wire the gate'), 'running')]);
+      // The HUD row turns the shared clock's one-phase frame in its scorer-readable mark (hud-surface SCORER_READS_CIRCLES); the panel turns the spinner's own. Colour and word match.
+      const [h, p] = [markOf(rowWith(s.hud, 'wire the gate'), 'running'), markOf(rowWith(s.panel, 'wire the gate'), 'running')];
+      expect([dt, h.slice(1)]).toEqual([dt, p.slice(1)]);
+      expect([dt, h[0]]).toEqual([dt, rowSpinnerGlyph(spinFrameOf(spinClock(NOW + dt, 0), ''))]);
     }
   });
 });

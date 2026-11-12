@@ -57,12 +57,12 @@ describe('B1: blocked is its own state', () => {
 describe('B2: every row that fits is drawn, only the rest is folded', () => {
   // stoprun-150-e4a8186a-3/frames/f0085.ans:25-27: `3 more todos not shown` under 2 drawn rows; the fold row itself cost the third.
   const four: HudAgent[] = [...AGENTS, agent('beta-explorer-2', 'done', { model: 'haiku', lastTool: 'Read' })];
-  test('9 rows: three plan rows beside the four agents, the count of the other two on the ribbon', () => {
+  test('9 rows: two plan rows beside the four agents and their column names, the count of the other three on the title', () => {
     const rows = text(hudLines({ todos: PLAN, agents: four }, { cols: 103, maxRows: 9, ui, now: NOW }));
     expect(rows).toHaveLength(9);
     const at = rows.findIndex((r) => r.includes('SUBAGENTS'));
-    expect(at).toBe(4); // ribbon, three plan rows, then the agents
-    expect(rows[0]).toMatch(/TODO ━+ 1\/5 · 2 more todos not shown ━+/);
+    expect(at).toBe(3); // title, two plan rows, then the agents (rev 5: the column names stay, so the plan gives up a row)
+    expect(rows[0]).toMatch(/TODO {2}1\/5 · 3 more todos not shown ─+/);
     expect(rows.some((r) => /^\s+\d+ more todos? not shown\s*$/.test(r))).toBe(false); // no row of its own
   });
   test('a plan that fits in full carries no count', () => {

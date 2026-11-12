@@ -12,13 +12,13 @@ import { hudText as rawHudText, paintHud } from "./hud-paint";
 const ui: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
 const opts = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
 // The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
-const hudText = (...a: Parameters<typeof rawHudText>) => rawHudText(...a).map(l => l.replace(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/g, "⠋"));
+const hudText = (...a: Parameters<typeof rawHudText>) => rawHudText(...a).map(l => l.replace(/(─ )[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/, "$1@SPIN@").replace(/[◐◓◑◒]/g, "◐")); // the title's spinner glyph is `@SPIN@` in the golden
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const phases = worldPhases();
 const block = (rows: string[]) => rows.slice(rows.findIndex(l => l.includes("SUBAGENTS")));
 
-// The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the count and 3 after it.
-const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(━{6,})( \d+\/\d+)$/, (_m, f: string, c: string) => `${f.slice(2)}${c} ━━━`), ...rows.slice(1)];
+// The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the meter and 3 after it (rev 5).
+const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(─{6,})( [▰▱]+)$/, (_m, f: string, m: string) => `${f.slice(2)}${m} ───`), ...rows.slice(1)];
 test("omp TODO surface equals the design goldens at 120, 120 rich, 80 and 40; 60 uses the 40 form", () => {
 	const input = { todos: worldPlan(), agents: [], phases };
 	expect(hudText(input, opts(120))).toEqual(edge(todo_120));

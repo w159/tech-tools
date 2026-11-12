@@ -6,6 +6,7 @@ import { worldSidebar, worldSnapshot } from '../contracts/world-live';
 import { liveWorkers } from './data/live';
 import { SPINNER_MS, runsString, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { hudAgents, hudLines } from './hud';
+import { rowSpinnerGlyph } from './hud-surface';
 import { panelModelOf } from './pane/sidebar-model';
 import { bodyLines, lineText } from './panel-layout';
 
@@ -34,20 +35,20 @@ describe('the HUD and the side panel turn one frame per agent', () => {
       expect(running.length).toBeGreaterThan(0);
       for (const a of running) {
         const id = a.key ?? a.name; // the squad name the panel rows carry
-        const want = spinnerGlyph(spinFrameOf(spinClock(snap.now, tick), id));
-        expect([a.name, glyphOf(hud, a.name)]).toEqual([a.name, want]);
-        expect([id, glyphOf(panel, id)]).toEqual([id, want]);
+        expect([a.name, glyphOf(hud, a.name)]).toEqual([a.name, rowSpinnerGlyph(spinFrameOf(spinClock(snap.now, tick), ''))]); // rev 5: one phase for every HUD row
+        expect([id, glyphOf(panel, id)]).toEqual([id, spinnerGlyph(spinFrameOf(spinClock(snap.now, tick), id))]);
       }
     });
   }
 
-  test('an agent shown under a display name turns the phase of its squad name, the panel row id', () => {
+  test('rev 5: every running HUD row of one frame turns the same glyph, whatever the agent is called (one phase, no per-row offsets)', () => {
     const NOW = 1_700_000_000_000;
     const names = ['alpha', 'beta', 'gamma', 'delta', 'omega'];
     const agents = names.map((n, i) => ({ name: n, key: `${n}-explorer-${i}`, role: 'explorer', state: 'working' as const, ui: 'running' as const }));
     const rows = hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick: 1, now: NOW }).map((r) => runsString(r));
-    for (const a of agents) expect([a.name, glyphOf(rows, a.name)]).toEqual([a.name, spinnerGlyph(spinFrameOf(spinClock(NOW, 1), a.key))]);
-    expect(new Set(agents.map((a) => spinFrameOf(NOW, a.key))).size).toBe(1); // one shared phase
+    const glyphs = agents.map((a) => glyphOf(rows, a.name));
+    expect(new Set(glyphs).size).toBe(1);
+    expect(glyphs[0]).toBe(rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
   });
 
   test('the HUD frame turns between data polls: the same snapshot at the next tick shows the next frame', () => {
