@@ -3,6 +3,7 @@
 ## atlas 17.14.0 - 2026-11-12
 
 - atlas 17.14.0: round 3 terminal UI (band, HUD, SUBAGENTS, side panel, board) and a README rewrite checked against the code. The section list is in [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).
+- Round 3 audit (working signal, critic scores, remaining defects): [docs/audits/2026-11-12_atlas-round3.md](audits/2026-11-12_atlas-round3.md).
 
 ## marketplace 5.19.0 - 2026-11-12
 

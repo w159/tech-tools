@@ -107,23 +107,28 @@ agent returned is a neutral `◉`, and 256-colour terminals see only Atlas's pal
 indices. Detail and file:line references are in
 [plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
 
-![Band with two running workers](img/showcase/cc-band-running.png)
+![Band, TODO box and SUBAGENTS box with one worker running, side panel on the route tab](img/showcase/cc-band-running.png)
 
 When the run ends the band reads `done` for 30 seconds and then settles into
 `idle · last run`, with the gate warning still shown.
 
-![Idle band after a wave](img/showcase/cc-band-idle.png)
+![Idle band after a wave, with the gate warning and the finished TODO and SUBAGENTS boxes](img/showcase/cc-band-idle.png)
 
 **Parallel teams.** Two or more workers run side by side in one tmux window,
 each pane headed by its role, with tool and peer chips.
 
 ![Three workers tiled in tmux](img/showcase/cc-team.png)
 
+This picture is from an earlier build.
+
 **Gates in the transcript.** A dispatch that breaks a rule is refused with the
 command that fixes it. A worker's card updates in place when it reports.
 
 ![Scope deny card](img/showcase/cc-scope-deny.png)
-![Worker card done](img/showcase/cc-card-done.png)
+
+This picture is from an earlier build.
+
+![Worker done cards in the transcript, with the band and boxes below](img/showcase/cc-card-done.png)
 
 ## What it changes on your machine
 
@@ -274,6 +279,8 @@ tripwire. omp has two extras:
   widget area.
 
 ![omp widget during a team run](img/showcase/omp-widget.png)
+
+This picture is from an earlier build.
 
 The parity matrix is in [docs/architecture/atlas-harness-parity.md](docs/architecture/atlas-harness-parity.md).
 
