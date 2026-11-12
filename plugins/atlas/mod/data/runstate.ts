@@ -84,7 +84,8 @@ export function gateTally(raw: readonly GateGroup[]): GateTally {
   const data = groups.filter(hasData);
   const checks = data.map((g): GateCheck => (groupOpenCount(g) === 0 ? { id: g.id, ok: true, ...(g.lines.some(isPendingLine) ? { pending: true as const } : {}) } : { id: g.id, ok: false, name: reasonName(g) }));
   const failing = checks.filter((c) => !c.ok).map((c) => c.id);
-  return { total: checks.length, green: checks.length - failing.length, failing, names: checks.filter((c) => !c.ok).map((c) => c.name!), checks, stop: stopOf(groups) };
+  // Critique 18 A2: `green` is the count of green marks drawn (`●`): a pending group (`◇`, Stop alone decides) and a failing one (`▲`) are not green, so `3/4 green` never sits beside 2 green marks.
+  return { total: checks.length, green: checks.filter((c) => c.ok && !c.pending).length, failing, names: checks.filter((c) => !c.ok).map((c) => c.name!), checks, stop: stopOf(groups) };
 }
 
 /** One refusing gate's word, lowercased; a bare gate letter (`r`) or the stand-in `gate` never reaches the band: it reads `stop refused`. */
@@ -109,19 +110,38 @@ const clipCells = (t: string, n: number): string => clip(t.replace(/\s+/g, ' ').
 /** Longest joined reason the band spells out; past it the count stands in (`3 reasons`). */
 const REASON_MAX = 28;
 
+const OPEN_GATE = /\bopen\b|todos? drained/;
+/** What the store holds open right now, for a reason that must agree with the todo figure beside it: `allDone`: the plan reads n/n; `openLeft`: open rows past the plan's own. */
+export type OpenNow = { allDone: boolean; openLeft: number };
+
 /** Why a band is blocked, after `blocked:` and in plain words: the lead declared it (`needs you`), or the Stop gate refused the stop and said why
  * (`1 todo open`, `team gate`, `team gate, todos drained`). One string at every width: a crowded row drops the reason whole, never rewords it. */
-export function blockReasons(declared: boolean, stopGates: readonly string[], dispatchTitle?: string): { long: string; short: string } {
+export function blockReasons(declared: boolean, stopGates: readonly string[], dispatchTitle?: string, now?: OpenNow): { long: string; short: string } {
   // The open row Stop refused on is a dispatch row the plan does not list: name it by its plan row's title (`dispatch T2 read ghost.py open`) instead of a count the band's todo figure would have to invent.
   const named = dispatchTitle ? `dispatch ${clipCells(dispatchTitle, DISPATCH_TITLE_MAX)} open` : '';
   // Critique 17 A4: a declared block keeps naming the open row Stop refused on, so the reason does not flip to `needs you` when the lead's own header arrives (stoprun-150-3, f0097 to the board tab).
-  if (declared && !(named && stopGates.some((g) => /\bopen\b|todos? drained/.test(g)))) return { long: 'needs you', short: 'needs you' };
+  if (declared && !(named && stopGates.some((g) => OPEN_GATE.test(g)))) return { long: 'needs you', short: 'needs you' };
   if (stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
-  const gates = named ? stopGates.reduce<string[]>((acc, g) => (/\bopen\b|todos? drained/.test(g) ? (acc.includes(named) ? acc : [...acc, named]) : [...acc, g]), []) : stopGates;
+  // Critique 18 A1: with the plan full and no dispatch row to name, `1 todo open` contradicts `todo 5/5` (stoprun-110-562576ed-1 f0113): say what is true now.
+  const stale = !named && now?.allDone ? (now.openLeft > 0 ? 'stop refused' : 'retry stop') : '';
+  const gates = stopGates.reduce<string[]>((acc, g) => { const w = OPEN_GATE.test(g) ? named || stale || g : g; return acc.includes(w) ? acc : [...acc, w]; }, []);
   const joined = gates.join(', ');
   const one = textWidth(joined) <= REASON_MAX || (named && gates.length === 1) ? joined : `${gates.length} reasons`;
   return { long: one, short: one };
 }
+
+/** The lead's reply waits on the person (critique 18 A4): it says so in words (`Waiting on your decision`, `Choose one:`, `say so and I'll write it`). Then the band reads
+ * `blocked: needs you` and the route phase reads `blocked` on the same tick, whatever phase word the reply's header carries. Plain statements of progress never match. */
+const ASKS: readonly RegExp[] = [
+  /\bwaiting (?:on|for) (?:your|you\b|the user)/i,
+  /\bawaiting your\b/i,
+  /\bneeds? your (?:decision|input|call|approval|go-ahead|answer)\b/i,
+  /^\s*choose one\b/im,
+  /\b(?:which|what) (?:do|would) you (?:want|prefer|like)\b/i,
+  /\bsay so and i(?:'|’)ll\b/i,
+  /\bblocked on you\b/i,
+];
+export const asksUser = (text: string | null | undefined): boolean => !!text && ASKS.some((re) => re.test(text));
 
 /** A failing check while the Stop gate did not refuse is a warning, never BLOCKED: `tripwire warning`, `2 gates warning`. */
 export const warningText = (failing: readonly string[]): string => `${failing.length === 1 ? failing[0] : `${failing.length} gates`} warning`;

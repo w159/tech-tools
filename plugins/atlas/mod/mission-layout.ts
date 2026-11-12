@@ -150,9 +150,9 @@ const countOf = (m: MissionModel, s: UiState): number => (s === 'failed' ? faile
 /** What the Motion observes of the band: each state's agent count, so a count that moves is drawn mid-transition. */
 export const bandMotionItems = (m: MissionModel): MotionItem[] => COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) }));
 
-function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   '): Run[] {
+function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   ', queued = true): Run[] {
   const n = (s: UiState): number => countOf(m, s);
-  const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || s === 'queued' || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
+  const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
   const parts = order.filter((s) => n(s) > 0).map((s): Run[] => animateRow(words ? countRuns(s, n(s), ui, m.tick) : [stateRun(s, ui, m.tick), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS));
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
@@ -204,7 +204,9 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber ▲).
   const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? warningText(failing) : undefined;
-  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates, m.openDispatchTitle) };
+  // The reason is read against the figure beside it (critique 18 A1): a plan that reads n/n never sits beside `1 todo open`.
+  const now = { allDone: m.total > 0 && m.done >= m.total, openLeft: Math.max(0, (m.openWork ?? 0) - (m.total - m.done)) };
+  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now) };
 }
 
 /** `▲ blocked: 1 todo open`: glyph, the word and, when given, the reason in plain words (what Stop said). One form at every width. */
@@ -232,9 +234,10 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     : idle ? [r('idle', 'text', true), ...phaseSeg] : [r(m.phase, 'text', true), ...phaseSeg];
   const lead = idle ? 'idle · ' : '';
   const fig = figure(m);
-  const todo = m.total ? `${fig.done}/${fig.total}${openMore(m)}` : '';
+  const todoAt = (withOpen: boolean): string => (m.total ? `${fig.done}/${fig.total}${withOpen ? openMore(m) : ''}` : '');
+  const todo = todoAt(true);
   const blockedWords = blockedRuns(m, ui, true);
-  const glue: Run = openMore(m) ? r(' · ', 'sub') : r(' '); // `4/5 · 1 dispatch open · ▣ 1 blocked`: a named fact is not glued to the next count (critique 17 A4)
+  const glue: Run = r(' · ', 'sub'); // critique 18 A3: always a middle dot between segments (`todo 4/5 · ▣ 1 blocked`), never a bare space
   // Below GAUGE_MIN the one-row band carries figures, not gauges: an empty `░░░` track beside `0 of 5` (critique 9, the 110 band) says nothing the figure does not.
   const full = (noun: boolean, ctxGauge: boolean, gap: string, gw = 10, gauges = true): Run[] => {
     const counts = bandCounts(m, ui, true, noun, gap);
@@ -245,35 +248,37 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
       ...(counts.length ? [r(gap), ...counts] : []),
     ];
   };
-  const counts = bandCounts(m, ui, true);
   const tiny = bandCounts(m, ui, false);
-  const midTodo = (word: string): string => [m.total ? '' : `${word} ${phaseNo}`, todo ? `todo ${todo}` : ''].filter(Boolean).join(' · ');
+  const midTodo = (word: string, withOpen: boolean): string => [m.total ? '' : `${word} ${phaseNo}`, m.total ? `todo ${todoAt(withOpen)}` : ''].filter(Boolean).join(' · ');
   const tail = (cs: Run[]): Run[] => (cs.length ? [r(' · ', 'sub'), ...cs] : []); // the bare blocked count (`■1`) is dropped below 60 columns: the todo header and the board carry it
   const stdCounts = bandCounts(m, ui, true, false, ' · ');
   const ctxSeg: Run[] = m.ctx !== undefined ? [r(' · ', 'sub'), r('ctx '), r(percent(m.ctx), 'sub')] : [];
-  // Critique 16 A2: the counts keep their words down to 50 columns (`■ 1 blocked · ◐ 1 running`); the bare glyph-and-number forms (`■1 · ◐1`) are the last fallbacks only.
-  const wordTail = (cs: Run[]): Run[] => [...(blockedWords.length ? [glue, ...blockedWords] : []), ...(cs.length ? [r(' · ', 'sub'), ...cs] : [])];
-  const compact = (word: string, cs: Run[], why: string, t: (cs: Run[]) => Run[] = tail): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word)}`, 'sub')] : [r(` ${lead}${midTodo(word)}`, 'sub')]), ...t(cs)];
+  // Critique 16 A2 and 18 A3: the counts keep their words down to 50 columns (`■ 1 blocked · ◐ 1 running`); the bare glyph-and-number forms (`■1 · ◐1`) are the last fallbacks only.
+  // A row that is too narrow drops a lower-priority SEGMENT, never the word of a count: first the ctx figure, then the open-row note (`· 2 dispatches open`), then the blocked count.
+  // The queued count (benign) goes before the blocked count (an attention state).
+  const stdNoQueued = bandCounts(m, ui, true, false, ' · ', false);
+  type Keep = { open: boolean; bw: boolean; ctx: boolean; q: boolean };
+  const KEEPS: readonly Keep[] = [{ open: true, bw: true, ctx: true, q: true }, { open: true, bw: true, ctx: false, q: true }, { open: false, bw: true, ctx: false, q: true }, { open: false, bw: true, ctx: false, q: false }, { open: false, bw: false, ctx: false, q: true }];
+  const countsOf = (k: Keep): Run[] => (k.q ? stdCounts : stdNoQueued);
+  const bwTail = (cs: Run[], bw: boolean): Run[] => [...(bw && blockedWords.length ? [glue, ...blockedWords] : []), ...tail(cs)];
+  const compact = (word: string, cs: Run[], why: string, k: Keep): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word, k.open)}`, 'sub')] : [r(` ${lead}${midTodo(word, k.open)}`, 'sub')]), ...bwTail(cs, k.bw)];
   const out: Form[] = [
     { runs: full(true, true, '   '), min: GAUGE_MIN }, { runs: full(true, false, '  ', 8), min: GAUGE_MIN },
     { runs: full(false, true, '   '), min: GAUGE_MIN }, { runs: full(false, false, '  ', 8), min: GAUGE_MIN },
     // Critique 12 A3: from STD_MIN to 119 columns the band is one layout with one separator (` · `). The old 100-119 form (triple-space gaps, an `agents` noun)
     // made one snapshot read differently at 110 (undocked, body 105) and 150 (docked beside the 56-column pane, body 93).
-    { runs: [...cap, r(' '), ...name, ...(m.total ? [r(` · todo ${todo}`, 'sub')] : []), ...(blockedWords.length ? [glue, ...blockedWords] : []), ...ctxSeg, ...(stdCounts.length ? [r(' · ', 'sub'), ...stdCounts] : [])], min: STD_MIN },
-    { runs: compact('phase', stdCounts, reason.long, wordTail), min: 80 },
-    // Critique 17 A4: before the bare count (`■1`) the blocked count's words drop (the head already says blocked): `... open · todo 4/5 · ■ 1 failed` keeps the failed word at 80 columns.
-    { runs: compact('phase', stdCounts, reason.long), min: 80 },
-    { runs: compact('phase', stdCounts, reason.short, wordTail), min: 50 },
-    { runs: compact('ph', stdCounts, reason.short, wordTail), min: 50 },
-    { runs: compact('phase', tiny, reason.short), min: 50 },
-    { runs: compact('ph', tiny, reason.short), min: 50 },
+    ...KEEPS.map((k): Form => ({ runs: [...cap, r(' '), ...name, ...(m.total ? [r(` · todo ${todoAt(k.open)}`, 'sub')] : []), ...(k.bw && blockedWords.length ? [glue, ...blockedWords] : []), ...(k.ctx ? ctxSeg : []), ...tail(countsOf(k))], min: STD_MIN })),
+    ...(['phase', 'ph'] as const).flatMap((word) => KEEPS.slice(1).map((k): Form => ({ runs: compact(word, countsOf(k), reason.long, k), min: 50 }))),
+    { runs: compact('phase', tiny, reason.short, KEEPS[4]!), min: 50 },
+    { runs: compact('ph', tiny, reason.short, KEEPS[4]!), min: 50 },
   ];
   if (blocked) {
-    const todoPart = todo ? [r(` todo ${todo}`, 'sub')] : [];
+    const todoPart = (open: boolean): Run[] => (m.total ? [r(` · todo ${todoAt(open)}`, 'sub')] : []);
     const small = (...parts: Run[][]): Run[] => [...cap, r(' '), ...flagHead(ui, st, reason.short), ...parts.flat()];
-    // Critique 17 A4: the narrow forms keep the words as long as they fit (`◖ ◆ ATLAS ◗ ▣ blocked: ... todo 4/5 · ■ 1 failed`), so the row never stops at `todo 4/5 · ■1` with columns to spare.
+    // Critique 17 A4: the narrow forms keep the words as long as they fit (`◖ ◆ ATLAS ◗ ▣ blocked: ... · todo 4/5 · ■ 1 failed`), so the row never stops at `todo 4/5 · ■1` with columns to spare.
     out.push(
-      { runs: small(todoPart, wordTail(stdCounts)), min: 0 }, { runs: small(todoPart, wordTail([])), min: 0 }, { runs: small(todoPart, tail(tiny)), min: 0 }, { runs: small(todoPart), min: 0 }, { runs: small(), min: 0 }, { runs: [...cap, r(' '), ...flagHead(ui, st)], min: 0 });
+      ...KEEPS.slice(1).map((k): Form => ({ runs: small(todoPart(k.open), bwTail(countsOf(k), k.bw)), min: 0 })),
+      { runs: small(todoPart(true), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), tail(tiny)), min: 0 }, { runs: small(todoPart(false)), min: 0 }, { runs: small(), min: 0 }, { runs: [...cap, r(' '), ...flagHead(ui, st)], min: 0 });
   } else out.push({ runs: [...cap, r(`${idle ? ' idle' : ''}${todo ? `${quiet(m) ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...tail(tiny)], min: 0 });
   return out;
 }
@@ -289,7 +294,7 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
   const counts = bandCounts(m, ui, true, true);
   const blocked = blockedRuns(m, ui, true);
   const to = (row: Run[], col: number): Run[] => (row.length ? atColumn(row, col) : [r(' '.repeat(col))]);
-  const todoRow = [...todo, ...(todo.length && blocked.length ? [r('  '), ...blocked] : [])];
+  const todoRow = [...todo, ...(todo.length && blocked.length ? [r(' · ', 'sub'), ...blocked] : [])]; // a middle dot between segments (critique 18 A3)
   const ctxAt = Math.max(40, runsWidth(todoRow) + 3); // the ctx and count columns move right when the blocked count joins the todo group
   let row = todoRow;
   if (ctx.length) row = [...to(row, ctxAt), ...ctx];
@@ -394,11 +399,13 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
   const one = (c: MissionCheck): Run[] => [c.pending ? stateRun('queued', ui) : c.ok ? stateRun('done', ui) : warnMark(ui), r(` ${c.id}`, c.ok ? 'sub' : 'text')];
   const join = (cs: readonly MissionCheck[]): Run[] => cs.flatMap((c, i) => [...(i ? [r('  ')] : []), ...one(c)]);
   const failing = checks.filter((c) => !c.ok);
-  const green = `${checks.length - failing.length}/${checks.length} green`;
+  // Critique 18 A2: the figure counts the green marks drawn: a pending check (`◇`) and a failing one (`▲`) are not green.
+  const attention = checks.filter((c) => !c.ok || c.pending);
+  const green = `${checks.length - attention.length}/${checks.length} green`;
   const forms: Run[][] = [
     [...join(checks), r(`  ${green}`, 'sub')],
     join(checks), // tight: the names and marks carry the figure
-    failing.length ? [...join(failing), r(`  ${green}`, 'sub')] : [stateRun('done', ui), r(` ${green}`, 'sub')],
+    attention.length ? [...join(attention), r(`  ${green}`, 'sub')] : [stateRun('done', ui), r(` ${green}`, 'sub')],
     failing.length ? [warnMark(ui), r(` ${plural(failing.length, 'warning')}`, 'text')] : [stateRun('done', ui)],
   ];
   const label = [r(' checks  ', 'muted')];

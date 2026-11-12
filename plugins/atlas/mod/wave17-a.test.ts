@@ -122,14 +122,15 @@ describe('A4: the gates figure never rises and falls in a clean run; a check Sto
     const frames = [world({}), world({}), world({ s: true }), world({}), world({ inline: true })];
     const drift = [false, true, true, true, true];
     const figs = frames.map((g, i) => { const t = gateTally(withCoreTally(g as never, core(drift[i]!) as never)); return t.green; });
-    expect(figs).toEqual([4, 3, 3, 3, 2]);
+    expect(figs).toEqual([4, 3, 2, 3, 2]); // critique 18 A2: the figure counts the green marks drawn, and a pending check (`◇`) is not a green mark
     const s = gateTally(withCoreTally(world({ s: true }) as never, core(true) as never));
     expect(s.checks.find((c) => c.id === 'completion')).toMatchObject({ ok: true, pending: true });
     expect(s.failing).toEqual(['routing']);
   });
   test('`Todos drained` with open rows is pending too while Stop has not decided', () => {
     const t = gateTally(withCoreTally(world({ i: true }) as never, null));
-    expect(t.green).toBe(t.total);
+    expect(t.green).toBe(t.total - 1); // the pending group is drawn `◇`, not a green mark (critique 18 A2)
+    expect(t.failing).toEqual([]);
     expect(t.checks.find((c) => c.id === 'completion')?.pending).toBe(true);
   });
   test('Stop refused: the same lines are failing, never pending', () => {
@@ -148,7 +149,7 @@ describe('A4: the gates figure never rises and falls in a clean run; a check Sto
     const snap = idle({ activity: lead(null, 'working') });
     const out = rows(snap, world({ s: true }) as never, 150).join('\n');
     expect(out).toContain('◇ completion');
-    expect(out).toContain('4/4 green');
+    expect(out).toContain('3/4 green'); // three ● marks and the pending ◇
     const tab = bodyLines(panelWorld('gates', 100, ui, { gates: world({ s: true }) as never })).map(lineText).join('\n');
     expect(tab).toMatch(/◇ +completion +pending/);
     expect(tab).not.toMatch(/▲ +completion/);

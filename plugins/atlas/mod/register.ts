@@ -20,6 +20,7 @@ import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';
+import { asksUser } from './data/runstate';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -1124,7 +1125,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			for (const msg of pendingDrift.splice(0)) $.ui.log(msg, { to: 'debug' });
 			if (e.agentId === undefined) {
 				const phase = headerPhaseOf(e.answer, await read($, snapshotState));
-				await update($, headerPhaseState, (prev) => phase ?? prev); // critique 17 A5: a reply with no header line leaves the lead's last declared phase; null reset the route to `research 1/5` beside a DONE chip
+				const declared = asksUser(e.answer) ? ('blocked' as const) : phase; // critique 18 A4: a reply that waits on the person is the blocked phase, whatever its header says
+				await update($, headerPhaseState, (prev) => declared ?? prev); // critique 17 A5: a reply with no header line leaves the lead's last declared phase; null reset the route to `research 1/5` beside a DONE chip
 				const seen = headerTallyOf(await leadMessages($), e.answer, await read($, snapshotState));
 				await update($, headerTallyState, (t) => ({ ok: Math.max(seen.ok, t.ok + +(phase !== null)), total: Math.max(seen.total, t.total + 1) })); // never below the per-turn count: a compacted transcript only shrinks `seen`
 				void runGates($);

@@ -28,7 +28,7 @@ import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
 import { openGateCount } from "../mod/gates";
 import type { CoreModel } from "../mod/data/core";
-import { ranWorkers } from "../mod/data/runstate";
+import { asksUser, ranWorkers } from "../mod/data/runstate";
 import { ownTodos, planCounts, planPhase, settleDispatch, type Outcome } from "../mod/data/todos";
 
 export const WIDGET_KEY = "atlas-channel";
@@ -77,6 +77,7 @@ export interface ViewDeps {
 	columns?: () => number | undefined; // terminal width; default process.stdout.columns, else 120
 	gates?: GatesCache; // default: atlas_gates.py through spawnText, armed projects only
 	headerPhase?: () => string | undefined; // the lead's latest ATLAS header phase this turn (registerChannelView)
+	asksUser?: () => boolean; // the lead's latest reply this turn waits on the person (data/runstate asksUser): the band reads `blocked: needs you`
 }
 export interface ChannelView {
 	/** A `task` dispatch opened (or reused) the lead's channel. */
@@ -586,6 +587,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		if (deps.gates || gatesArmed(i.cwd, env)) gates.refresh(i.sessionId ?? "-", i.root);
 	};
 	const header = deps.headerPhase ?? (() => undefined);
+	const asks = deps.asksUser ?? (() => false);
 	const trackWave = (i: ChannelOpenInfo & { root: string }) => {
 		const rows = channelMembers(i.root, i.channel) ?? [];
 		if (rows.length) wave = { channel: i.channel, ...waveOf(rows, now() / 1000, dispatchOwners(i)) };
@@ -614,6 +616,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 			width: panelWidth(columns()),
 			maxLines: MAX_LINES,
 			phase,
+			...(asks() ? { blocked: true } : {}), // critique 18 A4: the lead asked the person; the Claude band says the same (mod/register.ts)
 			spin: spinFrame(tickN, phase),
 			laneSpin: spinFrame(tickN),
 			tick: tickN,
@@ -740,18 +743,21 @@ const isSub = (ctx: PhaseCtx | undefined) => ctx?.agent?.kind === "sub";
 export function registerChannelView(pi: Pick<ExtensionAPI, "on">, deps: ViewDeps = {}): ChannelView {
 	// The lead's latest header phase this turn; a new prompt (before_agent_start) starts a turn without one.
 	let turnPhase: string | undefined;
-	const view = createChannelView({ headerPhase: () => turnPhase, ...deps });
+	let turnAsks = false;
+	const view = createChannelView({ headerPhase: () => turnPhase, asksUser: () => turnAsks, ...deps });
 	pi.on("session_shutdown", () => {
 		view.stop();
 		return undefined;
 	});
 	pi.on("before_agent_start", ((_e: unknown, ctx: PhaseCtx) => {
-		if (!isSub(ctx)) turnPhase = undefined;
+		if (!isSub(ctx)) { turnPhase = undefined; turnAsks = false; }
 		return undefined;
 	}) as never);
 	pi.on("message_end", ((e: { message?: unknown }, ctx: PhaseCtx) => {
 		const phase = isSub(ctx) ? undefined : headerPhaseOf(e?.message);
 		if (phase) turnPhase = phase;
+		const said = isSub(ctx) ? "" : assistantText(e?.message);
+		if (said.trim()) turnAsks = asksUser(said); // a tool-call-only message says nothing: the ask stands until the lead's next words
 		return undefined;
 	}) as never);
 	return view;

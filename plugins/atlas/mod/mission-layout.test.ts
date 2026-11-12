@@ -249,8 +249,9 @@ describe('mission-layout: a full plan with open store work never reads as all do
     expect(line).toContain('5/5');
     expect(line).not.toContain('5/6');
     for (const cols of [120, 100, 80]) expect(band({ ...m, cols })).not.toContain('5/6');
-    // without a title (no dispatch row to name) the reason keeps Stop's own words and `openMore` still names the open row
-    expect(band({ ...m, openDispatchTitle: undefined })).toContain('blocked: 1 todo open');
+    // without a title (no dispatch row to name) the plan is full, so `1 todo open` would contradict `5/5` (critique 18 A1): the reason is `stop refused` and `openMore` still names the open row
+    expect(band({ ...m, openDispatchTitle: undefined })).toContain('blocked: stop refused');
+    expect(band({ ...m, openDispatchTitle: undefined })).not.toContain('todo open');
     // not blocked: the figure stays the plan's own and the open row is named beside it (unchanged)
     expect(band(model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1 }))).toContain('5/5 · 1 dispatch open');
   });

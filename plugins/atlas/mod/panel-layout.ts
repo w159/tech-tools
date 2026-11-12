@@ -240,7 +240,8 @@ const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).leng
 /** `phase   research   2/4`: the lit phase and its place on the rail. While the Stop gate refused the stop (or the lead declared it) the phase is `blocked` with no rail
  * number: never `done 5/5` beside a blocked band (critique 16 A3, stoprun f0090). */
 function phaseRow(m: PanelModel): PanelLine {
-  if (m.phase === 'done' && tallyOf(gatesOf(m)).stop?.blocked) return line([label('phase', m.cols), r('blocked', 'bad', { bold: true })]);
+  // Critique 18 A4: the same state the band draws: a refused Stop makes the phase `blocked` whatever the lead's last header said (`research`, `done`), and the lead's own ask of the user does too (the header phase is `blocked`).
+  if (m.phase === 'blocked' || tallyOf(gatesOf(m)).stop?.blocked) return line([label('phase', m.cols), r('blocked', 'bad', { bold: true })]);
   // Critique 17 A5: the phase word alone (`phase implement`): a rail number beside it (`research 1/5`) read as the same kind of figure as the todo `n/m` and went stale beside the chip.
   return line([label('phase', m.cols), r(m.phase)]);
 }
@@ -741,7 +742,8 @@ function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
   // says the run needs no more (Stop allowed it), so the row reads quiet instead of amber beside a green line (critique 14).
   const gateOk = (id: string): boolean => m.gates.some((g) => g.lines.some((l) => l.id === id && l.ok));
   return [
-    heading('contract', [], m),
+    // Critique 18 A5: a plain heading with its own figure (`done items  5 of 5`), never the bare word `contract` over two rows.
+    heading('done items', [r(e.total > 0 || plan > 0 ? `${e.total} of ${plan > 0 ? Math.max(plan, e.total) : e.total}` : 'none yet', 'muted')], m),
     ...items.flatMap(([name, t, gate]): PanelLine[] => {
       const waived = t.total > 0 && t.ok < t.total && gateOk(gate);
       const runs = gridRow({
@@ -796,7 +798,7 @@ function offloadRows(c: CoreModel, m: PanelModel, cap = OFFLOAD_CAP): PanelLine[
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
   const nothing = o.kept === 0 && o.returned === 0;
   const gone = m.workers.filter((w) => w.state === 'done' || w.state === 'failed').length; // in-process workers keep no token log: they returned, the figure is absent
-  const head = flowHeading('reading', nothing ? [gone ? pickForm([`${gone} worker${gone === 1 ? '' : 's'} finished, their token use is not recorded`, `${gone} finished, token use not recorded`, `${gone} finished, no token log`], m.cols - cells('reading') - 3) : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
+  const head = flowHeading('reading', nothing ? [gone ? pickForm([`${gone} worker${gone === 1 ? '' : 's'} finished, token count not kept`, `${gone} finished, no token count`, `${gone} finished, no token log`], m.cols - GRID_LEAD - cells('reading') - 2) : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
   const ws = o.workers.slice(-cap);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);
@@ -840,7 +842,8 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
   const head = heading(tmux === 0 && inProc > 0 ? 'dispatches' : 'teams', teams.length ? [r(inProc > 0 && tmux > 0 ? `${tmux} tmux, ${inProc} in-process` : `${tmux === 0 ? dispatched || teams.length : teams.length} this session`, 'muted')] : [], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
-  const names = teams.flatMap((rt) => rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`));
+  const seatName = (s: { count: number; ran: readonly string[]; role: string }): string => `  ${seatCount(s)} ${s.role}${seatCount(s) === 1 ? '' : 's'}`; // plain words: `3 explorers`, never `3x explorer` (critique 18 A5)
+  const names = teams.flatMap((rt) => rt.seats.map(seatName));
   const { nameW } = gridPlan(m.cols, { names, word: SEAT_WORD_W, min: 8, max: 16 });
   const withDetail = (runs: Run[], forms: string | readonly string[]): PanelLine[] => {
     const used = rowWidth(runs);
@@ -863,9 +866,10 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
       const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['blocked', over ? 'too many' : 'changed', 'warn']; // plain words (critique 17 A6); amber like the gates tab's routing warning: a team that ran differently is a warning, not a failure (critique 14)
       // Plain words, no `model/effort` token: `3 explorers ran, 1 planned (haiku, low effort)`; a seat that ran another model reads `ran on opus, planned haiku, low effort`.
       const plan = `${s.model}, ${s.effort} effort`;
-      const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `${s.ran.length} ran, the plan said ${s.count} (${plan})` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
-      const runs = gridRow({ cols: m.cols, ui: m.ui, mark: coreMark(st, m.ui), name: { t: `  ${seatCount(s)}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
-      return withDetail(runs, over ? [detail, `${s.ran.length} ran, plan said ${s.count} (${s.model})`] : detail);
+      // The heading above already says `3 explorers ran, the plan said 1`: the seat row says what was asked for, in two short forms (critique 18 A5: no `3x`, no `3 ran, plan said 1 (haiku)`).
+      const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `asked for ${s.count} on ${s.model}, ${s.effort} effort` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
+      const runs = gridRow({ cols: m.cols, ui: m.ui, mark: coreMark(st, m.ui), name: { t: seatName(s) }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
+      return withDetail(runs, over ? [detail, `asked for ${s.count} on ${s.model}`] : detail);
     });
     // In-process routes have no team name or isolation to show: the sentence says how the workers ran.
     const how = rt.transport === 'in-process' ? [`workers ran in-process (no tmux team), up to ${rt.maxParallel} at once`, `ran in-process, up to ${rt.maxParallel} at once`] : `${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`;

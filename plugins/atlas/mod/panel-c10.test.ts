@@ -135,7 +135,7 @@ describe('C4: the core tab in plain words', () => {
   test('the sentence says what was planned and what ran', () => {
     const out = text(panelWorld('core', 150, mocha, { core: c, rows: 40 })).join('\n');
     expect(out).toContain('3 explorers ran, the plan said 1');
-    expect(out).toMatch(/3x explorer +too many +3 ran, the plan said 1/);
+    expect(out).toMatch(/3 explorers +too many +asked for 1 on haiku/);
   });
   test('a long reading sentence wraps whole instead of being cut mid-phrase', () => {
     const out = text(panelWorld('core', 37, mocha, { core: { ...core, offload: { ...core.offload, workers: [] } }, workers: [worker('a'), worker('b'), worker('c')], rows: 40 })).join('\n');

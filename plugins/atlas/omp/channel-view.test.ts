@@ -551,6 +551,31 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 	view.stop();
 });
 
+test("critique 18 A4: a lead reply that waits on the person reads `blocked: needs you` on the band until the next turn or the next words", () => {
+	const root = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "in_progress", content: "omp todo" }]);
+	const { calls, ui, deps } = harness({ ATLAS_PROJECT_ROOT: root });
+	type Handler = (e: Record<string, unknown>, c: Record<string, unknown>) => unknown;
+	const handlers: Record<string, Handler[]> = {};
+	const pi = { on: (name: string, h: Handler) => void (handlers[name] ??= []).push(h) } as unknown as Parameters<typeof registerChannelView>[0];
+	const view = registerChannelView(pi, deps);
+	const main = { cwd: root, agent: { kind: "main" } };
+	const say = (text: string, ctx: Record<string, unknown> = main) =>
+		handlers.message_end?.forEach(h => h({ message: { role: "assistant", content: [{ type: "text", text }] } }, ctx));
+	const head = () => plain([calls.at(-1)![0]!]);
+	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+	expect(head()).not.toContain("needs you");
+	say("ATLAS | ◎ research | waiting\nThe board is stuck.\nWaiting on your decision.\nChoose one:\n1. a\n2. b");
+	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+	expect(head()).toContain("blocked: needs you");
+	say("ATLAS | ◎ research | sub", { cwd: root, agent: { kind: "sub" } }); // a worker's words never move the lead's state
+	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+	expect(head()).toContain("blocked: needs you");
+	handlers.before_agent_start?.forEach(h => h({}, main)); // the person answered: a new turn
+	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+	expect(head()).not.toContain("needs you");
+	view.stop();
+});
+
 test("lane tool chip and target come from one event: an omp `write xd://<mcp tool>` is that tool with its query", () => {
 	const f = fixture();
 	type H = (e: unknown, c: unknown) => unknown;

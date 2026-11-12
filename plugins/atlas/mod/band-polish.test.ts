@@ -155,9 +155,9 @@ describe('band counts what the HUD counts (critique-3 change 4)', () => {
   test('a blocked task has its own glyph and count beside the todo count, with the agents noun in front of the agent counts', () => {
     const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
     expect(head).toContain('todo ');
-    expect(head).toMatch(/1\/3 ▣ 1 blocked/);
+    expect(head).toMatch(/1\/3 · ▣ 1 blocked/);
     expect(head).toMatch(/agents .*1 running/);
-    expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/todo 1\/3 ▣ 1 blocked/);
+    expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/todo 1\/3 · ▣ 1 blocked/);
   });
   test('the order is the HUD ribbon\'s: running, failed, queued, waiting', () => {
     const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
