@@ -262,10 +262,35 @@ export type AnimateOpts = {
   tint?: (run: Run, index: number) => boolean;
 };
 
-/** The last beat of the window: a run not already bold is drawn bold, in whatever tone it has. A 256-colour palette gives two distinct steps
- * between a lead and a rest tone, so without this the third beat equalled the rest frame and the ramp read 400 ms, not 600 (critique 12:
- * motion-8271cfc8/todo-strip.ans:2-5). Rests at the first frame past the window. */
-const held = (r: Run, beat: number): Run => (beat >= MAX_BEATS - 1 && r.bold !== true ? { ...r, bold: true } : r);
+/** A run not already bold is drawn bold for the whole window and drops it at rest: emphasis only ever falls. A 256-colour palette gives two
+ * distinct steps between a lead and a rest tone, so without this the last beats equalled the rest frame and the ramp read 400 ms, not 600
+ * (critique 12). Critique 16 (motion-e4a8186a/todo-strip.ans:4-7): bold that arrives on the LAST beats read 231, 193, bold 193, bold 151,
+ * 151, a brightness pop at 400-600 ms; held from the first beat it falls with the colour instead. */
+const lift = (r: Run): Run => (r.bold !== true ? { ...r, bold: true } : r);
+
+const rampCache = new Map<string, readonly string[]>();
+/**
+ * The colours a 256-colour run steps through, one per beat: white (the theme's emphasis colour) first when the palette has room for it, then
+ * the staircase, then the resting colour itself (held bold, so it still differs from the rest frame). Lightness only moves toward rest, so no
+ * beat is brighter than the one before. Empty when the palette has no staircase for the pair (the row keeps its tone; only the glyph pops).
+ */
+export function ramp256(accent: string, rest: string, theme: Ui['theme'], lifted: boolean): readonly string[] {
+  const key = `${theme}|${accent}|${rest}|${lifted}`;
+  const hit = rampCache.get(key);
+  if (hit) return hit;
+  const stairs = easeSteps256(accent, rest, theme);
+  const out: string[] = [...stairs];
+  if (out.length) {
+    const target = fitHex(rest, theme);
+    const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
+    const d = Math.sign(luminance(target) - luminance(out[0]!));
+    if (d !== 0 && deltaE(lead, out[0]!) >= MIN_STEP_DE && Math.sign(luminance(out[0]!) - luminance(lead)) === d) out.unshift(lead);
+    if (lifted) out.push(target);
+  }
+  const ramp = out.slice(0, MAX_BEATS);
+  rampCache.set(key, ramp);
+  return ramp;
+}
 
 /**
  * `runs` as drawn `ctx.now` ms into the row's window. `key` names the row's entry, `accent` is the state whose tone leads.
@@ -290,13 +315,11 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
         if (!wants(r, i)) return r;
         const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585b70') : palette[r.tone]);
         if (ui.color === '256') {
-          const stairs = easeSteps256(palette[markToken(accent)], rest, ui.theme);
-          if (beat < stairs.length) return { ...r, fg: stairs[beat]! };
-          // The palette ran out of steps before the window did: its last step held bold, then the rest tone held bold on the last beat, so every beat still differs from its neighbours and from rest.
-          const tail = stairs.at(-1);
-          return tail !== undefined && beat < MAX_BEATS - 1 && r.bold !== true ? { ...r, fg: tail, bold: true } : held(r, beat);
+          const steps = ramp256(palette[markToken(accent)], rest, ui.theme, r.bold !== true);
+          // No staircase for this pair: the row keeps its tone (the glyph pop still moves).
+          return steps.length ? lift({ ...r, fg: steps[Math.min(beat, steps.length - 1)]! }) : r;
         }
-        return held({ ...r, fg: mixHex(lead, rest, t) }, beat);
+        return lift({ ...r, fg: mixHex(lead, rest, t) });
       });
     }
     if (o.pop !== false && accent === 'done' && e.state === 'done') {

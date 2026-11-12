@@ -60,15 +60,16 @@ describe('256-colour ease', () => {
     const resting: Run[] = [{ t: '●', tone: 'ok' }, { t: ' ', tone: 'text' }, { t: 'wire the gate', tone: 'sub', strike: true }, { t: 'tests green', tone: 'muted' }];
     for (const word of ['wire the gate', 'tests green']) {
       const seen: string[] = [];
-      let atRest = false;
+      let boldOff = false;
       for (let dt = 0; dt < MOTION_MS; dt += 50) {
-        const fg = animateRow(resting, 'todo:a', 'done', m.ctx(1000 + dt), ui, { pop: false, reveal: false }).find((r) => r.t === word)!.fg;
-        if (fg === undefined) { atRest = true; continue; } // past its last step a run wears its resting tone
-        expect(atRest).toBe(false); // and never leaves it again
+        const run = animateRow(resting, 'todo:a', 'done', m.ctx(1000 + dt), ui, { pop: false, reveal: false }).find((r) => r.t === word)!;
+        const fg = run.fg;
+        expect(fg).toBeDefined(); // critique 16: every beat of the window is a step; the last one is the resting tone held bold (never a bold that arrives late)
+        if (!run.bold) boldOff = true;
+        expect(boldOff && run.bold === true).toBe(false); // bold only falls
         expect([fg, idx(fg!)]).toEqual([fg, hostTo256(fg!)]);
         if (seen.at(-1) !== fg) seen.push(fg!);
       }
-      expect(atRest).toBe(true);
       expect(new Set(seen.map(idx)).size).toBeGreaterThanOrEqual(MIN_STEPS_256);
       expect(seen.length).toBe(new Set(seen).size); // a staircase: no step comes back
     }

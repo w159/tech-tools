@@ -73,20 +73,18 @@ async function session(sound: boolean) {
 }
 
 describe('coreTick', () => {
-  test('the baseline read toasts nothing; each new verdict toasts once', async () => {
+  test('the baseline read toasts nothing; a new verdict raises no host toast either', async () => {
     const s = await session(false);
     await coreTick(s.$);
     expect(s.rec.toasts).toEqual([]);
     expect(s.rec.status).toEqual([]); // the core never sets a status-line entry
     s.files[`${RUN}/findings.json`] = JSON.stringify([verdict('a', 'verified', '2026-10-27T08:00:00+00:00'), verdict('b', 'rejected', '2026-10-27T08:05:00+00:00'), verdict('c', 'needs-evidence', '2026-10-27T08:06:00+00:00'), verdict('d', 'verified', '2026-10-27T08:07:00+00:00')]);
     await coreTick(s.$);
-    // One toast per read: state first, then the name, then one fact; the rest fold into `+N more`.
-    expect(s.rec.toasts).toHaveLength(1);
-    const [toast] = s.rec.toasts;
-    expect(toast).toBe('▌ ◆ ATLAS  ■ failed  b  refut... +2 more');
+    // Critique 16 C2: a verdict is told by the core tab; the host toast box over the transcript is for a worker that waits for the person.
+    expect(s.rec.toasts).toEqual([]);
     await coreTick(s.$);
     await coreTick(s.$);
-    expect(s.rec.toasts).toHaveLength(1);
+    expect(s.rec.toasts).toEqual([]);
     expect(s.rec.status).toEqual([]);
   });
 
@@ -101,13 +99,13 @@ describe('coreTick', () => {
     }
   });
 
-  test('a worker whose log finishes toasts its offload once', async () => {
+  test('a worker whose log finishes raises no host toast (critique 16 C2)', async () => {
     const s = await session(false);
     await coreTick(s.$);
     s.files[`${RUN}/logs/implementer-1.log`] += `\n${JSON.stringify({ type: 'result', total_cost_usd: 0.1, modelUsage: { 'claude-sonnet-5-5': { costUSD: 0.1 } } })}`;
     await coreTick(s.$);
     await coreTick(s.$);
-    expect(s.rec.toasts).toEqual(['▌ ◆ ATLAS  ● done  implementer-1  4.0...']);
+    expect(s.rec.toasts).toEqual([]);
   });
 
   test('an unchanged log is not read again', async () => {

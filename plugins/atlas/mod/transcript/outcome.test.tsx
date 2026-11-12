@@ -79,12 +79,12 @@ test('background launch card: live worker spins as running, never a stale comple
   expect(text).not.toContain('✓')
 })
 
-test('background launch card: an ended worker reads done in the border, its duration in the last row, never the STATUS shout', async () => {
+test('background launch card: an ended worker reads done on the rail, its duration after the name, never the STATUS shout', async () => {
   const e = launched('completed')
   const out = strings(await sites().ToolUse!(engine([e.agent]), e, next))
   const rows = (JSON.parse(out) as { children: Array<{ children: Array<{ children: string[] }> }> }).children.map((r) => r.children.map((c) => c.children.join('')).join(''))
-  expect(rows[0]).toMatch(/^┌─ ◆ done wave-a /)
-  expect(rows.some((r) => /^│ last {2}29s +│$/.test(r))).toBe(true);
+  expect(rows).toHaveLength(1) // the rail card, one row (critique 16 C3)
+  expect(rows[0]).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a {2}29s/u)
   expect(out).not.toContain('finished');
 })
 

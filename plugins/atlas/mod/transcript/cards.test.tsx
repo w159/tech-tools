@@ -1,7 +1,7 @@
 // Golden tests for transcript/cards.tsx: worker cards, wave strips, channel bubbles.
 import { expect, test } from 'claude-code/testing'
 import { fitText, textWidth } from '../theme'
-import { hexTo256, hostTo256, toneHex } from '../atlas-ui'
+import { hexTo256, hostTo256, runHex, uiFromEnv } from '../atlas-ui'
 import { bubbleTree, notificationTree, waveTree, workerCard, goalLine, resultLine, phaseOf, stripStatus } from './cards'
 import type { CallLike } from './cards'
 
@@ -34,33 +34,33 @@ type El = { props: Record<string, unknown>; children: El[] }
 const rowsOf = (c: unknown): string[] => (c as El).children.map((r) => text(r))
 const W = 44
 
-test('running card: a closed box, the state word and name in the top border, goal and last rows', () => {
-  const c = workerCard(call(), 'running', 0, undefined, '', { now: 'Grep auth/ 12s', wave: 2 })!
+// Critique 16 C3: one card style. The dispatch card is the rail card the finish uses (toastRuns): `▌ ◆ ATLAS  ◐ running  name  what it does  tag`, one row, never a box.
+test('running card: the rail card, the state word and name, what it is doing, then the model tag', () => {
+  const c = workerCard(call(), 'running', 60, undefined, '', { now: 'Grep auth/ 12s', wave: 2 })!
   const rows = rowsOf(c)
-  expect(rows[0]).toMatch(/^┌─ ◆ running impl-a ─+ sonnet ─┐$/u)
-  expect(rows.at(-1)).toMatch(/^└─+┘$/u)
-  expect(rows.some((r) => /^│ goal {2}ship the thing +│$/.test(r))).toBe(true)
-  expect(rows.some((r) => /^│ last {2}Grep auth\/ 12s +│$/.test(r))).toBe(true)
-  for (const r of rows) expect(textWidth(r)).toBe(W)
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatch(/^▌ ◆ ATLAS {2}◐ running {2}impl-a {2}Grep auth\/ 12s {2}sonnet$/u)
+  expect(textWidth(rows[0]!)).toBeLessThanOrEqual(60)
+  expect(text(c)).not.toMatch(/[┌┐└┘│]/u) // no box anywhere
   expect(props(c).borderStyle).toBeUndefined()
 })
 
-test('the card frame takes the state hue: running, done and failed differ; the state word stays plain text', () => {
+test('the rail bar takes the state hue: running, done and failed differ; the state word stays plain text', () => {
   const frame = (c: unknown): unknown => (((c as El).children[0]!.children[0]!).props as Record<string, unknown>).color
   const run = frame(workerCard(call(), 'running')!)
   const done = frame(workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished')!)
   const bad = frame(workerCard(call({ isRunning: false, isErrored: true }), 'failed')!)
   expect(new Set([run, done, bad]).size).toBe(3)
-  expect(bad).toBe(toneHex('bad', 'mocha'))
+  expect(bad).toBe(runHex({ tone: 'bad' }, 'mocha', uiFromEnv().color)) // the bad tone in the depth the card is drawn in
 })
 
-test('done card shows the result line in the last row; errored reads failed in the border', () => {
+test('done card shows the result line after the name; errored reads failed in the state word', () => {
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished')!
-  expect(rowsOf(done)[0]).toContain('done impl-a')
+  expect(rowsOf(done)[0]).toContain('done  impl-a')
   expect(text(done)).not.toContain('STATUS')
   expect(text(done)).not.toContain('DONE')
   const bad = workerCard(call({ isRunning: false, isErrored: true }), 'failed')!
-  expect(rowsOf(bad)[0]).toContain('failed impl-a')
+  expect(rowsOf(bad)[0]).toContain('failed  impl-a')
 })
 
 test('non-atlas Agent call is left to the engine', () => {
@@ -103,15 +103,14 @@ test('narrow wave stacks cards', () => {
   expect(props((waveTree(calls, 2, 60) as { children: unknown[] }).children[1])).toMatchObject({ flexDirection: 'column' })
 })
 
-test('denied dispatch: failed in the border, the first sentence of the reason, goal from the GOAL: line only', () => {
+test('denied dispatch: failed in the state word, the first sentence of the reason, no goal text', () => {
   const prompt = 'GOAL: list files in /tmp. TOOLS: ToolSearch lean-ctx (ctx_tree). DELIVERABLE: list. SUCCESS CRITERIA: list returned.'
   const output = 'Error: PreToolUse:Agent hook error: DENY - this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line. Classify the task, then resolve its team:\n  python3 x'
   const c = workerCard(call({ input: { subagent_type: 'atlas:explorer', prompt, model: 'sonnet', effort: 'low' }, isRunning: false, isErrored: true, output }), 'failed', 120)!
   const t = text(c)
-  expect(rowsOf(c)[0]).toContain('failed explorer')
+  expect(rowsOf(c)[0]).toContain('failed  explorer')
   expect(t).toContain('denied: this dispatch to atlas:')
   expect(t).not.toContain('Classify the task')
-  expect(t).toContain('list files in /tmp.')
   expect(t).not.toContain('TOOLS:')
   expect(t).not.toContain('DELIVERABLE')
 })
@@ -126,12 +125,12 @@ test('phaseOf maps a finished call by its worker state, not the idle fallback', 
   expect(phaseOf(call({ isRunning: false, isErrored: true }), 'failed').ui).toBe('failed')
 })
 
-test('card rows are fixed-size boxes; a returned worker reads done, never finished-as-done twice', () => {
+test('the card row is fixed-size; a returned worker reads done, never finished-as-done twice', () => {
   const running = workerCard(call(), 'running', 60, undefined, '', { now: 'x' })!
   for (const row of (running as El).children) expect(row.props.flexShrink).toBe(0)
-  expect(rowsOf(running)[0]).toMatch(/^┌─ ◆ running impl-a/u)
+  expect(rowsOf(running)[0]).toMatch(/^▌ ◆ ATLAS {2}◐ running {2}impl-a/u)
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished', 60)!
-  expect(rowsOf(done)[0]).toContain('done impl-a')
+  expect(rowsOf(done)[0]).toContain('done  impl-a')
 })
 
 test('bubble body lines are fitted to the columns less the 3-cell gutter', () => {
@@ -146,7 +145,7 @@ const DENIED = `Error: PreToolUse:Agent hook error: DENY - ${LONG}.`
 const longCall = (over: Partial<CallLike> = {}): CallLike =>
   call({ input: { subagent_type: 'atlas:implementer', name: 'impl-a', prompt: `GOAL: ${LONG}`, model: 'sonnet' }, ...over })
 
-test('every card is a closed box as wide as asked up to the design 44, at 30 to 120 columns, every state, long text', () => {
+test('every card is one rail row no wider than asked, up to 100, at 30 to 120 columns, every state, long text', () => {
   for (const width of [30, 44, 60, 80, 120]) {
     const cards = [
       workerCard(longCall(), 'running', width, undefined, '', { now: LONG }),
@@ -156,18 +155,15 @@ test('every card is a closed box as wide as asked up to the design 44, at 30 to 
     ]
     for (const card of cards) {
       const rows = rowsOf(card)
-      expect(rows[0]!.startsWith('┌')).toBe(true)
-      expect(rows[0]!.endsWith('┐')).toBe(true)
-      expect(rows.at(-1)!.startsWith('└')).toBe(true)
-      expect(rows.at(-1)!.endsWith('┘')).toBe(true)
-      for (const r of rows.slice(1, -1)) { expect(r.startsWith('│')).toBe(true); expect(r.endsWith('│')).toBe(true) }
-      for (const r of rows) expect([width, textWidth(r)]).toEqual([width, Math.min(width, W)]) // the design card is 44 wide at most
+      expect(rows).toHaveLength(1)
+      expect(rows[0]!.startsWith('▌ ◆ ATLAS')).toBe(true)
+      for (const r of rows) expect(textWidth(r)).toBeLessThanOrEqual(Math.min(width, 100)) // a rail row never outgrows its room, nor 100 cells
     }
   }
 })
 
-test('a card with no width is the design 44 columns', () => {
-  for (const r of rowsOf(workerCard(call(), 'running')!)) expect(textWidth(r)).toBe(W)
+test('a short card with no width fits the design 44 columns', () => {
+  for (const r of rowsOf(workerCard(call(), 'running')!)) expect(textWidth(r)).toBeLessThanOrEqual(W)
 })
 
 test('side-by-side wave cards fit the columns between them; below two boxes of room they stack', () => {
@@ -188,17 +184,17 @@ test('a wave whose workers all returned is headed finished, never done', () => {
   expect(text((waveTree([call(), calls[0]!], 3, 160) as El).children[0])).toBe('WAVE 3 · 2 workers · 1 running')
 })
 
-test('the outcome of a background worker is the last row, led by its label', () => {
+test('the outcome of a background worker follows its name on the rail row', () => {
   const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
-  const lastRow = (ended: string, outcome: string): string => rowsOf(workerCard(launch, 'finished', 60, undefined, '', { ended, outcome })!).slice(1, -1).join('\n')
-  expect(lastRow('finished', 'STATUS: DONE · 29s')).toContain('last  29s')
+  const row = (ended: string, outcome: string): string => rowsOf(workerCard(launch, 'finished', 60, undefined, '', { ended, outcome })!)[0]!
+  expect(row('finished', 'STATUS: DONE · 29s')).toContain('impl-a  29s')
 })
 
-test('a killed or failed background worker reads failed in the border; a finished one reads done', () => {
+test('a killed or failed background worker reads failed on the rail; a finished one reads done', () => {
   const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
   const card = (ended: string) => workerCard(launch, 'finished', 60, undefined, '', { ended, outcome: '' })!
-  for (const ended of ['killed', 'failed']) expect([ended, rowsOf(card(ended))[0]!.includes('failed impl-a')]).toEqual([ended, true])
-  expect(rowsOf(card('finished'))[0]).toContain('done impl-a')
+  for (const ended of ['killed', 'failed']) expect([ended, rowsOf(card(ended))[0]!.includes('failed  impl-a')]).toEqual([ended, true])
+  expect(rowsOf(card('finished'))[0]).toContain('done  impl-a')
 })
 
 test('the notification row is state, name, role and outcome', () => {
@@ -206,7 +202,7 @@ test('the notification row is state, name, role and outcome', () => {
   expect(text(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ failed {2}wave-a/)
 })
 
-test('a boxed card shows the whole agent name: the model tag goes before the name is cut (L14)', () => {
+test('the card shows the whole agent name: the model tag goes before the name is cut (L14)', () => {
   const long = call({ input: { subagent_type: 'atlas:explorer', name: 'board-auditor-open-items', description: 'd', prompt: PROMPT, model: 'haiku', effort: 'low' } })
   const out = text(workerCard(long, 'running')!)
   expect(out).toContain('board-auditor-open-items')
@@ -227,7 +223,7 @@ test('C6: on a 256-colour terminal the card fills are stable palette colours, ne
   for (const b of hexes) expect([b, hostTo256(b), hostTo256(b) === 17]).toEqual([b, hexTo256(b), false])
 })
 
-test('B3: a raw STATUS: <WORD> caps prefix never prints on a card; the border state word carries it', () => {
+test('B3: a raw STATUS: <WORD> caps prefix never prints on a card; the state word carries it', () => {
   expect(stripStatus('STATUS: DONE')).toBe('')
   expect(stripStatus('STATUS: DONE - read alpha.py')).toBe('read alpha.py')
   expect(stripStatus('STATUS: COMPLETE · 29s')).toBe('29s')
@@ -235,7 +231,7 @@ test('B3: a raw STATUS: <WORD> caps prefix never prints on a card; the border st
   expect(stripStatus('STATUS: FAILED')).toBe('failed')
   expect(stripStatus('read alpha.py')).toBe('read alpha.py')
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE - read alpha.py' }), 'finished', 60)!
-  expect(rowsOf(done)[0]).toContain('done impl-a')
-  expect(text(done)).toContain('last  read alpha.py')
+  expect(rowsOf(done)[0]).toContain('done  impl-a')
+  expect(text(done)).toContain('impl-a  read alpha.py')
   expect(text(done)).not.toMatch(/STATUS|DONE/)
 })

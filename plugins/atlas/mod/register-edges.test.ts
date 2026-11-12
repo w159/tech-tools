@@ -306,7 +306,7 @@ describe('core cache and gates', () => {
     await coreTick(s.$);
     expect(findingsReads(s)).toBe(2);
     expect((await stateOf(s, 'core')).verdicts.map((v: { status: string }) => v.status)).toEqual(['rejected']);
-    expect(s.rec.toasts).toEqual(['▌ ◆ ATLAS  ■ failed  a  refuted: title a']);
+    expect(s.rec.toasts).toEqual([]); // critique 16 C2: a refuted verdict raises no host toast
   });
 
   test('coreTick builds only for an interactive session with the mod on', async () => {

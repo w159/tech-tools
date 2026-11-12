@@ -116,6 +116,21 @@ test('A2: a place the host refused is retried on the next build, so the failed c
   expect(ids).toHaveLength(2) // placed once: nothing owed any more
 })
 
+// critique 16 C4: stoprun-110-e4a8186a-3 never drew the failed card (5 of 6 stop runs). A killed worker drops out of the host list, so the build that
+// shows it failed can be the first build that lists it: first sight of a FAILED worker is a finish the person must see (first sight of a done one stays none).
+test('C4: a worker first listed as failed (the killed ghost dropped out of the host list while running) still gets its failed card, once', async () => {
+  const ids: string[] = []
+  const before = live(10_000, [worker('alpha-explorer', 'running')], { 'alpha-explorer': act({ startedAt: 9000 }) })
+  const after = live(20_000, [worker('alpha-explorer', 'running'), worker('ghost-explorer', 'failed')], { 'alpha-explorer': act({ startedAt: 9000 }), 'ghost-explorer': act({ startedAt: 12_000, since: 18_000, mood: 'failed' }) })
+  expect(finishedWorkers(before, after)).toEqual([{ name: 'ghost-explorer', role: 'explorer', failed: true, durationMs: 6000 }])
+  await placeFinished(engine(ids), before, after)
+  expect(ids).toEqual(['done-ghost-explorer-1'])
+  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('explorer failed')
+  await placeFinished(engine(ids), after, live(20_500, [worker('alpha-explorer', 'running'), worker('ghost-explorer', 'failed')], { 'alpha-explorer': act({ startedAt: 9000 }), 'ghost-explorer': act({ startedAt: 12_000, since: 18_000, mood: 'failed' }) }))
+  expect(ids).toHaveLength(1) // placed once
+  expect(finishedWorkers(before, live(20_000, [worker('alpha-explorer', 'running'), worker('gamma-explorer', 'finished')], { 'gamma-explorer': act({}) }))).toEqual([]) // a worker first listed done is still no finish
+})
+
 // ---- the render sites ----
 
 type Hook = (d: unknown, e: unknown, n: (x?: unknown) => unknown) => Promise<unknown>

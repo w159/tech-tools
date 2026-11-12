@@ -6,7 +6,7 @@ import type { RenderElement, RenderNode } from 'claude-code'
 import { BRAND } from '../contract'
 import type { AgentState } from '../contract'
 import { surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
-import { CARD_W, cardLines, toastRuns } from '../panel-layout'
+import { CARD_W, toastRuns } from '../panel-layout'
 import { clip, cells } from '../atlas-ui'
 import { displayName } from '../hud'
 import { fitText } from '../theme'
@@ -74,6 +74,9 @@ export function phaseOf(c: CallLike, s: AgentState, ended = ''): { state: AgentS
  return phases.find(([on]) => on)?.[1] ?? { state: 'finished', ui: 'done' }
 }
 
+/** The widest a rail card grows when it has the room: its fact (what the worker does, or why a dispatch was denied) is clipped to this. */
+const RAIL_W = 100
+
 const tierOf = (i: AgentInput): string => [i.model, i.effort].filter(Boolean).join('·')
 
 /** Run -> Text element on the rev 4 panel (or the run's own fill). */
@@ -117,22 +120,25 @@ export function workerCard(c: CallLike, state: AgentState, width = 0, name?: str
  const role = typeOf(i).slice('atlas:'.length)
  const phase = phaseOf(c, state, extra.ended)
  const cardName = displayName(i.name ?? name ?? role, role, i.description)
- const w = Math.max(20, Math.min(CARD_W, width > 0 ? width : CARD_W))
- // The name is never cut while a model tag could go instead: the tag is dropped when title and tag do not both fit.
+ const w = Math.max(20, Math.min(RAIL_W, width > 0 ? width : RAIL_W))
+ // One card style (critique 16 C3: the boxed `┌─ ◆ done beta-explorer-2 ─┐` card sat beside the rail card for the same worker in 61 frames): the dispatch card is the
+ // rail card the finish uses, `▌ ◆ ATLAS  ◐ running  name  what it is doing`. The name is never cut: the fact is clipped to the room left, the model tag goes first.
+ const head = toastRuns(phase.ui, cardName, '', ui)
+ const used = head.reduce((n, x) => n + cells(x.t), 0)
+ const last = lastOf(c, phase.ui === 'running', extra, word, w - used - 2)
+ const fact = last === 'running' ? '' : last // the state word already says it; a host label such as `pending` still shows
+ const factRuns: UiRun[] = fact && w - used > 6 ? [{ t: `  ${clip(fact.replace(/\s+/g, ' '), w - used - 2)}`, tone: 'sub' }] : []
  const tag = tierOf(i)
- const cardModel = tag && 2 + phase.ui.length + 1 + cells(cardName) <= w - (cells(tag) + 1) - 8 ? tag : undefined
- const rows = cardLines({
-  state: phase.ui, name: cardName, model: cardModel, goal: goalLine(i) || undefined,
-  last: lastOf(c, phase.ui === 'running', extra, word, Math.min(width > 0 ? width : CARD_W, CARD_W) - 10) || undefined, steps: extra.steps, ctx: extra.ctx, ui,
- }, width > 0 ? width : CARD_W)
- return el('Box', { flexDirection: 'column', flexShrink: 0 }, ...rows.map((r) => rowEl(r, ui)))
+ const left = w - used - factRuns.reduce((n, x) => n + cells(x.t), 0)
+ const tagRuns: UiRun[] = tag && left >= cells(tag) + 2 ? [{ t: `  ${tag}`, tone: 'muted' }] : []
+ return el('Box', { flexDirection: 'column', flexShrink: 0 }, rowEl([...head, ...factRuns, ...tagRuns], ui))
 }
 
 /** Side by side when each card gets room for a 44-column box and a gap, else stacked; w is the per-card width (0 = unknown). */
 const waveLayout = (columns: number, count: number): { side: boolean; w: number } => {
  const share = Math.floor(columns / count)
  const side = columns > 0 && share >= CARD_W + 1
- return { side, w: side ? CARD_W : columns > 0 ? Math.min(CARD_W, columns) : 0 }
+ return { side, w: side ? CARD_W : columns > 0 ? Math.min(RAIL_W, columns) : 0 }
 }
 const waveHeader = (calls: ReadonlyArray<CallLike>, n: number) => {
  const live = calls.filter((c) => c.isRunning).length
