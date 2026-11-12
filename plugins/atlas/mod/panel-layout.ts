@@ -349,6 +349,15 @@ const bodyRows = (m: PanelModel, used: number): number => Math.max(3, m.rows - h
 /** Panes of this many rows or more have room beyond the tabs' own rows: each tab fills it with detail the snapshot already holds. */
 const TALL = 30;
 const tall = (m: PanelModel): boolean => m.rows >= TALL;
+/** A pane under TALL rows still names its agents under their count when they and the whole plan fit beside the header: the host's own agent list
+ * below the prompt takes one row per running agent from the pane, so with three agents running a 40 row terminal (31 pane rows) fell under TALL
+ * and the route tab named nobody for as long as all three ran (hud110). `used`: body rows already drawn. */
+/** Panes shorter than this keep the design's short form (the 24 row pane names only the loose agents below the plan). */
+const LIST_MIN = 26;
+const agentsFit = (m: PanelModel, used: number, agents: number): boolean => {
+  const listed = Math.min(agents, AGENT_ROWS);
+  return m.rows >= LIST_MIN && listed > 0 && m.todos.length > 0 && m.rows - headerRows(m).length - (used + listed + (agents > listed ? 1 : 0) + 2 + m.todos.length) >= 2;
+};
 /** Rows left in a pane after the header and `used` body rows (one row stays free at the foot). */
 const spareRows = (m: PanelModel, used: number): number => m.rows - headerRows(m).length - used - 1;
 
@@ -369,7 +378,7 @@ function routeBody(m: PanelModel): PanelLine[] {
   rows.push(...agentsRows(m));
   // A tall pane lists the agents under their count (the row headed `agents` holds agents, never plan rows); a short one names only the loose ones below the plan.
   const team = workersByTask(m); // the one agent order (HUD, route and team tab): by task
-  const listed = tall(m) ? team.slice(0, AGENT_ROWS) : [];
+  const listed = tall(m) || agentsFit(m, rows.length, team.length) ? team.slice(0, AGENT_ROWS) : [];
   if (listed.length) {
     const nameW = Math.min(nameCap(m.cols), Math.max(...listed.map((w) => cells(nameOf(w))), 1));
     rows.push(...listed.map((w) => routeAgentRow(m, w, nameW)));

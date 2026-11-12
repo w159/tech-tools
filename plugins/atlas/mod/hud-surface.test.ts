@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
-import { chipCount, runsString, type Run, type Ui } from './atlas-ui';
+import { chipCount, runsCells, runsString, type Run, type Ui } from './atlas-ui';
 import { COUNT_ORDER, type UiState } from './atlas-ui';
 import { textWidth } from './theme';
 import { agentRows, fitStack, padRows, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
@@ -78,8 +78,13 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
     const cells = (cols: number) => (text(agentRows(worldAgents(), opts(cols), full))[4] ?? '').split(/\s+/).filter(Boolean);
     expect(cells(88)).toEqual(cells(104));
   });
-  test('60 and 40 columns draw no Subagents block (the band counts carry it)', () => {
-    for (const cols of [60, 40]) expect(agentRows(worldAgents(), opts(cols), full)).toEqual([]);
+  test('60 and 40 columns still draw the Subagents block, every row within the width', () => {
+    for (const cols of [60, 40]) {
+      const rows = agentRows(worldAgents(), opts(cols), full);
+      expect(text(rows)[0]).toContain('SUBAGENTS');
+      expect(rows.length).toBeGreaterThan(worldAgents().length);
+      for (const r of rows) expect(runsCells(r)).toBeLessThanOrEqual(cols);
+    }
   });
   test('header counts equal the row sums', () => {
     const agents = worldAgents();

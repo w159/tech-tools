@@ -7,7 +7,7 @@ import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
-import { fitStack, padRows, sortAgents, stack, tierOf, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
+import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
 
@@ -208,7 +208,7 @@ export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
 /** Rows of the compact form: the plan's ribbon with up to five rows, the Subagents ribbon with up to two agents. What the HUD keeps whatever the band is given. */
 export const hudCompactRows = (input: HudInput, cols = 120): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
-  const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
+  const m = s.agents.length;
   return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: false }).length; // the floor has no column-name row: it is drawn only when the budget also leaves the band its summary row
 };
 
@@ -216,7 +216,7 @@ export const hudCompactRows = (input: HudInput, cols = 120): number => {
  * and the band still keeps its title row (register.ts hudSlotCap). `now`: the draw's clock, so a lingering finished wave counts (hudCompactRows has none and leaves it out). */
 export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
-  const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
+  const m = s.agents.length;
   return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length;
 };
 

@@ -144,12 +144,15 @@ export const sortAgents = <T extends { tasks?: readonly number[] }>(rows: readon
   return rows.map((row, i) => ({ row, i })).sort((a, b) => (first(a.row) === first(b.row) ? 0 : first(a.row) < first(b.row) ? -1 : 1) || a.i - b.i).map((x) => x.row);
 };
 
-/** Nothing below 80 columns: the band's counts carry the running agents there (design 3g). */
+/** The Subagents block at every width: a docked side pane leaves the transcript about 61 cells at 110 columns, and the block still shows there with its ribbon and a row per agent (the columns drop first). */
 export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
-  if (rows.length === 0 || tierOf(o.cols) === 'min') return [];
+  if (rows.length === 0) return [];
   const { ui, cols } = o;
   const rich = isRich(o);
-  const out: Run[][] = [ribbon(cols, 'SUBAGENTS', rich ? '' : stateCounts(rows.map((r) => r.state)), ui)];
+  // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
+  const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
+  const head = counts.map((c) => ribbon(cols, 'SUBAGENTS', c, ui)).find((r) => runsCells(r) <= cols) ?? ribbon(cols, 'SUBAGENTS', '', ui);
+  const out: Run[][] = [head];
   if (b.cap === 0) return out;
   const wordW = rich ? CHIP_W : 7;
   // The name column holds the longest name whole (19 cells at least, for alignment); only a name that alone overflows the row is end-clipped.
@@ -283,7 +286,7 @@ function ruleToEdge(row: Run[], ui: Ui): Run[] {
 function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
   const n = s.todos.length;
-  const m = tierOf(o.cols) === 'min' ? 0 : s.agents.length;
+  const m = s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean };
   // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
   const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];

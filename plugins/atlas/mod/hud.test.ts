@@ -38,7 +38,7 @@ describe('hud goldens through the Claude Code adapter (rev 4)', () => {
     expect(trimmed(hudRows(input, view(40)))).toEqual(edge(todo_40));
     expect(trimmed(hudRows(input, view(60))).slice(1)).toEqual(todo_40.slice(1));
   });
-  test('SUBAGENTS at 120, 120 rich and 80 equals the design goldens; 60 and 40 draw none', () => {
+  test('SUBAGENTS at 120, 120 rich and 80 equals the design goldens; 60 and 40 draw the block too', () => {
     const block = (cols: number, rich = false): string[] => {
       const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents(), phases }, view(cols, rich)));
       return rows.slice(rows.findIndex((l) => l.includes('SUBAGENTS')));
@@ -46,8 +46,8 @@ describe('hud goldens through the Claude Code adapter (rev 4)', () => {
     expect(block(120)).toEqual([...subagents_120]);
     expect(block(120, true)).toEqual([...subagents_120_rich]);
     expect(block(80)).toEqual([...subagents_80]);
-    for (const cols of [60, 40]) expect(trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))).join('\n')).not.toContain('SUBAGENTS');
-    expect(hudRows({ todos: [], agents: worldAgents() }, view(60))).toEqual([]);
+    for (const cols of [60, 40]) expect(trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))).join('\n')).toContain('▸ SUBAGENTS');
+    expect(hudRows({ todos: [], agents: worldAgents() }, view(60))).not.toEqual([]);
   });
   test('both blocks stack as the TODO golden, a blank row, then the SUBAGENTS golden', () => {
     const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)));

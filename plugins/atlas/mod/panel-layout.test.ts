@@ -395,3 +395,18 @@ describe('critique 12 A2: the route tab drops the owner column before it cuts a 
     }
   });
 });
+
+describe('hud110: the route tab names the running agents in a 40 row terminal with three running (pane under 30 rows)', () => {
+  const plan = ['T1 read alpha.py (alpha-explorer)', 'T2 read beta.py (beta-explorer)', 'T3 read gamma.py (gamma-explorer)', 'T4 combine the three reports', 'T5 write the final summary'].map((label, i) => ({ id: `T${i + 1}`, label, state: 'running' as const, ...(i < 3 ? { owner: ['alpha', 'beta', 'gamma'][i]! + '-explorer' } : {}) })); // the live plan: each agent owns a row, so none is loose
+  const running = ['alpha', 'beta', 'gamma'].map((n) => ({ name: `${n}-explorer`, state: 'running' as const, detail: 'Read', secs: 12 }));
+  test('29 pane rows (live-110: 31 beside three running agents) list each agent under the count', () => {
+    for (const cols of [37, 55]) {
+      const out = rows('route', cols, { todos: plan, workers: running, rows: 29 }).filter((l) => /^ {4}\S/.test(l)).join('\n');
+      for (const n of ['alpha', 'beta', 'gamma']) expect(out).toMatch(new RegExp(`[◐◓◑◒] ${n}-explorer\\s+running`));
+    }
+  });
+  test('a pane too short for the agents and the whole plan keeps the short form', () => {
+    const out = rows('route', 55, { todos: plan, workers: running, rows: 18 }).filter((l) => /^ {4}\S/.test(l)).join('\n');
+    expect(out).not.toMatch(/[◐◓◑◒] alpha-explorer\s+running/);
+  });
+});

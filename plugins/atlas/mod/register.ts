@@ -13,7 +13,6 @@ import { intentToArgv } from './intents';
 import { bandSpareRows, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { allSettled, easedNow, gaugeTargets, retargetAll, type GaugeMoves } from './band-motion';
 import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, isRunning, reclaimBlanks, segmentOf } from './hud';
-import { tierOf } from './hud-surface';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -1175,7 +1174,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
 		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true, columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
-		const agentsListed = agents.length > 0 && tierOf(columns) !== 'min';
+		const agentsListed = agents.length > 0;
 		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed);
 		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
 		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".

@@ -28,12 +28,12 @@ test("omp TODO surface equals the design goldens at 120, 120 rich, 80 and 40; 60
 	expect(hudText(input, opts(60)).slice(1)).toEqual(todo_40.slice(1));
 });
 
-test("omp SUBAGENTS surface equals the design goldens at 120, 120 rich and 80; none at 60 and 40", () => {
+test("omp SUBAGENTS surface equals the design goldens at 120, 120 rich and 80; the block at 60 and 40 too", () => {
 	const input = { todos: worldPlan(), agents: worldHudAgents(), phases };
 	expect(block(hudText(input, opts(120)))).toEqual([...subagents_120]);
 	expect(block(hudText(input, opts(120, true)))).toEqual([...subagents_120_rich]);
 	expect(block(hudText(input, opts(80)))).toEqual([...subagents_80]);
-	for (const cols of [60, 40]) expect(hudText(input, opts(cols)).join("\n")).not.toContain("SUBAGENTS");
+	for (const cols of [60, 40]) expect(hudText(input, opts(cols)).join("\n")).toContain("SUBAGENTS");
 });
 
 test("parity: Claude Code rows and omp rows are the same text at 120, 100, 80, 60 and 40, standard and rich", () => {

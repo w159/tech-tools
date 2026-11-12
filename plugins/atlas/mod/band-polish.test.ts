@@ -137,10 +137,10 @@ describe('when the band may drop its worker rows', () => {
     expect(hudListsAgents(rows(2, 160, agents.slice(0, 1)))).toBe(true); // ribbon and its one row
     expect(hudListsAgents(rows(2))).toBe(false); // three agents do not fit two rows: the ribbon keeps the counts, the band lists
   });
-  test('false with the ribbon alone (starved), below 80 columns (no block) and with nothing running', () => {
+  test('false with the ribbon alone (starved), and with nothing running', () => {
     expect(rows(1).length).toBe(1);
     expect(hudListsAgents(rows(1))).toBe(false);
-    expect(hudListsAgents(rows(20, 70))).toBe(false);
+    expect(hudListsAgents(rows(20, 70))).toBe(true); // the block shows at every width (hud110)
     expect(hudListsAgents(rows(20, 160, []))).toBe(false);
     expect(hudListsAgents([])).toBe(false);
   });
