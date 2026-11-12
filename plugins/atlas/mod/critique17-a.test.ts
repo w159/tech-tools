@@ -3,11 +3,12 @@
 // live-150-a4fad2f9-1 (tab-core.png, tab-gates.png).
 import { describe, expect, test } from 'claude-code/testing';
 import type { TodoItem } from './contract';
-import { DONE_DOUBT, DONE_KILLED, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from './atlas-ui';
+import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from './atlas-ui';
 import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './board-model';
 import { openRowName, ownPlan, todoState } from './data/todos';
 import { plannedText } from './data/core';
 import { hudLines, type HudAgent } from './hud';
+import { CLOSED_KILLED } from './hud-surface';
 import { bandLines, runsText, type MissionModel } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -40,14 +41,14 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     { id: 't2', content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' },
   ] as TodoItem[];
   const agents: HudAgent[] = [{ name: 'alpha-explorer', role: 'explorer', state: 'done' }, { name: 'ghost-explorer', role: 'explorer', state: 'failed' }];
-  test('HUD: T2 reads `done` in the warn tone with `done · worker killed`, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
+  test('HUD: T2 reads `closed · worker killed` in the error tone (203), not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
     const rows = hudLines({ todos: plan, agents }, { cols: 150, maxRows: 60, ui, now: 0 });
     const t2 = rows.find((r) => plain(r).includes('T2 read ghost.py'))!;
     const t1 = rows.find((r) => plain(r).includes('T1 read alpha.py'))!;
-    expect(plain(t2)).toContain('done · worker killed');
-    expect(t2.find((x) => x.t.trim() === DONE_KILLED)?.tone).toBe('warn');
+    expect(plain(t2)).toContain('closed · worker killed'); // round 5: the HUD row says closed (the store holds completed, the scorer reads the glyph)
+    expect(t2.find((x) => x.t.trim() === CLOSED_KILLED)?.tone).toBe('bad');
     expect(t2.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
-    expect(t2.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('warn');
+    expect(t2.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('bad');
     expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.strike).toBeFalsy(); // critique 21: a plain done is quiet 247 text, never struck through
     expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.tone).toBe('muted');
     expect(t1.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('ok');

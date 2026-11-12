@@ -31,13 +31,13 @@ describe('agentRows columns', () => {
     expect(runsString(agentRows([agent({ task: 'read beta.py' })], { cols: 200, ui }, plain)[1]!)).not.toContain('read beta.py');
   });
 
-  test('the last text goes before the model, and the model before a task id is cut', () => {
+  test('the RESULT text goes first, MODEL shows only from 120 columns, and a row too narrow for TASK keeps LAST', () => {
     const wide = runsString(agentRows([agent({ name: 'a'.repeat(19), tasks: [1, 2, 3], model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain)[1]!);
     expect(wide).toContain('3 tasks');
     expect(runsCells(agentRows([agent({ name: 'a'.repeat(19), tasks: [1, 2, 3], model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain)[1]!)).toBeLessThanOrEqual(80);
     const tight = runsString(agentRows([agent({ name: 'a'.repeat(19), tasks: [1], model: 'haiku', tool: 'read alpha.py' })], { cols: 44, ui }, plain)[1]!);
-    expect(tight).toContain('T1');
-    expect(tight).not.toContain('alpha.py');
+    expect(tight).not.toContain('alpha.py'); // round 5: with room for one column only, LAST (the elapsed clock) is the one kept; the task id and MODEL (120 columns and up) go
+    expect(tight).not.toContain('haiku');
   });
 
   test('ctx gauge column: drawn when the block fits exactly, at stateAt + 14; absent one cell short', () => {
@@ -66,20 +66,26 @@ describe('agentRows columns', () => {
 });
 
 describe('fitStack with the plan hidden', () => {
-  test('B5: the agents-only try keeps the column header and windows the agents instead', () => {
+  test('B5 (round 5): the agents-only try keeps its box (both rules) and the column header, and windows the agents instead', () => {
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
+    const rule = (l: string): boolean => /^(╰─+╯|\+-+\+)$/.test(l);
     const five = fitStack({ todos, agents }, { cols: 100, ui }, 5).map((r) => runsString(r));
-    expect(five.length).toBe(5); // the column names and the closing rules are the decoration that goes first: the plan's ribbon (its rows counted on it), the agents' title and all three agents
-    expect(five[0]).toMatch(/TODO/);
-    expect(five.filter((l) => /agent\d/.test(l)).length).toBe(3);
-    expect(five.some((l) => /AGENT\s+STATE/.test(l))).toBe(false);
-    expect(five.some((l) => /^(╰─+|\+-+)$/.test(l))).toBe(false);
-    const four = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r)); // one row less: the plan's ribbon goes, the agents are windowed and the names stay
+    expect(five.length).toBe(5); // no room for a closed TODO box: the plan goes and the agents keep a closed box with the column names, one agent and the count of the rest
+    expect(five[0]).toMatch(/SUBAGENTS/);
+    expect(five.some((l) => /TODO/.test(l))).toBe(false);
+    expect(five.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+    expect(five.filter((l) => /agent\d/.test(l)).length).toBe(1);
+    expect(five.some((l) => /2 more agents not shown/.test(l))).toBe(true);
+    expect(rule(five.at(-1)!)).toBe(true);
+    const four = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r)); // one row less: the names go, the box stays closed
     expect(four.length).toBe(4);
-    expect(four.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+    expect(four.some((l) => /AGENT\s+STATE/.test(l))).toBe(false);
     expect(four.filter((l) => /agent\d/.test(l)).length).toBe(1);
-    expect(four.some((l) => /2 more agents not shown/.test(l))).toBe(true);
+    expect(rule(four.at(-1)!)).toBe(true);
+    const seven = fitStack({ todos, agents }, { cols: 100, ui }, 7).map((r) => runsString(r)); // 7 rows hold the agents whole, still without the plan
+    expect(seven.filter((l) => /agent\d/.test(l)).length).toBe(3);
+    expect(seven.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
   });
   test('B5: only a budget with no room for the header and one agent drops the header, never the agent', () => {
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));

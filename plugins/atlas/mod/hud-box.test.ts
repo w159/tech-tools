@@ -81,7 +81,7 @@ describe('LAST is never blank or raw (critique 21: `first 3` and an empty cell a
 
 describe('the boxes at 110: a closing rule and a blank between the blocks', () => {
   const todos: TodoRow[] = [1, 2, 3].map((i) => ({ label: `T${i} item`, state: i === 1 ? 'done' : 'queued', detail: '', focus: false }));
-  const edge = `╰${'─'.repeat(109)}`;
+  const edge = `╰${'─'.repeat(108)}╯`;
   test('with the rows to spare: TODO, its closing rule, one blank, SUBAGENTS, its closing rule', () => {
     const out = text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui }, 20));
     const at = out.findIndex((r) => r.includes('SUBAGENTS'));
@@ -90,27 +90,31 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
     expect(out.at(-1)).toBe(edge);
     expect(out.filter((r) => r === '')).toHaveLength(1);
   });
-  test('short of rows the closing rules go first, then the column names, then the blank, and only then the finished rows fold (critique 23: every row stays while it fits)', () => {
+  test('short of rows the blank goes first, then the column names, then the finished rows fold, then plan rows; the rules and their corners stay (round 5)', () => {
     const rows = (n: number): string[] => text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui }, n));
+    const closed = (out: string[]): boolean => out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length === 2 && out.filter((r) => r === edge).length === 2;
     expect(rows(20)).toHaveLength(10); // title, 3 rows, rule, blank, title, names, 1 agent, rule
-    const nine = rows(9); // the rules go; all three plan rows, the blank and the names stay
-    expect(nine.filter((r) => r.startsWith('╰'))).toEqual([]);
+    const nine = rows(9); // the blank goes; all three plan rows, the names and both rules stay
+    expect(closed(nine)).toBe(true);
     expect(nine.filter((r) => /T\d item/.test(r))).toHaveLength(3);
-    expect(nine.filter((r) => r === '')).toHaveLength(1);
+    expect(nine.filter((r) => r === '')).toEqual([]);
     expect(nine.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
     expect(nine[0]).not.toMatch(/done/);
-    const seven = rows(7); // the column names go
-    expect(seven.some((r) => /AGENT\s+STATE/.test(r))).toBe(false);
-    expect(seven.filter((r) => r === '')).toHaveLength(1);
-    expect(seven.filter((r) => /^\s*[●◇◐] T\d item/.test(r))).toHaveLength(3);
-    const six = rows(6); // then the finished row folds into the count on the title
-    expect(six[0]).toMatch(/1 done/);
-    expect(six.filter((r) => r === '')).toHaveLength(1);
-    expect(six.filter((r) => /T[23] item/.test(r))).toHaveLength(2);
-    const five = rows(5); // then the blank
-    expect(five.filter((r) => r === '')).toEqual([]);
-    expect(five.filter((r) => /T[23] item/.test(r))).toHaveLength(2);
-    expect(rows(4)[0]).toMatch(/not shown/); // only when nothing else is left to give does a plan row get cut, and it says so
+    const eight = rows(8); // the column names go
+    expect(closed(eight)).toBe(true);
+    expect(eight.some((r) => /AGENT\s+STATE/.test(r))).toBe(false);
+    expect(eight.filter((r) => /^\s*[●◇◐] T\d item/.test(r))).toHaveLength(3);
+    const seven = rows(7); // then the finished row folds into the count on the title
+    expect(closed(seven)).toBe(true);
+    expect(seven[0]).toMatch(/1 done/);
+    expect(seven.filter((r) => /T[23] item/.test(r))).toHaveLength(2);
+    const six = rows(6); // then plan rows are cut, and the title says so
+    expect(closed(six)).toBe(true);
+    expect(six[0]).toMatch(/2 more todos not shown/);
+    const five = rows(5); // then the plan's box goes and the agents keep theirs, closed
+    expect(five.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length).toBe(1);
+    expect(five.filter((r) => r === edge)).toHaveLength(1);
+    expect(five.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
   });
 });
 

@@ -11,7 +11,7 @@ export const worldPlan = (): HudInput["todos"] =>
 
 export const worldHudAgents = (): HudAgent[] =>
   world.workers.map((w) => ({
-    name: w.name, role: w.name.split("-")[0]!, state: AGENT_STATE[w.state as keyof typeof AGENT_STATE], model: w.model, ctx: w.ctx,
+    name: w.name, role: w.name.split("-")[0]!, state: AGENT_STATE[w.state as keyof typeof AGENT_STATE], model: w.model, ctx: w.ctx, startedAt: -w.age_s * 1000, since: 0, // the clock LAST reads: the worker's age, ended workers frozen at it
     ...(w.state === "running" ? { tool: "Read", target: "runs.ts:17" } : { lastLine: w.last_tool }),
   }));
 

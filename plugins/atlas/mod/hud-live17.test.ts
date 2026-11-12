@@ -101,8 +101,8 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     const gap = hudGapRows(hud.some((r) => r.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
     return { hud, gap, band: budget - hud.length - gap };
   };
-  test('3 done, 2 open: at 12 rows every plan row is drawn (the HUD asks for what it needs), the blank and the header stay, the band keeps a row (critique 23)', () => {
-    const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 12);
+  test('3 done, 2 open: at 16 rows (the two rules take two more than critique 23) every plan row is drawn, the blank and the header stay, the band keeps a row', () => {
+    const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 16);
     expect(band).toBeGreaterThanOrEqual(1);
     expect(hud.filter((r) => /\bT[1-5] step/.test(r))).toHaveLength(5);
     expect(hud.some((r) => /not shown|\+\d+ more/.test(r))).toBe(false);
