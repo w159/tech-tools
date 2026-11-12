@@ -56,15 +56,15 @@ describe('A3: the SUBAGENTS column header and the blank before the band', () => 
       expect(band).toBeGreaterThanOrEqual(1);
     });
   }
-  test('a slot too small for the whole plan and the boxes leaves the band its row (no gap); both boxes stay closed, every agent row stays, the plan is counted on its title (round 5)', () => {
+  test('a slot too small for the whole plan and the boxes leaves the band its row (no gap); every plan row and the column names stay, the rules go, agents are windowed to the rows that fit (critique 26)', () => {
     const want = hudWantRows(running, 104, Date.now());
     const cap = hudSlotCap(11, hudCompactRows(running, 104), hudFloorRows(running, 104, Date.now()), 7, true, true, want);
     expect(cap).toBe(Math.min(hudBudget(11, hudCompactRows(running, 104), 7, true), 10)); // the running clamp keeps the band row
     const hud = draw(running, 104, cap);
-    expect(closed(hud)).toBe(true);
-    expect(hud.filter((r) => AGENT_ROW.test(r))).toHaveLength(3); // every agent keeps its row
-    expect(hud.filter((r) => PLAN_ROW.test(r)).length).toBeGreaterThanOrEqual(1);
-    expect(hud[0]).toMatch(/more todos? not shown/);
+    expect(hud.filter((r) => PLAN_ROW.test(r))).toHaveLength(5); // no plan row folds beside decoration
+    expect(hud.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    expect(hud.filter((r) => AGENT_ROW.test(r)).length).toBeGreaterThanOrEqual(1);
+    expect(hud.length).toBeLessThanOrEqual(10);
     expect(hudGapRows(true, 10, 11)).toBe(0);
   });
   test('the HUD asks for every row it has (hudWantRows) and gets it whenever the band keeps its title row and the blank under the agents: no `N more todos not shown` beside spare rows (critique 23, live-150-1 f0060:24)', () => {

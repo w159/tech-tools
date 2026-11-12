@@ -112,7 +112,7 @@ describe('step 2: a rounded box that never changes shape', () => {
     expect(out.filter((l) => /^\+-+\+$/.test(l))).toHaveLength(2);
     for (const l of out.filter((x) => x.trim() !== '')) expect(cells(l)).toBeLessThanOrEqual(110);
   });
-  test('a short budget drops the blank, then the column names, then folds the finished rows; both rules and both corners stay at every height the blocks show (round 5)', () => {
+  test('a short budget drops the blank, then the closing rules, then folds the finished rows; both top rules with their corners stay, and the column names stay while an agent row shows (critique 26)', () => {
     for (const cols of [150, 110]) {
       const input: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'completed', OWNERS[1]), todo(3, 'in_progress', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: OWNERS.map((n, i) => agent(n, i < 2 ? 'done' : 'working', i < 2 ? 'done' : 'running', { tool: 'Read', target: `${n.split('-')[0]}.py` })) };
       const at = (n: number): string[] => text(draw(input, cols, n));
@@ -122,17 +122,16 @@ describe('step 2: a rounded box that never changes shape', () => {
       for (let n = 14; n >= 8; n--) {
         const out = at(n);
         expect([cols, n, out.length <= n]).toEqual([cols, n, true]);
-        expect([cols, n, corners(out)]).toEqual([cols, n, [2, 2, 2]]); // two tops with their `╮` and two bottoms with their `╯`, whatever the slot
+        expect([cols, n, corners(out)]).toEqual([cols, n, [2, 2, n >= 13 ? 2 : 0]]); // two tops with their `╮` whatever the slot; the bottoms are the first decoration after the blank
+        expect([cols, n, out.some((l) => /AGENT\s+STATE/.test(l))]).toEqual([cols, n, true]);
       }
-      expect(at(14).some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
       expect(at(14).filter((l) => l === '')).toHaveLength(1);
       expect(at(13).filter((l) => l === '')).toHaveLength(0); // the blank goes first
-      expect(at(13).some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
       expect(plan(at(13))).toHaveLength(5); // every plan row stays
-      expect(at(12).some((l) => /AGENT\s+STATE/.test(l))).toBe(false); // then the column names
-      expect(plan(at(12))).toHaveLength(5);
-      expect(at(11)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
-      expect(plan(at(11)).some((l) => /T[12] read/.test(l))).toBe(false);
+      expect(plan(at(12))).toHaveLength(5); // then the rules; still every plan row
+      expect(plan(at(11))).toHaveLength(5);
+      expect(at(10)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
+      expect(plan(at(10)).some((l) => /T[12] read/.test(l))).toBe(false);
       expect(plan(at(8)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place
     }
   });

@@ -87,7 +87,7 @@ export type SurfaceOpts = {
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
 /** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so a drawn HUD prints it in every state until a budget too small turns it off. */
-export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** The `╰───╯` rule under the last row (a block with no row under its title has nothing to close); `stack` asks for it in every state. */ close?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean };
+export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** The `╰───╯` rule under the last row (a block with no row under its title has nothing to close); `stack` asks for it in every state. */ close?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean; /** Agents windowed to `cap` rows with no `n more agents not shown` row: the running count already rides the ribbon, so every slot holds an agent. */ quiet?: boolean };
 
 const t = (text: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run => ({ t: text, tone, ...extra });
 const BLANK: Run[] = [];
@@ -163,14 +163,14 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const meter = meterRuns(done, rows.length, ui);
   /** The title in the first form that fits: the count text with the meter, then without it. */
   const head = (forms: readonly string[]): Run[] => [...forms.map((f) => titleRow(cols, 'TODO', f, meter, ui)), ...forms.map((f) => titleRow(cols, 'TODO', f, [], ui))].find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'TODO', '', [], ui);
-  if (b.cap === 0) return [head([figure])];
+  if (b.cap === 0) return [head([`${figure} · +${rows.length} more`, figure])]; // every row folded onto the ribbon: the count says how many
   // Every slot holds a row: what does not fit is counted on the ribbon, not on a row of its own (critique 16: `3 more todos not shown` under 2 drawn rows, with room for a third).
   // A short budget folds the finished rows first: the ribbon counts them (`3/5 · 3 done`) and every open row keeps its place (critique 17: the 110 slot lost its band row and its blank to rows already done).
   const stays = (r: TodoRow): boolean => r.state !== 'done' || isFresh(r, o.now); // a row that completed within LINGER_MS keeps its place, as when the plan windows
   const foldable = rows.filter((r) => !stays(r)).length;
   const fold = b.foldDone === true && foldable > 0 && foldable < rows.length; // a plan that is all done keeps its rows
   const { shown, hidden } = fold ? { shown: rows.filter(stays), hidden: foldable } : windowRows(rows, b.cap, o.now, false);
-  const forms = hidden > 0 ? [fold ? `${figure} · ${hidden} done` : `${figure} · ${hidden} more ${hidden === 1 ? 'todo' : 'todos'} not shown`, ...(fold ? [] : [`${figure} · +${hidden} more`]), figure] : [figure];
+  const forms = hidden > 0 ? [fold ? `${figure} · ${hidden} done` : `${figure} · +${hidden} more`, figure] : [figure]; // one wording at every width (critique 26: `1 more todo not shown` at 150, `+2 more` at 110)
   const out: Run[][] = [head(forms)];
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
@@ -291,9 +291,9 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const stateAt = NAME_AT + nameW + AGENT_GUTTER;
   const plan = agentCols(rows, o, rich, stateAt);
   if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the column names: `stack` always asks for them (k9s), so every drawn HUD prints them; only a budget that cannot hold them asks for `header: false`
-  const { shown, hidden } = windowRows(rows, b.cap);
+  const { shown, hidden } = windowRows(rows, b.cap, undefined, b.quiet !== true);
   for (const r of shown) out.push(agentRow(r, o, rich, stateAt, nameW, plan));
-  if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
+  if (hidden > 0 && b.quiet !== true) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
   if (b.close === true && shown.length > 0) out.push(bottomRule(cols, ui));
   return out;
 }
@@ -411,9 +411,9 @@ function wordsEll(text: string, n: number, ell: string = ELL): string {
 export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] };
 
 /** Both blocks stacked (a blank between them when `spacers`). */
-export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean }): Run[][] {
+export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean }): Run[][] {
   const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), close: b.close !== false });
-  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true, close: b.close !== false }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
+  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true, close: b.close !== false, ...(b.quiet ? { quiet: true } : {}) }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
   return [...todo, ...(b.spacers && todo.length > 0 && agents.length > 0 ? [BLANK] : []), ...agents];
 }
 
@@ -433,24 +433,22 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
   const n = s.todos.length;
   const m = s.agents.length;
-  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean };
-  // The box keeps its shape: a short slot gives up the rail, then the blank between the blocks, then the SUBAGENTS column names, then the finished plan rows (counted on the title, `3/5 · 3 done`), then plan
-  // rows (counted on the title), and only then the plan's box and the agents' windowing; the rules (the top rule with its `╮` and the bottom `╰──╯`) are the last decoration to go: the second pass
-  // below, with no bottom rule, is reached only by a slot too small for a rule beside the rows.
-  const ladder = (close: boolean): Try[] => {
-    const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: false }, { spacers: false, extras: false, header: false }, { spacers: false, extras: false, header: false, foldDone: true }];
-    for (let cap = n - 1; cap >= 1; cap--) tries.push({ spacers: false, extras: false, header: false, todoCap: cap }); // a cap is a count of rows: the rest is counted on the title
-    // The plan gives way before the last running agent does: its box goes, then agents are windowed (two slots at least show one agent and the count of the rest).
-    if (m > 0) {
-      tries.push({ spacers: false, extras: false, hideTodo: true });
-      for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, agentCap: cap });
-      // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
-      tries.push({ spacers: false, extras: false, hideTodo: true, header: false });
-      for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, header: false, agentCap: cap });
-    }
-    return tries.map((tr) => ({ ...tr, close }));
-  };
-  const tries: Try[] = [...ladder(true), ...ladder(false), { spacers: false, extras: false, todoCap: 0, agentCap: 0, header: false, close: false }];
+  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean };
+  // A rows-over-decoration ladder (critique 26: `1 more todo not shown` beside a slot that held every row): the rail, the blank between the blocks, the two bottom rules together (a box is closed on
+  // both blocks or on neither), then the finished plan rows (counted on the title, `3/5 · 3 done`). The SUBAGENTS column names stay while an agent row shows; what folds next is agent rows (down to
+  // one, the running count rides the ribbon), then plan rows (counted on the title, `0/5 · +2 more`), the last agent's box last.
+  const open = { spacers: false, extras: false, close: false } as const; // no blank, no rail, no bottom rules
+  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, { spacers: false, extras: false, close: true }, open, { ...open, foldDone: true }];
+  for (let cap = m - 1; cap >= 1; cap--) tries.push({ ...open, foldDone: true, agentCap: cap, quiet: true });
+  const keep = m > 0 ? { agentCap: Math.min(m, 1), quiet: true } : {};
+  for (let cap = n - 1; cap >= 0; cap--) tries.push({ ...open, todoCap: cap, ...keep }); // a cap is a count of rows: the rest is counted on the title
+  // The plan gives way before the last running agent does: its box goes, then agents are windowed.
+  tries.push({ ...open, hideTodo: true });
+  for (let cap = m - 1; cap >= 1; cap--) tries.push({ ...open, hideTodo: true, agentCap: cap, quiet: true });
+  // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
+  tries.push({ ...open, hideTodo: true, header: false });
+  for (let cap = m - 1; cap >= 2; cap--) tries.push({ ...open, hideTodo: true, header: false, agentCap: cap, quiet: true }); // two slots are the title and one agent: below that the two bare ribbons
+  tries.push({ ...open, todoCap: 0, agentCap: 0, header: false });
   const ss = { todos: s.todos, agents: m > 0 ? s.agents : [] };
   for (const tr of tries) {
     const rows = stack(tr.hideTodo ? { ...ss, todos: [] } : ss, o, tr);

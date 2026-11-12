@@ -171,7 +171,7 @@ function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap =
   const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
   const closed = closedCount(m);
-  const closedRuns: Run[] = [{ t: ui.ascii ? `${GLYPH5_ASCII.done} ` : `${STATE_GLYPHS.done} `, tone: 'dim' }, r(`${closed} closed`, 'dim')]; // a closed failure is a dim record, never the red mark
+  const closedRuns: Run[] = [r(`${closed} closed`, 'dim')]; // a closed failure is a dim record: a word, no glyph (the done disc means done, the red square means failed; critique 26: `● 1 closed`)
   const parts = order.flatMap((s): Run[][] => [
     ...(n(s) > 0 ? [animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s), true) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
     ...(s === 'failed' && words && closed > 0 ? [closedRuns] : []),
@@ -184,6 +184,7 @@ function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap =
 function blockedRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
   const n = m.todoBlocked ?? 0;
   if (n <= 0) return [];
+  if (runStateOf(m).kind === 'blocked') return [r(words ? `${n} blocked` : `${n}`, 'bad')]; // the lead already shows `▲ blocked`: one state glyph per row (critique 26: `▲ blocked … ▲ 1 blocked`)
   return words ? countRuns('blocked', n, ui) : [stateRun('blocked', ui), r(`${n}`)];
 }
 

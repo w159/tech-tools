@@ -149,7 +149,7 @@ describe('A4: the band names the open row by its plan title and never leaves col
     const t = row(m(93));
     expect(t).toContain('▲ blocked · needs: close dispatch T2');
     expect(t).toContain('todo 4/5');
-    expect(t).toMatch(/▲ 1 blocked/);
+    expect(t).toMatch(/blocked · needs: close dispatch T2.* · 1 blocked/); // the lead shows the one `▲`: the count is a word (critique 26)
     expect(t).toMatch(/■ 1 failed/);
     expect(t).not.toMatch(/\.\.\.|…/);
     expect(t).not.toContain('Attempt');
