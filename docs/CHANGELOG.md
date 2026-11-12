@@ -1,5 +1,21 @@
 # Changelog
 
+## atlas 17.13.0 - 2026-11-12
+
+- atlas 17.13.0: fixes for hostile critiques 14 to 19 (waves 15 to 20). Also in this release:
+  - The HUD TODO block draws every plan row while an agent runs, and a row is judged by its owner's latest run, so a retry reads `running` and a finished retry reads `retried`, not `worker killed`.
+  - SUBAGENTS LAST is an outcome only, the agent grid has fixed MODEL and TASK widths, and the band draws compact worker rows in the rows the HUD leaves spare.
+  - A killed worker is terminal on every surface (failed card, `done` with `worker failed` on its plan row); blocked has its own glyph and one red tone; the band, route, gates and core tabs share one truth for phase, counts and blocked.
+  - The board draws each owner whole beside its row, the side panel channel tab carries kills and Stop refusals, and the 110-column pane keeps its tab strip, SUBAGENTS block and title text.
+  - `atlas_todo.py counts` leads with a plain `summary`, and the Stop refusal names open dispatch rows apart from plan items.
+  - The live host refuses a `.json` import from a hooks module, so the header pattern moved to `mod/contract-pattern.ts` (a wave 15 load failure and its fix).
+
+  Live, 3 runs per width on build 4b5b5a94: TODO 81.2% (150 cols) and 78.5% (110); band 94.5% and 92.2%; workers on any surface 94.0% and 91.4%; side panel tabs 100%; events never shown per surface 14 of 111 and 18 of 110 (now past 3x); critic 6.5 (critique 20). The 3x bar is met on 16 of 19 lines. Not met: first-appearance lag (2 lines) and the design critic (target 8.2). Details in docs/audits/2026-11-11_atlas-round2.md.
+
+## marketplace 5.18.0 - 2026-11-12
+
+- marketplace 5.18.0: atlas 17.13.0. armada and programmer are unchanged.
+
 ## atlas 17.12.0 - 2026-11-11
 
 - atlas 17.12.0: fixes for hostile critiques 12 and 13 (wave 14). Also in this release:

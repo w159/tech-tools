@@ -64,6 +64,10 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-12 | w17-band-count | verified | band todo n/m equals TODO header n/m in all compared frames (150, 110, stoprun) - claim holds; 110 band missing in 25 frames | [2026-11-12_w17-band-count.md](2026-11-12_w17-band-count.md) |
+| 2026-11-12 | verifier-6678-L1 | verified | critique 18 L1: done TODO row folded out of HUD by foldDone, panel still shows it | [2026-11-12_verifier-6678-l1.md](2026-11-12_verifier-6678-l1.md) |
+| 2026-11-12 | tc3c328-taskstop-claim | verified | TaskStop-killed agent reads failed on every agent surface at e4a8186a (todo row T2 reads done only when lead completes it) | [2026-11-12_tc3c328-taskstop-claim.md](2026-11-12_tc3c328-taskstop-claim.md) |
+| 2026-11-12 | L1-wave19 | rejected | Wave 19 claim L1 fixed is false: 24 L1 frames in 3 of 12 runs | [2026-11-12_l1-wave19.md](2026-11-12_l1-wave19.md) |
 | 2026-11-11 | wave5-verify | verified | Wave 5 live truth and side panel fixes verified; A2 kit regression fixed by updating the stillness test | [2026-11-11_wave5-verify.md](2026-11-11_wave5-verify.md) |
 | 2026-11-11 | wave13-subagents-reveal | rejected | Wave 13 claim (new SUBAGENTS row on first poll, full state) holds for timing and state word only; row is incomplete mid-reveal | [2026-11-11_wave13-subagents-reveal.md](2026-11-11_wave13-subagents-reveal.md) |
 | 2026-11-11 | wave12-phase-sync | rejected | wave 12 HUD/route-tab same glyph+colour claim refuted in live frames f0050/60/61/63 (TODO rows) | [2026-11-11_wave12-phase-sync.md](2026-11-11_wave12-phase-sync.md) |
@@ -80,6 +84,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-11 | gate-s-d11 | verified | Stop gate (s) skips read-only roles (explorer, db-prober), matches D11; 2+ editing workers still counted | [2026-11-11_gate-s-d11.md](2026-11-11_gate-s-d11.md) |
 | 2026-11-11 | critic3-ui-score | rejected | Rebuilt Atlas surfaces are NOT expert grade: after mean 6.2 vs baseline 3.5; 13 cross-surface disagreements | [2026-11-11_critic3-ui-score.md](2026-11-11_critic3-ui-score.md) |
 | 2026-11-11 | ce4b-gatespoll | verified | band gatesPoll runs gates on the poll that sees stop-verdict change (urgent bypass of 5s gap) | [2026-11-11_ce4b-gatespoll.md](2026-11-11_ce4b-gatespoll.md) |
+| 2026-11-11 | c14-band-busy-on-submit | rejected | prompt.submit busy mark does not remove live idle band: 13-14 idle frames after submit in both runs | [2026-11-11_c14-band-busy-on-submit.md](2026-11-11_c14-band-busy-on-submit.md) |
 | 2026-11-11 | band-polish-a929c761 | verified | band polish: kit 976 pass 0 real fail, bun 1838/0, tsc clean | [2026-11-11_band-polish-a929c761.md](2026-11-11_band-polish-a929c761.md) |
 | 2026-11-11 | audit-round2-numbers | rejected | Round2 audit: M5/M6 values right; lag max factors, 13-of-18 count, omitted M3 wrong | [2026-11-11_audit-round2-numbers.md](2026-11-11_audit-round2-numbers.md) |
 | 2026-11-10 | verify-be89-release | rejected | 17.5.0 tree: 10 tests fail on tree but pass on HEAD (stale tests/codex hooks json/crew.md TOC); live checks 1-4,6,8 pass | [2026-11-10_verify-be89-release.md](2026-11-10_verify-be89-release.md) |
