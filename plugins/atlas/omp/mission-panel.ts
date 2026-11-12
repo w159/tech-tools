@@ -16,6 +16,7 @@ import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel
 import type { GateGroup } from "../mod/pane/sidebar";
 import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/board-model";
 import { withOwnerStates } from "../mod/data/live";
+import { openRowName, ownPlan } from "../mod/data/todos";
 import { railIds, railOf } from "../mod/rail";
 import { RST, bg, PANEL, visibleWidth } from "./panel-paint";
 import { type PanelTodo, todoLines } from "./todo-panel";
@@ -137,6 +138,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 	const rail = railOf(railIds(m.phases), m.phase);
 	const owners = ownerStates(m);
 	const openDispatch = (m.todos ?? []).filter(t => t.origin === "dispatch" && t.status !== "completed"); // the rows Stop refuses on that the plan does not list
+	const openName = openRowName(ownPlan(m.todos ?? []), openDispatch[0]); // the plan row's title (T-id and title), else the agent: never the dispatch prompt
 	return {
 		cols: w,
 		maxRows: m.maxLines,
@@ -152,7 +154,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		total: m.total,
 		openWork: m.core?.contract.open,
 		openDispatch: openDispatch.length,
-		...(openDispatch[0]?.content ? { openDispatchTitle: openDispatch[0].content } : {}),
+		...(openName ? { openDispatchTitle: openName } : {}),
 		todoBlocked: blockedCount(m.todos ?? [], owners),
 		busy: !!m.leadBusy || planBusy(m.todos ?? [], owners),
 		workers,

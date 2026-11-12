@@ -3,7 +3,7 @@ import type { ChannelNote } from '../contract';
 import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
 import { isPlanItem, ownPlan, ownTodos, todoState } from '../data/todos';
 import { lastText } from '../data/lasttext';
-import { spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
+import { DONE_DOUBT, WORKER_FAILED, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
@@ -44,7 +44,7 @@ function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] 
     const owner = it.owner ?? undefined;
     const w = owner ? workers.find((x) => x.name === owner) : undefined;
     const { state, word } = todoState(it.status, owner ? owners.get(owner) : undefined); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
-    const detail = state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
+    const detail = state === 'done' && word === DONE_DOUBT ? WORKER_FAILED : state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
     return { id: it.id, label: one(it.content), state, ...(word ? { word } : {}), owner: owner ? one(owner) : undefined, detail, evidence: it.evidence ?? null };
   });
 }

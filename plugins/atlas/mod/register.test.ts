@@ -138,15 +138,27 @@ describe('header phase', () => {
     expect(headerPhaseOf('hello done', snapWith(PATTERN))).toBeNull();
     expect(headerPhaseOf('ATLAS | 🏁 done | x', snapWith(''))).toBeNull();
   });
-  test('a new turn drops the previous turn\'s header phase (live 12.2.0: rail kept a stale "done")', async () => {
+  test('a person\'s new prompt drops the previous reply\'s header phase (live 12.2.0: rail kept a stale "done")', async () => {
     const { on, pick } = captureOn();
     const { engine } = stubEngine();
     await register(on, {});
     const ref = { plugin: 'atlas', key: 'headerPhase' } as const;
     await engine.state.set(ref, 'done');
-    await pick('turn.start')(engine, { text: 'next task', turnId: 't2' }, noopNext);
+    await pick('prompt.submit')(engine, { text: 'next task' }, noopNext);
     expect((await engine.state.get(ref)).value ?? null).toBeNull();
   });
+  // Critique 17 A5 (stoprun-150-a4fad2f9-3 f0097: route `phase research 1/5` beside a DONE chip and a blocked band; live-110-a4fad2f9-1: `research 1/5` under an IMPLEMENT chip):
+  // turn.start also fires for a subagent's turn and for the Stop-hook continuation turn, and it dropped the phase, so the route fell back to `research` until the next answer.
+  test('a turn.start (a subagent, a Stop-hook continuation) keeps the lead\'s last header phase', async () => {
+    const { on, pick } = captureOn();
+    const { engine } = stubEngine();
+    await register(on, {});
+    const ref = { plugin: 'atlas', key: 'headerPhase' } as const;
+    await engine.state.set(ref, 'implement');
+    await pick('turn.start')(engine, { text: 'Stop hook feedback', turnId: 't3' }, noopNext);
+    expect((await engine.state.get(ref)).value).toBe('implement');
+  });
+
 });
 
 describe('faults', () => {

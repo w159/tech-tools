@@ -92,6 +92,13 @@ describe('A4: the core tab never counts in-process dispatches as tmux teams', ()
     expect(out).not.toMatch(/teams\s+1 this session/);
     expect(out).toMatch(/dispatches\s+1 this session/);
   });
+  // Critique 17 A6 (live-150-a4fad2f9-1/tab-core.png): `dispatches 1 this session` after three explorers ran; the figure is the workers the dispatches ran.
+  test('three explorers ran in one in-process group: the heading says `dispatches 3 this session`, never 1', () => {
+    const seat = { role: 'explorer', model: 'haiku', effort: 'low', count: 1, ran: ['haiku', 'haiku', 'haiku'] };
+    const out = core([{ ...route('in-process:audit/low', 'in-process'), seats: [seat] }]);
+    expect(out).toMatch(/dispatches\s+3 this session/);
+    expect(out).not.toMatch(/dispatches\s+1 this session/);
+  });
   test('tmux teams keep `teams N this session`; a mix says both', () => {
     expect(core([route('t1', 'tmux')])).toMatch(/teams\s+1 this session/);
     expect(core([route('t1', 'tmux'), route('in-process:audit/low', 'in-process')])).toMatch(/teams\s+1 tmux, 1 in-process/);

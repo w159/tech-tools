@@ -210,9 +210,9 @@ def tripwire_group(session: str) -> dict:
         g["lines"].append(
             _line(
                 "inline",
-                "Lead's own calls since last dispatch",
+                "Lead hands work to subagents",
                 n < limit,
-                f"{n} of {limit}",
+                f"{n} direct calls since the last dispatch, limit {limit}",
             )
         )
         rows = conn.execute(

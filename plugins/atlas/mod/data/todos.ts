@@ -5,7 +5,7 @@
 import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } from '../contract';
 import type { TodoGroup } from '../orchestra-types';
 import { contractGlyph } from '../theme';
-import type { UiState } from '../atlas-ui';
+import { DONE_DOUBT, type UiState } from '../atlas-ui';
 import { itemState, titleOwner } from '../board-model';
 
 /** The one derived state of a plan row, shared by the HUD TODO block and the side panel's route tab: the board's rule (board-model itemState),
@@ -13,7 +13,7 @@ import { itemState, titleOwner } from '../board-model';
  * `word` is the state word as drawn when it differs from `state`. */
 export function todoState(status: string, ownerState?: UiState): { state: UiState; word?: string } {
   const state = itemState(status, ownerState);
-  if (state === 'done') return { state };
+  if (state === 'done') return ownerState === 'failed' ? { state, word: DONE_DOUBT } : { state }; // critique 17 A1: a completed row whose worker failed reads `done` in the amber tone, never the green one
   if (ownerState === 'done' && (state === 'queued' || state === 'running' || status === 'ended')) return { state: 'blocked', word: 'returned' };
   return { state };
 }
@@ -159,6 +159,21 @@ export const planBasis = <T extends object>(items: readonly T[], sessionId?: str
 /** The plan rows every surface lists: the plan basis over this session's rows with a title-named worker made the owner (ownTodos). The HUD, the side panel's
  * route tab and the board all read this one set, so a row whose worker is named only in its title (`T1 read alpha.py (alpha-explorer)`) gets that owner's state everywhere. */
 export const ownPlan = <T extends object>(items: readonly T[], sessionId?: string): T[] => planBasis(ownTodos(items, sessionId), sessionId);
+
+/** The open dispatch row Stop refuses on, named for a person (critique 17 A4): the plan row that names its worker, as `T2 read ghost.py` (its T-id and title, the worker
+ * parenthesis left off), else the agent's name; never the dispatch prompt (`Read ghost.py first, then...`), which reads cut mid-phrase on the band. `plan` is ownPlan(...)
+ * (a title-named worker already is the row's owner). */
+export function openRowName(plan: readonly object[], open: object | undefined): string | undefined {
+  const d = open as { owner?: string | null; content?: unknown } | undefined;
+  if (!d) return undefined;
+  const owner = d.owner ? String(d.owner) : '';
+  if (!owner) return typeof d.content === 'string' && d.content.trim() !== '' ? d.content.replace(/\s+/g, ' ').trim() : undefined;
+  const row = plan.map((p) => p as { content?: unknown; owner?: string | null }).find((p) => typeof p.content === 'string' && (p.owner === owner || titleOwner(p.content, { has: (n) => n === owner })));
+  if (!row) return owner;
+  const content = String(row.content);
+  const m = titleOwner(content, { has: (n) => n === owner });
+  return (m ? content.slice(0, m.at) : content).replace(/\s+/g, ' ').trim() || owner;
+}
 
 /** Advisor notes are not operating-contract work: they never join phase groups or progress. */
 const isAdvisor = (it: BoardItem): boolean => it.origin === 'advisor';

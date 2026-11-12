@@ -42,7 +42,7 @@ test("tree: the rev 4 TODO surface, one row per plan item with its state word, t
 	]);
 	const rows = lines.slice(1);
 	expect(rows).toHaveLength(5);
-	const want: Array<[string, string]> = [["●", "trace calc module done"], ["◐", "map call paths running"], ["◇", "add mul queued"], ["■", "run tests failed"], ["■", "changelog blocked"]];
+	const want: Array<[string, string]> = [["●", "trace calc module done"], ["◐", "map call paths running"], ["◇", "add mul queued"], ["■", "run tests failed"], ["▣", "changelog blocked"]];
 	rows.forEach((r, i) => expect(r.replace(/ +/g, " ").replace(/^[ ▸] ?/, "")).toBe(`${want[i]![0]} ${want[i]![1]}`));
 	expect(rows[1]!.startsWith("▸")).toBe(true);
 	expect(lines.some((l) => /^progress /.test(l))).toBe(false); // one count: the ribbon's

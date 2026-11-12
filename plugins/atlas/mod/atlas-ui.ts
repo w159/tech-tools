@@ -214,10 +214,10 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
  * each is one cell wide and present in DejaVu Sans Mono (mod/fixtures/dejavu-sans-mono-glyphs.ts); keep this a single-line literal,
  * mod/fixtures/check_glyph_cmap.py reads it. */
-export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃';
+export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▲▁▂▃▄▅▆▇◌◍◃']);
+const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲▁▂▃▄▅▆▇◌◍◃']);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -227,8 +227,8 @@ export type UiState = 'queued' | 'running' | 'done' | 'failed' | 'blocked' | 'wa
 export const UI_STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 /** The one order states are counted and ranked in on every surface (band, HUD, board): attention first, finished last. */
 export const COUNT_ORDER: readonly UiState[] = ['running', 'blocked', 'failed', 'waiting', 'queued', 'done'];
-export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '■', waiting: '◉' };
-export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: '#', blocked: '#', waiting: '?' };
+export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '▣', waiting: '◉' }; // critique 17 A2: blocked is the boxed square, failed the solid one
+export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: 'x', blocked: '#', waiting: '?' };
 export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'bad', waiting: 'info' };
 
 /** `returned` is a word, not a seventh state: the owner agent ended and the store row is still open (a normal hand-back to the lead). It counts as
@@ -236,16 +236,23 @@ export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: '
 export const RETURNED = 'returned';
 export const RETURNED_GLYPH = '◃'; // the small triangle pointing back to the lead (U+25C3, hollow: a hand-back, not a fault; the focus mark ▸ points the other way)
 export const RETURNED_ASCII = '<';
-/** What a row's mark shows: a state, or `returned`. */
-export type MarkState = UiState | typeof RETURNED;
-/** The mark state of a row: `returned` when its word says so, else its state. */
-export const markOf = (state: UiState, word?: string): MarkState => (word === RETURNED ? RETURNED : state);
-/** The token of a mark: the state's own, or the accent for `returned`. */
-export const markToken = (s: MarkState): Token => (s === RETURNED ? 'accent' : STATE_TOKEN[s]);
-/** The one tone of a row's state WORD on every surface (HUD, side panel): failed and blocked red, `returned` accent, the rest the quiet sub tone. */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : state === 'failed' || state === 'blocked' ? 'bad' : 'sub');
+/** `doubt`: a row the store holds `completed` whose owner agent failed or was killed (critique 17 A1). It reads `done` in the amber warn tone with the detail
+ * `worker failed` (the lead may have finished the work itself); it is never the green done mark and never the fade-to-done pop. Carried as the row's word `done`
+ * on a `done` state, the one case a row's word equals its state. */
+export const DONE_DOUBT = 'done';
+export const WORKER_FAILED = 'worker failed';
+/** What a row's mark shows: a state, `returned`, or `doubt`. */
+export type MarkState = UiState | typeof RETURNED | 'doubt';
+/** The mark state of a row: `returned` or `doubt` when its word says so, else its state. */
+export const markOf = (state: UiState, word?: string): MarkState => (word === RETURNED ? RETURNED : state === 'done' && word === DONE_DOUBT ? 'doubt' : state);
+/** What the Motion tracks for a row: its state, except a doubted done, which is its own entry (it leads amber and never pops the done disc). */
+export const motionState = (state: UiState, word?: string): string => (markOf(state, word) === 'doubt' ? 'doubt' : state);
+/** The token of a mark: the state's own, the accent for `returned`, the amber warn for `doubt`. */
+export const markToken = (s: MarkState): Token => (s === RETURNED ? 'accent' : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
+/** The one tone of a row's state WORD on every surface (HUD, side panel): failed and blocked red, `returned` accent, a doubted done amber, the rest the quiet sub tone. */
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' || state === 'blocked' ? 'bad' : 'sub');
 
-export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s] : STATE_GLYPHS[s]);
+export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
 export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
   const g = s === 'running' ? spinnerGlyph(spinFrame, ui.ascii) : stateGlyph(s, ui);

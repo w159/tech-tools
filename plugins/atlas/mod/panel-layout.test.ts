@@ -189,9 +189,9 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toContain('3 explorers ran, 1 planned (haiku, low effort)'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
-    expect(out).toMatch(/▲ {3}3x explorer +off plan +3 explorers ran, 1 planned/);
-    expect(out).toContain('planned audit team (low effort), ran 3 explorers');
+    expect(out).toContain('3 ran, the plan said 1 (haiku, low effort)'); // B4: a sentence, not `ran 3 / planned 1 (haiku) haiku/low`
+    expect(out).toMatch(/▲ {3}3x explorer +too many +3 ran, the plan said 1/);
+    expect(out).toContain('3 explorers ran, the plan said 1');
     expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
   });
@@ -199,7 +199,7 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 4, drift: ['explorer ran 4, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toMatch(/▲ {3}4x explorer +off plan +4 explorers ran, 1 planned/);
+    expect(out).toMatch(/▲ {3}4x explorer +too many +4 ran, the plan said 1/);
     expect(out).not.toContain('1x explorer');
   });
   // critique 12 B1/B6: live-150-8271cfc8-1 core tab: the plan is 5/5 done, the rows carry no evidence and no finding verifies them
@@ -247,8 +247,8 @@ describe('core tab', () => {
     expect(out).toMatch(/Tool routing +warning/);
     expect(out).toContain('Dispatches followed the plan');
     const open = bodyLines(panelWorld('gates', 150, mocha, { gates, core: c, expanded: 'gate:dispatch-plan' })).map(lineText).join('\n');
-    expect(open).toContain('planned audit team (low effort), ran 3 explorers'); // the line's detail is the core row's own sentence
-    expect(rows('core', 150, { core: c }).join('\n')).toMatch(/off plan/);
+    expect(open).toContain('3 explorers ran, the plan said 1'); // the line's detail is the core row's own sentence
+    expect(rows('core', 150, { core: c }).join('\n')).toMatch(/too many/);
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {
     const c = { ...core, verdicts: [], ledger: { verified: 0, refuted: 0, pending: 0, claimed: 0, unchecked: 0 } } as CoreModel;
@@ -271,7 +271,7 @@ describe('channel tab', () => {
   test('header counts people and unread in words; blocked and handoff notes carry the state glyph and word', () => {
     const out = bodyLines(panelWorld('channel', 120, mocha)).map(lineText);
     expect(out[0]).toBe('    #atlas-board-mod  5 people · 2 unread');
-    expect(out[2]).toMatch(/^ {2}■ implementer-live +blocked /);
+    expect(out[2]).toMatch(/^ {2}▣ implementer-live +blocked /);
     expect(out[3]).toMatch(/^ {2}● implementer-layout +handoff /);
   });
   test('the log keeps the newest rows - 4 notes', () => {
@@ -298,7 +298,7 @@ describe('shared invariants', () => {
   test('every count carries its word', () => {
     const route = rows('route', 120).join('\n');
     expect(route).toContain('3/7');
-    expect(route).toContain('2/4');
+    expect(route).toMatch(/phase +research\n/); // the phase word alone, no n/m beside it (critique 17 A5)
     expect(route).toContain('2/3 green');
     expect(route).toMatch(/1 running/);
     for (const l of rows('route', 120).slice(0, 9)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/);
@@ -341,7 +341,7 @@ describe('toast', () => {
     expect([toastText('done', 'implementer-layout', '9 of 9 steps', mocha), toastText('failed', 'implementer-live', 'tests red 3', mocha)]).toEqual(toastDesign);
   });
   test('ASCII mode uses the ASCII state mark', () => {
-    expect(toastText('failed', 'a', 'b', ascii)).toBe('| ATLAS  # failed  a  b');
+    expect(toastText('failed', 'a', 'b', ascii)).toBe('| ATLAS  x failed  a  b');
   });
 });
 

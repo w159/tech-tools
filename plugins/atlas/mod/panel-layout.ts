@@ -6,10 +6,9 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { labelCut, planFigure } from './board-model';
-import { railNo, railOf } from './rail';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runstate';
@@ -244,8 +243,8 @@ const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).leng
  * number: never `done 5/5` beside a blocked band (critique 16 A3, stoprun f0090). */
 function phaseRow(m: PanelModel): PanelLine {
   if (m.phase === 'done' && tallyOf(gatesOf(m)).stop?.blocked) return line([label('phase', m.cols), r('blocked', 'bad', { bold: true })]);
-  const rail = railOf(m.phases, m.phase); // the one rail (mod/rail.ts): the band, the HUD and omp read the same index
-  return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && (m.phase === 'done' || m.phases.includes(m.phase)) ? [r(`${m.cols >= 100 ? '   ' : ' '}${railNo(rail)}`)] : [])]);
+  // Critique 17 A5: the phase word alone (`phase implement`): a rail number beside it (`research 1/5`) read as the same kind of figure as the todo `n/m` and went stale beside the chip.
+  return line([label('phase', m.cols), r(m.phase)]);
 }
 
 /** `gates   ● lint   ● test   ▲ doctor   2/3 green`; names that do not fit fold to the count alone. `n/m` like the ribbon's figure (critique 12 B3). */
@@ -307,7 +306,8 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   const key = `task:${t.id}`;
   const full = oneLine(t.label);
   const wordRun = { t: t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
-  const nameCell = { tone: t.state === 'done' ? 'sub' as const : 'text' as const, ...(t.state === 'done' ? { strike: true } : {}) }; // a done title is struck through, as in the HUD (critique 11)
+  const settled = t.state === 'done' && markOf(t.state, t.word) !== 'doubt'; // a done row whose worker failed (critique 17 A1) is not struck through
+  const nameCell = { tone: settled ? 'sub' as const : 'text' as const, ...(settled ? { strike: true } : {}) }; // a done title is struck through, as in the HUD (critique 11)
   const accent = markOf(t.state, t.word);
   const glyph = stateMark(accent, m, t.owner || t.id);
   // A title that does not fit beside its state word is drawn whole and its state follows it (critique 14, the 110-column pane: `T1 read alpha.py (alpha...` was cut
@@ -348,7 +348,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
 /** What the Motion observes of the panel: each plan task, worker, gate group and gate line (key and state word), the rows `bodyLines` can move. */
 export function panelMotionItems(m: Pick<PanelModel, 'todos' | 'workers' | 'lead' | 'mates' | 'gates'>): MotionItem[] {
   return [
-    ...m.todos.map((t): MotionItem => ({ key: `task:${t.id}`, state: t.state })),
+    ...m.todos.map((t): MotionItem => ({ key: `task:${t.id}`, state: motionState(t.state, t.word) })),
     ...[...m.workers, ...(m.mates ?? [])].map((w): MotionItem => ({ key: `worker:${w.name}`, state: w.state })),
     ...m.gates.flatMap((g): MotionItem[] => [{ key: `group:${g.id}`, state: groupOk(g) ? 'done' : 'failed' }, ...g.lines.map((l): MotionItem => ({ key: `gate:${l.id}`, state: l.ok ? 'done' : 'failed' }))]),
   ];
@@ -788,7 +788,7 @@ function offloadRows(c: CoreModel, m: PanelModel, cap = OFFLOAD_CAP): PanelLine[
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
   const nothing = o.kept === 0 && o.returned === 0;
   const gone = m.workers.filter((w) => w.state === 'done' || w.state === 'failed').length; // in-process workers keep no token log: they returned, the figure is absent
-  const head = flowHeading('reading', nothing ? [gone ? pickForm([`${gone} worker${gone === 1 ? '' : 's'} returned, no token figures kept`, `${gone} returned, no token figures kept`, `${gone} returned, no token log`], m.cols - cells('reading') - 3) : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
+  const head = flowHeading('reading', nothing ? [gone ? pickForm([`${gone} worker${gone === 1 ? '' : 's'} finished, their token use is not recorded`, `${gone} finished, token use not recorded`, `${gone} finished, no token log`], m.cols - cells('reading') - 3) : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
   const ws = o.workers.slice(-cap);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);
@@ -828,7 +828,8 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
   // One source for the heading and the rows: an in-process route is a dispatch group, never a tmux team (its row says `no tmux team`), so it is counted apart.
   const inProc = teams.filter((rt) => rt.transport === 'in-process').length;
   const tmux = teams.length - inProc;
-  const head = heading(tmux === 0 && inProc > 0 ? 'dispatches' : 'teams', teams.length ? [r(inProc > 0 && tmux > 0 ? `${tmux} tmux, ${inProc} in-process` : `${teams.length} this session`, 'muted')] : [], m);
+  const dispatched = teams.reduce((n, rt) => n + rt.seats.reduce((k, s) => k + seatCount(s), 0), 0); // every worker the dispatches ran (critique 17 A6: `dispatches 1 this session` after 3 workers ran)
+  const head = heading(tmux === 0 && inProc > 0 ? 'dispatches' : 'teams', teams.length ? [r(inProc > 0 && tmux > 0 ? `${tmux} tmux, ${inProc} in-process` : `${tmux === 0 ? dispatched || teams.length : teams.length} this session`, 'muted')] : [], m);
   const inProcessNote = (): PanelLine[] => (c.inProcess ? [] : wrap('in-process dispatches are not shown here', Math.max(8, m.cols - 4)).map((t) => note(t, m)));
   if (!teams.length) return [head, note('no team this session', m), ...inProcessNote()];
   const names = teams.flatMap((rt) => rt.seats.map((s) => `  ${seatCount(s)}x ${s.role}`));
@@ -851,12 +852,12 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');
       const over = s.ran.length > s.count;
       const used = [...new Set(s.ran.map((x) => x.replace(/^claude-/, '')))].join(', ');
-      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['blocked', 'off plan', 'warn']; // amber like the gates tab's routing warning: a team that ran differently is a warning, not a failure (critique 14)
+      const [st, word, tone]: [UiState, string, Tone] = !s.ran.length ? ['queued', 'not run', 'muted'] : same && !over ? ['done', 'as planned', 'ok'] : ['blocked', over ? 'too many' : 'changed', 'warn']; // plain words (critique 17 A6); amber like the gates tab's routing warning: a team that ran differently is a warning, not a failure (critique 14)
       // Plain words, no `model/effort` token: `3 explorers ran, 1 planned (haiku, low effort)`; a seat that ran another model reads `ran on opus, planned haiku, low effort`.
       const plan = `${s.model}, ${s.effort} effort`;
-      const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${plan})` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
+      const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `${s.ran.length} ran, the plan said ${s.count} (${plan})` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
       const runs = gridRow({ cols: m.cols, ui: m.ui, mark: coreMark(st, m.ui), name: { t: `  ${seatCount(s)}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
-      return withDetail(runs, over ? [detail, `${s.ran.length} ran, ${s.count} planned (${s.model})`] : detail);
+      return withDetail(runs, over ? [detail, `${s.ran.length} ran, plan said ${s.count} (${s.model})`] : detail);
     });
     // In-process routes have no team name or isolation to show: the sentence says how the workers ran.
     const how = rt.transport === 'in-process' ? [`workers ran in-process (no tmux team), up to ${rt.maxParallel} at once`, `ran in-process, up to ${rt.maxParallel} at once`] : `${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`;

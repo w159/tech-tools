@@ -116,9 +116,9 @@ describe('contrast', () => {
 describe('state vocabulary', () => {
   test('six lowercase words, each one glyph, one ASCII mark and one token', () => {
     expect([...UI_STATES]).toEqual(['queued', 'running', 'done', 'failed', 'blocked', 'waiting']);
-    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇◐●■■◉');
-    expect(UI_STATES.map((s) => STATE_ASCII[s]).join('')).toBe('o|*##?');
-    expect(new Set(UI_STATES.map((s) => STATE_GLYPHS[s])).size).toBe(5); // failed and blocked share the red square (critique 16 A2): the word tells them apart
+    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇◐●■▣◉');
+    expect(UI_STATES.map((s) => STATE_ASCII[s]).join('')).toBe('o|*x#?');
+    expect(new Set(UI_STATES.map((s) => STATE_GLYPHS[s])).size).toBe(6); // failed is the solid square, blocked the boxed one (critique 17 A2): no two states share a mark
     expect(STATE_TOKEN).toEqual({ queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'bad', waiting: 'info' });
     for (const s of UI_STATES) expect(s).toMatch(/^[a-z]+$/);
   });

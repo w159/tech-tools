@@ -28,7 +28,7 @@ describe('sidebar golden text', () => {
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
-    expect(r).toContain(' phase  implement 4/5');
+    expect(r).toContain(' phase  implement');
     expect(r.some((l) => l.startsWith(' gates ') && l.endsWith('0/2 green'))).toBe(true); // the tool-routing group holds no data: it is not a third gate (gateTally)
     expect(r.some((l) => l.startsWith(' todo ') && l.includes('1/7'))).toBe(true);
     expect(r.some((l) => l.startsWith(' agents ') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);

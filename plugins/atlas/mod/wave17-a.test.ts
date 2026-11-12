@@ -32,12 +32,29 @@ const mission = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150
 const band = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs);
 
 describe('A1: the band counts the plan rows the TODO header counts, and names the open dispatch row', () => {
-  test('f0090 from the store: band reads todo 5/5 and `blocked: dispatch read ghost.py open`, never 5/6', () => {
+  test('f0090 from the store: band reads todo 5/5 and `blocked: dispatch ghost-explorer open` (no plan row names the worker: its agent), never 5/6', () => {
     const out = rows(idle({ todos: stopStore }), [stopGroup('1 todo open')]).join('\n');
     expect(out).toMatch(/todo [^0-9]*5\/5/);
-    expect(out).toContain('blocked: dispatch read ghost.py open');
+    expect(out).toContain('blocked: dispatch ghost-explorer open');
     expect(out).not.toContain('5/6');
     expect(out).not.toContain('1 dispatch open'); // said once, in the reason
+  });
+  // Critique 17 A4 (stoprun-150-a4fad2f9-2 f0088: `dispatch Attempt to read gho... open`): the band names the open row by its plan row's title, never by the dispatch prompt.
+  test('a plan row that names its worker names the open row: `dispatch T2 read ghost.py open`, never the dispatch prompt cut mid-phrase', () => {
+    const named = [
+      ...['T1 read alpha.py (alpha-explorer)', 'T2 read ghost.py (ghost-explorer)', 'T3 read beta.py', 'T4 combine the reports', 'T5 write the final summary'].map((c, i) => row(`t${i}`, 'completed', 'session', '', c)),
+      row('da', 'completed', 'dispatch', SESSION, 'List the function names defined in alpha.py.', 'alpha-explorer'),
+      row('dg', 'pending', 'dispatch', SESSION, 'Read ghost.py first (it does not exist), then, one Read call at a time, README.md, util.py and only then report.', 'ghost-explorer'),
+    ];
+    const out = rows(idle({ todos: named }), [stopGroup('1 todo open')]).join('\n');
+    expect(out).toContain('blocked: dispatch T2 read ghost.py open');
+    expect(out).not.toMatch(/Read ghost|first|\.\.\./);
+  });
+  test('the reason holds while the lead declares the block: the open row is named in both frames, never `needs you` over an open row Stop refused on', () => {
+    expect(blockReasons(true, ['1 todo open'], 'T2 read ghost.py').long).toBe('dispatch T2 read ghost.py open');
+    expect(blockReasons(false, ['1 todo open'], 'T2 read ghost.py').long).toBe('dispatch T2 read ghost.py open');
+    expect(blockReasons(true, [], 'T2 read ghost.py').long).toBe('needs you'); // a declared block with Stop not refusing is the lead's own word
+    expect(blockReasons(true, ['team gate'], 'T2 read ghost.py').long).toBe('needs you');
   });
   test('the figure is the plan\'s own at every width', () => {
     const m = mission({ openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py', stopGates: ['1 todo open'] });
@@ -62,14 +79,15 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
 
 describe('A2: blocked is one red square, warnings keep the amber triangle, counts are words', () => {
   test('tokens', () => {
-    expect(STATE_GLYPHS.blocked).toBe('■');
+    expect(STATE_GLYPHS.blocked).toBe('▣');
+    expect(STATE_GLYPHS.failed).toBe('■');
     expect(STATE_TOKEN.blocked).toBe('bad');
     expect(warnMark(ui).t).toBe('▲');
   });
   test('the band never prints a bare glyph-and-number count (`▲1 · ■2`) at any width', () => {
     const m = mission({ todoBlocked: 1, workers: [{ name: 'a', state: 'failed', secs: 1 }, { name: 'b', state: 'failed', secs: 1 }, { name: 'c', state: 'running', secs: 1 }] });
-    for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[■▲◐◇◉]\d/);
-    for (const cols of [50, 40]) expect(band({ ...m, cols })).not.toMatch(/[■▲]1/); // narrower than the word forms: the blocked count is dropped, never a bare glyph and number
+    for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[■▣▲◐◇◉]\d/);
+    for (const cols of [50, 40]) expect(band({ ...m, cols })).not.toMatch(/[■▣▲]1/); // narrower than the word forms: the blocked count is dropped, never a bare glyph and number
     expect(band({ ...m, cols: 73 })).toContain('1 running');
     expect(band({ ...m, cols: 110 })).toContain('2 failed');
   });

@@ -233,6 +233,15 @@ describe('/atlas-core and the header tally', () => {
     expect(s.rec.commands).toContain('atlas-core');
   });
 
+  // Critique 17 A5: a reply with no header line leaves the lead's last declared phase (null reset the route to `research 1/5` beside a DONE chip).
+  test('a main-agent answer with no header line keeps the last header phase', async () => {
+    const s = await session(false);
+    const e = (answer: string) => ({ reason: 'answer', answer, agentId: undefined, isAborted: false });
+    for (const h of s.all('turn.complete', ['reason', 'answer'])) await h(s.$, e('ATLAS | 🔧 implement | wiring'), noopNext).catch(() => undefined);
+    for (const h of s.all('turn.complete', ['reason', 'answer'])) await h(s.$, e('no header here'), noopNext).catch(() => undefined);
+    expect((await s.state.get({ plugin: 'atlas', key: 'headerPhase' })).value).toBe('implement');
+  });
+
   test('main-agent answers bump the header tally; a matching header bumps ok', async () => {
     const s = await session(false);
     const e = (answer: string) => ({ reason: 'answer', answer, agentId: undefined, isAborted: false });

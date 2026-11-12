@@ -10,12 +10,13 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, clip, gauge, markOf, markToken, RETURNED, ribbon, runsCells, spinFrameOf, stateChip, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, clip, DONE_DOUBT, gauge, markOf, markToken, motionState, RETURNED, ribbon, runsCells, spinFrameOf, stateChip, stateRun, WORKER_FAILED, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */
-export type BoardRow = { label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`ended`: the agent is gone, the store row is still open). */ word?: string; owner: string; detail: string; elapsed?: { secs: number; of?: number }; ownerState?: UiState; focus?: boolean };
+export type BoardRow = { label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`ended`: the agent is gone, the store row is still open). */ word?: string; owner: string; detail: string; elapsed?: { secs: number; of?: number }; ownerState?: UiState; focus?: boolean; /** The open dispatch rows folded into this plan row (critique 17 A3): the board footer names each one (the plan row's title and its worker). */ openDispatch?: OpenDispatch[] };
+export type OpenDispatch = { title: string; owner: string };
 
 /** Column starts of the full form, and the compact form's state column. */
 export const COL = { state: 30, owner: 42, detail: 62, stateCompact: 26 } as const;
@@ -30,7 +31,7 @@ const LABEL_MIN = 16; // the least label room the narrow form keeps before it dr
 
 /** `estimate_s`: the item's own estimate in seconds, when the board records one. `ownerState`: the state word of the item's
  * owner when the caller knows the worker (data/live.ts); a failed or waiting owner shows on the item. */
-export type BoardSource = { content: string; status: string; owner?: string; evidence?: string; claimed_at?: number | null; completed_at?: number | null; origin?: string; estimate_s?: number | null; ownerState?: UiState };
+export type BoardSource = { content: string; status: string; owner?: string; evidence?: string; claimed_at?: number | null; completed_at?: number | null; origin?: string; estimate_s?: number | null; ownerState?: UiState; openDispatch?: OpenDispatch[] };
 
 /** The six-word vocabulary for a todo status; an unknown status reads as queued. */
 export function stateOfStatus(status: string): UiState {
@@ -75,10 +76,12 @@ export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
   // Named only when it adds to the item's own word (a failed owner already reads `failed`; a waiting owner reads `blocked` and is named).
   const ownerState = state !== 'done' && (it.ownerState === 'failed' || it.ownerState === 'waiting' || it.ownerState === 'blocked') && it.ownerState !== state ? it.ownerState : undefined;
   const ended = it.status === 'ended';
-  const base = { label: bare(it.content), state, ...(ended ? { word: RETURNED } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}) };
+  // Critique 17 A1: a completed row whose worker failed or was killed reads `done` in the amber tone (the lead may have finished it), with the detail `worker failed`.
+  const doubt = state === 'done' && it.ownerState === 'failed';
+  const base = { label: bare(it.content), state, ...(ended ? { word: RETURNED } : doubt ? { word: DONE_DOUBT } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}), ...(it.openDispatch?.length ? { openDispatch: it.openDispatch } : {}) };
   const ev = cleanEvidence(it.evidence);
-  const detail = ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
-  if (state === 'done' && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
+  const detail = doubt ? WORKER_FAILED : ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
+  if (state === 'done' && !doubt && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
   if (state === 'running' && it.claimed_at && nowSecs !== undefined && nowSecs >= it.claimed_at) {
     const est = typeof it.estimate_s === 'number' && it.estimate_s > 0 ? it.estimate_s : undefined;
     return { ...base, detail, elapsed: { secs: nowSecs - it.claimed_at, ...(est ? { of: est } : {}) } };
@@ -117,19 +120,21 @@ function foldBoard(items: readonly BoardSource[]): { rows: BoardSource[]; folded
   const alone: BoardSource[] = [];
   let count = 0;
   let open = 0;
+  const opens: OpenDispatch[][] = []; // plan row index -> its open folded dispatch rows (named by the footer)
   for (const d of dispatch) {
     const at = d.owner ? firstOf.get(d.owner) : undefined;
     if (at === undefined) { alone.push(d); continue; }
     const p = folded[at]!;
     // An open dispatch row under a plan row that already reads done is the row Stop counts (critique 15 B5, stoprun f0090: the fold hid `tc9cd5be6` and the lead had to list the
     // board on the command line): it is never folded away, it is its own row with its owner, and the plan row stays as the lead closed it.
-    if (finished(p.status) && !finished(d.status)) { alone.push(d); continue; }
+    if (finished(p.status) && !finished(d.status)) { if (d.ownerState === 'failed' && p.ownerState === undefined) folded[at] = { ...p, ownerState: 'failed' }; alone.push(d); continue; }
     count++;
-    if (!finished(d.status)) open++;
-    if (finished(p.status)) continue;
+    if (!finished(d.status)) { open++; (opens[at] ??= []).push({ title: bare(p.content), owner: d.owner! }); }
+    if (finished(p.status)) { if (d.ownerState === 'failed' && p.ownerState === undefined) folded[at] = { ...p, ownerState: 'failed' }; continue; } // a finished row keeps its worker's failure: it reads `done`, amber
     const pick = p.status !== 'blocked' && (FOLD_RANK[d.status] ?? 0) > (FOLD_RANK[p.status] ?? 1) ? foldStatus(d.status) : p.status; // a plan row the lead marked blocked stays blocked under a failed dispatch row
     folded[at] = { ...p, status: pick, claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
   }
+  opens.forEach((o, at) => { folded[at] = { ...folded[at]!, openDispatch: o }; });
   return { rows: [...folded, ...alone], folded: count, open };
 }
 
@@ -184,13 +189,15 @@ function detailRuns(row: BoardRow, o: BoardOpts, room: number): Run[] {
 /** One row, mid-transition when `o.motion` holds an entry for `o.key`. */
 export function boardRow(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const runs = boardRowResting(row, focus, o);
-  return o.key === undefined ? runs : animateRow(runs, o.key, row.state, o.motion, o.ui);
+  return o.key === undefined ? runs : animateRow(runs, o.key, accentOf(row), o.motion, o.ui);
 }
 
+/** The accent a row's motion leads with: its state, except a doubted done (critique 17 A1), which leads amber and never pops the done disc. */
+const accentOf = (row: BoardRow): MarkState => (markOf(row.state, row.word) === 'doubt' ? 'doubt' : row.state);
 /** The motion keys of `rows`, one per row, a repeated label numbered. */
 const boardKeys = (rows: readonly BoardRow[]): string[] => keysOf('board', rows.map((x) => x.label));
 /** What the Motion observes of a board: each row's key and state word. */
-export const boardMotionItems = (rows: readonly BoardRow[]): MotionItem[] => boardKeys(rows).map((key, i) => ({ key, state: rows[i]!.state }));
+export const boardMotionItems = (rows: readonly BoardRow[]): MotionItem[] => boardKeys(rows).map((key, i) => ({ key, state: motionState(rows[i]!.state, rows[i]!.word) }));
 
 /** Labels cut to `w` cells for one list: a label that fits stays whole, a longer one loses its end (`clip` ends in `…`). Never the front, never the
  * middle: rows with one shared head stay apart by their owner column, not by a different cut. */
@@ -205,14 +212,14 @@ function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   // Full form: done struck in sub, the focus bold. The 80 mock draws labels plain (text), the 40 mock dims a done one (sub).
   const text = o.shown ?? row.label;
   const labelRun = (w: number): Run =>
-    f === 'full' ? (row.state === 'done' ? r(clip(text, w), 'sub', { strike: true }) : r(clip(text, w), 'text', { bold: focus }))
+    f === 'full' ? (row.state === 'done' && markOf(row.state, row.word) !== 'doubt' ? r(clip(text, w), 'sub', { strike: true }) : r(clip(text, w), 'text', { bold: focus }))
       : r(clip(text, w), f === 'narrow' && row.state === 'done' ? 'sub' : 'text');
   if (f === 'narrow') return [...head, labelRun(Math.max(1, o.cols - 4))];
   const stateCol = f === 'full' ? COL.state : (o.stateCol ?? COL.stateCompact);
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
   const word = row.word ?? row.state;
   if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + (o.wordW ?? STATE_W) + 2), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
-  const stateCell = o.rich ? (row.word ? chip(word, markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word);
+  const stateCell = o.rich ? (row.word ? chip(word, markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word, markOf(row.state, row.word) === 'doubt' ? 'warn' : 'text');
   const withState = to([...withLabel, stateCell], COL.owner);
   const owner = to([...withState, ...(row.owner ? [r(clip(row.owner, OWNER_W), 'sub')] : [])], COL.detail);
   return [...owner, ...detailRuns(row, o, Math.max(0, o.cols - COL.detail - 1))];
@@ -272,7 +279,9 @@ export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[]
   const count = !withRibbon || !o.rich ? '' : `${rows.length} items · `;
   // An open folded dispatch row is what Stop counts: the footer names it instead of the quiet fold count.
   const note = k > 0 ? r(`  ${count}${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : r(`  ${count}${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted');
-  const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }] : [];
+  // Critique 17 A3: the open row is unfolded and named (the plan row's title and its worker), never only counted.
+  const named: BoardLine[] = k > 0 ? rows.flatMap((x) => (x.openDispatch ?? []).map((d): BoardLine => ({ runs: [r(clip(`    open: ${d.title}${d.owner ? ` · ${d.owner}` : ''}`, Math.max(1, o.cols - 1)), 'warn')] }))) : [];
+  const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }, ...named] : [];
   // `title: false`: the side panel's own ribbon already reads `▸ BOARD  5 items` (critique 15 B5: the live scorer finds the board by the capsule beside `▸ BOARD`), so no second title row.
   const title: BoardLine[] = withRibbon || o.title === false ? [] : [{ runs: [r(o.ui.ascii ? '  > ' : '  ▸ ', 'muted'), r('BOARD', 'text', { bold: true }), ...(rows.length > 0 ? [r(`  ${rows.length} items`, 'muted')] : [])] }];
   return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : title), ...boardBody(rows, o), ...footer];
