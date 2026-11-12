@@ -294,7 +294,6 @@ async function nowMs($: EngineInterface): Promise<number | null> {
 }
 
 export function registerRestyle(on: On): void {
- let engine: EngineInterface | null = null
  const cache: { envOff?: boolean } = {}
  const tracker: ReceiptTracker = {}
  const outcomes = new Map<string, Outcome>() // ended workers' result lines, per registration
@@ -332,7 +331,8 @@ export function registerRestyle(on: On): void {
    // A message drawn before anything primed the env read (a session's first reply, a turn the engine started without our turn.start) used to wait on `ready`'s promise and
    // paint the host's raw `● ATLAS | ...` row meanwhile (critique 22: 24 raw frames in 11 of 12 runs). The bundled pattern needs no read, so the chip answers at once; the env read
    // is primed behind it, and ATLAS_MOD=off is honoured from the next draw.
-   engine = $
+   // The Stop-refusal listener (below) calls `$.ui.invalidate` at the call site: the host refuses `$` stored, passed or returned from a hook, so it is re-armed here per draw.
+   onSuperseded(() => { void Promise.resolve().then(() => { try { $.ui.invalidate('ui.render') } catch { /* nothing drawn to refresh */ } }) })
    if (leadUi === null) void lookOf($).then((l) => { leadUi = l.ui }, () => undefined)
    if (cache.envOff === undefined) void primeEnv($, cache).catch(() => undefined)
    const known = cache.envOff !== true ? patternSnap() : null
@@ -404,6 +404,4 @@ export function registerRestyle(on: On): void {
    return shown === null ? base : { ...base, displayContent: shown }
   } catch { return base }
  })
- // A Stop refusal overturns the done chips drawn before it: the answers the host cached for them are dropped the moment it arrives.
- onSuperseded(() => { void Promise.resolve().then(() => { try { engine?.ui.invalidate('ui.render') } catch { /* nothing drawn to refresh */ } }) })
 }

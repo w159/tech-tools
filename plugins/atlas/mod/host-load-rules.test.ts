@@ -1,7 +1,9 @@
 // The live host (claude 2.1.322) refuses to load a mod that breaks its static rules and drops the WHOLE mod (no band, HUD, cards or panel), while every
 // unit test here still passes against fakes. register-hooks.test.ts holds rule 1 (one unmatched `on(event)` per event). This file holds rule 2:
 // the context `$` may be passed only to a function declared at the top level of the same file, or imported from the mod's own files. Not
-// `deps.x?.($)`, not a local const bound to a dep, not a method call. It reads the source the host loads: mod/** and omp/*.ts, tests excluded.
+// `deps.x?.($)`, not a local const bound to a dep, not a method call. Rule 3: `$` is never assigned, stored, returned or spread (`engine = $`
+// took the whole mod down at 09a0dd86: "$ itself is assigned (bound, passed, spread, returned or read); $ is always spelled $.noun.event(...) at the
+// call site"); rule 4: no .json import and no dynamic import() in mod code. It reads the source the host loads: mod/** and omp/*.ts, tests excluded.
 import { describe, expect, test } from 'claude-code/testing';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -109,6 +111,72 @@ export function hostLoadViolations(file: string, source: string): string[] {
   return found;
 }
 
+/** `code` with regex literal bodies blanked (`/x$/` holds no `$` reference): a `/` after an operator, an opening bracket, `,`, `;` or a keyword starts one. */
+function noRegex(code: string): string {
+  let out = '';
+  let last = ''; // the last token: a word or one punctuation character
+  for (let i = 0; i < code.length; i++) {
+    const c = code[i]!;
+    if (c === '/' && code[i + 1] !== '/' && code[i + 1] !== '*' && (last === '' || /^[(,=:\[!&|?{};+\-*%<>~^]$/.test(last) || /^(?:return|typeof|case|void|in|of)$/.test(last))) {
+      let j = i + 1;
+      let cls = false;
+      while (j < code.length && code[j] !== '\n' && (cls || code[j] !== '/')) { if (code[j] === '\\') j++; else if (code[j] === '[') cls = true; else if (code[j] === ']') cls = false; j++; }
+      if (code[j] === '/') { out += '/' + ' '.repeat(j - i - 1) + '/'; i = j; last = '/'; continue; }
+    }
+    out += c;
+    if (/[\w$]/.test(c)) { let j = i; while (/[\w$]/.test(code[j + 1] ?? '')) { j++; } out += code.slice(i + 1, j + 1); last = code.slice(i, j + 1); i = j; } else if (!/\s/.test(c)) last = c;
+  }
+  return out;
+}
+
+/** Rule 3: every `$` that is bound, stored, returned, spread or read bare (not `$.noun.event(...)`, not an argument or a parameter), as `file:line  why`. */
+export function hostBindViolations(file: string, source: string): string[] {
+  const code = noRegex(codeOnly(source));
+  const lineOf = (at: number): number => code.slice(0, at).split('\n').length;
+  const found: string[] = [];
+  for (const m of code.matchAll(/(?<![\w$])\$(?![\w$:{])/g)) {
+    const at = m.index!;
+    if (code[at - 1] === '.' && code.slice(at - 3, at) !== '...') continue; // a property named $, not the context
+    let after = at + 1;
+    while (/\s/.test(code[after] ?? '')) after++;
+    const next = code.slice(after, after + 2);
+    let before = at - 1;
+    while (before >= 0 && /\s/.test(code[before]!)) before--;
+    const prev = code.slice(Math.max(0, before - 6), before + 1);
+    const nextBad = after >= code.length || /^[;}\]|&+\-*\/<>!]/.test(next) || (next[0] === '?' && next[1] !== '.') || (next[0] === '=' && next[1] !== '>');
+    const prevBad = /(?:[^=!<>]=|\.\.\.|[\[:?|&]|\breturn|\byield|\bawait|\btypeof|=>)$/.test(prev);
+    if (next[0] === '.' || next === '?.') continue; // `$.noun.event(...)` and `$.plugin.root`: the context spelled at the use site
+    if (nextBad || prevBad) found.push(`${relative(ROOT, file)}:${lineOf(at)}  $ is assigned, stored, returned, spread or read; the host drops the whole mod`);
+  }
+  return found;
+}
+
+/** Rule 4 on one file the host loads: no dynamic import(), no .json import. */
+export function hostImportViolations(file: string, source: string): string[] {
+  const code = noRegex(codeOnly(source));
+  const found: string[] = [];
+  for (const m of code.matchAll(/(?<![\w$.])import\s*\(/g)) found.push(`${relative(ROOT, file)}:${code.slice(0, m.index!).split('\n').length}  dynamic import(); use an import declaration`);
+  for (const m of source.matchAll(/^import\s+(?!type\b)[^;]*?from\s+['"][^'"]+\.json['"]/gm)) found.push(`${relative(ROOT, file)}:${source.slice(0, m.index!).split('\n').length}  .json import; the host refuses it (use a code module)`);
+  return found;
+}
+
+/** The files the host reaches from the hooks module `entry` through relative import/export declarations (a CLI only a test imports is not loaded). */
+function reachable(entry: string): string[] {
+  const seen = new Set<string>();
+  const queue = [entry];
+  while (queue.length) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    for (const m of readFileSync(file, 'utf8').matchAll(/^(?:import|export)\s+(?!type\b)[^;'"]*?from\s+['"](\.[^'"]*)['"]|^import\s+['"](\.[^'"]*)['"]/gm)) {
+      const base = resolve(dirname(file), (m[1] ?? m[2])!);
+      const hit = [base, `${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), join(base, 'index.tsx')].find((c) => { try { return statSync(c).isFile(); } catch { return false; } });
+      if (hit && /\.tsx?$/.test(hit)) queue.push(hit);
+    }
+  }
+  return [...seen];
+}
+
 function sources(dir: string, deep: boolean): string[] {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
@@ -156,5 +224,24 @@ describe('host load rule 2: $ is passed only to a top-level function of the same
     expect(files.length).toBeGreaterThan(50);
     const out = files.flatMap((f) => hostLoadViolations(f, readFileSync(f, 'utf8')));
     expect(out).toEqual([]);
+  });
+  test('every source file the host loads never assigns, stores, returns or spreads $', () => {
+    const files = [...sources(join(ROOT, 'mod'), true), ...sources(join(ROOT, 'omp'), false)];
+    expect(files.flatMap((f) => hostBindViolations(f, readFileSync(f, 'utf8')))).toEqual([]);
+  });
+  test('every file reachable from mod/register.ts has no .json import and no dynamic import()', () => {
+    const files = reachable(join(ROOT, 'mod', 'register.ts'));
+    expect(files.length).toBeGreaterThan(30);
+    expect(files.flatMap((f) => hostImportViolations(f, readFileSync(f, 'utf8')))).toEqual([]);
+  });
+  test('rule 3 and 4: the 09a0dd86 shape and its siblings are caught, the call-site shapes pass', () => {
+    const file = join(ROOT, 'mod', 'seed.ts');
+    const wrap = (stmt: string): string => `export function reg(on: any) {\n  let engine: any = null;\n  on('x', async ($: any, e: any) => {\n    ${stmt}\n  });\n}\n`;
+    const bad = ['engine = $', 'const c = $;', 'return $', 'const { ui } = $;', 'const o = { ctx: $ };', 'const o = { $ };', 'const a = [$];', 'const f = () => $;', 'const k = $ || null;', 'const s = { ...$ };'];
+    for (const stmt of bad) expect([stmt, hostBindViolations(file, wrap(stmt)).length]).toEqual([stmt, 1]);
+    const good = ["$.ui.invalidate('ui.render')", "void Promise.resolve().then(() => { try { $.ui.invalidate('x') } catch {} })", 'await lookOf($)', "const t = await $.clock.now()", "const q = $?.ui?.log('x')", "const note = 'engine = $'; // engine = $"];
+    for (const stmt of good) expect([stmt, hostBindViolations(file, wrap(stmt).replace('export function', "import { lookOf } from './look';\nexport function"))]).toEqual([stmt, []]);
+    expect(hostImportViolations(file, "import c from '../contracts/operating-contract.json';\n").length).toBe(1);
+    expect(hostImportViolations(file, "import type c from '../contracts/operating-contract.json';\nconst m = await import('./x');\n").length).toBe(1);
   });
 });

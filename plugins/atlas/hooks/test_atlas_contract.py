@@ -1855,6 +1855,19 @@ class DisplayChecksContract(unittest.TestCase):
         hooks = json.loads((PLUGIN_ROOT / "hooks" / "hooks.json").read_text("utf-8"))
         self.assertIn("../mod/register.ts", hooks.get("modules", []))
 
+    def test_mod_never_stores_the_host_context(self):
+        """The host drops the whole mod when `$` is assigned, bound, returned or spread (09a0dd86: `engine = $`); mod/host-load-rules.test.ts is the full check."""
+        bad = re.compile(r"(?:[^=!<>]=\s*|return\s+|\.\.\.)\$\s*(?:[;\n}\])]|$)")
+        hits = []
+        for f in sorted((PLUGIN_ROOT / "mod").rglob("*.ts*")):
+            if re.search(r"\.(test|mut\.test)\.tsx?$|\.d\.ts$", f.name) or "fixtures" in f.parts or "node_modules" in f.parts:
+                continue
+            for n, line in enumerate(f.read_text("utf-8").splitlines(), 1):
+                code = line.split("//")[0]
+                if bad.search(code):
+                    hits.append(f"{f.relative_to(PLUGIN_ROOT)}:{n}: {line.strip()}")
+        self.assertEqual(hits, [])
+
 
 class ModTypesContractSync(unittest.TestCase):
     """types/index.d.ts must stay self-contained, so it carries a copy of the snapshot types in mod/contract.ts."""
