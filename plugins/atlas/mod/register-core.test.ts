@@ -242,6 +242,17 @@ describe('/atlas-core and the header tally', () => {
     expect((await s.state.get({ plugin: 'atlas', key: 'headerPhase' })).value).toBe('implement');
   });
 
+  // Critique 18 A4 (stoprun-150-562576ed-2 f0097): the reply's header says RESEARCH while the text waits on the person; the band and the route read the blocked phase.
+  test('a main-agent answer that waits on the person is the blocked phase, whatever its header says; the tally still counts the header', async () => {
+    const s = await session(false);
+    const e = (answer: string) => ({ reason: 'answer', answer, agentId: undefined, isAborted: false });
+    for (const h of s.all('turn.complete', ['reason', 'answer'])) await h(s.$, e('ATLAS | 🔍 research | 2/5 waiting\nStill open:\n- T3: beta-explorer was stopped.\n  Waiting on your decision.\nChoose one:\n1. re-dispatch'), noopNext).catch(() => undefined);
+    expect((await s.state.get({ plugin: 'atlas', key: 'headerPhase' })).value).toBe('blocked');
+    expect((await s.state.get({ plugin: 'atlas', key: 'headerTally' })).value).toMatchObject({ ok: expect.any(Number), total: 1 });
+    for (const h of s.all('turn.complete', ['reason', 'answer'])) await h(s.$, e('ATLAS | 🔧 implement | wiring the fix'), noopNext).catch(() => undefined);
+    expect((await s.state.get({ plugin: 'atlas', key: 'headerPhase' })).value).toBe('implement'); // the lead's next words end it
+  });
+
   test('main-agent answers bump the header tally; a matching header bumps ok', async () => {
     const s = await session(false);
     const e = (answer: string) => ({ reason: 'answer', answer, agentId: undefined, isAborted: false });

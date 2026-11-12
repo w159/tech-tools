@@ -66,7 +66,7 @@ describe('runstate: blocked shows glyph, word and reason at every width; a faili
     const gates = gateTally([stop('1 todo open')] as never).stop!.gates;
     expect(gates).toEqual(['1 todo open']);
     for (const cols of [60, 80, 110, 150]) {
-      const t = runsText(bandLines(model({ cols, stopGates: gates }))[0]!.runs);
+      const t = runsText(bandLines(model({ cols, stopGates: gates, done: 4, openWork: 1 }))[0]!.runs); // an open plan row: `4/5` and `1 todo open` agree (a full plan reads `retry stop`, critique 18 A1)
       expect(t).toContain('blocked: 1 todo open');
       expect(t).not.toContain('stop:');
       expect(t).not.toMatch(/\br\b/);

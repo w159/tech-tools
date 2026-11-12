@@ -43,7 +43,7 @@ describe('C5: the core tab says what happened', () => {
     for (const w of [37, 60, 80, 120]) expect([w, body('core', w, { core: c }).join('\n').includes('drift')]).toEqual([w, false]);
   });
   test('the seat row says "off plan" where it used to say "drift" and then "differs"', () => {
-    expect(text).toMatch(/3x explorer +too many +3 ran, the plan said 1/);
+    expect(text).toMatch(/3 explorers +too many +asked for 1 on haiku/);
   });
 });
 

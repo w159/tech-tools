@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Critique 18 slice A: one truth on the band, route, gates and core. A1 a refusal on open rows is read against the store now, so `1 todo open` never sits beside `todo 5/5` (a named dispatch row, `stop refused`, or `retry stop` once nothing is open); A2 the gates figure counts the green marks drawn (`◇` pending and `▲` are not green: `2/4 green`); A3 a middle dot between every band segment and no bare `■2` while a form with the words fits (ctx, then the open note, then the queued count, then the blocked count give way first); A4 a lead reply that waits on the person (`asksUser`) is the blocked phase on the band (`needs you`) and the route, on Claude Code and omp; A5 the core tab says `done items`, `3 explorers  too many  asked for 1 on haiku` and `3 workers finished, token count not kept`. Goldens updated.
+
 - Wave 18 integration: the live host loader refuses a `.json` import from a hooks module (`hooks module atlas@inline failed to load: ... is not named like code`), so `mod/restyle.tsx` reads the header pattern from `mod/contract-pattern.ts` (`HEADER_FIRST_LINE_PATTERN`), and `mod/contract-pattern.test.ts` keeps it equal to `contracts/operating-contract.json`.
 - Critique 17 A1: a TODO or board row whose owner failed or was killed never renders plain green `done`: it reads `done` in the amber warn tone with `worker failed`, with no fade-to-done pop; one derivation (`todoState`, `toBoardRow`, `motionState`) feeds HUD, route and board, including the plan row beside an open dispatch row. T3 reading `failed` over a `pending` store row is deliberate: the lead's TaskStop killed its worker.
 - Critique 17 A2: blocked has its own glyph `▣` in the bad tone (ASCII `#`); `■` stays failed (ASCII `x`). Goldens regenerated.

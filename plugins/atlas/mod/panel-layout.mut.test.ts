@@ -21,9 +21,9 @@ const core = (over: Partial<CoreModel> = {}): CoreModel => ({
 const runs = (c: CoreModel, cols = 120, over: Partial<PanelModel> = {}) => bodyLines(panelWorld('core', cols, mocha, { core: c, ...over })).flatMap((l) => l.runs);
 
 describe('core headings', () => {
-  test('contract and dispatch titles are bold', () => {
+  test('done-items and dispatch titles are bold', () => {
     const rs = runs(core());
-    expect(rs.find((x) => x.t === '    contract')?.bold).toBe(true);
+    expect(rs.find((x) => x.t === '    done items')?.bold).toBe(true);
     expect(rs.find((x) => x.t === '    teams')?.bold).toBe(true);
   });
 });
