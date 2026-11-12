@@ -234,12 +234,13 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const fig = figure(m);
   const todo = m.total ? `${fig.done}/${fig.total}${openMore(m)}` : '';
   const blockedWords = blockedRuns(m, ui, true);
+  const glue: Run = openMore(m) ? r(' · ', 'sub') : r(' '); // `4/5 · 1 dispatch open · ▣ 1 blocked`: a named fact is not glued to the next count (critique 17 A4)
   // Below GAUGE_MIN the one-row band carries figures, not gauges: an empty `░░░` track beside `0 of 5` (critique 9, the 110 band) says nothing the figure does not.
   const full = (noun: boolean, ctxGauge: boolean, gap: string, gw = 10, gauges = true): Run[] => {
     const counts = bandCounts(m, ui, true, noun, gap);
     return [
       ...cap, r('  '), ...name,
-      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${fig.done}/${fig.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
+      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${fig.done}/${fig.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [glue, ...blockedWords] : [])] : []),
       ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge && gauges ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
       ...(counts.length ? [r(gap), ...counts] : []),
     ];
@@ -251,15 +252,17 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const stdCounts = bandCounts(m, ui, true, false, ' · ');
   const ctxSeg: Run[] = m.ctx !== undefined ? [r(' · ', 'sub'), r('ctx '), r(percent(m.ctx), 'sub')] : [];
   // Critique 16 A2: the counts keep their words down to 50 columns (`■ 1 blocked · ◐ 1 running`); the bare glyph-and-number forms (`■1 · ◐1`) are the last fallbacks only.
-  const wordTail = (cs: Run[]): Run[] => [...(blockedWords.length ? [r(' '), ...blockedWords] : []), ...(cs.length ? [r(' · ', 'sub'), ...cs] : [])];
+  const wordTail = (cs: Run[]): Run[] => [...(blockedWords.length ? [glue, ...blockedWords] : []), ...(cs.length ? [r(' · ', 'sub'), ...cs] : [])];
   const compact = (word: string, cs: Run[], why: string, t: (cs: Run[]) => Run[] = tail): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word)}`, 'sub')] : [r(` ${lead}${midTodo(word)}`, 'sub')]), ...t(cs)];
   const out: Form[] = [
     { runs: full(true, true, '   '), min: GAUGE_MIN }, { runs: full(true, false, '  ', 8), min: GAUGE_MIN },
     { runs: full(false, true, '   '), min: GAUGE_MIN }, { runs: full(false, false, '  ', 8), min: GAUGE_MIN },
     // Critique 12 A3: from STD_MIN to 119 columns the band is one layout with one separator (` · `). The old 100-119 form (triple-space gaps, an `agents` noun)
     // made one snapshot read differently at 110 (undocked, body 105) and 150 (docked beside the 56-column pane, body 93).
-    { runs: [...cap, r(' '), ...name, ...(m.total ? [r(` · todo ${todo}`, 'sub')] : []), ...(blockedWords.length ? [r(' '), ...blockedWords] : []), ...ctxSeg, ...(stdCounts.length ? [r(' · ', 'sub'), ...stdCounts] : [])], min: STD_MIN },
+    { runs: [...cap, r(' '), ...name, ...(m.total ? [r(` · todo ${todo}`, 'sub')] : []), ...(blockedWords.length ? [glue, ...blockedWords] : []), ...ctxSeg, ...(stdCounts.length ? [r(' · ', 'sub'), ...stdCounts] : [])], min: STD_MIN },
     { runs: compact('phase', stdCounts, reason.long, wordTail), min: 80 },
+    // Critique 17 A4: before the bare count (`■1`) the blocked count's words drop (the head already says blocked): `... open · todo 4/5 · ■ 1 failed` keeps the failed word at 80 columns.
+    { runs: compact('phase', stdCounts, reason.long), min: 80 },
     { runs: compact('phase', stdCounts, reason.short, wordTail), min: 50 },
     { runs: compact('ph', stdCounts, reason.short, wordTail), min: 50 },
     { runs: compact('phase', tiny, reason.short), min: 50 },
@@ -268,7 +271,9 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   if (blocked) {
     const todoPart = todo ? [r(` todo ${todo}`, 'sub')] : [];
     const small = (...parts: Run[][]): Run[] => [...cap, r(' '), ...flagHead(ui, st, reason.short), ...parts.flat()];
-    out.push({ runs: small(todoPart, tail(tiny)), min: 0 }, { runs: small(todoPart), min: 0 }, { runs: small(), min: 0 }, { runs: [...cap, r(' '), ...flagHead(ui, st)], min: 0 });
+    // Critique 17 A4: the narrow forms keep the words as long as they fit (`◖ ◆ ATLAS ◗ ▣ blocked: ... todo 4/5 · ■ 1 failed`), so the row never stops at `todo 4/5 · ■1` with columns to spare.
+    out.push(
+      { runs: small(todoPart, wordTail(stdCounts)), min: 0 }, { runs: small(todoPart, wordTail([])), min: 0 }, { runs: small(todoPart, tail(tiny)), min: 0 }, { runs: small(todoPart), min: 0 }, { runs: small(), min: 0 }, { runs: [...cap, r(' '), ...flagHead(ui, st)], min: 0 });
   } else out.push({ runs: [...cap, r(`${idle ? ' idle' : ''}${todo ? `${quiet(m) ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...tail(tiny)], min: 0 });
   return out;
 }

@@ -337,12 +337,11 @@ export function registerRestyle(on: On): void {
   } catch { return next(e) }
  })
 
- // Turn clock at turn start. A header phase belongs to the turn that wrote
- // it, so a new turn starts without one (the engine allows one un-matchered turn.start per module: this one).
- // ponytail: turn.start carries no loop id, so a subagent's turn start clears it too; the next answer restores it.
+ // Turn clock at turn start (the engine allows one un-matchered turn.start per module: this one). The header phase is NOT dropped here: turn.start carries no
+ // loop id, so a subagent's turn and a Stop-hook continuation turn start it too, and the route read `research 1/5` beside a DONE chip (critique 17 A5). A person's
+ // prompt drops it instead (register.ts, the one prompt.submit hook).
  on('turn.start', async ($, e, next) => {
   tracker.turnStart = await nowMs($)
-  await update($, headerPhaseState, () => null).catch(() => undefined)
   return next(e)
  })
 

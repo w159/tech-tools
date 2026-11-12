@@ -117,7 +117,7 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), stateRun(markOf(r.state, r.word), ui, spinOf(o, r.owner || r.id || r.label)), t(' ')]; // the cursor marks work in hand, never a queued row; the spinner turns the owner's (else the item's id) phase, as the side panel does
   const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
   const text = clip(flat(r.label), labelW);
-  const label = r.state === 'done' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
+  const label = r.state === 'done' && markOf(r.state, r.word) !== 'doubt' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
   if (stateAt === 0) return [...head, label];
   const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(r.word ?? r.state, rowWordTone(r.state, r.word))];
   const detail = detailOf(r);

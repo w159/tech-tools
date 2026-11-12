@@ -94,13 +94,13 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(plain.rows[0]).toContain('◖ ◆ ATLAS ◗');
     expect(cells(plain.rowNodes[0]!).every((t) => t.props.color === undefined && t.props.backgroundColor === undefined)).toBe(true);
   });
-  test('blocked reads `■ blocked: needs you` and the phase rail keeps the last real phase lit', () => {
+  test('blocked reads `▣ blocked: needs you` and the phase rail keeps the last real phase lit', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
     const { rows } = panel(160, { snapshot, live: [], lastPhase: 'implement', rich: true });
     expect(rows[0]).toContain('▸ 4 implement');
     const band = panel(160, { snapshot, live: [], lastPhase: 'implement' }).rows[0]!;
-    expect(band).toContain('■ blocked: needs you');
+    expect(band).toContain('▣ blocked: needs you');
     expect(band).not.toContain('idle');
   });
   test('rich: capsule with the numbered phase rail, a blank row, then the gauges', () => {
@@ -298,7 +298,7 @@ describe('the board slot', () => {
   test('expanded lists every item right under the band (header, then one row each); folded costs nothing', () => {
     const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }), todoExpanded: true, maxRows: 14 });
     expect(rows[1]!.trim()).toMatch(/^ITEM +STATE +OWNER +DETAIL$/);
-    expect(rows.slice(2, 5).map((r) => r.trim().replace(/^▸ /, '').slice(0, 1))).toEqual(['●', '■', '◇']); // the in-progress item's owner waits, so the item reads blocked (data/live.ts: board state from the owner)
+    expect(rows.slice(2, 5).map((r) => r.trim().replace(/^▸ /, '').slice(0, 1))).toEqual(['●', '▣', '◇']); // the in-progress item's owner waits, so the item reads blocked (data/live.ts: board state from the owner)
     expect(rows.slice(2, 5).map((r) => r.includes('done') || r.includes('blocked') || r.includes('queued'))).toEqual([true, true, true]);
   });
   test('a tight budget shrinks the board before it takes the footer or the attention workers', () => {
@@ -308,7 +308,7 @@ describe('the board slot', () => {
     expect(rows.length).toBeLessThanOrEqual(8);
     expect(rows.some((r) => r.includes('runner-1'))).toBe(true);
     expect(rows.at(-1)).toContain('checks');
-    const boardRows = (rs: string[]) => rs.filter((r) => /^[ ▸] [●◐◓◑◒◇■▲] .* (done|running|queued|failed|blocked) /.test(r) && !/(runner|implementer|explorer) {2,}/.test(r)).length;
+    const boardRows = (rs: string[]) => rs.filter((r) => /^[ ▸] [●◐◓◑◒◇■▣▲] .* (done|running|queued|failed|blocked) /.test(r) && !/(runner|implementer|explorer) {2,}/.test(r)).length;
     expect(boardRows(roomy)).toBe(3);
     expect(boardRows(rows)).toBeLessThanOrEqual(boardRows(roomy)); // the board's header and three items fit in the 8 rows beside the attention worker and the footer
   });

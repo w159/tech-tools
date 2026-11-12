@@ -7,7 +7,7 @@ import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
-import { isPlanItem, ownTodos, planBasis, todoCounts } from './data/todos';
+import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from './data/todos';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
@@ -105,7 +105,7 @@ function openRows(s: LiveSnapshot): { openWork: number; openDispatch: number; op
   const rows = s.todos ?? [];
   const planOpen = planBasis(rows, s.sessionId).filter((it) => it.status !== 'completed').length;
   const dispatch = rows.filter((it) => (it as { origin?: string }).origin === 'dispatch');
-  const title = (openItems(dispatch, s.sessionId)[0] as { content?: string } | undefined)?.content; // the first open dispatch row, by its title (the GOAL line)
+  const title = openRowName(ownPlan(rows, s.sessionId), openItems(dispatch, s.sessionId)[0]); // the first open dispatch row, by its plan row's title (T-id and title), else its agent
   return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(dispatch, s.sessionId), ...(title ? { openDispatchTitle: title } : {}) };
 }
 

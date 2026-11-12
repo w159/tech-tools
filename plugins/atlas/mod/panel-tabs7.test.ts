@@ -36,14 +36,14 @@ describe('C5: the core tab says what happened', () => {
   c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
   const text = body('core', 120, { core: c }).join('\n');
   test('a team that ran differently reads "planned audit team (low effort), ran 3 explorers"', () => {
-    expect(text).toContain('planned audit team (low effort), ran 3 explorers');
+    expect(text).toContain('3 explorers ran, the plan said 1');
   });
   test('no jargon: not "drift", not "the plan and what ran", not "3x explorer drift", not "audit/low drift"', () => {
     for (const bad of ['drift', 'plan and what ran', 'x explorer drift']) expect([bad, text.includes(bad)]).toEqual([bad, false]);
     for (const w of [37, 60, 80, 120]) expect([w, body('core', w, { core: c }).join('\n').includes('drift')]).toEqual([w, false]);
   });
   test('the seat row says "off plan" where it used to say "drift" and then "differs"', () => {
-    expect(text).toMatch(/3x explorer +off plan +3 explorers ran, 1 planned/);
+    expect(text).toMatch(/3x explorer +too many +3 ran, the plan said 1/);
   });
 });
 

@@ -158,9 +158,9 @@ describe('core row cells', () => {
     const m = blank();
     m.verdicts = [{ id: 'v', status: 'verified', title: 't', by: 'b', at: 1, evidence: '' }];
     const at = (r: unknown) => { m.routes = [r as any]; return cellsText(coreCells(m, 500)).split('route  ')[1]?.trim(); };
-    expect(at(route({ cls: 'audit', effort: 'low', seats: [seat({ role: 'explorer', ran: ['haiku', 'haiku', 'haiku'] })], drift: ['x'] }))).toBe('planned audit team (low effort), ran 3 explorers');
-    expect(at(route({ seats: [seat({ role: 'verifier', ran: ['opus'] })], drift: ['x'] }))).toBe('planned fix team (low effort), ran 1 verifier');
-    expect(at(route({ seats: [seat()], drift: ['x'] }))).toBe('planned fix team (low effort), ran nothing');
+    expect(at(route({ cls: 'audit', effort: 'low', seats: [seat({ role: 'explorer', ran: ['haiku', 'haiku', 'haiku'] })], drift: ['x'] }))).toBe('3 explorers ran, the plan said 1');
+    expect(at(route({ seats: [seat({ role: 'verifier', ran: ['opus'] })], drift: ['x'] }))).toBe('1 verifier ran on a model the plan did not name');
+    expect(at(route({ seats: [seat()], drift: ['x'] }))).toBe('the planned fix team did not run');
     expect(cellsText(coreCells(m, 500))).not.toContain('drift');
     expect(cellsText(coreCells(m, 500))).not.toContain('■');
   });

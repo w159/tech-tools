@@ -1076,12 +1076,13 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// The one prompt.submit hook (the host refuses a second unmatched one and drops the mod): the pane opens first, before any await.
 	on('prompt.submit', async ($, e, next) => {
 		const opening = dockOnPrompt($);
+		await update($, headerPhaseState, () => null).catch(() => undefined); // a person's prompt starts new work: the last reply's header phase is not this run's (a turn.start also fires for subagents and Stop-hook continuations, which keep it)
 		const out = disciplinePrompt($, e, next, disciplineDeps);
 		await opening;
 		return out;
 	});
 
-	registerRestyle(on); // its turn.start also drops the previous turn's header phase
+	registerRestyle(on); // its turn.start only starts the turn clock; the header phase drops at prompt.submit
 	registerNotify(on, { soundEnabled: () => options.atlas_mod_sound === true });
 	soundOn = () => options.atlas_mod_sound === true;
 	// A reload drops the old copy's timers and commands, so the next boot wires them afresh.
@@ -1121,7 +1122,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			for (const msg of pendingDrift.splice(0)) $.ui.log(msg, { to: 'debug' });
 			if (e.agentId === undefined) {
 				const phase = headerPhaseOf(e.answer, await read($, snapshotState));
-				await update($, headerPhaseState, () => phase);
+				await update($, headerPhaseState, (prev) => phase ?? prev); // critique 17 A5: a reply with no header line leaves the lead's last declared phase; null reset the route to `research 1/5` beside a DONE chip
 				const seen = headerTallyOf(await leadMessages($), e.answer, await read($, snapshotState));
 				await update($, headerTallyState, (t) => ({ ok: Math.max(seen.ok, t.ok + +(phase !== null)), total: Math.max(seen.total, t.total + 1) })); // never below the per-turn count: a compacted transcript only shrinks `seen`
 				void runGates($);

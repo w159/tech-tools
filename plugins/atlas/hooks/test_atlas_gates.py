@@ -213,7 +213,7 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertIn("CHANGELOG", by_id["c"]["fix"])
         trip = {ln["id"]: ln for ln in doc["groups"][1]["lines"]}
         self.assertTrue(trip["armed"]["ok"])
-        self.assertEqual(trip["inline"]["detail"], "1 of 4")  # the logged code write
+        self.assertEqual(trip["inline"]["detail"], "1 direct calls since the last dispatch, limit 4")  # the logged code write
         self.assertEqual(trip["deny0"]["label"], "Denied: toolkit")
 
     def test_no_side_effects(self):
@@ -323,20 +323,20 @@ class AtlasGatesInProcess(unittest.TestCase):
     def test_inline_limit_default_is_four_and_strict(self):
         self._inline_ops(3)
         self.assertTrue(self._tripwire()["inline"]["ok"])
-        self.assertEqual(self._tripwire()["inline"]["detail"], "3 of 4")
+        self.assertEqual(self._tripwire()["inline"]["detail"], "3 direct calls since the last dispatch, limit 4")
         self._inline_ops(1)
         line = self._tripwire()["inline"]
-        self.assertEqual(line["detail"], "4 of 4")
+        self.assertEqual(line["detail"], "4 direct calls since the last dispatch, limit 4")
         self.assertFalse(line["ok"])
 
     def test_inline_limit_env_override_and_bad_value_fallback(self):
         self._inline_ops(4)
         with self.mock.patch.dict(os.environ, {"ATLAS_TRIPWIRE_THRESHOLD": "5"}):
             line = self._tripwire()["inline"]
-            self.assertEqual((line["ok"], line["detail"]), (True, "4 of 5"))
+            self.assertEqual((line["ok"], line["detail"]), (True, "4 direct calls since the last dispatch, limit 5"))
         with self.mock.patch.dict(os.environ, {"ATLAS_TRIPWIRE_THRESHOLD": "lots"}):
             line = self._tripwire()["inline"]
-            self.assertEqual((line["ok"], line["detail"]), (False, "4 of 4"))
+            self.assertEqual((line["ok"], line["detail"]), (False, "4 direct calls since the last dispatch, limit 4"))
 
     def test_completion_group_lists_every_gate_that_can_block_stop(self):
         """Critique 6: the team gate (s) blocks Stop but had no row. (r) is decided at Stop alone, evaluate() never fails it: no row."""
@@ -407,7 +407,7 @@ class AtlasGatesInProcess(unittest.TestCase):
         line = self._tripwire()
         self.assertEqual(line["armed"]["label"], "Team mode")
         self.assertEqual(
-            line["inline"]["label"], "Lead's own calls since last dispatch"
+            line["inline"]["label"], "Lead hands work to subagents"
         )
 
     def test_team_row_is_the_stop_gates_own_team_gate(self):

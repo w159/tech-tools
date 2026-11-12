@@ -131,7 +131,7 @@ describe('B2: no calm word beside a block', () => {
     const core = coreModel({ ...coreFixture, matrix: coreMatrix, logs: {}, todos: [], header: { ok: 1, total: 1 }, openGates: 0 });
     const done = body(panelWorld('core', 120, ui, { rows: 40, core, workers: [worker('alpha-explorer'), worker('beta-explorer')] })).join('\n');
     expect(done).not.toContain('returned nothing yet');
-    expect(done).toMatch(/2 workers returned/);
+    expect(done).toMatch(/2 workers finished/);
     const none = body(panelWorld('core', 120, ui, { rows: 40, core, workers: [] })).join('\n');
     expect(none).toContain('returned nothing yet');
   });

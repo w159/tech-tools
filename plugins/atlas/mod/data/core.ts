@@ -325,9 +325,16 @@ function seatsOf(
   }));
 }
 
-/** What a team that ran differently from its plan did, in plain words: `planned audit team (low effort), ran 3 explorers`. The band and the core tab say it the same way. */
-export const plannedText = (rt: Pick<Route, 'cls' | 'effort' | 'seats'>): string =>
-  `planned ${rt.cls} team (${rt.effort} effort), ran ${rt.seats.filter((s) => s.ran.length).map((s) => `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'}`).join(', ') || 'nothing'}`;
+/** What a team that ran differently from its plan did, in plain words a person can act on (critique 17 A6): `3 explorers ran, the plan said 1`; a seat that ran the planned
+ * number on another model reads `1 explorer ran on a model the plan did not name`. The band, the gates tab and the core tab say it the same way. */
+export const plannedText = (rt: Pick<Route, 'cls' | 'effort' | 'seats'>): string => {
+  const ran = rt.seats.filter((s) => s.ran.length);
+  const said = (s: (typeof ran)[number]): string => `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'}`;
+  const sameModel = (s: (typeof ran)[number]): boolean => s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');
+  const off = ran.filter((s) => s.ran.length !== s.count || !sameModel(s)); // the seats that differ from the plan; a seat that ran as planned is not news
+  const parts = off.map((s) => (s.ran.length !== s.count ? `${said(s)} ran, the plan said ${s.count}` : `${said(s)} ran on a model the plan did not name`));
+  return parts.join('; ') || (ran.length ? `ran ${ran.map(said).join(', ')}` : `the planned ${rt.cls} team did not run`);
+};
 
 const driftOf = (seats: readonly Seat[]): string[] =>
   seats.flatMap((s) => [

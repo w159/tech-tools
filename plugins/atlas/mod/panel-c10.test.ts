@@ -134,8 +134,8 @@ describe('C4: the core tab in plain words', () => {
   }
   test('the sentence says what was planned and what ran', () => {
     const out = text(panelWorld('core', 150, mocha, { core: c, rows: 40 })).join('\n');
-    expect(out).toContain('planned audit team (low effort), ran 3 explorers');
-    expect(out).toMatch(/3x explorer +off plan +3 explorers ran, 1 planned/);
+    expect(out).toContain('3 explorers ran, the plan said 1');
+    expect(out).toMatch(/3x explorer +too many +3 ran, the plan said 1/);
   });
   test('a long reading sentence wraps whole instead of being cut mid-phrase', () => {
     const out = text(panelWorld('core', 37, mocha, { core: { ...core, offload: { ...core.offload, workers: [] } }, workers: [worker('a'), worker('b'), worker('c')], rows: 40 })).join('\n');
@@ -143,6 +143,6 @@ describe('C4: the core tab in plain words', () => {
     expect(out).not.toMatch(/of wh\.\.\./);
     // A4: the zero-figure sentence takes its short form at this width instead of wrapping (`no token / figures kept`)
     const none = text(panelWorld('core', 37, mocha, { core: { ...core, offload: { ...core.offload, kept: 0, returned: 0, workers: [] } }, workers: [worker('a'), worker('b'), worker('c')], rows: 40 })).join('\n');
-    expect(none).toContain(' reading  3 returned, no token log');
+    expect(none).toContain(' reading  3 finished, no token log');
   });
 });

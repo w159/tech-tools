@@ -29,7 +29,7 @@ describe('A4: route rows at the 110-column pane', () => {
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       for (const r of rows.filter((x) => /T\d /.test(x) && / done\s*$/.test(x))) expect(r).toMatch(/\S {2,}done\s*$/); // a gap of two before the word
       expect(rows.filter((r) => /^\s+done\s*$/.test(r))).toHaveLength(0); // the state is never a row of its own (critique 15 C2)
-      expect(rows.filter((r) => /\S {2,}done\s*$/.test(r))).toHaveLength(5); // every task shows its state, closing its title's last line
+      expect(rows.filter((r) => !/^ phase /.test(r) && /\S {2,}done\s*$/.test(r))).toHaveLength(5); // every task shows its state, closing its title's last line
     });
   }
   test('a pane with room keeps one row per task (nothing moves to a second row)', () => {
@@ -64,8 +64,8 @@ describe('A4: core rows at the 110-column pane', () => {
       expect(text).not.toContain('...');
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       const flat = text.replace(/\s+/g, ' ');
-      for (const phrase of ['5 done without evidence', '0 verified findings so far', 'planned audit team (low effort), ran 3 explorers']) expect(flat).toContain(phrase);
-      expect(flat).toMatch(/3 returned, no token log/); // the short form of `3 workers returned, no token figures kept`, which wraps at this width
+      for (const phrase of ['5 done without evidence', '0 verified findings so far', '3 explorers ran, the plan said 1']) expect(flat).toContain(phrase);
+      expect(flat).toMatch(/3 finished, no token log/); // the short form of `3 workers finished, their token use is not recorded`, which wraps at this width
     });
     test(`pane ${cols}: a figure that does not fit beside its label goes under it, indented, not clipped`, () => {
       const rows = panelText(panelWorld('core', cols, ui, { rows: 40, core: c, todos: planDone, workers: done3 }));

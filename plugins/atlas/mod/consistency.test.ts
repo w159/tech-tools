@@ -32,7 +32,7 @@ const { renderPanel } = await ompLoad('mission-panel');
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['◐', '◓', '◑', '◒'].map((g): [string, UiState] => [g, 'running'])]);
-const G = '[◐◓◑◒◇●■▲◉]';
+const G = '[◐◓◑◒◇●■▣▲◉]';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -76,7 +76,7 @@ const todoOf = (text: string): [number, number] | undefined => {
 const GATE_NAMES = world.gates.map((g) => g.name).join('|');
 const gatePairs = (text: string): Record<string, boolean> => {
   const out: Record<string, boolean> = {};
-  for (const m of text.matchAll(new RegExp(`([●■▲]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
+  for (const m of text.matchAll(new RegExp(`([●■▣▲]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
   return out;
 };
 /** Rows `glyph name  word`: the glyph must agree with the word. */
@@ -159,7 +159,8 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
   const text = rows.join('\n');
   const f: Facts = {};
   if (tab === 'route') {
-    f.phase = /phase\s+\S+\s+(\d+)(?: of |\/)(\d+)/.exec(text)?.slice(1, 3).join('/');
+    const word = /phase\s+(\S+)/.exec(text)?.[1]; // the route names the phase by its word alone (critique 17 A5); its place on the rail is read back from the world's rail
+    f.phase = word !== undefined && expected.rail.ids.includes(word) ? `${expected.rail.ids.indexOf(word) + 1}/${expected.rail.ids.length}` : undefined;
     f.todo = todoOf(/^ todo .*$/m.exec(text)?.[0] ?? ''); // the labels sit one cell in (the tab indent)
     f.gates = gatePairs(/^ gates .*$/m.exec(text)?.[0] ?? '');
     f.gatesGreen = /(\d+)(?: of |\/)(\d+) green\s*$/m.exec(/^ gates .*$/m.exec(text)?.[0] ?? '')?.slice(1, 3).join('/');

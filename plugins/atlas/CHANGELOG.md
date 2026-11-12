@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Critique 17 A1: a TODO or board row whose owner failed or was killed never renders plain green `done`: it reads `done` in the amber warn tone with `worker failed`, with no fade-to-done pop; one derivation (`todoState`, `toBoardRow`, `motionState`) feeds HUD, route and board, including the plan row beside an open dispatch row. T3 reading `failed` over a `pending` store row is deliberate: the lead's TaskStop killed its worker.
+- Critique 17 A2: blocked has its own glyph `▣` in the bad tone (ASCII `#`); `■` stays failed (ASCII `x`). Goldens regenerated.
+- Critique 17 A3: the board footer unfolds the open dispatch row and names it (`open: T2 read ghost.py · ghost-explorer`).
+- Critique 17 A4: the blocked band names the open row by its plan title, keeps the reason stable across frames, never prints the dispatch prompt, separates the todo figure from a named open row with ` · `, and keeps `■ 1 failed` from 80 columns instead of clipping to `■1` with columns spare.
+- Critique 17 A5: the route phase follows the chip and the band: `turn.start` (also fired for subagents and Stop-hook continuations) no longer drops the header phase, `prompt.submit` does; the route phase is the word alone (`phase implement`), no `n/5`.
+- Critique 17 A6: plain words on the core and gates rows (`3 explorers ran, the plan said 1`, `Lead hands work to subagents`); the `dispatches N this session` count is the workers the dispatches ran, not 1.
 - Wave 17 integration: the channel log's `blocked` note word reads the bad tone (`rowWordTone`) like the team-row worker word, not amber `warn` (`noteRow`, `mod/panel-rows.test.ts`).
 - Critique 16 A1: the band's todo figure is the plan's own `n/m` (the count the TODO header, the route and the board give), never `5/6`: the open dispatch row Stop refused on is named by its title in the blocked reason (`blocked: dispatch read ghost.py open`, `blockReasons` takes the title; band.tsx and omp/mission-panel.ts fill `openDispatchTitle`).
 - Critique 16 A2: blocked is one red `■` on every surface (`STATE_GLYPHS`/`STATE_TOKEN`, ASCII `#`); the amber `▲` is `warnMark` only (failing checks, off-plan team, evidence and verdict warnings on the core tab). The band keeps the words (`■ 1 blocked · ◐ 1 running · ■ 2 failed`) down to 60 columns and drops the bare blocked count below that; at 73 cells (the docked 110 band) it reads `2 running`, not `◒2` (A5 wording).

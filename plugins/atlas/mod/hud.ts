@@ -6,7 +6,7 @@ import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
-import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, WORKER_FAILED, motionState, hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -109,7 +109,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const ownerWord = state !== 'done' && (own === 'failed' || own === 'waiting' || own === 'blocked') && own !== state ? `owner ${own}` : ''; // as on the board: a failed owner already fails the item, a waiting owner blocks it and is named
     const ev = flat(t.evidence);
     const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || flat(t.owner);
-    const detail = ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base;
+    const detail = word === DONE_DOUBT && state === 'done' ? WORKER_FAILED : ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base; // critique 17 A1: a done row whose worker failed says so
     return { label: labelOf(t), ...(t.id ? { id: String(t.id) } : {}), state, ...(word ? { word } : {}), detail, focus: false, ...(flat(t.owner) ? { owner: flat(t.owner) } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
   const at = rows.findIndex((r) => r.state === 'running');
@@ -196,7 +196,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
 /** What the Motion observes of the HUD: each TODO row's and each agent row's key and state word (the rows `hudLines` can draw). */
 export function hudMotionItems(input: HudInput, opts: { now: number }): { todos: MotionItem[]; agents: MotionItem[] } {
   const { s } = surfaces(input, { cols: 120, maxRows: 0, now: opts.now });
-  return { todos: s.todos.map((r) => ({ key: r.key!, state: r.state })), agents: s.agents.map((r) => ({ key: r.key!, state: r.state })) };
+  return { todos: s.todos.map((r) => ({ key: r.key!, state: motionState(r.state, r.word) })), agents: s.agents.map((r) => ({ key: r.key!, state: r.state })) };
 }
 
 /** The HUD as design Runs, each row padded to the width: [] when there is nothing to show. */

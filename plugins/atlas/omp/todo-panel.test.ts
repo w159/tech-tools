@@ -69,6 +69,6 @@ test("renderPanel puts the board under the band: header and one row per todo wit
 	};
 	const rows = renderPanel(model).map(strip).map(r => r.trimEnd());
 	expect(rows.some(r => /^ITEM +STATE +OWNER +DETAIL$/.test(r))).toBe(true);
-	expect(rows.filter(r => /^[ ▸] [●◐◓◑◒◇■▲] /.test(r)).length).toBe(7);
+	expect(rows.filter(r => /^[ ▸] [●◐◓◑◒◇■▣▲] /.test(r)).length).toBe(7);
 	for (const l of renderPanel(model)) expect(visibleWidth(l)).toBe(120);
 });

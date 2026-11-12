@@ -42,7 +42,7 @@ describe('runstate: blocked shows glyph, word and reason at every width; a faili
   for (const cols of [40, 60, 80, 120]) {
     test(`${cols} cells`, () => {
       const t = runsText(bandLines(model({ cols, checks, stopGates: ['tripwire'] }))[0]!.runs);
-      expect(t).toContain('■ blocked');
+      expect(t).toContain('▣ blocked');
       expect(textWidth(t)).toBeLessThanOrEqual(cols);
       if (cols >= 60) expect(t).toContain('tripwire');
       const w = runsText(bandLines(model({ cols, checks }))[0]!.runs);
@@ -83,7 +83,7 @@ describe('runstate: blocked shows glyph, word and reason at every width; a faili
     expect(warningText(['a', 'b'])).toBe('2 gates warning');
   });
   test('declared blocked says needs you', () => {
-    expect(runsText(bandLines(model({ blocked: true, phase: 'blocked' }))[0]!.runs)).toContain('■ blocked: needs you');
+    expect(runsText(bandLines(model({ blocked: true, phase: 'blocked' }))[0]!.runs)).toContain('▣ blocked: needs you');
   });
   test('blockReasons', () => {
     expect(blockReasons(false, ['tripwire']).long).toBe('tripwire');

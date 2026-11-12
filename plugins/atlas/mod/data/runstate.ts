@@ -112,10 +112,11 @@ const REASON_MAX = 28;
 /** Why a band is blocked, after `blocked:` and in plain words: the lead declared it (`needs you`), or the Stop gate refused the stop and said why
  * (`1 todo open`, `team gate`, `team gate, todos drained`). One string at every width: a crowded row drops the reason whole, never rewords it. */
 export function blockReasons(declared: boolean, stopGates: readonly string[], dispatchTitle?: string): { long: string; short: string } {
-  if (declared) return { long: 'needs you', short: 'needs you' };
-  if (stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
-  // The open row Stop refused on is a dispatch row the plan does not list: name it by its title (`dispatch read ghost.py open`) instead of a count the band's todo figure would have to invent.
+  // The open row Stop refused on is a dispatch row the plan does not list: name it by its plan row's title (`dispatch T2 read ghost.py open`) instead of a count the band's todo figure would have to invent.
   const named = dispatchTitle ? `dispatch ${clipCells(dispatchTitle, DISPATCH_TITLE_MAX)} open` : '';
+  // Critique 17 A4: a declared block keeps naming the open row Stop refused on, so the reason does not flip to `needs you` when the lead's own header arrives (stoprun-150-3, f0097 to the board tab).
+  if (declared && !(named && stopGates.some((g) => /\bopen\b|todos? drained/.test(g)))) return { long: 'needs you', short: 'needs you' };
+  if (stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
   const gates = named ? stopGates.reduce<string[]>((acc, g) => (/\bopen\b|todos? drained/.test(g) ? (acc.includes(named) ? acc : [...acc, named]) : [...acc, g]), []) : stopGates;
   const joined = gates.join(', ');
   const one = textWidth(joined) <= REASON_MAX || (named && gates.length === 1) ? joined : `${gates.length} reasons`;
