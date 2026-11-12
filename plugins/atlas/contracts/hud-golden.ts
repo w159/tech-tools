@@ -9,7 +9,7 @@ export const todo_120 = [
   "  ● Wire band to host         done          ran 03:10",
   "  ● Layout grid tiers         done          ran 02:41",
   "  ● Gate golden tests         done          ran 01:58",
-  "▸ ◐ Subagents block           running       elapsed 00:42 of 05:00",
+  "▸ ⠋ Subagents block           running       elapsed 00:42 of 05:00",
   "  ◇ Gate tests                queued        after Subagents block",
   "  ■ Changelog                 failed        tests red 3",
   "  ▣ Ship board mod            blocked       needs your approval"
@@ -21,7 +21,7 @@ export const todo_120_rich = [
   "  ● Wire band to host          DONE         ran 03:10",
   "  ● Layout grid tiers          DONE         ran 02:41",
   "  ● Gate golden tests          DONE         ran 01:58",
-  "▸ ◐ Subagents block            RUNNING      elapsed 00:42 of 05:00",
+  "▸ ⠋ Subagents block            RUNNING      elapsed 00:42 of 05:00",
   "  ◇ Gate tests                 QUEUED       after Subagents block",
   "  ■ Changelog                  FAILED       tests red 3",
   "  ▣ Ship board mod             BLOCKED      needs your approval"
@@ -32,7 +32,7 @@ export const todo_80 = [
   "  ● Wire band to host     done",
   "  ● Layout grid tiers     done",
   "  ● Gate golden tests     done",
-  "▸ ◐ Subagents block       running",
+  "▸ ⠋ Subagents block       running",
   "  ◇ Gate tests            queued",
   "  ■ Changelog             failed",
   "  ▣ Ship board mod        blocked"
@@ -43,7 +43,7 @@ export const todo_40 = [
   "  ● Wire band to host  done",
   "  ● Layout grid tiers  done",
   "  ● Gate golden tests  done",
-  "▸ ◐ Subagents block    running",
+  "▸ ⠋ Subagents block    running",
   "  ◇ Gate tests         queued",
   "  ■ Changelog          failed",
   "  ▣ Ship board mod     blocked"
@@ -54,7 +54,7 @@ export const subagents_120 = [
   "    AGENT               STATE       MODEL   TASK    LAST",
   "  ● implementer-layout  done        opus    T1,T2   9 of 9 steps",
   "  ● implementer-gates   done        sonnet  T3      golden tests written",
-  "▸ ◐ implementer-band    running     opus    T4      read runs.ts:17",
+  "▸ ⠋ implementer-band    running     opus    T4      read runs.ts:17",
   "  ◇ runner-land         queued      opus    T5      waits on implementer-live",
   "  ■ implementer-live    failed      opus    T6      tests red 3"
 ];
@@ -64,7 +64,7 @@ export const subagents_120_rich = [
   "    AGENT               STATE         CTX                 MODEL   LAST",
   "  ● implementer-layout   DONE                             opus    9 of 9 steps",
   "  ● implementer-gates    DONE                             sonnet  golden tests written",
-  "▸ ◐ implementer-band     RUNNING      ctx █████░░░ 62%    opus    read runs.ts:17",
+  "▸ ⠋ implementer-band     RUNNING      ctx █████░░░ 62%    opus    read runs.ts:17",
   "  ◇ runner-land          QUEUED                           opus    waits on implementer-live",
   "  ■ implementer-live     FAILED       ctx ████████ 100%   opus    tests red 3"
 ];
@@ -74,7 +74,7 @@ export const subagents_80 = [
   "    AGENT               STATE       MODEL   TASK    LAST",
   "  ● implementer-layout  done        opus    T1,T2   9 of 9 steps",
   "  ● implementer-gates   done        sonnet  T3      golden tests written",
-  "▸ ◐ implementer-band    running     opus    T4      read runs.ts:17",
+  "▸ ⠋ implementer-band    running     opus    T4      read runs.ts:17",
   "  ◇ runner-land         queued      opus    T5      waits on implementer-live",
   "  ■ implementer-live    failed      opus    T6      tests red 3"
 ];

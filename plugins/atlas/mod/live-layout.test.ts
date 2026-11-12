@@ -210,7 +210,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
     expect(hud.length).toBeLessThanOrEqual(budget);
     // the band keeps its content: the same non-blank rows before and after
     // (the compact worker rows fill what the HUD leaves, so they give way to the reclaim; the band's own row and its message stay)
-    const WORKER_ROW = /^\s*[◐◓◑◒◇■▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/;
+    const WORKER_ROW = /^\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇■▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/;
     const body = (maxRows: number): string[] => (bandTree(els, bandModel(maxRows)) as unknown as Node).props.children.map(text).filter((r: string) => r.trim() !== '' && !WORKER_ROW.test(r));
     expect(body(budget - hud.length)).toEqual(body(budget - first.length));
   });

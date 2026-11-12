@@ -23,8 +23,8 @@ test("band: the todo gauge reads `N/M`, ctx shows only when known, no board mean
 
 test("band names the capsule, the phase and the worker count; no project, scope or clock", () => {
 	const h = head(model({ team: "fix/low", elapsedSecs: 59, workers: Array.from({ length: 8 }, (_, i) => worker(`implementer-000${i}`)) }));
-	expect(h).toContain("◖ ◆ ATLAS ◗  implement · phase 4/5");
-	expect(h).toContain("◐ 8 running");
+	expect(h).toContain("◖ ◆ ATLAS ◗  ⠋ working 0:59   implement · phase 4/5");
+	expect(h).toContain("⠋ 8 running");
 	expect(h).not.toMatch(/demo@master|fix\/low|00:59/);
 });
 
@@ -49,7 +49,7 @@ test("role column joins at 100 columns; a worker without a role derives it from 
 
 test("long names and roles are cut with an ellipsis to their columns, never run into the next one", () => {
 	const lane = laneOf(model({ workers: [worker("completeness-critic-f08e", { role: "completeness-critic" })] }), "edit");
-	expect(lane).toMatch(/◐ completeness-cri\.\.\. completen\.\.\. edit {2}a\.ts +30s $/);
+	expect(lane).toMatch(/⠋ completeness-cri\.\.\. completen\.\.\. edit {2}a\.ts +30s $/);
 });
 
 test("every row is exactly the width at 20..200 columns", () => {
@@ -67,9 +67,9 @@ test("worker states: running spins with tool and target, thinking dims the last 
 		worker("start-1", { tool: undefined }),
 		worker("queued-1", { tool: undefined, state: "queued" }),
 	] }));
-	expect(r.find((x) => x.includes("run-1"))).toMatch(/◐ run-1 +implementer {2}edit {2}a\.ts/);
-	expect(r.find((x) => x.includes("think-1"))).toMatch(/◐ think-1 +implementer {2}thinking {3}last edit x\.ts/);
-	expect(r.find((x) => x.includes("start-1"))).toMatch(/◐ start-1 +implementer {2}thinking/); // the registry lists it: running, never a clock-guessed starting
+	expect(r.find((x) => x.includes("run-1"))).toMatch(/⠋ run-1 +implementer {2}edit {2}a\.ts/);
+	expect(r.find((x) => x.includes("think-1"))).toMatch(/⠋ think-1 +implementer {2}thinking {3}last edit x\.ts/);
+	expect(r.find((x) => x.includes("start-1"))).toMatch(/⠋ start-1 +implementer {2}thinking/); // the registry lists it: running, never a clock-guessed starting
 	expect(r.find((x) => x.includes("queued-1"))).toMatch(/◇ queued-1 +implementer {2}queued/);
 	expect(r.some((x) => /starting/.test(x))).toBe(false);
 });
@@ -129,13 +129,13 @@ test("footer: checks only, no key hints or buttons on omp", () => {
 test("idle panel: the band reads idle, the last run follows, a failed count is bold text", () => {
 	const idle = (failed: number) => model({ idle: { workers: 3, secs: 70, failed }, workers: [], phase: "done", done: 6, total: 6, maxLines: 6 });
 	const ok = rows(idle(0));
-	expect(ok[0]).toContain("idle   todo");
+	expect(ok[0]).toContain("✓ done 1:10   todo");
 	expect(ok[0]).toContain("6/6");
 	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	expect(rows(idle(2))[1]).toContain("2 failed");
 	expect(renderPanel(idle(2))[1]).toMatch(/\x1b\[1;38;2;205;214;244;48;2;24;24;37m2 failed/);
 	expect(rows(model({ idle: { workers: 1, failed: 0 }, workers: [] }))[1]).toContain("last run  1 worker · all ok");
-	expect(renderPanel(idle(0))[1]).not.toMatch(/[◐◓◑◒]/); // idle panels do not move
+	expect(renderPanel(idle(0))[1]).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/); // idle panels do not move
 });
 
 test("idle panel puts the board under the band and the last run, within maxLines minus those two rows", () => {
@@ -159,25 +159,25 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ◐ 1 running`", () => {
+test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running`", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 1/4 · ◐ 1 running");
+	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ⠋ working · todo 1/4 · ⠋ 1 running");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 
-test("blocked: `▣ blocked: needs you` with the orange square instead of the phase", () => {
+test("blocked: `! blocked: needs you` with the amber mark instead of the phase", () => {
 	const m = model({ blocked: true, team: "fix/low", workers: [] });
-	expect(head(m)).toContain("▣ blocked: needs you");
-	expect(renderPanel(m)[0]).toContain("38;2;250;159;60");
+	expect(head(m)).toContain("! blocked: needs you");
+	expect(renderPanel(m)[0]).toContain("38;2;249;226;175"); // the amber warn tone
 });
 
-test("tones are the Catppuccin hexes: panel #181825, capsule fill and caps accent #cba6f7, ink #11111b", () => {
+test("tones are the Catppuccin hexes: panel #181825, the diamond accent #cba6f7, the caps the quiet #303030", () => {
 	const out = renderPanel(model());
 	expect(out[0]).toContain("48;2;24;24;37"); // panel
-	expect(out[0]).toContain("38;2;203;166;247"); // accent caps
-	expect(out[0]).toMatch(/1;38;2;17;17;27;48;2;203;166;247m ◆ ATLAS /); // ink on the accent fill
+	expect(out[0]).toContain("38;2;203;166;247"); // accent diamond and letters
+	expect(out[0]).toMatch(/38;2;48;48;48;48;2;24;24;37m◖/); // the caps: 236 neutral, no fill
 });
 
 test("latte, NO_COLOR and 256 colours reach the ANSI: latte panel, no colour codes, indexed colours", () => {

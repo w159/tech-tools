@@ -74,7 +74,7 @@ describe('A3: one stable agent order, by task', () => {
 describe('A4: the team tab names the lead once', () => {
   test('one row begins with `lead`', () => {
     const s = world([sq('alpha-explorer', 'finished'), sq('beta-explorer', 'finished'), sq('gamma-explorer', 'finished')]);
-    expect(tab(s, 'team').filter((l) => /^\s*(◉|[◐◓◑◒●◇]\s)?\s*lead\b/.test(l))).toHaveLength(1);
+    expect(tab(s, 'team').filter((l) => /^\s*(◉|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏●◇]\s)?\s*lead\b/.test(l))).toHaveLength(1);
   });
 });
 

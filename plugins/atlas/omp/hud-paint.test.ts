@@ -12,7 +12,7 @@ import { hudText as rawHudText, paintHud } from "./hud-paint";
 const ui: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
 const opts = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
 // The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
-const hudText = (...a: Parameters<typeof rawHudText>) => rawHudText(...a).map(l => l.replace(/[◐◓◑◒]/g, "◐"));
+const hudText = (...a: Parameters<typeof rawHudText>) => rawHudText(...a).map(l => l.replace(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/g, "⠋"));
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const phases = worldPhases();
 const block = (rows: string[]) => rows.slice(rows.findIndex(l => l.includes("SUBAGENTS")));

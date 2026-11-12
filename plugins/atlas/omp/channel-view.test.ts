@@ -14,7 +14,7 @@ const CHAN = "repo@main/lead-abc";
 const plain = (ls?: string[]) => (ls ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
 /** A lane row: state chip, glyph, then the worker name. */
 /** A worker row: its status mark (spinner, hollow dot, tick or cross) then the name. */
-const lane = (name: string) => new RegExp(`[\u25d0\u25d3\u25d1\u25d2\u25c7\u25c9\u25a0\u25cf] ${name}\\s`);
+const lane = (name: string) => new RegExp(`[\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f\u25c7\u25c9\u25a0\u25cf] ${name}\\s`);
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "chan-view-"));
@@ -299,9 +299,10 @@ test("widget paints the band first and repaints a poll only when the picture cha
 	const root = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "pending", phase: "verify" }]);
 	const { calls, ui, timers, view } = harness({ ATLAS_PROJECT_ROOT: root });
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+	timers.clock = 1500; // the clock moves on one poll: the spinner clock moved with it, so the picture changed
 	timers.iv?.();
 	expect(plain([calls[0]![0]!])).toContain("ATLAS");
-	expect(calls.length).toBe(2); // the registry lists w1, so it is running (thinking): its spinner moves between polls, and the poll repaints
+	expect(calls.length).toBe(2); // the registry lists w1, so it is running (thinking): its spinner turns with the clock, and the poll repaints
 	view.stop();
 });
 
@@ -322,10 +323,10 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}implement {3}todo █████▌░░░░ 5\/9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
+	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}⠙ working 2:41 {3}implement {3}todo █████▌░░░░ 5\/9 {3}agents ⠙ 2 running {3}◇ 1 queued +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
-	expect(p[2]).toMatch(/^ ◓ explorer-a324 {5}explorer {5}ctx_search {2}dispatch_tripwire\.py +1m12s $/);
-	expect(p[3]).toMatch(/^ ◓ implementer-band {2}implementer {2}thinking {3}last Edit mod\/band\.tsx +48s $/);
+	expect(p[2]).toMatch(/^ ⠙ explorer-a324 {5}explorer {5}ctx_search {2}dispatch_tripwire\.py +1m12s $/);
+	expect(p[3]).toMatch(/^ ⠙ implementer-band {2}implementer {2}thinking {3}last Edit mod\/band\.tsx +48s $/);
 	expect(p[4]).toMatch(/^ ◇ verifier-ui {7}verifier {5}queued +12s $/);
 	expect(p[5]).toBe(" ".repeat(120));
 	expect(p[6]).toMatch(/^ implementer-band to all {3}sent a message +$/);
@@ -365,7 +366,7 @@ test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers int
 test("panel idle: the band reads idle and the last run follows, the whole thing is two rows", () => {
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}idle {3}todo █████▌░░░░ 5\/9 +$/);
+	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}✓ done 1:10 {3}todo █████▌░░░░ 5\/9 +$/);
 	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
 	expect(failed).toContain("last run  2 workers · 9s · 1 failed");
@@ -380,17 +381,17 @@ test("long worker names and roles are cut with an ellipsis in their columns, nev
 test("panel at 60 columns is the band alone", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
 	expect(p).toHaveLength(1);
-	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 5/9 · ◓ 2 running · ◇ 1 queued");
+	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ⠙ working 2:41 · todo 5/9 · ⠙ 2 running");
 });
 
 test("worker marks: a running worker's spinner follows the tick, thinking has a grey one; no faces", () => {
 	const lane = (tick: number, tool?: { tool: string; target: string; active: boolean }) =>
 		plain([renderPanel(model({ tick, workers: [{ name: "explorer-a324", secs: 5, tool }] }))[2]!]);
 	const run = { tool: "ctx_search", target: "x", active: true };
-	expect(lane(0, run)).toMatch(/^ ◐ explorer-a324 +explorer +ctx_search {2}x/);
-	expect(lane(1, run)).toMatch(/^ ◓ explorer-a324/);
-	expect(lane(0, { ...run, active: false })).toMatch(/^ ◐ explorer-a324 +explorer +thinking {3}last ctx_search x/);
-	expect(lane(0)).toMatch(/^ ◐ explorer-a324 +explorer +thinking/); // the registry lists it: running, no clock-guessed starting
+	expect(lane(0, run)).toMatch(/^ ⠋ explorer-a324 +explorer +ctx_search {2}x/);
+	expect(lane(1, run)).toMatch(/^ ⠙ explorer-a324/);
+	expect(lane(0, { ...run, active: false })).toMatch(/^ ⠋ explorer-a324 +explorer +thinking {3}last ctx_search x/);
+	expect(lane(0)).toMatch(/^ ⠋ explorer-a324 +explorer +thinking/); // the registry lists it: running, no clock-guessed starting
 	expect(lane(0, run)).not.toMatch(/[◔•◉]/);
 });
 
@@ -453,7 +454,7 @@ test("team lanes: last tool_use from each worker's stream-json log, mcp prefix s
 	expect(out).toMatch(/audit-1 .*thinking {3}last Bash echo hi/); // answered: between calls
 	expect(out).toMatch(/ctx_search\s+where is the widget/);
 	expect(out).not.toContain("mcp__");
-	expect(out).toMatch(/[◐◓◑◒] audit-3 .*Edit {2}mission-panel\.ts/); // in flight
+	expect(out).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] audit-3 .*Edit {2}mission-panel\.ts/); // in flight
 	const widths = (calls.at(-1) ?? []).map(l => [...stripAnsi(l)].length);
 	expect(new Set(widths).size).toBe(1); // ANSI in a lane never skews the frame
 
@@ -532,22 +533,22 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 		handlers.message_end?.forEach(h => h({ message: { role: "assistant", content: [{ type: "text", text }] } }, ctx));
 	const railOf = () => plain([calls.at(-1)![0]!]);
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}research {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}research {3}todo/);
 	say("ATLAS | ⛭ implement 1/3 | running the team\nbody");
 	say("no header on this follow-up message");
 	say("ATLAS | x verify | sub", { cwd: root, agent: { kind: "sub" } }); // a sub's header never moves the lead's rail
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}implement {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}implement {3}todo/);
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn: the old header no longer counts
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}research {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}research {3}todo/);
 	writeFileSync(join(root, ".atlas", ".run", "todos.json"), JSON.stringify({ version: 1, items: [{ status: "in_progress", phase: "test" }] }));
 	say("ATLAS | ⛭ verify | x");
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}verify {3}todo/); // critique 15 B1: the header chip outranks the active todo
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}verify {3}todo/); // critique 15 B1: the header chip outranks the active todo
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn, no header yet: the active todo decides
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}test {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}test {3}todo/);
 	view.stop();
 });
 
@@ -645,7 +646,7 @@ test("claude team lane: role + tool from the stream log; panefeed's calls-only <
 	timers.clock = nowS * 1000; // the harness clock starts at 0, which would age every call out of the window
 	view.open(ui, { channel: CHAN, members: ["explorer-127a"], cwd: root });
 	const lane = plain(calls.at(-1)).split("\n").find(l => l.includes("explorer-127a")) ?? "";
-	expect(lane).toMatch(/[◐◓◑◒] explorer-127a +scout +Read {2}dispatch\.py/);
+	expect(lane).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] explorer-127a +scout +Read {2}dispatch\.py/);
 	expect(lane).not.toMatch(/[▁▂▃▄▅▆▇█]/); // the tool-call history is kept but no graph is drawn
 	view.stop();
 });
@@ -837,11 +838,11 @@ test("only the lead's assistant text pins the rail: user messages and non-text c
 	send({ role: "assistant", content: "ATLAS | ⛭ verify | plain string content" });
 	send({ role: "assistant", content: [{ type: "tool_use", text: "ATLAS | ⛭ verify | x" }] });
 	send(null);
-	expect(railOf()).toMatch(/ATLAS ◗ {2}research {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}research {3}todo/);
 	send({ role: "assistant", content: header });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}verify {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}verify {3}todo/);
 	send({ role: "assistant", content: [{ type: "text", text: "ATLAS | ⛭ bogus-phase | x" }] }); // not a rail phase: ignored
-	expect(railOf()).toMatch(/ATLAS ◗ {2}verify {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}⠋ working 0:00 {3}verify {3}todo/);
 	view.stop();
 });
 
@@ -971,4 +972,23 @@ test("R2: omp todoSummary and mod planCounts/planPhase read the same rows to the
 	const expected = { ...planCounts(live, "s1"), phase: planPhase(live, "s1") };
 	expect(expected).toEqual({ done: 2, total: 3, phase: "verify" });
 	expect(todoSummary(root, "s1")).toEqual(expected);
+});
+
+test("A4: while a member is unfinished the band spinner steps every 100 ms on its own timer, driven by the injected clock, and the timer is gone when none is", () => {
+	const f = fixture();
+	const { calls, ui, timers, view } = harness();
+	view.open(ui, { channel: CHAN, members: ["A"], cwd: f.root });
+	expect(timers.frame).toBeDefined(); // the spinner timer runs with no poll in between
+	const glyphOf = () => plain(calls.at(-1)).match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0];
+	const seen: Array<string | undefined> = [];
+	for (let i = 0; i < 4; i++) {
+		timers.clock = i * 100; // the injected clock moves one frame; the poll timer (1.5 s) never fires
+		timers.frame?.();
+		seen.push(glyphOf());
+	}
+	expect(seen.every(Boolean)).toBe(true);
+	expect(new Set(seen).size).toBe(4); // four ticks, four frames
+	f.finish(["A"]);
+	for (let i = 0; i < 5; i++) timers.iv?.();
+	expect(timers.frame).toBeUndefined(); // nobody works: the spinner timer is cancelled
 });

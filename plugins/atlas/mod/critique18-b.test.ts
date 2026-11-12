@@ -77,7 +77,7 @@ describe('B3: blocked has its own colour, distinct from failed', () => {
     const rows = hudLines({ todos: plan(), agents }, { cols: 150, maxRows: 12, ui, now: NOW });
     const toneOf = (needle: string, word: string) => rows.find((r) => runsString(r).includes(needle))!.find((x) => x.t.trim() === word)!.tone;
     const glyphOf = (needle: string) => rows.find((r) => runsString(r).includes(needle))![2]!.tone;
-    expect(toneOf('T2 read ghost.py', 'blocked')).toBe('block');
+    expect(toneOf('T2 read ghost.py', 'blocked')).toBe('warn');
     expect(glyphOf('T2 read ghost.py')).not.toBe(glyphOf('T3 read beta.py'));
     expect(rows.some((r) => runsString(r).includes('T3 read beta.py'))).toBe(true);
   });
@@ -117,7 +117,7 @@ describe('B5 / critique 19 C1: the 110 board keeps the owner with its row and sa
   ];
   test('37 cells (critique 19 C1): each owner is the sub-line under its own row, with the row\'s reason and age; no detached list', () => {
     const text = boardText(boardLines(boardRowsOf(src, 400), { cols: 37, ui, ribbon: false, title: false }));
-    const rows = text.filter((r) => /^\s*[●◇▣■◐] T\d/.test(r));
+    const rows = text.filter((r) => /^\s*[●◇▣■⠋] T\d/.test(r));
     expect(rows).toHaveLength(3);
     const under = (title: string): string => text[text.findIndex((r) => r.includes(title)) + 1]!;
     expect(under('T1 read alpha.py')).toMatch(/^\s+alpha-explorer$/);

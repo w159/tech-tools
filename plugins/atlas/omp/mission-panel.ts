@@ -66,6 +66,8 @@ export interface PanelModel {
 	channel?: string; // `<repo>@<branch>/<lead>`
 	team?: string; // `<class>/<effort>`
 	elapsedSecs?: number;
+	/** The spinner clock in ms (an injected clock in tests): the band, its worker lanes and its counts turn spinFrameOf(spinMs). Absent: derived from `nowSecs` and `tick`. */
+	spinMs?: number;
 	idle?: IdleWave;
 	todos?: PanelTodo[]; // the shared board; listed under the rail when expanded
 	nowSecs?: number; // epoch seconds: times the running board item
@@ -143,7 +145,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		cols: w,
 		maxRows: m.maxLines,
 		tick: m.tick,
-		now: m.nowSecs === undefined ? undefined : spinClock(m.nowSecs * 1000, m.tick), // the one spinner clock, as the Claude Code band turns it
+		now: m.spinMs ?? (m.nowSecs === undefined ? undefined : spinClock(m.nowSecs * 1000, m.tick)), // the one spinner clock, as the Claude Code band turns it
 		project: channelScope(m.channel) || "atlas",
 		scope: m.team,
 		phases: rail.ids,

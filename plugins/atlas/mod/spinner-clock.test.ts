@@ -47,8 +47,7 @@ describe('the HUD and the side panel turn one frame per agent', () => {
     const agents = names.map((n, i) => ({ name: n, key: `${n}-explorer-${i}`, role: 'explorer', state: 'working' as const, ui: 'running' as const }));
     const rows = hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick: 1, now: NOW }).map((r) => runsString(r));
     for (const a of agents) expect([a.name, glyphOf(rows, a.name)]).toEqual([a.name, spinnerGlyph(spinFrameOf(spinClock(NOW, 1), a.key))]);
-    expect(new Set(agents.map((a) => spinFrameOf(NOW, a.key) % 4)).size).toBeGreaterThan(1);
-    expect(agents.some((a) => spinFrameOf(NOW, a.key) % 4 !== spinFrameOf(NOW, a.name) % 4)).toBe(true); // the display name would have turned a different frame
+    expect(new Set(agents.map((a) => spinFrameOf(NOW, a.key))).size).toBe(1); // one shared phase
   });
 
   test('the HUD frame turns between data polls: the same snapshot at the next tick shows the next frame', () => {

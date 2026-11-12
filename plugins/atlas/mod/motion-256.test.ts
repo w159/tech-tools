@@ -81,7 +81,7 @@ describe('256-colour ease', () => {
     const m = new Motion(true);
     m.observe('todo', [{ key: 'todo:a', state: 'queued' }], 0);
     m.observe('todo', [{ key: 'todo:a', state: 'running' }], 1000);
-    const text: Run[] = [{ t: '◐', tone: 'text' }, { t: ' wire', tone: 'text' }];
+    const text: Run[] = [{ t: '⠋', tone: 'text' }, { t: ' wire', tone: 'text' }];
     const f = animateRow(text, 'todo:a', 'running', m.ctx(1100), ui);
     expect(f.some((r) => r.fg !== undefined)).toBe(false);
   });
@@ -123,7 +123,7 @@ describe('done pop glyphs', () => {
   });
   const other = (own: string, table: Record<string, string>): string[] => Object.entries(table).filter(([s]) => s !== own).map(([, g]) => g);
   test('no pop frame reuses a glyph that means another state, the spinner, the focus mark or the capsule', () => {
-    const owned = [...other('done', STATE_GLYPHS), ...other('done', STATE_ASCII), '◐', '◓', '◑', '◒', '|', '/', '-', '\\', '▸', '>', '◆', '◖', '◗'];
+    const owned = [...other('done', STATE_GLYPHS), ...other('done', STATE_ASCII), '⠋', '⠙', '⠹', '⠸', '|', '/', '-', '\\', '▸', '>', '◆', '◖', '◗'];
     for (const g of [...POP_UNICODE, ...POP_ASCII]) expect([g, owned.includes(g)]).toEqual([g, false]);
   });
   test('across the whole window the glyph cell is the dot or the disc only', () => {

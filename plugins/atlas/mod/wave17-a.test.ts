@@ -86,7 +86,7 @@ describe('A2: blocked is one red square, warnings keep the amber triangle, count
   });
   test('the band never prints a bare glyph-and-number count (`▲1 · ■2`) at any width', () => {
     const m = mission({ todoBlocked: 1, workers: [{ name: 'a', state: 'failed', secs: 1 }, { name: 'b', state: 'failed', secs: 1 }, { name: 'c', state: 'running', secs: 1 }] });
-    for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[■▣▲◐◇◉]\d/);
+    for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[■▣▲⠋◇◉]\d/);
     for (const cols of [50, 40]) expect(band({ ...m, cols })).not.toMatch(/[■▣▲]1/); // narrower than the word forms: the blocked count is dropped, never a bare glyph and number
     expect(band({ ...m, cols: 73 })).toContain('1 running');
     expect(band({ ...m, cols: 110 })).toContain('2 failed');
@@ -157,16 +157,18 @@ describe('A4: the gates figure never rises and falls in a clean run; a check Sto
 });
 
 describe('A5: the docked 110-column band (73 cells) uses the words of the 150-column band', () => {
-  // live-110-e4a8186a-1 f0035..f0067: `todo 0/5 · ◓1`, `◒2`; stoprun-110-e4a8186a-1 f0054..f0061: `· 2 dispatches open · ◑1 ■1`.
+  // live-110-e4a8186a-1 f0035..f0067: `todo 0/5 · ⠙1`, `⠸2`; stoprun-110-e4a8186a-1 f0054..f0061: `· 2 dispatches open · ⠹1 ■1`.
   const at = (cols: number, over: Partial<MissionModel>): string => band(mission({ cols, done: 0, total: 5, ...over }));
   const run = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `w${i}`, state: 'running' as const, secs: 3 }));
   test('running agents read `2 running`, never the bare glyph and number', () => {
     for (const cols of [73, 93, 150]) expect(at(cols, { workers: run(2) })).toMatch(/2 running/);
-    expect(at(73, { workers: run(2) })).not.toMatch(/[◐◓◑◒]2/);
+    expect(at(73, { workers: run(2) })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]2/);
   });
-  test('the stop-run shape keeps the open dispatches and both counts in words', () => {
-    const t = at(73, { openWork: 7, openDispatch: 2, workers: [...run(1), { name: 'g', state: 'failed', secs: 3 }] });
-    expect(t).toMatch(/todo 0\/5 · 2 dispatches open · .* 1 running · .* 1 failed/);
-    expect(t).not.toMatch(/[■◐◓◑◒]1\b/);
+  test('the stop-run shape keeps both counts in words; the open-dispatch note is the first segment to go at 73 cells (the state word, spinner and todo come first)', () => {
+    const w = [...run(1), { name: 'g', state: 'failed' as const, secs: 3 }];
+    const t = at(73, { openWork: 7, openDispatch: 2, workers: w });
+    expect(t).toMatch(/working · todo 0\/5 · .* 1 running · .* 1 failed/);
+    expect(t).not.toMatch(/[■⠋⠙⠹⠸]1\b/);
+    expect(at(150, { openWork: 7, openDispatch: 2, workers: w })).toMatch(/todo .* 0\/5 · 2 dispatches open +agents .* 1 running +■ 1 failed/);
   });
 });

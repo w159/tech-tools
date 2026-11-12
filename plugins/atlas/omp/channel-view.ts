@@ -21,6 +21,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import type { PanelTodo } from "./todo-panel";
 import { type GatesCache,type IdleWave, type LaneTool, type PanelModel, type PanelNote, type PanelWorker, createGatesCache, panelMotionOf, renderPanel, spawnText } from "./mission-panel";
 import { Motion, reducedMotion } from "../mod/motion";
+import { SPINNER_MS } from "../mod/atlas-ui";
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
@@ -37,6 +38,7 @@ const MAX_NOTES = 8;
 const MAX_LINE = 110;
 const POLL_MS = 1500;
 const MOTION_FRAME_MS = 100; // a transition redraws at the spinner's rate, only while it is open
+const SPIN_FRAME_MS = SPINNER_MS; // the working spinner steps every frame, on its own timer, only while a member is unfinished (the 1.5 s poll is for data)
 const LINGER_MS = 15_000;
 const MAX_MS = 30 * 60_000; // hard cap: the view never outlives this even if no member is ever marked finished
 const QUIET_POLLS = 3; // polls with every member finished and no new note before the linger starts
@@ -555,6 +557,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	let tickN = 0;
 	const motion = new Motion(!reducedMotion(env));
 	let anim: unknown; // the frame timer: runs only while a transition is open
+	let spinIv: unknown; // the spinner timer: runs only while a dispatched member is unfinished
 
 	// Sticky: a member once finished stays finished, and a channel that vanishes after it was seen (atlas_team reap
 	// drops it from channels.json) finishes everyone. Without this the pending fallback repaints every reaped lane.
@@ -567,10 +570,15 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		if (anim !== undefined) clearFrame(anim);
 		anim = undefined;
 	};
+	const stopSpin = () => {
+		if (spinIv !== undefined) clearFrame(spinIv);
+		spinIv = undefined;
+	};
 	const stopPoll = () => {
 		if (poll !== undefined) clearIv(poll);
 		poll = undefined;
 		stopAnim();
+		stopSpin();
 	};
 	const goneMembers = (i: ChannelOpenInfo & { root: string }): Iterable<string> => {
 		const listed = channelListed(i.root, i.channel);
@@ -612,14 +620,17 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		refreshGates(info);
 		const team = teamInfo(info.root, info.channel);
 		const workers = panelWorkers(info.root, liveWorkers(info.root, info.channel), pending, now(), team.roles);
+		const frameAt = now(); // the spinner clock: one frame per SPINNER_MS of the (injectable) clock
+		const frame = Math.floor(frameAt / SPINNER_MS);
 		const model: PanelModel = {
 			width: panelWidth(columns()),
 			maxLines: MAX_LINES,
 			phase,
 			...(asks() ? { blocked: true } : {}), // critique 18 A4: the lead asked the person; the Claude band says the same (mod/register.ts)
-			spin: spinFrame(tickN, phase),
-			laneSpin: spinFrame(tickN),
-			tick: tickN,
+			spin: spinFrame(frame, phase),
+			laneSpin: spinFrame(frame),
+			tick: frame,
+			spinMs: frameAt,
 			done: todos.done,
 			total: todos.total,
 			workers,
@@ -641,6 +652,9 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 		const lines = renderPanel({ ...model, motion: motion.ctx(at) });
 		if (motion.animating(at)) anim ??= setFrame(() => { try { paint(); } catch { /* fail soft */ } }, MOTION_FRAME_MS);
 		else stopAnim();
+		// Working = a dispatched member is unfinished: the spinner steps on its own timer, and the timer is gone on the paint it is not.
+		if (pending.length > 0) spinIv ??= setFrame(() => { try { paint(); } catch { /* fail soft */ } }, SPIN_FRAME_MS);
+		else stopSpin();
 		const key = lines.join("\n");
 		if (key !== painted) ui.setWidget(WIDGET_KEY, lines);
 		painted = key;

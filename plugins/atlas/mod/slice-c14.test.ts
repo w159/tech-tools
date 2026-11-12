@@ -40,7 +40,7 @@ describe('C1: the band is never idle once a turn runs', () => {
     const head = runsText(bandLines(m)[0]!.runs);
     expect(head).toContain('▲');
     expect(head).not.toMatch(/\bdone\b/);
-    expect(runsText(bandLines({ ...m, checks: [{ id: 'completion', ok: true }] })[0]!.runs)).toMatch(/\bdone\b/);
+    expect(runsText(bandLines({ ...m, busy: false, checks: [{ id: 'completion', ok: true }] })[0]!.runs)).toMatch(/\bdone\b/);
   });
 });
 

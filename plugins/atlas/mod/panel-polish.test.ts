@@ -15,7 +15,7 @@ const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
-const G = '[◐◓◑◒◇●■▣▲◉]';
+const G = '[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏⠼⠴⠦⠧⠇⠏◇●■▣▲◉]';
 const WORD = '(queued|running|done|failed|blocked|waiting)';
 const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => bodyLines(panelWorld(t, cols, ui, { core, ...over })).map(lineText).map((l) => l.trimEnd());
 const taskRows = (rows: readonly string[]): string[] => rows.filter((l) => new RegExp(`^[▸ ] ${G} `).test(l));

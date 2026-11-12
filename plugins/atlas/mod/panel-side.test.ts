@@ -168,11 +168,11 @@ describe('spinners: spinFrameOf(now, worker name) on every row', () => {
   const two = [worker('alpha-one'), worker('beta-two')];
   const frame = (name: string): string => spinnerGlyph(spinFrameOf(NOW, name));
 
-  test('the team tab turns each agent by its own phase at one clock reading', () => {
+  test('the team tab turns every agent by the one shared phase at one clock reading', () => {
     const rows = body(panelWorld('team', 100, ui, { workers: two, now: NOW, rows: 24 }));
     expect(glyphOf(rows, 'alpha-one')).toBe(frame('alpha-one'));
     expect(glyphOf(rows, 'beta-two')).toBe(frame('beta-two'));
-    expect(frame('alpha-one')).not.toBe(frame('beta-two')); // the fixture names differ in phase
+    expect(frame('alpha-one')).toBe(frame('beta-two')); // rev 5: one shared phase, so every spinner on a surface turns together
   });
 
   test('the route tab agrees with the team tab for the same agent', () => {
