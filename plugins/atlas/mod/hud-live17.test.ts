@@ -100,8 +100,8 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     const gap = hudGapRows(hud.some((r) => r.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
     return { hud, gap, band: budget - hud.length - gap };
   };
-  test('3 done, 2 open: the done rows fold to `3 done` on the ribbon, both open rows, the blank and the header stay', () => {
-    const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 10);
+  test('3 done, 2 open: the done rows fold to `3 done` on the ribbon, both open rows, both closing rules, the blank and the header stay (12 rows: the boxes take two more than the bare blocks did)', () => {
+    const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 12);
     expect(band).toBeGreaterThanOrEqual(1);
     expect(hud[0]).toMatch(/TODO .*3 done/);
     expect(hud.filter((r) => /T[45] step/.test(r))).toHaveLength(2);
@@ -110,6 +110,7 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     expect(hud[at - 1]!.trim()).toBe('');
     expect(hud[at + 1]).toMatch(/AGENT\s+STATE/);
     expect(hud.filter((r) => /haiku/.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => r.startsWith('╰'))).toHaveLength(2);
   });
   test('all open (the live frame): the band still keeps a row and every agent stays', () => {
     const { hud, band } = slot(plan(['in_progress', 'in_progress', 'in_progress', 'pending', 'pending']), 61, 10);

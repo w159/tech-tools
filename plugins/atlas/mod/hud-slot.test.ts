@@ -28,7 +28,7 @@ function slot(input: HudInput, cols: number, budget: number, isRunning: boolean)
 describe('A3: the SUBAGENTS column header and the blank before the band', () => {
   for (const cols of [88, 104, 138]) {
     for (const [name, input, isRunning] of [['running', running, true], ['settled', settled, false]] as const) {
-      for (const budget of [14, 15, 18]) {
+      for (const budget of [16, 17, 18]) { // the floor holds both closing rules now (critique 22), so the blank and the gap need two more rows than before
         test(`${cols} columns, ${name}, ${budget} rows: header kept, one blank after the agents, the band keeps a row`, () => {
           const { hud, gap, band } = slot(input, cols, budget, isRunning);
           const at = hud.findIndex((r) => r.includes('SUBAGENTS'));

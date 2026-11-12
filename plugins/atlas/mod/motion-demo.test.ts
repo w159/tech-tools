@@ -8,8 +8,8 @@ import { Motion, MOTION_MS, MOTION_STEP_MS } from './motion';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips SGR
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
-/** The row a frame draws: its last line that is not the block's closing `└───┘` rule (critique 21). */
-const lastRow = (f: string): string => plain(f).trimEnd().split('\n').filter((l) => !l.startsWith('└')).at(-1)!;
+/** The row a frame draws: its last line that is not the block's closing `╰───╯` rule (critique 21). */
+const lastRow = (f: string): string => plain(f).trimEnd().split('\n').filter((l) => !l.startsWith('╰')).at(-1)!;
 
 describe('motion-demo frames', () => {
   const files = demoFrames(100);
@@ -53,7 +53,7 @@ describe('motion-demo frames', () => {
       }
     }
   });
-  test('critique 12: a `returned` glyph and word are one tone on every row at every frame, a row mid-transition included (live f0063: 183 beside a plain 189)', () => {
+  test('critique 22: `returned` is the done disc `●` and the dim word, at every frame, a row mid-transition included; the unreadable `◃` is gone and the word is never the plain body tone (live f0063: 183 beside a plain 189)', () => {
     const ui256: Ui = { ...uiFromEnv({}), color: '256' };
     const item = (id: string, owner: string) => ({ id, content: `${id.toUpperCase()} read ${owner}.py (${owner})`, status: 'in_progress', owner }) as never;
     const at = (gamma: 'working' | 'done'): HudInput => ({
@@ -67,10 +67,10 @@ describe('motion-demo frames', () => {
       const rows = hudLines(at('done'), { cols: 100, maxRows: 20, ui: ui256, tick: 0, now: 1000 + dt, motion: m.ctx(1000 + dt)! }).filter((r) => r.some((x) => x.t === 'returned'));
       expect(rows).toHaveLength(2);
       for (const r of rows) {
-        const g = r.find((x) => x.t === '◃')!;
+        expect([dt, r.some((x) => x.t === '◃')]).toEqual([dt, false]); // the scorer counts `◃` as unknown
+        expect([dt, r.some((x) => x.t === '●')]).toEqual([dt, true]); // the done disc is the mark
         const w = r.find((x) => x.t === 'returned')!;
-        expect([dt, g.fg, w.fg]).toEqual([dt, w.fg, w.fg]); // glyph and word share a tone
-        expect([dt, w.fg === fitHex(PALETTES[ui256.theme].text, ui256.theme)]).toEqual([dt, false]); // and it is never the plain body tone
+        expect([dt, w.fg === fitHex(PALETTES[ui256.theme].text, ui256.theme)]).toEqual([dt, false]); // and the word is never the plain body tone
       }
     }
   });

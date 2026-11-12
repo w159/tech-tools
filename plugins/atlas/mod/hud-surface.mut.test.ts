@@ -69,11 +69,17 @@ describe('fitStack with the plan hidden', () => {
   test('B5: the agents-only try keeps the column header and windows the agents instead', () => {
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
-    const text = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r));
-    expect(text.length).toBe(4);
+    const text = fitStack({ todos, agents }, { cols: 100, ui }, 5).map((r) => runsString(r));
+    expect(text.length).toBe(5);
     expect(text.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
     expect(text.filter((l) => /agent\d/.test(l)).length).toBe(1);
     expect(text.some((l) => /2 more agents not shown/.test(l))).toBe(true);
+    expect(text.at(-1)).toMatch(/^(╰─+╯|\+-+\+)$/); // round 3: the box keeps its closing rule
+    const four = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r)); // one row less: the names go, the rule and the agent stay
+    expect(four.length).toBe(4);
+    expect(four.some((l) => /AGENT\s+STATE/.test(l))).toBe(false);
+    expect(four.at(-1)).toMatch(/^(╰─+╯|\+-+\+)$/);
+    expect(four.filter((l) => /agent\d/.test(l)).length).toBe(1);
   });
   test('B5: only a budget with no room for the header and one agent drops the header, never the agent', () => {
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));

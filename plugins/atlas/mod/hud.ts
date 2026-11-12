@@ -7,7 +7,7 @@ import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
-import { DONE_DOUBT, WORKER_FAILED, cells, motionState, hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, WORKER_FAILED, cells, elapsedClock, motionState, hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -219,18 +219,33 @@ function plain(s: string, fallback: string): string {
   return fits(clause) ? clause : fallback;
 }
 
-/** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */
-export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
+/** The one word of an agent's last tool (`read`, `bash`), else the elapsed clock since it last changed state (`0:24`): what LAST reads when the agent has no outcome or call to state, so the cell is
+ * never blank and never the state word again (critique 22: LAST at 110 repeated `done`). */
+const lastFallback = (a: Pick<HudAgent, 'tool' | 'lastTool' | 'since'>, state: UiState, now?: number): string => {
+  const tool = flat(a.tool || a.lastTool).toLowerCase();
+  if (tool !== '' && !isPlumbing(tool)) return tool;
+  return state === 'running' && now !== undefined && typeof a.since === 'number' && a.since > 0 && now >= a.since ? elapsedClock((now - a.since) / 1000) : '';
+};
+
+/** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. `now` (epoch ms) times a running agent's LAST fallback.
+ * An agent the host listed with no name takes the key, the dispatch description's name, the owner of a dispatch row no other agent holds, else its role: a row never has a blank AGENT cell (critique 22). */
+export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null, now?: number): AgentRow[] {
   const plan = todos.filter(isPlanItem); // T-numbers count plan rows; the hook's dispatch row of a worker holds its report, which is the outcome a finished row shows
+  const held = (n: string): boolean => agents.some((x) => flat(x.name) === n || flat(x.key) === n);
+  const spare = [...new Set(todos.filter((t) => (t as { origin?: string }).origin === 'dispatch').map((t) => flat(t.owner)).filter((n) => n !== '' && n !== 'lead' && !held(n)))];
+  let spareAt = 0;
   const rows = agents.map((a): AgentRow => {
+    const shown = flat(a.name) || flat(a.key) || descriptionName(a.task) || spare[spareAt++] || flat(a.role) || 'agent';
     // A retry (`beta-explorer #2`) takes over the item its first run owned: the plan row names `beta-explorer`, so TASK reads `T3` for the retry too (critique 19 B2).
-    const first = a.name.replace(/\s+#\d+$/, '');
-    const mine = (t: TodoItem): boolean => t.owner === a.name || (a.key !== undefined && t.owner === a.key) || (first !== a.name && t.owner === first);
+    const first = shown.replace(/\s+#\d+$/, '');
+    const mine = (t: TodoItem): boolean => t.owner === shown || t.owner === a.name || (a.key !== undefined && t.owner === a.key) || (first !== shown && t.owner === first);
     const owned = [...plan.filter(mine), ...todos.filter((t) => !isPlanItem(t) && mine(t))];
     const tasks = plan.flatMap((t, i) => (mine(t) ? [i + 1] : []));
     const state = a.ui ?? workerUiState(a.state);
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
-    return { name: a.name, id: a.key ?? a.name, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
+    const fallback = lastFallback(a, state, now);
+    const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
+    return { name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -255,7 +270,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const all = [...input.agents, ...namedAgents(input.todos, input.agents)];
   const running = all.some(isRunning);
   const shown = running ? all : all.filter((a) => a.state === 'failed' || a.state === 'done');
-  const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root) : [];
+  const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.now) : [];
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
@@ -295,7 +310,7 @@ export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
 export const hudCompactRows = (input: HudInput, cols = 120): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length; // critique 18: the column names are part of the floor, so the slot never drops them while the block shows (fitRows still drops them in a slot with no room)
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length; // critique 18: the column names are part of the floor, so the slot never drops them while the block shows (fitRows still drops them in a slot with no room)
 };
 
 /** Rows of the compact form WITH the Subagents column names and the blank between the blocks: what the register gives the HUD when the slot can hold them
@@ -303,7 +318,7 @@ export const hudCompactRows = (input: HudInput, cols = 120): number => {
 export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length; // the boxes' `└───┘` rules are NOT in the floor: register.ts hudSlotCap sizes the band's rows from it, and a rule shows only in the rows the slot has beyond it (fitRows drops the rules first)
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length; // the box never changes shape (critique 22): both rounded bottom rules are in the floor, so register.ts hudSlotCap sizes the band's rows from the closed boxes
 };
 
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */

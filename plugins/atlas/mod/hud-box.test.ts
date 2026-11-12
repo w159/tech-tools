@@ -69,36 +69,41 @@ describe('LAST is never blank or raw (critique 21: `first 3` and an empty cell a
       }
     }
   });
-  test('a worker with nothing to say reads `-`; a text of one unbreakable word that cannot fit reads the state word, not a raw cut', () => {
-    const rows = [agent({ name: 'alpha-explorer', state: 'done', tool: '' }), agent({ name: 'beta-explorer', state: 'running', tool: 'x'.repeat(60) })];
-    const [a, b] = lasts(80, rows);
+  test('a worker with nothing to say reads its last tool or `-`, never the state word again; a text of one unbreakable word that cannot fit is cut with `…`, not swapped (critique 22)', () => {
+    const rows = [agent({ name: 'alpha-explorer', state: 'done', tool: '' }), agent({ name: 'beta-explorer', state: 'running', tool: 'x'.repeat(60) }), agent({ name: 'gamma-explorer', state: 'done', tool: '', fallback: 'read' })];
+    const [a, b, c] = lasts(80, rows);
     expect(a!.endsWith(' -')).toBe(true);
-    expect(b!.endsWith('running')).toBe(true);
+    expect(b!.endsWith('…')).toBe(true);
+    expect(b!).not.toContain('running  running');
+    expect(c!.endsWith(' read')).toBe(true);
   });
 });
 
 describe('the boxes at 110: a closing rule and a blank between the blocks', () => {
   const todos: TodoRow[] = [1, 2, 3].map((i) => ({ label: `T${i} item`, state: i === 1 ? 'done' : 'queued', detail: '', focus: false }));
+  const edge = `╰${'─'.repeat(108)}╯`;
   test('with the rows to spare: TODO, its closing rule, one blank, SUBAGENTS, its closing rule', () => {
     const out = text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui }, 20));
     const at = out.findIndex((r) => r.includes('SUBAGENTS'));
     expect(out[at - 1]).toBe('');
-    expect(out[at - 2]).toBe(`└${'─'.repeat(108)}┘`);
-    expect(out.at(-1)).toBe(`└${'─'.repeat(108)}┘`);
+    expect(out[at - 2]).toBe(edge);
+    expect(out.at(-1)).toBe(edge);
     expect(out.filter((r) => r === '')).toHaveLength(1);
   });
-  test('short of rows the closing rules go first, then the blank, never a plan row (critique 18 B1)', () => {
+  test('short of rows the finished rows fold first, then the blank goes, and the closing rules never do (round 3: the box keeps its shape)', () => {
     const rows = (n: number): string[] => text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui }, n));
     expect(rows(20)).toHaveLength(10); // title, 3 rows, rule, blank, title, names, 1 agent, rule
-    for (const n of [9, 8]) {
-      const out = rows(n);
-      expect([n, out.filter((r) => r.startsWith('└'))]).toEqual([n, []]); // the rules go first...
-      expect([n, out.filter((r) => r === '')]).toEqual([n, ['']]); // ...the blank stays
-      expect([n, out.filter((r) => /T\d item/.test(r)).length]).toEqual([n, 3]);
-    }
-    const seven = rows(7);
-    expect(seven.filter((r) => r === '')).toEqual([]); // then the blank
-    expect(seven.filter((r) => /T\d item/.test(r))).toHaveLength(3); // never a plan row
+    const nine = rows(9); // the done row folds into the count on the title
+    expect(nine[0]).toMatch(/1 done/);
+    expect(nine.filter((r) => r === '')).toHaveLength(1);
+    expect(nine.filter((r) => r.startsWith('╰'))).toEqual([edge, edge]);
+    expect(nine.filter((r) => /T\d item/.test(r))).toHaveLength(2);
+    const eight = rows(8); // then the blank
+    expect(eight.filter((r) => r === '')).toEqual([]);
+    expect(eight.filter((r) => r.startsWith('╰'))).toEqual([edge, edge]);
+    expect(eight.filter((r) => /T\d item/.test(r))).toHaveLength(2);
+    expect(rows(7).filter((r) => r.startsWith('╰'))).toEqual([edge, edge]); // a plan row is counted on the title before a rule goes
+    for (const n of [6, 5, 4]) expect([n, rows(n).at(-1)]).toEqual([n, edge]); // below that the plan is the ribbon alone and the running agent keeps its box
   });
 });
 

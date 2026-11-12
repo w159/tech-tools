@@ -27,7 +27,7 @@ function slot(input: HudInput, cols: number, budget: number) {
 
 describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
   // Rev 5: the column names stay while the grid shows. Of the blank between the blocks and the names (one row each) the blank goes first; then the plan is capped, never the names.
-  for (const [cols, budget] of [[150, 13], [150, 12], [61, 12], [61, 11]] as const) {
+  for (const [cols, budget] of [[150, 16], [150, 15], [61, 15], [61, 14]] as const) { // round 3: both boxes close, three rows more than before
     test(`${cols} columns, ${budget} rows, an agent running: the column names stay, every agent keeps its row and the band keeps a row`, () => {
       const { hud, band } = slot(stop, cols, budget);
       const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
@@ -35,8 +35,8 @@ describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
       expect(hud[at + 1]!).toMatch(/AGENT\s+STATE/); // the names show whenever the grid does
       expect(hud.slice(at + 2).filter((r) => /-explorer/.test(r))).toHaveLength(3); // every agent keeps its row
       const plan = hud.slice(0, at).filter((r) => /T\d /.test(r)).length;
-      expect(plan).toBeGreaterThanOrEqual(budget >= 12 ? 5 : 4); // every plan row while the rows fit, one folded onto the title below that
-      if (hud.length >= 12) expect(hud[at - 1]!.trim()).toBe(''); // the gap row between the blocks, when a row is left over
+      expect(plan).toBeGreaterThanOrEqual(budget >= 16 ? 5 : 4); // every plan row while the rows fit, one folded onto the title below that
+      if (hud.length >= 14) expect(hud[at - 1]!.trim()).toBe(''); // the gap row between the blocks, when a row is left over
       expect(band).toBeGreaterThanOrEqual(1);
     });
   }

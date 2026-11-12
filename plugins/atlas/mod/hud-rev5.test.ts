@@ -21,16 +21,22 @@ describe('title rows: a plain title, the count and the meter inside a thin rule 
   const t = rows(todo(5, (i) => (i < 3 ? 'completed' : 'pending')), []);
   test('TODO  3/5, then the 8-cell meter, then a thin rule to the last cell where the host draws its marker, no heavy rule', () => {
     const head = text(t[0]!);
-    expect(head).toMatch(/^◖ ◆ ATLAS ◗ ▸ TODO {2}3\/5 ▰{5}▱{3} ─+$/);
+    expect(head).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ TODO {2}3\/5 ▰{5}▱{3} ─+╮$/);
     expect(cells(head)).toBe(150);
     expect(head).not.toContain('━');
   });
-  test('the title is bold neutral text, the rule the line tone, the solid ATLAS pill is the only filled run', () => {
+  test('the header is quiet: the ribbon has no fill and reads 240, the title is bold 252, the rule and the corners 240, and no run of the header is a filled chip (critique 22)', () => {
     const head = t[0]!;
     const title = head.find((x) => x.t === 'TODO')!;
-    expect([title.tone, title.bold]).toEqual(['text', true]);
-    expect(head.filter((x) => (x.chip === true || x.bg === 'accent') && x !== title && !/^[ATLS◖◗◆ ]+$/.test(x.t))).toEqual([]);
-    expect(head.find((x) => /^─{6,}$/.test(x.t))!.tone).toBe('line');
+    expect([title.tone, title.bold, title.fg]).toEqual(['text', true, '#d0d0d0']);
+    const ribbon = head.find((x) => x.t === '◖ ◆ ATLAS ◗')!;
+    expect([ribbon.tone, ribbon.fg, ribbon.bg, ribbon.chip]).toEqual(['dim', '#585858', undefined, undefined]);
+    expect(head.filter((x) => x.chip === true || x.bg !== undefined)).toEqual([]);
+    const rule = head.find((x) => /^─{6,}╮$/.test(x.t))!;
+    expect([rule.tone, rule.fg]).toEqual(['dim', '#585858']);
+    expect(text(head).startsWith('╭─ ')).toBe(true);
+    const sub = rows(todo(2, () => 'pending'), [ag('alpha-explorer', 'working')]).find((r) => text(r).includes('SUBAGENTS'))!;
+    expect(sub.filter((x) => x.chip === true || x.bg !== undefined)).toEqual([]);
   });
   test('the meter is full only when every item is done, and never empty once one is', () => {
     const meter = (done: number, n: number): string => text(rows(todo(n, (i) => (i < done ? 'completed' : 'pending')), [])[0]!).match(/[▰▱]+/)![0];
@@ -41,7 +47,7 @@ describe('title rows: a plain title, the count and the meter inside a thin rule 
   });
   test('ASCII keeps the same cells: `#` and `-` for the meter, a `-` rule', () => {
     const head = text(rows(todo(5, (i) => (i < 3 ? 'completed' : 'pending')), [], { ui: ascii })[0]!);
-    expect(head).toMatch(/^\[ATLAS\] > TODO {2}3\/5 #{5}-{3} -+$/);
+    expect(head).toMatch(/^\+- \[ATLAS\] > TODO {2}3\/5 #{5}-{3} -+\+$/);
     expect(cells(head)).toBe(150);
   });
   test('the title row is exactly the width at every width, with or without the meter', () => {
