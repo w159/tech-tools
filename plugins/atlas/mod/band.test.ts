@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandRows, bandTree, missionTree, planRows, railPhase, shortTool } from './band';
 import { worldModel } from '../contracts/band-world';
-import { PALETTES, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
+import { PALETTES, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { computeCounts, groupTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
@@ -17,6 +17,8 @@ const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, prop
 const els = { Box: mk('Box'), Text: mk('Text') } as unknown as ClientElements;
 const cells = (row: Node): Node[] => row.props.children as Node[];
 const text = (row: Node): string => cells(row).map((t) => t.props.children).join('');
+/** The glyph the band turns for `explorer-1` on `tick`: the spinner clock (snapshot.now moved on by the ticker), the frame the HUD and the panel turn (critique 19 Band 3). */
+const spin = (tick: number): string => spinnerGlyph(spinFrameOf(spinClock(NOW, tick), 'explorer-1'));
 const gate = { id: 'completion' as const, title: 'Gates', lines: [{ ok: false, label: 'x' }] } as any;
 const okGate = { id: 'routing' as const, title: 'Routing', lines: [{ ok: true, label: 'y' }] } as any;
 
@@ -47,7 +49,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ██▌░░░░░░░ 1/4');
     expect(rows[0]).toContain('ctx █░░░░░░░ 12%');
-    expect(rows[0]).toContain(`agents ${spinnerGlyph(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
+    expect(rows[0]).toContain(`agents ${spin(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
     const withTodos = panel(160, { gates: [gate], snapshot: busySnap({ todos: boardTodos as any }) });
     expect(withTodos.rows).toHaveLength(panel(160, { gates: [gate] }).rows.length); // a folded board costs no row
   });
@@ -116,8 +118,8 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ██▌░░░░░░░ 1/4');
     expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ implement · todo 1\/4 · ctx 12% · /); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3)
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
-    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`); // below 50 columns the glyph forms are the last fallback
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
+    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spin(3)}1 ■1 ◉1`); // below 50 columns the glyph forms are the last fallback
   });
   test('idle shows the last run under the band', () => {
     const snapshot = busySnap({ comms: [] });
@@ -153,7 +155,7 @@ describe('workers: a row each, in words', () => {
   test('each state has its mark, tone and word: running, waiting, failed', () => {
     const { rowNodes } = panel(160);
     const run = rowOf(rowNodes, 'explorer-1');
-    expect(text(run)).toContain(`${spinnerGlyph(3)} explorer-1`);
+    expect(text(run)).toContain(`${spin(3)} explorer-1`);
     expect(cells(run)[1]!.props.color).toBe(TONE_HEX.run);
     expect(cellOf(run, 'Grep').props).toMatchObject({ color: TONE_HEX.text, bold: true });
     const wait = rowOf(rowNodes, 'impl-auth');
@@ -170,7 +172,7 @@ describe('workers: a row each, in words', () => {
     for (const tick of [0, 1, 2]) {
       expect(at(tick).find((r) => r.includes('runner-1'))).toContain('■ runner-1');
       expect(at(tick).find((r) => r.includes('impl-auth'))).toContain('◉ impl-auth');
-      expect(at(tick).find((r) => r.includes('explorer-1'))).toContain(`${spinnerGlyph(spinFrameOf(NOW, 'explorer-1'))} explorer-1`);
+      expect(at(tick).find((r) => r.includes('explorer-1'))).toContain(`${spin(tick)} explorer-1`);
     }
   });
   test('running shows the short tool name and its target', () => {
@@ -386,7 +388,7 @@ describe('below 80 columns: only the band, one row', () => {
   test('`◖ ◆ ATLAS ◗ todo 1/4 · ◒ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
+    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {

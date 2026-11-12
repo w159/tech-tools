@@ -115,10 +115,12 @@ const OPEN_GATE = /\bopen\b|todos? drained/;
 export type OpenNow = { allDone: boolean; openLeft: number };
 
 /** Why a band is blocked, after `blocked:` and in plain words: the lead declared it (`needs you`), or the Stop gate refused the stop and said why
- * (`1 todo open`, `team gate`, `team gate, todos drained`). One string at every width: a crowded row drops the reason whole, never rewords it. */
+ * (`1 todo open`, `team gate`, `team gate, todos drained`). `long` is the whole reason; `short` is the same fact in fewer cells for a crowded row (a named dispatch row keeps its T-id and drops its title:
+ * `dispatch T2 open`), so the todo figure and the agent counts stay beside it (critique 19 Band 2: the 61-cell band dropped both for the title). */
 export function blockReasons(declared: boolean, stopGates: readonly string[], dispatchTitle?: string, now?: OpenNow): { long: string; short: string } {
   // The open row Stop refused on is a dispatch row the plan does not list: name it by its plan row's title (`dispatch T2 read ghost.py open`) instead of a count the band's todo figure would have to invent.
   const named = dispatchTitle ? `dispatch ${clipCells(dispatchTitle, DISPATCH_TITLE_MAX)} open` : '';
+  const namedShort = dispatchTitle ? `dispatch ${/^T\d+\b/.exec(dispatchTitle.trim())?.[0] ?? clipCells(dispatchTitle, 8)} open` : '';
   // Critique 17 A4: a declared block keeps naming the open row Stop refused on, so the reason does not flip to `needs you` when the lead's own header arrives (stoprun-150-3, f0097 to the board tab).
   if (declared && !(named && stopGates.some((g) => OPEN_GATE.test(g)))) return { long: 'needs you', short: 'needs you' };
   if (stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
@@ -127,7 +129,7 @@ export function blockReasons(declared: boolean, stopGates: readonly string[], di
   const gates = stopGates.reduce<string[]>((acc, g) => { const w = OPEN_GATE.test(g) ? named || stale || g : g; return acc.includes(w) ? acc : [...acc, w]; }, []);
   const joined = gates.join(', ');
   const one = textWidth(joined) <= REASON_MAX || (named && gates.length === 1) ? joined : `${gates.length} reasons`;
-  return { long: one, short: one };
+  return { long: one, short: named && gates.length === 1 && one === named ? namedShort : one };
 }
 
 /** The lead's reply waits on the person (critique 18 A4): it says so in words (`Waiting on your decision`, `Choose one:`, `say so and I'll write it`). Then the band reads

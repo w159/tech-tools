@@ -11,7 +11,7 @@ import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, parseGates } from "../mod/gates";
 import { gateTally, planBusy, withCoreTally } from "../mod/data/runstate";
-import { hostEnv, paintAnsi, sgrColor, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
+import { hostEnv, paintAnsi, sgrColor, spinClock, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
 import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/board-model";
@@ -143,7 +143,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		cols: w,
 		maxRows: m.maxLines,
 		tick: m.tick,
-		now: m.nowSecs === undefined ? undefined : m.nowSecs * 1000,
+		now: m.nowSecs === undefined ? undefined : spinClock(m.nowSecs * 1000, m.tick), // the one spinner clock, as the Claude Code band turns it
 		project: channelScope(m.channel) || "atlas",
 		scope: m.team,
 		phases: rail.ids,
