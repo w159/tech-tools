@@ -236,7 +236,19 @@ export interface DisciplineDeps {
   reinforce: (snapshot: AtlasSnapshot | null) => string | null;
 }
 
-/** Wires tool.call (heavy-inline meter) and prompt.submit (reinforce + sharpen). */
+/** The prompt.submit work: the lead is busy from the submit, then the reinforce/sharpen lines ride the prompt's context. */
+export async function disciplinePrompt<E extends { text: string; context?: readonly string[]; origin?: { kind: string } }, R>(
+  $: EngineInterface,
+  e: E,
+  next: (input: E) => Promise<R>,
+  deps: DisciplineDeps,
+): Promise<R> {
+  await trackPromptSubmit($); // the lead is busy from the submit (the host spinner shows), not from the first model step: the band never reads idle then (critique 12 B5)
+  const context = await promptContext($, e, deps);
+  return context === e.context ? next(e) : next({ ...e, context });
+}
+
+/** Wires tool.call (heavy-inline meter) and turn.complete. prompt.submit (reinforce + sharpen) is `disciplinePrompt`, called from register.ts's one hook: the host drops the mod when an event has two unmatched hooks. */
 export function registerDiscipline(on: On, deps: DisciplineDeps): void {
   on('tool.call', async ($, e, next) => {
     const agent = e.agentId ?? LEAD;
@@ -245,12 +257,6 @@ export function registerDiscipline(on: On, deps: DisciplineDeps): void {
     await trackToolEnd($, agent);
     await meterHeavy($, e, result);
     return result;
-  });
-
-  on('prompt.submit', async ($, e, next) => {
-    await trackPromptSubmit($); // the lead is busy from the submit (the host spinner shows), not from the first model step: the band never reads idle then (critique 12 B5)
-    const context = await promptContext($, e, deps);
-    return context === e.context ? next(e) : next({ ...e, context });
   });
 
   // A distinct matcher from register.ts's { reason: 'answer' } hook: one hook per matcher.

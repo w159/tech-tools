@@ -2,7 +2,7 @@
 // headless gate silence it, and toasts are rate-limited.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { BIG_TURN_TOKENS, HEAVY_CHARS, HEAVY_LIMIT, TOAST_GAP_MS, factsLine, isVague, reinforceLine, registerDiscipline } from './discipline';
+import { BIG_TURN_TOKENS, HEAVY_CHARS, HEAVY_LIMIT, TOAST_GAP_MS, factsLine, isVague, disciplinePrompt, reinforceLine, registerDiscipline } from './discipline';
 import { memState } from './test_helpers';
 import { leadBusy } from './data/runstate';
 
@@ -19,6 +19,13 @@ describe('reinforceLine', () => {
   });
 });
 
+/** register.ts owns the one prompt.submit hook and calls disciplinePrompt from it; the tests stand in for that hook. */
+function wire(hooks: Map<string, Hook>, reinforce: () => string | null): void {
+  const deps = { reinforce };
+  registerDiscipline(((event: string, a: unknown, b?: unknown) => hooks.set(event, (b ?? a) as Hook)) as unknown as On, deps);
+  hooks.set('prompt.submit', ($, e, next) => disciplinePrompt($, e as { text: string }, next as never, deps));
+}
+
 type Hook = ($: EngineInterface, e: unknown, next: (i: unknown) => Promise<unknown>) => Promise<unknown>;
 const PATTERN = '^ATLAS \\| \\S+ \\w+';
 const GOOD = 'ATLAS | 🔨 implement | go';
@@ -34,8 +41,7 @@ const snapshot = {
 
 function setup(opts: { modOn?: boolean; interactive?: boolean; gitFails?: boolean } = {}) {
   const hooks = new Map<string, Hook>();
-  const on = ((event: string, a: unknown, b?: unknown) => hooks.set(event, (b ?? a) as Hook)) as unknown as On;
-  registerDiscipline(on, { reinforce: () => 'reinforce-line' });
+  wire(hooks, () => 'reinforce-line');
   const rec = { toasts: [] as string[], now: 1_000_000 };
   const $ = {
     state: memState({
@@ -98,7 +104,7 @@ describe('heavy inline meter', () => {
     const e = { tool: 'Read', reason: 'answer', isAborted: false, answer: 'x', text: 'fix it' };
     const broken = { state: { get: async () => { throw new Error('boom'); } } } as unknown as EngineInterface;
     const hooks = new Map<string, Hook>();
-    registerDiscipline(((ev: string, a: unknown, b?: unknown) => hooks.set(ev, (b ?? a) as Hook)) as unknown as On, { reinforce: () => null });
+    wire(hooks, () => null);
     for (const ev of ['tool.call', 'turn.complete', 'prompt.submit']) {
       expect(await hooks.get(ev)!(broken, e, async (i) => i)).toBeDefined();
     }
@@ -120,7 +126,7 @@ describe('critique 12 B5: a submitted prompt is a busy lead from the submit, not
   });
   test('a failing state read never blocks the prompt', async () => {
     const hooks = new Map<string, Hook>();
-    registerDiscipline(((ev: string, a: unknown, b?: unknown) => hooks.set(ev, (b ?? a) as Hook)) as unknown as On, { reinforce: () => null });
+    wire(hooks, () => null);
     const broken = { state: { get: async () => { throw new Error('boom'); } }, clock: { now: async () => { throw new Error('boom'); } } } as unknown as EngineInterface;
     expect(await hooks.get('prompt.submit')!(broken, { text: 'go' }, async (i) => i)).toBeDefined();
   });

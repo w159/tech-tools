@@ -25,7 +25,7 @@ import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, tok, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
 import { registerRouting, registerCompletion } from './routing';
-import { reinforceLine, registerDiscipline } from './discipline';
+import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDeps } from './discipline';
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
 import { isOlder, mergeToasts, registerNotify, stateToast } from './notify';
 import { forgetPlaced, placeFinished } from './transcript/placed';
@@ -1035,6 +1035,23 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 
 // ---- entrypoint -------------------------------------------------------------
 
+/** The first prompt of a run opens the docked pane where the engine would not (unasked it waits for 144 columns; an open behind the
+ * person's prompt is asked and docks from 110). Once per session, never after a by-hand close, never when the band's own dock
+ * check already docked it (150), never below 110 or inline. `ui.open` is called before any await: only then is the prompt behind it.
+ * Called from the mod's one prompt.submit hook: the host refuses a second unmatched prompt.submit hook and drops the whole mod. */
+async function dockOnPrompt($: EngineInterface): Promise<void> {
+	if (booted?.interactive === true && modOnNow && !promptDockDone && !paneClosedByPerson && !paneChecked && shouldDockAsked(lastViewport)) {
+		promptDockDone = true;
+		const opened = $.ui.open(PANE_DOCK);
+		try {
+			await update($, paneOpenedState, () => true);
+			toastUnplaced($)(await opened);
+		} catch (err) {
+			reportFailure($, `atlas: opening the pane failed: ${String(err)}`);
+		}
+	}
+}
+
 export async function register(on: On, options: PluginOptions): Promise<void> {
 	// Sibling registrars, wired by their real signatures. Persona routing pins
 	// model/effort and records spawned agents and turn completions; the
@@ -1048,12 +1065,21 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		},
 	});
 	registerCompletion(on);
-	registerDiscipline(on, {
+	const disciplineDeps: DisciplineDeps = {
 		reinforce: (snapshot) =>
 			snapshot?.contract.headerFirstLinePattern
 				? reinforceLine(snapshot.contract.headerTemplate, snapshot.phase)
 				: null,
+	};
+	registerDiscipline(on, disciplineDeps);
+	// The one prompt.submit hook (the host refuses a second unmatched one and drops the mod): the pane opens first, before any await.
+	on('prompt.submit', async ($, e, next) => {
+		const opening = dockOnPrompt($);
+		const out = disciplinePrompt($, e, next, disciplineDeps);
+		await opening;
+		return out;
 	});
+
 	registerRestyle(on); // its turn.start also drops the previous turn's header phase
 	registerNotify(on, { soundEnabled: () => options.atlas_mod_sound === true });
 	soundOn = () => options.atlas_mod_sound === true;
@@ -1070,23 +1096,6 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	});
 	on('classic.SessionStart', async ($, e, next) => {
 		if (e.source === 'clear' && booted !== null) await boot($, e.cwd, booted.interactive);
-		return next(e);
-	});
-
-	// The first prompt of a run opens the docked pane where the engine would not (unasked it waits for 144 columns; an open behind the
-	// person's prompt is asked and docks from 110). Once per session, never after a by-hand close, never when the band's own dock
-	// check already docked it (150), never below 110 or inline. `ui.open` is called before any await: only then is the prompt behind it.
-	on('prompt.submit', async ($, e, next) => {
-		if (booted?.interactive === true && modOnNow && !promptDockDone && !paneClosedByPerson && !paneChecked && shouldDockAsked(lastViewport)) {
-			promptDockDone = true;
-			const opened = $.ui.open(PANE_DOCK);
-			try {
-				await update($, paneOpenedState, () => true);
-				toastUnplaced($)(await opened);
-			} catch (err) {
-				reportFailure($, `atlas: opening the pane failed: ${String(err)}`);
-			}
-		}
 		return next(e);
 	});
 
