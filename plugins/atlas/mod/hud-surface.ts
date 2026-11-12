@@ -132,7 +132,8 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(wordOf(r, rich), rowWordTone(r.state, r.word))];
   const detail = detailOf(r, rich);
   if (tier !== 'full' || detail === '') return row;
-  return [...toCol(row, metaAt), t(clip(flat(detail), Math.max(1, o.cols - metaAt)), 'sub')];
+  const meta = t(clip(flat(detail), Math.max(1, o.cols - metaAt)), 'sub');
+  return [...toCol(row, metaAt), flat(detail) === flat(r.owner ?? '') ? calmRun(meta) : meta]; // the owner never changes with the row's state: the motion leaves it be (critique 18: it flashed 231 at 0 ms)
 }
 
 /** The numbered phase rail as one row: `● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build`. */
@@ -180,9 +181,15 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   return out;
 }
 
-/** The short form of an outcome that does not fit the LAST column whole: a lone leading word with `...` (`report...`, `read...`) says nothing (critique 16: LAST cut to `read...` at 110). */
-const SHORT_LAST: Readonly<Record<string, string>> = { 'report returned': 'reported' };
-const lastFor = (text: string, room: number): string => (cells(text) > room && SHORT_LAST[text] !== undefined ? SHORT_LAST[text]! : text);
+/** The short form of an outcome that does not fit the LAST column whole. A lone leading word with `...` (`report...`, `read...`) says nothing (critique 16), and neither does `reported`
+ * or a cut sentence (critique 18: `no matching...`): a count shortens to `12 found`, a finished agent's outcome that still does not fit reads `returned`. */
+const SHORT_LAST: Readonly<Record<string, string>> = { 'report returned': 'returned' };
+const lastFor = (text: string, room: number, state: UiState): string => {
+  if (cells(text) <= room) return text;
+  const short = SHORT_LAST[text] ?? text.replace(/^(\d+) functions? found$/, '$1 found');
+  if (cells(short) <= room) return short;
+  return state === 'done' && cells('returned') <= room ? 'returned' : text;
+};
 
 const TASK_W = 5; // `T1,T2`: the task column's width when every agent's ids fit
 /** Every owned id (`T1,T2`) when they fit `width`, else the count (`3 tasks`); an agent that owns none shows nothing. */
@@ -207,7 +214,7 @@ function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, sta
 }
 function agentColsAt(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number, modelMin: number): AgentCols {
   const { cols } = o;
-  const modelW = Math.max(modelMin, ...rows.map((r) => cells(r.model) + (rich ? 1 : 0))); // rich: the cell includes its gap
+  const modelW = Math.max(modelMin, ...rows.map((r) => cells(r.model) + 1)); // the cell includes one blank, and the column after it starts one more cell on: MODEL and TASK never run together (critique 18: `haiku T1`)
   const plan: AgentCols = { modelW, taskW: taskWidth(rows) };
   if (rich) {
     if (stateAt + 14 + 4 + 8 + 5 <= cols) plan.ctx = stateAt + 14;
@@ -272,7 +279,7 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
   cell(r.model, plan.model, plan.modelW, false, true);
   if (!rich) cell(taskText(r), plan.task, plan.taskW, true, true);
-  cell(lastFor(lastText(r.tool), plan.last === undefined ? 0 : cols - plan.last), plan.last, cols, true);
+  cell(lastFor(lastText(r.tool), plan.last === undefined ? 0 : cols - plan.last, r.state), plan.last, cols, true);
   return row;
 }
 
@@ -319,8 +326,8 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
   // Every plan row is drawn while the rows fit at all: the blank and the column names go before a finished row does (critique 18 B1: T1 left the block under `1/5 · 1 done`
   // although ribbon, five rows and three agents fit in the same ten rows). Only when even that does not fit do the finished rows fold into a count (critique 17, B4).
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
-  tries.push({ spacers: false, extras: false, header: false }); // the column-name row is the first row dropped: it never costs the plan a row or the band its summary row
+  // The column names outlive the blank and the rail (critique 18, stoprun-150-562576ed-1/f0080.ans lost them while an agent ran): every try that keeps the header comes before any that drops it.
+  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: true }, { spacers: false, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: false, header: false }];
   tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: true, extras: false, header: false, foldDone: true });
   for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap, header: false }); // a cap is a count of rows: the rest is counted on the ribbon
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).

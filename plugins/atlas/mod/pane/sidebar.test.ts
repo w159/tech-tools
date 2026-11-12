@@ -89,15 +89,17 @@ describe('sidebar shell', () => {
     }
   });
 
-  test('critique 17 B5: at 110 columns (38 inner) the strip is the keyed form wrapped to two rows, every tab a hotkey Button, no zero-width layer', () => {
+  test('critique 18: at 110 columns (38 inner) the strip is one row of the six whole words, the keys bound on the zero-width layer', () => {
     const t = tree({ columns: 38 }, 'gates');
     const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
-    expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs', 'tabs:1']);
+    expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs']); // one strip row, never `tabs:1`
     const visible = rowsOf.flatMap((r) => kids(r).filter((c) => c.kind === 'Button'));
     expect(visible.map((b) => b.props.label)).toEqual(['route', 'team', 'channel', 'gates', 'core', 'board']);
-    expect(visible.map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']); // the host draws `k: ` for each
-    expect(rowsOf.some((r) => kids(r).some(KEYS_W0))).toBe(false);
-    visible.find((b) => b.props.hotkey === 't')!.props.onPress();
+    expect(visible.map((b) => b.props.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]); // the host draws no `k: ` for a Button without a hotkey
+    const layer = rowsOf.flatMap((r) => kids(r).filter(KEYS_W0));
+    expect(layer).toHaveLength(1);
+    expect(kids(layer[0]!).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']); // the keys stay bound
+    visible.find((b) => b.props.label === 'team')!.props.onPress();
     expect(calls).toContain('view:team');
   });
 

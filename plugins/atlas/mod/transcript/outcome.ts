@@ -132,16 +132,34 @@ async function readOutcome($: EngineInterface, who: Who, memo: Map<string, Outco
 
 const firstOf = (...xs: (string | undefined)[]): string => xs.find((x) => !!x) ?? ''
 
+/** Whether the lead resumed the worker after it stopped it: a `SendMessage` to its name or id comes after the last `TaskStop` that named it (critique 18: beta-explorer was stopped by
+ * mistake, resumed and finished, and its finish row still read `failed`). A message sent before the stop is no resume. */
+export function resumedAfterStop(msgs: readonly Msg[], who: Pick<Who, 'id' | 'name'>): boolean {
+ const names = new Set([who.id, who.name].filter(Boolean))
+ const named = (u: { input: Record<string, unknown> }): boolean => Object.values(u.input).some((v) => typeof v === 'string' && names.has(v))
+ let stopped = -1
+ let resumed = -1
+ msgs.forEach((m, i) => { for (const u of m.toolUses ?? []) { if (!named(u)) continue; if (u.tool === 'TaskStop') stopped = i; else if (u.tool === 'SendMessage') resumed = i } })
+ return stopped >= 0 && resumed > stopped
+}
+
 /** The end word of a failed worker (`failed`, `killed`) from every source the mod holds, else undefined: the task's own status, the host row, the sticky
- * memo, the mod's end record (orch activity), the snapshot's squad row and activity, and (when `notified`) the task-notification in the lead transcript. */
+ * memo, the mod's end record (orch activity), the snapshot's squad row and activity, and (when `notified`) the task-notification in the lead transcript.
+ * Critique 18: a worker the lead stopped (TaskStop) reads `killed` whichever source says it failed, one verb on every card; and one the lead stopped, then resumed,
+ * is failed no more unless the host itself says so (its finish row read a stale `failed`, stoprun-150-562576ed-3), so its finish reads `finished`. */
 async function failureOf($: EngineInterface, who: Who, taskStatus: string | undefined, notified: boolean): Promise<string | undefined> {
  const host = badWord(taskStatus) ?? badWord(who.status)
  const known = host ?? (failedSeen.has(who.id) ? 'failed' : undefined) // by id only: a later worker may reuse a name
  const snap = ((await read($, snapshotRef)) ?? null) as unknown as Partial<LiveSnapshot> | null
  const recorded = (await read($, orchRef)).activity[who.id]?.mood === 'failed' || snap?.activity?.[who.name]?.mood === 'failed' || (snap?.squad ?? []).some((a) => a.name === who.name && (a.state === 'failed' || a.state === 'dead'))
- const word = known ?? (recorded ? 'failed' : undefined) ?? (notified ? badWord(notifiedStatus(rows(await $.session.messages().catch(() => [])).map((m) => m.text), who.id)) : undefined)
- if (word) noteFailed(who.id)
- return word
+ const lead = host === undefined && (known || recorded || notified) ? rows(await $.session.messages().catch(() => [])) : [] // the lead transcript is read only when a failure could be in play
+ if (host === undefined && (known || recorded) && resumedAfterStop(lead, who)) { failedSeen.delete(who.id); return undefined }
+ const said = known ?? (recorded ? 'failed' : undefined) ?? (notified ? badWord(notifiedStatus(lead.map((m) => m.text), who.id)) : undefined)
+ if (!said) return undefined
+ noteFailed(who.id)
+ if (said === 'killed') return said
+ const stopped = await killedNames($)
+ return stopped.has(who.id) || stopped.has(who.name) ? 'killed' : said
 }
 
 /** An atlas worker by host id: spawn metadata names it (the band's label), the host row gives its status; a

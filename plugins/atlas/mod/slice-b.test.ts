@@ -193,7 +193,7 @@ describe('B4: lastText and clipWords', () => {
       const line = text(cols, [row()]).find((l) => l.includes('beta-explorer'))!;
       expect(line).not.toMatch(/\b1\. /);
       expect(line).not.toContain('`');
-      expect(line.trimEnd()).toMatch(/(ctx_search|ToolSearch\.\.\.)$/); // the whole text, or cut after a whole word
+      expect(line.trimEnd()).toMatch(/(ctx_search|ToolSearch\.\.\.|returned)$/); // the whole text, or (critique 18) a finished agent's `returned` where it does not fit
     }
   });
   test('LAST then MODEL drop before a TASK is cut or a name is cut', () => {

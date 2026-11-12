@@ -71,7 +71,7 @@ describe('animateRow', () => {
     const lead = mixHex('#89b4fa', '#ffffff', 0.35);
     expect(r0.fg).toBe(lead);
     const late = animateRow(row('running'), 'todo:a', 'running', m.ctx(1000 + MOTION_MS - 1), ui).find((r) => r.t === 'wire the gate')!;
-    expect(late.fg).toBe(mixHex(lead, '#cdd6f4', easeOutCubic((MOTION_MS - 1) / MOTION_MS)));
+    expect(late.fg).toBe(mixHex(lead, '#cdd6f4', easeOutCubic((MOTION_MS - 2 * MOTION_STEP_MS) / MOTION_MS))); // the last beat holds the previous beat's colour: it drops the weight only (critique 18)
   });
   test('256-colour keeps stepping through palette entries; no colour skips the ease', () => {
     const m = changed();

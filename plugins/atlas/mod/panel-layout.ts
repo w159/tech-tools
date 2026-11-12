@@ -66,9 +66,14 @@ export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; 
     const tabs = formTabs(f);
     if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap, bare: false };
   }
-  // One form on every tab (critique 17: the board wrapped the strip to two rows and the route tab dropped the keys to one): the keys stay on screen and wrap. The scorer finds the pane by
-  // `r: route`, and the Board pane's strip is the only place that names the hotkeys once the board has replaced the view the person was on.
   const wide = STRIP_FORMS[0]!;
+  // Critique 18: the 110-column pane is about 38 cells and the prefixed strip wrapped onto two lines on every tab. The six whole words alone fit one row down to 35 cells: the form
+  // depends on the width only (never on the lit tab, which critique 17 asked for), the keys stay bound (mod/pane/sidebar.tsx's zero-width layer) and the band footer names them.
+  for (const gap of [wide.gap, 1]) {
+    const words = formTabs(wide);
+    if (stripWidth(words, gap, 0) <= inner) return { rows: [words], gap, bare: true };
+  }
+  // Narrower still, one form on every tab (critique 17: the board wrapped the strip to two rows and the route tab dropped the keys to one): the keys stay on screen and wrap.
   return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap, bare: false };
 }
 

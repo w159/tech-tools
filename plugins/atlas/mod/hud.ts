@@ -6,7 +6,7 @@ import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
-import { DONE_DOUBT, WORKER_FAILED, motionState, hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, WORKER_FAILED, cells, motionState, hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -157,31 +157,46 @@ export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastToo
   return outcome || (state === 'done' && a.lastTool ? 'report returned' : lastAction(a, root));
 }
 
-/** A tool echo as the evidence rows hold it: `1. Read \`/p/alpha.py\` -> first 3 lines: ...` (tool, target, `->`, what came back). */
-const ECHO = /^(?:\d{1,3}[.)]\s+)?[A-Za-z][\w-]*\s+`?([^\s`]+)`?\s+->\s+(.*)$/;
-/** What came back is a dump of the file's lines (`first 3 lines:`, `line 1 \`def ...\``): content, not an outcome. */
-const DUMP = /^(?:first|last)\s+\d+\s+lines?\b|^lines?\s+\d/i;
+/** A tool echo as the evidence rows hold it: `1. Read \`/p/alpha.py\` -> first 3 lines: ...` (tool, one target token and an optional `(note)`, `->`, what came back). */
+const ECHO = /^([A-Za-z][\w-]*)\s+(`[^`]+`|\S+)(?:\s+\([^)]*\))?\s+->\s+(.*)$/;
+const LIST_NUMBER = /^\d{1,3}[.)]\s+/;
+/** What came back is a dump of the file's lines (`first 3 lines:`, `line 1 \`def ...\``, `full file is 7 lines`, `1 def f():`): content, not an outcome. */
+const DUMP = /^(?:first|last)\s+\d+\s+lines?\b|^lines?\s+\d|^(?:the\s+)?(?:full\s+)?file\s+is\s+\d+\s+lines?\b|^\d{1,4}\s+(?:(?:def|function|func|fn|class|import|from|const|let|var|return)\b|#|\/\/)/i;
 const FUNCTION = /\b(?:def|function|func|fn)\s+\w/g;
+/** The longest outcome LAST is given: a sentence past it is cut to a clause, else replaced by a plain phrase (critique 18: no `1.`, no cut sentence). */
+const OUTCOME_MAX = 40;
 
 /** The short outcome of a finished agent's report or evidence (critique 17: LAST read `Read alpha.py -> first 3 lines: 1 def...`): a STATUS word, a count of what a file dump
- * holds (`2 functions found`, else `alpha.py read`), the result of a tool echo, else the first sentence. */
+ * holds (`2 functions found`, else `alpha.py read`), the result of a tool echo, else the first sentence; critique 18: the list number is dropped, a result past
+ * OUTCOME_MAX cells loses its parenthetical, then is cut to a clause, then reads `<tool> returned` (`report returned` with no echo). */
 export function outcomeOf(text: string): string {
   const status = /\bSTATUS:\s*([A-Za-z]+)/.exec(text)?.[1]?.toLowerCase();
   if (status && status !== 'done') return status;
   const deliverable = status ? /\bDELIVERABLE:\s*(.+)$/.exec(text)?.[1] : undefined;
   if (status && !deliverable) return 'done';
-  const body = flat(deliverable ?? text);
+  const body = flat(deliverable ?? text).replace(LIST_NUMBER, '');
+  if (body === '') return '';
   const echo = ECHO.exec(body);
   if (echo) {
-    const result = echo[2]!.replace(/`/g, '');
-    if (!DUMP.test(result)) return sentence(result);
+    const result = echo[3]!.replace(/`/g, '');
+    if (!DUMP.test(result)) return plain(result, `${echo[1]!.toLowerCase()} returned`);
     const n = (result.match(FUNCTION) ?? []).length;
-    return n > 0 ? `${n} ${n === 1 ? 'function' : 'functions'} found` : `${echo[1]!.split('/').pop()} read`;
+    return n > 0 ? `${n} ${n === 1 ? 'function' : 'functions'} found` : `${echo[2]!.replace(/`/g, '').split('/').pop()} read`;
   }
-  return sentence(body);
+  return plain(body, 'report returned');
 }
 /** The text to its first full stop (a stop followed by a space: `alpha.py` is no sentence end). */
 const sentence = (s: string): string => { const at = s.search(/[.!?](?:\s|$)/); return at >= 0 ? s.slice(0, at + 1) : s; };
+/** One sentence of `s` that fits OUTCOME_MAX: whole, else without its parentheticals, else its first clause, else `fallback`. */
+function plain(s: string, fallback: string): string {
+  const fits = (x: string): boolean => x !== '' && cells(x) <= OUTCOME_MAX && !/^\d{1,3}[.)]?$/.test(x);
+  const first = sentence(s);
+  if (fits(first)) return first;
+  const bare = sentence(first.replace(/\s*\([^)]*\)/g, '').replace(/\s{2,}/g, ' ').trim());
+  if (fits(bare)) return bare;
+  const clause = bare.split(/[;:,]\s/)[0]!.replace(/[\s,;:-]+$/, '');
+  return fits(clause) ? clause : fallback;
+}
 
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
@@ -192,7 +207,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const tasks = plan.flatMap((t, i) => (mine(t) ? [i + 1] : []));
     const state = a.ui ?? workerUiState(a.state);
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
-    return { name: a.name, id: a.key ?? a.name, state, model: shortModel(a.model), tasks, tool: last, ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
+    return { name: a.name, id: a.key ?? a.name, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, ...(taskOf(a.task) ? { task: taskOf(a.task) } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -246,7 +261,7 @@ export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
 export const hudCompactRows = (input: HudInput, cols = 120): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: false }).length; // the floor has no column-name row: it is drawn only when the budget also leaves the band its summary row
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length; // critique 18: the column names are part of the floor, so the slot never drops them while the block shows (fitRows still drops them in a slot with no room)
 };
 
 /** Rows of the compact form WITH the Subagents column names and the blank between the blocks: what the register gives the HUD when the slot can hold them

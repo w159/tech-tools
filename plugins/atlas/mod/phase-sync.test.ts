@@ -95,8 +95,8 @@ describe('A2: `returned` has a mark of its own', () => {
 });
 
 describe('A3: the deterministic ramp has no duplicate frames, and the HUD state word fades with its glyph', () => {
-  /** The colour and text of the row that changed (other rows keep turning their spinners). */
-  const shot = (rows: readonly (readonly Run[])[]): string => rowWith(rows, 'wire the gate').map((x) => `${x.fg ?? x.tone}|${x.t}`).join('');
+  /** The colour, weight and text of the row that changed (other rows keep turning their spinners); critique 18: the last beat changes the weight only, so it counts. */
+  const shot = (rows: readonly (readonly Run[])[]): string => rowWith(rows, 'wire the gate').map((x) => `${x.fg ?? x.tone}|${x.bold ? 'b' : ''}|${x.t}`).join('');
   const observed = (ui: Ui): { m: Motion; after: LiveSnapshot } => {
     const m = new Motion(true);
     for (const [k, v] of Object.entries(motionFeed(snapOf(['in_progress', 'pending', 'pending']), [], null, ui))) m.observe(k, v, NOW);

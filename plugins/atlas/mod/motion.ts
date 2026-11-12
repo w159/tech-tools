@@ -301,7 +301,9 @@ export function ramp256(accent: string, rest: string, theme: Ui['theme'], lifted
     const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
     const d = Math.sign(luminance(target) - luminance(out[0]!));
     if (d !== 0 && deltaE(lead, out[0]!) >= MIN_STEP_DE && Math.sign(luminance(out[0]!) - luminance(lead)) === d) out.unshift(lead);
-    if (lifted) out.push(target);
+    // A lifted run ends bold on its rest colour and drops the weight on the last beat: the colour must already be at rest then, so the weight and the colour never
+    // move in one frame (critique 18: bold dropped as 151 stepped to 146 at 600 ms). The rest colour takes the last two beats, so the staircase keeps MAX_BEATS - 2 steps.
+    if (lifted) { out.length = Math.min(out.length, MAX_BEATS - 2); out.push(target); }
   }
   const ramp = out.slice(0, MAX_BEATS);
   rampCache.set(key, ramp);
@@ -325,7 +327,8 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
     if (ui.color !== 'none') {
       const palette = PALETTES[ui.theme];
       const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
-      const t = easeOutCubic(pc);
+      // The weight falls on the last beat (`weighted`): the colour holds the previous beat's mix then, so one frame never moves both (critique 18: bold dropped as the text stepped 151 to 146).
+      const t = easeOutCubic(beat >= MAX_BEATS - 1 ? easeProgress(e, e.changed + (beat - 1) * MOTION_STEP_MS) : pc);
       const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '' && !calm.has(r));
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;
