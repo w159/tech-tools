@@ -75,7 +75,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
     : centred(pm, 'nothing on the board yet');
   // Under the rows, what fills the pane: one timeline row per agent (`alpha-explorer ━━━━━━━━ 14s ●`), as many as the spare height holds.
   const spare = max - lines.length - 2;
-  const timeline = items.length && spare >= 2 ? boardTimeline(pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs })), { cols, ui, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }) }, spare - 1) : [];
+  const timeline = items.length && spare >= 2 ? boardTimeline(pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs, startMs: w.startMs, endMs: w.endMs })), { cols, ui, tick: m.tick ?? 0, motion: m.motion, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }) }, spare - 1) : [];
   const body = timeline.length ? [...lines, { runs: [{ t: ' ', tone: 'text' as const }] }, ...timeline] : lines;
   const shown = body.length <= max ? body : [...body.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${body.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: shown.map((l) => lineEl(els, { runs: l.runs }, m, on, ui)) });

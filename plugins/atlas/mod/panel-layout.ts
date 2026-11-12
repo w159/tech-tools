@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, countRuns, DONE_KILLED, GRID_LEAD, meter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, countRuns, DONE_KILLED, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
@@ -69,7 +69,7 @@ export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; 
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
-export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; tools?: number };
+export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; /** When the worker started and when its run ended (or now), in the snapshot clock's ms: the board's Gantt places its bar by them. */ startMs?: number; endMs?: number; tools?: number };
 export type PanelGateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string; /** Only Stop decides it (data/runstate withPending): drawn `◇`. */ pending?: boolean };
 export type PanelGate = { id: string; title: string; error?: string; lines: PanelGateLine[] };
 export type PanelNote = { at: string; from: string; to?: string; kind?: string; text: string; lead?: boolean };
@@ -265,7 +265,7 @@ function todoCount(m: PanelModel): PanelLine {
   const done = m.todos.filter((t) => t.state === 'done').length;
   const total = m.todos.length;
   if (!total) return line([label('todo', m.cols), r('no tasks yet', 'muted')]);
-  const g = m.cols >= 40 ? [...meter(10, done / total, m.ui), r(' ')] : []; // the HUD's `▰▱` meter (atlas-ui meter()), never the `████░░` gauge
+  const g = m.cols >= 40 ? [...todoMeter(done, total, m.ui), r(' ')] : []; // the HUD's own meter (8 cells, ok green; atlas-ui todoMeter), never the `████░░` gauge
   return line([label('todo', m.cols), ...g, r(planFigure(done, total, m.todos.filter((t) => t.word === RETURNED).length))]);
 }
 
@@ -425,16 +425,25 @@ function routeBody(m: PanelModel): PanelLine[] {
   // A narrow pane (the 110-column pane is 37) drops the owner: the title's `(alpha-explorer)` and the owner column both go, the team tab names the owner (critique 17: the title wrapped
   // to `T1 read alpha.py` / `(alpha-explorer) done`, a staircase that doubled the row height).
   const narrow = m.cols < SPILL_BELOW;
-  const ordered = narrow ? m.todos.map(withoutOwner) : m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
-  // The owner column goes first (critique 12 A2): a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`) prints no second copy, so the title keeps the room.
-  const widest = narrow ? 0 : Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
-  // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
-  // Critique 19 C4: a pane that can keep a whole title beside `done · worker killed` spells it in the state cell; a narrower one (and the 100+ reason column) does not.
-  const doubtWord = !narrow && m.cols < WIDE && ordered.some((t) => markOf(t.state, t.word) === 'doubt') && m.cols - GRID_LEAD - cells(DONE_KILLED) - 1 >= TITLE_MIN_W + 4;
-  const todoWordW = ordered.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), doubtWord ? cells(DONE_KILLED) : WORD_W); // 8 while a row reads `returned`
-  const titleMax = m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols; // from 100 columns the title leaves the reason a column
-  const titles = [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))];
-  const plan = gridPlan(m.cols, { names: titles, word: todoWordW, value: widest, optional: true, min: Math.min(titleMax, Math.max(8, ...ordered.filter((t) => t.owner && !ownerColumn(t)).map((t) => cells(oneLine(t.label))))), max: titleMax }); // a title that names its owner stays whole: the column gives way before it is cut
+  let ordered = narrow ? m.todos.map(withoutOwner) : m.todos; // the Board's order (plan rows as the board lists them), not regrouped by state
+  const layout = (os: readonly PanelTodo[]) => {
+    // The owner column goes first (critique 12 A2): a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`) prints no second copy, so the title keeps the room.
+    const widest = narrow ? 0 : Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...os.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
+    // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
+    // Critique 19 C4: a pane that can keep a whole title beside `done · worker killed` spells it in the state cell; a narrower one (and the 100+ reason column) does not.
+    const doubtWord = !narrow && m.cols < WIDE && os.some((t) => markOf(t.state, t.word) === 'doubt') && m.cols - GRID_LEAD - cells(DONE_KILLED) - 1 >= TITLE_MIN_W + 4;
+    const todoWordW = os.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), doubtWord ? cells(DONE_KILLED) : WORD_W); // 8 while a row reads `returned`
+    const titleMax = m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols; // from 100 columns the title leaves the reason a column
+    const titles = [' '.repeat(TITLE_MIN_W), ...os.map((t) => oneLine(t.label))];
+    const plan = gridPlan(m.cols, { names: titles, word: todoWordW, value: widest, optional: true, min: Math.min(titleMax, Math.max(8, ...os.filter((t) => t.owner && !ownerColumn(t)).map((t) => cells(oneLine(t.label))))), max: titleMax }); // a title that names its owner stays whole: the column gives way before it is cut
+    return { doubtWord, todoWordW, plan };
+  };
+  let lay = layout(ordered);
+  // Critique 23: a worker's name is never cut (`T1 read alpha.py (alpha-explo… done` at 150 columns). When a title that ends in its owner does not fit whole, every row drops the `(owner)` and the
+  // owner column carries it, whole (the narrow pane has always done this).
+  const cutOwner = (t: PanelTodo): boolean => !!t.owner && oneLine(t.label).endsWith(` (${t.owner})`) && cells(oneLine(t.label)) > lay.plan.nameW;
+  if (!narrow && ordered.some(cutOwner)) { ordered = ordered.map(withoutOwner); lay = layout(ordered); }
+  const { doubtWord, todoWordW, plan } = lay;
   const shown: PanelLine[] = [];
   const shownTitles = labelCut(ordered.map((t) => oneLine(t.label)), plan.nameW);
   for (const [i, t] of ordered.entries()) {
@@ -606,17 +615,18 @@ const NOTE_LINES_SHORT = 2; // rows one message may take on a short pane
 const NOTE_INLINE_MIN = 20; // cells of text a one-row post needs beside its whole name; less and the post takes two rows
 
 function channelBody(m: PanelModel): PanelLine[] {
+  const rows = channelLog(m);
+  // Critique 23: the generated slug is no title and not the head's business (`this run  1 person  ....  #lc-ila3f5i_` read as a cut name in an empty pane). The live scorer finds the channel by its
+  // `#name`, so the id stays as one quiet line at the foot of the log, only where the pane has a spare row for it.
+  const id = channelLabel(m.channel) === 'this run' && m.channel && m.notes.length ? `#${m.channel}` : '';
+  return id && spareRows(m, rows.length) >= 1 ? [...rows, BLANK, line(fitRuns([r(`${' '.repeat(GRID_LEAD)}${id}`, 'dim')], m.cols))] : rows;
+}
+
+function channelLog(m: PanelModel): PanelLine[] {
   const ind = ' '.repeat(GRID_LEAD); // the indent every other tab's rows have: the name column (critique 11: the channel head sat one cell from the border)
   const count = `${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`;
   const title = channelLabel(m.channel);
-  // The title is `this run` for a generated channel; its real id stays on the head's right edge in the dim tone (the live scorer looks for the channel name) while there is room, never as the title.
-  const id = title === 'this run' && m.channel ? `#${m.channel}` : '';
-  const used = GRID_LEAD + cells(title) + 2 + cells(count);
-  const gap = m.cols - 1 - used - cells(id);
-  const head = line(fitRuns([
-    r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted'),
-    ...(id && gap >= 2 ? [r(' '.repeat(gap)), r(id, 'dim')] : []),
-  ], m.cols));
+  const head = line(fitRuns([r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted')], m.cols));
   if (!m.notes.length) return [head, ...centred(m, 'no messages yet')];
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane

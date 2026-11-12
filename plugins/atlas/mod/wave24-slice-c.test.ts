@@ -28,7 +28,7 @@ describe('board (step 1)', () => {
   test('the meter fills with the items done and never counts a dispatch row', () => {
     const half = [item(1), item(2), item(3, { state: 'running' }), item(4, { state: 'queued' })];
     const head = pane([...half, ...dispatchRows], 50, { dispatches: 3 })[0]!;
-    expect(head).toMatch(/^ {2}4 items · 3 dispatches +▰{5}▱{5}$/);
+    expect(head).toMatch(/^ {2}4 items · 3 dispatches +▰{4}▱{4}$/);
     expect(boardSummary([...half, ...dispatchRows])).toEqual({ items: 4, dispatches: 3, done: 2 });
   });
   test('the owner sits in one right-hand column on every row and never wraps onto a second line', () => {
@@ -102,12 +102,12 @@ describe('team tab (step 2)', () => {
 
 describe('channel tab (step 3)', () => {
   const note = (over: Partial<PanelModel['notes'][number]> = {}): PanelModel['notes'][number] => ({ at: '10:02', from: 'lead', text: 'hello', ...over });
-  test('a generated launch id is not the title: the title is `this run`, the id sits dim on the right edge', () => {
+  test('a generated launch id is not the title: the title is `this run`, the id leaves the head (critique 23)', () => {
     for (const cols of [80, 50]) {
       const head = body('channel', cols, { channel: 'lc-qksrlqem', people: 3, unread: 0, notes: [] })[0]!;
       expect(head).toMatch(/^ {4}this run {2}3 people/);
       expect(head).not.toMatch(/^ {4}lc-/);
-      expect(head.endsWith('#lc-qksrlqem')).toBe(true);
+      expect(head).not.toContain('#lc-');
       expect(cells(head)).toBeLessThanOrEqual(cols - 1);
     }
   });

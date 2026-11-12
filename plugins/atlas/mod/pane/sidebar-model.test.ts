@@ -7,13 +7,14 @@ import type { LiveSnapshot } from '../orchestra-types';
 import type { SquadAgent } from '../contract';
 import { bodyLines, lineText, panelText } from '../panel-layout';
 import type { Ui } from '../atlas-ui';
+import { forgetRefusals } from '../data/channels';
 import { panelModelOf } from './sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './sidebar';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const sq = (name: string, state: SquadAgent['state'], over: Partial<SquadAgent> = {}): SquadAgent => ({ name, persona: 'runner', state, source: 'task', ...over });
 const act = (over: Record<string, unknown> = {}) => ({ tool: null, since: NOW - 1000, toolCount: 0, tokens: null, mood: 'idle', lastLine: '', ...over });
-const world = (over: Partial<LiveSnapshot> = {}): LiveSnapshot => ({ ...busySnap(), squad: [], activity: {}, comms: [], members: [], todos: [], now: NOW, ...over }) as LiveSnapshot;
+const world = (over: Partial<LiveSnapshot> = {}): LiveSnapshot => (forgetRefusals(), { ...busySnap(), squad: [], activity: {}, comms: [], members: [], todos: [], now: NOW, ...over }) as LiveSnapshot;
 const model = (snapshot: LiveSnapshot, over: Partial<SidebarModel> = {}, view: SidebarModel['ui']['view'] = 'team'): SidebarModel =>
   ({ snapshot, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns: 80, rows: 40, tick: 0, ...over }) as SidebarModel;
 const team = (s: LiveSnapshot, cols = 80, over: Partial<SidebarModel> = {}): string[] => bodyLines(panelModelOf(model(s, { columns: cols + 1, ...over }), ui, cols)).map((l) => lineText(l).trimEnd());
@@ -63,8 +64,8 @@ describe('channel tab from the live snapshot', () => {
   test('a missing channel name reads #channel; a note with a bad timestamp reads --:--; a good one reads hh:mm', () => {
     const out = chan(world({ channel: undefined as never, notes: [note(1, 'a', { ts: 'not a time' }), note(2, 'b')] as never }));
     expect(out[0]).toMatch(/^ {4}#channel /);
-    expect(out[1]).toMatch(/^ {4}a note 1 +--:--$/); // the time is the right-aligned value column
-    expect(out[2]).toMatch(/^ {4}b note 2 +10:02$/);
+    expect(out[1]).toMatch(/^ {4}a +note 1 +--:--$/); // the time is the right-aligned value column
+    expect(out[2]).toMatch(/^ {4}b +note 2 +10:02$/);
   });
 });
 

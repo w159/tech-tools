@@ -30,7 +30,7 @@ describe('step 2: one vocabulary with the HUD', () => {
   test('the route meter is the HUD one, `▰▱`', () => {
     const todos = [{ id: '1', label: 'a', state: 'done' as const }, { id: '2', label: 'b', state: 'queued' as const }];
     const row = text('route', 150, { todos }).find((l) => l.startsWith(' todo'))!;
-    expect(row).toMatch(/^ todo {3}▰{5}▱{5} 1\/2/);
+    expect(row).toMatch(/^ todo {3}▰{4}▱{4} 1\/2/);
   });
 });
 
@@ -72,11 +72,13 @@ describe('step 3: the board pane', () => {
   });
   test('the timeline is one row per agent, `alpha-explorer ━━━━ 14s ●`: the bar as long as the run, the glyph its state, queued agents left off', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
-    expect(t).toHaveLength(2);
+    expect(t).toHaveLength(4); // the two agents, a blank between them, the time axis
     expect(t[0]).toMatch(/^ {2}alpha-explorer ━+ +14s ●$/);
-    expect(t[1]).toMatch(/^ {2}gamma {10}━+ +7s [◐◓◑◒]$/);
+    expect(t[1]).toBe('');
+    expect(t[2]).toMatch(/^ {2}gamma {10}━+ +7s [◐◓◑◒]$/);
+    expect(t[3]).toMatch(/^ {17}0s ─+ 14s$/);
     const bar = (l: string): number => [...l].filter((c) => c === '━').length;
-    expect(bar(t[0]!)).toBeGreaterThan(bar(t[1]!));
+    expect(bar(t[0]!)).toBeGreaterThan(bar(t[2]!));
     expect(boardTimeline([{ name: 'a', state: 'done', secs: 3 }], { cols: 10, ui: mocha })).toEqual([]);
   });
 });

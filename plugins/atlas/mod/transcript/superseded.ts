@@ -6,6 +6,10 @@ const MAX = 200;
 const drawn: string[] = []; // ids of the done chips drawn, oldest first
 const dead = new Set<string>();
 let refused = false;
+let flipped: (() => void) | null = null;
+
+/** `fn` runs when a Stop refusal supersedes done chips already drawn (the transcript drops their cached answers). One listener: the last registration. */
+export const onSuperseded = (fn: (() => void) | null): void => { flipped = fn; };
 
 /** Record that the done chip `id` was drawn; whether a Stop refusal has already superseded it. Without an id nothing can be told apart: never superseded. */
 export function noteDoneChip(id: string | undefined): boolean {
@@ -16,7 +20,7 @@ export function noteDoneChip(id: string | undefined): boolean {
 
 /** The last Stop verdict as the panel reads it. A flip to refused supersedes every done chip drawn so far; each later reading of the same verdict changes nothing. */
 export function noteStopVerdict(blocked: boolean): void {
-  if (blocked && !refused) for (const id of drawn) dead.add(id);
+  if (blocked && !refused && drawn.length) { for (const id of drawn) dead.add(id); try { flipped?.(); } catch { /* display only */ } }
   refused = blocked;
 }
 

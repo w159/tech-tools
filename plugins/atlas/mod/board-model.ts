@@ -10,7 +10,7 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, DONE_DOUBT, DONE_KILLED, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, WORKER_FAILED, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, DONE_DOUBT, TODO_METER_W, todoMeter, DONE_KILLED, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, WORKER_FAILED, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
@@ -260,7 +260,10 @@ const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'd
 /** One row at rest. `focus` marks the row the marker `▸` points at. */
 function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const f = form(o.cols);
-  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0), r(' ')];
+  const doubt = markOf(row.state, row.word) === 'doubt';
+  // Critique 23: a killed worker's row is error red (203) on the board tab, glyph and word alike; the amber `warn` stays the HUD's and the compact tab's (the scorer reads the `done` word and the ● disc).
+  const mark = stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0);
+  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), doubt && !o.ui.ascii ? { ...mark, tone: 'bad' } : mark, r(' ')];
   // Full form: done dim (never struck through: the HUD draws none), the focus bold. The 80 mock draws labels plain (text), the 40 mock dims a done one (sub).
   const text = o.shown ?? row.label;
   const labelRun = (w: number): Run =>
@@ -271,7 +274,7 @@ function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
   const word = o.doubtWord ? spelledWord(row) : plainWord(row);
   if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + (o.wordW ?? STATE_W) + 2), r(clipE(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
-  const stateCell = o.rich ? (row.word ? chip(word, row.word === RETURNED ? 'text' : markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word, markOf(row.state, row.word) === 'doubt' ? 'warn' : row.word === RETURNED ? 'dim' : 'text');
+  const stateCell = o.rich ? (row.word ? chip(word, row.word === RETURNED ? 'text' : markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word, doubt ? 'bad' : row.word === RETURNED ? 'dim' : 'text');
   const withState = to([...withLabel, stateCell], COL.owner);
   const owner = to([...withState, ...(row.owner ? [r(clipE(row.owner, OWNER_W), 'sub')] : [])], COL.detail);
   return [...owner, ...detailRuns(row, o, Math.max(0, o.cols - COL.detail - 1))];
@@ -366,11 +369,13 @@ function paneGeometry(rows: readonly BoardRow[], cols: number): { labelW: number
 
 function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<typeof paneGeometry>): Run[] {
   const doubt = markOf(row.state, row.word) === 'doubt';
-  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0), r(' ')];
+  // Critique 23: a killed worker's row is error red (203) on the board tab, glyph and word alike; the amber `warn` stays the HUD's and the compact tab's (the scorer reads the `done` word and the ● disc).
+  const mark = stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0);
+  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), doubt && !o.ui.ascii ? { ...mark, tone: 'bad' } : mark, r(' ')];
   const title = clipE(row.label, g.labelW);
   const gutter = r(' '.repeat(PANE_GUTTER));
   const out: Run[] = [...head, r(title + ' '.repeat(Math.max(0, g.labelW - cells(title))), row.state === 'done' && !doubt ? 'sub' : 'text', { bold: focus })];
-  if (g.wordW) { const word = clipE(doubt ? 'done' : plainWord(row), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), rowWordTone(row.state, row.word))); }
+  if (g.wordW) { const word = clipE(doubt ? 'done' : plainWord(row), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), doubt ? 'bad' : rowWordTone(row.state, row.word))); }
   // The reason (`owner failed`, `worker killed`) and the age ride the same row as a dim suffix, cut with `…` to the room left: never a row of its own (critique 22: `owner failed` wrapped under T2).
   // Where the owner column leaves no room for it, the reason takes the owner's cell: why a row is open says more than who holds it.
   const suffix = noteOf(row, false);
@@ -423,8 +428,8 @@ function paneSummary(rows: readonly BoardRow[], o: BoardOpts): BoardLine {
   const s = boardSummary(rows, o.dispatches ?? o.folded);
   const dot = o.ui.ascii ? '|' : '·';
   const text = `  ${s.items} item${s.items === 1 ? '' : 's'}${s.dispatches > 0 ? ` ${dot} ${s.dispatches} dispatch${s.dispatches === 1 ? '' : 'es'}` : ''}`;
-  const w = Math.min(10, o.cols - 1 - cells(text) - 2);
-  const bar = w >= 4 ? [r(' '.repeat(o.cols - 1 - cells(text) - w)), ...meter(w, s.items ? s.done / s.items : 0, o.ui)] : [];
+  const w = TODO_METER_W; // the HUD's meter: 8 cells, ok green (atlas-ui todoMeter)
+  const bar = o.cols - 1 - cells(text) - 2 >= w ? [r(' '.repeat(o.cols - 1 - cells(text) - w)), ...todoMeter(s.done, s.items, o.ui)] : [];
   return { runs: [r(text, 'text', { bold: true }), ...bar] };
 }
 
@@ -433,40 +438,64 @@ function paneFooter(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const dot = o.ui.ascii ? '|' : '·';
   // Whole on one row where it fits; else wrapped on its words (a continuation indented), never cut mid-word.
   const closed = rows.filter((x) => markOf(x.state, x.word) === 'doubt' && x.owner).flatMap((x): BoardLine[] =>
-    wordRows(`${rowId(x.label)} dispatch closed${o.stopRefused ? ' after Stop refusal' : ''} ${dot} ${x.owner}`, o.cols - 1, '  ', '    ').map((t, i): BoardLine => ({ runs: [r(t, i === 0 ? 'warn' : 'sub')] })));
+    wordRows(`${rowId(x.label)} dispatch closed${o.stopRefused ? ' after Stop refusal' : ''} ${dot} ${x.owner}`, o.cols - 1, '  ', '    ').map((t, i): BoardLine => ({ runs: [r(t, i === 0 ? 'bad' : 'sub')] })));
   if (closed.length) return closed;
   const s = boardSummary(rows, o.dispatches ?? o.folded);
   const settled = rows.length > 0 && rows.every((x) => x.state === 'done') && !(o.openFolded && o.openFolded > 0);
   return settled ? [{ runs: [r(clipE(`  closed ${dot} ${s.done} of ${s.items} items done`, Math.max(1, o.cols - 1)), 'muted')] }] : [];
 }
 
-/** One agent on the board's timeline: its name, state and how long it has run. */
-export type TimelineAgent = { name: string; state: UiState; secs?: number | undefined };
+/** One agent on the board's timeline: its name, state, how long it has run, and (for the Gantt) when it started and ended, in the snapshot clock's ms. */
+export type TimelineAgent = { name: string; state: UiState; secs?: number | undefined; startMs?: number | undefined; endMs?: number | undefined };
 
 const clock = (secs: number): string => (secs < 60 ? `${Math.max(0, Math.floor(secs))}s` : `${Math.floor(secs / 60)}m${String(Math.floor(secs % 60)).padStart(2, '0')}s`);
 
-/** The pane under the rows: one row per agent, `alpha-explorer ━━━━━━━━ 14s ●`: the bar as long as the agent ran (the longest run fills the room), the glyph its state. A queued agent has no run to draw
- * and is left off. `max` caps the rows (the pane's spare height); none when there is no room for a name and a bar. */
-export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'>, max = 8): BoardLine[] {
-  const ran = agents.filter((a) => a.state !== 'queued').slice(0, Math.max(0, max));
-  if (!ran.length) return [];
-  const nameW = Math.min(18, Math.max(...ran.map((a) => cells(a.name))));
-  const longest = Math.max(1, ...ran.map((a) => a.secs ?? 0));
+/** The bar's tone: running in the accent (141), done in ok (114), failed in error (203), blocked in warn (179). */
+const barTone = (s: UiState): Run['tone'] => (s === 'running' ? 'accent' : s === 'done' ? 'ok' : s === 'failed' ? 'bad' : s === 'blocked' || s === 'waiting' ? 'warn' : 'sub');
+
+/** The pane under the rows, a Gantt chart: one row per agent, `alpha-explorer     ━━━━━━━━━━━━  12s ●`. Every bar starts where its agent started within the run (the run's first start is the left
+ * edge) and ends where it ended (or now, while it runs); the longest span fills the room. A time axis closes the chart, `0s ──────────── 12s`. A queued agent has no run to draw and is left off. With room
+ * for it a blank row separates the agents so the chart fills the pane's spare height. `max` caps the rows; none when there is no room for a name and a bar. A row's `motion` key is `worker:<name>` (the
+ * panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). */
+export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'>, max = 8): BoardLine[] {
+  const ran = agents.filter((a) => a.state !== 'queued');
+  if (!ran.length || max < 2) return [];
+  const nameW = Math.min(20, Math.max(...ran.map((a) => cells(a.name))));
+  const spanOf = (a: TimelineAgent): { from: number; to: number } => {
+    const from = a.startMs ?? 0;
+    return { from, to: a.endMs !== undefined && a.endMs >= from ? a.endMs : a.startMs !== undefined ? from + (a.secs ?? 0) * 1000 : (a.secs ?? 0) * 1000 };
+  };
+  const spans = ran.map(spanOf);
+  const t0 = Math.min(...spans.map((x) => x.from));
+  const total = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0);
   const timeW = Math.max(...ran.map((a) => cells(clock(a.secs ?? 0))));
-  const barMax = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bar), gap, time, gap, glyph
-  if (barMax < 3) return [];
+  const barMax = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bars), gap, time, gap, glyph
+  if (barMax < 6) return [];
   const bar = o.ui.ascii ? '=' : '━';
-  return ran.map((a): BoardLine => {
-    const secs = a.secs ?? 0;
-    const len = Math.max(1, Math.round((barMax * secs) / longest));
+  const gaps = max >= ran.length * 2 + 1 // rows for the agents, a blank between each, the axis
+  const rows = Math.min(ran.length, Math.max(1, gaps ? ran.length : max - 1));
+  const shown = ran.slice(0, rows);
+  const out: BoardLine[] = [];
+  shown.forEach((a, i) => {
+    const { from, to } = spans[i]!;
+    const off = Math.min(barMax - 1, Math.round((barMax * (from - t0)) / total));
+    const len = Math.max(1, Math.min(barMax - off, Math.round((barMax * (to - from)) / total)));
     const name = clipE(a.name, nameW);
-    const tone: Run['tone'] = a.state === 'done' ? 'dim' : rowWordTone(a.state);
-    return { runs: [
+    const tone = barTone(a.state);
+    const runs: Run[] = [
       r('  '), r(name + ' '.repeat(nameW - cells(name)), 'sub'), r(' '),
-      r(bar.repeat(len), tone), r(' '.repeat(barMax - len + 1)),
-      r(clock(secs).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, a.name) : o.tick ?? 0),
-    ] };
+      r(' '.repeat(off)), r(bar.repeat(len), tone), r(' '.repeat(barMax - off - len + 1)),
+      r(clock(a.secs ?? 0).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, a.name) : o.tick ?? 0),
+    ];
+    if (gaps && i > 0) out.push({ runs: [r(' ')] });
+    out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui) : runs });
   });
+  // The axis: `0s` at the run's start, the run's length at the right edge, a hairline between them.
+  const left = '0s';
+  const right = clock(total / 1000);
+  const fill = Math.max(1, barMax - cells(left) - cells(right) - 2);
+  out.push({ runs: [r(' '.repeat(2 + nameW + 1)), r(`${left} ${(o.ui.ascii ? '-' : '─').repeat(fill)} ${right}`, 'dim')] });
+  return out;
 }
 
 /** What a row says beside its state, for the sub-line (critique 19 C1): its reason (`worker failed`, `owner failed`) and how long it has been open. A done row says nothing
