@@ -292,20 +292,23 @@ def counts(board: dict, session_id: Optional[str] = None) -> dict:
     plan = total - dispatches
     # Stop's own open count (open_items); only meaningful for a session slice.
     open_now = len(open_items(board, session_id)) if session_id else total - done
+    # Plain words, the Board tab's split: `5 items, 3 dispatch rows`, never the 8-row total read as a plan.
     base = (
-        f"needed {plan} plan items, {dispatches} dispatches"
+        f"{plan} items, {dispatches} dispatch row{'' if dispatches == 1 else 's'}"
         if dispatches
-        else f"needed {total} items"
+        else f"{total} items"
     )
     return {
+        # first key: the line a lead reads (critique 19: "8/8 board items complete" against a 5-item plan)
+        "summary": f"{base}; {open_now} open"
+        if open_now
+        else (f"{base}; all done" if total else base),
         "needed": total,
         # `needed` (and the Stop gate's open count) stays strict over every item; the split says how many are the lead's plan
         # and how many are hook-added dispatch rows, which the Board tab folds into their plan rows.
         "plan": plan,
         "dispatches": dispatches,
         "open": open_now,
-        # the summary names the open rows, so a lead reading it sees what Stop will count
-        "summary": f"{base}; {open_now} open" if open_now else base,
         "remaining": total - done,
         "complete": done,
         "claimed": sum(

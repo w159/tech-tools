@@ -50,7 +50,7 @@ class BoardBasics(unittest.TestCase):
                 "plan": 0,
                 "dispatches": 0,
                 "open": 0,
-                "summary": "needed 0 items",
+                "summary": "0 items",
                 "remaining": 0,
                 "complete": 0,
                 "claimed": 0,
@@ -72,7 +72,23 @@ class BoardBasics(unittest.TestCase):
             (c["needed"], c["remaining"]), (3, 3)
         )  # the Stop gate's count stays strict
         self.assertEqual((c["plan"], c["dispatches"]), (2, 1))
-        self.assertEqual(c["summary"], "needed 2 plan items, 1 dispatches; 3 open")
+        self.assertEqual(c["summary"], "2 items, 1 dispatch row; 3 open")
+
+    def test_summary_never_reads_the_row_total_as_the_plan(self):
+        # critique 19: the lead read "8/8 board items complete" and "needed count reads 8 against
+        # a 5-item plan" from counts while the Board tab said 5 items, 3 dispatches folded.
+        for n in range(5):
+            r = atlas_todo.add(self.root, f"T{n} step", session_id="s1", origin="session")
+            atlas_todo.set_status(self.root, r["item"]["id"], "completed")
+        for n in range(3):
+            r = atlas_todo.add(
+                self.root, f"read {n}", session_id="s1", origin="dispatch", owner=f"w{n}"
+            )
+            atlas_todo.set_status(self.root, r["item"]["id"], "completed")
+        c = atlas_todo.counts(atlas_todo.load(self.root), "s1")
+        self.assertEqual(c["summary"], "5 items, 3 dispatch rows; all done")
+        self.assertEqual(list(c)[0], "summary")  # the line a lead reads first
+        self.assertEqual((c["needed"], c["complete"]), (8, 8))  # Stop's strict row count
 
     def test_open_items_is_stops_rule_and_summary_names_the_open_row(self):
         # live run 150-74d8931b-1: every plan row done, one dispatch row open -> Stop said 1 open.
@@ -94,11 +110,11 @@ class BoardBasics(unittest.TestCase):
         )
         c = atlas_todo.counts(board, "s1")
         self.assertEqual(c["open"], 1)
-        self.assertEqual(c["summary"], "needed 3 plan items, 1 dispatches; 1 open")
+        self.assertEqual(c["summary"], "3 items, 1 dispatch row; 1 open")
         atlas_todo.set_status(self.root, d["item"]["id"], "completed")
         c = atlas_todo.counts(atlas_todo.load(self.root), "s1")
         self.assertEqual(
-            (c["open"], c["summary"]), (0, "needed 3 plan items, 1 dispatches")
+            (c["open"], c["summary"]), (0, "3 items, 1 dispatch row; all done")
         )
 
     def test_add_and_counts(self):

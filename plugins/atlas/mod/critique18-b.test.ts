@@ -101,29 +101,29 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
     expect(at(120)).toMatch(/done\s+ghost-explorer\s+worker killed/);
     expect(at(60)).toContain('done · worker killed');
   });
-  test('board row at 37 cells keeps `done` in the state cell and says `worker killed` in the notes under the rows', () => {
+  test('board row at 37 cells keeps `done` in the state cell and says `worker killed` on the sub-line under the row', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const text = boardText(boardLines(boardRowsOf(src), { cols: 37, ui, ribbon: false, title: false }));
-    expect(text.join('\n')).toMatch(/T2 ghost-explorer\s+worker killed/);
+    expect(text.join('\n')).toMatch(/T2 read ghost\.py[^\n]*\n\s+ghost-explorer\s+worker killed/); // critique 19 C1: on the sub-line under its own row
     for (const r of text) expect(cells(r)).toBeLessThanOrEqual(37);
   });
 });
 
-describe('B5: the 110 board keeps the owner beside its row and says something under the rows', () => {
+describe('B5 / critique 19 C1: the 110 board keeps the owner with its row and says something under it', () => {
   const src: BoardSource[] = [
     { content: 'T1 read alpha.py', status: 'completed', owner: 'alpha-explorer', ownerState: 'done' },
     { content: 'T2 read ghost.py', status: 'blocked', owner: 'ghost-explorer', ownerState: 'failed', claimed_at: 100 },
     { content: 'T3 combine the reports', status: 'pending' },
   ];
-  test('37 cells: no row holds an owner alone on its own line; the notes name the open row with its reason and age', () => {
+  test('37 cells (critique 19 C1): each owner is the sub-line under its own row, with the row\'s reason and age; no detached list', () => {
     const text = boardText(boardLines(boardRowsOf(src, 400), { cols: 37, ui, ribbon: false, title: false }));
-    expect(text.some((r) => /^\s+(alpha|ghost)-explorer\s*$/.test(r))).toBe(false);
     const rows = text.filter((r) => /^\s*[●◇▣■◐] T\d/.test(r));
     expect(rows).toHaveLength(3);
-    const notes = text.slice(text.findIndex((r) => r.includes('T3 combine')) + 1).filter((r) => r.trim() !== '');
-    expect(notes[0]).toMatch(/^\s+T2 ghost-explorer$/);
-    expect(notes[1]).toMatch(/^\s+owner failed · open 05:00$/);
-    expect(notes.some((r) => /^\s+T1 alpha-explorer/.test(r))).toBe(true);
+    const under = (title: string): string => text[text.findIndex((r) => r.includes(title)) + 1]!;
+    expect(under('T1 read alpha.py')).toMatch(/^\s+alpha-explorer$/);
+    expect(under('T2 read ghost.py')).toMatch(/^\s+ghost-explorer$/);
+    expect(text[text.findIndex((r) => r.includes('T2 read ghost.py')) + 2]).toMatch(/^\s+owner failed · open 05:00$/); // too long for the owner's line: the reason and age go on the next
+    expect(text.findIndex((r) => r.includes('T3 combine'))).toBeGreaterThan(text.findIndex((r) => r.includes('ghost-explorer'))); // no list after the last row
     for (const r of text) expect(cells(r)).toBeLessThanOrEqual(37);
   });
   test('120 cells: the owner column carries the owner, no notes block', () => {

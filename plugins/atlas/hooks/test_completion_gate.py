@@ -3041,6 +3041,40 @@ class DoneHeaderClaimTest(GateOrchestrationTest):
         )
         self.assertEqual(self._why(), ["1 agent running", "1 todo open"])
 
+    def _board_with_open_dispatch_row(self):
+        # critique 19 (stoprun-150-232567af-1 f0125:17 vs :37): the only open row is a dispatch
+        # row (T2 read ghost.py) while the plan reads 5/5; Stop said "1 open todo item(s)".
+        os.makedirs(os.path.join(self.tmp, ".atlas", ".run"), exist_ok=True)
+        atlas_todo.add(
+            self.tmp,
+            "plan step",
+            session_id="sess-orch",
+            origin="session",
+            status="completed",
+        )
+        atlas_todo.add(
+            self.tmp,
+            "read ghost.py",
+            owner="ghost-explorer",
+            origin="dispatch",
+            session_id="sess-orch",
+        )
+
+    def test_done_header_names_an_open_dispatch_row_not_a_todo_item(self):
+        self._board_with_open_dispatch_row()
+        reason = json.loads(self._stop(self.DONE).stdout)["reason"]
+        self.assertIn("1 open dispatch row", reason)
+        self.assertNotIn("open todo item", reason)
+        self.assertEqual(self._why(), ["1 dispatch row open"])
+
+    def test_done_header_counts_dispatch_rows_and_plan_items_apart(self):
+        self._board_with_open_dispatch_row()
+        atlas_todo.add(
+            self.tmp, "second step", session_id="sess-orch", origin="session"
+        )
+        reason = json.loads(self._stop(self.DONE).stdout)["reason"]
+        self.assertIn("1 open dispatch row and 1 open todo item", reason)
+
     def test_verify_header_with_running_subagent_stays_silent(self):
         r = self._stop(self.VERIFY, background_tasks=self.RUNNING)
         self.assertEqual(r.stdout.strip(), "", r.stdout)

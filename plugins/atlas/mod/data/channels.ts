@@ -182,3 +182,21 @@ export function systemLine(n: ChannelNote): string | undefined {
 	const code = n.text.match(/\bexit (\d+)\b/)?.[1] ?? String(n.seq);
 	return `*** ${n.owner || '?'} has quit (exit ${code})`;
 }
+
+/** Critique 19 C5: what went wrong is a channel row. A killed (failed) worker, a blocked one and a refused Stop are facts the store and the squad already hold; the channel tab read
+ * `no messages yet` after a kill and a refusal because only board notes became rows. Pure: the rows come from the inputs, so the same inputs make the same rows (a kill's time is
+ * the instant the worker ended, never the clock). A Stop refusal carries no time of its own (the gates tab's verdict line does not): its `ts` is '' and the panel draws no time for it. */
+export function failureNotes(i: { workers: readonly { name: string; state: string; endedMs?: number | undefined; detail?: string | undefined }[]; stop: { blocked: boolean; gates: readonly string[] } | null; channel?: string }): ChannelNote[] {
+	const channel = i.channel ?? '';
+	const rows: ChannelNote[] = [];
+	for (const w of i.workers) {
+		if (w.state !== 'failed' && w.state !== 'blocked') continue;
+		const text = w.state === 'failed' ? `worker killed${w.detail && w.detail !== 'failed' ? ` · ${w.detail}` : ''}` : `blocked${w.detail ? `: ${w.detail}` : ''}`;
+		rows.push({ ts: w.endedMs !== undefined ? isoTs(w.endedMs) : '', seq: 0, owner: w.name, to: 'lead', text, channel, kind: 'blocked' });
+	}
+	if (i.stop?.blocked) {
+		const words = i.stop.gates.filter((g) => g !== '' && g !== 'stop refused');
+		rows.push({ ts: '', seq: 0, owner: 'stop gate', to: 'lead', text: words.length ? `Stop refused: ${words.join(', ')}` : 'Stop refused', channel, kind: 'blocked' });
+	}
+	return rows;
+}

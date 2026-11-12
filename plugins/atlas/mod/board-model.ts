@@ -286,7 +286,8 @@ function geometry(rows: readonly BoardRow[], o: BoardOpts): { compact: boolean; 
   const cutBare = rows.map((x) => clip(x.label, o.cols - 13));
   const apart = new Set(cutBare).size === cutBare.length;
   const sharedHead = o.cols >= COMPACT_MIN ? ownerAll : Math.min(ownerAll, o.cols - (LABEL_MIN + 5) - wordW - 2);
-  const ownerW = ownerFit >= 5 ? ownerFit : compact && !apart && sharedHead >= 5 ? sharedHead : 0; // a sliver of a name tells nothing
+  // Critique 19 C1: the owner column holds a whole name or nothing (`alpha-exp...` with 15 blank cells before it): where the widest owner does not fit, every owner stands on the sub-line under its row.
+  const ownerW = ownerFit >= ownerAll ? ownerAll : compact && !apart && sharedHead >= ownerAll ? ownerAll : 0;
   // Compact: the owner column takes its width from the right, the state column slides left to make room (never under 26 at 60+, never past the widest label).
   // The state word ends on the panel's last cell, as a value column does (or the owner does, two cells after the word): a title that fills the column keeps two blank cells before it.
   const avail = o.cols - wordW - (ownerW ? ownerW + 2 : 0);
@@ -302,35 +303,33 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   const keys = o.motion ? boardKeys(rows) : [];
   const g = geometry(rows, o);
   const shown = labelCut(rows.map((x) => x.label), g.labelW);
-  const stacked = g.compact && g.ownerAll > 0 && g.ownerW === 0 && o.notes !== true;
+  const stacked = g.compact && g.ownerAll > 0 && g.ownerW === 0;
   const lines = rows.flatMap((row, i): BoardLine[] => {
     const own = { runs: boardRow(row, i === focus, { ...o, stateCol: g.stateColC, shown: shown[i]!, wordW: g.wordW, ...(g.doubtWord ? { doubtWord: true } : {}), ...(g.ownerW ? { ownerW: g.ownerW } : {}), ...(o.motion ? { key: keys[i]! } : {}) }) };
-    return stacked && row.owner ? [own, { runs: [r('    '), r(clip(row.owner, Math.max(1, o.cols - 4)), 'sub')] }] : [own];
+    if (!g.compact) return [own];
+    const owner = stacked ? row.owner : '';
+    // The board pane (`o.notes`) puts the row's reason and age on that sub-line too (critique 19 C1): the pane's room says why a row is open, beside the owner that holds it.
+    const note = o.notes === true && stacked ? noteOf(row, g.doubtWord) : '';
+    return owner || note ? [own, ...subLines(owner, note, row, o.cols)] : [own];
   });
   return form(o.cols) === 'full' ? [{ runs: boardHeader() }, ...lines] : lines;
 }
 
-/** The pane's blank space under the rows, used for what the rows could not carry (critique 18 B5): where the owner does not fit beside its row (the 110 pane is 36 cells), one line per
- * row that has an owner or an open reason: `T2 ghost-explorer  worker killed · open 02:15`, open rows first. Empty where the owner sits beside its row, and for a row with nothing to add. */
-export function boardNotes(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
-  const g = geometry(rows, o);
-  if (!g.compact || g.ownerW > 0) return [];
-  const id = (x: BoardRow): string => /^T\d+\b/.exec(x.label)?.[0] ?? '-';
-  const said = (x: BoardRow): string => [x.detail, x.state === 'done' || x.ageSecs === undefined ? '' : `open ${mmss(x.ageSecs)}`].filter(Boolean).join(' · ');
-  const worth = rows.filter((x) => x.owner !== '' || (x.state !== 'done' && said(x) !== ''));
-  if (worth.length === 0) return [];
-  const open = worth.filter((x) => x.state !== 'done');
-  const rest = worth.filter((x) => x.state === 'done');
-  const room = Math.max(1, o.cols - 2);
-  const line = (x: BoardRow): BoardLine[] => {
-    const doubt = markOf(x.state, x.word) === 'doubt';
-    const tone: Run['tone'] = x.state === 'done' && !doubt ? 'sub' : doubt ? 'warn' : rowWordTone(x.state, x.word);
-    const who = [id(x), x.owner].filter((p) => p !== '').join(' ');
-    const note = said(x);
-    if (note !== '' && cells(who) + 2 + cells(note) > room) return [{ runs: [r('  '), r(clip(who, room), 'sub')] }, { runs: [r('    '), r(clip(note, Math.max(1, room - 2)), tone)] }]; // too long for one line: the reason and the age go on the next
-    return [{ runs: [r('  '), r(clip(who, room), 'sub'), ...(note !== '' ? [r(`  ${note}`, tone)] : [])] }];
-  };
-  return [{ runs: [r(' ')] }, ...[...open, ...rest].flatMap(line)];
+/** What a row says beside its state, for the sub-line (critique 19 C1): its reason (`worker failed`, `owner failed`) and how long it has been open. A done row says nothing
+ * (`ran 03:10` is not a reason), and a doubted done that already spells `worker killed` in its state cell does not say it twice. */
+function noteOf(x: BoardRow, doubtWord: boolean): string {
+  const doubt = markOf(x.state, x.word) === 'doubt';
+  const reason = x.state === 'done' && !doubt ? '' : doubt && doubtWord ? '' : x.detail;
+  return [reason, x.state === 'done' || x.ageSecs === undefined ? '' : `open ${mmss(x.ageSecs)}`].filter(Boolean).join(' · ');
+}
+
+/** The lines directly under a row: `    ghost-explorer  owner failed · open 02:15`. The owner (when it does not fit beside the row) and the note share one line; a note too long for it goes on the next. */
+function subLines(owner: string, note: string, row: BoardRow, cols: number): BoardLine[] {
+  const room = Math.max(1, cols - 4);
+  const doubt = markOf(row.state, row.word) === 'doubt';
+  const tone: Run['tone'] = doubt ? 'warn' : rowWordTone(row.state, row.word);
+  if (owner && note && cells(owner) + 2 + cells(note) > room) return [{ runs: [r('    '), r(clip(owner, room), 'sub')] }, { runs: [r('      '), r(clip(note, Math.max(1, room - 2)), tone)] }];
+  return [{ runs: [r('    '), ...(owner ? [r(clip(owner, room), 'sub')] : []), ...(note ? [r(`${owner ? '  ' : ''}${clip(note, Math.max(1, room - (owner ? cells(owner) + 2 : 0)))}`, tone)] : [])] }];
 }
 
 /** The whole surface: ribbon (`N items` on the right in the plain form), a blank row, then the body. Without the ribbon (the side panel, which has
@@ -350,7 +349,7 @@ export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[]
   const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }, ...named] : [];
   // `title: false`: the side panel's own ribbon already reads `▸ BOARD  5 items` (critique 15 B5: the live scorer finds the board by the capsule beside `▸ BOARD`), so no second title row.
   const title: BoardLine[] = withRibbon || o.title === false ? [] : [{ runs: [r(o.ui.ascii ? '  > ' : '  ▸ ', 'muted'), r('BOARD', 'text', { bold: true }), ...(rows.length > 0 ? [r(`  ${rows.length} items`, 'muted')] : [])] }];
-  return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : title), ...boardBody(rows, { ...o, notes: true }), ...footer, ...boardNotes(rows, o)];
+  return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : title), ...boardBody(rows, { ...o, notes: true }), ...footer];
 }
 
 /** The side panel's ribbon words for the board view: the title and its `5 items` figure. */

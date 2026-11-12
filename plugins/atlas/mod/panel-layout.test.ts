@@ -189,8 +189,8 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toContain('asked for 1 on haiku, low effort'); // B4 and critique 18 A5: plain words, not `ran 3 / planned 1 (haiku) haiku/low` nor `3 ran, plan said 1 (haiku)`
-    expect(out).toMatch(/▲ {3}3 explorers +too many +asked for 1 on haiku/);
+    expect(out).toContain('planned on haiku, low effort'); // B4 and critique 18 A5: plain words, not `ran 3 / planned 1 (haiku) haiku/low` nor `3 ran, plan said 1 (haiku)`
+    expect(out).toMatch(/▲ {3}3 explorers +too many +planned on haiku/);
     expect(out).toContain('3 explorers ran, the plan said 1');
     expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
@@ -199,7 +199,7 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 4, drift: ['explorer ran 4, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toMatch(/▲ {3}4 explorers +too many +asked for 1 on haiku/);
+    expect(out).toMatch(/▲ {3}4 explorers +too many +planned on haiku/);
     expect(out).not.toContain('1x explorer');
   });
   // critique 12 B1/B6: live-150-8271cfc8-1 core tab: the plan is 5/5 done, the rows carry no evidence and no finding verifies them

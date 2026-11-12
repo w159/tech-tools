@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, clip, countRuns, DONE_KILLED, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { labelCut, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
@@ -313,10 +313,14 @@ const withoutOwner = (t: PanelTodo): PanelTodo => {
 const TODO_GAP = 2; // cells between a title and its state word where the title spills (critique 14: `...(alpha... done` had one); the one-row grammar keeps its single cell
 const SPILL_BELOW = 50; // panes narrower than this (the 110-column pane is 37) draw a title that cannot sit beside its state whole, state under it
 
-function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; wordW: number; shown?: string }): PanelLine[] {
+function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; wordW: number; shown?: string; doubtWord?: boolean }): PanelLine[] {
   const key = `task:${t.id}`;
   const full = oneLine(t.label);
-  const wordRun = { t: t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
+  // Critique 19 C4: a done row whose worker was killed says so in words, as the HUD does (`done · worker killed`), not only in amber: in the state cell where the pane gave it the room (`w.doubtWord`),
+  // else (the narrow pane, where the row spills) the word follows the title on its own line. From 100 columns the reason column says it.
+  const doubt = markOf(t.state, t.word) === 'doubt';
+  const spelled = doubt && (w.doubtWord === true || m.cols < SPILL_BELOW);
+  const wordRun = { t: spelled ? DONE_KILLED : t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
   const settled = t.state === 'done' && markOf(t.state, t.word) !== 'doubt'; // a done row whose worker failed (critique 17 A1) is not struck through
   const nameCell = { tone: settled ? 'sub' as const : 'text' as const, ...(settled ? { strike: true } : {}) }; // a done title is struck through, as in the HUD (critique 11)
   const accent = markOf(t.state, t.word);
@@ -324,12 +328,12 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   // A title that does not fit beside its state word is drawn whole and its state follows it (critique 14, the 110-column pane: `T1 read alpha.py (alpha...` was cut
   // while the title fit the pane). A pane from SPILL_BELOW columns keeps the one-row form: it has the room.
   const room = m.cols - GRID_LEAD - (w.wordW + 1) - (w.valueW ? w.valueW + 1 : 0); // the title column's widest possible width
-  const spill = m.cols < SPILL_BELOW && (cells(full) > w.nameW || (cells(full) === w.nameW && w.nameW >= room)); // too long, or filling the column and jammed against the word
+  const spill = m.cols < SPILL_BELOW && (spelled || cells(full) > w.nameW || (cells(full) === w.nameW && w.nameW >= room)); // too long, or filling the column and jammed against the word
   let rows: PanelLine[];
   if (spill) {
     const width = Math.max(8, m.cols - GRID_LEAD);
     // The title wraps, never the state: it wraps narrower by the gap and the word, so the word closes the last title line (critique 15 C2).
-    const lines = cells(full) + TODO_GAP + cells(wordRun.t) <= width ? [full] : wrap(full, Math.max(8, width - TODO_GAP - cells(wordRun.t)), 3);
+    const lines = cells(full) + TODO_GAP + cells(wordRun.t) <= width ? [full] : spelled ? wrap(full, width, 3) : wrap(full, Math.max(8, width - TODO_GAP - cells(wordRun.t)), 3); // a long spelled word (`done · worker killed`) takes its own line, it does not wrap the title
     const head = gridRow({ cols: m.cols, ui: m.ui, mark: glyph, name: { t: lines[0]!, ...nameCell }, nameW: Math.min(width, cells(lines[0]!)), nameCut: 'end' });
     const wordTail = [r(' '.repeat(TODO_GAP)), r(wordRun.t, wordRun.tone)];
     const lastW = cells(lines[lines.length - 1]!);
@@ -427,14 +431,16 @@ function routeBody(m: PanelModel): PanelLine[] {
   // The owner column goes first (critique 12 A2): a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`) prints no second copy, so the title keeps the room.
   const widest = narrow ? 0 : Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...ordered.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
   // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
-  const todoWordW = ordered.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), WORD_W); // 8 while a row reads `returned`
+  // Critique 19 C4: a pane that can keep a whole title beside `done · worker killed` spells it in the state cell; a narrower one (and the 100+ reason column) does not.
+  const doubtWord = !narrow && m.cols < WIDE && ordered.some((t) => markOf(t.state, t.word) === 'doubt') && m.cols - GRID_LEAD - cells(DONE_KILLED) - 1 >= TITLE_MIN_W + 4;
+  const todoWordW = ordered.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), doubtWord ? cells(DONE_KILLED) : WORD_W); // 8 while a row reads `returned`
   const titleMax = m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols; // from 100 columns the title leaves the reason a column
   const titles = [' '.repeat(TITLE_MIN_W), ...ordered.map((t) => oneLine(t.label))];
   const plan = gridPlan(m.cols, { names: titles, word: todoWordW, value: widest, optional: true, min: Math.min(titleMax, Math.max(8, ...ordered.filter((t) => t.owner && !ownerColumn(t)).map((t) => cells(oneLine(t.label))))), max: titleMax }); // a title that names its owner stays whole: the column gives way before it is cut
   const shown: PanelLine[] = [];
   const shownTitles = labelCut(ordered.map((t) => oneLine(t.label)), plan.nameW);
   for (const [i, t] of ordered.entries()) {
-    const rs = todoRows(m, t, { ...plan, wordW: todoWordW, shown: shownTitles[i]! });
+    const rs = todoRows(m, t, { ...plan, wordW: todoWordW, shown: shownTitles[i]!, doubtWord });
     if (shown.length + rs.length > room) break;
     shown.push(...rs);
   }
@@ -631,7 +637,12 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
 
 const GATE_WORD_W = 7; // `passing` and `warning`
 /** `2/3 green`: the group's checks that pass, the value column (the `n/m` the tab ribbon uses); empty while the group passes. */
-const gateValue = (g: PanelGate): string => (groupFailing(g) ? `${g.lines.length - groupFailing(g)}/${g.lines.length} green` : '');
+const gateValue = (g: PanelGate): string => {
+  if (!groupFailing(g)) return '';
+  // Critique 19 C4: the header contract is judged over replies, not lines: `7/8 replies` (the transcript's own tally), never `0/1 green` beside 7 chips.
+  const tally = g.id === 'header' ? /^(\d+) of (\d+)$/.exec(g.lines.find((l) => l.id === 'header-matched')?.detail ?? '') : null;
+  return tally ? `${tally[1]}/${tally[2]} replies` : `${g.lines.length - groupFailing(g)}/${g.lines.length} green`;
+};
 
 function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: boolean, all = false): PanelLine[] {
   const bad = groupFailing(g);
@@ -803,7 +814,7 @@ function offloadRows(c: CoreModel, m: PanelModel, cap = OFFLOAD_CAP): PanelLine[
   const pct = o.kept > 0 && o.returned <= o.kept ? Math.max(1, Math.round((o.returned / o.kept) * 100)) : null;
   const nothing = o.kept === 0 && o.returned === 0;
   const gone = m.workers.filter((w) => w.state === 'done' || w.state === 'failed').length; // in-process workers keep no token log: they returned, the figure is absent
-  const head = flowHeading('reading', nothing ? [gone ? pickForm([`${gone} worker${gone === 1 ? '' : 's'} finished, token count not kept`, `${gone} finished, no token count`, `${gone} finished, no token log`], m.cols - GRID_LEAD - cells('reading') - 2) : 'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
+  const head = flowHeading('reading', nothing ? [gone ? pickForm([`${gone} worker${gone === 1 ? '' : 's'} finished`, `${gone} finished`], m.cols - GRID_LEAD - cells('reading') - 2) :'workers have read and returned nothing yet'] :[`${tok(o.kept)} tokens read by workers`, `${tok(o.returned)} returned to the lead`, ...(pct !== null ? [`${pct}% of what they read`] : [])], m);
   const ws = o.workers.slice(-cap);
   if (!ws.length) return head;
   const model = (w: (typeof ws)[number]): string => clip((w.model ?? '?').replace(/^claude-/, ''), 12);
@@ -872,9 +883,10 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
       // Plain words, no `model/effort` token: `3 explorers ran, 1 planned (haiku, low effort)`; a seat that ran another model reads `ran on opus, planned haiku, low effort`.
       const plan = `${s.model}, ${s.effort} effort`;
       // The heading above already says `3 explorers ran, the plan said 1`: the seat row says what was asked for, in two short forms (critique 18 A5: no `3x`, no `3 ran, plan said 1 (haiku)`).
-      const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `asked for ${s.count} on ${s.model}, ${s.effort} effort` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
+      // Critique 19 C4: the heading says the counts (`3 explorers ran, the plan said 1`); an over-run seat names only what the heading does not, the model and effort that were planned.
+      const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `planned on ${s.model}, ${s.effort} effort` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
       const runs = gridRow({ cols: m.cols, ui: m.ui, mark: coreMark(st, m.ui), name: { t: seatName(s) }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
-      return withDetail(runs, over ? [detail, `asked for ${s.count} on ${s.model}`] : detail);
+      return withDetail(runs, over ? [detail, `planned on ${s.model}`] : detail);
     });
     // In-process routes have no team name or isolation to show: the sentence says how the workers ran.
     const how = rt.transport === 'in-process' ? [`workers ran in-process (no tmux team), up to ${rt.maxParallel} at once`, `ran in-process, up to ${rt.maxParallel} at once`] : `${rt.name || rt.teamId}  ${[rt.transport ?? 'transport unknown', rt.isolation].filter(Boolean).join(', ')}, max ${rt.maxParallel}`;

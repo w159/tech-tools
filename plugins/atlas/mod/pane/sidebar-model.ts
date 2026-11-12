@@ -9,6 +9,8 @@ import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
 import { hudAgents, lastOf, ownerStatesOf } from '../hud';
 import { ownerOutcome } from '../board-model';
+import { failureNotes } from '../data/channels';
+import { gateTally } from '../data/runstate';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
 import type { SidebarModel } from './sidebar-types';
@@ -58,6 +60,12 @@ const hhmm = (iso: string): string => {
 const noteOf = (n: ChannelNote): PanelNote => ({ at: hhmm(n.ts), from: n.owner, to: n.to, kind: n.kind, text: n.text, lead: isLead(n.owner) });
 
 
+/** When a worker ended, from the host list (the instant a killed worker left it), else undefined: the row then draws no time rather than the clock. */
+const endedMsOf = (s: LiveSnapshot, name: string): number | undefined => {
+  const w = liveWorkers(s, s.now).find((x) => x.name === name);
+  return w ? endedAt(w, s.now) : undefined;
+};
+
 const MOOD_STATE: Record<Mood, UiState> = { working: 'running', thinking: 'running', blocked: 'blocked', failed: 'failed', done: 'done', celebrate: 'done', idle: 'waiting' };
 
 export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number = Math.max(10, m.columns - 1)): PanelModel {
@@ -76,6 +84,12 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const notes = s.notes;
   const lastLead = notes.map((n) => isLead(n.owner)).lastIndexOf(true);
   const people = new Set([...notes.map((n) => n.owner), ...s.members.filter((x) => !x.ended_at && !ended.has(x.name)).map((x) => x.name), ...live]).size;
+  const spoken = new Set(notes.filter((n) => n.kind === 'blocked').map((n) => n.owner)); // a worker that already posted its own block needs no second row
+  const failures = failureNotes({
+    workers: workers.filter((w) => !spoken.has(w.name)).map((w) => ({ name: w.name, state: w.state, endedMs: endedMsOf(s, w.name), detail: w.state === 'failed' ? undefined : w.detail })),
+    stop: gateTally(m.gates).stop,
+    channel: s.channel ?? '',
+  });
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
@@ -84,6 +98,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos: todosOf(s, workers), workers, lead,
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
-    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: notes.map(noteOf),
+    // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
+    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: [...notes, ...failures].map(noteOf),
   };
 }
