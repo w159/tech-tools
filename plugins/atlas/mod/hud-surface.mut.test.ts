@@ -42,13 +42,13 @@ describe('agentRows columns', () => {
 
   test('ctx gauge column: drawn when the block fits exactly, at stateAt + 14; absent one cell short', () => {
     const rich = { cols: 120, ui, rich: true };
-    // nameW 84 -> stateAt 89; the ctx block needs stateAt + 14 + 4 + 8 + 5 = 120 cells: exactly cols.
-    const fit = agentRows([agent({ name: 'n'.repeat(84), ctx: 0.5 })], rich, plain)[1]!;
+    // nameW 83 -> stateAt 89 (4 + 83 + the 2-cell gutter); the ctx block needs stateAt + 14 + 4 + 8 + 5 = 120 cells: exactly cols.
+    const fit = agentRows([agent({ name: 'n'.repeat(83), ctx: 0.5 })], rich, plain)[1]!;
     const at = fit.findIndex((x) => x.t === 'ctx ');
     expect(at).toBeGreaterThan(0);
     expect(runsCells(fit.slice(0, at))).toBe(89 + 14);
-    // nameW 85 -> stateAt 90: one cell short, no gauge.
-    const short = agentRows([agent({ name: 'n'.repeat(85), ctx: 0.5 })], rich, plain)[1]!;
+    // nameW 84 -> stateAt 90: one cell short, no gauge.
+    const short = agentRows([agent({ name: 'n'.repeat(84), ctx: 0.5 })], rich, plain)[1]!;
     expect(runsString(short)).not.toContain('ctx ');
   });
 
@@ -58,8 +58,8 @@ describe('agentRows columns', () => {
   });
 
   test('a cell whose column was dropped draws nothing', () => {
-    // nameW 45 -> stateAt 50; even with the model column at its tight width (modelAt 62, task 68) last would start at 74 and need 8 more cells: 82 > 80.
-    const out = agentRows([agent({ name: 'n'.repeat(45), tool: 'bashtool' })], { cols: 80, ui }, plain);
+    // nameW 44 -> stateAt 50; even with the model column at its tight width (modelAt 62, task 68) last would start at 74 and need 8 more cells: 82 > 80.
+    const out = agentRows([agent({ name: 'n'.repeat(44), tool: 'bashtool' })], { cols: 80, ui }, plain);
     expect(runsString(out[1]!)).not.toContain('bashtool');
     expect(runsCells(out[1]!)).toBeLessThanOrEqual(80);
   });

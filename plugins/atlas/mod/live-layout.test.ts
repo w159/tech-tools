@@ -56,11 +56,12 @@ describe('1. titles use the width the row has', () => {
       expect(todoRows.map((r) => (/running/.test(r) ? 'running' : /queued/.test(r) ? 'queued' : '?'))).toEqual(['running', 'running', 'running', 'queued', 'queued']);
     });
   }
-  test('a title that cannot fit is cut with ... and the state word stays whole', () => {
+  test('a title that cannot fit is cut with a one-cell `…` (never `...`) and the state word stays whole', () => {
     const long = [todo('t1', `T1 ${'very long title '.repeat(10)}`, 'pending')];
     const rows = hudLines({ todos: long, agents: [] }, view(88, 30)).map(runsString);
     const row = rows.find((r) => r.includes('very long'))!;
-    expect(row).toContain('...');
+    expect(row).toContain('…');
+    expect(row).not.toContain('...');
     expect(row.trimEnd().endsWith('queued')).toBe(true);
   });
   test('the pane route tab at 55 columns shows whole titles, owners aside', () => {
@@ -173,7 +174,7 @@ describe('5. the plan row budget and the overflow row', () => {
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
     const rows = hudLines(input, view(88, 8)).map(runsString);
     const more = rows.find((r) => /\d+ more todos?/.test(r))!;
-    expect(more).toMatch(/▸ TODO {2}0\/5 · \d+ more todos? not shown ─+/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
+    expect(more).toMatch(/▸ TODO {2}0\/5 · \d+ more todos? not shown ▱+ ─+/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
     const planRows = rows.filter((r) => /T\d /.test(r) && !r.includes('haiku')).length;
     expect(planRows + Number(/(\d+) more/.exec(more)![1])).toBe(5); // every slot holds a row: shown plus counted is the whole plan

@@ -18,7 +18,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');
 const lines = (rows: Segment[][]): string[] => rows.map(text);
 // The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
-const unspin = (l: string): string => l.replace(/(─ )[◐◓◑◒◐◓◑◒◐◓◑◒◐◓]/, '$1@SPIN@').replace(/[◐◓◑◒]/g, '◐'); // the title's spinner glyph is `@SPIN@` in the golden; a row's mark is the first circle
+const unspin = (l: string): string => l.replace(/(SUBAGENTS )[◐◓◑◒]/, '$1@SPIN@').replace(/[◐◓◑◒]/g, '◐'); // the title's spinner glyph is `@SPIN@` in the golden; a row's mark is the first circle
 const trimmed = (rows: Segment[][]): string[] => lines(rows).map((l) => unspin(l.trimEnd()));
 const todo = (id: string, content: string, status: string, extra: Partial<TodoItem> | string = {}): TodoItem => ({ id, content, status, ...(typeof extra === 'string' ? { phase: extra as TodoItem['phase'] } : extra) });
 
@@ -27,8 +27,8 @@ const worldAgents = worldHudAgents;
 const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
 const phases = worldPhases();
 
-// The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the meter and 3 after it (rev 5).
-const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(─{6,})( [▰▱]+)$/, (_m, f: string, m: string) => `${f.slice(2)}${m} ───`), ...rows.slice(1)];
+// Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) with the count and meter inside it, and a `└───┘` rule closes the block, so the goldens are the rows as drawn.
+const edge = (rows: readonly string[]): string[] => [...rows];
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
     const input: HudInput = { todos: worldPlan(), agents: [], phases };
@@ -36,7 +36,7 @@ describe('hud goldens through the Claude Code adapter (rev 4)', () => {
     expect(trimmed(hudRows(input, view(120, true)))).toEqual(edge(todo_120_rich));
     expect(trimmed(hudRows(input, view(80)))).toEqual(edge(todo_80));
     expect(trimmed(hudRows(input, view(40)))).toEqual(edge(todo_40));
-    expect(trimmed(hudRows(input, view(60))).slice(1)).toEqual(todo_40.slice(1));
+    expect(trimmed(hudRows(input, view(60))).slice(1, -1)).toEqual(todo_40.slice(1, -1)); // the rows are the 40 form; the closing rule is 60 wide
   });
   test('SUBAGENTS at 120, 120 rich and 80 equals the design goldens; 60 and 40 draw the block too', () => {
     const block = (cols: number, rich = false): string[] => {
@@ -90,12 +90,14 @@ describe('critique 12: a done agent row shows its outcome, as its done plan row 
 
 describe('L1: a completed plan row is shown as completed', () => {
   const plan = [todo('a', 'Trace the failure', 'completed'), todo('b', 'Patch the gate', 'in_progress'), todo('c', 'Run the suite', 'pending')];
-  test('the done row stays in the tree with the done glyph, the word and a struck label', () => {
+  test('the done row stays in the tree with the green done glyph, the word and a plain 247 label, never struck (critique 21)', () => {
     const rows = hudRows({ todos: plan, agents: [] }, view(120));
     const row = rows.find((r) => text(r).includes('Trace the failure'))!;
     expect(row).toBeDefined();
     expect(text(row)).toMatch(/^ {2}● Trace the failure +done/);
-    expect(row.find((s) => s.t === 'Trace the failure')?.strike).toBe(true);
+    expect(row.find((s) => s.t === 'Trace the failure')?.strike).toBeUndefined();
+    expect(row.find((s) => s.t === 'Trace the failure')?.color).toBe(PALETTES.mocha.muted);
+    expect(row.find((s) => s.t === '●')?.color).toBe(PALETTES.mocha.ok);
   });
   test('when every row is done they all show, and the header says so', () => {
     const rows = trimmed(hudRows({ todos: plan.map((t) => ({ ...t, status: 'completed' })), agents: [] }, view(120)));

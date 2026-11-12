@@ -40,7 +40,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     { id: 't2', content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' },
   ] as TodoItem[];
   const agents: HudAgent[] = [{ name: 'alpha-explorer', role: 'explorer', state: 'done' }, { name: 'ghost-explorer', role: 'explorer', state: 'failed' }];
-  test('HUD: T2 reads `done` in the warn tone with `done · worker killed`, not struck through; T1 stays the quiet struck done', () => {
+  test('HUD: T2 reads `done` in the warn tone with `done · worker killed`, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
     const rows = hudLines({ todos: plan, agents }, { cols: 150, maxRows: 60, ui, now: 0 });
     const t2 = rows.find((r) => plain(r).includes('T2 read ghost.py'))!;
     const t1 = rows.find((r) => plain(r).includes('T1 read alpha.py'))!;
@@ -48,7 +48,8 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(t2.find((x) => x.t.trim() === DONE_KILLED)?.tone).toBe('warn');
     expect(t2.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
     expect(t2.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('warn');
-    expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.strike).toBe(true);
+    expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.strike).toBeFalsy(); // critique 21: a plain done is quiet 247 text, never struck through
+    expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.tone).toBe('muted');
     expect(t1.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('ok');
   });
   test('Board: the same row reads `done`, `worker killed`, amber; the dispatch row beside it does not make it green', () => {

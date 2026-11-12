@@ -2,9 +2,10 @@
 // stays while the grid shows, and a LAST that is never blank. Live shape: stoprun-150-4b5b5a94-1/frames/f0075.ans:24-35 (TODO 0/5 with two
 // running rows out of phase, SUBAGENTS without its column header, ragged `killed`).
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, rowWordTone, runsString, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from './atlas-ui';
+import { cells, rowWordTone, runsString, spinClock, spinFrameOf, type Run, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, type HudAgent } from './hud';
+import { rowSpinnerGlyph } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };
@@ -16,11 +17,11 @@ const rows = (todos: TodoItem[], agents: HudAgent[], o: { cols?: number; maxRows
   hudLines({ todos, agents }, { cols: o.cols ?? 150, maxRows: o.maxRows ?? 30, ui: o.ui ?? ui, now: NOW, ...(o.tick !== undefined ? { tick: o.tick } : {}) });
 const text = (r: Run[]): string => runsString(r);
 
-describe('title rows: a plain title, a thin rule, the meter on the right', () => {
+describe('title rows: a plain title, the count and the meter inside a thin rule that runs to the edge', () => {
   const t = rows(todo(5, (i) => (i < 3 ? 'completed' : 'pending')), []);
-  test('TODO  3/5 then a thin rule, then the 8-cell meter, the rule stub for the host marker, no heavy rule', () => {
+  test('TODO  3/5, then the 8-cell meter, then a thin rule to the last cell where the host draws its marker, no heavy rule', () => {
     const head = text(t[0]!);
-    expect(head).toMatch(/^◖ ◆ ATLAS ◗ ▸ TODO {2}3\/5 ─+ ▰{5}▱{3} ─{3}$/);
+    expect(head).toMatch(/^◖ ◆ ATLAS ◗ ▸ TODO {2}3\/5 ▰{5}▱{3} ─+$/);
     expect(cells(head)).toBe(150);
     expect(head).not.toContain('━');
   });
@@ -40,7 +41,7 @@ describe('title rows: a plain title, a thin rule, the meter on the right', () =>
   });
   test('ASCII keeps the same cells: `#` and `-` for the meter, a `-` rule', () => {
     const head = text(rows(todo(5, (i) => (i < 3 ? 'completed' : 'pending')), [], { ui: ascii })[0]!);
-    expect(head).toMatch(/^\[ATLAS\] > TODO {2}3\/5 -+ #{5}-{3} -{3}$/);
+    expect(head).toMatch(/^\[ATLAS\] > TODO {2}3\/5 #{5}-{3} -+$/);
     expect(cells(head)).toBe(150);
   });
   test('the title row is exactly the width at every width, with or without the meter', () => {
@@ -49,21 +50,30 @@ describe('title rows: a plain title, a thin rule, the meter on the right', () =>
 });
 
 describe('SUBAGENTS title: the working signal rides the title', () => {
-  test('a running agent puts the shared spinner glyph before the counts; no running agent, no spinner', () => {
+  test('a running agent puts the HUD spinner glyph before the counts, inside the rule; no running agent, no spinner', () => {
     const frame = spinFrameOf(spinClock(NOW, 0), '');
     const run = rows(todo(2, () => 'in_progress'), [ag('alpha-explorer', 'working')]);
     const head = text(run.find((r) => text(r).includes('SUBAGENTS'))!);
-    expect(head).toContain(`${spinnerGlyph(frame)} 1 running`);
+    expect(head).toContain(`${rowSpinnerGlyph(frame)} 1 running ─`);
     const idle = rows(todo(2, () => 'completed'), [ag('alpha-explorer', 'done')]);
     const idleHead = text(idle.find((r) => text(r).includes('SUBAGENTS'))!);
     expect(idleHead).toContain('1 done');
-    expect(idleHead).not.toContain(spinnerGlyph(frame));
+    expect(idleHead).not.toMatch(/[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
   });
   test('the spinner advances with the tick', () => {
     const at = (tick: number): string => text(rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working')], { tick }).find((r) => text(r).includes('SUBAGENTS'))!);
-    expect(at(0)).toContain(`${spinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))} 1 running`);
-    expect(at(1)).toContain(`${spinnerGlyph(spinFrameOf(spinClock(NOW, 1), ''))} 1 running`);
-    expect(spinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))).not.toBe(spinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
+    expect(at(0)).toContain(`${rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))} 1 running`);
+    expect(at(1)).toContain(`${rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), ''))} 1 running`);
+    expect(rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))).not.toBe(rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
+  });
+  test('critique 21: ONE spinner set on the block: the title and every running row turn the same quarter circle on one clock, no braille anywhere', () => {
+    for (const tick of [0, 1, 2, 3]) {
+      const out = rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working', { tool: 'Read', target: 'a.py' })], { tick });
+      const all = out.map(text).join('\n');
+      expect(all).not.toMatch(/[⠀-⣿]/);
+      const marks = new Set(out.flatMap((r) => [...text(r)]).filter((c) => '◐◓◑◒'.includes(c)));
+      expect(marks.size).toBe(1); // title, TODO rows and agent row on one frame
+    }
   });
 });
 
@@ -77,14 +87,17 @@ describe('rows: one phase, dim done rows, state words by weight', () => {
     expect(running.length).toBe(4); // two TODO rows, two agent rows
     expect(new Set(running.map(glyphOf)).size).toBe(1);
   });
-  test('a done row is dim from its label to its detail (struck, as the quiet done always was)', () => {
+  test('a done row is quiet from its label to its detail, never struck through, and keeps its green disc (critique 21)', () => {
     const done = out.find((r) => text(r).includes('step 1'))!;
     const label = done.find((x) => x.t.includes('step 1'))!;
-    expect([label.tone, label.strike ?? false, label.bold ?? false]).toEqual(['muted', true, false]);
+    expect([label.tone, label.strike ?? false, label.bold ?? false]).toEqual(['muted', false, false]);
     const word = done.find((x) => x.t === 'done')!;
     expect(word.tone).toBe(rowWordTone('done'));
+    expect(done.find((x) => x.t === '●')!.tone).toBe('ok');
     const agent = out.find((r) => text(r).includes('alpha-explorer') && text(r).includes('haiku'))!;
     expect(agent.filter((x) => x.t.trim() !== '' && x.t !== '●' && x.t !== 'done').every((x) => x.tone === 'muted')).toBe(true);
+    expect(agent.find((x) => x.t === '●')!.tone).toBe('ok'); // the agent row's glyph keeps the done colour while its text goes quiet
+    expect(out.flat().some((x) => x.strike)).toBe(false);
   });
   test('the running state word is bold; failed is the error tone; a warning is never bold', () => {
     const run = out.find((r) => text(r).includes('step 2'))!.find((x) => x.t === 'running')!;
