@@ -444,7 +444,7 @@ function compactLine(w: MissionWorker, m: MissionModel, nameW: number): Line {
 /** The compact rows that follow the band's own row while the HUD lists the workers: `band` the rows they sit under, `rows` the worker rows, `after` what a running band keeps beneath them (the message, the footer);
  * null when this model draws none (no workers to name, no room, a board slot or a narrow band). */
 function hudWorkerRows(m: MissionModel, running: boolean): { band: Line[]; rows: Line[]; after: Line[] } | null {
-  if (!m.workersInHud || m.noWorkerRows || m.cols < COMPACT_MIN || m.maxRows < 2 || m.boardRows) return null;
+  if (!m.workersInHud || m.noWorkerRows || m.cols < COMPACT_MIN || m.maxRows < 2 || (m.boardRows && m.maxRows - 1 >= 4)) return null; // a board slot that fits (runningLines gives it 4 rows or more) keeps the old layout; a tight band has no slot for it
   const band = bandLines({ ...m, rich: false });
   const foot = footerLines(m);
   // The message and the footer keep the rows the counts-only band gave them (planRows with no workers); the worker rows take what is left, in place of the breathing blanks.

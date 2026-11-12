@@ -163,3 +163,12 @@ describe('blocked band at 61 cells (critique 19 Band 2: todo and failed dropped)
     expect(blockedAt(93)).toContain('dispatch T2 read ghost.py open');
   });
 });
+
+describe('an expanded board does not take the spare row (live-150 f0060: ribbon, one blank row, separator, 3 running)', () => {
+  test('boardRows wanted but no room for the board slot: the spare row still names a worker', () => {
+    const m = { cols: 93, maxRows: 2, tick: 0, now: NOW, project: 'p', phases: ['research'], phase: 'research', done: 0, total: 5, boardRows: 6, workers: THREE.map((w) => ({ name: w.name, role: w.role, state: 'running', tool: 'Read', target: 'x.py', secs: 12 })), checks: null, workersInHud: true, ui: UI } as unknown as MissionModel;
+    const rows = missionLines(m).map((l) => runsText(l.runs));
+    expect(rows).toHaveLength(2);
+    expect(parsed(rows)).toHaveLength(1);
+  });
+});
