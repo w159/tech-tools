@@ -196,14 +196,13 @@ describe('B4: lastText and clipWords', () => {
       expect(line.trimEnd()).toMatch(/(ctx_search|ToolSearch\.\.\.|returned)$/); // the whole text, or (critique 18) a finished agent's `returned` where it does not fit
     }
   });
-  test('LAST then MODEL drop before a TASK is cut or a name is cut', () => {
-    const long = 'list every open Atlas todo item on the board';
+  test('LAST then MODEL drop before a TASK id is cut or a name is cut (critique 19 B2: TASK is the plan id, 7 cells at every width)', () => {
     for (const cols of [80, 90, 100, 110, 120, 150]) {
-      const lines = text(cols, [row({ task: long, name: 'explorer-board' })]);
+      const lines = text(cols, [row({ name: 'explorer-board', tasks: [1] })]);
       const l = lines.find((x) => x.includes('explorer-board'))!;
       expect(l).toContain('explorer-board');
-      if (l.includes('list every')) expect(l).toContain(long); // a shown task is whole while the model and the last text still had room to go
-      if (/haiku/.test(l)) expect(l).toContain(long); // the model only stays when the whole task fits beside it
+      if (/haiku/.test(l)) expect(l).toContain('T1'); // the model only stays when the task id fits beside it
+      expect(l).not.toContain('list every');
     }
   });
 });

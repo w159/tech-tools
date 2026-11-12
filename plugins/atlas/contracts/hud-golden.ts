@@ -2,6 +2,7 @@
 // Trailing spaces are trimmed; the surface is padded to its width when painted. Update only by regenerating from the design.
 // EXCEPTION, HAND-REVIEWED LITERAL: subagents_120 and subagents_120_rich differ from gen4.py in two rows, because gen4.py draws neither: the
 // column-word header row in the spacer slot (critique-3 change 8) and every owned task id (`T1,T2` for implementer-layout, who owns plan rows 1 and 2).
+// Critique 19 B2: MODEL (7 cells and a gap) and TASK (7 cells and a gap) are fixed-width columns, so subagents_120 and subagents_80 no longer pad MODEL to 10 and TASK to 5.
 
 export const todo_120 = [
   "◖ ◆ ATLAS ◗ ▸ TODO ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3/7",
@@ -50,12 +51,12 @@ export const todo_40 = [
 
 export const subagents_120 = [
   "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1 running · 1 failed · 1 queued · 2 done",
-  "    AGENT               STATE       MODEL     TASK  LAST",
-  "  ● implementer-layout  done        opus      T1,T2 9 of 9 steps",
-  "  ● implementer-gates   done        sonnet    T3    golden tests written",
-  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
-  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
-  "  ■ implementer-live    failed      opus      T6    tests red 3"
+  "    AGENT               STATE       MODEL   TASK    LAST",
+  "  ● implementer-layout  done        opus    T1,T2   9 of 9 steps",
+  "  ● implementer-gates   done        sonnet  T3      golden tests written",
+  "▸ ◐ implementer-band    running     opus    T4      read runs.ts:17",
+  "  ◇ runner-land         queued      opus    T5      waits on implementer-live",
+  "  ■ implementer-live    failed      opus    T6      tests red 3"
 ];
 
 export const subagents_120_rich = [
@@ -70,11 +71,11 @@ export const subagents_120_rich = [
 
 export const subagents_80 = [
   "◖ ◆ ATLAS ◗ ▸ SUBAGENTS ━━━━━━━━━━━━━ 1 running · 1 failed · 1 queued · 2 done",
-  "    AGENT               STATE       MODEL     TASK  LAST",
-  "  ● implementer-layout  done        opus      T1,T2 9 of 9 steps",
-  "  ● implementer-gates   done        sonnet    T3    golden tests written",
-  "▸ ◐ implementer-band    running     opus      T4    read runs.ts:17",
-  "  ◇ runner-land         queued      opus      T5    waits on implementer-live",
-  "  ■ implementer-live    failed      opus      T6    tests red 3"
+  "    AGENT               STATE       MODEL   TASK    LAST",
+  "  ● implementer-layout  done        opus    T1,T2   9 of 9 steps",
+  "  ● implementer-gates   done        sonnet  T3      golden tests written",
+  "▸ ◐ implementer-band    running     opus    T4      read runs.ts:17",
+  "  ◇ runner-land         queued      opus    T5      waits on implementer-live",
+  "  ■ implementer-live    failed      opus    T6      tests red 3"
 ];
 

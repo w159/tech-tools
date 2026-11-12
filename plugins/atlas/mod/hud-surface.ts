@@ -183,36 +183,28 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   return out;
 }
 
-/** The short form of an outcome that does not fit the LAST column whole. A lone leading word with `...` (`report...`, `read...`) says nothing (critique 16), and neither does `reported`
- * or a cut sentence (critique 18: `no matching...`): a count shortens to `12 found`, a finished agent's outcome that still does not fit reads `returned`. */
-const SHORT_LAST: Readonly<Record<string, string>> = { 'report returned': 'returned' };
-const lastFor = (text: string, room: number, state: UiState): string => {
-  if (cells(text) <= room) return text;
-  const short = SHORT_LAST[text] ?? text.replace(/^(\d+) functions? found$/, '$1 found');
-  if (cells(short) <= room) return short;
-  return state === 'done' && cells('returned') <= room ? 'returned' : text;
-};
+/** The LAST text as the column can hold it. One form at every width (critique 19 B1: `1 found` at 110, `1 function found` at 150): the outcome is already the short form (hud.ts outcomeOf),
+ * and one that does not fit is ended on a whole word by the cell, never swapped for another wording (`returned` said nothing). */
+const lastFor = (text: string): string => text;
 
-const TASK_W = 5; // `T1,T2`: the task column's width when every agent's ids fit
+const TASK_W = 7; // `T1,T2` or `3 tasks`: the TASK column is this wide in every frame (critique 19 B2: 5 cells in one frame, 12 in the next, as the agents' task texts came and went)
 /** Every owned id (`T1,T2`) when they fit `width`, else the count (`3 tasks`); an agent that owns none shows nothing. */
 export const taskCell = (tasks: readonly number[], width: number = TASK_W): string => {
   const ids = tasks.map((n) => `T${n}`).join(',');
   return tasks.length === 0 ? '' : ids.length <= width ? ids : `${tasks.length} tasks`;
 };
-/** The TASK cell of a row: its plan ids, else the agent's own task text (the dispatch description). */
-const taskText = (r: AgentRow): string => (r.tasks.length > 0 ? taskCell(r.tasks) : flat(r.task ?? ''));
-/** The task column's width: wide enough for the longest cell (a dispatch description is shown whole while any room is left, see agentCols). */
-const taskWidth = (rows: readonly AgentRow[]): number => rows.reduce((n, r) => Math.max(n, cells(taskText(r))), TASK_W);
+/** The TASK cell of a row: its plan ids and nothing else. A dispatch description (`read beta.py`) is the item's title on the TODO row above, not a second TASK. */
+const taskText = (r: AgentRow): string => taskCell(r.tasks);
+/** The task column's width: constant. */
+const taskWidth = (_rows: readonly AgentRow[]): number => TASK_W;
 
 /** Which optional columns fit, and where they start. A narrow row drops LAST first, then MODEL, before a TASK is cut (the model gives its cells to the task);
  * only when the task alone still does not fit is it ended on a whole word. A name is never cut here. The last text ends on a whole word from LAST_MIN cells. */
 type AgentCols = { model?: number; modelW: number; task?: number; taskW: number; last?: number; ctx?: number };
 const LAST_MIN = 8;
 function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number): AgentCols {
-  const loose = agentColsAt(rows, o, rich, stateAt, rich ? 8 : 9);
-  // Spare columns first: a LAST text that does not fit takes the model column's slack (down to the header word) before it is cut.
-  const clipped = rows.some((r) => { const w = cells(lastText(r.tool)); return w > 0 && (loose.last === undefined || w > o.cols - loose.last); });
-  return clipped ? agentColsAt(rows, o, rich, stateAt, rich ? 6 : 5) : loose;
+  // Critique 19 B2: one grid. The MODEL column was 10 cells wide in one frame and 7 in the next (a long LAST text took its slack); its width now depends on the models only.
+  return agentColsAt(rows, o, rich, stateAt, rich ? 8 : 7);
 }
 function agentColsAt(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number, modelMin: number): AgentCols {
   const { cols } = o;
@@ -281,7 +273,7 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
   cell(r.model, plan.model, plan.modelW, false, true);
   if (!rich) cell(taskText(r), plan.task, plan.taskW, true, true);
-  cell(lastFor(lastText(r.tool), plan.last === undefined ? 0 : cols - plan.last, r.state), plan.last, cols, true);
+  cell(lastFor(lastText(r.tool)), plan.last, cols, true);
   return row;
 }
 

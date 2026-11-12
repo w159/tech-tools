@@ -75,11 +75,11 @@ describe('B2: every row that fits is drawn, only the rest is folded', () => {
 describe('B4: LAST is an outcome for a finished row and the current action for a live one', () => {
   const dispatch = (owner: string, evidence: string): TodoItem => ({ id: `d-${owner}`, content: `Read ${owner}`, status: 'completed', owner, origin: 'dispatch', session_id: '', evidence }) as unknown as TodoItem;
   const lastOf = (rows: string[], name: string): string => rows.find((r) => r.includes(` ${name} `))!;
-  test('a done agent reads the evidence its dispatch row holds, not `report returned`', () => {
+  test('a done agent reads the evidence its dispatch row holds, not `finished`', () => {
     const todos = [...PLAN, dispatch('alpha-explorer', '1. Read `/tmp/p/alpha.py` -> alpha_one (line 1), alpha_two (line 5)')];
     const rows = text(hudLines({ todos, agents: AGENTS }, { cols: 120, maxRows: 30, ui, now: NOW }));
     expect(lastOf(rows, 'alpha-explorer')).toContain('alpha_one (line 1)');
-    expect(lastOf(rows, 'alpha-explorer')).not.toContain('report returned');
+    expect(lastOf(rows, 'alpha-explorer')).not.toContain('finished');
     expect(lastOf(rows, 'alpha-explorer')).not.toContain('/tmp/p'); // never a path
   });
   test('the dispatch row does not become a task id: T-numbers count plan rows only', () => {
@@ -94,7 +94,7 @@ describe('B4: LAST is an outcome for a finished row and the current action for a
       const rows = text(hudLines({ todos: plan, agents: live }, { cols, maxRows: 30, ui, now: NOW }));
       for (const r of rows) expect(r).not.toMatch(/\b[a-z]{1,6}\.\.\./); // `read...`, `report...`
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
-      if (cols === 61) { expect(lastOf(rows, 'alpha-explorer')).toContain('read alpha.py'); expect(lastOf(rows, 'gamma-explorer')).toContain('report returned'); } // critique 17: the name column is as wide as the names under 80 columns, so the whole outcome fits
+      if (cols === 61) { expect(lastOf(rows, 'alpha-explorer')).toContain('read alpha.py'); expect(lastOf(rows, 'gamma-explorer')).toContain('finished'); } // critique 17: the name column is as wide as the names under 80 columns, so the whole outcome fits
     }
   });
 });

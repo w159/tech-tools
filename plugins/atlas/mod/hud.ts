@@ -136,6 +136,13 @@ const shellCall = (command: string): string => {
 /** The event keeps 40 chars of a command as `target`; the full command rides in `detail` when the call had no description. */
 const wholeCommand = (target: string, detail: string | null | undefined): string => { const d = flat(detail); return target !== '' && d.startsWith(target) ? d : target; };
 const isShell = (tool: string | null | undefined): boolean => (tool ?? '').toLowerCase() === 'bash';
+/** Calls that set the agent up, not work on its task: a LAST of `toolsearch...` or `todowrite` says nothing. */
+const isPlumbing = (tool: string | null | undefined): boolean => /^(toolsearch|todowrite|todoread)$/i.test(tool ?? '');
+const PREPARING = 'preparing';
+/** A finished agent whose report holds no outcome LAST can state. */
+const FINISHED = 'finished';
+/** Text that is a tool's failure or an empty search, not an outcome (critique 19 B1: `No matching deferred tools found.`, `no match`). */
+const JUNK = /\bno\s+match(?:es|ing)?\b|not\s+found|\bno\s+such\b|unavailable|\berrors?\b|denied|refused|\bcannot\b|\bcould\s+not\b|\bunable\s+to\b|timed?\s*out|permission|traceback|exception|proxy|\b40[0-9]\b|\b50[0-9]\b/i;
 
 /** The agent's current call (`read runs.ts:17`), else its last line, else its last call. */
 export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, root?: string | null): string {
@@ -143,6 +150,7 @@ export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'las
   const rel = (s: string): string => (base ? s.split(base).join('') : s);
   const target = rel(flat(a.target));
   const command = wholeCommand(target, a.detail != null ? rel(flat(a.detail)) : a.detail);
+  if (isPlumbing(a.tool) || (!a.tool && isPlumbing(a.lastTool))) return PREPARING; // loading tools is no step of the task (critique 19 B1: `toolsearch...`)
   if (a.tool) return isShell(a.tool) && target ? shellCall(command) : `${a.tool.toLowerCase()}${target ? ` ${target}` : ''}`;
   // Between calls and after the end: the last call (its target, else its intent), then the free-text report only when there was no call.
   const call = isShell(a.lastTool) && target ? shellCall(command) : a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${target}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
@@ -154,10 +162,19 @@ export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'las
  * (critique 14), and its closing line stays when it made no call. A live or failed worker's is its current (else last) call, in plain words (critique 16: the HUD said
  * `read util.py` and the team tab `failed` for one agent). `evidence`: the evidence of every row the agent owns, plan rows first. */
 export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, state: UiState, evidence: readonly (string | null | undefined)[], root?: string | null): string {
-  const outcome = state === 'done' ? outcomeOf(flat(evidence.find((e) => flat(e) && !/^ran\s+[\d:]+$/.test(flat(e))))) : '';
   // Critique 17: a failed agent's LAST said `read ghost.py`, the call it was making when it was stopped: that is what happened to it, `killed`. A failure that left only a closing line keeps the line (`tests red 3`).
   if (state === 'failed' && (a.tool || a.lastTool)) return 'killed';
-  return outcome || (state === 'done' && a.lastTool ? 'report returned' : lastAction(a, root));
+  if (state !== 'done') return lastAction(a, root);
+  // Critique 19 B1: a finished agent's LAST is an outcome and only that: the first evidence row that states one, else its closing line, else `finished`. Never a tool error, a tool name,
+  // `<file> read` or `returned`; the same words at every width.
+  for (const e of evidence) {
+    if (!flat(e) || /^ran\s+[\d:]+$/.test(flat(e))) continue;
+    const o = outcomeOf(flat(e));
+    if (o) return o;
+  }
+  // The closing line is a stored, clipped tool echo more often than a report: only a line that is not an echo can state an outcome (a clipped dump would count wrong).
+  const closing = flat(root ? flat(a.lastLine).split(`${root.replace(/\/+$/, '')}/`).join('') : a.lastLine);
+  return (ECHO.test(closing.replace(LIST_NUMBER, '')) ? '' : outcomeOf(closing)) || FINISHED;
 }
 
 /** A tool echo as the evidence rows hold it: `1. Read \`/p/alpha.py\` -> first 3 lines: ...` (tool, one target token and an optional `(note)`, `->`, what came back). */
@@ -171,7 +188,8 @@ const OUTCOME_MAX = 40;
 
 /** The short outcome of a finished agent's report or evidence (critique 17: LAST read `Read alpha.py -> first 3 lines: 1 def...`): a STATUS word, a count of what a file dump
  * holds (`2 functions found`, else `alpha.py read`), the result of a tool echo, else the first sentence; critique 18: the list number is dropped, a result past
- * OUTCOME_MAX cells loses its parenthetical, then is cut to a clause, then reads `<tool> returned` (`report returned` with no echo). */
+ * OUTCOME_MAX cells loses its parenthetical, then is cut to a clause. Critique 19 B1: '' (no outcome stated) when the text is a tool's failure or empty search, a file dump with no
+ * function in it, or a sentence too long to cut; a count reads `2 functions` (11 cells, so the 110-column LAST holds the same words as the 150). */
 export function outcomeOf(text: string): string {
   const status = /\bSTATUS:\s*([A-Za-z]+)/.exec(text)?.[1]?.toLowerCase();
   if (status && status !== 'done') return status;
@@ -181,12 +199,12 @@ export function outcomeOf(text: string): string {
   if (body === '') return '';
   const echo = ECHO.exec(body);
   if (echo) {
-    const result = echo[3]!.replace(/`/g, '');
-    if (!DUMP.test(result)) return plain(result, `${echo[1]!.toLowerCase()} returned`);
+    const result = echo[3]!.replace(/`/g, '').replace(/^["']+|["']+$/g, '');
+    if (!DUMP.test(result)) return JUNK.test(result) ? '' : plain(result, '');
     const n = (result.match(FUNCTION) ?? []).length;
-    return n > 0 ? `${n} ${n === 1 ? 'function' : 'functions'} found` : `${echo[2]!.replace(/`/g, '').split('/').pop()} read`;
+    return n > 0 ? `${n} ${n === 1 ? 'function' : 'functions'}` : '';
   }
-  return plain(body, 'report returned');
+  return JUNK.test(body) ? '' : plain(body, '');
 }
 /** The text to its first full stop (a stop followed by a space: `alpha.py` is no sentence end). */
 const sentence = (s: string): string => { const at = s.search(/[.!?](?:\s|$)/); return at >= 0 ? s.slice(0, at + 1) : s; };
@@ -205,7 +223,9 @@ function plain(s: string, fallback: string): string {
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
   const plan = todos.filter(isPlanItem); // T-numbers count plan rows; the hook's dispatch row of a worker holds its report, which is the outcome a finished row shows
   const rows = agents.map((a): AgentRow => {
-    const mine = (t: TodoItem): boolean => t.owner === a.name || (a.key !== undefined && t.owner === a.key);
+    // A retry (`beta-explorer #2`) takes over the item its first run owned: the plan row names `beta-explorer`, so TASK reads `T3` for the retry too (critique 19 B2).
+    const first = a.name.replace(/\s+#\d+$/, '');
+    const mine = (t: TodoItem): boolean => t.owner === a.name || (a.key !== undefined && t.owner === a.key) || (first !== a.name && t.owner === first);
     const owned = [...plan.filter(mine), ...todos.filter((t) => !isPlanItem(t) && mine(t))];
     const tasks = plan.flatMap((t, i) => (mine(t) ? [i + 1] : []));
     const state = a.ui ?? workerUiState(a.state);

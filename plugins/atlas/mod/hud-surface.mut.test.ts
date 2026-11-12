@@ -24,22 +24,20 @@ describe('todoRows at the min tier', () => {
 });
 
 describe('agentRows columns', () => {
-  test('a long task cell is shown whole while it fits (critique 6: no 18-cell cut)', () => {
-    const out = agentRows([agent({ task: 'x'.repeat(30) })], { cols: 200, ui }, plain);
-    expect(runsString(out[1]!)).toContain('x'.repeat(30));
+  test('TASK holds plan ids only: a dispatch description never fills it (critique 19 B2: `read beta.py` for a retry)', () => {
+    const out = agentRows([agent({ task: 'x'.repeat(30), tasks: [3] })], { cols: 200, ui }, plain);
+    expect(runsString(out[1]!)).toContain('T3');
+    expect(runsString(out[1]!)).not.toContain('xxx');
+    expect(runsString(agentRows([agent({ task: 'read beta.py' })], { cols: 200, ui }, plain)[1]!)).not.toContain('read beta.py');
   });
 
-  test('the model and the last text go before the task is cut', () => {
-    const task = 'one two three four five six seven eight nine'; // 44 cells: beside the model at 80 columns it would pass the edge
-    const out = agentRows([agent({ name: 'a'.repeat(19), task, model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain);
-    const row = runsString(out[1]!);
-    expect(row).toContain(task);
-    expect(row).not.toContain('haiku');
-    expect(row).not.toContain('alpha.py');
-    expect(runsCells(out[1]!)).toBeLessThanOrEqual(80);
-    // only when the task alone does not fit is it ended on a whole word
-    const tight = runsString(agentRows([agent({ name: 'a'.repeat(19), task: `${task} ${task}` })], { cols: 80, ui }, plain)[1]!);
-    expect(tight).toMatch(/nine\.\.\.$|eight\.\.\.$|seven\.\.\.$/);
+  test('the last text goes before the model, and the model before a task id is cut', () => {
+    const wide = runsString(agentRows([agent({ name: 'a'.repeat(19), tasks: [1, 2, 3], model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain)[1]!);
+    expect(wide).toContain('3 tasks');
+    expect(runsCells(agentRows([agent({ name: 'a'.repeat(19), tasks: [1, 2, 3], model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain)[1]!)).toBeLessThanOrEqual(80);
+    const tight = runsString(agentRows([agent({ name: 'a'.repeat(19), tasks: [1], model: 'haiku', tool: 'read alpha.py' })], { cols: 44, ui }, plain)[1]!);
+    expect(tight).toContain('T1');
+    expect(tight).not.toContain('alpha.py');
   });
 
   test('ctx gauge column: drawn when the block fits exactly, at stateAt + 14; absent one cell short', () => {
