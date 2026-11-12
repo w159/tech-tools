@@ -6,9 +6,9 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `...` through `clip`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, percent, ribbon, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, clip, countRuns, gauge, GRID_LEAD, gridPlan, gridRow as gridRowAt, markOf, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
-import { labelCut } from './board-model';
+import { labelCut, planFigure } from './board-model';
 import { railNo, railOf } from './rail';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
@@ -192,17 +192,18 @@ function ribbonRight(m: PanelModel): string {
   return '';
 }
 
-export function ribbonRow(m: PanelModel): PanelLine {
+/** `view`: another view in the panel's ribbon (the board: `▸ BOARD  5 items`, critique 15 B5); absent: the SIDEPANEL ribbon of the lit tab. */
+export function ribbonRow(m: PanelModel, view?: { title: string; right: string }): PanelLine {
   if (m.cols < 34) {
     const cap = capsule(m.ui);
     const fill = Math.max(0, m.cols - rowWidth(cap) - 1);
     return line(fitRuns([...cap, r(' '), m.ui.ascii ? r('-'.repeat(fill), 'muted') : r('━'.repeat(fill), 'line')], m.cols));
   }
-  const right = ribbonRight(m);
+  const right = view ? view.right : ribbonRight(m);
   const fitsRight = right && m.cols >= 40 + cells(right);
   // The gates figure (`17/18`) never drops from the header while the capsule and title fit beside it.
-  const keep = m.tab === 'gates' && !!right && m.cols >= 32 + cells(right);
-  return line(ribbon(m.cols, 'SIDEPANEL', fitsRight || keep ? right : '', m.ui));
+  const keep = !view && m.tab === 'gates' && !!right && m.cols >= 32 + cells(right);
+  return line(ribbon(m.cols, view?.title ?? 'SIDEPANEL', fitsRight || keep ? right : '', m.ui));
 }
 
 /** The tab strip and the rule under the lit tab: `r: route  t: team  c: channel  g: gates  k: core  o: board`, `━━━━━` under the lit one. A
@@ -255,7 +256,7 @@ function todoCount(m: PanelModel): PanelLine {
   const total = m.todos.length;
   if (!total) return line([label('todo', m.cols), r('no tasks yet', 'muted')]);
   const g = m.cols >= 40 ? [...gauge(10, done / total, m.ui, 'ok', 'muted'), r(' ')] : []; // the ok tone fills and the muted tone is the track: quieter than any state word
-  return line([label('todo', m.cols), ...g, r(`${done}/${total}`)]);
+  return line([label('todo', m.cols), ...g, r(planFigure(done, total, m.todos.filter((t) => t.word === RETURNED).length))]);
 }
 
 /** The agents row: one count per state; segments that do not fit wrap under the label instead of overflowing. */

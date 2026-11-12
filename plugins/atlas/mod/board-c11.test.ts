@@ -35,11 +35,10 @@ describe('the state column is padded', () => {
   const cut = (line: string, word: string): { before: string; after: string } => ({ before: line.slice(0, line.indexOf(word)), after: line.slice(line.indexOf(word) + word.length) });
   test('a title that fills its column keeps two blank cells before the state word (38 columns: `reports done`)', () => {
     const lines = boardBody(live(), { cols: 38, ui }).map((l) => l.runs.map((x) => x.t).join(''));
-    for (const l of lines) {
-      expect(textWidth(l)).toBeLessThanOrEqual(38);
-      expect(cut(l, 'done').before).toMatch(/ {2}$/);
-    }
-    expect(lines[3]).toContain('T4 combine the three reports'); // whole: nothing is cut to make the room
+    for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(38);
+    const rowsOnly = lines.filter((l) => !/^ {4}\S/.test(l)); // the owner stands under its row (critique 15 B5)
+    for (const l of rowsOnly) expect(cut(l, 'done').before).toMatch(/ {2}$/);
+    expect(rowsOnly[3]).toContain('T4 combine the three reports'); // whole: nothing is cut to make the room
   });
   test('the owner keeps two blank cells after the state word (54 columns: `done alpha-explorer`)', () => {
     const lines = boardBody(live(), { cols: 54, ui }).map((l) => l.runs.map((x) => x.t).join(''));

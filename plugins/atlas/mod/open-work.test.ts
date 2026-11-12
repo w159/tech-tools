@@ -16,22 +16,24 @@ const input = (todos: Row[]) => ({ findings: '', reports: [], logs: {}, teams: [
 
 describe('A2: the Board fold never hides an open row', () => {
   const asBoard = (rows: Row[]) => rows.map((r) => ({ content: r.content, status: r.status, ...(r.owner ? { owner: r.owner } : {}), ...(r.origin ? { origin: r.origin } : {}), ...(r.evidence ? { evidence: r.evidence } : {}) }));
-  test('all five plan rows done, the gamma dispatch row open: the footer says so and T3 does not read done', () => {
+  test('critique 15 B5: all five plan rows done, the gamma dispatch row open: the open row is unfolded as its own row with its owner, so the board lists 6 items', () => {
     const items = asBoard(ownTodos(store(), SESSION));
-    expect(boardFolded(items)).toBe(3);
-    expect(boardOpenFolded(items)).toBe(1);
+    expect(boardFolded(items)).toBe(2); // the two closed dispatch rows fold; the open one does not
+    expect(boardOpenFolded(items)).toBe(0);
     const rows = boardRowsOf(items);
-    expect(rows).toHaveLength(5);
-    expect(rows.map((r) => r.state)).toEqual(['done', 'done', 'queued', 'done', 'done']);
+    expect(rows).toHaveLength(6);
+    expect(rows.map((r) => r.state)).toEqual(['done', 'done', 'done', 'done', 'done', 'queued']);
+    expect(rows[5]!.owner).toBe('gamma-explorer');
     const text = boardText(boardLines(rows, { cols: 80, ui, folded: boardFolded(items), openFolded: boardOpenFolded(items) }));
-    expect(text.at(-1)).toBe('  1 dispatch open');
+    expect(text.join('\n')).toContain('gamma-explorer');
+    expect(text.at(-1)).toBe('  2 dispatches folded');
   });
-  test('the agent ended but the store row is open (settled to ended): the plan row reads ended, never done', () => {
+  test('the agent ended but the store row is open (settled to ended): its own row reads returned, never done', () => {
     const items = asBoard(settleDispatch(ownTodos(store(), SESSION), { 'gamma-explorer': 'done' }));
     const rows = boardRowsOf(items);
-    expect(rows[2]!.word).toBe('returned');
-    expect(rows[2]!.state).not.toBe('done');
-    expect(boardOpenFolded(items)).toBe(1);
+    expect(rows[5]!.word).toBe('returned');
+    expect(rows[5]!.state).not.toBe('done');
+    expect(rows[2]!.state).toBe('done');
   });
   test('every dispatch row closed: the quiet fold footer, all rows done', () => {
     const items = asBoard(ownTodos(store('completed'), SESSION));

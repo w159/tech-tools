@@ -120,9 +120,12 @@ describe('SnapshotBuilder', () => {
     });
   });
 
-  test('phase precedence: active todo beats header; header next; no signal falls back to default', async () => {
+  test('phase precedence: header beats active todo (critique 15 B1); active todo next; no signal falls back to default', async () => {
     const { fs, b } = await newBuilder();
-    const fromTodo = await b.build(live({ headerPhase: 'test' }));
+    const fromHeader = await b.build(live({ headerPhase: 'test' }));
+    expect(fromHeader.phase).toBe('test');
+    expect(fromHeader.phaseSource).toBe('header');
+    const fromTodo = await b.build(live({ headerPhase: null }));
     expect(fromTodo.phase).toBe('theory'); // first in_progress of the slice
     expect(fromTodo.phaseSource).toBe('todo');
 

@@ -404,9 +404,14 @@ describe('carried rows re-stamped to the current session (defect A)', () => {
 });
 
 describe('currentPhase', () => {
-  test('the active todo wins over the reply header (live 12.2.0: rail read verify during a research task)', () => {
+  test('critique 15 B1: the reply header (the chip the transcript draws) wins over a stale in_progress todo (live-150-95c4a588-1 f0063: route `phase research 1/5`, chip IMPLEMENT)', () => {
     const items = [{ ...item({ status: 'in_progress', content: '[research] r' }), phase: 'research' as const }];
-    expect(currentPhase(items, 'verify')).toEqual({ phase: 'research', source: 'todo' });
+    expect(currentPhase(items, 'implement')).toEqual({ phase: 'implement', source: 'header' });
+  });
+
+  test('the active todo decides when no header was read this turn', () => {
+    const items = [{ ...item({ status: 'in_progress', content: '[research] r' }), phase: 'research' as const }];
+    expect(currentPhase(items, null)).toEqual({ phase: 'research', source: 'todo' });
   });
 
   test('with no active todo the header phase is used', () => {
@@ -483,8 +488,9 @@ describe('D3 phase after completion', () => {
   test('D3: every plan row completed => done, never research', () => {
     expect(currentPhase([done('a', 'research'), done('b', 'implement')], null)).toEqual({ phase: 'done', source: 'todo' });
   });
-  test('D3: a stale header cannot pull a finished run back', () => {
-    expect(currentPhase([done('a', 'implement')], 'research').phase).toBe('done');
+  test('critique 15 B1/B2: with every row completed the chip still decides (stoprun f0090: chip IMPLEMENT, Stop refused, route read `phase done 5/5`)', () => {
+    expect(currentPhase([done('a', 'implement')], 'implement').phase).toBe('implement');
+    expect(currentPhase([done('a', 'implement')], 'done').phase).toBe('done');
   });
   test('D3/R4: nothing in progress, work pending, no header => the earliest open row\'s phase, not the stale last-completed one', () => {
     const items = [done('a', 'research'), done('c', 'implement'), { ...item({ id: 'b', status: 'pending' }), phase: 'verify' } as TodoItem];

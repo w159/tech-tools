@@ -26,7 +26,6 @@ export const COMPACT_MIN = 60;
 /** Below this the board is the label alone; from here to COMPACT_MIN the state (and, when it fits, the owner) still sit right of the label. */
 export const NARROW_MIN = 30;
 const LABEL_MIN = 16; // the least label room the narrow form keeps before it drops the owner column
-
 // ---- data: todo rows to board rows --------------------------------------------------------------------------------
 
 /** `estimate_s`: the item's own estimate in seconds, when the board records one. `ownerState`: the state word of the item's
@@ -121,14 +120,13 @@ function foldBoard(items: readonly BoardSource[]): { rows: BoardSource[]; folded
   for (const d of dispatch) {
     const at = d.owner ? firstOf.get(d.owner) : undefined;
     if (at === undefined) { alone.push(d); continue; }
-    count++;
     const p = folded[at]!;
+    // An open dispatch row under a plan row that already reads done is the row Stop counts (critique 15 B5, stoprun f0090: the fold hid `tc9cd5be6` and the lead had to list the
+    // board on the command line): it is never folded away, it is its own row with its owner, and the plan row stays as the lead closed it.
+    if (finished(p.status) && !finished(d.status)) { alone.push(d); continue; }
+    count++;
     if (!finished(d.status)) open++;
-    if (finished(p.status)) {
-      // A finished plan row stays finished only while its worker's row is closed too; an open dispatch row (the store still counts it for Stop) re-opens the row's word.
-      if (!finished(d.status)) folded[at] = { ...p, status: foldStatus(d.status), claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
-      continue;
-    }
+    if (finished(p.status)) continue;
     const pick = (FOLD_RANK[d.status] ?? 0) > (FOLD_RANK[p.status] ?? 1) ? foldStatus(d.status) : p.status;
     folded[at] = { ...p, status: pick, claimed_at: p.claimed_at ?? d.claimed_at, estimate_s: p.estimate_s ?? d.estimate_s, evidence: p.evidence || d.evidence, ownerState: p.ownerState ?? d.ownerState };
   }
@@ -150,6 +148,10 @@ export function titleOwner(content: string, workers: { has(name: string): boolea
   return m && workers.has(m[1]!) ? { name: m[1]!, at: m.index } : undefined;
 }
 
+/** The one plan figure: `done/total`, and when owners have handed rows back that the lead has not closed, ` · n returned` beside it (critique 15 B6: `0/5` over a row that reads
+ * `returned` looked like a contradiction). A returned row is not done, so it never joins `done`; it is named. HUD header, band and side panel all say it this way. */
+export const planFigure = (done: number, total: number, returned = 0): string => `${done}/${total}${returned > 0 ? ` · ${returned} returned` : ''}`;
+
 /** Counts of a board by state, plus done and total: the numbers the ribbon and the band both state. */
 export function boardCounts(rows: readonly BoardRow[]): Record<UiState, number> & { total: number } {
   const out = { queued: 0, running: 0, done: 0, failed: 0, blocked: 0, waiting: 0, total: rows.length };
@@ -164,7 +166,7 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** `boardLines`: how many of those folded dispatch rows are still open in the store; the footer then reads `N items · K dispatch open`. */ openFolded?: number; /** `boardLines`: draw the `ATLAS ▸ BOARD` ribbon and its blank row (default true). Off inside the side panel, which already has its own header: the footer then carries the one count. */ ribbon?: boolean; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Compact form: the state column's width (the longest word on the board; absent: 7). */ wordW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** `boardLines`: how many of those folded dispatch rows are still open in the store; the footer then reads `N items · K dispatch open`. */ openFolded?: number; /** `boardLines`: draw the `ATLAS ▸ BOARD` ribbon and its blank row (default true). Off inside the side panel, which already has its own header: the footer then carries the one count. */ ribbon?: boolean; /** `boardLines`, ribbon off: false draws no title row either (the host's own ribbon names the board). */ title?: boolean; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Compact form: the state column's width (the longest word on the board; absent: 7). */ wordW?: number; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= NARROW_MIN ? 'compact' : 'narrow');
 
@@ -249,7 +251,12 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
   const stateColC = compact ? Math.max(Math.min(COL.stateCompact, avail), Math.min(avail, widest + 7)) : undefined;
   const labelW = form(o.cols) === 'narrow' ? Math.max(1, o.cols - 4) : (stateColC ?? COL.state) - 5;
   const shown = labelCut(rows.map((x) => x.label), labelW);
-  const lines = rows.map((row, i) => ({ runs: boardRow(row, i === focus, { ...o, stateCol: stateColC, shown: shown[i]!, wordW, ...(ownerW ? { ownerW } : {}), ...(o.motion ? { key: keys[i]! } : {}) }) }));
+  // Critique 15 B5: when the owner column does not fit beside the titles (the 110 pane is 36 cells), the owner is not dropped: it stands under its row, indented, so every row that has one names it.
+  const stacked = compact && ownerAll > 0 && ownerW === 0;
+  const lines = rows.flatMap((row, i): BoardLine[] => {
+    const own = { runs: boardRow(row, i === focus, { ...o, stateCol: stateColC, shown: shown[i]!, wordW, ...(ownerW ? { ownerW } : {}), ...(o.motion ? { key: keys[i]! } : {}) }) };
+    return stacked && row.owner ? [own, { runs: [r('    '), r(clip(row.owner, Math.max(1, o.cols - 4)), 'sub')] }] : [own];
+  });
   return form(o.cols) === 'full' ? [{ runs: boardHeader() }, ...lines] : lines;
 }
 
@@ -266,8 +273,14 @@ export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[]
   // An open folded dispatch row is what Stop counts: the footer names it instead of the quiet fold count.
   const note = k > 0 ? r(`  ${count}${k} dispatch${k === 1 ? '' : 'es'} open`, 'warn') : r(`  ${count}${n} dispatch${n === 1 ? '' : 'es'} folded`, 'muted');
   const footer: BoardLine[] = (n > 0 || k > 0) && rows.length > 0 ? [{ runs: [note] }] : [];
-  const title: BoardLine[] = withRibbon ? [] : [{ runs: [r(o.ui.ascii ? '  > ' : '  ▸ ', 'muted'), r('BOARD', 'text', { bold: true }), ...(rows.length > 0 ? [r(`  ${rows.length} items`, 'muted')] : [])] }];
+  // `title: false`: the side panel's own ribbon already reads `▸ BOARD  5 items` (critique 15 B5: the live scorer finds the board by the capsule beside `▸ BOARD`), so no second title row.
+  const title: BoardLine[] = withRibbon || o.title === false ? [] : [{ runs: [r(o.ui.ascii ? '  > ' : '  ▸ ', 'muted'), r('BOARD', 'text', { bold: true }), ...(rows.length > 0 ? [r(`  ${rows.length} items`, 'muted')] : [])] }];
   return [...(withRibbon ? [{ runs: rib }, { runs: [r(' ')] }] : title), ...boardBody(rows, o), ...footer];
+}
+
+/** The side panel's ribbon words for the board view: the title and its `5 items` figure. */
+export function boardRibbon(rows: readonly BoardRow[]): { title: string; right: string } {
+  return { title: 'BOARD', right: rows.length ? `${rows.length} items` : '' };
 }
 
 /** Plain text of lines, trailing blanks trimmed: what the goldens compare. */

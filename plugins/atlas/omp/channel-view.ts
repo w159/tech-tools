@@ -424,7 +424,7 @@ export const todoItems = (root: string, sessionId?: string, ended: Iterable<stri
 	}));
 };
 
-/** mod/data/todos.ts currentPhase order: the active todo's phase, else this turn's header phase, else research. */
+/** mod/data/todos.ts currentPhase order (critique 15 B1): this turn's header phase (the chip the transcript draws), else the active todo's phase, else research. */
 const PHASE_WORDS: Array<[string, RegExp]> = [
 	["research", /^(setup|plan|research|discover|investigate|explor)/],
 	["theory", /^(design|theory)/],
@@ -438,7 +438,7 @@ export function phaseFromName(name: string | undefined): string | undefined {
 	const n = (name ?? "").trim().toLowerCase();
 	return PHASE_WORDS.find(([, re]) => re.test(n))?.[0];
 }
-export const railPhase = (todo: string | undefined, header: string | undefined): string => phaseFromName(todo) ?? todo ?? header ?? "research";
+export const railPhase = (todo: string | undefined, header: string | undefined): string => header ?? phaseFromName(todo) ?? todo ?? "research";
 
 /** Main repo root of a linked git worktree dir (`.git` file -> gitdir -> commondir), else undefined. Mirrors atlas_todo._worktree_main_root. */
 function worktreeMainRoot(dir: string): string | undefined {

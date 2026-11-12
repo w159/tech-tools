@@ -242,4 +242,14 @@ describe('mission-layout: a full plan with open store work never reads as all do
     expect(band(model({ done: 3, total: 5, openWork: 2 }))).not.toContain('open');
     expect(band(model({ done: 3, total: 5, openWork: 3 }))).toContain('1 open');
   });
+  test('critique 15 B2 (stoprun-150-95c4a588-1 f0090): blocked on one open dispatch row, the count is 5/6, never `todo 5/5` beside `blocked: 1 todo open`', () => {
+    const m = model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1, stopGates: ['1 todo open'], workers: [] });
+    const line = band(m);
+    expect(line).toContain('blocked: 1 todo open');
+    expect(line).toContain('5/6 · 1 dispatch open');
+    expect(line).not.toContain('5/5');
+    for (const cols of [120, 100, 80]) expect(band({ ...m, cols })).not.toContain('5/5');
+    // not blocked: the figure stays the plan's own and the open row is named beside it (unchanged)
+    expect(band(model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1 }))).toContain('5/5 · 1 dispatch open');
+  });
 });

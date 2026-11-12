@@ -190,7 +190,7 @@ test('the pill shows the phase the header states, not a phase word in its senten
 test('turn receipt: done delta, workers, ctx', () => {
   const tracker: ReceiptTracker = { done: 0 }
   const text = stringsOf(durationTree(snap({ squad: [worker('a', 'running')] }), { durationMs: 252_000 }, tracker))
-  expect(text).toBe('▸ 4m12s · +3 done · 1 workers · ctx 41%')
+  expect(text).toBe('▸ 4m12s · +3 done · 1 worker · ctx 41%') // critique 15 B6: singular
   expect(tracker.done).toBe(3)
 })
 
@@ -471,7 +471,13 @@ test('critique 11: the header tally counts every assistant text the transcript d
   await draw('m3', 'ATLAS | 🏁 done | 5/5')
   await draw('m4', 'plain text with no header')
   await draw('m3', 'ATLAS | 🏁 done | 5/5\n\nbody grown by streaming') // a re-draw of one message is still one message
-  expect(drawnHeaderTally()).toEqual({ ok: 3, total: 4 })
+  expect(drawnHeaderTally()).toEqual({ ok: 3, total: 3 }) // critique 15 B3: the headerless narration block is not a failed chip
+  await draw('m5', 'also plain')
+  expect(drawnHeaderTally()).toEqual({ ok: 3, total: 3 }) // the figure never falls as the lead narrates
+  forgetDrawnHeaders()
+  await draw('p1', 'plain text, no header')
+  await draw('p2', 'more plain text')
+  expect(drawnHeaderTally()).toEqual({ ok: 0, total: 2 }) // a run with text and no chip at all still fails
   forgetDrawnHeaders()
   expect(drawnHeaderTally()).toEqual({ ok: 0, total: 0 })
 })
