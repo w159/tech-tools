@@ -404,7 +404,9 @@ const BAND_KEEP_ROWS = 1;
 export function hudSlotCap(budget: number, compact: number, floor: number, bandRows: number, running: boolean, agentsListed: boolean): number {
 	const base = hudBudget(budget, compact, bandRows, running);
 	if (!agentsListed) return base;
-	return budget - floor - 1 >= BAND_KEEP_ROWS ? Math.max(base, floor) : base; // floor: hudFloorRows, the compact form with the column names and the blank between the blocks
+	const cap = budget - floor - 1 >= BAND_KEEP_ROWS ? Math.max(base, floor) : base; // floor: hudFloorRows, the compact form with the column names and the blank between the blocks
+	// While an agent runs the band keeps its row (critique 17: 110 columns, 10 rows, 3 agents: the HUD took all 10 and no band line was drawn); the HUD folds to fit (hud-surface fitRows).
+	return running && budget > BAND_KEEP_ROWS + 1 ? Math.min(cap, budget - BAND_KEEP_ROWS) : cap;
 }
 
 /** Blank rows between the last agent row and the band: one, while the band keeps its title row. */

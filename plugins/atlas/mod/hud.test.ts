@@ -123,7 +123,8 @@ describe('L2: the plan is not cut to "N more todos not shown"', () => {
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => /Step \d+/.test(l)).length;
       const hidden = Number(/(\d+) more todos?/.exec(rows.join('\n'))?.[1] ?? 0);
-      if (rows.length > 1) expect(shown + hidden).toBe(12);
+      const folded = Number(/TODO .*· (\d+) done/.exec(rows[0] ?? '')?.[1] ?? 0); // critique 17 B4: finished rows fold into a `2 done` count, every open row stays
+      if (rows.length > 1) expect(shown + hidden + folded).toBe(12);
     }
   });
   test('the ribbon count stays the whole plan at every height', () => {
@@ -178,18 +179,18 @@ describe('the Subagents block is back on Claude Code', () => {
     expect(rows[0]).toContain('1 running');
     expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +opus-5 +read mod\/hud\.ts:12$/);
   });
-  test('with nothing running the block is absent, even with finished agents', () => {
-    expect(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120))).toEqual([]);
+  test('with nothing running the finished agents stay (critique 17 B3: the block outlives a clean finish)', () => {
+    expect(trimmed(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120)))[0]).toContain('SUBAGENTS');
     expect(isRunning({ ...running, state: 'done' })).toBe(false);
   });
-  test('with nothing running, agents that finished within the linger window still show as done; older ones are gone', () => {
+  test('with nothing running, finished agents show as done however long ago they ended', () => {
     const done = (n: string, ago: number): HudAgent => ({ ...running, name: n, state: 'done', ui: 'done', since: 100_000 - ago });
     const at = (ago: number) => trimmed(hudRows({ todos: [], agents: ['a-one', 'a-two', 'a-three'].map((n) => done(n, ago)) }, { ...view(120), now: 100_000 }));
     const recent = at(2_000);
     expect(recent[0]).toContain('SUBAGENTS');
     expect(recent[0]).toContain('3 done');
     expect(recent.filter((l) => /^[ ▸] ● /.test(l))).toHaveLength(3);
-    expect(at(20_000)).toEqual([]);
+    expect(at(3_600_000).filter((l) => /^[ ▸] ● /.test(l))).toHaveLength(3);
   });
   test('with nothing running, a failed agent stays however long ago it failed', () => {
     const failed: HudAgent = { ...running, name: 'a-bad', state: 'failed', ui: 'failed', since: 100_000 - 60_000 };

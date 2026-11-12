@@ -69,9 +69,9 @@ describe('change 9: one tab strip on both hosts', () => {
     expect(stripOf(ccRows('route', 60))[0]!.trim()).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
     // C4: below the one-row width the full words wrap onto a second row; the two-letter form is gone
     expect(stripOf(ccRows('route', 30)).map((x) => x.trim())).toEqual(['r: route  t: team  c: channel', 'g: gates  k: core  o: board']);
-    // A1: where the words alone fit one row (a 110-column pane) they are drawn bare and bound by key elsewhere, never on two rows
-    expect(stripOf(ccRows('route', 40)).map((x) => x.trim())).toEqual(['route team channel gates core board']);
-    expect(stripOf(ccRows('route', 38)).map((x) => x.trim())).toEqual(['route team channel gates core board']);
+    // Critique 17 B5: one form on every tab (the scorer finds the pane by `r: route`): a 110-column pane wraps the keyed form, it never drops the keys
+    expect(stripOf(ccRows('route', 40)).map((x) => x.trim())).toEqual(['r: route  t: team  c: channel  g: gates', 'k: core  o: board']);
+    expect(stripOf(ccRows('route', 38)).map((x) => x.trim())).toEqual(['r: route  t: team  c: channel', 'g: gates  k: core  o: board']);
     expect(stripOf(ccRows('route', 110)).map((x) => x.trim())).toEqual(['r: route  t: team  c: channel  g: gates  k: core  o: board']);
   });
   test('the rule sits under the lit tab on both hosts', () => {

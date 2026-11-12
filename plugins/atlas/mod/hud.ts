@@ -6,7 +6,7 @@ import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
-import { DONE_DOUBT, WORKER_FAILED, motionState, hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, WORKER_FAILED, motionState, hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -151,9 +151,37 @@ export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'las
  * (critique 14), and its closing line stays when it made no call. A live or failed worker's is its current (else last) call, in plain words (critique 16: the HUD said
  * `read util.py` and the team tab `failed` for one agent). `evidence`: the evidence of every row the agent owns, plan rows first. */
 export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, state: UiState, evidence: readonly (string | null | undefined)[], root?: string | null): string {
-  const outcome = state === 'done' ? flat(evidence.find((e) => flat(e) && !/^ran\s+[\d:]+$/.test(flat(e)))) : '';
+  const outcome = state === 'done' ? outcomeOf(flat(evidence.find((e) => flat(e) && !/^ran\s+[\d:]+$/.test(flat(e))))) : '';
+  // Critique 17: a failed agent's LAST said `read ghost.py`, the call it was making when it was stopped: that is what happened to it, `killed`. A failure that left only a closing line keeps the line (`tests red 3`).
+  if (state === 'failed' && (a.tool || a.lastTool)) return 'killed';
   return outcome || (state === 'done' && a.lastTool ? 'report returned' : lastAction(a, root));
 }
+
+/** A tool echo as the evidence rows hold it: `1. Read \`/p/alpha.py\` -> first 3 lines: ...` (tool, target, `->`, what came back). */
+const ECHO = /^(?:\d{1,3}[.)]\s+)?[A-Za-z][\w-]*\s+`?([^\s`]+)`?\s+->\s+(.*)$/;
+/** What came back is a dump of the file's lines (`first 3 lines:`, `line 1 \`def ...\``): content, not an outcome. */
+const DUMP = /^(?:first|last)\s+\d+\s+lines?\b|^lines?\s+\d/i;
+const FUNCTION = /\b(?:def|function|func|fn)\s+\w/g;
+
+/** The short outcome of a finished agent's report or evidence (critique 17: LAST read `Read alpha.py -> first 3 lines: 1 def...`): a STATUS word, a count of what a file dump
+ * holds (`2 functions found`, else `alpha.py read`), the result of a tool echo, else the first sentence. */
+export function outcomeOf(text: string): string {
+  const status = /\bSTATUS:\s*([A-Za-z]+)/.exec(text)?.[1]?.toLowerCase();
+  if (status && status !== 'done') return status;
+  const deliverable = status ? /\bDELIVERABLE:\s*(.+)$/.exec(text)?.[1] : undefined;
+  if (status && !deliverable) return 'done';
+  const body = flat(deliverable ?? text);
+  const echo = ECHO.exec(body);
+  if (echo) {
+    const result = echo[2]!.replace(/`/g, '');
+    if (!DUMP.test(result)) return sentence(result);
+    const n = (result.match(FUNCTION) ?? []).length;
+    return n > 0 ? `${n} ${n === 1 ? 'function' : 'functions'} found` : `${echo[1]!.split('/').pop()} read`;
+  }
+  return sentence(body);
+}
+/** The text to its first full stop (a stop followed by a space: `alpha.py` is no sentence end). */
+const sentence = (s: string): string => { const at = s.search(/[.!?](?:\s|$)/); return at >= 0 ? s.slice(0, at + 1) : s; };
 
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. */
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null): AgentRow[] {
@@ -174,14 +202,10 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
 
 function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agents: AgentRow[] }; o: SurfaceOpts } {
   const plan = input.todos.filter(isPlanItem);
-  // A finished agent shows while a wave runs, and with nothing running a done one stays LINGER_MS after it ended while a failed one stays until it is cleared (the band's rule).
+  // The block stays after the wave: a clean finish keeps its done rows as a stop run keeps its failed one, until the roster is cleared (critique 17: live-150-a4fad2f9-3/tab-team.png
+  // lost the block after DONE while the stop runs kept all three rows). Only an agent that is neither running, done nor failed (parked) is left out.
   const running = input.agents.some(isRunning);
-  // The finished wave lingers as one: while its newest member is within LINGER_MS every done agent shows, so the header count and the rows keep matching the band.
-  const newestDone = input.agents.reduce((n, a) => (a.state === 'done' && a.since !== undefined ? Math.max(n, a.since) : n), -Infinity);
-  const waveLingers = opts.now !== undefined && opts.now - newestDone <= LINGER_MS;
-  // A failed agent is kept until cleared, and the wave it belonged to stays with it: the final block lists the done siblings too, so its count matches the route's (critique 16: `1 failed` over `2 done ■ 1 failed`).
-  const anyFailed = input.agents.some((a) => a.state === 'failed');
-  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || (a.state === 'done' && (waveLingers || anyFailed)));
+  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || a.state === 'done');
   const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };

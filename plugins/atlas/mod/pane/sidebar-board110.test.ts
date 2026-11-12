@@ -34,7 +34,8 @@ describe('the board view in a narrow pane keeps the tab keys on screen', () => {
       for (const l of r.slice(0, rule + 1)) expect([...l].length).toBeLessThanOrEqual(columns);
     });
   }
-  test('the other views keep the bare one-row strip at 38 columns (the keys stay bound on the zero-width layer)', () => {
-    expect(rows('team', 38)[2]!.trimEnd()).toBe(' route team channel gates core board');
+  test('every view draws the same keyed strip at 38 columns (critique 17 B5: the board wrapped it, the route dropped the keys)', () => {
+    const first = (v: SidebarView): string => rows(v, 38)[2]!.trimEnd();
+    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ' r: route  t: team  c: channel']);
   });
 });
