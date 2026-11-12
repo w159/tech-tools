@@ -18,7 +18,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');
 const lines = (rows: Segment[][]): string[] => rows.map(text);
 // The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
-const unspin = (l: string): string => l.replace(/[◐◓◑◒]/g, '◐');
+const unspin = (l: string): string => l.replace(/(─ )[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/, '$1@SPIN@').replace(/[◐◓◑◒]/g, '◐'); // the title's spinner glyph is `@SPIN@` in the golden; a row's mark is the first circle
 const trimmed = (rows: Segment[][]): string[] => lines(rows).map((l) => unspin(l.trimEnd()));
 const todo = (id: string, content: string, status: string, extra: Partial<TodoItem> | string = {}): TodoItem => ({ id, content, status, ...(typeof extra === 'string' ? { phase: extra as TodoItem['phase'] } : extra) });
 
@@ -27,8 +27,8 @@ const worldAgents = worldHudAgents;
 const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
 const phases = worldPhases();
 
-// The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the count and 3 after it.
-const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(━{6,})( \d+\/\d+)$/, (_m, f: string, c: string) => `${f.slice(2)}${c} ━━━`), ...rows.slice(1)];
+// The first row of the HUD runs its rule on to the last cell (mod/hud-surface.ts ruleToEdge) so the host's `[-]` marker sits at the rule's end: the design golden's first row, with its rule 2 cells shorter before the meter and 3 after it (rev 5).
+const edge = (rows: readonly string[]): string[] => [rows[0]!.replace(/(─{6,})( [▰▱]+)$/, (_m, f: string, m: string) => `${f.slice(2)}${m} ───`), ...rows.slice(1)];
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
     const input: HudInput = { todos: worldPlan(), agents: [], phases };
@@ -177,7 +177,7 @@ describe('the Subagents block is back on Claude Code', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [running] }, view(120)));
     expect(rows[0]).toContain('SUBAGENTS');
     expect(rows[0]).toContain('1 running');
-    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +opus-5 +read mod\/hud\.ts:12$/);
+    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +opus-5 +- +read mod\/hud\.ts:12$/);
   });
   test('with nothing running the finished agents stay (critique 17 B3: the block outlives a clean finish)', () => {
     expect(trimmed(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120)))[0]).toContain('SUBAGENTS');

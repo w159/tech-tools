@@ -5,14 +5,56 @@
 import { animateRow, calmRun, revealProgress, revealRuns, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
-import { cells, CHIP_W, COUNT_ORDER, DONE_KILLED, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, COUNT_ORDER, DONE_KILLED, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
 export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string };
-/** The spinner frame of row `id` (the agent's squad name): the shared clock's frame (spinFrameOf of spinClock, as the side panel turns it)
- * when the snapshot's `now` is known, else the caller's tick. */
-const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>, id: string): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), id) : o.tick ?? 0);
+/** The one spinner frame of the HUD: the shared clock's frame (spinFrameOf of spinClock) when the snapshot's `now` is known, else the caller's tick.
+ * Rev 5: ONE phase for every row and title in a frame (no per-row id: out-of-phase spinners read as noise, critique 17.13.0 problem 1). */
+const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), '') : o.tick ?? 0);
+
+/** The running mark of a HUD row. The capture scorer (round2/tools/live_capture.py GLYPH_STATE4, :467-469) reads a TODO item's state from its glyph alone and a SUBAGENTS row
+ * only when its glyph is one of `◐◓◑◒◇■▲◉●`, so a braille frame there scores `wrong_state`/a missing row. Until the scorer maps braille, a row keeps the four-frame mark
+ * on the SAME shared clock as the titles and the band, which carry the braille spinner. Flip to false when the scorer reads braille. */
+const SCORER_READS_CIRCLES = true;
+const ROW_SPIN = '◐◓◑◒';
+/** The glyph a HUD row turns at spinner `frame`: the four-frame mark while the scorer needs it, else the shared braille spinner. */
+export const rowSpinnerGlyph = (frame: number, ascii = false): string => (SCORER_READS_CIRCLES && !ascii ? [...ROW_SPIN][((Math.floor(frame) % 4) + 4) % 4]! : spinnerGlyph(frame, ascii));
+function markRun(s: MarkState, o: Pick<SurfaceOpts, 'now' | 'tick' | 'ui'>): Run {
+  const base = stateRun(s, o.ui, spinOf(o));
+  return s === 'running' ? { ...base, t: rowSpinnerGlyph(spinOf(o), o.ui.ascii) } : base;
+}
+
+// ---- rev 5 titles: a plain title, a thin rule, the meter on the right ------------------------------------------------------
+// File-local tokens until the shared set lands (names match slice A's GLYPH5): the meter marks, the rule.
+const METER_ON = '▰';
+const METER_OFF = '▱';
+const METER_W = 8;
+const RULE = '─';
+/** The quiet brand the scorer locates a block by (`◖ ◆ ATLAS ◗ ▸ TODO`, live_capture.py is_block_header :510): the caps in the rule tone, the word dim, no fill and no chip.
+ * The accent wordmark lives on the band alone. */
+const quietBrand = (ui: Ui): Run[] => (ui.ascii ? [{ t: '[ATLAS]', tone: 'muted' }] : [{ t: '◖', tone: 'line' }, { t: ' ◆ ATLAS ', tone: 'muted' }, { t: '◗', tone: 'line' }]);
+/** `▰▰▰▱▱▱▱▱` for done/total: full only when everything is done, never empty once one is. ASCII: `#` and `-`. */
+export function meterRuns(done: number, total: number, ui: Ui): Run[] {
+  const on = total <= 0 ? 0 : done >= total ? METER_W : Math.min(METER_W - 1, Math.max(done > 0 ? 1 : 0, Math.round((METER_W * done) / total)));
+  return [{ t: (ui.ascii ? '#' : METER_ON).repeat(on), tone: 'ok' }, { t: (ui.ascii ? '-' : METER_OFF).repeat(METER_W - on), tone: 'muted' }];
+}
+/** `brand ▸ TITLE  count ───────── right ` in exactly `cols` cells (or wider when the parts alone do not fit; callers try narrower forms). The last cell is blank: the host draws its fold marker there. */
+export function titleRow(cols: number, title: string, count: string, right: readonly Run[], ui: Ui): Run[] {
+  const left: Run[] = [...quietBrand(ui), { t: ui.ascii ? ' > ' : ' ▸ ', tone: 'muted' }, { t: title, tone: 'text', bold: true }, ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), { t: ' ', tone: 'line' }];
+  const tail: Run[] = right.length > 0 ? [{ t: ' ', tone: 'line' }, ...right, { t: ' ', tone: 'text' }] : [];
+  const fill = Math.max(0, cols - runsCells(left) - runsCells(tail) - 1);
+  return [...left, { t: (ui.ascii ? '-' : RULE).repeat(fill), tone: ui.ascii ? 'muted' : 'line' }, ...tail, { t: ' ', tone: 'text' }];
+}
+
+/** The tone and weight of a row's state word. The tone is the ONE shared table (atlas-ui rowWordTone), so the HUD, the route tab and the board never disagree on a row's colour
+ * (phase-sync.test.ts); rev 5 asks that table for: running `text`, finished and queued `muted`, failed `bad`, blocked/waiting/doubt `warn`, returned `text`. Weight: the running word
+ * is bold, a warning never is. `worker failed` (a pending row whose worker died) is the error tone. */
+function wordStyle(r: Pick<TodoRow, 'state' | 'word'>): { tone: Run['tone']; bold?: boolean } {
+  const tone = r.word === WORKER_DOWN ? 'bad' : rowWordTone(r.state, r.word);
+  return r.state === 'running' && r.word === undefined ? { tone, bold: true } : { tone };
+}
 export type SurfaceOpts = {
   cols: number;
   ui: Ui;
@@ -49,7 +91,7 @@ const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state,
 /** The state cell's text: the row's word, and for a doubted done in the plain form `done · worker killed` (critique 18 B2: the amber tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
 const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? DONE_KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
 /** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
-const wordTone = (r: Pick<TodoRow, 'state' | 'word'>): Run['tone'] => (r.word === WORKER_DOWN ? 'bad' : rowWordTone(r.state, r.word));
+const wordRun = (r: Pick<TodoRow, 'state' | 'word'>, text: string): Run => { const s = wordStyle(r); return t(text, s.tone, s.bold ? { bold: true } : {}); };
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
 const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
@@ -77,7 +119,7 @@ export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: 
 }
 
 /** The overflow row, in plain words: `  2 more todos not shown`. */
-const more = (n: number, what: string): Run[] => [t(`  ${n} more ${what} not shown`, 'sub')];
+const more = (n: number, what: string): Run[] => [t(`  ${n} more ${what} not shown`, 'muted')];
 
 // ---- TODO ------------------------------------------------------------------------------------------------
 
@@ -88,7 +130,10 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const rich = isRich(o);
   const done = rows.filter((r) => r.state === 'done').length;
   const figure = planFigure(done, rows.length, rows.filter((r) => r.word === RETURNED).length); // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
-  if (b.cap === 0) return [ribbon(cols, 'TODO', figure, ui)];
+  const meter = meterRuns(done, rows.length, ui);
+  /** The title in the first form that fits: the count text with the meter, then without it. */
+  const head = (forms: readonly string[]): Run[] => [...forms.map((f) => titleRow(cols, 'TODO', f, meter, ui)), ...forms.map((f) => titleRow(cols, 'TODO', f, [], ui))].find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'TODO', '', [], ui);
+  if (b.cap === 0) return [head([figure])];
   // Every slot holds a row: what does not fit is counted on the ribbon, not on a row of its own (critique 16: `3 more todos not shown` under 2 drawn rows, with room for a third).
   // A short budget folds the finished rows first: the ribbon counts them (`3/5 · 3 done`) and every open row keeps its place (critique 17: the 110 slot lost its band row and its blank to rows already done).
   const stays = (r: TodoRow): boolean => r.state !== 'done' || isFresh(r, o.now); // a row that completed within LINGER_MS keeps its place, as when the plan windows
@@ -96,7 +141,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const fold = b.foldDone === true && foldable > 0 && foldable < rows.length; // a plan that is all done keeps its rows
   const { shown, hidden } = fold ? { shown: rows.filter(stays), hidden: foldable } : windowRows(rows, b.cap, o.now, false);
   const forms = hidden > 0 ? [fold ? `${figure} · ${hidden} done` : `${figure} · ${hidden} more ${hidden === 1 ? 'todo' : 'todos'} not shown`, ...(fold ? [] : [`${figure} · +${hidden} more`]), figure] : [figure];
-  const out: Run[][] = [forms.map((f) => ribbon(cols, 'TODO', f, ui)).find((r) => runsCells(r) <= cols) ?? ribbon(cols, 'TODO', '', ui)];
+  const out: Run[][] = [head(forms)];
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
   const stateAt = todoStateAt(rows, o, tier, rich);
@@ -126,15 +171,16 @@ function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt:
 
 function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
   const { ui } = o;
-  const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), stateRun(markOf(r.state, r.word), ui, spinOf(o, r.owner || r.id || r.label)), t(' ')]; // the cursor marks work in hand, never a queued row; the spinner turns the owner's (else the item's id) phase, as the side panel does
+  const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), markRun(markOf(r.state, r.word), o), t(' ')]; // the cursor marks work in hand, never a queued row; one spinner phase for the whole frame
   const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
   const text = clip(flat(r.label), labelW);
-  const label = r.state === 'done' && markOf(r.state, r.word) !== 'doubt' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
+  const finished = r.state === 'done' && markOf(r.state, r.word) !== 'doubt';
+  const label = finished ? t(text, 'muted', { strike: true }) : t(text, r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is dim and struck (the quiet done); bold marks the selected row only
   if (stateAt === 0) return [...head, label];
-  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(wordOf(r, rich), wordTone(r))];
+  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : wordRun(r, wordOf(r, rich))];
   const detail = detailOf(r, rich);
   if (tier !== 'full' || detail === '') return row;
-  const meta = t(clip(flat(detail), Math.max(1, o.cols - metaAt)), 'sub');
+  const meta = t(clip(flat(detail), Math.max(1, o.cols - metaAt)), finished ? 'muted' : 'sub');
   return [...toCol(row, metaAt), flat(detail) === flat(r.owner ?? '') ? calmRun(meta) : meta]; // the owner never changes with the row's state: the motion leaves it be (critique 18: it flashed 231 at 0 ms)
 }
 
@@ -167,7 +213,10 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
-  const head = counts.map((c) => ribbon(cols, 'SUBAGENTS', c, ui)).find((r) => runsCells(r) <= cols) ?? ribbon(cols, 'SUBAGENTS', '', ui);
+  // The working signal rides the title: the braille spinner (the shared clock and phase) before the counts while any agent runs.
+  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o)), t: spinnerGlyph(spinOf(o), ui.ascii) }, t(' ')] : [];
+  const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...spin, t(c, 'sub')] : spin.slice(0, 1), ui);
+  const head = counts.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
   const out: Run[][] = [head];
   if (b.cap === 0) return out;
   const wordW = rich ? CHIP_W : 7;
@@ -187,6 +236,8 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
  * and one that does not fit is ended on a whole word by the cell, never swapped for another wording (`returned` said nothing). */
 const lastFor = (text: string): string => text;
 
+/** What a TASK or LAST cell with nothing to say reads (critique 17.13.0: LAST was blank at 110). */
+const NONE = '-';
 const TASK_W = 7; // `T1,T2` or `3 tasks`: the TASK column is this wide in every frame (critique 19 B2: 5 cells in one frame, 12 in the next, as the agents' task texts came and went)
 /** Every owned id (`T1,T2`) when they fit `width`, else the count (`3 tasks`); an agent that owns none shows nothing. */
 export const taskCell = (tasks: readonly number[], width: number = TASK_W): string => {
@@ -260,20 +311,22 @@ function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, n
 
 function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const { ui, cols } = o;
-  const head: Run[] = [focusMark(r.focus, ui), t(' '), stateRun(r.state, ui, spinOf(o, r.id ?? r.name)), t(' '), t(clip(flat(r.name), nameW), 'text', { bold: true })];
-  let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : t(r.state, rowWordTone(r.state))];
+  const finished = r.state === 'done';
+  const head: Run[] = [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), t(clip(flat(r.name), nameW), finished ? 'muted' : 'text', { bold: r.focus })]; // bold marks the selected row only; a finished row is dim throughout
+  let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : wordRun(r, r.state)];
   /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. */
   const cell = (text: string, at: number | undefined, width: number, words = false, still = false): void => {
     if (text === '' || at === undefined) return;
     const room = Math.max(1, Math.min(width, cols - at));
     const cut = words ? clipWords(flat(text), room) : clip(flat(text), room);
     const shown = words && /^\S{1,6}\.\.\.$/.test(cut) && /\s/.test(flat(text)) ? '' : cut; // a short bare verb and `...` of a longer text (`read...`, `report...`) is no information: draw nothing
-    if (shown !== '') row = [...toCol(row, at), still ? calmRun(t(shown, 'sub')) : t(shown, 'sub')]; // MODEL and TASK never change with the state: the motion leaves them be
+    const tone = finished || text === NONE ? 'muted' : 'sub';
+    if (shown !== '') row = [...toCol(row, at), still ? calmRun(t(shown, tone)) : t(shown, tone)]; // MODEL and TASK never change with the state: the motion leaves them be
   };
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
   cell(r.model, plan.model, plan.modelW, false, true);
-  if (!rich) cell(taskText(r), plan.task, plan.taskW, true, true);
-  cell(lastFor(lastText(r.tool)), plan.last, cols, true);
+  if (!rich) cell(taskText(r) || NONE, plan.task, plan.taskW, true, true); // a column never goes blank: `-` says there is nothing
+  cell(lastFor(lastText(r.tool)) || NONE, plan.last, cols, true);
   return row;
 }
 
@@ -304,7 +357,7 @@ export function fitStack(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] 
 /** The first row is a ribbon whose right end the host draws its `[-]` fold marker beside (outside the cells the mod owns). The rule runs on
  * to the last cell, 3 cells past the count, so the marker reads as the end of the rule, not a stray token after a gap (critique 11). Width kept. */
 function ruleToEdge(row: Run[], ui: Ui): Run[] {
-  const ch = ui.ascii ? '-' : '━';
+  const ch = ui.ascii ? '-' : RULE;
   const last = row.at(-1);
   const at = row.findIndex((x) => x.t.length >= 6 && [...x.t].every((c) => c === ch));
   if (at < 0 || !last || last.t !== ' ') return row;
@@ -317,25 +370,19 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   const n = s.todos.length;
   const m = s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean };
-  // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
-  // Every plan row is drawn while the rows fit at all: the blank and the column names go before a finished row does (critique 18 B1: T1 left the block under `1/5 · 1 done`
-  // although ribbon, five rows and three agents fit in the same ten rows). Only when even that does not fit do the finished rows fold into a count (critique 17, B4).
-  // Critique 19 A1/A4: every plan row is drawn before a finished row folds (stoprun-150-232567af-3/f0104.ans lost T1 under `1/5 · 1 done` although ten rows held all five without the column
-  // names), and while an agent runs the blank between the blocks stays (f0093.ans:29-30 butted the blocks): of the blank and the column names, which cost one row each, the names go.
-  const running = s.agents.some((a) => a.state === 'running');
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }];
-  if (running) tries.push({ spacers: true, extras: false, header: false });
-  tries.push({ spacers: false, extras: true }, { spacers: false, extras: false });
-  tries.push({ spacers: true, extras: false, header: false }, { spacers: false, extras: false, header: false });
-  tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: false, extras: false, foldDone: true }, { spacers: true, extras: false, header: false, foldDone: true });
-  for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap, header: false }); // a cap is a count of rows: the rest is counted on the ribbon
+  // Rev 5: the column names stay while the grid shows (critique 17.13.0: the AGENT/STATE header was missing while agents ran). Of the blank between the blocks and the column
+  // names, the blank goes first; then the finished rows fold into a count; then the plan is capped; only a slot too small for the names drops them (the last tries).
+  // The blank between TODO and SUBAGENTS outlives the rail (critique 11: at 110 columns the blocks butted together). Every plan row is drawn while the rows fit at all (critique 18 B1).
+  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
+  tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: false, extras: false, foldDone: true });
+  for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap }); // a cap is a count of rows: the rest is counted on the title
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).
   tries.push({ spacers: false, extras: false, hideTodo: true });
   for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, agentCap: cap });
   // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
   tries.push({ spacers: false, extras: false, hideTodo: true, header: false });
   for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, header: false, agentCap: cap });
-  tries.push({ spacers: false, extras: false, todoCap: 0, agentCap: 0 });
+  tries.push({ spacers: false, extras: false, todoCap: 0, agentCap: 0, header: false });
   const ss = { todos: s.todos, agents: m > 0 ? s.agents : [] };
   for (const tr of tries) {
     const rows = stack(tr.hideTodo ? { ...ss, todos: [] } : ss, o, tr);

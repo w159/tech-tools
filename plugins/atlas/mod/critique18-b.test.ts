@@ -25,8 +25,8 @@ const agents = [agent(names[0]!, 'done', 'done'), agent(names[1]!, 'failed', 'fa
 const hud = (cols: number, maxRows: number, input: HudInput = { todos: plan(), agents }): string[] => hudLines(input, { cols, maxRows, ui, now: NOW }).map(runsString);
 
 describe('B1: a completed row never leaves the TODO block while the rows fit', () => {
-  test('93 cells, 10 rows (f0086): all five rows are drawn, T1 included, with no `done` fold on the ribbon', () => {
-    const rows = hud(93, 10);
+  test('93 cells, 11 rows (f0086; the column names take one): all five rows are drawn, T1 included, with no `done` fold on the ribbon', () => {
+    const rows = hud(93, 11);
     expect(rows.filter((r) => /\bT[1-5] /.test(r) && !/haiku/.test(r))).toHaveLength(5);
     expect(rows.find((r) => r.includes('T1 read alpha.py'))).toMatch(/done/);
     expect(rows[0]).toContain('1/5');
@@ -34,9 +34,10 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect(rows.filter((r) => /haiku/.test(r))).toHaveLength(3);
   });
   test('when the rows truly do not fit, open rows keep their place and the ribbon says how many were left out', () => {
-    const rows = hud(93, 9);
+    const rows = hud(93, 10);
     expect(rows.filter((r) => /\bT[2-5] /.test(r) && !/haiku/.test(r))).toHaveLength(4);
-    expect(rows[0]).toMatch(/1 more todo not shown/);
+    expect(rows[0]).toMatch(/1 done/);
+    expect(rows.some((r) => /AGENT\s+STATE/.test(r))).toBe(true); // rev 5: the column names stay, the finished row folds into the count
   });
 });
 
@@ -77,7 +78,7 @@ describe('B3: blocked has its own colour, distinct from failed', () => {
     const rows = hudLines({ todos: plan(), agents }, { cols: 150, maxRows: 12, ui, now: NOW });
     const toneOf = (needle: string, word: string) => rows.find((r) => runsString(r).includes(needle))!.find((x) => x.t.trim() === word)!.tone;
     const glyphOf = (needle: string) => rows.find((r) => runsString(r).includes(needle))![2]!.tone;
-    expect(toneOf('T2 read ghost.py', 'blocked')).toBe('block');
+    expect(toneOf('T2 read ghost.py', 'blocked')).toBe(rowWordTone('blocked')); // the HUD word takes the shared table's blocked tone
     expect(glyphOf('T2 read ghost.py')).not.toBe(glyphOf('T3 read beta.py'));
     expect(rows.some((r) => runsString(r).includes('T3 read beta.py'))).toBe(true);
   });

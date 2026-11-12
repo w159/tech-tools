@@ -26,16 +26,17 @@ function slot(input: HudInput, cols: number, budget: number) {
 }
 
 describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
-  // Critique 19 A4: while an agent runs the blank between TODO and SUBAGENTS stays; of the blank and the column names (one row each) the names go in a slot that holds only one of them.
+  // Rev 5: the column names stay while the grid shows. Of the blank between the blocks and the names (one row each) the blank goes first; then the plan is capped, never the names.
   for (const [cols, budget] of [[150, 13], [150, 12], [61, 12], [61, 11]] as const) {
-    test(`${cols} columns, ${budget} rows, an agent running: the blank stays, every agent keeps its row and the band keeps a row`, () => {
+    test(`${cols} columns, ${budget} rows, an agent running: the column names stay, every agent keeps its row and the band keeps a row`, () => {
       const { hud, band } = slot(stop, cols, budget);
       const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
       expect(at).toBeGreaterThan(0);
-      if (budget >= 12) expect(hud[at - 1]!.trim()).toBe(''); // the gap row between the blocks (11 rows hold the ribbon, five plan rows, the blank, the ribbon and three agents; 10 do not)
-      expect(hud.slice(0, at).filter((r) => /T\d /.test(r))).toHaveLength(5); // every plan row
-      expect(hud.slice(at + 1).filter((r) => /-explorer/.test(r))).toHaveLength(3); // every agent keeps its row
-      if (hud[at + 1]!.match(/AGENT\s+STATE/)) expect(hud.slice(at + 2).filter((r) => /-explorer/.test(r))).toHaveLength(3); // the names show when the slot holds them too
+      expect(hud[at + 1]!).toMatch(/AGENT\s+STATE/); // the names show whenever the grid does
+      expect(hud.slice(at + 2).filter((r) => /-explorer/.test(r))).toHaveLength(3); // every agent keeps its row
+      const plan = hud.slice(0, at).filter((r) => /T\d /.test(r)).length;
+      expect(plan).toBeGreaterThanOrEqual(budget >= 12 ? 5 : 4); // every plan row while the rows fit, one folded onto the title below that
+      if (hud.length >= 12) expect(hud[at - 1]!.trim()).toBe(''); // the gap row between the blocks, when a row is left over
       expect(band).toBeGreaterThanOrEqual(1);
     });
   }

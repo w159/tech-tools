@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
-import { chipCount, runsCells, runsString, type Run, type Ui } from './atlas-ui';
+import { chipCount, runsCells, runsString, spinnerGlyph, type Run, type Ui } from './atlas-ui';
 import { COUNT_ORDER, type UiState } from './atlas-ui';
 import { textWidth } from './theme';
 import { agentRows, fitStack, padRows, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
@@ -13,6 +13,8 @@ export const worldAgents = (): AgentRow[] => // the adapter's order (hud.ts agen
   sortAgents(world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running' })));
 const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
+/** A golden title carries `@SPIN@` for the spinner glyph at frame 0 (the glyph set is the shared atlas-ui one, not this golden's). */
+const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(spinnerGlyph(0), '@SPIN@') : r));
 const full = { spacers: true, extras: true };
 
 describe('TODO surface goldens (rev 4)', () => {
@@ -25,7 +27,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const rows = text(todoRows(worldTodos(), opts(60), full));
     expect(rows.slice(1)).toEqual(todo_40.slice(1));
     expect(rows[0]!.length).toBe(60 - 2); // the ribbon is 60 cells; the two trailing spaces are trimmed
-    expect(rows[0]!.endsWith('3/7')).toBe(true);
+    expect(rows[0]!).toMatch(/TODO {2}3\/7 .* ▰{3}▱{5}$/); // rev 5: the count follows the title, the meter ends the row
   });
   test('completed rows are drawn as done: the done glyph, the word and a struck label', () => {
     const rows = todoRows(worldTodos(), opts(120), full);
@@ -33,7 +35,7 @@ describe('TODO surface goldens (rev 4)', () => {
     expect(done).toHaveLength(3);
     for (const r of done) {
       expect(r.some((x) => x.t === '●')).toBe(true);
-      expect(r.some((x) => x.strike && x.tone === 'sub')).toBe(true);
+      expect(r.some((x) => x.strike && x.tone === 'muted')).toBe(true);
     }
   });
   test('header counts equal the row sums', () => {
@@ -63,7 +65,7 @@ describe('TODO surface goldens (rev 4)', () => {
 describe('SUBAGENTS surface goldens (rev 4)', () => {
   for (const [cols, rich, golden] of [[120, false, subagents_120], [120, true, subagents_120_rich], [80, false, subagents_80]] as const) {
     test(`${cols} columns rich=${rich} equals the design golden`, () => {
-      expect(text(agentRows(worldAgents(), opts(cols, rich), full))).toEqual([...golden]);
+      expect(spun(text(agentRows(worldAgents(), opts(cols, rich), full)))).toEqual([...golden]);
     });
   }
   test('A4: 80 to 99 columns (a wide terminal with the pane docked) show model, task and last line, as 104 does', () => {
@@ -284,20 +286,20 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
 
 describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
   const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py', ctx: null, focus: false, ...o });
-  test('B5 (critique 19 A4): while an agent runs the blank between TODO and SUBAGENTS outlives the column names at 110 columns; the names come back with one more row', () => {
+  test('B5 (rev 5): the column names outrank the blank between TODO and SUBAGENTS at 110 columns; the blank comes back with one more row, and a tighter slot caps the plan, never the names', () => {
     const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
-    const out = text(fitStack({ todos, agents: rows }, opts(110), 8)); // ribbon + 3 plan rows + blank + ribbon + 2 agents
+    const out = text(fitStack({ todos, agents: rows }, opts(110), 8)); // title + 3 plan rows + title + column names + 2 agents
     expect(out.length).toBe(8);
-    expect(out[4]).toBe('');
-    expect(out[5]).toContain('SUBAGENTS');
-    expect(out.some((l) => /^ {4}AGENT +STATE/.test(l))).toBe(false);
+    expect(out[4]).toContain('SUBAGENTS');
+    expect(out[5]).toMatch(/^ {4}AGENT +STATE/);
     const roomy = text(fitStack({ todos, agents: rows }, opts(110), 9)); // one more row: the blank comes back
-    expect(roomy.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
     expect(roomy[4]).toBe('');
-    const tight = text(fitStack({ todos, agents: rows }, opts(110), 7)); // no room for the names beside the plan: they go, never a plan row
-    expect(tight.some((l) => /^ {4}AGENT +STATE/.test(l))).toBe(false);
-    expect(tight.filter((l) => l.includes('queued')).length).toBe(3);
+    expect(roomy.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
+    const tight = text(fitStack({ todos, agents: rows }, opts(110), 7)); // no room for the whole plan beside the names: the plan is capped
+    expect(tight.some((l) => /^ {4}AGENT +STATE/.test(l))).toBe(true);
+    expect(tight.filter((l) => l.includes('queued')).length).toBe(2);
+    expect(tight[0]).toMatch(/1 more todo not shown/);
   });
   test('B4: a doubled verb draws once in the LAST column', () => {
     const out = text(agentRows([row({ name: 'alpha-explorer', tasks: [1], tool: 'read Read alpha.py' })], opts(110), full));
@@ -335,7 +337,7 @@ describe('critique 11 C4: the TODO box', () => {
   test('the rule of the first row runs to the last cell, so the host\'s [-] ends it (live PNGs: [-] floated past a gap)', () => {
     for (const cols of [80, 110, 150]) {
       const first = fitStack({ todos: live(), agents: [] }, opts(cols), 10)[0]!;
-      expect(runsString(first)).toMatch(/━{3}$/);
+      expect(runsString(first)).toMatch(/ ─{3}$/);
       expect(textWidth(runsString(first))).toBe(cols);
     }
     const second = fitStack({ todos: live(), agents: worldAgents() }, opts(110), 20).find((r) => runsString(r).includes('SUBAGENTS'))!;
