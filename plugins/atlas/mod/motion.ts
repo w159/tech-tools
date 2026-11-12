@@ -77,6 +77,19 @@ export const trackBusy = (track: Track | undefined, now: number): boolean => {
   return false;
 };
 
+/** The key of one agent's row on the HUD (`agent:<name>`, hud.ts) and on the side panel (`worker:<name>`, panel-layout.ts). */
+const AGENT_KEY = /^(agent|worker):(.+)$/;
+/** The entry a row is drawn from. An agent is one row on two surfaces, so both read ONE phase of its change: when the twin row has the same state, the earlier `changed`
+ * and `born` of the two win (critique 19 B3: beta `◍`/193 in the panel and `◌`/231 in the HUD in one frame, the two surfaces having seen `done` on different ticks). */
+export function sharedPhase(key: string, find: (key: string) => Entry | undefined): Entry | undefined {
+  const e = find(key);
+  const m = AGENT_KEY.exec(key);
+  if (!e || !m) return e;
+  const twin = find(`${m[1] === 'agent' ? 'worker' : 'agent'}:${m[2]!}`);
+  if (!twin || twin.state !== e.state || (twin.changed >= e.changed && twin.born >= e.born)) return e;
+  return { state: e.state, changed: Math.min(e.changed, twin.changed), born: Math.min(e.born, twin.born) };
+}
+
 /** The stateful holder a host keeps: one Track per surface. Observation is the host tick's job; a render only reads `ctx`. */
 export class Motion {
   private tracks = new Map<string, Track>();
@@ -110,7 +123,8 @@ export class Motion {
   /** The view a builder reads at `now` (default: the frame clock); undefined when motion is off, so builders return the resting render untouched. */
   ctx(now: number = this.shown): MotionCtx | undefined {
     if (!this.enabled) return undefined;
-    return { now, entry: (key) => { for (const t of this.tracks.values()) { const e = t.get(key); if (e) return e; } return undefined; } };
+    const find = (key: string): Entry | undefined => { for (const t of this.tracks.values()) { const e = t.get(key); if (e) return e; } return undefined; };
+    return { now, entry: (key) => sharedPhase(key, find) };
   }
 
   /** True while any row is in a window: the host keeps its redraw tick going. False when idle: it writes nothing. */
@@ -301,9 +315,9 @@ export function ramp256(accent: string, rest: string, theme: Ui['theme'], lifted
     const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
     const d = Math.sign(luminance(target) - luminance(out[0]!));
     if (d !== 0 && deltaE(lead, out[0]!) >= MIN_STEP_DE && Math.sign(luminance(out[0]!) - luminance(lead)) === d) out.unshift(lead);
-    // A lifted run ends bold on its rest colour and drops the weight on the last beat: the colour must already be at rest then, so the weight and the colour never
-    // move in one frame (critique 18: bold dropped as 151 stepped to 146 at 600 ms). The rest colour takes the last two beats, so the staircase keeps MAX_BEATS - 2 steps.
-    if (lifted) { out.length = Math.min(out.length, MAX_BEATS - 2); out.push(target); }
+    // A lifted run is bold while its colour moves and drops the weight on the very frame its colour lands on rest (critique 19: bold fell one step after 146 landed,
+    // motion-232567af/todo-strip.ans:4-5). The rest colour is the last step; the staircase keeps MAX_BEATS - 1 steps before it.
+    if (lifted) { out.length = Math.min(out.length, MAX_BEATS - 1); out.push(target); }
   }
   const ramp = out.slice(0, MAX_BEATS);
   rampCache.set(key, ramp);
@@ -336,7 +350,10 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
         if (ui.color === '256') {
           const steps = ramp256(palette[markToken(accent)], rest, ui.theme, r.bold !== true);
           // No staircase for this pair: the row keeps its tone (the glyph pop still moves).
-          return steps.length ? weighted({ ...r, fg: steps[Math.min(beat, steps.length - 1)]! }, beat) : r;
+          if (!steps.length) return r;
+          const at = Math.min(beat, steps.length - 1);
+          const landed = at >= steps.length - 1; // the colour is at rest (a lifted ramp's last step): the weight falls with it, in this frame
+          return landed ? { ...r, fg: steps[at]! } : lift({ ...r, fg: steps[at]! });
         }
         return weighted({ ...r, fg: mixHex(lead, rest, t) }, beat);
       });

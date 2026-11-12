@@ -231,13 +231,13 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
   const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py -> first lines', ctx: null, focus: false, ...o });
   const lines = (rows: AgentRow[], cols: number): string[] => text(agentRows(rows, opts(cols), { spacers: false, extras: false })).slice(1);
   test('a narrow row drops last text, then task, then model; the state word is never cut', () => {
-    const a = row({ name: 'board-auditor-open-items', task: 'list open items' });
+    const a = row({ name: 'board-auditor-open-items', tasks: [1] }); // critique 19 B2: TASK is the plan id
     const widths = [140, 100, 90, 80];
     const seen = widths.map((w) => lines([a], w)[0]!);
     for (const l of seen) { expect(l).toContain('board-auditor-open-items'); expect(l).toContain('running'); expect(l).not.toContain('...items'); }
     expect(seen[0]).toContain('first lines');
     expect(seen[3]).not.toContain('first');
-    const at = (l: string) => ({ model: l.includes('haiku'), task: l.includes('list open'), last: l.includes('read alpha') });
+    const at = (l: string) => ({ model: l.includes('haiku'), task: l.includes('T1'), last: l.includes('read alpha') });
     // Whatever survives, a later column never shows without the earlier one.
     for (const l of seen) { const c = at(l); if (c.last) expect(c.task && c.model).toBe(true); if (c.task) expect(c.model).toBe(true); }
   });
@@ -299,12 +299,13 @@ describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
     expect(tight.filter((l) => l.includes('queued')).length).toBe(3);
   });
   test('B4: a doubled verb draws once in the LAST column', () => {
-    const out = text(agentRows([row({ name: 'alpha-explorer', task: 'read alpha.py', tool: 'read Read alpha.py' })], opts(110), full));
-    expect(out[2]).toContain('read alpha.py read alpha.py');
+    const out = text(agentRows([row({ name: 'alpha-explorer', tasks: [1], tool: 'read Read alpha.py' })], opts(110), full));
+    expect(out[2]).toContain('T1      read alpha.py'); // TASK is a fixed 7-cell column and a gap, then LAST
     expect(out[2]).not.toContain('Read');
+    expect(out[2]).not.toContain('read alpha.py read alpha.py');
   });
-  test('B4: LAST takes the model column slack before it is cut', () => {
-    const last = 'one two three four five six seven eight nine tenth ab'; // 53 cells: 110 - 60 = 50 with the model column at 9, 110 - 56 = 54 at its tight width
+  test('B4: a 53-cell LAST fits whole at 110 on the fixed grid (critique 19 B2: the model column no longer gives or takes slack)', () => {
+    const last = 'one two three four five six seven eight nine tenth ab'; // 53 cells: LAST starts at 52 of 110
     const out = text(agentRows([row({ name: 'alpha-explorer', task: 'read alpha.py', tool: last })], opts(110), full));
     expect(out[2]).toContain(last);
     expect(out[2]).not.toContain('...');

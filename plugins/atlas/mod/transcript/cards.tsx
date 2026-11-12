@@ -156,9 +156,24 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer  outcome` (state, name, role, outcome). */
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), aged = false): RenderElement {
- const runs = toastRuns(failed ? 'failed' : 'done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui)
+ if (failed) return failedTree(name, outcome, ui, aged)
+ const runs = toastRuns('done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui)
  // An old card (critique 17 C3: cards held full colour for 40 frames) keeps its words and drops to the muted tone, unbold: the run has moved on.
  return rowEl(aged ? runs.map((x) => ({ ...x, tone: 'muted' as const, bold: false })) : runs, ui)
+}
+
+/** A failure card carries one verb (critique 19 B4: `■ failed ghost-explorer explorer killed · 6s` said it twice): the end word the outcome leads with (`killed`, `failed`) is the state word,
+ * the rest (`· 6s`, or the worker's own line) follows the name. An aged card keeps its glyph and word in the failure colour; only the name and the rest go muted. */
+function failedTree(name: string, outcome: string, ui: Ui, aged: boolean): RenderElement {
+ const m = /^\s*(killed|failed)\b[\s·:.,;-]*([\s\S]*)$/i.exec(stripStatus(outcome))
+ const verb = m ? m[1]!.toLowerCase() : 'failed'
+ const rest = clip((m ? m[2]! : stripStatus(outcome)).replace(/\s+/g, ' ').trim(), 80)
+ const head = toastRuns('failed', displayName(name, ''), '', ui)
+ const word = head.findIndex((x) => x.t === 'failed')
+ const runs: UiRun[] = head.map((x, i) => (i === word ? { ...x, t: verb } : x))
+ if (rest) runs.push({ t: ` · ${rest}`, tone: 'sub' })
+ const stays = (i: number): boolean => i <= word && i >= word - 1 // the glyph run and the state word
+ return rowEl(aged ? runs.map((x, i) => (stays(i) ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */

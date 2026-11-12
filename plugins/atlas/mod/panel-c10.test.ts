@@ -43,9 +43,9 @@ describe('C1: the team LAST reads as the HUD LAST (`read gamma.py`)', () => {
   const snap = { ...busySnap(), squad: [{ name: 'gamma', persona: 'explorer', state: 'finished', source: 'task' }], members: [], todos: [], now: NOW,
     activity: { gamma: act({ lastTool: 'Read', target: 'gamma.py', lastLine: 'Read gamma.py -> 1 def gamma_name(): / 2 return...' }) } } as unknown as LiveSnapshot;
   const model = { snapshot: snap, gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns: 121, rows: 40, tick: 0 } as unknown as SidebarModel;
-  test('a done worker shows its outcome as the HUD LAST does (`report returned` with no evidence), not the raw result text', () => {
+  test('a done worker shows its outcome as the HUD LAST does (`finished` with no evidence; critique 19: a clipped echo counts nothing), not the raw result text', () => {
     const w = panelModelOf(model, mocha, 120).workers[0]!;
-    expect(w.detail).toBe('report returned');
+    expect(w.detail).toBe('finished');
   });
   test('a running worker between calls shows the same short form', () => {
     const s = { ...snap, activity: { gamma: act({ mood: 'working', lastTool: 'Read', target: 'beta.py' }) }, squad: [{ name: 'gamma', persona: 'explorer', state: 'running', source: 'task' }] } as unknown as LiveSnapshot;

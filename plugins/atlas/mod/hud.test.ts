@@ -77,9 +77,9 @@ describe('critique 12: a done agent row shows its outcome, as its done plan row 
   const agent = { name: 'impl', role: 'implementer', state: 'done', model: 'opus', lastTool: 'read', target: 'runs.ts:17', since: 1 } as unknown as HudAgent;
   test('the evidence of the plan row it owns replaces its last call', () => {
     expect(agentModel([agent], [todo({ evidence: 'tests green' })])[0]!.tool).toBe('tests green');
-    expect(agentModel([agent], [todo({})])[0]!.tool).toBe('report returned'); // no evidence: the outcome, not its last call (critique 14)
-    expect(agentModel([agent], [todo({ evidence: 'ran 03:10' })])[0]!.tool).toBe('report returned'); // a duration is not an outcome
-    expect(agentModel([agent], [])[0]!.tool).toBe('report returned'); // owns no row: still the outcome, not the call
+    expect(agentModel([agent], [todo({})])[0]!.tool).toBe('finished'); // no evidence: no outcome to state, not its last call (critique 14; critique 19: not `report returned`)
+    expect(agentModel([agent], [todo({ evidence: 'ran 03:10' })])[0]!.tool).toBe('finished'); // a duration is not an outcome
+    expect(agentModel([agent], [])[0]!.tool).toBe('finished'); // owns no row: still not the call
     expect(agentModel([{ ...agent, lastTool: null, target: null, lastLine: '9 of 9 steps' } as unknown as HudAgent], [])[0]!.tool).toBe('9 of 9 steps'); // no call made: the closing line stays
   });
   test('a running agent keeps its current call whatever its row carries', () => {
@@ -201,7 +201,7 @@ describe('the Subagents block is back on Claude Code', () => {
   test('LAST is the agent\'s last tool and target, not its free-text report (critique 8: three rows read the same posting step)', () => {
     const done = (name: string, lastTool: string, target: string | null, detail: string, lastLine: string): HudAgent => ({ name, role: 'explorer', state: 'done', ui: 'done', tool: null, lastTool, target, detail, lastLine });
     const rows = agentModel([done('alpha', 'Read', 'alpha.py', 'Read /r/alpha.py', 'Read alpha.py -> first 3 lines: 1 def'), done('beta', 'Grep', null, 'def main', ''), done('gamma', '', null, '', 'all green')], []);
-    expect(rows.map((r) => r.tool)).toEqual(['report returned', 'report returned', 'all green']); // a done worker that made calls reports the outcome (critique 14); the closing line only when there was no call
+    expect(rows.map((r) => r.tool)).toEqual(['finished', 'finished', 'all green']); // a done worker whose closing line is a clipped tool echo states `finished` (critique 14, 19); a plain closing line stays
   });
   test('a finished agent shows beside a running one, and the header counts every row', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [{ ...running, name: 'a-done', state: 'done', lastLine: '9 of 9 steps' }, running] }, view(120)));
@@ -378,10 +378,20 @@ describe('hud fixes (round 3): canonical name, task text, finished wave', () => 
     expect(displayName('board-auditor-open-items', 'explorer')).toBe('board-auditor-open-items');
     expect(displayName('alpha-explorer', 'explorer')).toBe(agentName('alpha-explorer', 'explorer'));
   });
-  test('the TASK column is filled from the agent description (f0054, f0176)', () => {
+  test('the TASK column is the plan item id, never the agent description (critique 19 B2; was f0054, f0176)', () => {
     const agents = hudAgents([lw('alpha-explorer', 'working')], [sq('alpha-explorer', 'alpha-explorer: read alpha.py')]);
-    const rows = hudLines({ todos: [], agents }, { cols: 120, maxRows: 10, ui, now: 0 }).map((r) => r.map((x) => x.t).join(''));
-    expect(rows.some((r) => r.includes('alpha-explorer') && r.includes('read alpha.py'))).toBe(true);
+    const plan = [{ id: 'p1', content: 'T1 read alpha.py (alpha-explorer)', status: 'in_progress', owner: 'alpha-explorer' }] as never;
+    const rows = hudLines({ todos: plan, agents }, { cols: 120, maxRows: 10, ui, now: 0 }).map((r) => r.map((x) => x.t).join(''));
+    const row = rows.find((r) => r.includes('alpha-explorer') && r.includes('haiku') === false && /running/.test(r) && !r.includes('T1 read'))!;
+    expect(row).toMatch(/\sT1\s/);
+    expect(rows.filter((r) => /running\s+\S*\s+read alpha\.py/.test(r))).toHaveLength(0);
+  });
+  test('a retry owns the item its first run owned: TASK reads T3 for `beta-explorer #2` (critique 19 B2: it read `read beta.py`)', () => {
+    const plan = [1, 2, 3].map((n) => ({ id: `p${n}`, content: `T${n} step ${n}`, status: n === 3 ? 'in_progress' : 'completed', owner: n === 3 ? 'beta-explorer' : `x${n}-explorer` })) as never;
+    const ag = (name: string, state: 'working' | 'failed'): HudAgent => ({ name, role: 'explorer', state, ui: state === 'working' ? 'running' : 'failed', model: 'haiku', since: 1, ...(state === 'working' ? { tool: 'Read', target: 'beta.py', task: 'beta-explorer: read beta.py' } : { lastTool: 'Read' }) });
+    const rows = agentModel([ag('beta-explorer', 'failed'), ag('beta-explorer #2', 'working')], plan);
+    expect(rows.find((r) => r.name === 'beta-explorer #2')!.tasks).toEqual([3]);
+    expect(rows.find((r) => r.name === 'beta-explorer')!.tasks).toEqual([3]);
   });
   test('a finished wave lingers as one: the header count and the rows both list all three (110 f0086)', () => {
     const ags = ['alpha', 'beta', 'gamma'].map((n, i): HudAgent => ({ name: `${n}-explorer`, role: 'explorer', state: 'done', ui: 'done', since: 1000 + i * 9000 }));

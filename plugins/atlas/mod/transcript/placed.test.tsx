@@ -111,7 +111,7 @@ test('A2: a place the host refused is retried on the next build, so the failed c
   expect(ids).toEqual(['done-ghost-explorer-1'])
   await placeFinished(engine(ids), failed, snap(5500, [worker('ghost-explorer', 'failed')])) // nothing moved, the card is still owed
   expect(ids).toHaveLength(2)
-  expect(flat(placedTree(ids[1]!, uiFromEnv()))).toContain('explorer failed')
+  expect(flat(placedTree(ids[1]!, uiFromEnv()))).toContain('■ failed')
   await placeFinished(engine(ids), failed, snap(6000, [worker('ghost-explorer', 'failed')]))
   expect(ids).toHaveLength(2) // placed once: nothing owed any more
 })
@@ -125,7 +125,7 @@ test('C4: a worker first listed as failed (the killed ghost dropped out of the h
   expect(finishedWorkers(before, after)).toEqual([{ name: 'ghost-explorer', role: 'explorer', failed: true, durationMs: 6000 }])
   await placeFinished(engine(ids), before, after)
   expect(ids).toEqual(['done-ghost-explorer-1'])
-  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('explorer failed')
+  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('■ failed')
   await placeFinished(engine(ids), after, live(20_500, [worker('alpha-explorer', 'running'), worker('ghost-explorer', 'failed')], { 'alpha-explorer': act({ startedAt: 9000 }), 'ghost-explorer': act({ startedAt: 12_000, since: 18_000, mood: 'failed' }) }))
   expect(ids).toHaveLength(1) // placed once
   expect(finishedWorkers(before, live(20_000, [worker('alpha-explorer', 'running'), worker('gamma-explorer', 'finished')], { 'gamma-explorer': act({}) }))).toEqual([]) // a worker first listed done is still no finish
@@ -193,7 +193,7 @@ test('A1: the notification row of a killed task reads failed, never finished, wh
   ] as const) {
     forgetPlaced()
     const row = flat(await h(eng, stoppedNotice(`k-${label}`, status), next))
-    expect([label, FINISHED.test(row), /explorer (failed|killed|stopped)/.test(row)]).toEqual([label, false, true])
+    expect([label, FINISHED.test(row), /■ (failed|killed|stopped)/.test(row)]).toEqual([label, false, true])
   }
 })
 
@@ -225,13 +225,13 @@ test('C2: the card placed for a worker the lead stopped reads killed with its ru
   const $ = stopped()
   await placeFinished({ ...($ as object), ui: { place: async ({ id }: { id: string }) => { ids.push(id); return { isPlaced: true, requestId: id } } } } as unknown as EngineInterface, before, after)
   const cards = ids.map((id) => flat(placedTree(id, uiFromEnv())))
-  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('explorer killed · 9s')
-  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('explorer failed · 9s')
+  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('■ killed  ghost-explorer · 9s')
+  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('■ failed  beta-explorer · 9s')
 })
 
 test('C3: the host row of a stopped task with no duration_ms carries the run the HUD prints, like a done card', async () => {
   const row = flat(await sites().UserMessage!(stopped(), stoppedNoDuration('k1'), next))
-  expect(row).toContain('explorer killed · 9s')
+  expect(row).toContain('■ killed  ghost-explorer · 9s')
 })
 const stoppedNoDuration = (requestId: string) => ({ surface: 'terminal', component: 'UserMessage', requestId, props: { text: 'Agent stopped', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', status: 'killed' } } })
 

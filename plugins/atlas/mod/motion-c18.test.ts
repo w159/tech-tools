@@ -37,8 +37,25 @@ describe('C4: the TODO owner column does not flash', () => {
   }
 });
 
+// Critique 19 B5 (motion-232567af/todo-strip.ans:4-5): the 256-colour ramp dropped the weight one frame AFTER the text reached 146. The weight now falls on the frame the colour lands.
+describe('B5: on 256 colours the weight falls on the frame the colour lands on rest', () => {
+  for (const surface of ['todo', 'agent'] as const) {
+    test(`${surface}: bold stays while the colour moves; the frame that drops it is the first at the resting colour`, () => {
+      const { rest, beats } = frames(surface, '256');
+      const seq = [...beats, rest];
+      for (const [k, r] of rest.entries()) {
+        if (r.t.trim() === '' || beats[0]![k]!.t !== r.t || beats[0]![k]!.fg === undefined || (r.bold ?? false)) continue; // a run that ramps and rests plain
+        const fgs = beats.map((b) => b[k]!.fg);
+        const landed = fgs.findIndex((f, i) => fgs.slice(i).every((g) => g === f)); // the first beat from which the colour no longer changes
+        const dropped = beats.findIndex((b) => !(b[k]!.bold ?? false));
+        expect([surface, r.t, dropped]).toEqual([surface, r.t, landed]);
+      }
+    });
+  }
+});
+
 describe('C4: a frame never drops the weight and steps the colour together', () => {
-  for (const color of ['truecolor', '256'] as const) {
+  for (const color of ['truecolor'] as const) {
     for (const surface of ['todo', 'agent'] as const) {
       test(`${surface}, ${color}: between two beats a run changes weight or colour, not both`, () => {
         const { rest, beats } = frames(surface, color);

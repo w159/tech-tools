@@ -202,6 +202,29 @@ test('the notification row is state, name, role and outcome', () => {
   expect(text(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ failed {2}wave-a/)
 })
 
+// Critique 19 B4 (stoprun-150-232567af-3/f0132.ans:4, -1/f0093.ans:15 vs :20): one verb per card, and a failure keeps its red glyph and word as it ages.
+const parts = (n: unknown): Array<{ t: string; color: unknown }> => {
+  const o = n as { type?: string; props?: Record<string, unknown>; children?: unknown }
+  if (Array.isArray(n)) return n.flatMap(parts)
+  if (!o || typeof o !== 'object') return []
+  if (o.type === 'Text') return [{ t: text(o.children), color: o.props?.color }]
+  return parts(o.children)
+}
+test('B4: a killed worker reads one verb: `killed name · 6s`, not `failed name explorer killed · 6s`', () => {
+  const card = text(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true))
+  expect(card).toMatch(/■ killed {2}ghost-explorer · 6s\s*$/)
+  expect(card).not.toContain('failed')
+  expect(text(notificationTree('ghost-explorer', 'explorer', 'failed · tests red · 6s', true))).toMatch(/■ failed {2}ghost-explorer · tests red · 6s\s*$/)
+})
+test('B4: an aged failure card keeps its glyph and state word in the failed colour; the rest goes muted', () => {
+  const fresh = parts(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, uiFromEnv(), false))
+  const aged = parts(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, uiFromEnv(), true))
+  const at = (xs: typeof fresh, w: string) => xs.find((x) => x.t.trim() === w)!
+  expect(at(aged, '■').color).toBe(at(fresh, '■').color)
+  expect(at(aged, 'killed').color).toBe(at(fresh, 'killed').color)
+  expect(at(aged, 'ghost-explorer').color).not.toBe(at(fresh, 'ghost-explorer').color)
+})
+
 test('the card shows the whole agent name: the model tag goes before the name is cut (L14)', () => {
   const long = call({ input: { subagent_type: 'atlas:explorer', name: 'board-auditor-open-items', description: 'd', prompt: PROMPT, model: 'haiku', effort: 'low' } })
   const out = text(workerCard(long, 'running')!)

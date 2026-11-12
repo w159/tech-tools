@@ -20,11 +20,11 @@ describe('B1: LAST is the outcome, never the raw tool echo', () => {
   const ALPHA = '1. Read `/mnt/attach/project-files/atlas-ui-redesign/round2/lc-krsau21t/alpha.py` -> first 3 lines: `1 def alpha_one():` / `2     return 1` / `3 (blank)`; last 3 lines: `5 def alpha_two(x):` / `6     return x * 2` / `7 (end of file)`';
   const BETA = '1. Read /mnt/attach/project-files/atlas-ui-redesign/round2/lc-krsau21t/beta.py -> line 1 `def beta_sum(a, b):`, line 2 `    return a + b`, line 3 empty, ... lines 5-6 `class BetaBox:` / `    pass`, line 7 empty (file is 7 lines)';
   test('a file dump reads as a count of what was found', () => {
-    expect(lastOf({ ...none, lastTool: 'Read' }, 'done', [ALPHA])).toBe('2 functions found');
-    expect(lastOf({ ...none, lastTool: 'Read' }, 'done', [BETA])).toBe('1 function found');
+    expect(lastOf({ ...none, lastTool: 'Read' }, 'done', [ALPHA])).toBe('2 functions');
+    expect(lastOf({ ...none, lastTool: 'Read' }, 'done', [BETA])).toBe('1 function');
   });
-  test('a dump with nothing to count reads `<file> read`', () => {
-    expect(lastOf({ ...none, lastTool: 'Read' }, 'done', ['1. Read `/a/b/notes.md` -> first 3 lines: `# Notes` / `` / `text`'])).toBe('notes.md read');
+  test('a dump with nothing to count states no outcome: `finished`, never `<file> read` (critique 19 B1)', () => {
+    expect(lastOf({ ...none, lastTool: 'Read' }, 'done', ['1. Read `/a/b/notes.md` -> first 3 lines: `# Notes` / `` / `text`'])).toBe('finished');
   });
   test('a plain outcome stays, to its first sentence', () => {
     expect(lastOf(none, 'done', ['tests green'])).toBe('tests green');
@@ -47,9 +47,9 @@ describe('B1: LAST is the outcome, never the raw tool echo', () => {
     const agents = [agent('alpha-explorer', 'done', { lastTool: 'Read' }), agent('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), agent('beta-explorer', 'done', { lastTool: 'Read' })];
     const rows = hudLines({ todos: [...plan, dispatch('alpha-explorer', ALPHA), dispatch('beta-explorer', BETA)], agents }, { cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
     const of = (n: string): string => rows.find((r) => r.includes(` ${n} `) && /haiku/.test(r))!;
-    expect(of('alpha-explorer')).toContain('2 functions found');
+    expect(of('alpha-explorer')).toContain('2 functions');
     expect(of('ghost-explorer')).toContain('killed');
-    expect(of('beta-explorer')).toContain('1 function found');
+    expect(of('beta-explorer')).toContain('1 function');
     for (const r of rows) expect(r).not.toMatch(/first 3 lines|-> line 1/);
   });
 });
