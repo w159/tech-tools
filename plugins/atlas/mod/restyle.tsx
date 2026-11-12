@@ -5,7 +5,7 @@
 
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
-import operatingContract from '../contracts/operating-contract.json'
+import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
 import { BRAND } from './contract'
 import { PHASES } from './intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
@@ -292,7 +292,7 @@ async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<A
 /** The contract's header pattern as the last snapshot carried it. A header chip needs nothing else from the snapshot, so a new message draws from
  * this copy with no state read: the host paints a new message with its own row until the hook answers (critique 12 C1: 15 raw `● ATLAS | ...`
  * frames, one frame each, always the first draw of a message), and the `await read` was a whole round trip of that wait. */
-const bundledPattern = (operatingContract as { headerFirstLinePattern?: string }).headerFirstLinePattern ?? '' // read from the contract file at load, not copied
+const bundledPattern = HEADER_FIRST_LINE_PATTERN // the contract's pattern as a code module (the host refuses a .json import); mod/contract-pattern.test.ts pins it to the file
 let headerPattern = bundledPattern
 export const noteHeaderPattern = (pattern: string | undefined): void => { if (pattern) headerPattern = pattern }
 export const forgetHeaderPattern = (): void => { headerPattern = '' }

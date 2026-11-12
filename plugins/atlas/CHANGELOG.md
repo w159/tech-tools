@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Wave 18 integration: the live host loader refuses a `.json` import from a hooks module (`hooks module atlas@inline failed to load: ... is not named like code`), so `mod/restyle.tsx` reads the header pattern from `mod/contract-pattern.ts` (`HEADER_FIRST_LINE_PATTERN`), and `mod/contract-pattern.test.ts` keeps it equal to `contracts/operating-contract.json`.
 - Critique 17 A1: a TODO or board row whose owner failed or was killed never renders plain green `done`: it reads `done` in the amber warn tone with `worker failed`, with no fade-to-done pop; one derivation (`todoState`, `toBoardRow`, `motionState`) feeds HUD, route and board, including the plan row beside an open dispatch row. T3 reading `failed` over a `pending` store row is deliberate: the lead's TaskStop killed its worker.
 - Critique 17 A2: blocked has its own glyph `▣` in the bad tone (ASCII `#`); `■` stays failed (ASCII `x`). Goldens regenerated.
 - Critique 17 A3: the board footer unfolds the open dispatch row and names it (`open: T2 read ghost.py · ghost-explorer`).
