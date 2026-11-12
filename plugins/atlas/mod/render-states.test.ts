@@ -32,7 +32,8 @@ describe('B1: blocked is its own state', () => {
   test('the store word `blocked` outranks a failed owner (the lead said blocked, the killed agent stays failed)', () => {
     expect(itemState('blocked', 'failed')).toBe('blocked');
     expect(todoState('blocked', 'failed')).toEqual({ state: 'blocked' });
-    expect(itemState('pending', 'failed')).toBe('failed'); // an unmarked row of a killed agent still fails
+    expect(itemState('pending', 'failed')).toBe('queued'); // a row the store still holds pending stays queued under a killed agent (critique 18 B3); the owner is named failed beside it
+    expect(itemState('in_progress', 'failed')).toBe('failed'); // an unmarked row the lead started still fails
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
   });
   test('the HUD row for T2 reads blocked with the blocked glyph, and the ghost agent row stays failed', () => {

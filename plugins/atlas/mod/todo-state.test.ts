@@ -25,7 +25,8 @@ describe('todoState', () => {
     expect(todoState('pending', 'running')).toEqual({ state: 'running' });
     expect(todoState('pending', undefined)).toEqual({ state: 'queued' });
     expect(todoState('completed', 'done')).toEqual({ state: 'done' });
-    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' });
+    expect(todoState('pending', 'failed')).toEqual({ state: 'queued' }); // critique 18 B3
+    expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
     expect(todoState('pending', 'waiting')).toEqual({ state: 'blocked' });
     expect(todoState('abandoned', 'done')).toEqual({ state: 'failed' });
   });

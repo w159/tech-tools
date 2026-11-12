@@ -167,10 +167,10 @@ test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 
-test("blocked: `▣ blocked: needs you` with the red square instead of the phase", () => {
+test("blocked: `▣ blocked: needs you` with the orange square instead of the phase", () => {
 	const m = model({ blocked: true, team: "fix/low", workers: [] });
 	expect(head(m)).toContain("▣ blocked: needs you");
-	expect(renderPanel(m)[0]).toContain("38;2;243;139;168");
+	expect(renderPanel(m)[0]).toContain("38;2;250;159;60");
 });
 
 test("tones are the Catppuccin hexes: panel #181825, capsule fill and caps accent #cba6f7, ink #11111b", () => {

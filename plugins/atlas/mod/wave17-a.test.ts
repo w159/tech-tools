@@ -81,7 +81,7 @@ describe('A2: blocked is one red square, warnings keep the amber triangle, count
   test('tokens', () => {
     expect(STATE_GLYPHS.blocked).toBe('▣');
     expect(STATE_GLYPHS.failed).toBe('■');
-    expect(STATE_TOKEN.blocked).toBe('bad');
+    expect(STATE_TOKEN.blocked).toBe('block'); // critique 18 B3: blocked is orange, failed stays red
     expect(warnMark(ui).t).toBe('▲');
   });
   test('the band never prints a bare glyph-and-number count (`▲1 · ■2`) at any width', () => {

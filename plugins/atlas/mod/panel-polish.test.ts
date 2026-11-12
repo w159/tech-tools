@@ -179,7 +179,7 @@ describe('change 10: the card and the toast', () => {
     expect(L.toastText('done', 'a', '', ascii)).toMatch(/^[\x20-\x7e]*$/);
   });
   test('the left bar and the state word carry the state tone; the rest keeps its own', () => {
-    const tones: Record<string, string> = { running: 'run', done: 'ok', failed: 'bad', blocked: 'bad', waiting: 'info' };
+    const tones: Record<string, string> = { running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' };
     for (const s of Object.keys(tones) as UI.UiState[]) {
       const runs = L.toastRuns(s, 'name', 'fact', mocha);
       expect(runs[0]!.t.trim()).toBe('▌');

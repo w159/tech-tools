@@ -17,7 +17,7 @@ const ascii: Ui = { theme: 'mocha', ascii: true, color: 'truecolor' };
 describe('tokens', () => {
   test('Mocha and Latte carry every token as #rrggbb, with the rev 4 values', () => {
     for (const theme of ['mocha', 'latte'] as const) {
-      expect(Object.keys(PALETTES[theme]).sort()).toEqual(['accent', 'bad', 'base', 'info', 'ink', 'line', 'muted', 'ok', 'panel', 'queued_fill', 'run', 'sub', 'text', 'warn', 'white']);
+      expect(Object.keys(PALETTES[theme]).sort()).toEqual(['accent', 'bad', 'base', 'block', 'info', 'ink', 'line', 'muted', 'ok', 'panel', 'queued_fill', 'run', 'sub', 'text', 'warn', 'white']);
       for (const hex of Object.values(PALETTES[theme])) expect(hex).toMatch(/^#[0-9a-f]{6}$/);
     }
     expect(PALETTES.mocha).toMatchObject({ panel: '#181825', text: '#cdd6f4', accent: '#cba6f7', line: '#7f849c' });
@@ -119,7 +119,7 @@ describe('state vocabulary', () => {
     expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇◐●■▣◉');
     expect(UI_STATES.map((s) => STATE_ASCII[s]).join('')).toBe('o|*x#?');
     expect(new Set(UI_STATES.map((s) => STATE_GLYPHS[s])).size).toBe(6); // failed is the solid square, blocked the boxed one (critique 17 A2): no two states share a mark
-    expect(STATE_TOKEN).toEqual({ queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'bad', waiting: 'info' });
+    expect(STATE_TOKEN).toEqual({ queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' });
     for (const s of UI_STATES) expect(s).toMatch(/^[a-z]+$/);
   });
   test('stateRun: token colour, text where under 3:1 or in ASCII; running takes the spinner frame', () => {
