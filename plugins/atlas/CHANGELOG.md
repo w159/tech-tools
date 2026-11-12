@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 17.14.0 - 2026-11-12
+
+- README: both READMEs now match the shipped code (counts, doctor output, Stop block text, the round 3 band, HUD, side panel and board, and the environment variables the mod and omp extension read). No code change in this entry.
 
 - Wave 25 (band, HUD, panel merge): the band has four states with idle after 30 s and a frozen done duration; one 110 ms frame clock turns the same spinner glyph on the band, HUD, SUBAGENTS and panel; `todo N/M` is kept at every width; the HUD TODO and SUBAGENTS blocks are fixed rounded boxes whose closing rules the band budget counts; quiet ribbons; gate warnings are the hollow triangle `△` (`▲` means blocked only); `returned` is the done disc with a dim word on every surface; `▰▱` meters and no strikethrough in the panel and board; a board timeline; the channel is always labelled this run.
 

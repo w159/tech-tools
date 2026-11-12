@@ -8,9 +8,9 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.5.0 (`.claude-plugin/plugin.json`)                                                                               |
+| Version    | 17.14.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 8 JSON contracts                                               |
+| Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
@@ -84,10 +84,19 @@ it Atlas falls back to `claude --bg` workers.
    python3 "$ATLAS/scripts/atlas_doctor.py"
    ```
 
-   Problems print first, checks that do not apply on this machine fold into one
-   `SKIP` line (`--verbose` lists them), and the last line is `HEALTHY - atlas` or
-   a count of problems, with the pass, warn, fail and n/a counts. `--fix` repairs
-   what the check finds.
+   Problems print first, passing checks fold into one `✓ N checks pass` line,
+   and checks that do not apply on this machine fold into one
+   `· N not applicable here; --verbose lists them` line (`--verbose` lists every
+   check, the not-applicable ones as `SKIP`). The last line is the verdict, then the
+   tally:
+
+   ```
+   4 warning(s) to review  ·  23 pass, 4 warnings, 0 failures, 10 not applicable
+   ```
+
+   The verdict is `Healthy` when nothing warns or fails, `N warning(s) to review`
+   when a check warns, and `N problem(s) need attention` when a check fails.
+   `--fix` repairs what the check finds.
 
 5. Optional: preview the team Atlas would launch for a task, without starting it:
 
@@ -429,8 +438,11 @@ fork, so their judgment starts clean.
 
 ## Hooks
 
-19 hook programs / 23 bindings, wired from `hooks/hooks.json` when the plugin is
-enabled. `hooks/event_dispatch.py` runs the PreToolUse and PostToolUse hooks in
+19 hook programs / 23 bindings. `hooks/hooks.json` holds 14 commands on 9 events
+(SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStart,
+SubagentStop, SessionEnd, PreCompact); two of them are `event_dispatch.py`, which
+runs the other hooks in-process, and the count of bindings is the 12 other commands
+plus the 11 hooks the dispatcher runs. `hooks/event_dispatch.py` runs the PreToolUse and PostToolUse hooks in
 one process per tool event, each with its original matcher and a time slice;
 `hooks/stop_tail.py` does the same for four Stop hooks. Measured on 16.0.0,
 median Pre+Post blocking time per Bash call fell from 289 ms to 174 ms
@@ -460,7 +472,7 @@ fail-open when the CLI is absent).
 | `connector_credential_watch.py` | PostToolUse                                                        | On the first 401 or 403 from an armada connector, says to restart the server instead of retrying (`ATLAS_CONNECTOR_WATCH=off`)                                                                                                                                                                                                                                                                                                               |
 | `format_after_edit.py`          | PostToolUse (Edit, Write)                                          | Runs the repo's formatter                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `crew_worker.py`                | PreToolUse, PostToolUse, Stop (crew worker settings, not `hooks.json`) | In crew workers only, delivers IRC context, enforces file leases and the check/report gate; guarded by `ATLAS_CREW_WORKER` elsewhere |
-| `completion_gate.py`            | Stop                                                               | Blocks a premature "done" (conditions a to q above)                                                                                                                                                                                                                                                                                                                                                                                          |
+| `completion_gate.py`            | Stop                                                               | Blocks a premature "done" (conditions a to s above)                                                                                                                                                                                                                                                                                                                                                                                          |
 | `stop_tail.py`                  | Stop                                                               | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter                                                                                                                                                                                                                                                                                                                                        |
 | `ingest_session.py`             | SubagentStop, SessionEnd, PreCompact (and Stop via `stop_tail.py`) | Mirrors the transcript into the observability DB (`ATLAS_INGEST=off`)                                                                                                                                                                                                                                                                                                                                                                        |
 | `worker_report_gate.py`         | SubagentStop                                                       | Blocks an `atlas:*` subagent whose final message is not the fixed report (once per agent)                                                                                                                                                                                                                                                                                                                                                    |
@@ -496,37 +508,247 @@ python3 "$ATLAS/scripts/atlas_statusline.py" uninstall
 
 `install` saves your previous `statusLine` and `uninstall` restores it.
 
-In-terminal mod. `mod/register.ts`, wired by the `modules` entry in
-`hooks/hooks.json`, draws a one-row band above the prompt (phase, progress,
-live workers, gate count) and a sidebar with route, team, channel and gates
-views; `/atlas-cc` opens it. The route view is labelled `route: class/effort -> seats -> model`,
-lists this session's tmux team records and in-process dispatches (each row shows
-its transport, `tmux` or `in-process`; a dispatch without a `SCOPE:` line shows as
-class `-`, effort `-`), and prints `no team this session` only with no tmux rows
-and no dispatch rows. Gate readings come from
-`scripts/atlas_gates.py --session <id> --root <repo> --json`, which shares its
-evaluation with the Stop hook. `ATLAS_MOD=off` disables it. Detail:
-[docs/architecture/atlas-mod.md](../../docs/architecture/atlas-mod.md).
+### In-terminal mod
 
-Above the band, `mod/hud.ts` draws the same TODO tree and `Subagents · N running`
-block omp shows natively (phases in plan order, active phase expanded, completed
-items struck through; model, name, role, task and last tool per subagent), so
-Claude Code and omp present a run the same way. `ATLAS_HUD=off` (exactly that
-value) hides it. While an agent runs the Subagents block is never dropped: the
-TODO tree shrinks to a one-row summary first, a `... N more` row stands in for
-agents that do not fit, and the HUD keeps at least 2 rows (the band yields, down
-to none). Phase labels such as `Research:` or `Implement:` group the tree. The
-tree needs the legacy `TodoWrite` tool: set `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`
-(TodoWrite on every model) and `CLAUDE_CODE_ENABLE_TASKS=0` (without it Claude
-Code uses TaskCreate/TaskUpdate and draws its own checklist above the prompt,
-re-expanding it on every update, which squeezes the Atlas TODO tree and band to
-about 6 rows). The HUD wins the row budget over the Mission Control band. Claude Code's fullscreen renderer gives everything under the transcript (prompt, status line, mode line, agent list) one slot capped at half the terminal, and a status line command is told no row budget. So the mod writes `.atlas/.run/hud-state.json` (`{ts, maxRows, wanted, shown, fullscreen}`, `wanted` being the rows the HUD would draw unrestricted); while it is fresher than 15 s and `shown < wanted` the status line prints one row only (folder, timer, model, `· ctx N%`) and otherwise the full grid. `atlas_statusline.py install` and `atlas_doctor.py --fix` set `refreshInterval: 5` on the statusLine entry (other keys are kept) so the switch lands within seconds. `atlas_doctor.py` reports this and the other display settings as
-`display-` checks (`display-hud` flags `ATLAS_HUD=off`; `display-omp-todo` flags
-`todo.enabled=false` in omp settings), and `atlas_doctor.py --fix` sets both env
-flags and the status line, removes `ATLAS_HUD=off` and sets omp `todo.enabled`
-true. On omp the lead records the plan with omp's own `todo` tool; when it never
-calls it, the extension draws a fallback TODO tree from the board until the
-first native todo result.
+`mod/register.ts`, wired by the `modules` entry in `hooks/hooks.json`, draws a
+band above the prompt, a TODO block and a SUBAGENTS block, and a side panel with
+a tab strip and a board; `/atlas-cc` opens the panel. `ATLAS_MOD=off` disables the
+whole mod. Gate readings come from
+`scripts/atlas_gates.py --session <id> --root <repo> --json`, which shares its
+evaluation with the Stop hook. Detail:
+[docs/architecture/atlas-mod.md](../../docs/architecture/atlas-mod.md). The
+blocks below were rendered by running the mod's own layout code, not typed by hand.
+
+**One clock and one glyph key.** A single 110 ms frame loop (`FRAME_MS`,
+`mod/band-motion.ts:51`, armed in `mod/register.ts:1039`) advances one spinner
+index. The band, the HUD TODO and SUBAGENTS blocks and the side panel all read
+that index, so every spinner on screen shows the same frame. `ATLAS_REDUCED_MOTION`
+and `NO_COLOR` stop the row transitions; the spinner still steps (see the variables
+below).
+
+| Glyph | Meaning | Glyph | Meaning |
+| ----- | ------- | ----- | ------- |
+| `◐ ◓ ◑ ◒` | running (the spinner frames, `SPIN_FRAMES` in `mod/atlas-ui.ts:575`) | `■` | failed |
+| `◇` | queued | `▲` | blocked (it needs you) |
+| `●` | done | `◉` | waiting |
+| `△` | a gate warning (hollow; `▲` is reserved for blocked) | `▰▱` | a meter: filled and empty cells |
+
+The state marks are `STATE_GLYPHS` in `mod/atlas-ui.ts:256`; the gate warning
+mark is `gateMark` at `mod/atlas-ui.ts:297`. No row is struck through: a done row
+is dim and keeps its green `●`.
+
+**The band.** The band leads with one of four states (`runStateOf`,
+`mod/mission-layout.ts:232`): working, done, idle or blocked. The brand is a solid
+`◖ ◆ ATLAS ◗` pill. A finished run reads `done` with its frozen duration for 30 s
+(`IDLE_AFTER_SECS`, `mod/mission-layout.ts:225`), then rests as
+`idle · last run <duration>`. A gate warning is a trailing segment and never leads.
+At 150 columns:
+
+```
+◖ ◆ ATLAS ◗  ◐ working 0:42   todo ▰▰▰▰▰▰▱▱▱▱ 3/5   agents ◐ 2 running
+◖ ◆ ATLAS ◗  ● done · 1:08   todo ▰▰▰▰▰▰▰▰▰▰ 5/5
+◖ ◆ ATLAS ◗  ○ idle · last run 1:08   todo ▰▰▰▰▰▰▰▰▰▰ 5/5
+◖ ◆ ATLAS ◗  ▲ blocked · needs: close dispatch T2 · ◐ fixing   todo ▰▰▰▰▰▰▱▱▱▱ 3/5   agents ◐ 1 running
+◖ ◆ ATLAS ◗  ● done · 1:08   todo ▰▰▰▰▰▰▰▰▰▰ 5/5 · △ 2 gates to check
+```
+
+The lines are: working, done, idle, blocked, and done with two failing gates. At
+110 columns the same states drop the meter and keep `todo N/M` whole:
+
+```
+◖ ◆ ATLAS ◗ ◐ working 0:42 · todo 3/5 · ◐ 2 running
+◖ ◆ ATLAS ◗ ● done · 1:08 · todo 5/5
+◖ ◆ ATLAS ◗ ○ idle · last run 1:08 · todo 5/5
+◖ ◆ ATLAS ◗ ▲ blocked · needs: close dispatch T2 · ◐ fixing · todo 3/5 · ◐ 1 running
+◖ ◆ ATLAS ◗ ● done · 1:08 · todo 5/5 · △ 2 gates to check
+```
+
+The band is one row by default. `ATLAS_BAND_RICH=1` draws a tall form when the host
+gives it rows (`mod/band.tsx:146`), with a phase rail and a todo meter:
+
+```
+◖ ◆ ATLAS ◗  ◐ working 0:42   ● 1 research  ──  ● 2 plan  ──  ▸ 3 build  ──  ◇ 4 verify  ──  ◇ 5 done
+todo ▰▰▰▰▰▰▰▰▰▰▱▱▱▱▱▱ 3/5 · 60%                               agents ◐ 2 running
+```
+
+**TODO and SUBAGENTS.** Above the band, `mod/hud.ts` draws the same TODO and
+SUBAGENTS blocks omp shows natively, so Claude Code and omp present a run the same
+way. Each block is a rounded box: the top edge carries the brand, the title, the
+count and, on TODO, a `▰▱` meter; a `╰───╯` rule closes it. A done row is dim, not
+struck through. SUBAGENTS has fixed AGENT, STATE, MODEL, TASK and LAST columns
+(`mod/hud-surface.ts`). The two blocks below are the 120-column goldens
+(`contracts/hud-golden.ts`, which `mod/hud-surface.test.ts` compares with the
+drawn rows; the spinner glyph is the frame at index 0):
+
+```
+╭─ ◖ ◆ ATLAS ◗ ▸ TODO  3/7 ▰▰▰▱▱▱▱▱ ───────────────────────────────────────────────────────────────────────────────────╮
+  ● Wire band to host         done          ran 03:10
+  ● Layout grid tiers         done          ran 02:41
+  ● Gate golden tests         done          ran 01:58
+▸ ◐ Subagents block           running       elapsed 00:42 of 05:00
+  ◇ Gate tests                queued        after Subagents block
+  ■ Changelog                 failed        tests red 3
+  ▲ Ship board mod            blocked       needs your approval
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ◐ 1 running · 1 failed · 1 queued · 2 done ─────────────────────────────────────────────────╮
+    AGENT                STATE       MODEL   TASK    LAST
+  ● implementer-layout   done        opus    T1,T2   9 of 9 steps
+  ● implementer-gates    done        sonnet  T3      golden tests written
+▸ ◐ implementer-band     running     opus    T4      read runs.ts:17
+  ◇ runner-land          queued      opus    T5      waits on implementer-live
+  ■ implementer-live     failed      opus    T6      tests red 3
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+`ATLAS_HUD=off` (exactly that value) hides both blocks. While an agent runs the
+SUBAGENTS block is never dropped: the TODO rows shrink first and the HUD keeps at
+least 2 rows (the band yields, down to none). The TODO block needs the legacy
+`TodoWrite` tool: set `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (TodoWrite on every model)
+and `CLAUDE_CODE_ENABLE_TASKS=0` (without it Claude Code uses TaskCreate and
+TaskUpdate and draws its own checklist above the prompt, re-expanding it on every
+update, which squeezes the Atlas blocks to about 6 rows). The HUD wins the row
+budget over the band. Claude Code's fullscreen renderer gives everything under the
+transcript (prompt, status line, mode line, agent list) one slot capped at half the
+terminal, and a status line command is told no row budget. So the mod writes
+`.atlas/.run/hud-state.json` (`{ts, maxRows, wanted, shown, fullscreen}`, `wanted`
+being the rows the HUD would draw unrestricted); while it is fresher than 15 s and
+`shown < wanted` the status line prints one row only (folder, timer, model,
+`· ctx N%`) and otherwise the full grid. `atlas_statusline.py install` and
+`atlas_doctor.py --fix` set `refreshInterval: 5` on the statusLine entry (other keys
+are kept) so the switch lands within seconds. `atlas_doctor.py` reports this and the
+other display settings as `display-` checks (`display-hud` flags `ATLAS_HUD=off`;
+`display-omp-todo` flags `todo.enabled=false` in omp settings), and
+`atlas_doctor.py --fix` sets both env flags and the status line, removes
+`ATLAS_HUD=off` and sets omp `todo.enabled` true. On omp the lead records the plan
+with omp's own `todo` tool; when it never calls it, the extension draws a fallback
+TODO tree from the board until the first native todo result.
+
+**The side panel.** The panel has six tabs. The strip shows names only; the keys
+stay bound (`r` route, `t` team, `c` channel, `g` gates, `k` core, `o` board,
+`PANEL_TABS` and `STRIP_TABS` in `mod/panel-layout.ts:19-28`). The lit tab name is
+bold with a rule under it. Route, team, gates and channel at 80 columns:
+
+```
+◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────
+
+route  team  channel  gates  core  board
+━━━━━
+ phase  research
+ gates  ● lint   ● test   △ doctor   2/3 green
+ agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed
+    ● implementer-layout done
+    ● implementer-gates  done
+    ◐ implementer-band   running
+    ◇ runner-land        queued
+    ■ implementer-live   failed
+
+ todo   ▰▰▰▰▱▱▱▱▱▱ 3/7
+  ● Wire band to host     done                                implementer-layout
+  ● Layout grid tiers     done                                implementer-layout
+  ● Gate golden tests     done                                 implementer-gates
+  ◐ Subagents block       running                               implementer-band
+  ◇ Gate tests            queued                                     runner-land
+  ■ Changelog             failed                                implementer-live
+  ▲ Ship board mod        blocked                                            you
+
+◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── 1 queued · 1 running · 2 done · 1 failed
+
+route  team  channel  gates  core  board
+       ━━━━
+  ● implementer-layout  done     42s
+  ● implementer-gates   done     42s
+▸ ◐ implementer-band    running  42s
+  ◇ runner-land         queued
+  ■ implementer-live    failed   42s
+
+◖ ◆ ATLAS ◗ ▸ SIDEPANEL ────────────────────────────────────────────────── 2/3
+
+route  team  channel  gates  core  board
+                      ━━━━━
+  ● lint    passing                                                          1/1
+    ● lint
+  ● test    passing                                                          1/1
+    ● test
+  △ doctor  warning                                                          0/1
+    △ doctor
+
+◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────── #atlas-board-mod
+
+route  team  channel  gates  core  board
+             ━━━━━━━
+    #atlas-board-mod  5 people · 2 unread
+    lead                                                                   10:02
+    ▸ implementer-band take T4, then run the gate tests
+  ▲ implementer-live    blocked                                            10:05
+    tests red 3, need a decision on the changelog
+  ● implementer-layout  handoff T1 and T2 merged                           10:07
+```
+
+The route tab lists this session's tmux team records and in-process dispatches,
+each with its transport (`tmux` or `in-process`); a dispatch without a `SCOPE:`
+line shows class `-` and effort `-`; `no team this session` prints only with no
+tmux rows and no dispatch rows. The gates tab groups the Stop gate's checks with an
+`n/m` count each, and the core tab carries the `verified n/m` figure
+(`mod/panel-layout.ts:683`). The channel tab shows the channel name and its messages.
+
+**The board.** The board tab (key `o`, or the band's board button) lists one row
+per plan item with its state, owner and detail, a count in the title row and a
+footer that names dispatch rows folded into plan rows (`mod/board-model.ts:149`).
+At 80 columns the board is:
+
+```
+◖ ◆ ATLAS ◗ ▸ BOARD ────────────────────────────────────────────────── 7 items
+
+  ● Wire band to host     done     implementer-layout
+  ● Layout grid tiers     done     implementer-layout
+  ● Gate golden tests     done     implementer-gates
+▸ ◐ Subagents block       running  implementer-band
+  ◇ Gate tests            queued   runner-land
+  ■ Changelog             failed   implementer-live
+  ▲ Ship board mod        blocked  you
+```
+
+**Transcript cards and toasts.** A worker's card keeps its state colour on the
+rail, glyph and word, and a failed card keeps the error colour as it ages. The
+state word sits in a 7-cell column (`CARD_WORD_W`) so names line up. The card box
+and the one-line toasts (`contracts/panel-golden.ts`):
+
+```
+┌─ ◆ running implementer-band ────── opus ─┐
+│ last  read runs.ts:17                    │
+│ steps ▰▰▰▰▱▱▱▱ 4 of 9 · 44%              │
+│                                          │
+│ ctx   ▰▰▰▰▰▱▱▱ 62%                       │
+└──────────────────────────────────────────┘
+▌ ◆ ATLAS  ● done     implementer-layout  9 of 9 steps
+▌ ◆ ATLAS  ■ failed   implementer-live  tests red 3
+```
+
+### Terminal variables
+
+These are read by the mod (`mod/atlas-ui.ts`, `mod/motion.ts`, `mod/look.ts`,
+`mod/register.ts`) and by the omp extension (`omp/`). Unset means the default.
+
+| Variable | Default | Effect |
+| -------- | ------- | ------ |
+| `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/register.ts:1062`) |
+| `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/register.ts:1277`) |
+| `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/band.tsx:146`, `mod/look.ts:34`) |
+| `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/atlas-ui.ts:60`) |
+| `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/atlas-ui.ts:69`) |
+| `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/atlas-ui.ts:77`; `reducedMotion`, `mod/motion.ts:38`) |
+| `COLORTERM` | unset | `truecolor` or `24bit` selects 24-bit colour; with `TERM` containing `256` and `COLORTERM` unset the mod uses the 256-colour palette; otherwise truecolor (`mod/atlas-ui.ts:77-82`) |
+| `ATLAS_REDUCED_MOTION` | off | `1`, `true`, `yes` or `on` draws the resting render only: no state-change fade and no reveal of a new row; the spinner still steps (`mod/motion.ts:8`, `:38`) |
+| `ATLAS_PROJECT_ROOT` | unset | A project root that contains `.atlas`; it wins over the search. Unset, the mod walks up from the working directory to the nearest `.git` or `.atlas` (`mod/data/root.ts:43`) |
+| `ATLAS_HOME`, `ATLAS_DB` | `~/.atlas`, `<home>/atlas.db` | Where the mod looks for the gate database (`mod/register.ts:597`) |
+| `ATLAS_STATUSLINE` | on | omp only: `off` skips the usage statusline (`omp/index.ts:767`) |
+| `ATLAS_ADVISOR_GATE` | on | omp only: `off` disables the advisor gate (`omp/advisor.ts:121`) |
+
+The omp advisor gate (`omp/advisor.ts`) turns every advisor note, of any severity,
+into a board item for the session, appends a reminder to the system prompt while
+items are open, and refuses to stop while any is open, at most 3 times per prompt
+(`MAX_STOP_BLOCKS`, `omp/advisor.ts:29`). With no `docs/` ancestor, no session id or
+`ATLAS_ADVISOR_GATE=off` it does nothing.
 
 ## omp and codex
 
@@ -556,13 +778,13 @@ codex plugin add atlas@tech-tools
 
 then trust the hooks with `/hooks`. Skills (`.codex-plugin/plugin.json` points at
 the same `skills/`) and hooks (`hooks/hooks.codex.json`, generated from `hooks.json`
-by `scripts/gen_codex_hooks.py`) are shared with Claude Code. Differences:
+by `scripts/gen_codex_hooks.py` at the repository root, not under `plugins/atlas/scripts`) are shared with Claude Code. Differences:
 
 - Codex rejects a PreToolUse `ask`, so a guard that would ask the human denies
   instead, with the same reason plus "re-run after confirming with the user"
   (`scripts/atlas_harness.py`). Claude Code behaviour is unchanged.
 - Agents: a Codex plugin cannot ship agents, but Codex loads custom agents from
-  `.codex/agents/*.toml`. Install the 14 atlas agents for a project with
+  `.codex/agents/*.toml`. Install the 11 atlas agents for a project with
   `python3 plugins/atlas/scripts/atlas_codex_agents.py [DIR]` (default
   `./.codex/agents`; add `--plugin-root /abs/path/to/plugins/atlas` so scripts
   named in the agents resolve). They appear as `atlas-<name>` and `spawn_agent`
@@ -673,7 +895,7 @@ tools present in the session.
 | Symptom                                                                                 | Cause and fix                                                                                                                                                               |
 | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Doctor warns `cannot read plugin config: installed_plugins.json`                        | Atlas 15.x and earlier on a claude.ai synced or `--plugin-dir` load. 16.0.0 recognizes both loads. Update the plugin.                                                       |
-| Stop blocks with `conditions: a b`                                                      | Code shipped without an evidence artifact or a verified finding. Dispatch `atlas:verifier` and record the verdict with `scripts/atlas_finding.py`.                          |
+| Stop blocks with `conditions: a,b (no evidence artifact, no verified finding)`          | Code shipped without an evidence artifact or a verified finding. Dispatch `atlas:verifier` and record the verdict with `scripts/atlas_finding.py`. The letters are the stable part; the parenthesised names are the reason for each. |
 | An `atlas:*` dispatch is denied                                                         | The prompt is missing the TOOLS block or a spec block, has no `name` with `ATLAS_AUTONAME=off`, overrides the pinned model, or has two GOALs. The deny message names which. |
 | `spawn-team` reports `worktree: fatal: invalid reference: HEAD`                         | The repo has no commit yet. Make the first commit, then spawn again.                                                                                                        |
 | Connector tools return 401 after a key rotation                                         | The server cached old credentials. Restart the session.                                                                                                                     |
@@ -686,7 +908,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.5.0
+|-- .claude-plugin/plugin.json   manifest, version 17.14.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

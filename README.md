@@ -10,12 +10,12 @@
 
 </div>
 
-Current versions: atlas 17.13.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.14.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
 - **A fixed work loop.** Hooks enforce research, test, implement, verify. A lead session hands work to named role subagents (explorer, implementer, verifier and others) that share one todo board.
-- **A gate on "done".** A Stop hook refuses to let a session finish until there is evidence, a verified finding, current docs and no open todos. Each of its 17 conditions has an off switch.
+- **A gate on "done".** A Stop hook refuses to let a session finish until there is evidence, a verified finding, current docs and no open todos. Each of its 19 conditions, (a) to (s), has an off switch.
 - **Memory and self-tuning.** Each session starts with a claude-mem recall, a local dashboard shows runs and gates, and a doctor mines session telemetry into rule changes that you approve.
 
 | What | Count | Source |
@@ -25,7 +25,7 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 | Hooks | 19 programs, 23 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 77 non-test Python files | `plugins/atlas/scripts/` |
 | MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
-| omp agents | 14, generated | `plugins/atlas/omp/agents/` |
+| omp agents | 11, generated | `plugins/atlas/omp/agents/` |
 
 The marketplace also carries `armada` (an optional organization layer: department agents and the vendor connectors) and `programmer` (code review based on The Pragmatic Programmer). Their licenses and contents are listed in [plugins/README.md](plugins/README.md).
 
@@ -81,21 +81,23 @@ atlas-debug login returns 500
 atlas-audit
 ```
 
-Terms used below: a "colony" is the set of named worker subagents a lead session runs together. By default they run inside the lead session; the opt-in `ATLAS_MUX=tmux` mode runs each as a visible terminal pane.
+Terms used below: a "colony" is the set of named worker subagents a lead session runs together. Colony mode is on by default: workers run as panes in a tmux session when tmux is installed and as background `claude --bg` processes otherwise (`ATLAS_MUX=off` turns it off, `ATLAS_COLONY_TRANSPORT` forces a transport).
 
 ## What it looks like
 
 Every image below is a real capture of the installed plugin, taken from a tmux
 session or the browser.
 
-**Mission Control band.** The panel above the prompt shows the wave, phase
-pills, one lane per worker with its current tool and target, a channel ticker,
-and gate chips.
+**Mission Control band.** The band above the prompt leads with one of four
+states (`◐ working 0:42`, `● done · 1:08`, `○ idle · last run 1:08`,
+`▲ blocked · needs: close dispatch T2`), then `todo N/M`, the running agents and,
+when a gate fails, a `△ 2 gates to check` segment. Set `ATLAS_BAND_RICH=1` for the
+tall form with the phase rail. The HUD below it draws the TODO and SUBAGENTS boxes.
 
 ![Band with two running workers](img/showcase/cc-band-running.png)
 
-When the wave ends the band settles into a summary of what ran and which gate
-is still open.
+When the run ends the band reads `done` for 30 seconds and then settles into
+`idle · last run`, with the gate warning still shown.
 
 ![Idle band after a wave](img/showcase/cc-band-idle.png)
 
@@ -112,11 +114,11 @@ command that fixes it. A worker's card updates in place when it reports.
 
 ## What it changes on your machine
 
-- **Hooks.** The plugin registers 23 hook bindings (19 programs) from `plugins/atlas/hooks/hooks.json` for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas-setup` step you approve.
+- **Hooks.** The plugin registers 23 hook bindings (19 programs; `plugins/atlas/hooks/hooks.json` holds 14 commands, two of them the in-process dispatcher) for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas-setup` step you approve.
 - **Project files.** `/atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Worktrees for isolated parallel implementers go under `.atlas/wt/`.
 - **State in `~/.atlas/`.** `atlas.db` (SQLite telemetry), `memory/` (lessons saved at Stop and reloaded at boot), `dashboard-prefs.json`, and self-fix worktrees.
 - **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.
-- **Local dashboard.** A daemon starts at session start on `http://127.0.0.1:7421/` (loopback only, shared by every open terminal, a per-start token guards writes). `ATLAS_DASHBOARD=off` stops it from starting.
+- **Local dashboard.** A daemon serves `http://127.0.0.1:7421/` (loopback only, shared by every open terminal, a per-start token guards writes). It is off by default; `ATLAS_DASHBOARD=on` starts it at session start.
 - **Self-fix scheduler (on by default).** While the dashboard runs, a scheduler checks every 30 minutes for actionable doctor findings and runs up to 2 worker sessions, each in its own git worktree under `~/.atlas/worktrees/` on a branch named `atlas/selffix-<id>`. It never pushes; a passing fix waits as a local branch for you to merge. Set `ATLAS_SELFFIX=0` in your shell to turn it off, or set `selffix.enabled` to `false` in `~/.atlas/dashboard-prefs.json`.
 - **Outbound traffic.** Atlas sends no transcript data off the machine by default. It does send anonymous weekly usage counters (skill, hook and gate counts; no ids, prompts, code or paths), on by default and off with `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off` or `python3 plugins/atlas/scripts/atlas_analytics.py disable`; counters go to https://atlas-telemetry.vercel.app; see [plugins/atlas/references/telemetry.md](plugins/atlas/references/telemetry.md). Optional exceptions: turn scoring sends redacted transcript excerpts to api.typesafe.ai only when `TYPESAFE_API_KEY` is set (`ATLAS_TYPESAFE_SCORING=off` disables it), and the prompt classifier can call a local Ollama server. Connectors talk to their vendors once you give them credentials.
 
@@ -201,7 +203,7 @@ The lead sees each note on its next tool call:
 ### 4. The Stop gate
 
 When the agent tries to finish, `completion_gate.py` checks the definition of
-done (18 conditions, (a)-(r): evidence under `.atlas/evidence/`, a verified finding,
+done (19 conditions, (a)-(s): evidence under `.atlas/evidence/`, a verified finding,
 current docs, drained todos, a dispatch for any shipped code, and more). If
 something is missing it blocks the stop and says what to do:
 
@@ -264,8 +266,8 @@ The parity matrix is in [docs/architecture/atlas-harness-parity.md](docs/archite
 
 ## Command Center web UI
 
-A loopback-only dashboard (`http://127.0.0.1:7421/`) starts at session start
-and is shared by every open terminal. It reads the same telemetry DB, boards and
+A loopback-only dashboard (`http://127.0.0.1:7421/`), off by default and started
+at session start with `ATLAS_DASHBOARD=on`, is shared by every open terminal. It reads the same telemetry DB, boards and
 channels the hooks write.
 
 ![Overview](img/showcase/dashboard-overview.png)
@@ -299,11 +301,16 @@ Every guard has an off switch. Set it in your shell or in
 | `ATLAS_GATE=off` | Stop gate off |
 | `ATLAS_TRIPWIRE_HARD=off` | dispatch and routing denies off |
 | `ATLAS_MANDATES=off` | recall gate off |
-| `ATLAS_DASHBOARD=off` | no dashboard at session start |
+| `ATLAS_DASHBOARD=on` | start the dashboard at session start (off by default) |
 | `ATLAS_ADVISOR_GATE=off` | omp advisor gate off |
 | `ATLAS_MODE=solo` | small direct changes on the main thread are acknowledged instead of forced into a dispatch |
+| `ATLAS_MOD=off` | Claude Code in-terminal mod off |
+| `ATLAS_HUD=off` | hide the TODO and SUBAGENTS boxes |
+| `ATLAS_BAND_RICH=1` | tall band with the phase rail |
+| `ATLAS_THEME`, `ATLAS_ASCII`, `NO_COLOR`, `COLORTERM`, `ATLAS_REDUCED_MOTION` | terminal look: theme, ASCII marks, colour depth, motion |
 
-The full table, connector setup, colony transport, remote access and
+Each terminal variable, its default and the code that reads it are listed in
+[plugins/atlas/README.md](plugins/atlas/README.md#terminal-variables). The full table, connector setup, colony transport, remote access and
 troubleshooting are in the [reference](docs/reference/atlas-reference.md).
 
 Worker pane transport: tmux when installed, else background `claude --bg` processes (`claude-bg`); herdr (a terminal multiplexer atlas can also drive) is selectable with `ATLAS_COLONY_TRANSPORT`.

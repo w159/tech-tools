@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.14.0 - 2026-11-12
+
+- atlas 17.14.0: round 3 terminal UI (band, HUD, SUBAGENTS, side panel, board) and a README rewrite checked against the code. The section list is in [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).
+
+## marketplace 5.19.0 - 2026-11-12
+
+- marketplace 5.19.0: atlas 17.14.0. armada and programmer are unchanged.
+
 ## atlas 17.13.0 - 2026-11-12
 
 - atlas 17.13.0: fixes for hostile critiques 14 to 19 (waves 15 to 20). Also in this release:
