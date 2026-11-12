@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Wave 19 integration: the HUD keeps the SUBAGENTS column names while an agent runs (critique 18 C1) and still draws every plan row when none runs (B1); the board view in a pane with the bare one-row strip names the pane in its ribbon (`▸ SIDEPANEL ▸ BOARD`) so the capture scorer finds the pane without the tab keys; tests assert the marker on every view.
 - Critique 18 slice A: one truth on the band, route, gates and core. A1 a refusal on open rows is read against the store now, so `1 todo open` never sits beside `todo 5/5` (a named dispatch row, `stop refused`, or `retry stop` once nothing is open); A2 the gates figure counts the green marks drawn (`◇` pending and `▲` are not green: `2/4 green`); A3 a middle dot between every band segment and no bare `■2` while a form with the words fits (ctx, then the open note, then the queued count, then the blocked count give way first); A4 a lead reply that waits on the person (`asksUser`) is the blocked phase on the band (`needs you`) and the route, on Claude Code and omp; A5 the core tab says `done items`, `3 explorers  too many  asked for 1 on haiku` and `3 workers finished, token count not kept`. Goldens updated.
 
 - Critique 18 B1 (slice B): the HUD TODO block draws every plan row while ribbon, rows and agents fit (the blank and the SUBAGENTS column names go first); finished rows fold into `n/m · k done` only when that still does not fit (`hud-surface.ts` fitRows), so T1 no longer vanishes under `1/5 · 1 done` and the T1 to completed lag matches the panel's.

@@ -37,7 +37,7 @@ describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
     });
   }
   test('MODEL and TASK keep two blank cells between them, also when the LAST text is long (`haiku T1` ran together)', () => {
-    const long: HudInput = { ...stop, todos: ownTodos([...plan(['completed', 'blocked', 'pending']).map((t) => ({ ...t, evidence: null }))]), agents: stop.agents };
+    const long: HudInput = { ...stop, todos: ownTodos([...plan(['completed', 'blocked', 'pending']).map((t) => ({ ...t, evidence: null as never }))]), agents: stop.agents };
     const rows = hudLines(long, { cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString);
     for (const r of rows.filter((x) => /haiku/.test(x))) expect(r).toMatch(/haiku {2,}T\d/);
   });

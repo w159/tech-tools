@@ -55,6 +55,13 @@ function boardItems(m: SidebarModel) {
   return withOwnerStates(ownTodos(s.todos ?? [], s.sessionId), workerStates(s, liveWorkers(s, s.now)));
 }
 
+/** The board view's ribbon words. Where the strip is the bare one-row form (no `r: route` keys on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
+ * tells the pane from a toast box by `r: route` or `▸ SIDEPANEL` and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
+export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { title: string; right: string } {
+  const b = boardRibbon(boardRowsOf(boardItems(model), Math.floor(model.snapshot.now / 1000)));
+  return stripLayout(cols).bare ? { ...b, title: ui.ascii ? 'SIDEPANEL > BOARD' : 'SIDEPANEL ▸ BOARD' } : b;
+}
+
 function boardIn(els: ClientElements, m: SidebarModel, cols: number, ui: Ui): RenderElement {
   const s = m.snapshot;
   const items = boardItems(m);
@@ -71,6 +78,6 @@ export function sidebarTree(els: ClientElements, model: SidebarModel, on: Sideba
     flexShrink: 0,
     width: cols,
     backgroundColor: panelBg(ui),
-    children: [lineEl(els, ribbonRow(pm, model.ui.view === 'board' ? boardRibbon(boardRowsOf(boardItems(model), Math.floor(model.snapshot.now / 1000))) : undefined), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, cols, ui)] : viewRows(model.ui.view, els, model, on, cols, pm))],
+    children: [lineEl(els, ribbonRow(pm, model.ui.view === 'board' ? boardViewRibbon(model, cols, ui) : undefined), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, cols, ui)] : viewRows(model.ui.view, els, model, on, cols, pm))],
   });
 }

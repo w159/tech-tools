@@ -326,8 +326,11 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
   // Every plan row is drawn while the rows fit at all: the blank and the column names go before a finished row does (critique 18 B1: T1 left the block under `1/5 · 1 done`
   // although ribbon, five rows and three agents fit in the same ten rows). Only when even that does not fit do the finished rows fold into a count (critique 17, B4).
-  // The column names outlive the blank and the rail (critique 18, stoprun-150-562576ed-1/f0080.ans lost them while an agent ran): every try that keeps the header comes before any that drops it.
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: true }, { spacers: false, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: false, header: false }];
+  // While an agent runs the column names outlive both the blank and a finished row (critique 18 C1, stoprun-150-562576ed-1/f0080.ans lost them while beta ran): the header-keeping folds come before any try that drops the header.
+  const running = s.agents.some((a) => a.state === 'running');
+  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
+  if (running) tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: false, extras: false, foldDone: true });
+  tries.push({ spacers: true, extras: false, header: false }, { spacers: false, extras: false, header: false });
   tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: true, extras: false, header: false, foldDone: true });
   for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap, header: false }); // a cap is a count of rows: the rest is counted on the ribbon
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).
