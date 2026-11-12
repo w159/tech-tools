@@ -30,14 +30,16 @@ describe('band beside the Subagents block: counts only', () => {
     const all = rowsOf(160).join('\n');
     for (const n of NAMES) expect(all).toContain(n);
   });
-  test('with the HUD block the band lists no worker and keeps the counts', () => {
+  test('with the HUD block the band keeps the counts and lists each worker once, in the compact form, in the rows the HUD left', () => {
     const rows = rowsOf(160, { workersInHud: true, snapshot: busySnap({ comms: [] }) });
     const all = rows.join('\n');
-    for (const n of NAMES) expect(all).not.toContain(n);
-    expect(all).not.toContain('implementer');
+    expect(all).not.toContain('implementer'); // no role column: the HUD block carries it
     expect(rows[0]).toContain('1 running');
     expect(rows[0]).toContain('1 failed');
-    expect(rows.length).toBeLessThan(rowsOf(160, { snapshot: busySnap({ comms: [] }) }).length);
+    const listed = rows.slice(1).filter((r) => /^\s*[◐◓◑◒◇■▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/.test(r));
+    expect(listed).toHaveLength(NAMES.length);
+    for (const n of NAMES) expect(listed.filter((r) => r.includes(n))).toHaveLength(1);
+    expect(rowsOf(160, { workersInHud: true, maxRows: 1, snapshot: busySnap({ comms: [] }) })).toHaveLength(1);
   });
   test('the band counts equal the HUD block: a roster member the host does not list is queued in both; a listed worker is running at any age', () => {
     const base = busySnap();
@@ -54,7 +56,8 @@ describe('band beside the Subagents block: counts only', () => {
     expect(rowsOf(160, { snapshot, live: aged, workersInHud: true })[0]).toContain(`${running} running`);
   });
   test('narrow bands list nothing either way (the single row)', () => {
-    expect(rowsOf(60, { workersInHud: true })).toHaveLength(1);
+    expect(rowsOf(60, { workersInHud: true, maxRows: 1 })).toHaveLength(1);
+    expect(rowsOf(36, { workersInHud: true })).toHaveLength(1);
   });
 });
 

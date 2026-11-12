@@ -11,7 +11,7 @@ import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } fro
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
-import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
+import { hostEnv, LINGER_MS, spinClock, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
@@ -86,7 +86,7 @@ function missionWorker(w: LiveWorker, now: number): MissionWorker {
   const state = workerState(w);
   const tool = w.tool ?? w.lastTool;
   const end = state === 'done' || state === 'failed' ? w.since : now;
-  return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.round((end - w.startedAt) / 1000)) };
+  return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.round((end - w.startedAt) / 1000)), ...(state === 'done' || state === 'failed' ? { agoSecs: Math.max(0, Math.round((now - w.since) / 1000)) } : {}) };
 }
 
 const hhmm = (ts: number): string => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -125,7 +125,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
   const working = active.filter((w) => w.state === 'working' || w.state === 'blocked');
   return {
-    cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now,
+    cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now: spinClock(now, b.tick), // the one spinner clock: the band turns the frame the HUD and the panel turn (critique 19)
     project: boardOf(s), scope: b.team,
     phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
     done, total, ...openRows(s), todoBlocked: blockedCount(plan, owners),
@@ -199,7 +199,7 @@ export const bandCountItems = (b: BandModel): MotionItem[] => bandMotionItems(mi
 export function bandSpareRows(b: BandModel): number {
   const maxRows = b.maxRows ?? 12;
   if (maxRows < 1) return 0;
-  const m = missionModel({ ...b, maxRows, ui: b.ui ?? uiFromEnv() });
+  const m = { ...missionModel({ ...b, maxRows, ui: b.ui ?? uiFromEnv() }), noWorkerRows: true }; // worker rows fill what the HUD leaves, so they are never counted as the band's reclaimable blanks
   const lines = missionLines(m);
   const blanks = lines.filter((l) => !l.board && !l.keys && l.runs.every((x) => x.t.trim() === '')).length;
   const drawn = lines.reduce((n, l) => n + (l.board ?? 1), 0); // a board slot counts as the rows it holds

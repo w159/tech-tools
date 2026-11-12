@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, spinFrameOf, spinnerGlyph, stateRun, uiFromEnv, warnMark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, capsule, clip, COUNT_ORDER, countRuns, gauge, padEnd, PALETTES, percent, rail, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, uiFromEnv, warnMark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons, warningText } from './data/runstate';
 import { displayName } from './hud';
@@ -26,7 +26,8 @@ export const TONE_HEX: Record<Tone, string> = { ...PALETTES.mocha, dim: '#585b70
 export const PANEL_BG = '#11111b';
 
 export type WorkerState = 'running' | 'thinking' | 'queued' | 'waiting' | 'failed' | 'done';
-export type MissionWorker = { name: string; role?: string; state: WorkerState; tool?: string; target?: string; secs: number };
+/** `agoSecs`: for a done or failed worker, seconds since it ended (snapshot.now less its stamped finish); absent reads as just ended. */
+export type MissionWorker = { name: string; role?: string; state: WorkerState; tool?: string; target?: string; secs: number; agoSecs?: number };
 export type MissionNote = { from: string; to: string; text: string; at?: string; kind?: string };
 /** Presence and system events (a worker joining or leaving, a worktree merge) are not messages: the message row shows
  * the newest comm whose kind is not one of these (`say`, `dispatch`, `report`, or a kind the source does not state). */
@@ -89,8 +90,10 @@ export type MissionModel = {
   rich?: boolean;
   /** Theme, ASCII and colour mode; absent reads the environment. */
   ui?: Ui;
-  /** The HUD's Subagents block lists the workers: the band keeps the counts and draws no worker rows. */
+  /** The HUD's Subagents block lists the workers: the band keeps the counts and draws its worker rows only in the rows the HUD left spare (compact rows, `G name state  detail time`, one worker per row; critique 19 Band 3). */
   workersInHud?: boolean;
+  /** Measure the band without those compact worker rows: what the HUD may reclaim (bandSpareRows) never counts the rows a worker would fill. */
+  noWorkerRows?: boolean;
   /** Gauge values on screen while a figure glides (0..1); the labels keep the true figures. Absent: the figure itself. */
   eased?: { todo?: number; ctx?: number };
   /** Motion view (mod/motion.ts): a count that changed is drawn mid-transition. Absent: the resting render. */
@@ -150,10 +153,16 @@ const countOf = (m: MissionModel, s: UiState): number => (s === 'failed' ? faile
 /** What the Motion observes of the band: each state's agent count, so a count that moves is drawn mid-transition. */
 export const bandMotionItems = (m: MissionModel): MotionItem[] => COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) }));
 
+/** The spinner frame of a state's count: the running count turns the frame of the worker listed first (the HUD and the panel turn spinFrameOf(clock, name) for that same row, critique 19: `◒` in the band against `◐` in the HUD); the local tick otherwise. */
+function countFrame(m: MissionModel, s: UiState): number {
+  const first = s === 'running' && m.now !== undefined ? byAttention(m.workers).find((w) => uiStateOf(w.state) === 'running') : undefined;
+  return first && m.now !== undefined ? spinFrameOf(m.now, first.name) : m.tick;
+}
+
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   ', queued = true): Run[] {
   const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
-  const parts = order.filter((s) => n(s) > 0).map((s): Run[] => animateRow(words ? countRuns(s, n(s), ui, m.tick) : [stateRun(s, ui, m.tick), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS));
+  const parts = order.filter((s) => n(s) > 0).map((s): Run[] => animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s)) : [stateRun(s, ui, countFrame(m, s)), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS));
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
 }
@@ -278,6 +287,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     // Critique 17 A4: the narrow forms keep the words as long as they fit (`◖ ◆ ATLAS ◗ ▣ blocked: ... · todo 4/5 · ■ 1 failed`), so the row never stops at `todo 4/5 · ■1` with columns to spare.
     out.push(
       ...KEEPS.slice(1).map((k): Form => ({ runs: small(todoPart(k.open), bwTail(countsOf(k), k.bw)), min: 0 })),
+      { runs: small(todoPart(false), bwTail(tiny, true)), min: 0 }, // critique 19 Band 2: at 61 cells the todo figure and the agent counts (`■1`) stay beside the reason, they are not dropped for it
       { runs: small(todoPart(true), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), bwTail([], true)), min: 0 }, { runs: small(todoPart(false), tail(tiny)), min: 0 }, { runs: small(todoPart(false)), min: 0 }, { runs: small(), min: 0 }, { runs: [...cap, r(' '), ...flagHead(ui, st)], min: 0 });
   } else out.push({ runs: [...cap, r(`${idle ? ' idle' : ''}${todo ? `${quiet(m) ? ' · ' : ' '}todo ${todo}` : ''}`, 'sub'), ...tail(tiny)], min: 0 });
   return out;
@@ -374,6 +384,80 @@ function moreLine(hidden: readonly MissionWorker[], cols: number): Line {
   if (waiting) runs.push(r(' · ', 'sub'), r(`${waiting} waiting`, 'text'));
   if (failed) runs.push(r(' · ', 'sub'), r(`${failed} failed`, 'text'));
   return { runs: fitRuns(runs, cols) };
+}
+
+// ---- compact worker rows (the HUD lists the workers) ------------------------------------
+
+/** Narrowest band that draws a compact worker row. */
+const COMPACT_MIN = 40;
+/** The state word column: `running` and two cells, so the detail never touches the word. */
+const WORD_W = 9;
+/** A worker that ended this recently takes a row first, so its `done` or `failed` row is seen. */
+const PIN_SECS = 4;
+/** With fewer rows than workers the rows turn through the workers on the shared clock (snapshot.now), one step per this many ms. */
+const ROTATE_MS = 2000;
+const endedState = (w: MissionWorker): boolean => w.state === 'done' || w.state === 'failed';
+
+/** `k` of `list`, starting where the shared clock points: every entry gets its turn when the rows are fewer than the workers. */
+function turn<T>(list: readonly T[], k: number, clockMs: number): T[] {
+  if (list.length <= k) return [...list];
+  const start = (Math.floor(clockMs / ROTATE_MS) * k) % list.length;
+  return Array.from({ length: k }, (_, i) => list[(start + i) % list.length]!);
+}
+
+/** The workers that take the `slots` compact rows: those that ended in the last PIN_SECS (failed first), then the live ones by attention (waiting, running, queued);
+ * a worker that ended earlier takes a row only when no live worker needs it. More workers than rows: the rows turn through them. */
+function compactPick(m: MissionModel, slots: number, running: boolean): MissionWorker[] {
+  const clockMs = m.now ?? m.tick * 100;
+  const pinned = m.workers.filter((w) => endedState(w) && (w.agoSecs ?? 0) <= PIN_SECS).sort((a, b) => ORDER[a.state] - ORDER[b.state]);
+  const live = running ? byAttention(m.workers.filter((w) => !endedState(w))) : [];
+  const head = turn(pinned, slots, clockMs);
+  const liveRows = turn(live, slots - head.length, clockMs);
+  const stale = running ? m.workers.filter((w) => endedState(w) && !pinned.includes(w)).sort((a, b) => ORDER[a.state] - ORDER[b.state]) : []; // an older failure or finish takes only a row nobody live needs
+  return [...head, ...liveRows, ...stale.slice(0, Math.max(0, slots - head.length - liveRows.length))];
+}
+
+/** What the worker is doing beside its state word. */
+function compactDetail(w: MissionWorker): string {
+  const call = `${(w.tool ?? 'working').toLowerCase()}${w.target ? ` ${w.target}` : ''}`;
+  switch (w.state) {
+    case 'running': return call;
+    case 'thinking': return 'thinking';
+    case 'waiting': return w.target ?? '';
+    case 'failed': return w.tool ? 'killed' : ''; // stopped mid-call: the HUD's LAST says the same
+    case 'done': return `${w.role ?? 'agent'} finished`;
+    case 'queued': return '';
+  }
+}
+
+/** `G name  state  detail  time`: the form the scorer reads (glyph, name, lowercase state word, two or more cells, the rest). */
+function compactLine(w: MissionWorker, m: MissionModel, nameW: number): Line {
+  const ui = uiOf(m);
+  const st = uiStateOf(w.state);
+  const ended = endedState(w);
+  const head = [r(' '), mark(w, m, ui), r(' '), r(padTo(w.name, nameW) + ' ', ended ? 'sub' : 'text', !ended), r(padTo(st, WORD_W), rowWordTone(st), st === 'failed')];
+  const time = r(clip(clock(w.secs), TIME_W - 1).padStart(TIME_W - 1) + ' ', 'sub');
+  const room = Math.max(0, m.cols - runsWidth(head) - TIME_W);
+  return { runs: [...head, ...fitRuns([r(compactDetail(w), 'sub')], room), time] };
+}
+
+/** The compact rows that follow the band's own row while the HUD lists the workers: `band` the rows they sit under, `rows` the worker rows, `after` what a running band keeps beneath them (the message, the footer);
+ * null when this model draws none (no workers to name, no room, a board slot or a narrow band). */
+function hudWorkerRows(m: MissionModel, running: boolean): { band: Line[]; rows: Line[]; after: Line[] } | null {
+  if (!m.workersInHud || m.noWorkerRows || m.cols < COMPACT_MIN || m.maxRows < 2 || m.boardRows) return null;
+  const band = bandLines({ ...m, rich: false });
+  const foot = footerLines(m);
+  // The message and the footer keep the rows the counts-only band gave them (planRows with no workers); the worker rows take what is left, in place of the breathing blanks.
+  const plan = running ? planRows(m.maxRows - (band.length - 2), 0, !!m.note, foot.length) : { ticker: false, footerRows: 0 };
+  const extras: Line[] = plan.ticker && m.note ? [noteLine(m.note, m.cols)] : [];
+  const tail: Line[] = foot.slice(foot.length - plan.footerRows);
+  const slots = m.maxRows - band.length - extras.length - tail.length;
+  if (slots < 1) return null;
+  const picked = compactPick(m, slots, running);
+  if (!picked.length) return null;
+  const nameW = Math.max(6, Math.min(NAME_MAX, Math.max(...picked.map((w) => textWidth(w.name))), m.cols - 28));
+  const rows = picked.map((w) => compactLine(w, m, nameW));
+  return { band, rows, after: [...(slots - rows.length >= 1 && extras.length ? [blank(m.cols)] : []), ...extras, ...tail] };
 }
 
 // ---- message and footer ---------------------------------------------------------------
@@ -493,6 +577,13 @@ function runningLines(m: MissionModel): Line[] {
 export function missionLines(m: MissionModel): Line[] {
   if (m.maxRows < 1) return [];
   const running = isRunning(m);
+  const hud = hudWorkerRows(m, running);
+  if (hud) {
+    // The worker rows sit directly under the band row (no breathing blank between them); an idle band keeps its core row and footer under them.
+    const lines = running || m.cols < MID ? [...hud.band, ...hud.rows, ...hud.after] : (() => { const idle = idleLines({ ...m, rich: false }); return [...idle.slice(0, hud.band.length), ...hud.rows, ...idle.slice(hud.band.length)]; })();
+    let used = 0;
+    return lines.filter((l) => (used += l.board ?? 1) <= m.maxRows).map((l) => (l.board || l.keys ? l : { ...l, runs: fitRuns(l.runs, m.cols) }));
+  }
   if ((running && (m.cols < MID || m.maxRows < 3)) || (!running && m.cols < MID)) return bandLines({ ...m, rich: false });
   const lines = running ? runningLines(m) : idleLines(m);
   let used = 0;
