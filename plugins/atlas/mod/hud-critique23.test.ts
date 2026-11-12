@@ -28,7 +28,7 @@ describe('every plan row the slot holds is drawn', () => {
     expect(hudWantRows(working, 110, NOW)).toBe(14);
   });
   for (const cols of [150, 110]) for (const [name, input] of Object.entries(STATES)) {
-    for (const budget of [12, 13, 14, 15, 16, 17]) {
+    for (const budget of [13, 14, 15, 16, 17]) {
       test(`${cols} columns, ${name}, a host slot of ${budget} rows: all five plan rows, no "not shown", the band keeps its rows`, () => {
         const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
         const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
@@ -38,6 +38,16 @@ describe('every plan row the slot holds is drawn', () => {
         expect(budget - hud.length - gap).toBeGreaterThanOrEqual(1);
       });
     }
+  }
+  for (const cols of [150, 110]) for (const [name, input] of Object.entries(STATES)) {
+    test(`${cols} columns, ${name}, a host slot of 12 rows (the least that holds the boxes): both boxes stay closed, the band keeps its rows, the plan folds before a rule goes`, () => {
+      const cap = hudSlotCap(12, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
+      const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
+      expect([hud.filter((l) => l.startsWith('╭─ ') && l.endsWith('╮')).length, hud.filter((l) => l.startsWith('╰') && l.endsWith('╯')).length]).toEqual([2, 2]);
+      expect(planRows(hud).length).toBeGreaterThanOrEqual(3);
+      const gap = hudGapRows(hud.some((l) => l.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, 12);
+      expect(12 - hud.length - gap).toBeGreaterThanOrEqual(1);
+    });
   }
   test('finished rows fold into the title count only when the rows truly do not fit, and never print "not shown" while a blank row remains', () => {
     const at = (n: number): string[] => text(hudLines(blocked, { cols: 110, maxRows: n, ui, now: NOW }));
@@ -61,12 +71,13 @@ describe('one blank row between TODO and SUBAGENTS in every state', () => {
   }
 });
 
-describe('the rule ends open so the host `[-]` reads as its last cell', () => {
-  test('no right corner on any title or closing rule, and every rule reaches the last cell', () => {
+describe('the rule ends in a corner on the last cell, where the host `[-]` stands against it', () => {
+  test('every title rule ends in `╮`, every closing rule in `╯`, and every rule reaches the last cell (host cells: AbovePrompt bodyColumns, index.d.ts:11262-11270)', () => {
     for (const cols of [150, 110, 57]) {
       for (const l of text(hudLines(working, { cols, maxRows: 40, ui, now: NOW }))) {
-        expect(l).not.toMatch(/[╮╯]/);
-        if (l.startsWith('╭') || l.startsWith('╰')) expect([cols, cells(l)]).toEqual([cols, cols]);
+        if (l.startsWith('╭')) expect([cols, l.endsWith('─╮'), cells(l)]).toEqual([cols, true, cols]);
+        if (l.startsWith('╰')) expect([cols, l.endsWith('─╯'), cells(l)]).toEqual([cols, true, cols]);
+        if (!l.startsWith('╭') && !l.startsWith('╰')) expect(l).not.toMatch(/[╮╯]/); // rows carry no wall
       }
     }
   });
@@ -76,7 +87,7 @@ describe('SUBAGENTS columns and the selection', () => {
   const long: HudInput = { ...working, agents: OWNERS.map((n) => agent(n, 'working', 'running', { tool: 'Read', target: `${n.split('-')[0]}_long_module_name.py` })) };
   test('LAST keeps the spare width at 110: the whole `read <file>`, never `2 funct…`', () => {
     const rows = text(hudLines(long, { cols: 110, maxRows: 40, ui, now: NOW }));
-    for (const n of ['alpha', 'beta', 'gamma']) expect(rows.find((l) => l.includes(`${n}-explorer`) && /running\s+\S+\s+T\d/.test(l) && l.includes('read')) ?? '').toContain(`read ${n}_long_module_name.py`);
+    for (const n of ['alpha', 'beta', 'gamma']) expect(rows.find((l) => l.includes(`${n}-explorer`) && /running\s+T\d/.test(l) && l.includes('read')) ?? '').toContain(`read ${n}_long_module_name.py`);
   });
   test('at the narrowest width MODEL goes first and LAST stays whole', () => {
     const rows = text(hudLines(working, { cols: 57, maxRows: 40, ui, now: NOW }));

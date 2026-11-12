@@ -179,7 +179,7 @@ describe('the Subagents block is back on Claude Code', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [running] }, view(120)));
     expect(rows[0]).toContain('SUBAGENTS');
     expect(rows[0]).toContain('1 running');
-    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +opus-5 +- +read mod\/hud\.ts:12$/);
+    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +opus-5 +- +- +read mod\/hud\.ts:12$/); // MODEL (120 columns), TASK, LAST (no start time: a dash), then RESULT);
   });
   test('with nothing running the finished agents stay (critique 17 B3: the block outlives a clean finish)', () => {
     expect(trimmed(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120)))[0]).toContain('SUBAGENTS');
@@ -215,7 +215,7 @@ describe('the Subagents block is back on Claude Code', () => {
   });
   test('the T column is the position of the plan row the agent owns', () => {
     const plan = [todo('a', 'First', 'completed'), todo('b', 'Second', 'in_progress', { owner: 'impl-hud' })];
-    expect(trimmed(hudRows({ todos: plan, agents: [running] }, view(120))).join('\n')).toMatch(/impl-hud +running +opus-5 +T2 +read/);
+    expect(trimmed(hudRows({ todos: plan, agents: [running] }, view(120))).join('\n')).toMatch(/impl-hud +running +opus-5 +T2 +- +read/);
   });
   test('shortModel drops the provider and claude- prefix and guesses nothing', () => {
     expect(shortModel('anthropic/claude-sonnet-5')).toBe('sonnet-5');
@@ -265,8 +265,8 @@ describe('hud row budget', () => {
     expect(hudLines({ todos: [], agents: [] }, view(120))).toEqual([]);
   });
   test('hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows', () => {
-    expect(hudCompactRows({ todos: plan, agents })).toBe(6 + 5); // no closing rules (decoration goes first, critique 23); TODO ribbon and 5 rows (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents and the overflow row
-    expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 6 + 5 + 1))).join('\n')).toContain('AGENT'); // one row beyond the floor: the blank returns beside the column names
+    expect(hudCompactRows({ todos: plan, agents })).toBe(7 + 6); // round 5: both closing rules stay; TODO ribbon, 5 rows and its rule (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents, the overflow row and its rule
+    expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 7 + 6 + 1))).join('\n')).toContain('AGENT'); // one row beyond the floor: the blank returns beside the column names
     for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
     expect(hudBudget(1, 7, 7, true)).toBe(1);
     expect(hudBudget(2, 7)).toBe(2);

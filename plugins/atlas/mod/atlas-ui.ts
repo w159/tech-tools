@@ -17,7 +17,7 @@ export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' 
 /** A run's role. `dim` is the legacy tone (mission-layout TONE_HEX before rev 4); it has no token and paints as `line`. */
 export type Tone = Token | 'dim';
 /** One styled piece of a row. `bg` overrides the row surface (chips, the capsule); `chip` marks a fill (one per row). */
-export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; chip?: boolean; /** Motion override: a #rrggbb foreground that replaces the tone's colour for this frame (mod/motion.ts). */ fg?: string };
+export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; /** A fill as #rrggbb (the selected row's 236 bar), when no theme token is the colour; wins over `bg`. */ bgHex?: string; chip?: boolean; /** Motion override: a #rrggbb foreground that replaces the tone's colour for this frame (mod/motion.ts). */ fg?: string };
 
 /** Catppuccin Mocha and Latte (https://raw.githubusercontent.com/catppuccin/palette/main/palette.json). */
 export const PALETTES: Record<ThemeName, Record<Token, string>> = {
@@ -180,6 +180,16 @@ export function surfaceHex(tok: Token, ui: Pick<Ui, 'theme' | 'color'>): string 
   return out;
 }
 
+const fillCache = new Map<string, string>();
+/** The fill of a run: its own `bgHex` (in 256 colours the stable palette colour nearest it, as for a surface), else its `bg` token's surface, else the panel. */
+export function fillHex(x: Pick<Run, 'bg' | 'bgHex'>, ui: Pick<Ui, 'theme' | 'color'>): string {
+  if (x.bgHex === undefined) return surfaceHex(x.bg ?? 'panel', ui);
+  if (ui.color !== '256') return x.bgHex;
+  let out = fillCache.get(x.bgHex);
+  if (out === undefined) fillCache.set(x.bgHex, (out = PRE_IMAGE.get(x.bgHex) ?? stable256(x.bgHex)));
+  return out;
+}
+
 const fitCache = new Map<string, string>();
 /** `hex` as drawn in 256-colour mode on the theme's panel: the nearest stable palette colour that keeps the contrast the original had (to 4.5:1). Memoised. */
 export function fitHex(hex: string, theme: ThemeName): string {
@@ -210,7 +220,7 @@ export function sgrColor(hex: string, layer: 38 | 48, mode: ColorMode): string {
  * panel unless the run carries its own). In 256-colour mode both colours are stable palette colours. Colour off keeps bold and strike only. */
 export function paintAnsi(x: Run, ui: Ui): string {
   if (x.t === '') return '';
-  const sgr = [x.bold ? '1' : '', x.strike ? '9' : '', sgrColor(runHex(x, ui.theme, ui.color), 38, ui.color), sgrColor(surfaceHex(x.bg ?? 'panel', ui), 48, ui.color)].filter(Boolean).join(';');
+  const sgr = [x.bold ? '1' : '', x.strike ? '9' : '', sgrColor(runHex(x, ui.theme, ui.color), 38, ui.color), sgrColor(fillHex(x, ui), 48, ui.color)].filter(Boolean).join(';');
   return sgr ? `\x1b[${sgr}m${x.t}\x1b[0m` : x.t;
 }
 

@@ -21,7 +21,7 @@ describe('title rows: a plain title, the count and the meter inside a thin rule 
   const t = rows(todo(5, (i) => (i < 3 ? 'completed' : 'pending')), []);
   test('TODO  3/5, then the 8-cell meter, then a thin rule to the last cell where the host draws its marker, no heavy rule', () => {
     const head = text(t[0]!);
-    expect(head).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ TODO {2}3\/5 ▰{5}▱{3} ─+$/);
+    expect(head).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ TODO {2}3\/5 ▰{5}▱{3} ─+╮$/);
     expect(cells(head)).toBe(150);
     expect(head).not.toContain('━');
   });
@@ -32,7 +32,7 @@ describe('title rows: a plain title, the count and the meter inside a thin rule 
     const ribbon = head.find((x) => x.t === '◖ ◆ ATLAS ◗')!;
     expect([ribbon.tone, ribbon.fg, ribbon.bg, ribbon.chip]).toEqual(['dim', '#585858', undefined, undefined]);
     expect(head.filter((x) => x.chip === true || x.bg !== undefined)).toEqual([]);
-    const rule = head.find((x) => /^─{6,}$/.test(x.t))!;
+    const rule = head.find((x) => /^─{6,}╮$/.test(x.t))!;
     expect([rule.tone, rule.fg]).toEqual(['dim', '#585858']);
     expect(text(head).startsWith('╭─ ')).toBe(true);
     const sub = rows(todo(2, () => 'pending'), [ag('alpha-explorer', 'working')]).find((r) => text(r).includes('SUBAGENTS'))!;
@@ -47,7 +47,7 @@ describe('title rows: a plain title, the count and the meter inside a thin rule 
   });
   test('ASCII keeps the same cells: `#` and `-` for the meter, a `-` rule', () => {
     const head = text(rows(todo(5, (i) => (i < 3 ? 'completed' : 'pending')), [], { ui: ascii })[0]!);
-    expect(head).toMatch(/^\+- \[ATLAS\] > TODO {2}3\/5 #{5}-{3} -+$/);
+    expect(head).toMatch(/^\+- \[ATLAS\] > TODO {2}3\/5 #{5}-{3} -+\+$/);
     expect(cells(head)).toBe(150);
   });
   test('the title row is exactly the width at every width, with or without the meter', () => {
@@ -119,22 +119,32 @@ describe('rows: one phase, dim done rows, state words by weight', () => {
 describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK are never blank', () => {
   const plan = todo(5, () => 'pending', (i) => (i < 3 ? ['alpha-explorer', 'ghost-explorer', 'beta-explorer'][i] : undefined));
   const agents = [ag('alpha-explorer', 'working', { tool: 'Read', target: 'alpha.py' }), ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), ag('beta-explorer', 'working', { tool: 'Read', target: 'beta.py' })];
-  test('f0075: 12 rows for 5 todos and 3 agents keep every row, the blank and the AGENT/STATE header (the closing rules go first)', () => {
+  const planRows = (out: string[]): number => out.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(r)).length;
+  const agentLines = (out: string[]): number => out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length;
+  const corners = (out: string[]): [number, number] => [out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length, out.filter((r) => r.startsWith('╰') && r.endsWith('╯')).length];
+  test('14 rows for 5 todos and 3 agents keep every row, the blank, the AGENT/STATE header and both closed boxes', () => {
+    const out = rows(plan, agents, { maxRows: 14 }).map(text);
+    expect(out).toHaveLength(14);
+    expect(out.some((r) => /AGENT\s+STATE\s+MODEL\s+TASK\s+LAST\s+RESULT/.test(r))).toBe(true);
+    expect(out.filter((r) => r.trim() === '')).toHaveLength(1);
+    expect(agentLines(out)).toBe(3);
+    expect(planRows(out)).toBe(5);
+    expect(corners(out)).toEqual([2, 2]);
+  });
+  test('13 rows lose the blank first, 12 the column names next; the five plan rows, the three agents and both closed boxes stay', () => {
+    const thirteen = rows(plan, agents, { maxRows: 13 }).map(text);
+    expect(thirteen).toHaveLength(13);
+    expect(thirteen.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    expect(thirteen.filter((r) => r.trim() === '')).toHaveLength(0);
     const out = rows(plan, agents, { maxRows: 12 }).map(text);
     expect(out).toHaveLength(12);
-    expect(out.some((r) => /AGENT\s+STATE\s+MODEL\s+TASK\s+LAST/.test(r))).toBe(true);
-    expect(out.filter((r) => r.trim() === '')).toHaveLength(1);
-    expect(out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length).toBe(3);
-    expect(out.filter((r) => /T[1-5] /.test(r) && !r.includes('haiku')).length).toBe(5);
-    expect(out.some((r) => r.startsWith('╰'))).toBe(false);
-  });
-  test('11 rows keep the five plan rows, the blank and the three agents; the column names are the row that goes', () => {
-    const out = rows(plan, agents, { maxRows: 11 }).map(text);
-    expect(out).toHaveLength(11);
     expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(false);
-    expect(out.filter((r) => r.trim() === '')).toHaveLength(1);
-    expect(out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length).toBe(3);
-    expect(out.filter((r) => /T[1-5] /.test(r) && !r.includes('haiku')).length).toBe(5);
+    expect(out.filter((r) => r.trim() === '')).toHaveLength(0);
+    for (const o of [thirteen, out]) {
+      expect(agentLines(o)).toBe(3);
+      expect(planRows(o)).toBe(5);
+      expect(corners(o)).toEqual([2, 2]);
+    }
   });
   test('a tighter slot gives up the column names, then the blank, then plan rows, and keeps every agent row', () => {
     const out = rows(plan, agents, { maxRows: 9 }).map(text);
@@ -149,6 +159,6 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
       expect([cols, row.trimEnd().endsWith('-')]).toEqual([cols, true]);
     }
     const wide = rows([], bare, { cols: 150 }).map(text).find((r) => r.includes('lone-explorer'))!;
-    expect(wide).toMatch(/queued\s+haiku\s+-\s+-\s*$/);
+    expect(wide).toMatch(/queued\s+haiku\s+-\s+0:00\s+-\s*$/); // TASK `-`, LAST the clock (a queued agent has run for 0:00), RESULT `-`
   });
 });

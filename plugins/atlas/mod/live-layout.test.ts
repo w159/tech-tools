@@ -39,12 +39,14 @@ const view = (cols: number, maxRows: number) => ({ cols, maxRows, ui, rich: fals
 /** HUD columns the live host handed the hook: bodyColumns, the transcript less the engine's five (88 beside the 56-column pane at 150, 104 at 110). */
 const HUD_WIDTHS = [88, 104, 138];
 const PANE_WIDTHS = [55, 43, 37];
+/** A TODO row starts with its state glyph and `T<n> `; the SUBAGENTS rows start with theirs too, but name a worker. */
+const PLAN_ROW = /^[▸ ] [◐◓◑◒◇●■▲◉] T\d /;
 
 describe('1. titles use the width the row has', () => {
   for (const cols of HUD_WIDTHS) {
     test(`HUD TODO at ${cols} columns: every title shows whole, the state word has its column`, () => {
       const rows = hudLines(input, view(cols, 30)).map(runsString);
-      const todoRows = rows.filter((r) => /T\d /.test(r) && !r.includes('haiku')); // the agent rows (with a model) now also name their T1
+      const todoRows = rows.filter((r) => PLAN_ROW.test(r)); // the agent rows also name their T1, after the worker
       expect(todoRows).toHaveLength(5);
       expect(todoRows[0]).toContain('T1 read alpha.py (alpha-explorer)');
       expect(todoRows[2]).toContain('T3 read gamma.py (gamma-explorer)');
@@ -165,18 +167,18 @@ describe('4. no fold marker', () => {
 
 describe('5. the plan row budget and the overflow row', () => {
   test('five todos and three agents: the compact form holds all five plan rows', () => {
-    // ribbon + 5 plan rows + the blank + agents ribbon + the column names + 3 agents = 11 rows (critique 23: the closing rules are decoration and go first)
-    expect(hudCompactRows(input, 88)).toBe(11);
+    // ribbon + 5 plan rows + rule + agents ribbon + the column names + 3 agents + rule = 13 rows (round 5: the closing rules stay; the blank goes first)
+    expect(hudCompactRows(input, 88)).toBe(13);
     const rows = hudLines(input, view(88, hudBudget(15, hudCompactRows(input, 88), 7, true))).map(runsString);
-    expect(rows.filter((r) => /T\d /.test(r) && !r.includes('haiku'))).toHaveLength(5);
+    expect(rows.filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
   });
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
-    const rows = hudLines(input, view(88, 6)).map(runsString);
+    const rows = hudLines(input, view(88, 8)).map(runsString);
     const more = rows.find((r) => /\d+ more todos?/.test(r))!;
-    expect(more).toMatch(/▸ TODO {2}0\/5 · \d+ more todos? not shown ▱+ ─+/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
+    expect(more).toMatch(/▸ TODO {2}0\/5 · \d+ more todos? not shown ▱+ ─+╮/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
-    const planRows = rows.filter((r) => /T\d /.test(r) && !r.includes('haiku')).length;
+    const planRows = rows.filter((r) => PLAN_ROW.test(r)).length;
     expect(planRows + Number(/(\d+) more/.exec(more)![1])).toBe(5); // every slot holds a row: shown plus counted is the whole plan
   });
   test('a plan longer than five still keeps its window and counts the rest', () => {
@@ -192,7 +194,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
   const hudIn: HudInput = { todos: planDone, agents };
   const budget = 18; // the live frame's 15 slot rows less the host's line (14), plus the Subagents column-header row and its blank, plus the two closing rules (round 3)
-  const cap = 8; // a slot that cuts the plan: the floor holds the column names and the open plan rows, so only a slot well below the five-row form cuts (critique 23)
+  const cap = 10; // a slot that cuts the plan: the closing rules stay, so only a slot well below the five-row form cuts (round 5)
   const snapshot = busySnap();
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
   const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));
@@ -218,8 +220,8 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   test('a HUD that already fits, or a band with no blanks, is returned as it was', () => {
     const all = draw(30);
     expect(reclaimBlanks(all, 30, 30, () => 3, draw)).toBe(all);
-    const cut = draw(8);
-    expect(reclaimBlanks(cut, 8, 14, () => 0, draw)).toBe(cut);
+    const cut = draw(10);
+    expect(reclaimBlanks(cut, 10, 14, () => 0, draw)).toBe(cut);
     expect(reclaimBlanks([], 8, 14, () => 3, draw)).toEqual([]);
   });
 });

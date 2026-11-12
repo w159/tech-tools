@@ -64,7 +64,7 @@ describe('step 1: a quiet header', () => {
         expect([ribbon.tone, ribbon.fg, ribbon.bg, ribbon.chip]).toEqual(['dim', PALETTE5.dim, undefined, undefined]);
         const name = head.find((x) => x.t === title)!;
         expect([name.tone, name.bold, name.fg]).toEqual(['text', true, PALETTE5.body]);
-        const rule = head.find((x) => /^─+$/.test(x.t))!;
+        const rule = head.find((x) => /^─+╮$/.test(x.t))!; // the rule and its right corner are one quiet 240 run
         expect([rule.tone, rule.fg]).toEqual(['dim', PALETTE5.dim]);
         expect(head.filter((x) => x.chip === true || x.bg !== undefined)).toEqual([]); // the band alone carries the solid chip
       }
@@ -72,8 +72,8 @@ describe('step 1: a quiet header', () => {
   }
   test('the count and the meter follow the title: TODO has `n/m` and the meter, SUBAGENTS the spinner and the counts', () => {
     const rows = text(draw(working, 150));
-    expect(rows[0]).toMatch(/▸ TODO {2}0\/5 ▱{8} ─+$/);
-    expect(rows.find((r) => r.includes('SUBAGENTS'))).toMatch(/▸ SUBAGENTS [◐◓◑◒] 3 running ─+$/);
+    expect(rows[0]).toMatch(/▸ TODO {2}0\/5 ▱{8} ─+╮$/);
+    expect(rows.find((r) => r.includes('SUBAGENTS'))).toMatch(/▸ SUBAGENTS [◐◓◑◒] 3 running ─+╮$/);
   });
 });
 
@@ -85,14 +85,14 @@ describe('step 2: a rounded box that never changes shape', () => {
       const heads = out.map((l, i) => [l, i] as const).filter(([l]) => isBlockHeader(l));
       expect(heads.map(([l]) => /▸ (TODO|SUBAGENTS)/.exec(l)![1])).toEqual(['TODO', 'SUBAGENTS']);
       for (const [l, i] of heads) {
-        expect([l.startsWith('╭─ '), l.endsWith('─'), cells(l)]).toEqual([true, true, cols]);
+        expect([l.startsWith('╭─ '), l.endsWith('╮'), cells(l)]).toEqual([true, true, cols]);
         expect(cells(runsString(rows[i]!))).toBe(cols); // padded to the one width in every state
       }
       const closes = out.map((l, i) => [l, i] as const).filter(([l]) => l.startsWith('╰'));
-      expect(closes.map(([l]) => l)).toEqual([`╰${'─'.repeat(cols - 1)}`, `╰${'─'.repeat(cols - 1)}`]); // both blocks, every state
+      expect(closes.map(([l]) => l)).toEqual([`╰${'─'.repeat(cols - 2)}╯`, `╰${'─'.repeat(cols - 2)}╯`]); // both blocks, every state
       expect(closes[1]![1]).toBe(out.length - 1); // SUBAGENTS closes the HUD; the host or the register adds the blank under it
       const subAt = heads[1]![1];
-      expect([out[subAt - 2], out[subAt - 1]]).toEqual([`╰${'─'.repeat(cols - 1)}`, '']); // exactly one blank between TODO and SUBAGENTS
+      expect([out[subAt - 2], out[subAt - 1]]).toEqual([`╰${'─'.repeat(cols - 2)}╯`, '']); // exactly one blank between TODO and SUBAGENTS
       expect(out.filter((l) => l === '')).toHaveLength(1);
       for (const l of out) expect(cells(l)).toBeLessThanOrEqual(cols);
       expect(out.slice(1).some((l) => /^[│┃]/.test(l.trim()) && !l.startsWith('╰'))).toBe(false); // rows carry no side border: the scorer reads the glyph first
@@ -106,33 +106,34 @@ describe('step 2: a rounded box that never changes shape', () => {
       expect([...widths]).toEqual([cols]);
     }
   });
-  test('ASCII keeps the same shape: `+-` on the header, `+---` closing, no right corner, `[ATLAS]` for the ribbon', () => {
+  test('ASCII keeps the same shape: `+-` and `-+` on the header, `+---+` closing, `[ATLAS]` for the ribbon', () => {
     const out = text(hudLines(working, { cols: 110, maxRows: 40, ui: { theme: 'mocha', ascii: true, color: 'none' }, now: NOW }));
-    expect(out[0]).toMatch(/^\+- \[ATLAS\] > TODO .*-$/); // the rule runs to the last cell: the host's `[-]` ends it
-    expect(out.filter((l) => /^\+-+$/.test(l))).toHaveLength(2);
+    expect(out[0]).toMatch(/^\+- \[ATLAS\] > TODO .*-\+$/); // the rule runs to the last cell and ends in `+`
+    expect(out.filter((l) => /^\+-+\+$/.test(l))).toHaveLength(2);
     for (const l of out.filter((x) => x.trim() !== '')) expect(cells(l)).toBeLessThanOrEqual(110);
   });
-  test('a short budget drops the rules first, then the column names, then the blank, and only then folds the finished rows (critique 23)', () => {
+  test('a short budget drops the blank, then the column names, then folds the finished rows; both rules and both corners stay at every height the blocks show (round 5)', () => {
     for (const cols of [150, 110]) {
-      const input: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'completed', OWNERS[1]), todo(3, 'in_progress', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: OWNERS.map((n, i) => agent(n, i < 2 ? 'done' : 'working', i < 2 ? 'done' : 'running', { tool: 'Read', target: 'x.py' })) };
+      const input: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'completed', OWNERS[1]), todo(3, 'in_progress', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: OWNERS.map((n, i) => agent(n, i < 2 ? 'done' : 'working', i < 2 ? 'done' : 'running', { tool: 'Read', target: `${n.split('-')[0]}.py` })) };
       const at = (n: number): string[] => text(draw(input, cols, n));
-      const plan = (out: string[]): string[] => out.filter((l) => /\bT[1-5] /.test(l) && !l.includes('haiku'));
+      const plan = (out: string[]): string[] => out.filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(l));
+      const corners = (out: string[]): [number, number, number] => [out.filter((l) => l.startsWith('╭─ ')).length, out.filter((l) => l.endsWith('╮')).length, out.filter((l) => l.startsWith('╰') && l.endsWith('╯')).length];
       expect(at(40)).toHaveLength(14);
-      expect(at(14).filter((l) => l.startsWith('╰'))).toHaveLength(2);
-      for (let n = 13; n >= 11; n--) {
+      for (let n = 14; n >= 8; n--) {
         const out = at(n);
-        expect([cols, n, out.filter((l) => l.startsWith('╰')).length]).toEqual([cols, n, 0]); // the closing rules go before any plan row
-        expect([cols, n, plan(out).length]).toEqual([cols, n, 5]); // every plan row stays
-        expect([cols, n, out.filter((l) => l === '').length]).toEqual([cols, n, 1]); // ...with the one blank row between the blocks
         expect([cols, n, out.length <= n]).toEqual([cols, n, true]);
+        expect([cols, n, corners(out)]).toEqual([cols, n, [2, 2, 2]]); // two tops with their `╮` and two bottoms with their `╯`, whatever the slot
       }
-      expect(at(12).some((l) => /AGENT\s+STATE/.test(l))).toBe(true); // the names outlast the rules
-      expect(at(10).some((l) => /AGENT\s+STATE/.test(l))).toBe(false); // ...and go before the blank
-      expect(at(10).filter((l) => l === '')).toHaveLength(1);
-      expect(at(10)[0]).toMatch(/2 done/); // the finished rows fold into the count last of all
-      expect(at(10).some((l) => /T[12] read/.test(l) && !l.includes('haiku'))).toBe(false);
-      expect(at(8).filter((l) => l === '')).toHaveLength(0); // then the blank
-      expect(plan(at(8)).filter((l) => /T[345] /.test(l))).toHaveLength(3); // while every open plan row keeps its place
+      expect(at(14).some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+      expect(at(14).filter((l) => l === '')).toHaveLength(1);
+      expect(at(13).filter((l) => l === '')).toHaveLength(0); // the blank goes first
+      expect(at(13).some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+      expect(plan(at(13))).toHaveLength(5); // every plan row stays
+      expect(at(12).some((l) => /AGENT\s+STATE/.test(l))).toBe(false); // then the column names
+      expect(plan(at(12))).toHaveLength(5);
+      expect(at(11)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
+      expect(plan(at(11)).some((l) => /T[12] read/.test(l))).toBe(false);
+      expect(plan(at(8)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place
     }
   });
 });
@@ -171,7 +172,7 @@ describe('step 3: honest rows', () => {
   test('truncation is all or none per column: a cell that does not fit ends in a one-cell `…`, never `...`, never a cut without a mark, never another word', () => {
     const mk = (name: string, tool: string): AgentRow => ({ name, state: 'running', model: 'haiku', tasks: [1], tool, ctx: null, focus: false });
     const rows = [mk('alpha-explorer', 'read a-very-long-file-name-that-cannot-fit.py'), mk('beta-explorer', 'read b.py'), mk('gamma-explorer', 'bash')];
-    for (const cols of [110, 80, 57]) {
+    for (const cols of [110, 80, 70]) { // RESULT is the column that ends in a mark; 57 cells leave no room for it
       const lasts = text(agentRows(rows, { cols, ui }, { spacers: true, extras: false, close: true })).slice(2, -1).map((l) => l.split(/\s{2,}/).at(-1)!);
       expect([cols, lasts[1]!.startsWith('read b') || lasts[1]!.endsWith('…')]).toEqual([cols, true]);
       expect([cols, lasts[0]!.endsWith('…') || lasts[0] === 'read a-very-long-file-name-that-cannot-fit.py']).toEqual([cols, true]);
@@ -184,24 +185,29 @@ describe('step 3: honest rows', () => {
     expect([lone.task, lone.model]).toEqual(['read gamma.py', 'haiku']);
     for (const cols of [150, 110]) {
       const line = text(agentRows([lone], { cols, ui }, { spacers: true, extras: false, close: true }))[2]!;
-      expect(line).toContain('haiku');
-      expect(line).toMatch(/haiku {3}read g…/); // the dispatch text, cut with a one-cell mark in the 7-cell TASK column, never `-`
+      expect(line.includes('haiku')).toBe(cols >= 120); // MODEL shows from 120 columns
+      expect(line).toMatch(cols >= 120 ? /haiku {3}read g…/ : /running {5}read g…/); // the dispatch text, cut with a one-cell mark in the 7-cell TASK column, never `-`
     }
     expect(agentModel([agent('gamma-explorer', 'working', 'running', { model: '' })], [])[0]!.model).toBe('-'); // unknown stays an honest dash
   });
-  test('LAST never repeats the state word: no outcome reads the last tool, else the elapsed clock, else `-`', () => {
-    const running = agentModel([agent('alpha-explorer', 'working', 'running', { since: NOW - 24_000 })], [], null, NOW)[0]!;
-    expect(running.fallback).toBe('0:24');
+  test('LAST is one type, the elapsed clock, frozen when the agent ends; RESULT never repeats the state word', () => {
+    const running = agentModel([agent('alpha-explorer', 'working', 'running', { startedAt: NOW - 24_000, since: NOW - 24_000 })], [], null, NOW)[0]!;
+    expect(running.elapsed).toBe('0:24');
+    expect(running.fallback).toBeUndefined();
     expect(agentModel([agent('alpha-explorer', 'done', 'done', { lastTool: 'Read' })], [], null, NOW)[0]!.fallback).toBe('read');
+    const ended = { startedAt: NOW - 40_000, since: NOW - 10_000 };
+    expect(agentModel([agent('alpha-explorer', 'done', 'done', ended)], [], null, NOW)[0]!.elapsed).toBe('0:30');
+    expect(agentModel([agent('alpha-explorer', 'done', 'done', ended)], [], null, NOW + 90_000)[0]!.elapsed).toBe('0:30'); // frozen: a later clock does not move it
+    expect(agentModel([agent('alpha-explorer', 'failed', 'failed', ended)], [], null, NOW + 90_000)[0]!.elapsed).toBe('0:30');
+    expect(agentModel([agent('alpha-explorer', 'working', 'running', { startedAt: NOW - 40_000 })], [], null, NOW + 90_000)[0]!.elapsed).toBe('2:10'); // a live agent's keeps counting
     for (const cols of [110, 57]) {
       const row: AgentRow = { ...running, tool: '' };
-      const line = text(agentRows([row], { cols, ui }, { spacers: true, extras: false, close: true }))[2]!;
-      expect([cols, line.match(/running/g)!.length]).toEqual([cols, 1]); // the state column only: LAST is the clock
-      expect([cols, line.trimEnd().split(/\s{2,}/).at(-1)]).toEqual([cols, '0:24']);
+      const out = text(agentRows([row], { cols, ui }, { spacers: true, extras: false, close: true }));
+      expect(out[1]).toMatch(/LAST/);
+      expect([cols, out[2]!.match(/running/g)!.length]).toEqual([cols, 1]); // the state column only
+      expect([cols, /\s0:24(\s|$)/.test(out[2]!)]).toEqual([cols, true]);
     }
-    const done: AgentRow = { ...running, state: 'done', tool: 'finished', fallback: 'read' };
-    const narrow = text(agentRows([done], { cols: 57, ui }, { spacers: true, extras: false, close: true }))[2]!;
-    expect(narrow).not.toMatch(/done\s+haiku\s+T1\s+done$/); // critique 22: LAST at 110 repeated `done`
+    expect(text(agentRows([{ ...running, tool: 'read a.py' }], { cols: 110, ui }, { spacers: true, extras: false, close: true }))[2]).toMatch(/0:24 {4}read a\.py$/); // RESULT follows LAST, the clock stays the one type in its column
   });
   test('at 110 all five TODO rows show while running when the budget allows (the box and the agents take 14 rows)', () => {
     for (const cols of [110, 57]) {
