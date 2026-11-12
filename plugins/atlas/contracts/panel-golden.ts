@@ -105,7 +105,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◐ Subagents block       running elapsed 00:42 of 05:00                                                implementer-band",
       "  ◇ Gate tests            queued  after Subagents block                                                      runner-land",
       "  ■ Changelog             failed  tests red 3                                                           implementer-live",
-      "  ▣ Ship board mod        blocked needs your approval                                                                you"
+      "  ▲ Ship board mod        blocked needs your approval                                                                you"
     ],
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -128,7 +128,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◐ Subagents block       running                               implementer-band",
       "  ◇ Gate tests            queued                                     runner-land",
       "  ■ Changelog             failed                                implementer-live",
-      "  ▣ Ship board mod        blocked                                            you"
+      "  ▲ Ship board mod        blocked                                            you"
     ],
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -151,7 +151,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ◐ Subagents block       running       implementer-band",
       "  ◇ Gate tests            queued             runner-land",
       "  ■ Changelog             failed        implementer-live",
-      "  ▣ Ship board mod        blocked                    you"
+      "  ▲ Ship board mod        blocked                    you"
     ]
   },
   team: {
@@ -199,7 +199,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                        ▸ implementer-band take T4, then run the gate tests                                10:02",
-      "  ▣ implementer-live    blocked tests red 3, need a decision on the changelog                                      10:05",
+      "  ▲ implementer-live    blocked tests red 3, need a decision on the changelog                                      10:05",
       "  ● implementer-layout  handoff T1 and T2 merged                                                                   10:07"
     ],
     80: [
@@ -210,7 +210,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                                                   10:02",
       "    ▸ implementer-band take T4, then run the gate tests",
-      "  ▣ implementer-live    blocked                                            10:05",
+      "  ▲ implementer-live    blocked                                            10:05",
       "    tests red 3, need a decision on the changelog",
       "  ● implementer-layout  handoff T1 and T2 merged                           10:07"
     ],
@@ -223,7 +223,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    lead                                           10:02",
       "    ▸ implementer-band take T4, then run the gate",
       "    tests",
-      "  ▣ implementer-live    blocked                    10:05",
+      "  ▲ implementer-live    blocked                    10:05",
       "    tests red 3, need a decision on the changelog",
       "  ● implementer-layout  handoff                    10:07",
       "    T1 and T2 merged"

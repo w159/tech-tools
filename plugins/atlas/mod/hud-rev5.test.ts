@@ -25,11 +25,11 @@ describe('title rows: a plain title, the count and the meter inside a thin rule 
     expect(cells(head)).toBe(150);
     expect(head).not.toContain('━');
   });
-  test('the title is bold neutral text, the rule the line tone, the brand is quiet (no chip, no fill)', () => {
+  test('the title is bold neutral text, the rule the line tone, the solid ATLAS pill is the only filled run', () => {
     const head = t[0]!;
     const title = head.find((x) => x.t === 'TODO')!;
     expect([title.tone, title.bold]).toEqual(['text', true]);
-    expect(head.some((x) => x.chip === true || x.bg === 'accent')).toBe(false);
+    expect(head.filter((x) => (x.chip === true || x.bg === 'accent') && x !== title && !/^[ATLS◖◗◆ ]+$/.test(x.t))).toEqual([]);
     expect(head.find((x) => /^─{6,}$/.test(x.t))!.tone).toBe('line');
   });
   test('the meter is full only when every item is done, and never empty once one is', () => {
