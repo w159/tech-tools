@@ -190,3 +190,33 @@ describe('prompt sharpening', () => {
     expect(factsLine(null, 'main')).toBeNull();
   });
 });
+
+describe('TaskStop marks the stopped agent failed in the shared stores', () => {
+  test('the one tool.call hook records the killed id and fails the agent row', async () => {
+    const { hooks, $ } = setupStop();
+    await hooks.get('tool.call')!($, { tool: 'TaskStop', task_id: 'ghost-explorer' }, async (i) => i);
+    expect(await held($, 'killed')).toEqual(['ghost-explorer']);
+    expect(((await held($, 'taskAgents')) as { name: string; state: string }[]).map((a) => [a.name, a.state])).toEqual([['ghost-explorer', 'failed']]);
+  });
+  test('other tools leave the killed list alone', async () => {
+    const { hooks, $ } = setupStop();
+    await hooks.get('tool.call')!($, { tool: 'Read' }, async (i) => i);
+    expect(await held($, 'killed')).toBeUndefined();
+  });
+});
+
+const held = async ($: EngineInterface, key: string): Promise<unknown> => ($.state as unknown as { get: (r: object) => Promise<{ value: unknown }> }).get({ plugin: 'atlas', key }).then((c) => c.value);
+
+function setupStop() {
+  const hooks = new Map<string, Hook>();
+  wire(hooks, () => null);
+  const $ = {
+    state: memState({
+      'atlas/isModOn': true,
+      'atlas/isInteractive': true,
+      'atlas/taskAgents': [{ name: 'ghost-explorer', persona: 'explorer', state: 'running', source: 'task' }],
+    }),
+    clock: { now: async () => 1_000_000 },
+  } as unknown as EngineInterface;
+  return { hooks, $ };
+}

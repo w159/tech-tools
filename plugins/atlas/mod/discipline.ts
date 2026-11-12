@@ -248,12 +248,29 @@ export async function disciplinePrompt<E extends { text: string; context?: reado
   return context === e.context ? next(e) : next({ ...e, context });
 }
 
-/** Wires tool.call (heavy-inline meter) and turn.complete. prompt.submit (reinforce + sharpen) is `disciplinePrompt`, called from register.ts's one hook: the host drops the mod when an event has two unmatched hooks. */
+const killedState = atom({ plugin: 'atlas', key: 'killed' } as const, []);
+const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
+
+/** A TaskStop of an agent (the lead's own call): remember its id and fail its row, so no surface reads a killed worker as done. Never throws. */
+async function markStopped($: EngineInterface, e: unknown): Promise<void> {
+	try {
+		const a = e as Record<string, unknown>; // SAFETY: TaskStop args ride flat on the event, an open string-keyed bag
+		const raw = [a.task_id, a.agent_id, a.shell_id].find((v) => typeof v === 'string' && v !== '');
+		if (typeof raw !== 'string') return;
+		await update($, killedState, (ids) => (ids.includes(raw) ? ids : [...ids, raw].slice(-64)));
+		await update($, taskAgentsState, (agents) => agents.map((t) => (t.name === raw ? { ...t, state: 'failed' as const } : t)));
+	} catch {
+		// a kill mark never blocks the tool
+	}
+}
+
+/** Wires tool.call (heavy-inline meter, and a TaskStop's kill mark) and turn.complete. prompt.submit (reinforce + sharpen) is `disciplinePrompt`, called from register.ts's one hook: the host drops the mod when an event has two unmatched hooks. */
 export function registerDiscipline(on: On, deps: DisciplineDeps): void {
   on('tool.call', async ($, e, next) => {
     const agent = e.agentId ?? LEAD;
     await trackToolStart($, agent, e.tool, e); // tool args ride flat on the event, like routing.ts reads Agent args
     const result = await next(e);
+    if (e.tool === 'TaskStop') await markStopped($, e);
     await trackToolEnd($, agent);
     await meterHeavy($, e, result);
     return result;

@@ -97,6 +97,7 @@ const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
 const usageState = atom({ plugin: 'atlas', key: 'usage' } as const, { tokens: null, contextPct: null });
 const taskAgentsState = atom({ plugin: 'atlas', key: 'taskAgents' } as const, []);
 const orchState = atom({ plugin: 'atlas', key: 'orch' } as const, EMPTY_ORCH);
+const killedState = atom({ plugin: 'atlas', key: 'killed' } as const, []); // ids/names a TaskStop ended (discipline.ts's tool.call hook writes it)
 const headerPhaseState = atom({ plugin: 'atlas', key: 'headerPhase' } as const, null);
 const paneOpenedState = atom({ plugin: 'atlas', key: 'paneOpened' } as const, false); // herdrTick stays idle until the pane has been opened
 // Sidebar UI state and gate data: handlers write, the Pane render hook reads.
@@ -315,16 +316,23 @@ export function syncAgentsFromList(
 	meta: Record<string, SpawnMeta> = {},
 	now?: number,
 	taken: Record<string, string> = {},
+	killed: readonly string[] = [],
 ): SquadAgent[] {
 	const known = new Set(listed.map((a) => a.id));
 	const live: readonly string[] = ['spawning', 'running', 'idle', 'input', 'stuck'];
+	// A TaskStop-ed worker is failed on every surface: never finished by the unlisted-after-grace rule, and failed even where the host list still shows it running.
+	const killedNames = new Set([...killed, ...killed.map((id) => taken[id]).filter((n): n is string => n !== undefined)]);
 	const rest = taskAgents
 		.filter((t) => !known.has(t.name))
 		.map((t) => {
+			if (killedNames.has(t.name)) return live.includes(t.state) ? { ...t, state: 'failed' as const } : t;
 			const at = meta[t.name]?.at;
 			return now !== undefined && at !== undefined && now - at > SPAWN_GRACE_MS && live.includes(t.state) ? { ...t, state: 'finished' as const } : t;
 		});
-	return [...mapListed(listed, taskAgents, meta, taken).map((m) => m.agent), ...rest].slice(-64);
+	const mapped = mapListed(listed, taskAgents, meta, taken).map((m) =>
+		killed.includes(m.id) && live.includes(m.agent.state) ? { ...m.agent, state: 'failed' as const } : m.agent,
+	);
+	return [...mapped, ...rest].slice(-64);
 }
 
 // ---- $-carrying top-level functions ----------------------------------------
@@ -504,10 +512,11 @@ async function rebuildOnce($: EngineInterface): Promise<void> {
 		listed = rows.map((a) => ({ id: a.id, status: a.status }));
 		const { meta } = await read($, orchState);
 		const spawnNow = await $.clock.now();
+		const killedIds = await read($, killedState);
 		await update($, taskAgentsState, (agents) => {
 			// the same rows the squad gets, keyed by host id: a label belongs to one id, never to a list position
 			for (const m of mapListed(rows, agents, meta, nameMemo)) names[m.id] = m.agent.name;
-			return syncAgentsFromList(rows, agents, meta, spawnNow, nameMemo);
+			return syncAgentsFromList(rows, agents, meta, spawnNow, nameMemo, killedIds);
 		});
 		Object.assign(nameMemo, names);
 		// A worker the host lists as finished whose own turn.complete never reached us (or carried no

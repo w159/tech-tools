@@ -184,6 +184,7 @@ declare module 'claude-code' {
 			lastHeader: { matched: boolean; phase: string | null } | null;
 			core: CoreState | null;
 			headerTally: { ok: number; total: number };
+			killed: string[];
 		};
 	}
 }

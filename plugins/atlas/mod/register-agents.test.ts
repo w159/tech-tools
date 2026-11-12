@@ -380,3 +380,19 @@ describe('starved is judged against the rows the HUD gets with the FULL status l
 		expect(JSON.parse(files.get('/tmp/p/.atlas/.run/hud-state.json')!)).toMatchObject({ shown: 6, wanted: 6, starved: true });
 	});
 });
+
+describe('syncAgentsFromList: a stopped (killed) worker is never finished', () => {
+  const ghost = { name: 'ghost-explorer', persona: 'explorer', state: 'running' as const, source: 'task' as const };
+  const meta = { 'ghost-explorer': { name: 'ghost-explorer', type: 'atlas:explorer', at: 1000 } };
+  test('an unlisted killed worker reads failed past the spawn grace, not finished', () => {
+    const out = syncAgentsFromList([], [ghost], meta, 1000 + 60_000, {}, ['ghost-explorer']);
+    expect(out.map((a) => [a.name, a.state])).toEqual([['ghost-explorer', 'failed']]);
+  });
+  test('a killed id the host still lists as running reads failed', () => {
+    const out = syncAgentsFromList([{ id: 'aaaa1111', type: 'atlas:explorer', description: 'x', status: 'running' }], [], {}, 5000, {}, ['aaaa1111']);
+    expect(out.map((a) => a.state)).toEqual(['failed']);
+  });
+  test('without a kill the same worker still finishes (control)', () => {
+    expect(syncAgentsFromList([], [ghost], meta, 1000 + 60_000).map((a) => a.state)).toEqual(['finished']);
+  });
+});
