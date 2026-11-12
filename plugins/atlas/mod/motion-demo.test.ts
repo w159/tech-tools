@@ -8,6 +8,8 @@ import { Motion, MOTION_MS, MOTION_STEP_MS } from './motion';
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: strips SGR
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
+/** The row a frame draws: its last line that is not the block's closing `└───┘` rule (critique 21). */
+const lastRow = (f: string): string => plain(f).trimEnd().split('\n').filter((l) => !l.startsWith('└')).at(-1)!;
 
 describe('motion-demo frames', () => {
   const files = demoFrames(100);
@@ -23,12 +25,13 @@ describe('motion-demo frames', () => {
       expect(names.filter((n) => /-t\d{4}ms\.ans$/.test(n))).toHaveLength(MOTION_MS / MOTION_STEP_MS); // the frame at MOTION_MS is the rest: it is the `99-done` file, never repeated as a ramp frame
     }
   });
-  test('the window moves: at least 3 distinct frames, the glyph pops, and the last ramp frame is not the resting done row (no repeat)', () => {
+  test('the window moves: at least 3 distinct frames, the glyph stays the green disc (no ring pop), and the last ramp frame is not the resting done row (no repeat)', () => {
     for (const s of ['todo', 'agent']) {
       const frames = Object.keys(files).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => files[n]!);
       expect(new Set(frames).size).toBeGreaterThanOrEqual(3);
-      const row = (f: string): string => plain(f).trimEnd().split('\n').at(-1)!;
-      expect(row(frames[0]!)).toContain('◌'); // the dotted ring: no state's own mark, no bar track, and not the host's `·` separator
+      const row = lastRow;
+      expect(row(frames[0]!)).toContain('●'); // critique 21: the flash is the disc itself stepping from bright to ok
+      for (const f of frames) expect(/[◌◍]/.test(row(f))).toBe(false); // never a dotted ring: it reads empty
       for (const f of frames) expect(['◇', '◆'].some((g) => row(f).includes(g))).toBe(false); // queued and the capsule keep their glyphs
       expect(frames.at(-1)).not.toBe(files[`${s}-99-done.ans`]);
       expect(plain(files[`${s}-99-done.ans`]!)).toContain('●');
@@ -72,7 +75,7 @@ describe('motion-demo frames', () => {
     }
   });
   test('critique 7/14: the agent row keeps its LAST column through done (it never goes blank at the change): the call while it runs, the outcome of its plan row after', () => {
-    const agentRow = (n: string): string => plain(files[n]!).trimEnd().split('\n').at(-1)!;
+    const agentRow = (n: string): string => lastRow(files[n]!);
     expect(agentRow('agent-00-running.ans')).toContain('runs.ts:17');
     for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans') && !k.includes('running'))) expect([n, agentRow(n).includes('tests green'), agentRow(n).includes('runs.ts:17')]).toEqual([n, true, false]);
   });
@@ -88,13 +91,13 @@ describe('the demo draws what the live HUD draws', () => {
   test('the resting done frame is the live builder output byte for byte, strike included', () => {
     for (const s of ['todo', 'agent'] as const) expect(files[`${s}-99-done.ans`]).toBe(live(s, 1000 + MOTION_MS));
   });
-  test('done TODO titles are struck: the builder marks the run and the frames carry SGR 9, as the live frames do', () => {
+  test('done TODO titles are plain 247 text, never struck (critique 21): the builder marks no strike and no frame carries SGR 9', () => {
     const row = hudLines(demoInput('todo', 'done', 1000 + MOTION_MS), { cols: 100, maxRows: 20, ui: mocha, now: 1000 + MOTION_MS }).flat().find((r) => r.t === 'wire the gate');
-    expect(row?.strike).toBe(true);
+    expect(row?.strike).toBeUndefined();
     // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
-    expect(files['todo-99-done.ans']).toMatch(/\x1b\[9;38;2;\d+;\d+;\d+;48;2;[\d;]+mwire the gate/);
+    expect(files['todo-99-done.ans']).toMatch(/\x1b\[38;2;\d+;\d+;\d+;48;2;[\d;]+mwire the gate/);
     // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
-    for (const f of Object.keys(files).filter((n) => /todo-\d\d-t/.test(n))) expect(files[f]).toMatch(/\x1b\[(1;)?9;/); // the last beat of the window is bold: SGR `1;9;`
+    for (const f of Object.keys(files)) expect(files[f]).not.toMatch(/\x1b\[(1;)?9[;m]/);
   });
   test('256-colour frames: palette indices only, the neutral panel (never navy 17), still at least 5 distinct frames', () => {
     const f256 = demoFrames(100, MOTION_STEP_MS, '256');
@@ -113,7 +116,7 @@ describe('the demo draws what the live HUD draws', () => {
       expect(ramp.length).toBeGreaterThanOrEqual(2); // two palette steps, then the resting render
       for (let i = 1; i < ramp.length; i++) expect([s, i, ramp[i] === ramp[i - 1]]).toEqual([s, i, false]);
     }
-    expect(f256['todo-99-done.ans']).toContain('\x1b[9;');
+    expect(f256['todo-99-done.ans']).not.toMatch(/\x1b\[(1;)?9[;m]/); // no strikethrough on a done row
   });
 });
 

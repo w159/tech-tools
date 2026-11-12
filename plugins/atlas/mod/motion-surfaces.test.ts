@@ -57,16 +57,29 @@ describe('HUD rows', () => {
     before: () => hudMotionItems(hudInput('pending', 'working'), { now: T0 }).agents, after: () => hudMotionItems(hudInput('pending', 'done'), { now: T0 }).agents,
     render: (m) => hudLines(hudInput('pending', 'done'), hudView(m)),
   });
-  test('a TODO row that turned done pops its glyph while only that row moves', () => {
+  test('a TODO row that turned done flashes its own ● from bright to ok (never the ◌/◍ pop) and keeps its ▸ and bold through the fade; only it and the next row (its cursor waits) move', () => {
     const mo = new Motion(true);
     mo.observe('hud-todo', hudMotionItems(hudInput('pending', 'working'), { now: T0 }).todos, 0);
     mo.observe('hud-todo', hudMotionItems(hudInput('completed', 'working'), { now: T0 }).todos, T0);
     const rest = hudLines(hudInput('completed', 'working'), hudView(undefined));
     const f0 = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0)));
     const moved = f0.flatMap((r, i) => (shot([r]) === shot([rest[i]!]) ? [] : [i]));
-    expect(moved).toHaveLength(1);
-    expect(runsString(f0[moved[0]!]!)).not.toBe(runsString(rest[moved[0]!]!)); // a dot for ● at t=0
-    expect(runsString(f0[moved[0]!]!).includes('◌') || runsString(f0[moved[0]!]!).trim() === '').toBe(true);
+    expect(moved).toHaveLength(2); // the row that turned done, and the next open row whose ▸ waits for it
+    const done = runsString(f0[moved[0]!]!);
+    expect(done).toContain('●');
+    expect(done).not.toMatch(/[◌◍]/); // critique 21: the dotted rings read empty
+    // the cursor and the bold label hold from t=0 through the fade (critique 21: the ▸ vanished at t=0, the bold dropped a step late), and fall together on the last beat
+    for (const dt of [0, 200, 399]) {
+      const row = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + dt)))[moved[0]!]!;
+      expect([dt, runsString(row).startsWith('▸ ●')]).toEqual([dt, true]);
+      expect([dt, row.find((x) => x.t.includes('Subagents block'))!.bold]).toEqual([dt, true]);
+      const next = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + dt)))[moved[1]!]!;
+      expect([dt, next.find((x) => x.t.includes('Gate tests'))!.bold ?? false]).toEqual([dt, false]); // the next open row's focus waits for the fade
+    }
+    const last = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + 600)));
+    expect(runsString(last[moved[0]!]!).startsWith('▸')).toBe(false); // the cursor and the weight fall together on the last beat
+    expect(last[moved[0]!]!.find((x) => x.t.includes('Subagents block'))!.bold ?? false).toBe(false);
+    expect(last[moved[1]!]!.find((x) => x.t.includes('Gate tests'))!.bold).toBe(true);
   });
   test('a TODO row that appears reveals left to right', () => {
     const mo = new Motion(true);

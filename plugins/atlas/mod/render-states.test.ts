@@ -62,7 +62,7 @@ describe('B2: every row that fits is drawn, only the rest is folded', () => {
     expect(rows).toHaveLength(9);
     const at = rows.findIndex((r) => r.includes('SUBAGENTS'));
     expect(at).toBe(3); // title, two plan rows, then the agents (rev 5: the column names stay, so the plan gives up a row)
-    expect(rows[0]).toMatch(/TODO {2}1\/5 · 3 more todos not shown ─+/);
+    expect(rows[0]).toMatch(/TODO {2}1\/5 · 3 more todos not shown ▰+▱* ─+/);
     expect(rows.some((r) => /^\s+\d+ more todos? not shown\s*$/.test(r))).toBe(false); // no row of its own
   });
   test('a plan that fits in full carries no count', () => {

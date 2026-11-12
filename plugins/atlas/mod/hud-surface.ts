@@ -2,10 +2,10 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { animateRow, calmRun, revealProgress, revealRuns, type MotionCtx } from './motion';
+import { animateRow, calmRun, MOTION_MS, MOTION_STEP_MS, revealProgress, revealRuns, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
-import { cells, CHIP_W, COUNT_ORDER, DONE_KILLED, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, COUNT_ORDER, DONE_KILLED, GLYPH5, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, wordmark, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -28,25 +28,34 @@ function markRun(s: MarkState, o: Pick<SurfaceOpts, 'now' | 'tick' | 'ui'>): Run
 
 // ---- rev 5 titles: a plain title, a thin rule, the meter on the right ------------------------------------------------------
 // File-local tokens until the shared set lands (names match slice A's GLYPH5): the meter marks, the rule.
-const METER_ON = '▰';
-const METER_OFF = '▱';
+const METER_ON = GLYPH5.meterOn;
+const METER_OFF = GLYPH5.meterOff;
 const METER_W = 8;
 const RULE = '─';
-/** The quiet brand the scorer locates a block by (`◖ ◆ ATLAS ◗ ▸ TODO`, live_capture.py is_block_header :510): the caps in the rule tone, the word dim, no fill and no chip.
- * The accent wordmark lives on the band alone. */
-const quietBrand = (ui: Ui): Run[] => (ui.ascii ? [{ t: '[ATLAS]', tone: 'muted' }] : [{ t: '◖', tone: 'line' }, { t: ' ◆ ATLAS ', tone: 'muted' }, { t: '◗', tone: 'line' }]);
+/** The ellipsis of a cut cell: one cell, never three dots (critique 21: `(alpha-expl...` beside a whole `(beta-explorer)`). */
+const ELL = String.fromCharCode(0x2026); // built, not typed: omp/glyph-guard.test.ts bans a literal ellipsis in source (ASCII and NO_COLOR modes swap it)
+const ELL_ASCII = '~';
+const ellOf = (ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? ELL_ASCII : ELL);
+/** The brand the scorer locates a block by (`◖ ◆ ATLAS ◗ ▸ TODO`, live_capture.py is_block_header :510): atlas-ui's wordmark, the one `◖ ◆ ATLAS ◗` of a block header. */
+const brand = (ui: Ui): Run[] => wordmark(ui);
 /** `▰▰▰▱▱▱▱▱` for done/total: full only when everything is done, never empty once one is. ASCII: `#` and `-`. */
 export function meterRuns(done: number, total: number, ui: Ui): Run[] {
   const on = total <= 0 ? 0 : done >= total ? METER_W : Math.min(METER_W - 1, Math.max(done > 0 ? 1 : 0, Math.round((METER_W * done) / total)));
   return [{ t: (ui.ascii ? '#' : METER_ON).repeat(on), tone: 'ok' }, { t: (ui.ascii ? '-' : METER_OFF).repeat(METER_W - on), tone: 'muted' }];
 }
-/** `brand ▸ TITLE  count ───────── right ` in exactly `cols` cells (or wider when the parts alone do not fit; callers try narrower forms). The last cell is blank: the host draws its fold marker there. */
-export function titleRow(cols: number, title: string, count: string, right: readonly Run[], ui: Ui): Run[] {
-  const left: Run[] = [...quietBrand(ui), { t: ui.ascii ? ' > ' : ' ▸ ', tone: 'muted' }, { t: title, tone: 'text', bold: true }, ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), { t: ' ', tone: 'line' }];
-  const tail: Run[] = right.length > 0 ? [{ t: ' ', tone: 'line' }, ...right, { t: ' ', tone: 'text' }] : [];
-  const fill = Math.max(0, cols - runsCells(left) - runsCells(tail) - 1);
-  return [...left, { t: (ui.ascii ? '-' : RULE).repeat(fill), tone: ui.ascii ? 'muted' : 'line' }, ...tail, { t: ' ', tone: 'text' }];
+const ruleRun = (n: number, ui: Ui): Run => ({ t: (ui.ascii ? '-' : RULE).repeat(n), tone: ui.ascii ? 'muted' : 'line' });
+/** The title rule of a box (lipgloss standard): `brand ▸ TITLE  count mid ─────────────` in exactly `cols` cells, the count and the `mid` runs (the meter, the spinner and counts)
+ * INSIDE the rule, the rule running on to the last cell so the host's own `[-]` (drawn in the five cells the host reserves, not by the mod) ends it. Wider than `cols` when the parts
+ * and two rule cells do not fit; callers try narrower forms. */
+export function titleRow(cols: number, title: string, count: string, mid: readonly Run[], ui: Ui): Run[] {
+  const left: Run[] = [...brand(ui), { t: ui.ascii ? ' > ' : ' ▸ ', tone: 'muted' }, { t: title, tone: 'text', bold: true }, ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), ...(mid.length > 0 ? [{ t: ' ', tone: 'line' as const }, ...mid] : []), { t: ' ', tone: 'line' }];
+  return [...left, ruleRun(Math.max(2, cols - runsCells(left)), ui)];
 }
+/** The bottom rule that closes a box: `└────────┘` in the rule tone across `cols` cells (ASCII `+---+`). The capture scorer skips a row of only `└─┘` and spaces. */
+export const bottomRule = (cols: number, ui: Ui): Run[] => {
+  const w = Math.max(2, cols);
+  return ui.ascii ? [{ t: `+${'-'.repeat(w - 2)}+`, tone: 'muted' }] : [{ t: `└${RULE.repeat(w - 2)}┘`, tone: 'line' }];
+};
 
 /** The tone and weight of a row's state word. The tone is the ONE shared table (atlas-ui rowWordTone), so the HUD, the route tab and the board never disagree on a row's colour
  * (phase-sync.test.ts); rev 5 asks that table for: running `text`, finished and queued `muted`, failed `bad`, blocked/waiting/doubt `warn`, returned `text`. Weight: the running word
@@ -71,7 +80,7 @@ export type SurfaceOpts = {
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
 /** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so it outlives the blank rows. */
-export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean };
+export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** Close the box with a `└───┘` rule under the last row (a block with no row under its title has nothing to close). */ close?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean };
 
 const t = (text: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run => ({ t: text, tone, ...extra });
 const BLANK: Run[] = [];
@@ -146,8 +155,43 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
   const stateAt = todoStateAt(rows, o, tier, rich);
   const metaAt = stateAt + Math.max(14, todoWordW(rows, rich) + 2);
-  for (const r of shown) out.push(todoRow(r, o, tier, rich, stateAt, metaAt));
+  // The row that just turned done keeps its `▸` and its bold through the first beats of the fade (critique 21: the cursor vanished at t=0 and the bold dropped a step late); the
+  // cursor of the next open row waits for it. The weight and the cursor fall on the LAST beat, with the colour landing on rest.
+  const held = shown.find((r) => settling(r, o));
+  const drawn = held ? shown.map((r) => (r.focus === (r === held) ? r : { ...r, focus: r === held })) : shown;
+  const bodyAt = out.length;
+  const details = detailCells(drawn, o, metaAt, tier, rich);
+  drawn.forEach((r, i) => out.push(todoRow(r, o, tier, rich, stateAt, metaAt, details[i])));
+  if (b.close === true && out.length > bodyAt) out.push(bottomRule(cols, ui));
   return out;
+}
+
+/** A done row inside the first beats of its fade: it turned done in this window (not a row first seen done), and the last beat has not begun. */
+function settling(r: TodoRow, o: SurfaceOpts): boolean {
+  if (r.state !== 'done' || r.key === undefined || !o.motion) return false;
+  const e = o.motion.entry(r.key);
+  const age = e ? o.motion.now - e.changed : -1;
+  return e !== undefined && e.state === 'done' && e.changed > e.born && age >= 0 && age < MOTION_MS - MOTION_STEP_MS;
+}
+
+/** The detail column's text for every drawn row, all-or-none: every cell whole when the widest fits `cols - metaAt`, else every cell that does not fit ends in `…` (never `...`, never a
+ * cell cut with no mark beside a whole one). `undefined` for a row with no detail or no column. */
+function detailCells(rows: readonly TodoRow[], o: SurfaceOpts, metaAt: number, tier: Tier, rich: boolean): (string | undefined)[] {
+  if (tier !== 'full') return rows.map(() => undefined);
+  const room = Math.max(1, o.cols - metaAt);
+  return rows.map((r) => { const d = flat(detailOf(r, rich)); return d === '' ? undefined : clipEll(d, room, ellOf(o.ui)); });
+}
+
+/** `text` in `n` cells: whole, else cut with a one-cell `…`. */
+export function clipEll(text: string, n: number, ell: string = ELL): string {
+  if (n <= 0) return '';
+  if (cells(text) <= n) return text;
+  let out = '';
+  for (const c of [...text]) {
+    if (cells(out) + cells(c) > n - 1) break;
+    out += c;
+  }
+  return `${out.trimEnd()}${ell}`;
 }
 
 /** The state column: just past the longest title, so every title shows whole; never past the last cell a state word (or chip) still fits,
@@ -164,24 +208,23 @@ function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich:
   return Math.min(Math.max(tier === 'full' ? 30 : 26, maxLen(rows.map((r) => flat(r.label))) + 1 + 4), Math.max(last, 12));
 }
 
-function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
-  const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt);
-  return r.key === undefined ? runs : animateRow(runs, r.key, markOf(r.state, r.word), o.motion, o.ui);
+function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string): Run[] {
+  const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt, detail);
+  return r.key === undefined ? runs : animateRow(runs, r.key, markOf(r.state, r.word), o.motion, o.ui, { pop: false }); // no pop glyph: the `●` itself steps from bright to ok (critique 21: `◌` reads empty)
 }
 
-function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number): Run[] {
+function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string): Run[] {
   const { ui } = o;
   const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), markRun(markOf(r.state, r.word), o), t(' ')]; // the cursor marks work in hand, never a queued row; one spinner phase for the whole frame
   const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
-  const text = clip(flat(r.label), labelW);
+  const text = clipEll(flat(r.label), labelW, ellOf(ui));
   const finished = r.state === 'done' && markOf(r.state, r.word) !== 'doubt';
-  const label = finished ? t(text, 'muted', { strike: true }) : t(text, r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is dim and struck (the quiet done); bold marks the selected row only
+  const label = t(text, finished ? 'muted' : r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is quiet 247 text beside its green `●`, never struck through (critique 21: a finished plan read as cancelled); bold marks the selected row only
   if (stateAt === 0) return [...head, label];
   const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : wordRun(r, wordOf(r, rich))];
-  const detail = detailOf(r, rich);
-  if (tier !== 'full' || detail === '') return row;
-  const meta = t(clip(flat(detail), Math.max(1, o.cols - metaAt)), finished ? 'muted' : 'sub');
-  return [...toCol(row, metaAt), flat(detail) === flat(r.owner ?? '') ? calmRun(meta) : meta]; // the owner never changes with the row's state: the motion leaves it be (critique 18: it flashed 231 at 0 ms)
+  if (tier !== 'full' || detail === undefined) return row;
+  const meta = t(detail, finished ? 'muted' : 'sub');
+  return [...toCol(row, metaAt), flat(detailOf(r, rich)) === flat(r.owner ?? '') ? calmRun(meta) : meta]; // the owner never changes with the row's state: the motion leaves it be (critique 18: it flashed 231 at 0 ms)
 }
 
 /** The numbered phase rail as one row: `● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build`. */
@@ -213,22 +256,23 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
-  // The working signal rides the title: the braille spinner (the shared clock and phase) before the counts while any agent runs.
-  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o)), t: spinnerGlyph(spinOf(o), ui.ascii) }, t(' ')] : [];
+  // The working signal rides the title, inside the rule: the quarter-circle spinner (one shared clock and phase, the mark of every running row) before the counts while any agent runs.
+  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o)), t: rowSpinnerGlyph(spinOf(o), ui.ascii) }, t(' ')] : [];
   const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...spin, t(c, 'sub')] : spin.slice(0, 1), ui);
   const head = counts.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
   const out: Run[][] = [head];
   if (b.cap === 0) return out;
   const wordW = rich ? CHIP_W : 7;
-  // The name column holds the longest name whole (19 cells at least, for alignment); only a name that alone overflows the row is end-clipped.
-  // Under 80 columns (the 110-column transcript is 61) the column is as wide as the longest name: 5 cells more for LAST (critique 17: LAST was dropped there).
-  const nameW = Math.max(1, Math.min(Math.max(cols >= 80 ? 19 : 8, maxLen(rows.map((r) => flat(r.name)))), cols - 5 - wordW));
-  const stateAt = nameW + 5;
+  // The name column holds the longest name whole (19 cells at least, for alignment) and a gutter of AGENT_GUTTER cells separates it from STATE (critique 21: `alpha-explorer done`, one cell between);
+  // only a name that alone overflows the row is end-clipped, with `…`. Under 80 columns (the 110-column transcript is 61) the column is as wide as the longest name: 5 cells more for LAST (critique 17).
+  const nameW = Math.max(1, Math.min(Math.max(cols >= 80 ? 19 : 8, maxLen(rows.map((r) => flat(r.name)))), cols - NAME_AT - AGENT_GUTTER - wordW));
+  const stateAt = NAME_AT + nameW + AGENT_GUTTER;
   const plan = agentCols(rows, o, rich, stateAt);
   if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
   const { shown, hidden } = windowRows(rows, b.cap);
   for (const r of shown) out.push(agentRow(r, o, rich, stateAt, nameW, plan));
   if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
+  if (b.close === true && shown.length > 0) out.push(bottomRule(cols, ui));
   return out;
 }
 
@@ -297,11 +341,13 @@ function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, plan: Agent
 
 /** The name run of an agent row: after the focus mark, a blank, the state glyph and a blank. */
 const NAME_AT = 4;
+/** Cells between the longest name and the STATE column: AGENT and STATE never touch (critique 21: `alpha-explorer done`). */
+const AGENT_GUTTER = 2;
 function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const runs = agentRowResting(r, o, rich, stateAt, nameW, plan);
   if (r.key === undefined) return runs;
   // A new row reveals its NAME only: MODEL, TASK and LAST are whole on every frame (critique 17: `gamma-explor` with both columns blank).
-  const moved = animateRow(runs, r.key, r.state, o.motion, o.ui, { reveal: false });
+  const moved = animateRow(runs, r.key, r.state, o.motion, o.ui, { reveal: false, pop: false }); // no pop glyph: the `●` steps from bright to ok on its own (critique 21)
   const entry = o.motion?.entry(r.key);
   const pr = entry && o.motion ? revealProgress(entry, o.motion.now) : 1;
   const name = moved[NAME_AT];
@@ -312,22 +358,33 @@ function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, n
 function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const { ui, cols } = o;
   const finished = r.state === 'done';
-  const head: Run[] = [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), t(clip(flat(r.name), nameW), finished ? 'muted' : 'text', { bold: r.focus })]; // bold marks the selected row only; a finished row is dim throughout
+  // A finished row is dim in its name and text but keeps its glyph colour: the green `●` is the one mark that says done (critique 21: done rows went wholly 247, state read from a 1-cell dot).
+  const head: Run[] = [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), t(clipEll(flat(r.name), nameW, ellOf(ui)), finished ? 'muted' : 'text', { bold: r.focus })]; // bold marks the selected row only
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : wordRun(r, r.state)];
-  /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. */
-  const cell = (text: string, at: number | undefined, width: number, words = false, still = false): void => {
-    if (text === '' || at === undefined) return;
+  /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. `fallback`: what a cell reads when its text is empty or only a bare verb fits. */
+  const cell = (text: string, at: number | undefined, width: number, words = false, still = false, fallback = ''): void => {
+    if (at === undefined) return;
     const room = Math.max(1, Math.min(width, cols - at));
-    const cut = words ? clipWords(flat(text), room) : clip(flat(text), room);
-    const shown = words && /^\S{1,6}\.\.\.$/.test(cut) && /\s/.test(flat(text)) ? '' : cut; // a short bare verb and `...` of a longer text (`read...`, `report...`) is no information: draw nothing
-    const tone = finished || text === NONE ? 'muted' : 'sub';
-    if (shown !== '') row = [...toCol(row, at), still ? calmRun(t(shown, tone)) : t(shown, tone)]; // MODEL and TASK never change with the state: the motion leaves them be
+    const whole = flat(text);
+    const ell = ellOf(ui);
+    const cut = whole === '' ? NONE : words ? wordsEll(whole, room, ell) : clipEll(whole, room, ell); // nothing to say reads `-`
+    const bare = words && new RegExp(`^\\S{1,6}${ell}$`).test(cut) && /\s/.test(whole); // `read…` or `report…` of a longer text: a short verb and a mark say nothing
+    const shown = cut === '' || bare ? clipEll(fallback || NONE, room, ell) : cut; // text that cannot show whole nor on a word reads the fallback (the state word), never a raw cut
+    const tone = finished || shown === NONE || shown === fallback ? 'muted' : 'sub';
+    row = [...toCol(row, at), still ? calmRun(t(shown, tone)) : t(shown, tone)]; // MODEL and TASK never change with the state: the motion leaves them be
   };
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
   cell(r.model, plan.model, plan.modelW, false, true);
-  if (!rich) cell(taskText(r) || NONE, plan.task, plan.taskW, true, true); // a column never goes blank: `-` says there is nothing
-  cell(lastFor(lastText(r.tool)) || NONE, plan.last, cols, true);
+  if (!rich) cell(taskText(r), plan.task, plan.taskW, true, true, NONE); // a column never goes blank: `-` says there is nothing
+  cell(lastFor(lastText(r.tool)), plan.last, cols, true, false, r.state); // LAST is never blank or raw: the text whole, or cut on a word with `…`, or the state word (critique 21: `first 3` and an empty cell at 110)
   return row;
+}
+
+/** `text` in `n` cells on a whole word, ended with `…` (clipWords' own mark is `...`, three cells). */
+function wordsEll(text: string, n: number, ell: string = ELL): string {
+  if (cells(text) <= n) return text;
+  const cut = clipWords(text, n);
+  return cut.endsWith('...') ? `${cut.slice(0, -3)}${ell}` : ''; // not even one word fits: nothing (the cell reads its fallback)
 }
 
 // ---- assembly --------------------------------------------------------------------------------------------
@@ -335,9 +392,9 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
 export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] };
 
 /** Both blocks stacked (a blank between them when `spacers`). */
-export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean }): Run[][] {
-  const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}) });
-  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
+export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean }): Run[][] {
+  const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), ...(b.close ? { close: true } : {}) });
+  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true, ...(b.close ? { close: true } : {}) }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
   return [...todo, ...(b.spacers && todo.length > 0 && agents.length > 0 ? [BLANK] : []), ...agents];
 }
 
@@ -350,30 +407,18 @@ export const padRows = (rows: readonly Run[][], cols: number): Run[][] =>
 
 /** The design rows for `maxRows`: the full form, then no spacers, no rail or progress, then the tree windowed down to its ribbon, then the agents. A running agent keeps its row before the plan keeps its last. */
 export function fitStack(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
-  const rows = fitRows(s, o, maxRows);
-  return rows.length > 0 ? [ruleToEdge(rows[0]!, o.ui), ...rows.slice(1)] : rows;
-}
-
-/** The first row is a ribbon whose right end the host draws its `[-]` fold marker beside (outside the cells the mod owns). The rule runs on
- * to the last cell, 3 cells past the count, so the marker reads as the end of the rule, not a stray token after a gap (critique 11). Width kept. */
-function ruleToEdge(row: Run[], ui: Ui): Run[] {
-  const ch = ui.ascii ? '-' : RULE;
-  const last = row.at(-1);
-  const at = row.findIndex((x) => x.t.length >= 6 && [...x.t].every((c) => c === ch));
-  if (at < 0 || !last || last.t !== ' ') return row;
-  const fill = row[at]!;
-  return row.map((x, i) => (i === at ? { ...fill, t: ch.repeat(fill.t.length - 2) } : i === row.length - 1 ? { ...fill, t: ch.repeat(3) } : x));
+  return fitRows(s, o, maxRows); // the title rule of each block already runs to the last cell, where the host draws its `[-]` (titleRow)
 }
 
 function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
   const n = s.todos.length;
   const m = s.agents.length;
-  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean };
-  // Rev 5: the column names stay while the grid shows (critique 17.13.0: the AGENT/STATE header was missing while agents ran). Of the blank between the blocks and the column
-  // names, the blank goes first; then the finished rows fold into a count; then the plan is capped; only a slot too small for the names drops them (the last tries).
-  // The blank between TODO and SUBAGENTS outlives the rail (critique 11: at 110 columns the blocks butted together). Every plan row is drawn while the rows fit at all (critique 18 B1).
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
+  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean };
+  // Rev 5: the column names stay while the grid shows (critique 17.13.0: the AGENT/STATE header was missing while agents ran). Box first: the `└───┘` rules close each block (critique 21)
+  // and are the first thing a short slot gives up, the blank between the blocks (critique 11: at 110 columns the blocks butted together) the next; then the finished rows fold into a count; then the
+  // plan is capped; only a slot too small for the names drops them (the last tries). Every plan row is drawn while the rows fit at all (critique 18 B1).
+  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, { spacers: true, extras: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
   tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: false, extras: false, foldDone: true });
   for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap }); // a cap is a count of rows: the rest is counted on the title
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).

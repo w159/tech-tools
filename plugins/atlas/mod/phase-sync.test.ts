@@ -62,7 +62,10 @@ describe('A1: the HUD and the route tab draw the same mark and colour for the sa
         for (const [label, word] of [['wire the gate', 'done'], ['map the auth flow', 'done'], ['edit auth middleware', 'returned']] as const) {
           const [h, p] = [markOf(rowWith(s.hud, label), word), markOf(rowWith(s.panel, label), word)];
           expect([name, dt, label, h.includes('no-')]).toEqual([name, dt, label, false]); // both rows were found, with a mark and a word
-          expect([name, dt, label, h]).toEqual([name, dt, label, p]);
+          // Critique 21: the HUD flash is the `●` itself stepping from bright to ok, never the `◌`/`◍` pop (animateRow `pop: false`). The panel's pop is the side panel slice's to retire; until then its
+          // pop glyph is read as the disc it lands on, so the colour and the word are still compared beat by beat.
+          expect([name, dt, label, /^[◌◍@]/.test(h)]).toEqual([name, dt, label, false]);
+          expect([name, dt, label, h]).toEqual([name, dt, label, p.replace(/^◌|^◍/, '●').replace(/^@/, '*')]);
           seen.add(h);
         }
       }

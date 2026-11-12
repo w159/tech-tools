@@ -84,7 +84,7 @@ describe('critique 17 C4: the agent strip flashes only what changed', () => {
     test(`${color}: MODEL and TASK keep their resting colour and weight at every beat; the state word still ramps`, () => {
       const all = demoFrames(100, MOTION_STEP_MS, color);
       const rest = all['agent-99-done.ans']!;
-      const agentRow = (f: string): string => f.trimEnd().split('\n').at(-1)!; // the strip's last line is the agent row; the plan row above it is not part of this ramp
+      const agentRow = (f: string): string => f.trimEnd().split('\n').filter((l) => !plain(l).startsWith('└')).at(-1)!; // the strip's last line but the closing rule is the agent row; the plan row above it is not part of this ramp
       for (const f of ramp(all, 'agent')) {
         for (const word of ['opus', 'T1']) expect([word, runOf(agentRow(f), word)]).toEqual([word, runOf(agentRow(rest), word)]);
       }
@@ -96,7 +96,7 @@ describe('critique 17 C4: the agent strip flashes only what changed', () => {
 describe('critique 16 C5: the TODO strip keeps one third column', () => {
   test('the owner is the third column in every frame of the TODO strip; the outcome lives in the agent strip only', () => {
     const all = demoFrames(100);
-    const rows = Object.keys(all).filter((n) => n.startsWith('todo-') && n.endsWith('.ans') && !n.endsWith('strip.ans')).map((n) => plain(all[n]!).trimEnd().split('\n').at(-1)!);
+    const rows = Object.keys(all).filter((n) => n.startsWith('todo-') && n.endsWith('.ans') && !n.endsWith('strip.ans')).map((n) => plain(all[n]!).trimEnd().split('\n').filter((l) => !l.startsWith('└')).at(-1)!);
     for (const r of rows) expect([r, r.includes('implementer-band'), r.includes('tests green')]).toEqual([r, true, false]);
   });
 });

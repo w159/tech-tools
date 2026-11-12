@@ -2,10 +2,10 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
-import { chipCount, runsCells, runsString, spinnerGlyph, type Run, type Ui } from './atlas-ui';
+import { chipCount, runsCells, runsString, type Run, type Ui } from './atlas-ui';
 import { COUNT_ORDER, type UiState } from './atlas-ui';
 import { textWidth } from './theme';
-import { agentRows, fitStack, padRows, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
+import { agentRows, fitStack, padRows, rowSpinnerGlyph, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 export const worldTodos = (): TodoRow[] => world.todos.map((t) => ({ label: t.label, state: t.state, detail: t.detail, focus: t.state === 'running' }));
@@ -13,9 +13,9 @@ export const worldAgents = (): AgentRow[] => // the adapter's order (hud.ts agen
   sortAgents(world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running' })));
 const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
-/** A golden title carries `@SPIN@` for the spinner glyph at frame 0 (the glyph set is the shared atlas-ui one, not this golden's). */
-const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(spinnerGlyph(0), '@SPIN@') : r));
-const full = { spacers: true, extras: true };
+/** A golden title carries `@SPIN@` for the spinner glyph at frame 0 (the HUD's one spinner set, not this golden's). */
+const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(rowSpinnerGlyph(0), '@SPIN@') : r));
+const full = { spacers: true, extras: true, close: true };
 
 describe('TODO surface goldens (rev 4)', () => {
   for (const [cols, rich, golden] of [[120, false, todo_120], [120, true, todo_120_rich], [80, false, todo_80], [40, false, todo_40]] as const) {
@@ -25,17 +25,46 @@ describe('TODO surface goldens (rev 4)', () => {
   }
   test('60 columns uses the 40 column form under a 60 column ribbon', () => {
     const rows = text(todoRows(worldTodos(), opts(60), full));
-    expect(rows.slice(1)).toEqual(todo_40.slice(1));
-    expect(rows[0]!.length).toBe(60 - 2); // the ribbon is 60 cells; the two trailing spaces are trimmed
-    expect(rows[0]!).toMatch(/TODO {2}3\/7 .* ▰{3}▱{5}$/); // rev 5: the count follows the title, the meter ends the row
+    expect(rows.slice(1, -1)).toEqual(todo_40.slice(1, -1));
+    expect(rows[0]!.length).toBe(60); // the title rule runs to the last cell, where the host draws its `[-]`
+    expect(rows[0]!).toMatch(/TODO {2}3\/7 ▰{3}▱{5} ─+$/); // critique 21: the count and the meter sit INSIDE the rule, which runs on to the edge
+    expect(rows.at(-1)).toBe(`└${'─'.repeat(58)}┘`); // the box closes at the width of the surface
   });
-  test('completed rows are drawn as done: the done glyph, the word and a struck label', () => {
+  test('completed rows are drawn as done: a green disc, the word, and quiet 247 text that is never struck through (critique 21)', () => {
     const rows = todoRows(worldTodos(), opts(120), full);
     const done = rows.filter((r) => r.some((x) => x.t === 'done'));
     expect(done).toHaveLength(3);
     for (const r of done) {
-      expect(r.some((x) => x.t === '●')).toBe(true);
-      expect(r.some((x) => x.strike && x.tone === 'muted')).toBe(true);
+      const disc = r.find((x) => x.t === '●')!;
+      expect(disc.tone).toBe('ok');
+      const label = r.find((x) => x.t.startsWith('Wire') || x.t.startsWith('Layout') || x.t.startsWith('Gate golden'))!;
+      expect(label.tone).toBe('muted');
+      expect(r.some((x) => x.strike)).toBe(false);
+    }
+  });
+  test('a block is a box: a bottom rule of only └─┘ closes TODO and SUBAGENTS, rows carry no side border, and `close` off draws neither', () => {
+    for (const cols of [120, 80, 40]) {
+      const t = text(todoRows(worldTodos(), opts(cols), full));
+      const a = text(agentRows(worldAgents(), opts(cols), full));
+      for (const rows of [t, a]) {
+        expect(rows.at(-1)).toBe(`└${'─'.repeat(cols - 2)}┘`);
+        expect(rows.slice(1, -1).some((r) => /[│]/.test(r))).toBe(false);
+      }
+    }
+    expect(text(todoRows(worldTodos(), opts(120), { spacers: true, extras: true })).some((r) => r.startsWith('└'))).toBe(false);
+    expect(text(agentRows(worldAgents(), opts(120), { spacers: true, extras: true })).some((r) => r.startsWith('└'))).toBe(false);
+    expect(todoRows(worldTodos(), opts(120), { spacers: true, extras: true, close: true, cap: 0 })).toHaveLength(1); // a ribbon alone has nothing to close
+    expect(agentRows(worldAgents(), opts(120), { spacers: true, extras: true, close: true, cap: 0 })).toHaveLength(1);
+  });
+  test('the title rule carries the count, the meter and the spinner inside it and ends on a rule cell, in every width', () => {
+    for (const cols of [40, 60, 80, 120, 150]) {
+      const t = todoRows(worldTodos(), opts(cols), full)[0]!;
+      const line = runsString(t);
+      expect(line.startsWith('◖ ◆ ATLAS ◗ ▸ TODO')).toBe(true);
+      expect(runsCells(t)).toBe(cols);
+      expect(line.endsWith('─')).toBe(true);
+      expect(line.indexOf('▰')).toBeLessThan(line.lastIndexOf('─'));
+      expect(line.indexOf('3/7')).toBeLessThan(line.indexOf('▰'));
     }
   });
   test('header counts equal the row sums', () => {
@@ -101,7 +130,7 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
   test('a long name widens the name column instead of being cut, up to 28 cells', () => {
     const rows = text(agentRows([{ ...worldAgents().find((a) => a.state === 'running')!, name: 'implementer-capture-harness' }], opts(120), full));
     expect(rows[2]).toContain('implementer-capture-harness');
-    expect(rows[2]!.indexOf('running')).toBe(4 + 28);
+    expect(rows[2]!.indexOf('running')).toBe(4 + 27 + 2); // the AGENT column keeps a 2-cell gutter before STATE (critique 21)
   });
 });
 
@@ -209,7 +238,7 @@ describe('mutation kills (round 2): order, slots, focus mark, name column cap, s
     expect(rows[1]).toContain(long);
     const tight = text(agentRows([ag('x'.repeat(90))], opts(80), { spacers: false, extras: false }));
     expect(tight[1]).toContain('running');
-    expect(tight[1]).toMatch(/x\.\.\. +running/);
+    expect(tight[1]).toMatch(/x… {2}running/); // a one-cell `…` and the 2-cell gutter, never `...`
   });
   test('stack puts a blank row between the blocks only when spacers is on and both blocks exist', () => {
     const s = { todos: [td('t')], agents: [ag('a')] };
@@ -262,7 +291,8 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
       expect(out[0]).toMatch(/\d+( of |\/)\d+/); // the count is in the ribbon
       expect(out.slice(1).filter((l) => /\d+ of \d+ done|\d+\/\d+\b(?!:)|\d+%/.test(l))).toHaveLength(0); // and only there
       expect(out.some((l) => /^progress /.test(l))).toBe(false);
-      const rows = out.slice(1);
+      expect(out.at(-1)).toBe(`└${'─'.repeat(cols - 2)}┘`); // the box closes (critique 21)
+      const rows = out.slice(1, -1);
       expect(rows).toHaveLength(worldTodos().length);
       for (const l of rows) expect([cols, l]).toEqual([cols, expect.stringMatching(/(done|running|queued|failed|blocked|waiting)/)]); // the state column at every width
       for (const l of rows) expect(textWidth(l)).toBeLessThanOrEqual(cols);
@@ -334,14 +364,15 @@ describe('critique 11 C4: the TODO box', () => {
     expect(out[2]!.match(/beta-explorer/g)!.length).toBe(1);
     expect(out[3]).toContain('wave one'); // a detail the title does not say stays
   });
-  test('the rule of the first row runs to the last cell, so the host\'s [-] ends it (live PNGs: [-] floated past a gap)', () => {
+  test('the title rule of every block runs to the last cell, so the host\'s [-] ends it (live PNGs: [-] floated past a gap); the count and meter sit inside it', () => {
     for (const cols of [80, 110, 150]) {
       const first = fitStack({ todos: live(), agents: [] }, opts(cols), 10)[0]!;
-      expect(runsString(first)).toMatch(/ ─{3}$/);
+      expect(runsString(first)).toMatch(/ ▰+▱* ─+$/);
       expect(textWidth(runsString(first))).toBe(cols);
     }
     const second = fitStack({ todos: live(), agents: worldAgents() }, opts(110), 20).find((r) => runsString(r).includes('SUBAGENTS'))!;
-    expect(runsString(second)).toMatch(/ $/); // only the first row of the HUD is the host's marker row
+    expect(runsString(second)).toMatch(/ ─+$/);
+    expect(textWidth(runsString(second))).toBe(110);
   });
   test('a 110 column budget of 11 rows keeps all 5 plan rows, the ribbons, the column names and 3 agents; the blank is the row that goes (critique 18)', () => {
     const todos: TodoRow[] = [1, 2, 3, 4, 5].map((i) => ({ label: `T${i} item`, state: 'queued', detail: '', focus: false }));

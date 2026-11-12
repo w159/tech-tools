@@ -238,12 +238,23 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
   return sorted;
 }
 
+/** Workers a dispatch row names that no list holds yet: a queued row on the first snapshot that names the worker, before its first event (critique 21: SUBAGENTS rows appeared 89.5% of
+ * the time at 150). The dispatch hook writes the row (origin `dispatch`) when the lead launches the worker, before the squad or the members record lists it. Only an open row counts
+ * (a finished one's worker has been listed and is gone), `lead` never does, and a retry (`beta-explorer #2`) is its first run's row. */
+export function namedAgents(todos: readonly TodoItem[], agents: readonly HudAgent[]): HudAgent[] {
+  const listed = (name: string): boolean => agents.some((a) => a.name === name || a.key === name || a.name.replace(/\s+#\d+$/, '') === name);
+  const open = (t: TodoItem): boolean => t.origin === 'dispatch' && (t.status === 'in_progress' || t.status === 'pending');
+  const names = todos.filter(open).map((t) => flat(t.owner)).filter((n) => n !== '' && n !== 'lead' && !n.startsWith('lead-') && !listed(n));
+  return [...new Set(names)].map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }));
+}
+
 function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agents: AgentRow[] }; o: SurfaceOpts } {
   const plan = input.todos.filter(isPlanItem);
   // The block stays after the wave: a clean finish keeps its done rows as a stop run keeps its failed one, until the roster is cleared (critique 17: live-150-a4fad2f9-3/tab-team.png
   // lost the block after DONE while the stop runs kept all three rows). Only an agent that is neither running, done nor failed (parked) is left out.
-  const running = input.agents.some(isRunning);
-  const shown = running ? input.agents : input.agents.filter((a) => a.state === 'failed' || a.state === 'done');
+  const all = [...input.agents, ...namedAgents(input.todos, input.agents)];
+  const running = all.some(isRunning);
+  const shown = running ? all : all.filter((a) => a.state === 'failed' || a.state === 'done');
   const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root) : [];
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
@@ -292,7 +303,7 @@ export const hudCompactRows = (input: HudInput, cols = 120): number => {
 export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length;
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true }).length; // the boxes' `└───┘` rules are NOT in the floor: register.ts hudSlotCap sizes the band's rows from it, and a rule shows only in the rows the slot has beyond it (fitRows drops the rules first)
 };
 
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */
