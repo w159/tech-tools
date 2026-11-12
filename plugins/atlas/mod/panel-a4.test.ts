@@ -65,7 +65,7 @@ describe('A4: core rows at the 110-column pane', () => {
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       const flat = text.replace(/\s+/g, ' ');
       for (const phrase of ['5 done without evidence', '0 verified findings so far', '3 explorers ran, the plan said 1']) expect(flat).toContain(phrase);
-      expect(flat).toMatch(/3 finished, no token log/); // the short form of `3 workers finished, their token use is not recorded`, which wraps at this width
+      expect(flat).toMatch(/reading 3 workers finished/); // critique 19 C4: no `token count not kept` filler
     });
     test(`pane ${cols}: a figure that does not fit beside its label goes under it, indented, not clipped`, () => {
       const rows = panelText(panelWorld('core', cols, ui, { rows: 40, core: c, todos: planDone, workers: done3 }));

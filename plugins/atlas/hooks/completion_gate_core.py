@@ -597,6 +597,32 @@ def _open_work_count(transcript: str, root: Path, session: str) -> int:
     )
 
 
+def _open_work_words(transcript: str, root: Path, session: str, total: int) -> list:
+    """What Stop names as open, in the board's own words (critique 19): a dispatch row is
+    `1 open dispatch row`, a plan item `1 open todo item(s)`. The transcript todo list and the
+    ledger only know plan items; the board splits its open rows by origin. Fail-open: any
+    error names the whole count as todo items."""
+    plain = [f"{total} open todo item(s)"]
+    if _open_todos(transcript):
+        return plain
+    try:
+        import atlas_todo
+
+        rows = atlas_todo.open_items(atlas_todo.load(str(root)), session)
+    except Exception:
+        return plain
+    dispatch = sum(1 for i in rows if i.get("origin") == "dispatch")
+    items = len(rows) - dispatch
+    if not rows or len(rows) != total:
+        return plain
+    out = []
+    if dispatch:
+        out.append(f"{dispatch} open dispatch row{'' if dispatch == 1 else 's'}")
+    if items:
+        out.append(f"{items} open todo item(s)")
+    return [" and ".join(out)]
+
+
 _LEDGER_RE = None
 
 
@@ -1565,6 +1591,9 @@ def _done_claim_why(reason: str) -> list:
     m = re.search(r"(\d+) running agent", reason)
     if m:
         out.append(f"{m.group(1)} agent{'' if m.group(1) == '1' else 's'} running")
+    m = re.search(r"(\d+) open dispatch row", reason)
+    if m:
+        out.append(f"{m.group(1)} dispatch row{'' if m.group(1) == '1' else 's'} open")
     m = re.search(r"(\d+) open todo", reason)
     if m:
         out.append(f"{m.group(1)} todo{'' if m.group(1) == '1' else 's'} open")
@@ -2619,7 +2648,7 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
         if running:
             parts.append(f"{running} running agent(s)")
         if open_todos:
-            parts.append(f"{open_todos} open todo item(s)")
+            parts.extend(_open_work_words(transcript, root, session, open_todos))
         return (
             "  (r) Done claimed too early: the reply header says `done` but there "
             f"are {' and '.join(parts)}. `done` is forbidden until nothing is "

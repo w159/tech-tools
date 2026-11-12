@@ -56,7 +56,7 @@ describe('board goldens', () => {
     for (const cols of [40, 59, 60, 79, 99, 100]) {
       for (const l of boardLines(worldBoardRows(), { cols, ui: ui('mocha') })) expect([cols, runsWidth(l.runs) <= cols]).toEqual([cols, true]);
     }
-    expect(boardText(boardLines(worldBoardRows(), { cols: 40, ui: ui('mocha') })).slice(2)[3]).toMatch(/^▸ ◐ Subagents block +running +\S/);
+    expect(boardText(boardLines(worldBoardRows(), { cols: 40, ui: ui('mocha') })).filter((l) => /^[▸ ] [●◇▲◐■▣] /.test(l))[3]).toMatch(/^▸ ◐ Subagents block +running$/); // critique 19 C1: its owner is the sub-line under it
   });
   test('A3: from 30 cells up every row keeps a state column, and an owner column wherever the label keeps its room; below 30 the label alone', () => {
     // two plan rows with a title owner, one folded dispatch row (alpha), one dispatch row with no plan row (beta): three rows
@@ -68,12 +68,13 @@ describe('board goldens', () => {
     ]);
     expect(rows.length).toBe(3);
     for (const cols of [38, 59, 60, 80, 99, 110, 150]) {
-      const lines = boardText(boardBody(rows, { cols, ui: ui('mocha') })).filter((l) => /^[▸ ] [●◇▲◐] /.test(l));
+      const text = boardText(boardBody(rows, { cols, ui: ui('mocha') }));
+      const lines = text.filter((l) => /^[▸ ] [●◇▲◐] /.test(l));
       expect(lines.length).toBe(3);
       for (const l of lines) {
         expect([cols, /\b(done|queued)\b/.test(l)]).toEqual([cols, true]);
-        // B2: the owner column drops before a title is cut; it shows from 59 up here, where the 34-cell title fits beside it or the cut titles would share a head
-        if (cols >= 59) expect([cols, /(alpha|beta|gamma)(-|\.\.\.)/.test(l)]).toEqual([cols, true]); // the owner, the T row's included
+        // B2 / critique 19 C1: an owner is whole beside its row or whole on the sub-line right under it (never cut, never a detached list); it shows from 59 up here
+        if (cols >= 59) expect([cols, /(alpha|beta|gamma)-explorer/.test(`${l} ${text[text.indexOf(l) + 1] ?? ''}`)]).toEqual([cols, true]); // the owner, the T row's included
         expect([cols, l.includes('-explorer)')]).toEqual([cols, false]); // not left in the title
       }
     }

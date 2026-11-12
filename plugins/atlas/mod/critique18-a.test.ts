@@ -138,7 +138,7 @@ describe('A5: the core tab in plain words', () => {
   test('the heading carries a figure and the seat row names the plan in words', () => {
     const out = panelText(panelWorld('core', 150, ui, { rows: 40, core, workers: done3 })).map((l) => l.trimEnd());
     expect(out.some((l) => /^\s+done items\s+\d+ of \d+$/.test(l))).toBe(true);
-    expect(out.some((l) => /3 explorers\s+too many\s+asked for 1 on haiku, low effort/.test(l))).toBe(true);
-    expect(out.some((l) => /reading\s+3 workers finished, token count not kept/.test(l))).toBe(true);
+    expect(out.some((l) => /3 explorers\s+too many\s+planned on haiku, low effort/.test(l))).toBe(true);
+    expect(out.some((l) => /reading\s+3 workers finished/.test(l))).toBe(true);
   });
 });
