@@ -13,7 +13,7 @@ import { textWidth } from './theme';
 
 export type ThemeName = 'mocha' | 'latte';
 /** Design tokens (rev 4 section 3). `panel` is the surface every pair is measured against. */
-export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' | 'run' | 'warn' | 'bad' | 'info' | 'accent' | 'queued_fill' | 'ink' | 'white';
+export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' | 'run' | 'warn' | 'bad' | 'block' | 'info' | 'accent' | 'queued_fill' | 'ink' | 'white';
 /** A run's role. `dim` is the legacy tone (mission-layout TONE_HEX before rev 4); it has no token and paints as `line`. */
 export type Tone = Token | 'dim';
 /** One styled piece of a row. `bg` overrides the row surface (chips, the capsule); `chip` marks a fill (one per row). */
@@ -23,11 +23,11 @@ export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?
 export const PALETTES: Record<ThemeName, Record<Token, string>> = {
   mocha: {
     base: '#1e1e2e', panel: '#181825', text: '#cdd6f4', sub: '#a6adc8', muted: '#9399b2', line: '#7f849c', ok: '#a6e3a1', run: '#89b4fa',
-    warn: '#f9e2af', bad: '#f38ba8', info: '#94e2d5', accent: '#cba6f7', queued_fill: '#a6adc8', ink: '#11111b', white: '#ffffff',
+    warn: '#f9e2af', bad: '#f38ba8', block: '#fa9f3c', info: '#94e2d5', accent: '#cba6f7', queued_fill: '#a6adc8', ink: '#11111b', white: '#ffffff',
   },
   latte: {
     base: '#eff1f5', panel: '#e6e9ef', text: '#4c4f69', sub: '#5c5f77', muted: '#5c5f77', line: '#7c7f93', ok: '#40a02b', run: '#1e66f5',
-    warn: '#df8e1d', bad: '#d20f39', info: '#179299', accent: '#8839ef', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff',
+    warn: '#df8e1d', bad: '#d20f39', block: '#a84300', info: '#179299', accent: '#8839ef', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff',
   },
 };
 
@@ -229,7 +229,7 @@ export const UI_STATES: readonly UiState[] = ['queued', 'running', 'done', 'fail
 export const COUNT_ORDER: readonly UiState[] = ['running', 'blocked', 'failed', 'waiting', 'queued', 'done'];
 export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '▣', waiting: '◉' }; // critique 17 A2: blocked is the boxed square, failed the solid one
 export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: 'x', blocked: '#', waiting: '?' };
-export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'bad', waiting: 'info' };
+export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' }; // critique 18 B3: blocked has its own token (orange), distinct from failed (red) and from the doubted done (amber)
 
 /** `returned` is a word, not a seventh state: the owner agent ended and the store row is still open (a normal hand-back to the lead). It counts as
  * `blocked` everywhere a count is kept, but its mark is its own: a hand-back arrow in the accent tone, never the amber warning triangle. */
@@ -240,7 +240,9 @@ export const RETURNED_ASCII = '<';
  * `worker failed` (the lead may have finished the work itself); it is never the green done mark and never the fade-to-done pop. Carried as the row's word `done`
  * on a `done` state, the one case a row's word equals its state. */
 export const DONE_DOUBT = 'done';
-export const WORKER_FAILED = 'worker failed';
+export const WORKER_FAILED = 'worker killed';
+/** A doubted done spelled out where no detail column shows it: `done · worker killed` (critique 18 B2: the amber tone alone certified a killed worker). */
+export const DONE_KILLED = `${DONE_DOUBT} · ${WORKER_FAILED}`;
 /** What a row's mark shows: a state, `returned`, or `doubt`. */
 export type MarkState = UiState | typeof RETURNED | 'doubt';
 /** The mark state of a row: `returned` or `doubt` when its word says so, else its state. */
@@ -250,7 +252,7 @@ export const motionState = (state: UiState, word?: string): string => (markOf(st
 /** The token of a mark: the state's own, the accent for `returned`, the amber warn for `doubt`. */
 export const markToken = (s: MarkState): Token => (s === RETURNED ? 'accent' : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
 /** The one tone of a row's state WORD on every surface (HUD, side panel): failed and blocked red, `returned` accent, a doubted done amber, the rest the quiet sub tone. */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' || state === 'blocked' ? 'bad' : 'sub');
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' ? 'bad' : state === 'blocked' ? 'block' : 'sub');
 
 export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
@@ -530,8 +532,8 @@ export function emittedPairs(theme: ThemeName, mode: ColorMode = 'truecolor'): P
   const fill = (bg: Token): string => surfaceHex(bg, { theme, color: mode });
   const add = (kind: Pair['kind'], fg: Token, bg: Token, what: string): number => out.push({ kind, fg: hex(fg), bg: fill(bg), need: NEED[kind], ratio: contrast(hex(fg), fill(bg)), what });
   for (const t of ['text', 'sub', 'muted'] as const) add('text', t, 'panel', `text ${t}`);
-  for (const t of ['line', 'accent', 'ok', 'run', 'warn', 'bad', 'info', 'muted'] as const) add('glyph', glyphTone(t, theme), 'panel', `glyph ${t}`);
-  for (const f of ['accent', 'ok', 'run', 'warn', 'bad', 'info', 'queued_fill'] as const) add('text', inkFor(f, theme, mode), f, `chip ${f}`);
+  for (const t of ['line', 'accent', 'ok', 'run', 'warn', 'bad', 'block', 'info', 'muted'] as const) add('glyph', glyphTone(t, theme), 'panel', `glyph ${t}`);
+  for (const f of ['accent', 'ok', 'run', 'warn', 'bad', 'block', 'info', 'queued_fill'] as const) add('text', inkFor(f, theme, mode), f, `chip ${f}`);
   for (const st of UI_STATES) add('text', stateWordTone(st, { ascii: false, theme }), 'panel', `state word ${st}`);
   return out;
 }

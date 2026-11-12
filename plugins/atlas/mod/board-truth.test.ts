@@ -46,7 +46,8 @@ describe('B3: a queued row whose owner runs reads running', () => {
     expect(itemState('pending', 'running')).toBe('running');
     expect(itemState('pending', undefined)).toBe('queued');
     expect(itemState('completed', 'running')).toBe('done');
-    expect(itemState('pending', 'failed')).toBe('failed');
+    expect(itemState('pending', 'failed')).toBe('queued'); // critique 18 B3: pending in the store never reads failed
+    expect(itemState('in_progress', 'failed')).toBe('failed');
   });
   test('ownTodos names the title worker; the board fold keeps the title as before', () => {
     const own = ownTodos([...plan, ...dispatch].map((x) => ({ ...x })));

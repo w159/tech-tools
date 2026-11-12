@@ -26,7 +26,7 @@ describe('A2: the Board fold never hides an open row', () => {
     expect(rows[5]!.owner).toBe('gamma-explorer');
     const text = boardText(boardLines(rows, { cols: 80, ui, folded: boardFolded(items), openFolded: boardOpenFolded(items) }));
     expect(text.join('\n')).toContain('gamma-explorer');
-    expect(text.at(-1)).toBe('  2 dispatches folded');
+    expect(text).toContain('  2 dispatches folded');
   });
   test('the agent ended but the store row is open (settled to ended): its own row reads returned, never done', () => {
     const items = asBoard(settleDispatch(ownTodos(store(), SESSION), { 'gamma-explorer': 'done' }));

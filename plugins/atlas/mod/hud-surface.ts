@@ -5,7 +5,7 @@
 import { animateRow, calmRun, revealProgress, revealRuns, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { planFigure } from './board-model';
-import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, COUNT_ORDER, DONE_KILLED, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -43,7 +43,11 @@ export const isRich = (o: SurfaceOpts): boolean => !!o.rich && o.cols >= 120;
 const MIN_STATE_AT = 6;
 const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 /** A row's detail column text: empty when the title already says it (`T1 read alpha.py (alpha-explorer)` with the owner `alpha-explorer` printed again beside it). */
-const detailOf = (r: Pick<TodoRow, 'label' | 'detail'>): string => (r.detail !== '' && flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) ? '' : r.detail);
+const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || (!rich && isDoubt(r))) ? '' : r.detail); // a doubted done says `worker killed` in its state cell (non-rich), so the detail column does not say it again
+/** A completed row whose worker failed or was killed (critique 17 A1). */
+const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
+/** The state cell's text: the row's word, and for a doubted done in the plain form `done · worker killed` (critique 18 B2: the amber tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
+const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? DONE_KILLED : r.word ?? r.state);
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
 const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
@@ -94,7 +98,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
   const stateAt = todoStateAt(rows, o, tier, rich);
-  const metaAt = stateAt + 14;
+  const metaAt = stateAt + Math.max(14, todoWordW(rows, rich) + 2);
   for (const r of shown) out.push(todoRow(r, o, tier, rich, stateAt, metaAt));
   return out;
 }
@@ -103,12 +107,12 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
  * and, where a detail column follows (100 columns and up), never so far that the detail has under 16 cells. Every width has it; only a
  * pane under 13 cells (no room for a title and a word) drops it (0). */
 /** The plain state column's width: 7 (`running`), 8 while a row reads `returned`. */
-const todoWordW = (rows: readonly TodoRow[]): number => rows.reduce((n, r) => Math.max(n, cells(r.word ?? r.state)), 7);
+const todoWordW = (rows: readonly TodoRow[], rich = false): number => rows.reduce((n, r) => Math.max(n, cells(wordOf(r, rich))), 7);
 
 function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich: boolean): number {
-  const wordW = rich ? CHIP_W : todoWordW(rows); // `running` and `blocked` are the longest of the six words
+  const wordW = rich ? CHIP_W : todoWordW(rows, rich); // `running` and `blocked` are the longest of the six words
   if (tier === 'min') return o.cols < MIN_STATE_AT + wordW ? 0 : Math.min(maxLen(rows.map((r) => flat(r.label))) + 2 + 4, o.cols - wordW);
-  const detail = tier === 'full' && rows.some((r) => detailOf(r) !== '');
+  const detail = tier === 'full' && rows.some((r) => detailOf(r, rich) !== '');
   const last = o.cols - wordW - (detail ? 14 + 16 : 0); // the leftmost the column may start at
   return Math.min(Math.max(tier === 'full' ? 30 : 26, maxLen(rows.map((r) => flat(r.label))) + 1 + 4), Math.max(last, 12));
 }
@@ -125,8 +129,8 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   const text = clip(flat(r.label), labelW);
   const label = r.state === 'done' && markOf(r.state, r.word) !== 'doubt' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
   if (stateAt === 0) return [...head, label];
-  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(r.word ?? r.state, rowWordTone(r.state, r.word))];
-  const detail = detailOf(r);
+  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(wordOf(r, rich), rowWordTone(r.state, r.word))];
+  const detail = detailOf(r, rich);
   if (tier !== 'full' || detail === '') return row;
   return [...toCol(row, metaAt), t(clip(flat(detail), Math.max(1, o.cols - metaAt)), 'sub')];
 }
@@ -313,9 +317,11 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   const m = s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean };
   // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
-  // Finished rows fold into a count before the blank, the column names or an open row go (critique 17, B4).
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, foldDone: true }, { spacers: true, extras: false, header: false }, { spacers: true, extras: false, header: false, foldDone: true }, { spacers: false, extras: true }, { spacers: false, extras: false }];
+  // Every plan row is drawn while the rows fit at all: the blank and the column names go before a finished row does (critique 18 B1: T1 left the block under `1/5 · 1 done`
+  // although ribbon, five rows and three agents fit in the same ten rows). Only when even that does not fit do the finished rows fold into a count (critique 17, B4).
+  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: true, extras: false, header: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
   tries.push({ spacers: false, extras: false, header: false }); // the column-name row is the first row dropped: it never costs the plan a row or the band its summary row
+  tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: true, extras: false, header: false, foldDone: true });
   for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap, header: false }); // a cap is a count of rows: the rest is counted on the ribbon
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).
   tries.push({ spacers: false, extras: false, hideTodo: true });
