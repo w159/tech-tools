@@ -42,23 +42,21 @@ describe('side panel design goldens', () => {
 });
 
 describe('tab strip', () => {
-  test('lists r: route t: team c: channel g: gates k: core o: board; the lit tab is ruled and bold', () => {
+  test('lists route team channel gates core board by name; the lit tab is ruled and bold', () => {
     for (const t of tabs) {
       const [strip, rule] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
-      expect(lineText(strip!).trim()).toBe('r: route  t: team  c: channel  g: gates  k: core  o: board');
+      expect(lineText(strip!).trim()).toBe('route  team  channel  gates  core  board');
       const lit = strip!.runs.find((x) => x.bold)!;
       expect(lit.t).toBe(t);
       expect(lineText(rule!).trim()).toBe('━'.repeat(t.length));
-      expect(lineText(rule!).indexOf('━')).toBe(lineText(strip!).indexOf(`${PANEL_TABS.find((x) => x.id === t)!.key}: ${t}`) + 3);
+      expect(lineText(rule!).indexOf('━')).toBe(lineText(strip!).indexOf(t));
     }
   });
   test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (it wraps)', () => {
     for (let cols = 29; cols <= 140; cols++) {
-      const bare = stripLayout(cols, 'route').bare; // A1: the words alone on one row, no `k: ` (the keys stay bound by the host layer)
-      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => (bare ? /^ (route|team)/.test(l) : /^\w: /.test(l.trim())));
+      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => /^ (route|team|channel|gates|core|board)/.test(l));
       for (const l of rowsOut) expect(cells(l)).toBeLessThanOrEqual(cols);
-      if (bare) expect(rowsOut.map((l) => l.trim().replace(/ +/g, ' '))).toEqual(['route team channel gates core board']); // critique 18: one row of whole words (one or two cells apart) from 36 cells up to where the keys fit
-      else expect(rowsOut.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w)).join('')).toBe(STRIP_TABS.map((t) => `${t.key}:`).join(''));
+      expect(rowsOut.join(' ').split(/\s+/).filter(Boolean).join(' ')).toBe('route team channel gates core board'); // C1: names only, in order, wrapped whole when the pane is narrower than the row
     }
   });
 });
@@ -144,7 +142,7 @@ describe('team tab lists the subagents by name and state', () => {
     }
   });
   test('nobody dispatched is the design empty state', () => {
-    expect(rows('team', 80, { workers: [] }).at(-1)).toBe('    nobody dispatched yet, ask the lead to start a worker'); // critique 15 C4: no `(no state)` lead-in, indented like the rows
+    expect(rows('team', 80, { workers: [] }).at(-1)).toBe(' '.repeat(29) + 'nobody dispatched yet'); // design rev 5 C2: one dim centred line
     expect(rows('team', 37, { workers: [] }).every((l) => cells(l) <= 37)).toBe(true);
   });
   test('rows are pressable and select the worker', () => {
@@ -158,7 +156,7 @@ describe('gates tab', () => {
   const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
   test('a group says how many fail in words and shows the first fix', () => {
     const row = rows('gates', 100, { gates: g() }).at(-1)!;
-    expect(row).toMatch(/^ {2}▲ Completion gate {2}warning run the hooks suite +1\/2 green$/);
+    expect(row).toMatch(/^ {2}▲ Completion gate {2}warning run the hooks suite +1\/2$/);
     expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });
   test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {
@@ -168,7 +166,7 @@ describe('gates tab', () => {
   });
   test('an open group lists its lines; an open failing line shows the fix and copies it on a second press', () => {
     const open = bodyLines(panelWorld('gates', 100, mocha, { gates: g(), expanded: 'gate:verify' })).map((l) => ({ t: lineText(l), p: l.press }));
-    expect(open.map((x) => x.t)).toContain('  ▲   verification coverage');
+    expect(open.map((x) => x.t)).toContain('    ▲ verification coverage');
     expect(open.map((x) => x.t)).toContain('      fix: run the hooks suite (press to copy)');
     expect(open.find((x) => x.p?.key === 'gate:verify')?.p?.copy).toBe('run the hooks suite');
   });
@@ -176,7 +174,7 @@ describe('gates tab', () => {
     expect(rows('gates', 100, { gates: [{ id: 'header', title: 'Header contract', lines: [], error: 'findings.json unreadable' }] }).at(-1)).toContain('unavailable: findings.json unreadable');
   });
   test('no gate data is the design empty state', () => {
-    expect(rows('gates', 100, { gates: [] }).at(-1)).toBe('(no state)  no gates reported yet');
+    expect(rows('gates', 100, { gates: [] }).at(-1)).toBe(' '.repeat(39) + 'no gates reported yet');
   });
 });
 
@@ -263,7 +261,7 @@ describe('core tab', () => {
     expect(open).toContain('evidence:');
   });
   test('no core data is the design empty state', () => {
-    expect(rows('core', 120, { core: null }).at(-1)).toBe('(no state)  no verdicts, workers or gates yet');
+    expect(rows('core', 120, { core: null }).at(-1)).toBe(' '.repeat(43) + 'no verdicts, workers or gates yet');
   });
 });
 
@@ -341,7 +339,7 @@ describe('toast', () => {
     expect([toastText('done', 'implementer-layout', '9 of 9 steps', mocha), toastText('failed', 'implementer-live', 'tests red 3', mocha)]).toEqual(toastDesign);
   });
   test('ASCII mode uses the ASCII state mark', () => {
-    expect(toastText('failed', 'a', 'b', ascii)).toBe('| ATLAS  x failed  a  b');
+    expect(toastText('failed', 'a', 'b', ascii)).toBe('| ATLAS  x failed   a  b');
   });
 });
 

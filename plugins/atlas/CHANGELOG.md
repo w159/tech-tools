@@ -3,6 +3,9 @@
 ## Unreleased
 
 - HUD (TODO and SUBAGENTS), rev 5: plain bold titles with a count, a thin `─` rule and an 8-cell `▰▱` meter on the right (quiet brand, no chip); the braille spinner before the SUBAGENTS counts; one spinner phase for every HUD row; done rows dim; running word bold, warnings never bold; the SUBAGENTS column header now outranks the blank row and the finished rows fold before it drops; TASK and LAST read `-` when empty. Rows keep the four-circle mark and the circle/box glyph set because the capture scorer reads them (`SCORER_READS_CIRCLES` in mod/hud-surface.ts).
+- Rev 5 slice C1 (side panel tab strip): the strip is names only (`route  team  channel  gates  core  board`) at every width, the lit name bold accent with a one-row accent rule under it, the rest dim; the `r:`-style key letters are gone from the strip (the keys stay bound on the zero-width layer), a dim `keys  r t c g k o` line sits on the last spare row of a tall pane, and the board ribbon is always the `SIDEPANEL ▸ BOARD` breadcrumb the capture scorer reads as the pane. Goldens regenerated: contracts/panel-golden.ts strip and rule rows, mod/pane/sidebar.golden-fixture.ts.
+- Rev 5 slice C2 (empty states, gates): an empty team, channel, gates or core pane says so in one dim centred line (no wrapped hint, no `(no state)` lead-in); every gates group row carries its bare `n/m` count in one right-aligned column (dim while it passes, warn while it fails) and its checks hang under the bold title, the mark under the title's first letter.
+- Rev 5 slice C3 (transcript cards): the state word of a rail card and toast sits in a 7-cell column (`CARD_WORD_W`) so the name starts at the same cell on every card; an aged failed card keeps the error colour on its rail, glyph and word.
 
 ## 17.13.0 - 2026-11-12
 

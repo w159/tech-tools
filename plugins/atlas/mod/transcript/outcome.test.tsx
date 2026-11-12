@@ -84,7 +84,7 @@ test('background launch card: an ended worker reads done on the rail, its durati
   const out = strings(await sites().ToolUse!(engine([e.agent]), e, next))
   const rows = (JSON.parse(out) as { children: Array<{ children: Array<{ children: string[] }> }> }).children.map((r) => r.children.map((c) => c.children.join('')).join(''))
   expect(rows).toHaveLength(1) // the rail card, one row (critique 16 C3)
-  expect(rows[0]).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a {2}29s/u)
+  expect(rows[0]).toMatch(/^▌ ◆ ATLAS {2}● done {5}wave-a {2}29s/u)
   expect(out).not.toContain('finished');
 })
 

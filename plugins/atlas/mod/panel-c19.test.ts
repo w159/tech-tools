@@ -41,7 +41,7 @@ describe('critique 19 C4: the gates tab counts the replies it checked', () => {
   });
   test('a plain failing group keeps `n/m green`', () => {
     const rows = body('gates', 80, { gates: [{ id: 'doctor', title: 'doctor', lines: [{ id: 'd', label: 'doctor', ok: false, fix: 'run it' }] }] });
-    expect(rows[0]).toMatch(/0\/1 green$/);
+    expect(rows[0]).toMatch(/0\/1$/);
   });
 });
 

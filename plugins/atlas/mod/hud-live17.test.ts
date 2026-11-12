@@ -142,11 +142,11 @@ describe('B5: route rows do not wrap at 110, and one strip form serves every tab
     const rows = bodyLines(panelWorld('route', 120, ui, { todos, workers: [], rows: 40 })).map((l) => lineText(l).trimEnd());
     expect(rows.some((r) => r.includes('T1 read alpha.py (alpha-explorer)'))).toBe(true);
   });
-  test('the strip is the same on every tab at every width; the keys are named where they fit (critique 18: under 53 cells the six words are one row and the keys stay bound)', () => {
+  test('the strip is the same on every tab at every width; the names alone, never the keys (design rev 5 C1)', () => {
     for (const cols of [37, 44, 47, 52, 60, 80, 120]) {
       const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => JSON.stringify(stripLayout(cols, t)));
       expect([cols, new Set(forms).size]).toEqual([cols, 1]);
-      expect([cols, tabRows(panelWorld('route', cols, ui)).map(lineText).join('\n')]).toEqual([cols, expect.stringMatching(cols >= 54 ? /r: route/ : /^ route {1,2}team {1,2}channel {1,2}gates {1,2}core {1,2}board$/m)]);
+      expect([cols, tabRows(panelWorld('route', cols, ui)).map(lineText).join('\n')]).toEqual([cols, expect.stringMatching(/^ route {1,2}team {1,2}channel {1,2}gates {1,2}core {1,2}board$/m)]);
     }
   });
 });

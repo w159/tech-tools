@@ -49,7 +49,7 @@ describe('2: no middle ellipsis on a name the panel owns', () => {
     const gates = [{ id: 'g1', title: 'Completion gate', lines: [{ id: 'a', label: 'x', ok: false }, { id: 'b', label: 'y', ok: true }] }];
     const rows = body('gates', 45, { gates });
     expect(rows[0]).toContain('Completion gate');
-    expect(rows.join('\n')).toContain('1/2 green');
+    expect(rows.join('\n')).toContain('1/2');
   });
 });
 

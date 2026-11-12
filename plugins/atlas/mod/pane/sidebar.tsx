@@ -1,7 +1,7 @@
 // Native-element sidebar: the SIDEPANEL ribbon, a tab strip (route, team, channel, gates, core) with the lit tab ruled, and
 // exactly one view under it. The rows come from the shared layout (mod/panel-layout.ts); this file adds the tab Buttons
-// (hotkeys r t c g k o, the six of STRIP_TABS in mod/panel-layout.ts that the omp painter prints too), which the host draws as
-// `k: label`, so the strip budgets 3 cells a tab, takes a shorter label form (`chan`, then two letters) when the pane is narrow and wraps only below that: it never overflows into the neighbouring pane.
+// (hotkeys r t c g k o, the six of STRIP_TABS in mod/panel-layout.ts that the omp painter prints too). The strip draws the names only (design rev 5, C1): the hotkeys are
+// Buttons on a clipped zero-width layer, the strip wraps only below 35 cells and never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
