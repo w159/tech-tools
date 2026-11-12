@@ -23,7 +23,7 @@ test("band: the todo gauge reads `N/M`, ctx shows only when known, no board mean
 
 test("band names the capsule, the phase and the worker count; no project, scope or clock", () => {
 	const h = head(model({ team: "fix/low", elapsedSecs: 59, workers: Array.from({ length: 8 }, (_, i) => worker(`implementer-000${i}`)) }));
-	expect(h).toContain("◖ ◆ ATLAS ◗  ◐ working 0:59   phase 4/5");
+	expect(h).toContain("◖ ◆ ATLAS ◗  ⠋ working 0:59   phase 4/5");
 	expect(h).toContain("◐ 8 running");
 	expect(h).not.toMatch(/demo@master|fix\/low|00:59/);
 });
@@ -165,7 +165,7 @@ test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ◐ working · todo 1/4 · ◐ 1 running");
+	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ⠋ working · todo 1/4 · ◐ 1 running");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 

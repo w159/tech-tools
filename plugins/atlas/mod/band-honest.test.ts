@@ -37,10 +37,10 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
   }
   test('the four leads are what the brief says, at 110 columns', () => {
     const lead = (over: Partial<MissionModel>): string => head(model({ cols: 110, ...over })).replace(/^◖ ◆ ATLAS ◗\s+/, '');
-    expect(lead(STATES.working!)).toMatch(/^◐ working 0:42 · todo 3\/5 · ◐ 2 running/);
+    expect(lead(STATES.working!)).toMatch(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:42 · todo 3\/5 · ◐ 2 running/);
     expect(lead(STATES.done!)).toMatch(/^● done · 1:08 · todo 5\/5/);
     expect(lead(STATES.idle!)).toMatch(/^○ idle · last run 1:08 · todo 5\/5/);
-    expect(lead(STATES.blocked!)).toMatch(/^▲ blocked · needs: close dispatch T2 · ◐ fixing · todo 3\/5/);
+    expect(lead(STATES.blocked!)).toMatch(/^▲ blocked · needs: close dispatch T2 · [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] fixing · todo 3\/5/);
   });
   test('the done count is said once, and a gate warning never leads', () => {
     const t = head(model({ cols: 110, ...STATES.done! }));
@@ -153,7 +153,7 @@ describe('step 3 and 5: a solid chip, and the brief\'s exact palette indices', (
   });
   test('the lead word is bold body text and the spinner glyph is the accent', () => {
     const runs = bandLines(model({ busy: true, turnSecs: 42, workers: live }))[0]!.runs;
-    const spinner = runs.find((x) => /^[◐◓◑◒]$/.test(x.t))!;
+    const spinner = runs.find((x) => /^[\u2800-\u28ff]$/.test(x.t))!;
     const word = runs.find((x) => x.t.startsWith('working'))!;
     expect(spinner.tone).toBe('accent');
     expect([word.tone, word.bold]).toEqual(['text', true]);

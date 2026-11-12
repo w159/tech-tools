@@ -47,10 +47,13 @@ export const easedNow = (g: GaugeMoves, now: number): { todo: number; ctx?: numb
 // ends the run. The spinner is driven by FRAME_MS beats of one `$.clock.every` loop (register.ts) that waits for nothing: no store update,
 // no poll, no snapshot. A watchdog (`beatStale`) re-arms the loop when the host ended it.
 
-/** One spinner frame per beat: 110 ms is 9 redraws a second, under the host's ten (index.d.ts: a redraw, ten a second at most). */
-export const FRAME_MS = 110;
-/** Not working for this long ends a run; a gap shorter than that is the same run (a worker ending a beat before the next starts). */
+/** One spinner frame per beat: 100 ms is 10 redraws a second, the host cap (index.d.ts: a redraw, ten a second at most); the fastest period the host does not fold. */
+export const FRAME_MS = 100;
+/** Not working for this long ends a run when the host gives no turn signal of its own (omp, headless fixtures); a gap shorter than that is the same run (a worker ending a beat before the next starts).
+ * Where the host says its turn is over (AbovePrompt `isWorking` false) the run ends on that beat: there is no grace. */
 export const END_GRACE_MS = 1_500;
+/** A user prompt arms the next run for this long: a prompt that starts no work does not leave a stale start behind. */
+export const ARM_MS = 15_000;
 /** The loop is presumed dead (the host refused a period and ended the interval) when no beat landed for this many frames. */
 export const STALE_BEATS = 5;
 
@@ -58,10 +61,20 @@ export const STALE_BEATS = 5;
 export type RunClock = { startMs: number | null; lastSeenMs: number; ranMs?: number; endedMs?: number };
 export const newRunClock = (): RunClock => ({ startMs: null, lastSeenMs: 0 });
 
+/** What a beat knows beyond `working`. `hostIdle`: the host says its model turn is over (AbovePrompt `isWorking` false), so a run that no worker or lead work holds up ends now.
+ * `promptMs`: when the person's prompt armed the next run. A run that already ended starts a new one only from a prompt: work with no prompt behind it (a background task's
+ * notification, a worker flicker) leaves `ranMs`, `endedMs` and so `idle` exactly as they were. The very first run needs no prompt. */
+export type BeatSignal = { hostIdle?: boolean; promptMs?: number | null };
+
 /** The clock after a beat at `now` that found Atlas `working` or not. Returns the same object when nothing changed. */
-export function stepRun(c: RunClock, working: boolean, now: number): RunClock {
-  if (working) return c.startMs === null ? { ...c, startMs: now, lastSeenMs: now } : c.lastSeenMs === now ? c : { ...c, lastSeenMs: now };
-  if (c.startMs !== null && now - c.lastSeenMs >= END_GRACE_MS) return { startMs: null, lastSeenMs: c.lastSeenMs, ranMs: Math.max(0, c.lastSeenMs - c.startMs), endedMs: c.lastSeenMs };
+export function stepRun(c: RunClock, working: boolean, now: number, sig: BeatSignal = {}): RunClock {
+  if (working) {
+    if (c.startMs !== null) return c.lastSeenMs === now ? c : { ...c, lastSeenMs: now };
+    const prompt = sig.promptMs ?? null;
+    if (c.endedMs !== undefined && prompt === null) return c; // a blip after a finished run: not a new run, not a new clock
+    return { ...c, startMs: prompt !== null ? Math.min(prompt, now) : now, lastSeenMs: now };
+  }
+  if (c.startMs !== null && (sig.hostIdle === true || now - c.lastSeenMs >= END_GRACE_MS)) return { startMs: null, lastSeenMs: c.lastSeenMs, ranMs: Math.max(0, c.lastSeenMs - c.startMs), endedMs: c.lastSeenMs };
   return c;
 }
 /** Whole seconds the current run has lasted; undefined at rest. */
