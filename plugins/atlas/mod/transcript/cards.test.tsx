@@ -217,13 +217,13 @@ test('B4: a killed worker reads one verb: `killed name · 6s`, not `failed name 
   expect(card).not.toContain('failed')
   expect(text(notificationTree('ghost-explorer', 'explorer', 'failed · tests red · 6s', true))).toMatch(/■ failed {3}ghost-explorer · tests red · 6s\s*$/)
 })
-test('B4: an aged failure card keeps its glyph and state word in the failed colour; the rest goes muted', () => {
+test('B4: an aged failure card is drawn exactly as a fresh one (critique 26: one text grey on every card)', () => {
   const fresh = parts(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, uiFromEnv(), false))
   const aged = parts(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, uiFromEnv(), true))
   const at = (xs: typeof fresh, w: string) => xs.find((x) => x.t.trim() === w)!
   expect(at(aged, '■').color).toBe(at(fresh, '■').color)
   expect(at(aged, 'killed').color).toBe(at(fresh, 'killed').color)
-  expect(at(aged, 'ghost-explorer').color).not.toBe(at(fresh, 'ghost-explorer').color)
+  expect(at(aged, 'ghost-explorer').color).toBe(at(fresh, 'ghost-explorer').color)
 })
 
 test('the card shows the whole agent name: the model tag goes before the name is cut (L14)', () => {

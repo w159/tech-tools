@@ -325,9 +325,9 @@ test("panel: the band, workers in words, the newest message and the checks foote
 	const p = lines.map(l => plain([l]));
 	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}agents ⠙ 2 running {3}◇ 1 queued +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
-	expect(p[2]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +01:12 $/);
-	expect(p[3]).toMatch(/^ ◓ implementer-band running {2}thinking +00:48 $/);
-	expect(p[4]).toMatch(/^ ◇ verifier-ui +queued +00:12 $/);
+	expect(p[2]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +1:12 $/);
+	expect(p[3]).toMatch(/^ ◓ implementer-band running {2}thinking +0:48 $/);
+	expect(p[4]).toMatch(/^ ◇ verifier-ui +queued +0:12 $/);
 	expect(p[5]).toBe(" ".repeat(120));
 	expect(p[6]).toMatch(/^ implementer-band to all {3}sent a message +$/);
 	expect(p[7]).toBe(" checks  △ routing  0/1 green".padEnd(120)); // groups with no lines yet are not shown
@@ -367,9 +367,9 @@ test("panel idle: the band reads idle and the last run follows, the whole thing 
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
 	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}● done · 1:10 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 +$/);
-	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
+	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1:10 · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
-	expect(failed).toContain("last run  2 workers · 9s · 1 failed");
+	expect(failed).toContain("last run  2 workers · 0:09 · 1 failed");
 });
 
 test("long worker names and roles are cut with an ellipsis in their columns, never run together", () => {
@@ -512,7 +512,7 @@ test("reap after the view cleared re-mounts the idle panel with the last wave, w
 	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root, reaped: true });
 	const out = plain(calls.at(-1));
 	expect(calls.at(-1)).toHaveLength(2);
-		expect(out).toContain("last run  2 workers · 1m10s · 1 failed");
+		expect(out).toContain("last run  2 workers · 1:10 · 1 failed");
 	expect(out).not.toMatch(lane("w\\d"));
 	for (let i = 0; i < 3; i++) timers.iv?.();
 	expect(timers.to).toBeDefined(); // linger window, panel still up
@@ -660,7 +660,7 @@ test("D3 a 6-day lane fits the width and never grows past the time column", () =
 	const workers = [{ name: "a-1", secs: 540092 }, ...[1, 2, 3].map(i => ({ name: `explorer-t${i}`, secs: 500, tool: { tool: "Edit", target: "x.ts", active: false } }))];
 	const lines = renderPanel(model({ workers, width: 100, maxLines: 14 }));
 	for (const l of lines) expect(visibleWidth(l)).toBeLessThanOrEqual(100);
-	expect(lines.map(plainOf).some(l => /a-1 .*150h1m $/.test(l))).toBe(true);
+	expect(lines.map(plainOf).some(l => /a-1 .*150:01:32 $/.test(l))).toBe(true);
 	expect(lines.map(plainOf).filter(l => /starting|thinking/.test(l)).join("\n")).not.toMatch(/[█▏▎▍▌▋▊▉]/); // no bars
 });
 test("D4 roleOf of a plain name is task", async () => {
@@ -761,7 +761,7 @@ test("the last-wave summary counts from epoch-second registry clocks and shows n
 	view.open(ui, { channel: CHAN, members: ["w1", "w2"], cwd: f.root });
 	writeFileSync(join(run, "channels.json"), JSON.stringify({ version: 1, channels: {} })); // reaped before anyone's ended_at was read
 	timers.iv?.();
-	expect(plain(calls.at(-1))).toContain("last run  2 workers · 1m30s");
+	expect(plain(calls.at(-1))).toContain("last run  2 workers · 1:30");
 	expect(plain(calls.at(-1))).not.toContain("failed");
 
 	const bare = fixture(); // reaped mount with no registry rows at all: just the roster size

@@ -30,7 +30,7 @@ import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDep
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
 import { isOlder, registerNotify } from './notify';
 import { forgetPlaced, placeFinished } from './transcript/placed';
-import { EASE_FRAMES, EASE_MS, holdSpinFrame, type Ui } from './atlas-ui';
+import { EASE_FRAMES, EASE_MS, holdSpinFrame, sharedSpinFrame, type Ui } from './atlas-ui';
 import { IDLE_AFTER_SECS } from './mission-layout';
 import { clearLook, lookOf } from './look';
 import { Motion, MotionDriver, reducedMotion } from './motion';
@@ -107,6 +107,8 @@ const paneOpenedState = atom({ plugin: 'atlas', key: 'paneOpened' } as const, fa
 const recipientState = atom({ plugin: 'atlas', key: 'sidebarRecipient' } as const, null);
 const expandedState = atom({ plugin: 'atlas', key: 'sidebarExpanded' } as const, null);
 const draftState = atom({ plugin: 'atlas', key: 'sidebarDraft' } as const, '');
+/** The frame the last beat published: the band and the pane renders both read THIS value, so they never turn adjacent frames (critique 26: `⠸`/`⠼`, `◑`/`◓`). */
+let beatFrame = 0;
 const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
 const gaugeState = atom({ plugin: 'atlas', key: 'bandGauges' } as const, null as GaugeMoves | null); // the band gauges' glide, retargeted by the tick when a figure moves
 const easeTickState = atom({ plugin: 'atlas', key: 'easeTick' } as const, 0); // bumped by the ease timer so the band redraws each frame of a glide
@@ -1054,7 +1056,7 @@ async function frameBeat($: EngineInterface): Promise<void> {
 		verdictBusy = true;
 		try { await verdictFast($, snap as LiveSnapshot); } finally { verdictBusy = false; }
 	}
-	if (working || runClock.startMs !== null || ended || flip) await update($, spinnerTickState, (n) => n + 1);
+	if (working || runClock.startMs !== null || ended || flip) await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; });
 }
 let verdictBusy = false;
 /** (Re)start the frame loop. `$.clock.every` ends when the host refuses a period, so the slow tick and the poll call this when the beat went stale. */
@@ -1294,12 +1296,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const agents = hudAgents(live, snapshot.squad, queuedMembers(snapshot));
 		const hudIn = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, lastRailPhase) };
 		const look = await lookOf($);
-		const tick = await read($, spinnerTickState);
+		const tick = Math.max(await read($, spinnerTickState), beatFrame);
 		const clockNow = await $.clock.now();
-		const release = holdSpinFrame(tick); // every surface of this render turns frame `tick`: one index for the band, the HUD rows, the SUBAGENTS header and the pane
+		const release = holdSpinFrame(tick); const frame = sharedSpinFrame() ?? tick; // every surface of this render turns frame `tick`: one index for the band, the HUD rows, the SUBAGENTS header and the pane
 		try {
 		const motionCtx = motion?.ctx(); // the frame clock the motion driver stamped: the HUD, the band and the pane draw one frame, never a render apart
-		const hudView = { cols: columns, tick, ui: look.ui, rich: look.rich, now: snapshot.now, motion: motionCtx }; // the board's clock too: one `claimed_at`, one elapsed
+		const hudView = { cols: columns, tick: frame, ui: look.ui, rich: look.rich, now: snapshot.now, motion: motionCtx }; // the board's clock too: one `claimed_at`, one elapsed
 		const hudOn = (await $.env.get('ATLAS_HUD').catch(() => undefined)) !== 'off'; // ATLAS_HUD=off: no TODO / Subagents rows
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;
@@ -1310,7 +1312,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(ranSecsOf(runClock) !== undefined ? { ranSecs: ranSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(ranSecsOf(runClock) !== undefined ? { ranSecs: ranSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
 		const want = hudWantRows(hudIn, columns, snapshot.now);
 		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed, want);
@@ -1349,12 +1351,13 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const look = await lookOf($);
 		await read($, easeTickState); // a transition bumps it each frame: the pane redraws mid-transition too
 		const paneMotion = motion?.ctx();
-		const paneTick = await read($, spinnerTickState);
+		const paneTick = Math.max(await read($, spinnerTickState), beatFrame);
 		const releasePane = holdSpinFrame(paneTick); // the same frame index as the band's render
+		const paneFrame = sharedSpinFrame() ?? paneTick; // a render already drawing keeps its frame: the pane turns that one
 		try {
 		if (e.requestId === BOARD_ID) {
 			return boardTree($.ui.resolve(e), withOwnerStates(ownTodos(snapshot.todos ?? [], snapshot.sessionId), workerStates(snapshot, liveWorkers(snapshot, snapshot.now))), {
-				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: paneTick, now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
+				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: paneFrame, now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
 			});
 		}
 		return sidebarTree($.ui.resolve(e), {
@@ -1365,7 +1368,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
-			tick: paneTick,
+			tick: paneFrame,
 			motion: paneMotion,
 		}, sidebarHandlers($, e.surface));
 		} finally {

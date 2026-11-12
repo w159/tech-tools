@@ -87,7 +87,7 @@ function missionWorker(w: LiveWorker, now: number): MissionWorker {
   const state = workerState(w);
   const tool = w.tool ?? w.lastTool;
   const end = state === 'done' || state === 'failed' ? w.since : now;
-  return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.round((end - w.startedAt) / 1000)), ...(state === 'done' || state === 'failed' ? { agoSecs: Math.max(0, Math.round((now - w.since) / 1000)) } : {}) };
+  return { name: w.name, role: w.role, state, tool: tool ? shortTool(tool) : undefined, target: w.target ?? undefined, secs: Math.max(0, Math.floor((end - w.startedAt) / 1000)), ...(state === 'done' || state === 'failed' ? { agoSecs: Math.max(0, Math.round((now - w.since) / 1000)) } : {}) };
 }
 
 const hhmm = (ts: number): string => { const d = new Date(ts); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };

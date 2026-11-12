@@ -10,7 +10,7 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, DONE_DOUBT, TODO_METER_W, todoMeter, DONE_KILLED, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, WORKER_FAILED, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, DONE_DOUBT, elapsedClock, TODO_METER_W, todoMeter, DONE_KILLED, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, WORKER_FAILED, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
@@ -236,7 +236,7 @@ function detailRuns(row: BoardRow, o: BoardOpts, room: number): Run[] {
 /** One row, mid-transition when `o.motion` holds an entry for `o.key`. */
 export function boardRow(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const runs = boardRowResting(row, focus, o);
-  return o.key === undefined ? runs : animateRow(runs, o.key, accentOf(row), o.motion, o.ui);
+  return o.key === undefined ? runs : animateRow(runs, o.key, accentOf(row), o.motion, o.ui, { reveal: false });
 }
 
 /** The accent a row's motion leads with: its state, except a doubted done (critique 17 A1), which leads amber and never pops the done disc. */
@@ -403,7 +403,7 @@ function paneBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const keys = o.motion ? boardKeys(rows) : [];
   return rows.map((row, i): BoardLine => ({ runs: boardRowKeyed(paneRow(row, i === focus, o, g), row, o, keys[i]) }));
 }
-const boardRowKeyed = (runs: Run[], row: BoardRow, o: BoardOpts, key?: string): Run[] => (key === undefined ? runs : animateRow(runs, key, accentOf(row), o.motion, o.ui));
+const boardRowKeyed = (runs: Run[], row: BoardRow, o: BoardOpts, key?: string): Run[] => (key === undefined ? runs : animateRow(runs, key, accentOf(row), o.motion, o.ui, { reveal: false }));
 
 /** `text` on rows of at most `width` cells, broken on spaces (a word wider than a row is cut with `…`); `first` leads the first row, `rest` every later one. */
 function wordRows(text: string, width: number, first: string, rest: string): string[] {
@@ -448,13 +448,13 @@ function paneFooter(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
 /** One agent on the board's timeline: its name, state, how long it has run, and (for the Gantt) when it started and ended, in the snapshot clock's ms. */
 export type TimelineAgent = { name: string; state: UiState; secs?: number | undefined; startMs?: number | undefined; endMs?: number | undefined };
 
-const clock = (secs: number): string => (secs < 60 ? `${Math.max(0, Math.floor(secs))}s` : `${Math.floor(secs / 60)}m${String(Math.floor(secs % 60)).padStart(2, '0')}s`);
+const clock = (secs: number): string => elapsedClock(secs); // `0:14`, the HUD's LAST figure
 
 /** The bar's tone: running in the accent (141), done in ok (114), failed in error (203), blocked in warn (179). */
 const barTone = (s: UiState): Run['tone'] => (s === 'running' ? 'accent' : s === 'done' ? 'ok' : s === 'failed' ? 'bad' : s === 'blocked' || s === 'waiting' ? 'warn' : 'sub');
 
 /** The pane under the rows, a Gantt chart: one row per agent, `alpha-explorer     ━━━━━━━━━━━━  12s ●`. Every bar starts where its agent started within the run (the run's first start is the left
- * edge) and ends where it ended (or now, while it runs); the longest span fills the room. A time axis closes the chart, `0s ──────────── 12s`. A queued agent has no run to draw and is left off. With room
+ * edge) and ends where it ended (or now, while it runs); the longest span fills the room. A time axis closes the chart, `0:00 ──────────── 0:12`. A queued agent has no run to draw and is left off. With room
  * for it a blank row separates the agents so the chart fills the pane's spare height. `max` caps the rows; none when there is no room for a name and a bar. A row's `motion` key is `worker:<name>` (the
  * panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). */
 export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'>, max = 8): BoardLine[] {
@@ -490,10 +490,10 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
       r(clock(a.secs ?? 0).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, a.name) : o.tick ?? 0),
     ];
     if (gaps && i > 0) out.push({ runs: [r(' ')] });
-    out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui) : runs });
+    out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
   });
-  // The axis: `0s` at the run's start, the run's length at the right edge, a hairline between them.
-  const left = '0s';
+  // The axis: `0:00` at the run's start, the run's length at the right edge, a hairline between them.
+  const left = '0:00';
   const right = rightLabel;
   const fill = Math.max(1, room - cells(left) - cells(right) - 2); // the hairline ends where the longest bar ends; the label follows it
   out.push({ runs: [r(' '.repeat(2 + nameW + 1)), r(`${left} ${(o.ui.ascii ? '-' : '─').repeat(fill)} ${right}`, 'dim')] });

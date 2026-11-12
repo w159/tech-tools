@@ -11,7 +11,7 @@
 import type { RenderElement, RenderNode } from 'claude-code'
 import { PHASES } from '../intents'
 import type { PhaseId } from '../contract'
-import { toneHex, type Ui } from '../atlas-ui'
+import { runHex, type Ui } from '../atlas-ui'
 
 export interface Lead { phase: PhaseId; count: string; sentence: string; first: string; form: 'contract' | 'display' }
 
@@ -61,12 +61,12 @@ export interface LeadOpts { ui: Ui; columns: number; /** A done chip a Stop refu
 
 /** The chip's row: `▌ RESEARCH 3/5 state`. No background. Under 40 columns the bar and the word only. */
 export function leadRow(l: Lead, o: LeadOpts): RenderElement {
-  const paint = (tone: 'accent' | 'ok' | 'bad' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: toneHex(tone, o.ui.theme) })
+  const paint = (tone: 'accent' | 'ok' | 'bad' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: runHex({ tone }, o.ui.theme, o.ui.color) })
   const dead = o.superseded === true
   const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'sub' : leadTone(l.phase)) }, '▌')
   const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${l.phase.toUpperCase()}`)
   const count = l.count ? [txt({ ...fixed, ...paint('sub') }, ` ${l.count}`)] : []
-  const state = l.sentence ? [txt({ wrap: 'wrap', ...paint(o.quiet ? 'dim' : 'sub') }, ` ${l.sentence}`)] : []
+  const state = l.sentence ? [txt({ wrap: 'wrap', ...paint('sub') }, ` ${l.sentence}`)] : []
   const narrow = o.columns > 0 && o.columns < 40
   const kids: RenderNode[] = o.quiet && !dead
     ? [keep(bar), ...(narrow ? [] : state)]

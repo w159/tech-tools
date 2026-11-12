@@ -153,7 +153,7 @@ describe('round 3 A5: the band lists its workers in the scorer\'s row shape', ()
       expect(wr).toHaveLength(4);
       for (const r of wr) expect(r).not.toMatch(/│/);
       expect(wr.map((r) => scorer.exec(r)![3])).toEqual(expect.arrayContaining(['running', 'failed', 'queued', 'done']));
-      expect(wr.find((r) => r.includes('impl-a'))).toMatch(/running {2}read runs\.ts:17 +00:42$/);
+      expect(wr.find((r) => r.includes('impl-a'))).toMatch(/running {2}read runs\.ts:17 +0:42$/);
     });
   }
   test('with no room (a one-row band) there are no worker rows', () => {

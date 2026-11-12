@@ -137,10 +137,10 @@ describe('B5: route rows do not wrap at 110, and one strip form serves every tab
   ];
   test('37 cells (the 110-column pane): one row per task, title then state, no owner on its own line', () => {
     const rows = bodyLines(panelWorld('route', 37, ui, { todos, workers: [], rows: 40 })).map((l) => lineText(l).trimEnd());
-    const t1 = rows.findIndex((r) => r.includes('T1 read alpha.py'));
-    expect(rows[t1]).toMatch(/T1 read alpha\.py\s+done$/);
-    const t2 = rows.findIndex((r) => r.includes('T2 read ghost.py'));
-    expect(rows[t2]).toMatch(/T2 read ghost\.py\s+blocked$/);
+    const t1 = rows.findIndex((r) => r.includes('T1 read'));
+    expect(rows[t1]).toMatch(/T1 read.*\(alpha-explorer\)\s+done$/); // the task is cut, the agent's name never (critique 26)
+    const t2 = rows.findIndex((r) => r.includes('T2 read'));
+    expect(rows[t2]).toMatch(/T2 read.*\(ghost-explorer\)\s+blocked$/);
     expect(rows.some((r) => /^\s+\(alpha-explorer\)/.test(r))).toBe(false);
     for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(37);
   });

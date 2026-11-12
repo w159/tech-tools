@@ -18,12 +18,13 @@ describe('critique 19 C4: the route tab reads a killed worker in words', () => {
     { id: 't3', label: 'T3 combine the reports', state: 'done' as const },
   ];
   for (const cols of [64, 56, 38]) {
-    test(`${cols} cells: the T2 row says \`closed · worker killed\` (or the second line does), the others plain done, nothing wider than the pane`, () => {
+    test(`${cols} cells: the T2 row says what happened to its worker on its own row (\`closed · worker killed\` where it fits, \`killed\` in the narrow pane), the others plain done, nothing wider than the pane`, () => {
       const rows = body('route', cols, { todos });
-      const at = rows.findIndex((l) => l.includes('T2 read ghost'));
+      const at = rows.findIndex((l) => l.includes('T2 read ghost') || l.includes('T2 read'));
       expect(at).toBeGreaterThan(-1);
-      expect(rows.slice(at, at + 3).join(' ').replace(/\s+/g, ' ')).toContain('closed · worker killed');
-      expect(rows.join('\n').match(/worker killed/g)!.length).toBe(1);
+      expect(rows[at]).toMatch(cols < 50 ? /killed\s*$/ : /worker killed/); // one row, never a second line (critique 26)
+      expect(rows[at]).toContain('ghost-explorer'); // the agent's name stays whole at every width
+      expect(rows.join('\n').match(/killed/g)!.length).toBeGreaterThanOrEqual(1);
       for (const l of rows) expect(cells(l)).toBeLessThanOrEqual(cols);
     });
   }

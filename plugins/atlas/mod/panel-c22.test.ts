@@ -71,13 +71,13 @@ describe('step 3: the board pane', () => {
     const rib = boardText(boardLines(rows, { cols: 120, ui: mocha }))[0]!;
     expect([rib.includes('─'), rib.includes('━')]).toEqual([true, false]);
   });
-  test('the timeline is one row per agent, `alpha-explorer ━━━━ 14s ●`: the bar as long as the run, the glyph its state, queued agents left off', () => {
+  test('the timeline is one row per agent, `alpha-explorer ━━━━ 0:14 ●`: the bar as long as the run, the glyph its state, queued agents left off', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
     expect(t).toHaveLength(4); // the two agents, a blank between them, the time axis
-    expect(t[0]).toMatch(/^ {2}alpha-explorer ━+ +14s ●$/);
+    expect(t[0]).toMatch(/^ {2}alpha-explorer ━+ +0:14 ●$/);
     expect(t[1]).toBe('');
-    expect(t[2]).toMatch(/^ {2}gamma {10}━+ +7s [◐◓◑◒]$/);
-    expect(t[3]).toMatch(/^ {17}0s ─+ 14s$/);
+    expect(t[2]).toMatch(/^ {2}gamma {10}━+ +0:07 [◐◓◑◒]$/);
+    expect(t[3]).toMatch(/^ {17}0:00 ─+ 0:14$/);
     const bar = (l: string): number => [...l].filter((c) => c === '━').length;
     expect(bar(t[0]!)).toBeGreaterThan(bar(t[2]!));
     expect(boardTimeline([{ name: 'a', state: 'done', secs: 3 }], { cols: 10, ui: mocha })).toEqual([]);

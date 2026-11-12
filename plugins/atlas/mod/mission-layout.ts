@@ -13,7 +13,7 @@ import { atColumn, clip, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_AS
 import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons } from './data/runstate';
 import { displayName } from './hud';
-import { fitText, formatDuration, textWidth } from './theme';
+import { fitText, textWidth } from './theme';
 
 export type { Run, Tone };
 /** One row, on the theme's panel colour. `keys`: the footer, where the band appends its key buttons in `keysWidth`
@@ -137,10 +137,7 @@ function fitRuns(runs: readonly Run[], cols: number): Run[] {
   return left > 0 ? [...out, r(' '.repeat(left))] : out;
 }
 
-const clock = (secs: number): string => {
-  const s = Math.max(0, Math.floor(secs));
-  return s >= 3600 ? formatDuration(s * 1000) : `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-};
+const clock = (secs: number): string => elapsedClock(secs); // `0:14`: an agent's run reads the same on every surface
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
 // ---- band ------------------------------------------------------------------------------
@@ -262,9 +259,13 @@ export function needsOf(reason: string, form: 'long' | 'short' | 'bare' = 'long'
   return reason === 'retry stop' ? 'retrying' : reason;
 }
 
-/** The warn tail of a quiet or working band: ` . △ 2 gates to check` (never the lead); `short`: ` . △ 2 gates`. Only the mark is amber (179) on an idle or done band, where the words are dim (240): the amber tail
- * outshone the `○ idle . last run 0:56` lead in grey 245 (critique 25). A working band keeps the words amber. */
-const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => (st.warn ? [r(' · ', 'sub'), gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, st.kind === 'idle' || st.kind === 'done' ? 'dim' : 'warn')] : []);
+/** The warn tail of a quiet or working band: ` . △ 2 gates to check` (never the lead); `short`: ` . △ 2 gates`. On an idle or done band the mark AND its words are dim (240): the amber mark was still the loudest thing in
+ * `○ idle . last run 0:56` (critique 26, live-150-a5fa582a-1 f0121:25). A working band keeps the mark and the words amber (179). */
+const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => {
+  if (!st.warn) return [];
+  const quiet = st.kind === 'idle' || st.kind === 'done';
+  return [r(' · ', 'sub'), quiet ? { ...gateMark(ui), tone: 'dim' } : gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, quiet ? 'dim' : 'warn')];
+};
 
 /** How much of the lead a form keeps: the clock or last run, the blocked reason (`long`, `short`, `bare`, or none) and the moving `fixing`. */
 type LeadOpts = { clock: boolean; reason: 'long' | 'short' | 'bare' | 'none'; fix: boolean };
@@ -403,7 +404,7 @@ export function bandLines(m: MissionModel): Line[] {
 function lastRunRuns(l: LastRun | undefined, checksFail = false): Run[] {
   if (!l || !l.workers) return [];
   const parts: Run[] = [r(' last run  ', 'muted'), r(plural(l.workers, 'worker'), 'sub')];
-  if (l.secs !== undefined) parts.push(r(' · ', 'sub'), r(formatDuration(l.secs * 1000), 'sub'));
+  if (l.secs !== undefined) parts.push(r(' · ', 'sub'), r(elapsedClock(l.secs), 'sub'));
   if (l.failed) parts.push(r(' · ', 'sub'), r(`${l.failed} failed`, 'text', true));
   else if (!checksFail) parts.push(r(' · ', 'sub'), r('all ok', 'sub')); // never `all ok` above a failing check
   return [...parts, r(' ')];
@@ -494,8 +495,10 @@ function compactLine(w: MissionWorker, m: MissionModel, nameW: number): Line {
   const st = uiStateOf(w.state);
   const ended = endedState(w);
   const head = [r(' '), mark(w, m, ui), r(' '), r(padTo(w.name, nameW) + ' ', ended ? 'sub' : 'text', !ended), r(padTo(st, WORD_W), rowWordTone(st), st === 'failed')];
-  const time = r(clip(clock(w.secs), TIME_W - 1).padStart(TIME_W - 1) + ' ', 'sub');
-  const room = Math.max(0, m.cols - runsWidth(head) - TIME_W);
+  const clockText = clock(w.secs);
+  const timeW = Math.max(TIME_W, clockText.length + 1); // `150:01:32` is the whole run, never cut to `150...`
+  const time = r(clip(clockText, timeW - 1).padStart(timeW - 1) + ' ', 'sub');
+  const room = Math.max(0, m.cols - runsWidth(head) - timeW);
   return { runs: [...head, ...fitRuns([r(compactDetail(w), 'sub')], room), time] };
 }
 

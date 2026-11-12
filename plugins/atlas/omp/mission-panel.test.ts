@@ -41,7 +41,7 @@ test("roleOf: role before the last hyphen word, the whole name when only a hyphe
 
 test("a worker row is `<glyph> <name>  <state word>  <last>  <time>` at every width: no role column, the scorer's worker-row shape", () => {
 	const lane = (name: string, width = 140) => laneOf(model({ width, workers: [worker(name, { role: undefined })] }), "edit");
-	expect(lane("explorer-9")).toMatch(/^ ◐ explorer-9 running {2}edit a\.ts +00:30 $/);
+	expect(lane("explorer-9")).toMatch(/^ ◐ explorer-9 running {2}edit a\.ts +0:30 $/);
 	expect(lane("solo")).toMatch(/^ ◐ solo +running {2}edit a\.ts/);
 	expect(lane("explorer-9", 99)).not.toContain("explorer ");
 	expect(lane("explorer-9", 100)).not.toContain("explorer ");
@@ -51,7 +51,7 @@ test("a worker row is `<glyph> <name>  <state word>  <last>  <time>` at every wi
 
 test("long names and roles are cut with an ellipsis to their columns, never run into the next one", () => {
 	const lane = laneOf(model({ workers: [worker("completeness-critic-f08e", { role: "completeness-critic" })] }), "edit");
-	expect(lane).toMatch(/^ ◐ completeness-cr\.\.\. running {2}edit a\.ts +00:30 $/);
+	expect(lane).toMatch(/^ ◐ completeness-cr\.\.\. running {2}edit a\.ts +0:30 $/);
 });
 
 test("every row is exactly the width at 20..200 columns", () => {
@@ -133,7 +133,7 @@ test("idle panel: the band reads idle, the last run follows, a failed count is b
 	const ok = rows(idle(0));
 	expect(ok[0]).toContain("● done · 1:10   todo");
 	expect(ok[0]).toContain("6/6");
-	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
+	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1:10 · all ok +$/);
 	expect(rows(idle(2))[1]).toContain("2 failed");
 	expect(renderPanel(idle(2))[1]).toMatch(/\x1b\[1;38;2;208;208;208;48;2;24;24;37m2 failed/);
 	expect(rows(model({ idle: { workers: 1, failed: 0 }, workers: [] }))[1]).toContain("last run  1 worker · all ok");
