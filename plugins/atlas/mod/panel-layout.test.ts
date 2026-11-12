@@ -209,6 +209,17 @@ describe('core tab', () => {
       expect(rows('core', 150, { core: c, todos: planDone, rows: 40 }).join('\n')).toMatch(/verified +0\/5/);
     }
   });
+  // gates-tab metric 66.7 at 95c4a588: both gates a and b passed, so both rows read `not required for this run` and no `N verified` figure was left on the gates or core tab
+  test('B7: a verified row waived by its gate still carries the true verified count; the evidence row keeps `not required for this run`', () => {
+    const gates = [{ id: 'g', title: 'Completion gate', lines: [{ id: 'a', label: 'Evidence captured', ok: true }, { id: 'b', label: 'Verified finding recorded', ok: true }] }];
+    for (const cols of [150, 110, 80, 56]) {
+      const out = rows('core', cols, { core: zeroCore, todos: planDone, rows: 40, gates }).join('\n');
+      const flat = out.replace(/\s+/g, ' '); // a narrow pane wraps the sentence under its row
+      expect([cols, flat]).toEqual([cols, expect.stringContaining('evidence 0/5 not required for this run')]);
+      expect([cols, flat]).toEqual([cols, expect.stringContaining('verified 0/5 0 verified findings so far, not required for this run')]);
+      expect(out).toMatch(/(\d+) verified|verified \d+ of \d+/); // the live scorer's verdict-line pattern (tools/live_capture.py)
+    }
+  });
   test('B3: the gates figure is n/m in the route tab and on the group row, as the header has it', () => {
     const gates = [{ id: 'lint', title: 'Lint', lines: [{ id: 'l1', label: 'style', ok: true }] }, { id: 'doctor', title: 'Doctor', lines: [{ id: 'd1', label: 'x', ok: false }, { id: 'd2', label: 'y', ok: true }] }];
     for (const cols of [150, 110, 80]) {

@@ -716,7 +716,7 @@ function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
         cols: m.cols, ui: m.ui, mark: stateRun(!t.total || waived ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
         name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: waived ? 'muted' : tallyTone(t.ok, t.total) }, wordW: 8,
       });
-      return withRoom(runs, waived ? 'not required for this run' : why(name, t), m);
+      return withRoom(runs, waived ? (name === 'evidence' ? 'not required for this run' : `${why(name, t)}, not required for this run`) : why(name, t), m); // a waived verified row keeps the true count: the verdict line the live scorer reads (gates metric 66.7 at 95c4a588)
     }),
   ];
 }
