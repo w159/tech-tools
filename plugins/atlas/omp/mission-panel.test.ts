@@ -24,7 +24,7 @@ test("band: the todo gauge reads `N/M`, ctx shows only when known, no board mean
 test("band names the capsule, the phase and the worker count; no project, scope or clock", () => {
 	const h = head(model({ team: "fix/low", elapsedSecs: 59, workers: Array.from({ length: 8 }, (_, i) => worker(`implementer-000${i}`)) }));
 	expect(h).toContain("◖ ◆ ATLAS ◗  ⠋ working 0:59   phase 4/5");
-	expect(h).toContain("◐ 8 running");
+	expect(h).toContain("⠋ 8 running");
 	expect(h).not.toMatch(/demo@master|fix\/low|00:59/);
 });
 
@@ -86,7 +86,7 @@ test("failed and waiting workers sort first and never spin; a finished worker so
 	expect(plain[at("wait-1")]).toMatch(/◉ wait-1 .* waiting/);
 	expect(plain[at("done-1")]).toMatch(/● done-1 .* finished/);
 	expect(out[at("fail-1")]).toContain("38;2;255;95;95"); // bad (203)
-	expect(out[at("wait-1")]).toContain("38;2;148;226;213"); // info
+	expect(out[at("wait-1")]).toContain("38;2;175;135;255"); // info (141)
 	expect(out[at("done-1")]).toContain("38;2;135;215;135"); // ok (114)
 	const later = renderPanel(model({ workers: ws, tick: 3 })).map(strip);
 	expect(later.find((x) => x.includes("fail-1"))).toContain("■ fail-1");
@@ -137,7 +137,7 @@ test("idle panel: the band reads idle, the last run follows, a failed count is b
 	expect(rows(idle(2))[1]).toContain("2 failed");
 	expect(renderPanel(idle(2))[1]).toMatch(/\x1b\[1;38;2;208;208;208;48;2;24;24;37m2 failed/);
 	expect(rows(model({ idle: { workers: 1, failed: 0 }, workers: [] }))[1]).toContain("last run  1 worker · all ok");
-	expect(renderPanel(idle(0))[1]).not.toMatch(/[◐◓◑◒◐◓◑◒◐◓]/); // idle panels do not move
+	expect(renderPanel(idle(0))[1]).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/); // idle panels do not move
 });
 
 test("idle panel puts the board under the band and the last run, within maxLines minus those two rows", () => {
@@ -161,11 +161,11 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ◐ 1 running`", () => {
+test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running`", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ⠋ working · todo 1/4 · ◐ 1 running");
+	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ⠋ working · todo 1/4 · ⠋ 1 running");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 

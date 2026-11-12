@@ -1048,11 +1048,13 @@ async function frameBeat($: EngineInterface): Promise<void> {
 	const rest = restSecsOf(runClock, now);
 	const flip = !idleFlipped && rest !== undefined && rest >= IDLE_AFTER_SECS;
 	if (flip) idleFlipped = true;
-	if (working || runClock.startMs !== null || ended || flip) await update($, spinnerTickState, (n) => n + 1);
-	if (working && hostKnown && !verdictBusy) { // the Stop verdict is read on the beat, not only on the slower tick: the band and the panel flip on the refusal's own update
+	// The Stop verdict is read on the beat, not only on the slower tick, and BEFORE the tick bump: the bump is what redraws the band (the panel also redraws on the gate write itself), so a verdict
+	// read after it left the band drawing the old gates for one more beat (critique 25, stoprun-150-3 f0106: `phase blocked` in the panel, `working` in the band; the band flipped at f0107).
+	if (working && hostKnown && !verdictBusy) {
 		verdictBusy = true;
 		try { await verdictFast($, snap as LiveSnapshot); } finally { verdictBusy = false; }
 	}
+	if (working || runClock.startMs !== null || ended || flip) await update($, spinnerTickState, (n) => n + 1);
 }
 let verdictBusy = false;
 /** (Re)start the frame loop. `$.clock.every` ends when the host refuses a period, so the slow tick and the poll call this when the beat went stale. */

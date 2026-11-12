@@ -10,22 +10,18 @@ test("hx parses #rrggbb into channel triples", () => {
 	expect(hx("#CBA6F7")).toEqual([203, 166, 247]); // upper case hex
 });
 
-test("palette entries hold the exact catppuccin-mocha colors the panels draw with", () => {
-	expect(PANEL).toEqual([0x11, 0x11, 0x1b]);
+test("palette entries are the Atlas palette: accent 141, ok 114, warn 179, error 203, neutrals 240 / 245 / 252", () => {
+	expect(PANEL).toEqual([0x18, 0x18, 0x25]);
 	expect(PANEL2).toEqual([0x18, 0x18, 0x25]);
 	expect(BASE).toEqual([0x1e, 0x1e, 0x2e]);
-	expect(TXT).toEqual([0xcd, 0xd6, 0xf4]);
-	expect(MUT).toEqual([0x6c, 0x70, 0x86]);
-	expect(DIM).toEqual([0x45, 0x47, 0x5a]);
-	expect(VIOLET).toEqual([0xcb, 0xa6, 0xf7]);
-	expect(TEAL).toEqual([0x94, 0xe2, 0xd5]);
-	expect(SKY).toEqual([0x89, 0xdc, 0xeb]);
-	expect(BLUE).toEqual([0x89, 0xb4, 0xfa]);
-	expect(GREEN).toEqual([0xa6, 0xe3, 0xa1]);
-	expect(PEACH).toEqual([0xfa, 0xb3, 0x87]);
-	expect(RED).toEqual([0xf3, 0x8b, 0xa8]);
-	expect(YEL).toEqual([0xf9, 0xe2, 0xaf]);
-	expect(PINK).toEqual([0xf5, 0xc2, 0xe7]);
+	expect(TXT).toEqual([0xd0, 0xd0, 0xd0]); // 252
+	expect(MUT).toEqual([0x8a, 0x8a, 0x8a]); // 245
+	expect(DIM).toEqual([0x58, 0x58, 0x58]); // 240
+	for (const accent of [VIOLET, TEAL, SKY, BLUE, PINK]) expect(accent).toEqual([0xaf, 0x87, 0xff]); // 141
+	expect(GREEN).toEqual([0x87, 0xd7, 0x87]); // 114
+	expect(PEACH).toEqual([0xd7, 0xaf, 0x5f]); // 179
+	expect(YEL).toEqual([0xd7, 0xaf, 0x5f]);
+	expect(RED).toEqual([0xff, 0x5f, 0x5f]); // 203
 	expect(WHITE).toEqual([255, 255, 255]);
 });
 

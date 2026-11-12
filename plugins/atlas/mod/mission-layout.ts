@@ -21,9 +21,7 @@ export type { Run, Tone };
 export type Line = { runs: Run[]; keys?: boolean; board?: number };
 
 /** Mocha hexes for each tone (the default theme); the hosts paint the live theme through atlas-ui `toneHex`. */
-export const TONE_HEX: Record<Tone, string> = { ...PALETTES.mocha, dim: '#585b70' };
-/** Panel background of the surfaces that have not moved to the rev 4 panel token yet (todo list, side panel). */
-export const PANEL_BG = '#11111b';
+export const TONE_HEX: Record<Tone, string> = { ...PALETTES.mocha, dim: '#585858' };
 
 export type WorkerState = 'running' | 'thinking' | 'queued' | 'waiting' | 'failed' | 'done';
 /** `agoSecs`: for a done or failed worker, seconds since it ended (snapshot.now less its stamped finish); absent reads as just ended. */
@@ -175,7 +173,7 @@ function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap =
   const closed = closedCount(m);
   const closedRuns: Run[] = [{ t: ui.ascii ? `${GLYPH5_ASCII.done} ` : `${STATE_GLYPHS.done} `, tone: 'dim' }, r(`${closed} closed`, 'dim')]; // a closed failure is a dim record, never the red mark
   const parts = order.flatMap((s): Run[][] => [
-    ...(n(s) > 0 ? [animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s)) : [stateRun(s, ui, countFrame(m, s)), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
+    ...(n(s) > 0 ? [animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s), true) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
     ...(s === 'failed' && words && closed > 0 ? [closedRuns] : []),
   ]);
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
@@ -264,8 +262,9 @@ export function needsOf(reason: string, form: 'long' | 'short' | 'bare' = 'long'
   return reason === 'retry stop' ? 'retrying' : reason;
 }
 
-/** The warn tail of a quiet or working band: ` . △ 2 gates to check` (amber 179, never the lead); `short`: ` . △ 2 gates`. */
-const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => (st.warn ? [r(' · ', 'sub'), gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, 'warn')] : []);
+/** The warn tail of a quiet or working band: ` . △ 2 gates to check` (never the lead); `short`: ` . △ 2 gates`. Only the mark is amber (179) on an idle or done band, where the words are dim (240): the amber tail
+ * outshone the `○ idle . last run 0:56` lead in grey 245 (critique 25). A working band keeps the words amber. */
+const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => (st.warn ? [r(' · ', 'sub'), gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, st.kind === 'idle' || st.kind === 'done' ? 'dim' : 'warn')] : []);
 
 /** How much of the lead a form keeps: the clock or last run, the blocked reason (`long`, `short`, `bare`, or none) and the moving `fixing`. */
 type LeadOpts = { clock: boolean; reason: 'long' | 'short' | 'bare' | 'none'; fix: boolean };

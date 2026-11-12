@@ -77,8 +77,14 @@ Below 80 columns the band is one row: `◆ ATLAS  implement · 1/6 tasks · 2 wo
 
 ## Palette
 
-Catppuccin Mocha. Tones: text `#cdd6f4`, muted `#9399b2`, dim `#585b70`, accent `#cba6f7`, ok `#a6e3a1`, warn
-`#f9e2af`, bad `#f38ba8`. Panel `#11111b`, raised header `#1e1e2e`. Defined once in `TONE_HEX`.
+One restrained palette (critique 25). Accent `#af87ff` (141), ok `#87d787` (114), warn `#d7af5f` (179), error
+`#ff5f5f` (203), neutrals 236 `#303030` (rules), 240 `#585858` (dim: the brand mark, rules, idle gate segment), 245
+`#8a8a8a` (secondary text), 252 `#d0d0d0` (body). Panel `#181825`, raised header `#1e1e2e`. Defined once in
+`PALETTES` and `PALETTE5` (`mod/atlas-ui.ts`); `mod/palette.test.ts` fails on any other literal colour in a surface
+file. `◆ ATLAS` appears only on the band chip, the block ribbons, the panel title and the finish cards (240). The
+band agents count, the SUBAGENTS title and the panel agent rows turn the band's braille frame; rows the capture
+scorer parses by glyph (TODO, board, plan and band worker rows) keep the circle quarters. A killed worker reads
+`closed` in error red on every surface.
 
 ## Other surfaces
 

@@ -78,7 +78,7 @@ test('formatDuration', () => {
 })
 
 test('receipt duration is the turn durationMs, not session time', () => {
-  expect(stringsOf(durationTree(snap(), { durationMs: 77_000 }, {}, null))).toContain('1m17s')
+  expect(stringsOf(durationTree(snap(), { durationMs: 77_000 }, {}, null))).toContain('1:17')
 })
 
 // ---- Spinner ----
@@ -158,7 +158,7 @@ test('critique 23: the lead header has no fill and no pastel: a bar in the phase
   for (const p of [bar!, word!, ...rest]) expect(p.props.backgroundColor).toBeUndefined()
   expect(rest.at(-1)!.props.color).toBe('#8a8a8a') // 245
   expect(pillsOf('ATLAS | 🏁 done | all finished', 120)[0]!.props.color).toBe('#87d787') // 114
-  expect(pillsOf('ATLAS | ⛔ blocked | stuck', 120)[0]!.props.color).toBe('#d7af5f') // 179
+  expect(pillsOf('ATLAS | ⛔ blocked | stuck', 120)[0]!.props.color).toBe('#ff5f5f') // 203: blocked is the error colour (critique 25: one bar colour per state)
 })
 
 test("critique 14 B2: the lead's sentence is never cut inside the chip; it wraps beside the pills", () => {
@@ -207,7 +207,7 @@ test('the pill shows the phase the header states, not a phase word in its senten
 test('turn receipt: done delta, workers, ctx', () => {
   const tracker: ReceiptTracker = { done: 0 }
   const text = stringsOf(durationTree(snap({ squad: [worker('a', 'running')] }), { durationMs: 252_000 }, tracker))
-  expect(text).toBe('▸ 4m12s · +3 done · 1 worker · ctx 41%') // critique 15 B6: singular
+  expect(text).toBe('▸ 4:12 · +3 done · 1 worker · ctx 41%') // critique 15 B6: singular
   expect(tracker.done).toBe(3)
 })
 
@@ -285,8 +285,24 @@ test('receipt duration is capped by the mod-owned turn timer when the host figur
   const $ = { ...(harness.$ as object), clock: { now: async () => ticks.shift() } } as unknown as EngineInterface
   await regs[4]?.hook($, {}, echoNext)
   const text = stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 542_000 }), echoNext))
-  expect(text).toContain('1m17s')
+  expect(text).toContain('1:17')
   expect(text).not.toContain('9m02s')
+})
+
+test('critique 25: a turn footer freezes at the value it was first drawn with and prints the band clock format (0:56)', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const first = fake$({ snapshot: snap() })
+  await regs[4]?.hook(first.$, {}, echoNext)
+  const drawn = stringsOf(await regs[3]?.hook(first.$, fakeE('TurnDuration', { durationMs: 56_000 }), echoNext))
+  expect(drawn).toBe('▸ 0:56 · ctx 41%')
+  // The next redraw of the same turn arrives with a later snapshot (more context used, a longer host figure): the receipt does not move.
+  const later = fake$({ snapshot: snap({ contextPct: 77 }) })
+  const again = stringsOf(await regs[3]?.hook(later.$, fakeE('TurnDuration', { durationMs: 300_000 }), echoNext))
+  expect(again).toBe(drawn)
+  // Another turn (another requestId) is its own receipt.
+  const other = stringsOf(await regs[3]?.hook(later.$, { ...fakeE('TurnDuration', { durationMs: 300_000 }), requestId: 'r2' }, echoNext))
+  expect(other).toBe('▸ 5:00 · ctx 77%')
 })
 
 test('ATLAS_MOD=off no-ops every site even with a live snapshot', async () => {
@@ -349,15 +365,15 @@ const runAgent: AgentInfo[] = [{ id: 'a1', type: 'atlas:implementer', descriptio
 test('running worker card shows what it is doing: tool (mcp prefix cut), target, age, tool count', () => {
   const s = withActivity({ tool: 'mcp__lean-ctx__ctx_read', target: 'register.ts', since: 1000, startedAt: 500, toolCount: 9 })
   const text = stringsOf(toolUseTree(s, taskProps({ isRunning: true }), runAgent))
-  expect(text).toContain('ctx_read register.ts · 1m13s') // the 44-column card sheds the tool count rather than clip the age
+  expect(text).toContain('ctx_read register.ts · 1:13') // the 44-column card sheds the tool count rather than clip the age
 })
 
 test('worker card activity: last tool without a target, and no tool at all, still render the age', () => {
   const last = withActivity({ lastTool: 'Grep', since: 500, toolCount: 2 })
-  expect(stringsOf(toolUseTree(last, taskProps({ isRunning: true }), runAgent))).toContain('Grep · 1m13s · 2 tools')
+  expect(stringsOf(toolUseTree(last, taskProps({ isRunning: true }), runAgent))).toContain('Grep · 1:13 · 2 tools')
   const none = withActivity({ since: 500, toolCount: 0 })
   const text = stringsOf(toolUseTree(none, taskProps({ isRunning: true }), runAgent))
-  expect(text).toContain('1m13s · 0 tools')
+  expect(text).toContain('1:13 · 0 tools')
   expect(text).not.toContain(' ·  · ')
 })
 
@@ -382,7 +398,7 @@ test('noisy badge is an inverse accent pill with the size; boundary is 8000', ()
   const base = { tool: 'Read', input: { file_path: '/a/b.ts' }, ...callBase }
   const tree = noisyTree({ ...base, output: 'x'.repeat(8000) })! as Extract<RenderElement, { type: string }> & { props: Record<string, unknown>; children: RenderElement[] }
   const badge = tree.children.at(-1)! as typeof tree
-  expect(badge.props).toMatchObject({ color: '#2fbd9f', inverse: true })
+  expect(badge.props).toMatchObject({ color: '#8a8a8a', inverse: true })
   expect(stringsOf(badge)).toBe(' ▸ 8.0kB ')
   expect(stringsOf(tree)).toContain('Read /a/b.ts')
   expect(noisyTree({ ...base, output: 'x'.repeat(7999) })).toBeNull()
@@ -415,9 +431,9 @@ test('assistantTree: an unknown phase word gives null (no snapshot fallback), ba
 test('durationTree: capped by the mod clock, delta only when positive, no workers or ctx when zero', () => {
   const s = snap({ contextPct: 0, counts: { done: 2, total: 5, byPhase: {} } })
   const tr: ReceiptTracker = { done: 2, turnStart: 1000 }
-  expect(stringsOf(durationTree(s, { durationMs: 600_000 }, tr, 6000))).toBe('▸ 5s')
-  expect(stringsOf(durationTree(s, { durationMs: 3000 }, tr, 60_000))).toBe('▸ 3s')
-  expect(stringsOf(durationTree(s, { durationMs: 7000 }, { done: 5 }, null))).toBe('▸ 7s')
+  expect(stringsOf(durationTree(s, { durationMs: 600_000 }, tr, 6000))).toBe('▸ 0:05')
+  expect(stringsOf(durationTree(s, { durationMs: 3000 }, tr, 60_000))).toBe('▸ 0:03')
+  expect(stringsOf(durationTree(s, { durationMs: 7000 }, { done: 5 }, null))).toBe('▸ 0:07')
 })
 
 test('personaFor needs the atlas: prefix and a known name', () => {
@@ -467,7 +483,7 @@ test('a failing clock leaves the receipt on the host figure', async () => {
   const harness = fake$({ snapshot: snap({ contextPct: 0, counts: { done: 0, total: 0, byPhase: {} } }) })
   const $ = { ...(harness.$ as object), clock: { now: async () => { throw new Error('no clock') } } } as unknown as EngineInterface
   await regs[4]?.hook($, {}, echoNext)
-  expect(stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 9000 }), echoNext))).toBe('▸ 9s')
+  expect(stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 9000 }), echoNext))).toBe('▸ 0:09')
 })
 
 test('PHASE_RE picks a whole phase word and ignores substrings', () => {

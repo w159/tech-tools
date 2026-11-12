@@ -104,7 +104,7 @@ const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || (!rich && isDoubt(r))) ? '' : r.detail); // a doubted done says `worker killed` in its state cell (non-rich), so the detail column does not say it again
 /** A completed row whose worker failed or was killed (critique 17 A1). */
 const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
-/** The state cell's text: the row's word, and for a doubted done in the plain form `done · worker killed` (critique 18 B2: the amber tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
+/** The state cell's text: the row's word, and for a doubted done in the plain form `closed · worker killed` (critique 18 B2: a tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
 const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? DONE_KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
 /** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
 const wordRun = (r: Pick<TodoRow, 'state' | 'word'>, text: string): Run => { const s = wordStyle(r); return t(text, s.tone, s.bold ? { bold: true } : {}); };
@@ -264,8 +264,8 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
-  // The working signal rides the title, inside the rule: the quarter-circle spinner (one shared clock and phase, the mark of every running row) before the counts while any agent runs.
-  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o)), t: rowSpinnerGlyph(spinOf(o), ui.ascii) }, t(' ')] : [];
+  // The working signal rides the title, inside the rule: the band lead's braille spinner (the shared clock and frame) before the counts while any agent runs.
+  const spin: Run[] = rows.some((r) => r.state === 'running') ? [stateRun('running', ui, spinOf(o), true), t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
   const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...spin, t(c, 'sub')] : spin.slice(0, 1), ui);
   const head = counts.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
   const out: Run[][] = [head];

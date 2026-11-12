@@ -106,7 +106,7 @@ function openRows(s: LiveSnapshot, owners: ReadonlyMap<string, UiState>): { open
   const rows = s.todos ?? [];
   const planOpen = planBasis(rows, s.sessionId).filter((it) => it.status !== 'completed').length;
   const dispatch = rows.filter((it) => (it as { origin?: string }).origin === 'dispatch');
-  // The row the reason names must agree with the TODO beside it: a dispatch row the board already draws done (its worker failed or was killed: `done · worker killed`) is not what the band asks the lead to close.
+  // The row the reason names must agree with the TODO beside it: a dispatch row the board already draws done (its worker failed or was killed: `closed · worker killed`) is not what the band asks the lead to close.
   const shown = withOwnerStates(openItems(dispatch, s.sessionId) as { owner?: string }[], owners).filter((it) => it.ownerState !== 'failed');
   const title = openRowName(ownPlan(rows, s.sessionId), shown[0]); // the first open dispatch row, by its plan row's title (T-id and title), else its agent
   return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(dispatch, s.sessionId), ...(title ? { openDispatchTitle: title } : {}) };

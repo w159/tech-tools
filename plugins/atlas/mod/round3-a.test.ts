@@ -22,10 +22,10 @@ describe('round 3 A1: rows turn circle quarters; the band lead alone turns brail
     expect(GLYPH5.running).toBe('◐');
     expect(BRAILLE.test(ATLAS_GLYPHS)).toBe(false);
   });
-  test('a working band carries one braille glyph, the lead spinner, at any tick or width; its counts stay circles', () => {
+  test('a working band carries two braille glyphs on one frame, the lead spinner and the agents count, at any tick or width; the worker rows stay circles', () => {
     for (const cols of [150, 110, 80, 60]) for (const tick of [0, 1, 2, 3, 4]) {
       const t = head(model({ cols, tick, busy: true, workers: live }));
-      expect(t.match(/[\u2800-\u28ff]/g)).toHaveLength(1);
+      expect(t.match(/[\u2800-\u28ff]/g)).toHaveLength(2);
       expect(t).toContain(`${LEAD_FRAMES[tick % 10]!} working`);
     }
   });
@@ -33,7 +33,7 @@ describe('round 3 A1: rows turn circle quarters; the band lead alone turns brail
     for (const tick of [0, 1, 2, 3, 4, 9, 10, 11]) {
       const t = head(model({ tick, busy: true, workers: live }));
       expect(t).toContain(`${LEAD_FRAMES[tick % 10]!} working`);
-      expect(t).toContain(`${SPIN_FRAMES[tick % 4]!} 1 running`);
+      expect(t).toContain(`${LEAD_FRAMES[tick % 10]!} 1 running`);
     }
   });
 });

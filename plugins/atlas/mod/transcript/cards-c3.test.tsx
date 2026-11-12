@@ -19,12 +19,14 @@ const cards = (): Record<string, string> => ({
   failedAged: text(notificationTree('wave-e', 'explorer', 'boom', true, ui, true)),
 })
 
-test('C3: every card opens with the rail and its name starts at the same column', () => {
+test('C3: every card opens with the rail; the finish cards (brand `◆ ATLAS  `, 9 cells) share one name column and the brand-less dispatch card starts its name 9 cells earlier', () => {
   const at = { dispatch: 'impl-a', done: 'wave-a', failed: 'wave-b', killed: 'wave-c', doneAged: 'wave-d', failedAged: 'wave-e' }
   const c = cards()
   const cols = Object.entries(at).map(([k, name]) => { expect(c[k]!.startsWith('▌ ')).toBe(true); return [k, c[k]!.indexOf(name)] })
-  expect(new Set(cols.map(([, x]) => x)).size).toBe(1)
+  const finish = new Set(cols.slice(1).map(([, x]) => x))
+  expect(finish.size).toBe(1)
   expect(cols[0]![1]).toBeGreaterThan(0)
+  expect(cols[0]![1]).toBe([...finish][0]! as number - 9)
 })
 
 test('C3: the state word column is fixed: the word is padded to 7 cells and two spaces follow, whatever the word', () => {

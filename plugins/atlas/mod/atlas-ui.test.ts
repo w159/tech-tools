@@ -20,11 +20,11 @@ describe('tokens', () => {
       expect(Object.keys(PALETTES[theme]).sort()).toEqual(['accent', 'bad', 'base', 'block', 'info', 'ink', 'line', 'muted', 'ok', 'panel', 'queued_fill', 'run', 'sub', 'text', 'warn', 'white']);
       for (const hex of Object.values(PALETTES[theme])) expect(hex).toMatch(/^#[0-9a-f]{6}$/);
     }
-    expect(PALETTES.mocha).toMatchObject({ panel: '#181825', text: '#d0d0d0', run: '#d0d0d0', accent: '#af87ff', ok: '#87d787', warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', ink: '#1c1c1c', line: '#7f849c' }); // round 3: 252, 141, 114, 179, 203, 234
+    expect(PALETTES.mocha).toMatchObject({ panel: '#181825', text: '#d0d0d0', run: '#d0d0d0', accent: '#af87ff', ok: '#87d787', warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', ink: '#1c1c1c', line: '#585858' }); // round 3: 252, 141, 114, 179, 203, 234; the rule is the one dim grey (240)
     expect(PALETTES.latte).toMatchObject({ panel: '#e6e9ef', text: '#4c4f69', accent: '#8534ee', queued_fill: '#bcc0cc' });
   });
   test('toneHex maps legacy dim to a readable colour in each theme', () => {
-    expect(toneHex('dim', 'mocha')).toBe('#585b70');
+    expect(toneHex('dim', 'mocha')).toBe('#585858');
     expect(toneHex('dim', 'latte')).toBe(PALETTES.latte.muted);
     expect(toneHex('accent', 'latte')).toBe('#8534ee');
   });
@@ -82,7 +82,7 @@ describe('contrast', () => {
       for (const p of pairs) expect([theme, p.what, p.ratio >= p.need]).toEqual([theme, p.what, true]);
       const min = (kind: 'text' | 'glyph') => Math.min(...pairs.filter((p) => p.kind === kind).map((p) => p.ratio));
       // The measured minimums of rev 4 (evidence/contrast-results.txt).
-      expect(min('text')).toBeGreaterThanOrEqual(theme === 'mocha' ? 5.08 : 4.91);
+      expect(min('text')).toBeGreaterThanOrEqual(theme === 'mocha' ? 4.93 : 4.91);
       expect(min('glyph')).toBeGreaterThanOrEqual(theme === 'mocha' ? 4.75 : 3.078);
     }
   });

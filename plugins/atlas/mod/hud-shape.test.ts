@@ -2,7 +2,7 @@
 // Every rule is checked at 150 and 110 columns (and at 57, the width the live 110-column transcript leaves beside the docked pane) with a scorer-shaped parser
 // (round2/tools/live_capture.py parse_frame, rev 4 locators: is_block_header, a TODO row is `<glyph> T<n> `, a SUBAGENTS row is `<glyph> <name> <state word>`).
 import { describe, expect, test } from 'claude-code/testing';
-import { PALETTE5, SPIN_FRAMES, cells, runsString, spinClock, spinFrameOf, type Run, type Ui } from './atlas-ui';
+import { PALETTE5, SPIN_FRAMES, cells, leadSpinnerGlyph, runsString, spinClock, spinFrameOf, type Run, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { agentModel, hudLines, type HudAgent, type HudInput } from './hud';
 import { agentRows, type AgentRow } from './hud-surface';
@@ -73,7 +73,7 @@ describe('step 1: a quiet header', () => {
   test('the count and the meter follow the title: TODO has `n/m` and the meter, SUBAGENTS the spinner and the counts', () => {
     const rows = text(draw(working, 150));
     expect(rows[0]).toMatch(/▸ TODO {2}0\/5 ▱{8} ─+$/);
-    expect(rows.find((r) => r.includes('SUBAGENTS'))).toMatch(/▸ SUBAGENTS [◐◓◑◒] 3 running ─+$/);
+    expect(rows.find((r) => r.includes('SUBAGENTS'))).toMatch(/▸ SUBAGENTS [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] 3 running ─+$/);
   });
 });
 
@@ -243,7 +243,7 @@ describe('step 5: one spinner phase: the band, the TODO rows, the SUBAGENTS rows
         const glyph = SPIN_FRAMES[((frame % 4) + 4) % 4]!;
         const rows = draw(working, cols, 40, { now, tick });
         const header = runsString(rows.find((r) => runsString(r).includes('▸ SUBAGENTS'))!);
-        expect([now, tick, header.includes(`SUBAGENTS ${glyph} 3 running`)]).toEqual([now, tick, true]);
+        expect([now, tick, header.includes(`SUBAGENTS ${leadSpinnerGlyph(frame)} 3 running`)]).toEqual([now, tick, true]); // the title turns the band's braille frame on the same index
         const marks = text(rows).flatMap((l) => (/^[▸ ] ([◐◓◑◒]) (T\d|\S+-explorer)/.exec(l) ? [/^[▸ ] ([◐◓◑◒])/.exec(l)![1]!] : []));
         expect(marks).toHaveLength(6); // three TODO rows, three agent rows
         expect([now, tick, new Set(marks).size, marks[0]]).toEqual([now, tick, 1, glyph]);

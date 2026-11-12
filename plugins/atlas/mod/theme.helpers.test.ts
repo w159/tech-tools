@@ -1,27 +1,13 @@
 // Behavior tests for the theme helpers the base theme.test.ts leaves unexercised.
 import { describe, expect, test } from 'claude-code/testing';
 import {
-  barParts, blink, chartRoom, contractGlyph, dim, fitText, formatDuration, glyph, isRawId, lerp, meterColor, MOCHA, mix,
-  phaseColor, phaseHue, rangeWidth, spin, spriteTile, STATE_GLYPH, stateColor, textWidth,
+  barParts, blink, chartRoom, contractGlyph, dim, fitText, formatDuration, glyph, isRawId, lerp, mix,
+  rangeWidth, spin, spriteTile, STATE_GLYPH, textWidth,
 } from './theme';
-
-test('phaseColor and stateColor cover every key with the BRAND token', () => {
-  const phases = { research: '#62b8e6', theory: '#b5a3fa', test: '#f2aa40', validate: '#7fe0cb', implement: '#2fbd9f', verify: '#52c872', done: '#2fbd9f', blocked: '#ff7570' } as const;
-  for (const [p, c] of Object.entries(phases)) expect([p, phaseColor(p as keyof typeof phases)]).toEqual([p, c]);
-  const states = { spawning: '#b5a3fa', running: '#2fbd9f', idle: '#93a4ac', input: '#f2aa40', stuck: '#ff7570', parked: '#9fb0b8', finished: '#52c872', failed: '#ff7570', dead: '#9fb0b8' } as const;
-  for (const [s, c] of Object.entries(states)) expect([s, stateColor(s as keyof typeof states)]).toEqual([s, c]);
-});
 
 test('STATE_GLYPH and glyph tables', () => {
   expect(STATE_GLYPH).toEqual({ spawning: '▸', running: '▶', idle: '○', input: '◇', stuck: '■', parked: '·', finished: '●', failed: '■', dead: '·' });
   expect(glyph).toEqual({ brand: '◆', diamond: '◆', hollow: '◇', rail: '━', dash: '┄', play: '▶', tri: '▸', disc: '●', ring: '○', square: '■', fill: '▰', empty: '▱', star: '✦', starDim: '✧', spark: '˚', dot: '·', bar: '│' });
-});
-
-test('meterColor boundaries are inclusive at 60 and 85', () => {
-  expect(meterColor(59.9)).toBe('#52c872');
-  expect(meterColor(60)).toBe('#f2aa40');
-  expect(meterColor(84.9)).toBe('#f2aa40');
-  expect(meterColor(85)).toBe('#ff7570');
 });
 
 test('lerp extrapolates unclamped using (b - a)', () => {
@@ -53,18 +39,6 @@ test('mix blends channel-wise and clamps t', () => {
   expect(mix('#ffffff', '#000000', 0.25)).toBe('#bfbfbf');
   expect(mix('#00ff00', '#ff0000', 1)).toBe('#ff0000');
   expect(mix('nope', '#ffffff', 1)).toBe('#ffffff');
-});
-
-test('MOCHA palette and phaseHue', () => {
-  expect(MOCHA).toEqual({
-    panel: '#11111b', panel2: '#181825', base: '#1e1e2e', text: '#cdd6f4', muted: '#6c7086', dim: '#45475a',
-    violet: '#cba6f7', teal: '#94e2d5', sky: '#89dceb', blue: '#89b4fa', green: '#a6e3a1', peach: '#fab387',
-    red: '#ff5f5f', yellow: '#f9e2af', pink: '#f5c2e7', grey: '#585b70', grey2: '#313244', white: '#ffffff',
-  });
-  expect(['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'].map(phaseHue)).toEqual([
-    MOCHA.blue, MOCHA.violet, MOCHA.yellow, MOCHA.sky, MOCHA.peach, MOCHA.green, MOCHA.teal, MOCHA.red,
-  ]);
-  expect(phaseHue('nonsense')).toBe(MOCHA.violet);
 });
 
 test('chartRoom roles and spriteTile', () => {

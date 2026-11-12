@@ -2,7 +2,9 @@
 // Pure functions, so every expectation is a literal or a one-line derivation.
 import { describe, expect, test } from 'claude-code/testing';
 import { chip, merge, padRow, seg } from './paint';
-import { MOCHA as M } from './theme';
+import { PALETTES } from './atlas-ui';
+
+const M = PALETTES.mocha;
 
 const text = (parts: readonly { t: string }[]): string => parts.map((p) => p.t).join('');
 

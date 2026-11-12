@@ -87,9 +87,9 @@ describe('B3 (round 3): blocked and failed share the one error colour; the glyph
 
 describe('B2: a killed worker reads in words, not only in colour', () => {
   const done = [item(1, 'completed', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'completed', 'T2 read ghost.py (ghost-explorer)', names[1])];
-  test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `done · worker killed`', () => {
+  test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `closed · worker killed`', () => {
     const t2 = hud(93, 12, { todos: done, agents }).find((r) => r.includes('T2 read ghost.py'))!;
-    expect(t2).toContain('done · worker killed');
+    expect(t2).toContain('closed · worker killed');
     expect(hud(93, 12, { todos: done, agents }).find((r) => r.includes('T1 read alpha.py'))).not.toContain('worker killed');
   });
   test('HUD row in the 61-cell strip keeps the words and fits', () => {
@@ -97,11 +97,11 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
     expect(t2).toContain('worker killed');
     expect(cells(t2)).toBeLessThanOrEqual(61);
   });
-  test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `done · worker killed` in the state cell', () => {
+  test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `closed · worker killed` in the state cell', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const at = (cols: number): string => boardText(boardLines(boardRowsOf(src), { cols, ui, ribbon: false, title: false })).join('\n');
-    expect(at(120)).toMatch(/done\s+ghost-explorer\s+worker killed/);
-    expect(at(60)).toContain('done · worker killed');
+    expect(at(120)).toMatch(/closed\s+ghost-explorer\s+worker killed/);
+    expect(at(60)).toContain('closed · worker killed');
   });
   test('board row at 37 cells keeps `done` in the state cell and says `worker killed` on the sub-line under the row', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];

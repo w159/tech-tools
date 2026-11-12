@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { panelWorld } from '../contracts/panel-world';
 import { worldGates, worldSidebar, worldSnapshot } from '../contracts/world-live';
-import { spinFrameOf, spinnerGlyph, type Ui, type UiState } from './atlas-ui';
+import { leadSpinnerGlyph, spinFrameOf, spinnerGlyph, type Ui, type UiState } from './atlas-ui';
 import { bandTree } from './band';
 import { liveWorkers } from './data/live';
 import { gateTally } from './data/runstate';
@@ -168,7 +168,8 @@ describe('spinners: spinFrameOf(now, worker name) on every row', () => {
   const NOW = 1_700_000_000_000;
   const glyphOf = (rows: readonly string[], name: string): string => rows.find((l) => l.includes(name))!.trimStart().replace(/^▸\s*/, '')[0]!;
   const two = [worker('alpha-one'), worker('beta-two')];
-  const frame = (name: string): string => spinnerGlyph(spinFrameOf(NOW, name));
+  const frame = (name: string): string => leadSpinnerGlyph(spinFrameOf(NOW, name)); // agent rows turn the band's braille frame
+  const planFrame = (name: string): string => spinnerGlyph(spinFrameOf(NOW, name)); // plan rows keep the circle quarters (the scorer parses them by glyph)
 
   test('the team tab turns every agent by the one shared phase at one clock reading', () => {
     const rows = body(panelWorld('team', 100, ui, { workers: two, now: NOW, rows: 24 }));
@@ -185,12 +186,12 @@ describe('spinners: spinFrameOf(now, worker name) on every row', () => {
   test('the route plan rows turn by their owner', () => {
     const todos = [{ id: 'a', label: 'Wire the band', state: 'running' as UiState, owner: 'alpha-one' }];
     const route = body(panelWorld('route', 100, ui, { todos, workers: two, now: NOW, rows: 24 }));
-    expect(glyphOf(route.filter((l) => l.includes('Wire the band')), 'Wire the band')).toBe(frame('alpha-one'));
+    expect(glyphOf(route.filter((l) => l.includes('Wire the band')), 'Wire the band')).toBe(planFrame('alpha-one'));
   });
 
   test('without a clock reading the tick still drives the frame', () => {
     const rows = body(panelWorld('team', 100, ui, { workers: [worker('alpha-one')], tick: 2, rows: 24 }));
-    expect(glyphOf(rows, 'alpha-one')).toBe(spinnerGlyph(2));
+    expect(glyphOf(rows, 'alpha-one')).toBe(leadSpinnerGlyph(2));
   });
 
   test('panelModelOf carries the snapshot clock', () => {

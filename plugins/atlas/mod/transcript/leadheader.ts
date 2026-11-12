@@ -53,16 +53,17 @@ const txt = (props: Props, ...children: RenderNode[]): RenderElement => ({ type:
 const keep = (child: RenderElement): RenderElement => ({ type: 'Box', props: { flexShrink: 0 }, children: [child] })
 const fixed = { wrap: 'truncate-end' }
 
-/** The phase colour: the one accent for every working phase, ok for done, warn for blocked. */
-export const leadTone = (phase: PhaseId): 'accent' | 'ok' | 'warn' => (phase === 'done' ? 'ok' : phase === 'blocked' ? 'warn' : 'accent')
+/** The bar colour of a lead status line: four values and no others (critique 25: five bar colours on one screen). Accent 141 for an active phase, ok 114 for done, error 203 for blocked; the quiet
+ * and superseded bars and the notes' bars take the secondary grey (245). */
+export const leadTone = (phase: PhaseId): 'accent' | 'ok' | 'bad' => (phase === 'done' ? 'ok' : phase === 'blocked' ? 'bad' : 'accent')
 
 export interface LeadOpts { ui: Ui; columns: number; /** A done chip a Stop refusal overturned: the word is struck and quiet, and says why. */ superseded?: boolean; /** The previous header was this phase: no word, a quiet bar and the state. */ quiet?: boolean }
 
 /** The chip's row: `▌ RESEARCH 3/5 state`. No background. Under 40 columns the bar and the word only. */
 export function leadRow(l: Lead, o: LeadOpts): RenderElement {
-  const paint = (tone: 'accent' | 'ok' | 'warn' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: toneHex(tone, o.ui.theme) })
+  const paint = (tone: 'accent' | 'ok' | 'bad' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: toneHex(tone, o.ui.theme) })
   const dead = o.superseded === true
-  const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'dim' : leadTone(l.phase)) }, '▌')
+  const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'sub' : leadTone(l.phase)) }, '▌')
   const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${l.phase.toUpperCase()}`)
   const count = l.count ? [txt({ ...fixed, ...paint('sub') }, ` ${l.count}`)] : []
   const state = l.sentence ? [txt({ wrap: 'wrap', ...paint(o.quiet ? 'dim' : 'sub') }, ` ${l.sentence}`)] : []

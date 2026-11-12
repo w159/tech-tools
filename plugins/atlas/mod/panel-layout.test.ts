@@ -343,17 +343,17 @@ describe('toast', () => {
     expect([toastText('done', 'implementer-layout', '9 of 9 steps', mocha), toastText('failed', 'implementer-live', 'tests red 3', mocha)]).toEqual(toastDesign);
   });
   test('ASCII mode uses the ASCII state mark', () => {
-    expect(toastText('failed', 'a', 'b', ascii)).toBe('| ATLAS  x failed   a  b');
+    expect(toastText('failed', 'a', 'b', ascii)).toBe('| x failed   a  b');
   });
 });
 
-describe('route tab names the running agents (live round2: `agents ◒ 3 running` and no name)', () => {
+describe('route tab names the running agents (live round2: `agents ⠋ 3 running` and no name)', () => {
   const plan = [{ id: 'T1', label: 'T1 read alpha.py (alpha-explorer)', state: 'queued' as const }, { id: 'T2', label: 'T2 combine the reports', state: 'queued' as const }]; // host-spawned agents: the plan rows have no owner
   const running = ['alpha', 'beta', 'gamma'].map((n) => ({ name: `${n}-explorer`, state: 'running' as const, detail: 'Read', secs: 12 }));
   test('each agent that holds no plan row is listed by name with its state word, at 80 and 120 columns', () => {
     for (const cols of [80, 120]) {
       const text = rows('route', cols, { todos: plan, workers: running }).filter((l) => /^ {4}\S/.test(l)).join('\n');
-      for (const n of ['alpha', 'beta', 'gamma']) expect(text).toMatch(new RegExp(`[◐◓◑◒◐◓◑◒◐◓] ${n}-explorer\\s+running`));
+      for (const n of ['alpha', 'beta', 'gamma']) expect(text).toMatch(new RegExp(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] ${n}-explorer\\s+running`));
     }
   });
   test('an agent that owns a plan row is named by that row, not listed twice; finished and parked ones are not listed', () => {
@@ -424,11 +424,11 @@ describe('hud110: the route tab names the running agents in a 40 row terminal wi
   test('29 pane rows (live-110: 31 beside three running agents) list each agent under the count', () => {
     for (const cols of [37, 55]) {
       const out = rows('route', cols, { todos: plan, workers: running, rows: 29 }).filter((l) => /^ {4}\S/.test(l)).join('\n');
-      for (const n of ['alpha', 'beta', 'gamma']) expect(out).toMatch(new RegExp(`[◐◓◑◒◐◓◑◒◐◓] ${n}-explorer\\s+running`));
+      for (const n of ['alpha', 'beta', 'gamma']) expect(out).toMatch(new RegExp(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] ${n}-explorer\\s+running`));
     }
   });
   test('a pane too short for the agents and the whole plan keeps the short form', () => {
     const out = rows('route', 55, { todos: plan, workers: running, rows: 18 }).filter((l) => /^ {4}\S/.test(l)).join('\n');
-    expect(out).not.toMatch(/[◐◓◑◒◐◓◑◒◐◓] alpha-explorer\s+running/);
+    expect(out).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] alpha-explorer\s+running/);
   });
 });

@@ -151,7 +151,7 @@ async function abovePromptText($: Engine, maxRows: number, bodyColumns = 160): P
 /** The band's spinner frame in its `<glyph> 1 running` count after `ms` more mocked time ('' when the count has no spinner). */
 async function bandSpinAfter($: Engine, clock: { advance(ms: number): Promise<unknown> }, ms: number): Promise<string> {
   await clock.advance(ms);
-  return /([◐◓◑◒◐◓◑◒◐◓]) 1 running/.exec(await abovePromptText($, 30))?.[1] ?? '';
+  return /([⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]) 1 running/.exec(await abovePromptText($, 30))?.[1] ?? '';
 }
 
 test('the band spinner advances one frame per 100 ms while a worker runs', async ($, on) => {
@@ -187,7 +187,7 @@ test('the HUD lists the agent; the band beside it keeps the counts and draws no 
   expect(shown).toContain('impl-a'); // listed once, by the HUD
   expect(shown).not.toContain('implementer'); // the band's role column is gone
   expect(shown).toContain('phase 1/5');
-  expect(shown).toMatch(/[◐◓◑◒◐◓◑◒◐◓] 1 running/); // the band's count agrees with the block (a working agent is running)
+  expect(shown).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] 1 running/); // the band's count agrees with the block (a working agent is running)
   expect(shown).not.toContain('queued');
   expect(shown).not.toContain('starting'); // no band worker row (its activity word)
   const tight = await abovePromptText($, 7);
@@ -225,7 +225,7 @@ test('at a starved maxRows the HUD keeps its Subagents ribbon and row, and the b
   const three = await abovePromptText($, 3);
   expect(three).toContain('SUBAGENTS');
   expect(three).toContain('phase 1/5'); // the band's one summary row: phase position and counts
-  expect(three).toMatch(/[◐◓◑◒◐◓◑◒◐◓] 1 running/);
+  expect(three).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] 1 running/);
   expect(three).not.toContain('theory'); // no rail: it would name every phase
   expect(three).not.toContain('implementer');
 });
@@ -319,7 +319,7 @@ test('L13 the HUD, the band and the side panel say the same state word for a wor
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
   const above = await abovePromptText($, 30);
   expect(above).toMatch(/impl-a[^"]*running/); // the HUD row
-  expect(above).toMatch(/[◐◓◑◒◐◓◑◒◐◓] 1 running/); // the band's count
-  expect(await teamRow($)).toMatch(/[◐◓◑◒◐◓◑◒◐◓] impl-a\s+running/); // the side panel row
+  expect(above).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] 1 running/); // the band's count
+  expect(await teamRow($)).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] impl-a\s+running/); // the side panel row
   for (const text of [above, await teamRow($)]) expect(text).not.toContain('queued');
 });
