@@ -47,8 +47,8 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const { rows } = panel(160, { gates: [gate] });
     expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ${spin(3)} working 0:42   implement   `); // the state word and the clock lead, then the phase
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
-    expect(rows[0]).toContain('todo ██▌░░░░░░░ 1/4');
-    expect(rows[0]).toContain('ctx █░░░░░░░ 12%');
+    expect(rows[0]).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
+    expect(rows[0]).toContain('ctx ▰▱▱▱▱▱▱▱ 12%');
     expect(rows[0]).toContain(`agents ${spin(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
     const withTodos = panel(160, { gates: [gate], snapshot: busySnap({ todos: boardTodos as any }) });
     expect(withTodos.rows).toHaveLength(panel(160, { gates: [gate] }).rows.length); // a folded board costs no row
@@ -79,12 +79,12 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(all).not.toMatch(/\$/);
     expect(cells(rowNodes[1]!).every((t) => t.props.backgroundColor === mocha.panel)).toBe(true);
   });
-  test('the gauges fill in info over a line track; ctx has no threshold colours', () => {
+  test('the meters fill in info over a muted track; ctx has no threshold colours', () => {
     const head = panel(160, { snapshot: busySnap({ contextPct: 90 }) }).rowNodes[0]!;
-    const fills = cells(head).filter((t) => /^█[█▏▎▍▌▋▊▉]*$/.test(String(t.props.children)));
+    const fills = cells(head).filter((t) => /^▰+$/.test(String(t.props.children)));
     expect(fills.length).toBeGreaterThan(0);
     expect(fills.every((t) => t.props.color === TONE_HEX.info)).toBe(true);
-    expect(cells(head).filter((t) => /^░+$/.test(String(t.props.children))).every((t) => t.props.color === TONE_HEX.line)).toBe(true);
+    expect(cells(head).filter((t) => /^▱+$/.test(String(t.props.children))).every((t) => t.props.color === TONE_HEX.muted)).toBe(true);
   });
   test('without a context figure there is no ctx gauge', () => {
     expect(panel(160, { snapshot: busySnap({ contextPct: 0 }) }).rows[0]).not.toContain('ctx');
@@ -113,14 +113,14 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const { rows, rowNodes } = panel(160, { rich: true });
     expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ${spin(3)} working 0:42   ● 1 research  ──  ● 2 theory  ──  ● 3 test  ──  ▸ 4 implement  ──  ◇ 5 verify`);
     expect(rows[1]!.trim()).toBe('');
-    expect(rows[2]).toMatch(/^todo ████░░░░░░░░░░░░ 1\/4 · 25% {2,}ctx █▎░░░░░░░░ 12%/);
+    expect(rows[2]).toMatch(/^todo ▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱ 1\/4 · 25% {2,}ctx ▰▱▱▱▱▱▱▱▱▱ 12%/);
     expect(cellOf(rowNodes[0]!, '▸').props).toMatchObject({ color: TONE_HEX.accent, bold: true });
     expect(cellOf(rowNodes[0]!, '4 implement').props).toMatchObject({ color: TONE_HEX.text, bold: true });
     expect(cellOf(rowNodes[0]!, '◇').props.color).toBe(TONE_HEX.muted);
   });
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
-    expect(band(160)).toContain('todo ██▌░░░░░░░ 1/4');
+    expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
     expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · implement · todo 1/4 · ctx 12% · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3)
     expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4`); // 40 columns: the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word

@@ -21,9 +21,9 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
     expect(at(95)).toBe('◖ ◆ ATLAS ◗ ◐ working · research · todo 3/7 · ▲ 1 blocked · ◐ 1 running · ■ 1 failed'); // the queued count gives way first
     expect(at(108)).toBe('◖ ◆ ATLAS ◗ ◐ working · research · todo 3/7 · ▲ 1 blocked · ctx 62% · ◐ 1 running · ■ 1 failed · ◇ 1 queued');
     expect(at(119)).toBe(at(108));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ◐ working  research  todo ███▍░░░░ 3/7 · ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ◐ working  research  todo ▰▰▰▱▱▱▱▱ 3/7 · ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued');
     expect(at(134)).toBe(at(120)); // the state word widens the full form: it starts at 135
-    expect(at(135)).toBe('◖ ◆ ATLAS ◗  ◐ working   research   todo ████▎░░░░░ 3/7 · ▲ 1 blocked   ctx █████░░░ 62%   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+    expect(at(135)).toBe('◖ ◆ ATLAS ◗  ◐ working   research   todo ▰▰▰▰▱▱▱▱▱▱ 3/7 · ▲ 1 blocked   ctx ▰▰▰▰▰▱▱▱ 62%   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
   });
   test('critique 12 A3: the live-run snapshot reads the same at the 110 body (105, undocked) and the 150 body (93, docked): one separator set', () => {
     // live-110-8271cfc8-1 f0067 read `research   todo 0/5 · 1 dispatch open   ctx 7%   agents ◐ 1 running`; live-150 f0061 read `todo 0/5 · 1 dispatch open · ◐ 1 running` (merge: two open dispatch rows against one running worker, so B4 does not fold the count away)
@@ -39,7 +39,7 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, ctx: undefined }));
     expect(at(100)).toBe('◖ ◆ ATLAS ◗ ◐ working · research · todo 3/7 · ▲ 1 blocked · ◐ 1 running · ■ 1 failed · ◇ 1 queued');
     expect(at(119)).toBe(at(100));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ◐ working   research   todo ████▎░░░░░ 3/7 · ▲ 1 blocked   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ◐ working   research   todo ▰▰▰▰▱▱▱▱▱▱ 3/7 · ▲ 1 blocked   agents ◐ 1 running   ■ 1 failed   ◇ 1 queued');
   });
 });
 

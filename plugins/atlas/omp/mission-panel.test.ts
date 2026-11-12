@@ -15,9 +15,9 @@ const head = (m: PanelModel) => rows(m)[0]!;
 const laneOf = (m: PanelModel, name: string) => rows(m).find((x) => x.includes(name))!;
 
 test("band: the todo gauge reads `N/M`, ctx shows only when known, no board means no todo part", () => {
-	expect(head(model({ done: 2, total: 5 }))).toContain("todo ████░░░░░░ 2/5");
+	expect(head(model({ done: 2, total: 5 }))).toContain("todo ▰▰▰▰▱▱▱▱▱▱ 2/5");
 	expect(head(model({ done: 0, total: 0 }))).not.toContain("todo");
-	expect(head(model({ ctx: 0.5 }))).toContain("ctx ████░░░░ 50%");
+	expect(head(model({ ctx: 0.5 }))).toContain("ctx ▰▰▰▰▱▱▱▱ 50%");
 	expect(head(model({}))).not.toContain("ctx");
 });
 

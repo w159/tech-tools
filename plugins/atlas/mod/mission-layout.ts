@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clip, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, gauge, padEnd, PALETTES, percent, rail, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, sweepIndex, uiFromEnv, warnMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clip, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, meter, padEnd, PALETTES, percent, rail, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, sweepIndex, uiFromEnv, warnMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons, warningText } from './data/runstate';
 import { displayName } from './hud';
@@ -207,8 +207,10 @@ const openMore = (m: MissionModel): string => {
 function figure(m: MissionModel): { done: number; total: number } {
   return { done: m.done, total: m.total };
 }
-const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => { const f = figure(m); return gauge(w, m.eased?.todo ?? (f.total ? Math.min(1, f.done / f.total) : 0), ui); };
-const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
+/** The band's progress meter is the shared `▰▱` one (HUD and board draw it too); fill in info over a muted track keeps the old gauge's colours and the 3:1 glyph contrast. */
+const bandMeter = (w: number, v: number, ui: Ui): Run[] => meter(w, v, ui).map((x): Run => ({ ...x, tone: x.tone === 'accent' ? 'info' : 'muted' }));
+const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => { const f = figure(m); return bandMeter(w, m.eased?.todo ?? (f.total ? Math.min(1, f.done / f.total) : 0), ui); };
+const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => bandMeter(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
 
 /** The one figures-and-` · ` band form (phase word, todo, ctx, counts) starts here: below a docked 150-column terminal's transcript (93), so 110 and 150 read alike. A form also has to fit. */
 const STD_MIN = 90;

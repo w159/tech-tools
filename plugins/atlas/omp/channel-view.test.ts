@@ -323,7 +323,7 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}◓ working 2:41 {3}implement {3}todo █████▌░░░░ 5\/9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
+	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}◓ working 2:41 {3}implement {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}agents ◓ 2 running {3}◇ 1 queued +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
 	expect(p[2]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +01:12 $/);
 	expect(p[3]).toMatch(/^ ◓ implementer-band running {2}thinking +00:48 $/);
@@ -366,7 +366,7 @@ test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers int
 test("panel idle: the band reads idle and the last run follows, the whole thing is two rows", () => {
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}● done 5\/9 · 1:10 {3}todo █████▌░░░░ 5\/9 +$/);
+	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}● done 5\/9 · 1:10 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 +$/);
 	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1m10s · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
 	expect(failed).toContain("last run  2 workers · 9s · 1 failed");
