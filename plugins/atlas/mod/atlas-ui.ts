@@ -570,13 +570,20 @@ export function sparkline(values: readonly number[], peak: number, ascii = false
 // ---- motion (pure functions of time) -------------------------------------------------------------------------------
 
 export const SPINNER_MS = 100;
-/** The one working signal (round 3): the circle quarters, one frame per SPINNER_MS, on every surface and in every renderer. The capture scorer maps only
- * these four marks on rows, so no braille set exists anywhere in the mod. */
+/** The row working signal (round 3): the circle quarters, one frame per beat of the shared clock, on every row surface (TODO, SUBAGENTS, panel, board, band worker rows).
+ * The capture scorer maps only these four marks on rows. The band's own lead spinner is the braille set below. */
 export const SPIN_FRAMES = ['◐', '◓', '◑', '◒'] as const;
+/** The band lead's spinner (MiniDot): ten braille frames, one per beat of the same shared clock. Rows never use it. */
+export const LEAD_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const SPIN_ASCII = ['|', '/', '-', '\\'] as const;
 /** Spinner frame by frame number (any integer). */
 export function spinnerGlyph(frame: number, ascii = false): string {
   const f = ascii ? SPIN_ASCII : SPIN_FRAMES;
+  return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
+}
+/** The band lead's spinner at frame `frame` (braille; the ASCII set in ASCII mode). */
+export function leadSpinnerGlyph(frame: number, ascii = false): string {
+  const f = ascii ? SPIN_ASCII : LEAD_FRAMES;
   return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
 }
 /** Spinner frame number at the shared clock reading `nowMs`: ONE phase for every surface in a frame. The `id` argument is kept for the callers that still pass an

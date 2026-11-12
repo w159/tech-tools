@@ -134,7 +134,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     project: boardOf(s), scope: b.team,
     phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
     done, total, ...openRows(s, owners), todoBlocked: blockedCount(plan, owners),
-    busy: !!b.working || leadBusy(s) || planBusy(plan, owners),
+    busy: b.working === false ? false : !!b.working || leadBusy(s) || planBusy(plan, owners), // the host's own `isWorking: false` is the turn end: stale lead or plan marks do not keep the band working past it
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,
