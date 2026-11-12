@@ -33,7 +33,7 @@ Overall mean line of each critique (`round2/after/critique-21.md` to `critique-2
 | Critique | Overall mean | Note |
 |---|---|---|
 | 21 | 5.5 | |
-| 22 | 5.6 | |
+| 22 | 5.6 | 2cf10943 |
 | 23 | 5.7 | 513bb41c |
 | 24 | 1.1 | build 09a0dd86, failed to load |
 | 25 | 6.0 | bfb52164 |
