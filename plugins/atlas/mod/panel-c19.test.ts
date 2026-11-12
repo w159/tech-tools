@@ -62,6 +62,7 @@ describe('critique 19 C4: the core tab says each fact once', () => {
     const text = out(150).join('\n');
     expect(text).toContain('3 explorers ran, the plan said 1');
     expect(text).not.toMatch(/asked for 1/);
-    expect(text).toMatch(/3 explorers +too many +planned on haiku, low effort/);
+    expect(text).toMatch(/^ +planned on haiku, low effort$/m);
+    expect(text).not.toMatch(/too many/); // the count is said once (critique 21)
   });
 });

@@ -135,10 +135,11 @@ describe('A5: the core tab in plain words', () => {
       expect(out.replace(/\s+/g, ' ')).toContain('3 explorers ran, the plan said 1'); // the heading still says what happened
     });
   }
-  test('the heading carries a figure and the seat row names the plan in words', () => {
+  test('the heading carries a figure and the seat line names the plan in words', () => {
     const out = panelText(panelWorld('core', 150, ui, { rows: 40, core, workers: done3 })).map((l) => l.trimEnd());
     expect(out.some((l) => /^\s+done items\s+\d+ of \d+$/.test(l))).toBe(true);
-    expect(out.some((l) => /3 explorers\s+too many\s+planned on haiku, low effort/.test(l))).toBe(true);
+    expect(out.some((l) => /^\s+planned on haiku, low effort$/.test(l))).toBe(true); // critique 21: the heading says the count, the seat names only the plan
+    expect(out.some((l) => /too many/.test(l))).toBe(false);
     expect(out.some((l) => /reading\s+3 workers finished/.test(l))).toBe(true);
   });
 });

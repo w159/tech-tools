@@ -130,8 +130,10 @@ describe('team tab lists the subagents by name and state', () => {
   test('an open worker row adds what it is doing and how long it has run', () => {
     const open = bodyLines(panelWorld('team', 80, mocha, { expanded: 'worker:implementer-band' })).map(lineText);
     const at = open.findIndex((l) => l.includes('implementer-band'));
-    expect(open[at + 1]).toContain('read runs.ts:17');
-    expect(open[at + 2]).toContain('running 42s');
+    expect(open[at + 1]).toMatch(/^ {4}task {2}T4/); // wave 24: a row is one line; the rows under it open on a press
+    expect(open.slice(at + 1, at + 6).join('\n')).toContain('read runs.ts:17');
+    expect(open.slice(at + 1, at + 6).join('\n')).toContain('running 42s');
+    expect(bodyLines(panelWorld('team', 80, mocha, {})).map(lineText).filter((l) => l.includes('runs.ts'))).toHaveLength(0); // closed at 80: the one row, no detail (the 120-column row adds its last step)
   });
   test('critique 15 C5: a project-directory slug in an agent\'s last step never reaches the team rows', () => {
     // live-110-95c4a588-1/tab-team.png: `last  run -home-user-tech-t`
@@ -187,17 +189,18 @@ describe('core tab', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toContain('planned on haiku, low effort'); // B4 and critique 18 A5: plain words, not `ran 3 / planned 1 (haiku) haiku/low` nor `3 ran, plan said 1 (haiku)`
-    expect(out).toMatch(/▲ {3}3 explorers +too many +planned on haiku/);
-    expect(out).toContain('3 explorers ran, the plan said 1');
+    expect(out).toContain('3 explorers ran, the plan said 1'); // B4 and critique 18 A5: plain words, not `ran 3 / planned 1 (haiku) haiku/low` nor `3 ran, plan said 1 (haiku)`
+    expect(out).not.toMatch(/too many/); // critique 21: the count is said once, in the heading; a second `3 explorers too many` row said it twice
+    expect(out.match(/3 explorers/g)).toHaveLength(1);
     expect(out).not.toContain('ran 3 / planned 1');
     expect(out).not.toContain('as planned');
   });
-  test('L16: the seat row counts the agents that ran (4x), the planned count stays in the detail sentence', () => {
+  test('L16: the heading counts the agents that ran (4), once, and no seat row repeats the count', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 't1', name: 'audit', cls: 'audit', effort: 'low', isolation: 'shared', maxParallel: 4, drift: ['explorer ran 4, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku', 'haiku'] }] }];
     const out = rows('core', 120, { core: c }).join('\n');
-    expect(out).toMatch(/▲ {3}4 explorers +too many +planned on haiku/);
+    expect(out).toContain('4 explorers ran, the plan said 1');
+    expect(out).not.toMatch(/too many/);
     expect(out).not.toContain('1x explorer');
   });
   // critique 12 B1/B6: live-150-8271cfc8-1 core tab: the plan is 5/5 done, the rows carry no evidence and no finding verifies them
@@ -246,7 +249,7 @@ describe('core tab', () => {
     expect(out).toContain('Dispatches followed the plan');
     const open = bodyLines(panelWorld('gates', 150, mocha, { gates, core: c, expanded: 'gate:dispatch-plan' })).map(lineText).join('\n');
     expect(open).toContain('3 explorers ran, the plan said 1'); // the line's detail is the core row's own sentence
-    expect(rows('core', 150, { core: c }).join('\n')).toMatch(/too many/);
+    expect(rows('core', 150, { core: c }).join('\n')).toContain('3 explorers ran, the plan said 1'); // the same sentence, once
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {
     const c = { ...core, verdicts: [], ledger: { verified: 0, refuted: 0, pending: 0, claimed: 0, unchecked: 0 } } as CoreModel;

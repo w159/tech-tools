@@ -17,11 +17,18 @@ const LIVE = [
   'ATLAS | ✅ verify | scenario steps run; team gate still open',
 ];
 
-test('B6: every live header line that showed raw is a chip on its first render, alone or with a body', () => {
-  for (const line of LIVE) {
-    expect([line, chipped(line)]).toEqual([line, true]);
-    expect([line, chipped(`${line}\n\nThe three files match.`)]).toEqual([line, true]);
-  }
+test('B6 (wave 24): a still-streaming first line is a chip from the first `ATLAS |` on, so no raw `● ATLAS | ...` frame is drawn', () => {
+  // Critique 21: 22 raw header frames in 11 of 12 runs. The strict pattern needs one non-space character after the second pipe; before it the brand pill
+  // draws alone (then with the phase pill once the phase word is whole), and from the state's first character the strict pattern takes over. Only a line
+  // too short to be told from prose (`ATLAS`, `ATLAS |` without its space) stays the host's own row.
+  const full = LIVE[0]!;
+  const cut = full.indexOf('| Stop') + 2;
+  const frames = Array.from({ length: full.length - 'ATLAS |'.length + 1 }, (_, k) => full.slice(0, 'ATLAS |'.length + k));
+  expect(frames.filter((f) => !chipped(f))).toEqual([]);
+  expect(chipped(full.slice(0, cut))).toBe(true);
+  expect(chipped(full.slice(0, cut + 1))).toBe(true);
+  for (const f of ['A', 'ATLAS', 'ATLAS ', 'ATLA']) expect([f, chipped(f)]).toEqual([f, false]);
+  expect(chipped('ATLAS | x | y\nbody')).toBe(false); // a finished first line that is no header stays the host's
 });
 
 // Critique 11 C3: 15 raw `● ATLAS | ...` frames at build 5d6a53ef. These are the complete first lines of those frames (live-150-5d6a53ef-2 f0043-f0044,
@@ -42,13 +49,4 @@ test('C3: every first line the 5d6a53ef live runs drew raw is a chip on the firs
     expect([line, cols, assistantTree(snap, { text: line }, cols) !== null]).toEqual([line, cols, true]);
     expect([line, cols, assistantTree(snap, { text: `${line}\n\nbody`, isFirstOfReply: true }, cols) !== null]).toEqual([line, cols, true]);
   }
-});
-
-test('B6: the host draws a still-streaming first line before its state text has begun: that frame is the only one the mod cannot chip', () => {
-  // The pattern needs one non-space character after the second pipe. A line cut before it is not yet a header; from the first
-  // character of the state on, it is. Nothing in register.ts or restyle.tsx adds frames beyond that.
-  const full = LIVE[0]!;
-  const cut = full.indexOf('| Stop') + 2;
-  expect(chipped(full.slice(0, cut))).toBe(false);
-  expect(chipped(full.slice(0, cut + 1))).toBe(true);
 });

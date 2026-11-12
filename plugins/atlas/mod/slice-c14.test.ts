@@ -69,7 +69,7 @@ describe('C3: the core tab and the gates tab say one thing', () => {
 
   test('f0001 (150-1 tab-core): the off-plan team is amber like the gates tab, never a red square', () => {
     const rows = out({ gates: gates(true, true) });
-    for (const key of ['3 explorers ran, the plan said 1', 'too many']) {
+    for (const key of ['3 explorers ran, the plan said 1']) {
       const row = rows.find((l) => l.includes(key))!;
       expect([key, row.includes('▲'), row.includes('■')]).toEqual([key, true, false]);
     }

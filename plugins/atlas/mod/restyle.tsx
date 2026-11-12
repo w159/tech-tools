@@ -18,6 +18,7 @@ import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
 import { cardAged, hideNotification, placedTree } from './transcript/placed'
+import { noteDoneChip } from './transcript/superseded'
 import { lookOf } from './look'
 import type { Outcome } from './transcript/outcome'
 
@@ -187,11 +188,16 @@ const isNarrow = (columns: number): boolean => columns > 0 && columns < PILL_NAR
 const firstText = (k: RenderNode): string => (k as { children: string[] }).children[0] ?? ''
 
 /** ` ◆ ATLAS ` on violet and ` ⚒ IMPLEMENT ` on the phase hue, both dark bold text. */
-function pills(mid: string, phase: PhaseId): RenderNode[] {
+function pills(mid: string, phase: PhaseId, superseded = false): RenderNode[] {
  const mark = contractGlyph(mid.trim().split(/\s+/)[0] ?? '')
+ // A done chip a Stop refusal overturned keeps its word but reads struck through on a quiet fill, and says why beside it (critique 21).
+ const phasePill = superseded
+  ? txt({ ...fixed, color: MOCHA.muted, backgroundColor: MOCHA.panel2, strikethrough: true }, ` ${mark} ${phase.toUpperCase()} `)
+  : txt({ ...fixed, color: MOCHA.base, backgroundColor: phaseHue(phase), bold: true }, ` ${mark} ${phase.toUpperCase()} `)
  return [
   txt({ ...fixed, color: MOCHA.base, backgroundColor: MOCHA.violet, bold: true }, ` ${BRAND_MARK} ATLAS `),
-  txt({ ...fixed, color: MOCHA.base, backgroundColor: phaseHue(phase), bold: true }, ` ${mark} ${phase.toUpperCase()} `),
+  phasePill,
+  ...(superseded ? [txt({ ...fixed, color: MOCHA.muted }, ' superseded')] : []),
  ]
 }
 
@@ -204,10 +210,10 @@ function tailOf(nm: RegExpExecArray | null, sentence: string): RenderNode[] {
 }
 
 /** Filled pills then the state text, never a glued pipe; under 40 columns the two pills only. */
-function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, sentence: string, columns: number): RenderNode[] {
+function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, sentence: string, columns: number, superseded = false): RenderNode[] {
  // Each chip sits in its own non-shrinking Box: a Text cannot opt out of flex shrink, so with a long sentence beside it the host cut the chips
  // (`◆ ATLA… ◎ RESEARC…` at 110, critique 15 C2). The sentence is what gives way.
- const kids = pills(mid, phase).map((chip): RenderNode => ({ type: 'Box', props: { flexShrink: 0 }, children: [chip] }))
+ const kids = pills(mid, phase, superseded).map((chip): RenderNode => ({ type: 'Box', props: { flexShrink: 0 }, children: [chip] }))
  return isNarrow(columns) ? kids : [...kids, ...tailOf(nm, sentence)]
 }
 
@@ -234,16 +240,33 @@ function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): v
  if (drawnHeaders.size > DRAWN_MAX) drawnHeaders.delete(drawnHeaders.keys().next().value as string)
 }
 
+/** A header line still streaming in (`ATLAS |`, `ATLAS | 🏁 do`, `ATLAS | 🏁 done | all fin`): the contract pattern needs the whole `| state` before it matches, so the host drew the raw
+ * `● ATLAS | 🏁 done | ...` line for the frames until it did (critique 21: 22 raw frames in 11 of 12 runs). The pills draw from the first `ATLAS |`: the brand pill at once, the phase pill when the phase word is
+ * whole, and from the state's first character the strict pattern draws the whole header. A line that is complete (a newline follows) and does not match the pattern is not a header and stays the host's own row. */
+function partialHeaderTree(text: string, _columns: number): RenderElement | null {
+ if (text.includes('\n') || !text.startsWith('ATLAS |')) return null
+ const pipes = text.split('|')
+ const sentence = pipes.slice(2).join('|').trim()
+ if (pipes.length >= 3 && sentence !== '') return null // the state has begun: the contract's strict pattern decides (an unknown phase stays the host's own row)
+ const words = (pipes[1] ?? '').trim().split(/\s+/).filter(Boolean)
+ const phaseWord = words[1]
+ const pillNodes: RenderNode[] = phaseWord !== undefined && (PHASES as readonly string[]).includes(phaseWord)
+  ? pills(words[0] ?? '', phaseWord as PhaseId)
+  : [txt({ ...fixed, color: MOCHA.base, backgroundColor: MOCHA.violet, bold: true }, ` ${BRAND_MARK} ATLAS `)]
+ const kids = pillNodes.map((chip): RenderNode => ({ type: 'Box', props: { flexShrink: 0 }, children: [chip] }))
+ return { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: kids }
+}
+
 /** `ATLAS | ⚒ implement 3/5 | sentence` drawn in place as filled pills, body kept under it. */
-export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0): RenderElement | null {
+export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0, superseded = false): RenderElement | null {
  if (props.isSummary || !props.text) return null
  const first = props.text.split('\n', 1)[0] ?? ''
  const phase = headerPhaseOf(props.text, snap)
- if (phase === null) return null
+ if (phase === null) return partialHeaderTree(props.text, columns)
  const [, mid = '', ...tail] = first.split('|')
  const nm = /(\d+)\s*\/\s*(\d+)/.exec(mid)
  const rest = props.text.slice(first.length).replace(/^\n/, '')
- const kids = headerPills(mid, phase, nm, tail.join('|').trim(), columns)
+ const kids = headerPills(mid, phase, nm, tail.join('|').trim(), columns, superseded)
 
  const row: RenderElement = { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: kids }
  if (!rest.trim()) return row
@@ -332,7 +355,8 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => {
   const draw = (snap: AtlasSnapshot | null) => {
    if (snap && !e.props.isSummary) noteDrawn(snap, e.requestId, e.props.text)
-   return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0) ?? next(e)) : next(e)
+   const superseded = snap && !e.props.isSummary && headerPhaseOf(e.props.text, snap) === 'done' ? noteDoneChip(e.requestId) : false
+   return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0, superseded) ?? next(e)) : next(e)
   }
   try {
    const known = cache.envOff === false ? patternSnap() : null

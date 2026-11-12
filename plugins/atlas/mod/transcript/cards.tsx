@@ -7,7 +7,8 @@ import { BRAND } from '../contract'
 import type { AgentState } from '../contract'
 import { surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
 import { CARD_W, toastRuns } from '../panel-layout'
-import { clip, cells } from '../atlas-ui'
+import { cells } from '../atlas-ui'
+import { clipE as clip } from '../board-model'
 import { displayName } from '../hud'
 import { fitText } from '../theme'
 
@@ -159,7 +160,9 @@ export function notificationTree(name: string, role: string, outcome: string, fa
  if (failed) return failedTree(name, outcome, ui, aged)
  const runs = toastRuns('done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui)
  // An old card (critique 17 C3: cards held full colour for 40 frames) keeps its words and drops to the muted tone, unbold: the run has moved on.
- return rowEl(aged ? runs.map((x) => ({ ...x, tone: 'muted' as const, bold: false })) : runs, ui)
+ // The rail `▌` is the card's state colour and stays (critique 21: older cards turned wholly grey and lost it); the glyph run and the state word beside it stay too.
+ const word = runs.findIndex((x) => x.t === 'done')
+ return rowEl(aged ? runs.map((x, i) => (i === 0 || i === word || i === word - 1 ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
 }
 
 /** A failure card carries one verb (critique 19 B4: `■ failed ghost-explorer explorer killed · 6s` said it twice): the end word the outcome leads with (`killed`, `failed`) is the state word,

@@ -135,7 +135,8 @@ describe('C4: the core tab in plain words', () => {
   test('the sentence says what was planned and what ran', () => {
     const out = text(panelWorld('core', 150, mocha, { core: c, rows: 40 })).join('\n');
     expect(out).toContain('3 explorers ran, the plan said 1');
-    expect(out).toMatch(/3 explorers +too many +planned on haiku/);
+    expect(out).toContain('planned on haiku'); // the plan's model, once; the count is the sentence above (critique 21)
+    expect(out).not.toMatch(/too many/);
   });
   test('a long reading sentence wraps whole instead of being cut mid-phrase', () => {
     const out = text(panelWorld('core', 37, mocha, { core: { ...core, offload: { ...core.offload, workers: [] } }, workers: [worker('a'), worker('b'), worker('c')], rows: 40 })).join('\n');

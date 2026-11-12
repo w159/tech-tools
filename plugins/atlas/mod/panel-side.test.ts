@@ -111,13 +111,15 @@ describe('agent names: displayName on the team and route tabs', () => {
 describe('fill height: a tall pane shows detail already in the snapshot', () => {
   const team = [worker('implementer-band', { goal: 'implementer-band: wire the band', detail: 'read runs.ts:17' }), worker('implementer-live', { state: 'failed', task: 'T6', detail: 'tests red 3', model: 'sonnet' }), worker('runner-land', { state: 'queued', task: 'T5', detail: 'parked' })];
 
-  test('team: per-agent model, task and last step under each row from 30 rows', () => {
-    const rows = body(panelWorld('team', 100, ui, { workers: team, rows: 36 }));
+  test('team: one row per agent from 30 rows; the model, task and last step open under the row on a press', () => {
+    const closed = body(panelWorld('team', 100, ui, { workers: team, rows: 36 })).join('\n');
+    expect(closed).not.toMatch(/^ {4}(model|task|last) /m);
+    const rows = body(panelWorld('team', 100, ui, { workers: team, rows: 36, expanded: 'worker:implementer-band' }));
     const joined = rows.join('\n');
     expect(joined).toMatch(/model +opus/);
     expect(joined).toMatch(/task +wire the band/);
     expect(joined).toMatch(/last +read runs\.ts:17/);
-    expect(joined).toMatch(/model +sonnet/);
+    expect(joined).not.toMatch(/model +sonnet/); // the other agent stays one row
     expect(rows.length).toBeLessThanOrEqual(36 - 6);
   });
 

@@ -44,8 +44,8 @@ describe('sidebar golden text', () => {
     const r = rows('team').slice(4).filter((l) => !/^ {4}\S/.test(l)).slice(0, 4); // the detail rows a tall pane adds sit under their agent
     expect(r[0]).toMatch(/^ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] lead\s+running/);
     expect(r[1]).toMatch(/^▸ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] explorer-1\s+running/);
-    expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
-    expect(r[3]).toMatch(/^ {2}■ runner-1\s+failed/);
+    expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+(\S+\s+)?waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
+    expect(r[3]).toMatch(/^ {2}■ runner-1\s+(\S+\s+)?failed/);
   });
   test('team at 38 columns (the 110-column pane) draws the six whole words on one row (critique 18; one form on every tab), and keeps name and state', () => {
     const r = rows('cols38');
@@ -76,8 +76,8 @@ describe('sidebar golden text', () => {
   test('an empty squad reads as nothing running, not a blank pane', () => {
     expect(goldenText('empty').trim().length).toBeGreaterThan(0);
   });
-  test('no legacy glyphs: no check, bullet, ellipsis or circle in any case (braille is the rev 5 spinner)', () => {
+  test('no legacy glyphs: no check, bullet or circle, and no ASCII `...`, in any case (braille is the rev 5 spinner)', () => {
     for (const k of ['route', 'team', 'channel', 'gates', 'core', 'cols38', 'cols30', 'cols120', 'channelLog', 'routeOpenPending', 'routeOpenDone'])
-      expect(goldenText(k)).not.toMatch(/[✓•…✗○]/u);
+      { expect(goldenText(k)).not.toMatch(/[✓•✗○]/u); expect(goldenText(k)).not.toContain('...'); } // a cut is one `…` (wave 24)
   });
 });

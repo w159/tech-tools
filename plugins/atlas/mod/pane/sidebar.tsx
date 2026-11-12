@@ -5,11 +5,12 @@
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
-import { HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows } from '../panel-layout';
+import { emptyHint, HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { boardRibbon, boardRowsOf } from '../board-model';
-import { boardTree } from '../todo-panel';
+import { boardFolded, boardLines, boardOpenFolded, boardRibbon, boardRowsOf } from '../board-model';
+import { gateTally } from '../data/runstate';
+import { noteStopVerdict } from '../transcript/superseded';
 import { panelModelOf } from './sidebar-model';
 import { lineEl, panelBg, runEl, viewRows } from './sidebar-paint';
 import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
@@ -62,22 +63,30 @@ export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { ti
   return stripLayout(cols).bare ? { ...b, title: ui.ascii ? 'SIDEPANEL > BOARD' : 'SIDEPANEL ▸ BOARD' } : b;
 }
 
-function boardIn(els: ClientElements, m: SidebarModel, cols: number, ui: Ui): RenderElement {
+/** The board view's rows (design wave 24): a summary row, every item with its owner in one right column, and the record of how the run closed. Nothing on the board: one dim line. */
+function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number, ui: Ui, pm: PanelModel): RenderElement {
   const s = m.snapshot;
   const items = boardItems(m);
-  return boardTree(els, items, { ribbon: false, title: false, cols, rows: Math.max(1, m.rows - 4), tick: m.tick ?? 0, now: Math.floor(s.now / 1000), ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), ui, motion: m.motion });
+  const max = Math.max(1, m.rows - 4);
+  const stop = gateTally(m.gates as never).stop;
+  const lines = items.length
+    ? boardLines(boardRowsOf(items, Math.floor(s.now / 1000)), { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, dispatches: items.filter((i) => i.origin === 'dispatch').length, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
+    : emptyHint(pm, 'nothing on the board yet');
+  const shown = lines.length <= max ? lines : [...lines.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${lines.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
+  return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: shown.map((l) => lineEl(els, { runs: l.runs }, m, on, ui)) });
 }
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
   const ui = model.look ?? uiFromEnv(); // the host's one read (register.ts); the process environment only where a fixture sets none
   const cols = Math.max(10, model.columns - 1);
   const pm = panelModelOf(model, ui, cols);
+  noteStopVerdict(!!gateTally(model.gates as never).stop?.blocked); // the transcript's done chips read it: a refusal supersedes the ones drawn before it
   const blank = (): RenderElement => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, model, on, ui);
   return els.Box({
     flexDirection: 'column',
     flexShrink: 0,
     width: cols,
     backgroundColor: panelBg(ui),
-    children: [lineEl(els, ribbonRow(pm, model.ui.view === 'board' ? boardViewRibbon(model, cols, ui) : undefined), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, cols, ui)] : viewRows(model.ui.view, els, model, on, cols, pm))],
+    children: [lineEl(els, ribbonRow(pm, model.ui.view === 'board' ? boardViewRibbon(model, cols, ui) : undefined), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, on, cols, ui, pm)] : viewRows(model.ui.view, els, model, on, cols, pm))],
   });
 }

@@ -55,9 +55,11 @@ function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] 
 
 const hhmm = (iso: string): string => {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '--:--' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return iso === '' ? '' : Number.isNaN(d.getTime()) ? '--:--' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
-const noteOf = (n: ChannelNote): PanelNote => ({ at: hhmm(n.ts), from: n.owner, to: n.to, kind: n.kind, text: n.text, lead: isLead(n.owner) });
+/** A kill is a failure, not a block: the store's row for a killed worker says `worker killed` under the blocked kind, the channel draws it `■ failed`. */
+const kindOf = (n: ChannelNote): string | undefined => (n.kind === 'blocked' && /^worker killed/.test(n.text) ? 'failed' : n.kind);
+const noteOf = (n: ChannelNote): PanelNote => ({ at: hhmm(n.ts), from: n.owner, to: n.to, ...(kindOf(n) ? { kind: kindOf(n)! } : {}), text: n.text, lead: isLead(n.owner) });
 
 
 /** When a worker ended, from the host list (the instant a killed worker left it), else undefined: the row then draws no time rather than the clock. */
@@ -90,15 +92,19 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     stop: gateTally(m.gates).stop,
     channel: s.channel ?? '',
   });
+  // The closure is a post too (wave 24): a plan row the lead closed over a failed worker reads `T2 dispatch closed after Stop refusal · ghost-explorer`, whole names, from the lead.
+  const stop = gateTally(m.gates).stop;
+  const todos = todosOf(s, workers);
+  const closures: ChannelNote[] = todos.filter((t) => t.state === 'done' && t.word === DONE_DOUBT && t.owner).map((t) => ({ ts: '', seq: 0, owner: 'lead', to: 'all', text: `${/^T\d+\b/i.exec(t.label)?.[0] ?? 'row'} dispatch closed${stop?.blocked ? ' after Stop refusal' : ''} · ${t.owner}`, channel: s.channel ?? '', kind: 'done' }));
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
     cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, tick: m.tick ?? 0, now: spinClock(s.now, m.tick ?? 0), // the one spinner clock (atlas-ui): the snapshot clock moves with the ticker, so a spinner turns between data polls
     expanded: m.ui.expanded, recipient: m.ui.recipient,
-    phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos: todosOf(s, workers), workers, lead,
+    phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos, workers, lead,
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
-    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: [...notes, ...failures].map(noteOf),
+    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: [...notes, ...failures, ...closures].map(noteOf),
   };
 }

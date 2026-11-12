@@ -27,9 +27,9 @@ const shown = (rows: string[]): number => (rows.join('\n').match(/item-\d+/g) ??
 
 describe('sidebar board tab', () => {
   const many = Array.from({ length: 12 }, (_, i) => todo(i));
-  test('the row cap is the pane height less four: the column header and the items, then the "more" row (the panel ribbon is the one BOARD title)', () => {
-    expect(shown(board(many, { rows: 10 }))).toBe(4); // 6 rows: header, four items, "+N more"
-    expect(shown(board(many, { rows: 11 }))).toBe(5);
+  test('the row cap is the pane height less four: the summary and its blank row, the items, then the "more" row (the panel ribbon is the one BOARD title)', () => {
+    expect(shown(board(many, { rows: 10 }))).toBe(3); // 6 rows (wave 24): the summary, a blank, three items, "+N more"
+    expect(shown(board(many, { rows: 11 }))).toBe(4);
     expect(shown(board(many, { rows: 40 }))).toBe(12);
   });
   test('critique 15 B5 (L19): the panel ribbon itself reads `▸ BOARD  n items` beside the capsule, and no second BOARD title row follows', () => {
@@ -41,9 +41,9 @@ describe('sidebar board tab', () => {
     expect(rows.join('\n').match(/BOARD/g)!.length).toBe(1);
     expect(board(many, { ui: { recipient: null, expanded: null, draft: '', view: 'route' } as never }).join('\n')).toContain('SIDEPANEL');
   });
-  test('the board lists the snapshot todos, and none reads (no state)', () => {
+  test('the board lists the snapshot todos, and none reads one dim line', () => {
     expect(shown(board(many))).toBe(12);
-    expect(board([]).join('\n')).toContain('(no state)');
+    expect(board([]).join('\n')).toContain('nothing on the board yet'); // wave 24: an empty board is one dim line
   });
   test('a running item turns the shared spinner clock: the snapshot clock moved on by the pane tick', () => {
     const run = [todo(0, { status: 'in_progress', claimed_at: NOW / 1000 - 5 })];
@@ -63,8 +63,8 @@ describe('sidebar board tab', () => {
   });
   test('a running item counts its time from the snapshot clock in whole seconds', () => {
     const run = [todo(0, { status: 'in_progress', claimed_at: NOW / 1000 - 90 })];
-    expect(board(run).join('\n')).toContain('elapsed 01:30');
+    expect(board(run).join('\n')).toContain('open 01:30');
     const later = [todo(0, { status: 'in_progress', claimed_at: Math.floor(NOW / 1000) - 3725 })];
-    expect(board(later).join('\n')).toContain('elapsed 62:05');
+    expect(board(later).join('\n')).toContain('open 62:05');
   });
 });
