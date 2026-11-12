@@ -380,7 +380,7 @@ test("long worker names and roles are cut with an ellipsis in their columns, nev
 test("panel at 60 columns is the band alone", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
 	expect(p).toHaveLength(1);
-	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 5/9 · ◓2");
+	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 5/9 · ◓ 2 running · ◇ 1 queued");
 });
 
 test("worker marks: a running worker's spinner follows the tick, thinking has a grey one; no faces", () => {

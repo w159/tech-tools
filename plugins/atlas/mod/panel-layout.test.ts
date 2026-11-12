@@ -271,7 +271,7 @@ describe('channel tab', () => {
   test('header counts people and unread in words; blocked and handoff notes carry the state glyph and word', () => {
     const out = bodyLines(panelWorld('channel', 120, mocha)).map(lineText);
     expect(out[0]).toBe('    #atlas-board-mod  5 people · 2 unread');
-    expect(out[2]).toMatch(/^ {2}▲ implementer-live +blocked /);
+    expect(out[2]).toMatch(/^ {2}■ implementer-live +blocked /);
     expect(out[3]).toMatch(/^ {2}● implementer-layout +handoff /);
   });
   test('the log keeps the newest rows - 4 notes', () => {

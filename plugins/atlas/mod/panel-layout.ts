@@ -77,7 +77,7 @@ export function stripLayout(cols: number, lit?: string): { rows: StripTab[][]; g
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
 export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; tools?: number };
-export type PanelGateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string };
+export type PanelGateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string; /** Only Stop decides it (data/runstate withPending): drawn `◇`. */ pending?: boolean };
 export type PanelGate = { id: string; title: string; error?: string; lines: PanelGateLine[] };
 export type PanelNote = { at: string; from: string; to?: string; kind?: string; text: string; lead?: boolean };
 
@@ -148,6 +148,8 @@ export const lineText = (l: PanelLine): string => runsText(l.runs);
 
 /** Spinner frame of agent `id`: the shared clock reading (spinFrameOf, a fixed phase per id) when the model carries one, else the tick. */
 const frameOf = (m: Pick<PanelModel, 'now' | 'tick'>, id = ''): number => (m.now !== undefined ? spinFrameOf(m.now, id) : m.tick);
+/** The mark of a core-tab row: a `blocked` state there is a warning (a team off plan, evidence missing, a claim no verdict backs), so it keeps the amber triangle; blocked work is the red square (critique 16 A2). */
+const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : stateRun(s, ui));
 /** The state glyph of agent `id` on its row. */
 const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => stateRun(s, m.ui, frameOf(m, id));
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
@@ -233,10 +235,15 @@ export const headerRows = (m: PanelModel): PanelLine[] => [ribbonRow(m), BLANK, 
 // ---- route ------------------------------------------------------------------------------------------------------------
 
 const groupOk = (g: PanelGate): boolean => !g.error && g.lines.every((l) => l.ok);
+/** A group that passes but for conditions only Stop decides: `◇ pending`, neither the green mark nor the warning. */
+const groupPending = (g: PanelGate): boolean => groupOk(g) && g.lines.some((l) => l.pending);
+const groupMark = (g: PanelGate, ui: Ui): Run => (groupPending(g) ? stateRun('queued', ui) : groupOk(g) ? stateRun('done', ui) : warnMark(ui));
 const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).length;
 
-/** `phase   research   2/4`: the lit phase and its place on the rail. */
+/** `phase   research   2/4`: the lit phase and its place on the rail. While the Stop gate refused the stop (or the lead declared it) the phase is `blocked` with no rail
+ * number: never `done 5/5` beside a blocked band (critique 16 A3, stoprun f0090). */
 function phaseRow(m: PanelModel): PanelLine {
+  if (m.phase === 'done' && tallyOf(gatesOf(m)).stop?.blocked) return line([label('phase', m.cols), r('blocked', 'bad', { bold: true })]);
   const rail = railOf(m.phases, m.phase); // the one rail (mod/rail.ts): the band, the HUD and omp read the same index
   return line([label('phase', m.cols), r(m.phase), ...(m.phases.length && (m.phase === 'done' || m.phases.includes(m.phase)) ? [r(`${m.cols >= 100 ? '   ' : ' '}${railNo(rail)}`)] : [])]);
 }
@@ -247,7 +254,7 @@ function gatesRow(m: PanelModel): PanelLine | null {
   const gs = countedGates(gatesOf(m));
   if (!t.total) return null;
   const word = `${t.green}/${t.total} green`;
-  const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), groupOk(g) ? mark('done', m) : { ...warnMark(m.ui), t: `${warnMark(m.ui).t} ` }, r(g.id)]);
+  const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), groupPending(g) ? { ...stateRun('queued', m.ui), t: `${stateRun('queued', m.ui).t} ` } : groupOk(g) ? mark('done', m) : { ...warnMark(m.ui), t: `${warnMark(m.ui).t} ` }, r(g.id)]);
   const full = [label('gates', m.cols), ...names, r(`   ${word}`)];
   if (rowWidth(full) <= m.cols) return line(full);
   return line([label('gates', m.cols), r(word)]);
@@ -603,7 +610,7 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
   const [first = '', ...more] = wrap(oneLine(ln.label), Math.max(8, m.cols - 6));
   const extra = open ? [ln.detail, ln.fix ? `fix: ${ln.fix} (press to copy)` : undefined].filter((x): x is string => !!x) : [];
   return [
-    line(moving(gridRow({ cols: m.cols, ui: m.ui, mark: ln.ok ? stateRun('done', m.ui) : warnMark(m.ui), name: { t: `  ${first}` }, nameW: cells(first) + 2 }), key, ln.ok ? 'done' : 'blocked', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
+    line(moving(gridRow({ cols: m.cols, ui: m.ui, mark: ln.pending ? stateRun('queued', m.ui) : ln.ok ? stateRun('done', m.ui) : warnMark(m.ui), name: { t: `  ${first}` }, nameW: cells(first) + 2 }), key, ln.ok ? 'done' : 'blocked', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
     ...more.map((t) => note(`  ${t}`, m)), ...extra.map((t) => note(`  ${oneLine(t)}`, m)),
   ];
 }
@@ -620,14 +627,15 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
   // What is wrong follows the word: the first fix, else (while the group is closed) the failing check's name. Once the checks are listed the name is
   // their own row, never said twice; a passing group says nothing here (a check's detail belongs to its row, never beside another's name).
   const tail = g.error ? `unavailable: ${oneLine(g.error)}` : bad ? oneLine(first?.fix ?? (open ? '' : first?.label)) : '';
-  const word = bad || g.error ? 'warning' : 'passing';
+  const pend = groupPending(g);
+  const word = bad || g.error ? 'warning' : pend ? 'pending' : 'passing';
   // The green count is the right-aligned value; the tail follows the word when it fits whole, else wraps under.
   const value = showValue ? gateValue(g) : '';
   const fixed = GRID_LEAD + nameW + 2 + GATE_WORD_W + (value ? cells(value) + 1 : 0) + 1;
   const fits = !tail || cells(tail) <= m.cols - fixed;
   const runs = gridRow({
-    cols: m.cols, ui: m.ui, mark: groupOk(g) ? stateRun('done', m.ui) : warnMark(m.ui),
-    name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'warn' : 'ok' }, wordW: GATE_WORD_W,
+    cols: m.cols, ui: m.ui, mark: groupMark(g, m.ui),
+    name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'warn' : pend ? 'muted' : 'ok' }, wordW: GATE_WORD_W,
     ...(fits && tail ? { detail: { t: tail } } : {}), ...(value ? { value: { t: value, tone: 'warn' as const } } : {}),
   });
   return [
@@ -729,7 +737,7 @@ function contractRows(c: CoreModel, m: PanelModel): PanelLine[] {
     ...items.flatMap(([name, t, gate]): PanelLine[] => {
       const waived = t.total > 0 && t.ok < t.total && gateOk(gate);
       const runs = gridRow({
-        cols: m.cols, ui: m.ui, mark: stateRun(!t.total || waived ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
+        cols: m.cols, ui: m.ui, mark: coreMark(!t.total || waived ? 'queued' : t.ok === t.total ? 'done' : 'blocked', m.ui),
         name: { t: name }, nameW: 8, word: { t: t.total ? `${t.ok}/${over(t)}` : 'none yet', tone: waived ? 'muted' : tallyTone(t.ok, t.total) }, wordW: 8,
       });
       return withRoom(runs, waived ? (name === 'evidence' ? 'not required for this run' : `${why(name, t)}, not required for this run`) : why(name, t), m); // a waived verified row keeps the true count: the verdict line the live scorer reads (gates metric 66.7 at 95c4a588)
@@ -756,7 +764,7 @@ function verdictRows(c: CoreModel, m: PanelModel, cap = VERDICT_CAP): PanelLine[
     const open = m.expanded === key;
     const detail = open ? [checked ? `checks the done claim of ${checked.owner}` : 'no worker claim before it', `by ${v.by}`, `evidence: ${oneLine(v.evidence) || 'none recorded'}`] : [];
     const verdictRow = (withTitle: boolean): Run[] => gridRow({
-      cols: m.cols, ui: m.ui, mark: stateRun(look.s, m.ui), name: { t: oneLine(v.id) }, nameW: plan.nameW,
+      cols: m.cols, ui: m.ui, mark: coreMark(look.s, m.ui), name: { t: oneLine(v.id) }, nameW: plan.nameW,
       word: { t: look.word, tone: look.tone, bold: v.status === 'rejected' }, wordW: VERDICT_WORD_W, ...(withTitle ? { detail: { t: oneLine(v.title) } } : {}),
     });
     // A pane narrower than SPILL_BELOW (the 110-column pane) puts the title beside the verdict when it fits, else on the rows under it: never cut with `...`.
@@ -768,7 +776,7 @@ function verdictRows(c: CoreModel, m: PanelModel, cap = VERDICT_CAP): PanelLine[
     ];
   });
   const unchecked = owners.map((x) => line(fitRuns(gridRow({
-    cols: m.cols, ui: m.ui, mark: stateRun('blocked', m.ui), name: { t: x.owner }, nameW: plan.nameW,
+    cols: m.cols, ui: m.ui, mark: warnMark(m.ui), name: { t: x.owner }, nameW: plan.nameW,
     word: { t: 'unchecked', tone: 'warn' }, wordW: VERDICT_WORD_W, detail: { t: 'says done, no verdict yet' },
   }), m.cols)));
   return [heading('verdicts', figures, m), ...(rows.length || unchecked.length || none ? [...rows, ...unchecked] : [line([r('    no verdict recorded yet', 'muted')])])];
@@ -837,7 +845,7 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
     // A team that ran differently says what happened, in words: `planned audit team (low effort), ran 3 explorers` (data/core plannedText, the band's wording).
     const headName = rt.drift.length ? plannedText(rt) : teamName;
     const headLines = cells(headName) <= m.cols - GRID_LEAD ? [headName] : wrap(headName, Math.max(8, m.cols - GRID_LEAD), 3); // a name wider than the pane wraps on its words, it is never cut
-    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? stateRun('blocked', m.ui) : null, name: { t: headLines[0]!, bold: true }, nameW: Math.min(cells(headLines[0]!), Math.max(1, m.cols - GRID_LEAD)) });
+    const team = gridRow({ cols: m.cols, ui: m.ui, mark: rt.drift.length ? warnMark(m.ui) : null, name: { t: headLines[0]!, bold: true }, nameW: Math.min(cells(headLines[0]!), Math.max(1, m.cols - GRID_LEAD)) });
     const headMore = headLines.slice(1).map((t) => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(t, 'text', { bold: true })], m.cols)));
     const seats = rt.seats.flatMap((s): PanelLine[] => {
       const same = s.ran.every((x) => x.toLowerCase().includes(s.model.toLowerCase()) || s.model === 'inherit');
@@ -847,7 +855,7 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
       // Plain words, no `model/effort` token: `3 explorers ran, 1 planned (haiku, low effort)`; a seat that ran another model reads `ran on opus, planned haiku, low effort`.
       const plan = `${s.model}, ${s.effort} effort`;
       const detail = !s.ran.length ? `not run yet, planned ${plan}` : over ? `${s.ran.length} ${s.role}${s.ran.length === 1 ? '' : 's'} ran, ${s.count} planned (${plan})` : same ? `ran ${used}, ${s.effort} effort` : `ran on ${used}, planned ${plan}`;
-      const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateRun(st, m.ui), name: { t: `  ${seatCount(s)}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
+      const runs = gridRow({ cols: m.cols, ui: m.ui, mark: coreMark(st, m.ui), name: { t: `  ${seatCount(s)}x ${s.role}` }, nameW, word: { t: word, tone }, wordW: SEAT_WORD_W });
       return withDetail(runs, over ? [detail, `${s.ran.length} ran, ${s.count} planned (${s.model})`] : detail);
     });
     // In-process routes have no team name or isolation to show: the sentence says how the workers ran.

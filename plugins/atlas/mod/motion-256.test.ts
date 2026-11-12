@@ -39,7 +39,7 @@ describe('256-colour ease', () => {
         }
       }
     }
-    expect(eased).toBeGreaterThanOrEqual(30); // 40 before critique 12: pairs whose only mid-steps read as the body tone now keep their resting tone instead
+    expect(eased).toBeGreaterThanOrEqual(27); // 30 before critique 16 A2 (blocked took the red tone, whose ladder eases fewer pairs); 40 before critique 12: pairs whose only mid-steps read as the body tone now keep their resting tone instead
     // Critique 12: no step is the body tone (189 on Mocha): a `returned` glyph and word at that step looked uncoloured beside the rows at rest.
     for (const theme of THEMES) {
       const p = PALETTES[theme];

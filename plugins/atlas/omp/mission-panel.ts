@@ -136,6 +136,7 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 	const workers = m.idle ? [] : m.workers.map(missionWorker);
 	const rail = railOf(railIds(m.phases), m.phase);
 	const owners = ownerStates(m);
+	const openDispatch = (m.todos ?? []).filter(t => t.origin === "dispatch" && t.status !== "completed"); // the rows Stop refuses on that the plan does not list
 	return {
 		cols: w,
 		maxRows: m.maxLines,
@@ -150,6 +151,8 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		done: m.done,
 		total: m.total,
 		openWork: m.core?.contract.open,
+		openDispatch: openDispatch.length,
+		...(openDispatch[0]?.content ? { openDispatchTitle: openDispatch[0].content } : {}),
 		todoBlocked: blockedCount(m.todos ?? [], owners),
 		busy: !!m.leadBusy || planBusy(m.todos ?? [], owners),
 		workers,

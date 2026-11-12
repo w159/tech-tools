@@ -87,8 +87,8 @@ function stateRows(rows: readonly string[], rowRe: RegExp): Record<string, UiSta
     if (!m) continue;
     const word = m[3] as UiState | undefined;
     const glyph = GLYPH.get(m[1]!)!;
-    if (word) expect(glyph).toBe(word); // the glyph and the word of one row agree
-    out[m[2]!.trim()] = word ?? glyph;
+    if (word) expect(glyph === 'blocked' && word === 'failed' ? word : glyph).toBe(word); // the glyph and the word of one row agree (failed and blocked share the red square, the word tells them apart)
+    out[m[2]!.trim()] = word ?? (glyph === 'blocked' ? 'failed' : glyph); // a row with no word (the band's worker table): the red square is the failed worker (a worker is never blocked there)
   }
   return out;
 }

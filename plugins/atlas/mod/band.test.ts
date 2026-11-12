@@ -94,13 +94,13 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(plain.rows[0]).toContain('◖ ◆ ATLAS ◗');
     expect(cells(plain.rowNodes[0]!).every((t) => t.props.color === undefined && t.props.backgroundColor === undefined)).toBe(true);
   });
-  test('blocked reads `▲ blocked: needs you` and the phase rail keeps the last real phase lit', () => {
+  test('blocked reads `■ blocked: needs you` and the phase rail keeps the last real phase lit', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
     const { rows } = panel(160, { snapshot, live: [], lastPhase: 'implement', rich: true });
     expect(rows[0]).toContain('▸ 4 implement');
     const band = panel(160, { snapshot, live: [], lastPhase: 'implement' }).rows[0]!;
-    expect(band).toContain('▲ blocked: needs you');
+    expect(band).toContain('■ blocked: needs you');
     expect(band).not.toContain('idle');
   });
   test('rich: capsule with the numbered phase rail, a blank row, then the gauges', () => {
@@ -116,8 +116,8 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ██▌░░░░░░░ 1/4');
     expect(band(100)).toMatch(/^◖ ◆ ATLAS ◗ implement · todo 1\/4 · ctx 12% · /); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3)
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
-    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
+    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`); // below 50 columns the glyph forms are the last fallback
   });
   test('idle shows the last run under the band', () => {
     const snapshot = busySnap({ comms: [] });
@@ -298,7 +298,7 @@ describe('the board slot', () => {
   test('expanded lists every item right under the band (header, then one row each); folded costs nothing', () => {
     const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }), todoExpanded: true, maxRows: 14 });
     expect(rows[1]!.trim()).toMatch(/^ITEM +STATE +OWNER +DETAIL$/);
-    expect(rows.slice(2, 5).map((r) => r.trim().replace(/^▸ /, '').slice(0, 1))).toEqual(['●', '▲', '◇']); // the in-progress item's owner waits, so the item reads blocked (data/live.ts: board state from the owner)
+    expect(rows.slice(2, 5).map((r) => r.trim().replace(/^▸ /, '').slice(0, 1))).toEqual(['●', '■', '◇']); // the in-progress item's owner waits, so the item reads blocked (data/live.ts: board state from the owner)
     expect(rows.slice(2, 5).map((r) => r.includes('done') || r.includes('blocked') || r.includes('queued'))).toEqual([true, true, true]);
   });
   test('a tight budget shrinks the board before it takes the footer or the attention workers', () => {
@@ -383,10 +383,10 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ todo 1/4 · ◒1 ■1` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ todo 1/4 · ◒ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)}1 ■1 ◉1`);
+    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ todo 1/4 · ${spinnerGlyph(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {
