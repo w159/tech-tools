@@ -5,7 +5,7 @@
 import { groupOpenCount } from '../gates';
 import { textWidth } from '../theme';
 import type { GateGroup } from '../pane/sidebar-types';
-import type { UiState } from '../atlas-ui';
+import { clip, type UiState } from '../atlas-ui';
 import { todoState } from './todos';
 import { plannedText, type Route } from './core';
 
@@ -22,7 +22,8 @@ export const leadBusy = (s: { activity?: Readonly<Record<string, { mood?: string
 };
 
 /** `name`: only on a failing check, what the blocked reason calls it (the failing line's own words). */
-export type GateCheck = { id: string; ok: boolean; name?: string };
+/** `pending`: the group's only failing lines are conditions Stop alone decides (`Todos drained`, `Team gate`); it counts as not failing and reads `◇ pending` until Stop decides (critique 16 A4). */
+export type GateCheck = { id: string; ok: boolean; name?: string; pending?: true };
 /** `stop`: the completion gate's last Stop verdict for this session (the `stop-verdict` line atlas_gates.py reads from completion_gate_core's record): `gates` are the
  * refusing gates' names, lowercased. null when no Stop has been recorded. Only a blocked Stop makes the band BLOCKED. */
 export type StopVerdict = { blocked: boolean; gates: string[] };
@@ -35,6 +36,20 @@ export const STOP_LINE = 'stop-verdict';
 const hasData = (g: GateGroup): boolean => g.lines.some((l) => l.id !== STOP_LINE) || !!g.error || g.id === 'header';
 
 const NAME_MAX = 16;
+/** The completion gate's lines that only Stop can decide: `i` (Todos drained: a plan has open rows all run long) and `s` (Team gate: red once the second in-process dispatch lands, green
+ * again the moment its one advisory is used). Read mid-run they flip a clean run's figure 4/4, 3/4, 2/4, 3/4 (critique 16 A4, live-150-e4a8186a-1 f0034 to f0094), so until a Stop has
+ * refused they read PENDING: `ok` with `pending` set, drawn `◇`, never counted as a failure and never as a green mark. A refused Stop makes them real again. */
+export const STOP_ONLY_LINES: ReadonlySet<string> = new Set(['i', 's']);
+export const isPendingLine = (l: unknown): boolean => !!(l as { pending?: boolean }).pending;
+export function withPending<G extends { id: string; lines: readonly unknown[] }>(groups: readonly G[]): readonly G[] {
+  if (stopOf(groups as unknown as readonly GateGroup[])?.blocked) return groups;
+  return groups.map((g) => {
+    if (g.id !== 'completion') return g;
+    const lines = g.lines as readonly { id: string; ok: boolean }[];
+    return lines.some((l) => !l.ok && STOP_ONLY_LINES.has(l.id)) ? { ...g, lines: lines.map((l) => (!l.ok && STOP_ONLY_LINES.has(l.id) ? { ...l, ok: true, pending: true } : l)) } : g;
+  });
+}
+
 /** The header contract as ONE evaluation: the core row's `n of m` replies that opened with the ATLAS header (the transcript's tally) also decides the gates tab's
  * `Header contract` line, so `header 6 of 8` amber beside `Header contract passing` can not happen. A header group without a tally, or a tally with no replies yet, keeps its own line. */
 export function withHeaderTally<G extends { id: string; lines: readonly unknown[] }>(groups: readonly G[], header: { ok: number; total: number } | null | undefined): readonly G[] {
@@ -50,7 +65,7 @@ export const DISPATCH_LINE = 'dispatch-plan';
  * and the dispatch plan. A route that ran differently from its plan (the core row's red `off plan`) fails the routing group with a line that says how, so `■ 3x explorer off plan`
  * beside `Tool routing passing` and `● routing` can not happen (critique 12 B2). A core without a drifted route changes nothing. */
 export function withCoreTally<G extends { id: string; lines: readonly unknown[] }>(groups: readonly G[], core: { contract: { header: { ok: number; total: number } }; routes: readonly Pick<Route, 'cls' | 'effort' | 'seats' | 'drift'>[] } | null | undefined): readonly G[] {
-  const withHeader = withHeaderTally(groups, core?.contract.header);
+  const withHeader = withPending(withHeaderTally(groups, core?.contract.header));
   const drifted = [...(core?.routes ?? [])].reverse().find((rt) => rt.drift.length > 0); // the newest drifted route, the one the core row names
   if (!drifted) return withHeader;
   const line = { id: DISPATCH_LINE, label: 'Dispatches followed the plan', ok: false, detail: plannedText(drifted) };
@@ -64,9 +79,10 @@ function reasonName(g: GateGroup): string {
 }
 
 /** The gates figure for every surface: the side panel's `green of total`, the band's checks row and its blocked reason. `failing` holds group ids, `names` the reason words. */
-export function gateTally(groups: readonly GateGroup[]): GateTally {
+export function gateTally(raw: readonly GateGroup[]): GateTally {
+  const groups = withPending(raw); // idempotent: withCoreTally has already applied it to the groups every surface draws
   const data = groups.filter(hasData);
-  const checks = data.map((g): GateCheck => (groupOpenCount(g) === 0 ? { id: g.id, ok: true } : { id: g.id, ok: false, name: reasonName(g) }));
+  const checks = data.map((g): GateCheck => (groupOpenCount(g) === 0 ? { id: g.id, ok: true, ...(g.lines.some(isPendingLine) ? { pending: true as const } : {}) } : { id: g.id, ok: false, name: reasonName(g) }));
   const failing = checks.filter((c) => !c.ok).map((c) => c.id);
   return { total: checks.length, green: checks.length - failing.length, failing, names: checks.filter((c) => !c.ok).map((c) => c.name!), checks, stop: stopOf(groups) };
 }
@@ -86,16 +102,23 @@ function stopOf(groups: readonly GateGroup[]): StopVerdict | null {
   return null;
 }
 
+/** The open dispatch row's title, in cells, inside `dispatch <title> open`. */
+const DISPATCH_TITLE_MAX = 22;
+const clipCells = (t: string, n: number): string => clip(t.replace(/\s+/g, ' ').trim(), n);
+
 /** Longest joined reason the band spells out; past it the count stands in (`3 reasons`). */
 const REASON_MAX = 28;
 
 /** Why a band is blocked, after `blocked:` and in plain words: the lead declared it (`needs you`), or the Stop gate refused the stop and said why
  * (`1 todo open`, `team gate`, `team gate, todos drained`). One string at every width: a crowded row drops the reason whole, never rewords it. */
-export function blockReasons(declared: boolean, stopGates: readonly string[]): { long: string; short: string } {
+export function blockReasons(declared: boolean, stopGates: readonly string[], dispatchTitle?: string): { long: string; short: string } {
   if (declared) return { long: 'needs you', short: 'needs you' };
   if (stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
-  const joined = stopGates.join(', ');
-  const one = textWidth(joined) <= REASON_MAX ? joined : `${stopGates.length} reasons`;
+  // The open row Stop refused on is a dispatch row the plan does not list: name it by its title (`dispatch read ghost.py open`) instead of a count the band's todo figure would have to invent.
+  const named = dispatchTitle ? `dispatch ${clipCells(dispatchTitle, DISPATCH_TITLE_MAX)} open` : '';
+  const gates = named ? stopGates.reduce<string[]>((acc, g) => (/\bopen\b|todos? drained/.test(g) ? (acc.includes(named) ? acc : [...acc, named]) : [...acc, g]), []) : stopGates;
+  const joined = gates.join(', ');
+  const one = textWidth(joined) <= REASON_MAX || (named && gates.length === 1) ? joined : `${gates.length} reasons`;
   return { long: one, short: one };
 }
 

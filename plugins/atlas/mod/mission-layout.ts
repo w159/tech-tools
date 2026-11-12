@@ -33,7 +33,7 @@ export type MissionNote = { from: string; to: string; text: string; at?: string;
 const NOT_MESSAGE = new Set(['join', 'leave', 'exit', 'merge']);
 export const isMessageKind = (kind?: string): boolean => !kind || !NOT_MESSAGE.has(kind);
 /** `name`: what a failing check is called in the blocked reason (the failing line's own words, `team gate`); the id when absent. */
-export type MissionCheck = { id: string; ok: boolean; name?: string };
+export type MissionCheck = { id: string; ok: boolean; name?: string; /** Only Stop decides it: drawn `◇`, counted as not failing. */ pending?: boolean };
 export type LastRun = { workers: number; secs?: number; failed: number };
 
 export type MissionModel = {
@@ -61,6 +61,8 @@ export type MissionModel = {
   openWork?: number;
   /** Of Stop's open rows, how many are dispatch rows: the extra open rows beyond the plan read `n dispatch open` when they all are. */
   openDispatch?: number;
+  /** The title of the first open dispatch row: a blocked band names it in its reason (`blocked: dispatch read ghost.py open`) and leaves the todo figure at the plan's own count. */
+  openDispatchTitle?: string;
   /** The lead is mid-turn: its own tool runs or it is thinking (data/runstate leadBusy), or a plan row is running (planBusy, the HUD's TODO rule), though no worker is listed. The band never reads `idle` then. */
   busy?: boolean;
   /** Workers to show: running, waiting, failed and recently finished (never parked). */
@@ -173,15 +175,15 @@ function phaseIndex(m: MissionModel): number {
 const openMore = (m: MissionModel): string => {
   const n = (m.openWork ?? 0) - (m.total - m.done);
   if (!m.total || n <= 0) return '';
+  if (m.openDispatchTitle && (m.openDispatch ?? 0) >= n && (m.blocked || (m.stopGates?.length ?? 0) > 0)) return ''; // a blocked band names the row in its reason
   // An open dispatch row of a worker that is listed running is that worker: `1 dispatch open` beside `◐ 1 running` said one fact twice (critique 12 B4, f0061). The agent count carries it.
   if ((m.openDispatch ?? 0) >= n && n <= m.workers.filter((w) => w.state !== 'done' && w.state !== 'failed').length) return '';
   return (m.openDispatch ?? 0) >= n ? ` · ${n} ${n === 1 ? 'dispatch' : 'dispatches'} open` : ` · ${n} open`; // an open dispatch row is named: Stop refuses on it though the plan reads full
 };
-/** The todo figure. A BLOCKED band whose Stop refusal rests on open rows the plan does not list counts them in the total: `5/6 · 1 dispatch open`, never `5/5` beside
- * `blocked: 1 todo open` (critique 15 B2, stoprun f0090). Not blocked, the figure stays the plan's own and `openMore` names the open rows. */
+/** The todo figure: the plan's own `n/m`, the count the TODO header, the route and the board give (critique 16 A1: `todo 5/6` beside a TODO header of `5/5` invented a sixth row).
+ * Open rows the plan does not list never join the denominator: a blocked band names the open dispatch row in its reason, an unblocked one beside the figure (`openMore`). */
 function figure(m: MissionModel): { done: number; total: number } {
-  const extra = m.total && runStateOf(m).blocked && openMore(m) ? Math.max(0, (m.openWork ?? 0) - (m.total - m.done)) : 0;
-  return { done: m.done, total: m.total + extra };
+  return { done: m.done, total: m.total };
 }
 const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => { const f = figure(m); return gauge(w, m.eased?.todo ?? (f.total ? Math.min(1, f.done / f.total) : 0), ui); };
 const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
@@ -202,7 +204,7 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber ▲).
   const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? warningText(failing) : undefined;
-  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates) };
+  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, reason: blockReasons(!!m.blocked, stopGates, m.openDispatchTitle) };
 }
 
 /** `▲ blocked: 1 todo open`: glyph, the word and, when given, the reason in plain words (what Stop said). One form at every width. */
@@ -232,7 +234,6 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const fig = figure(m);
   const todo = m.total ? `${fig.done}/${fig.total}${openMore(m)}` : '';
   const blockedWords = blockedRuns(m, ui, true);
-  const blockedTiny = blockedRuns(m, ui, false);
   // Below GAUGE_MIN the one-row band carries figures, not gauges: an empty `░░░` track beside `0 of 5` (critique 9, the 110 band) says nothing the figure does not.
   const full = (noun: boolean, ctxGauge: boolean, gap: string, gw = 10, gauges = true): Run[] => {
     const counts = bandCounts(m, ui, true, noun, gap);
@@ -246,17 +247,21 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const counts = bandCounts(m, ui, true);
   const tiny = bandCounts(m, ui, false);
   const midTodo = (word: string): string => [m.total ? '' : `${word} ${phaseNo}`, todo ? `todo ${todo}` : ''].filter(Boolean).join(' · ');
-  const tail = (cs: Run[]): Run[] => [...(blockedTiny.length ? [r(' '), ...blockedTiny] : []), ...(cs.length ? [r(' · ', 'sub'), ...cs] : [])];
+  const tail = (cs: Run[]): Run[] => (cs.length ? [r(' · ', 'sub'), ...cs] : []); // the bare blocked count (`■1`) is dropped below 60 columns: the todo header and the board carry it
   const stdCounts = bandCounts(m, ui, true, false, ' · ');
   const ctxSeg: Run[] = m.ctx !== undefined ? [r(' · ', 'sub'), r('ctx '), r(percent(m.ctx), 'sub')] : [];
-  const compact = (word: string, cs: Run[], why: string): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word)}`, 'sub')] : [r(` ${lead}${midTodo(word)}`, 'sub')]), ...tail(cs)];
+  // Critique 16 A2: the counts keep their words down to 50 columns (`■ 1 blocked · ◐ 1 running`); the bare glyph-and-number forms (`■1 · ◐1`) are the last fallbacks only.
+  const wordTail = (cs: Run[]): Run[] => [...(blockedWords.length ? [r(' '), ...blockedWords] : []), ...(cs.length ? [r(' · ', 'sub'), ...cs] : [])];
+  const compact = (word: string, cs: Run[], why: string, t: (cs: Run[]) => Run[] = tail): Run[] => [...cap, ...(blocked ? [r(' '), ...flagHead(ui, st, why), r(` · ${midTodo(word)}`, 'sub')] : [r(` ${lead}${midTodo(word)}`, 'sub')]), ...t(cs)];
   const out: Form[] = [
     { runs: full(true, true, '   '), min: GAUGE_MIN }, { runs: full(true, false, '  ', 8), min: GAUGE_MIN },
     { runs: full(false, true, '   '), min: GAUGE_MIN }, { runs: full(false, false, '  ', 8), min: GAUGE_MIN },
     // Critique 12 A3: from STD_MIN to 119 columns the band is one layout with one separator (` · `). The old 100-119 form (triple-space gaps, an `agents` noun)
     // made one snapshot read differently at 110 (undocked, body 105) and 150 (docked beside the 56-column pane, body 93).
     { runs: [...cap, r(' '), ...name, ...(m.total ? [r(` · todo ${todo}`, 'sub')] : []), ...(blockedWords.length ? [r(' '), ...blockedWords] : []), ...ctxSeg, ...(stdCounts.length ? [r(' · ', 'sub'), ...stdCounts] : [])], min: STD_MIN },
-    { runs: compact('phase', counts, reason.long), min: 80 },
+    { runs: compact('phase', stdCounts, reason.long, wordTail), min: 80 },
+    { runs: compact('phase', stdCounts, reason.short, wordTail), min: 50 },
+    { runs: compact('ph', stdCounts, reason.short, wordTail), min: 50 },
     { runs: compact('phase', tiny, reason.short), min: 50 },
     { runs: compact('ph', tiny, reason.short), min: 50 },
   ];
@@ -381,7 +386,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
   const lean = hint > 0 ? checkRuns(checks, room - hint, ui) : []; // the form that leaves the hint its room, when one fits
   if (lean.length) return lean;
   if (!checks?.length) return [];
-  const one = (c: MissionCheck): Run[] => [c.ok ? stateRun('done', ui) : warnMark(ui), r(` ${c.id}`, c.ok ? 'sub' : 'text')];
+  const one = (c: MissionCheck): Run[] => [c.pending ? stateRun('queued', ui) : c.ok ? stateRun('done', ui) : warnMark(ui), r(` ${c.id}`, c.ok ? 'sub' : 'text')];
   const join = (cs: readonly MissionCheck[]): Run[] => cs.flatMap((c, i) => [...(i ? [r('  ')] : []), ...one(c)]);
   const failing = checks.filter((c) => !c.ok);
   const green = `${checks.length - failing.length}/${checks.length} green`;

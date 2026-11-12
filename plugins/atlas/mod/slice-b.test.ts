@@ -26,7 +26,7 @@ const worker = (name: string, over: Record<string, unknown> = {}) => ({ name, ro
 
 describe('B1: the blocker has one name on the band, the gates tab and the tally', () => {
   const teamGate: GateGroup[] = [
-    { id: 'completion', title: 'Completion gate', lines: [{ id: 'a', label: 'Evidence captured', ok: true }, { id: 's', label: 'Team gate', ok: false, fix: 'run atlas_mux.py spawn-team' }] },
+    { id: 'completion', title: 'Completion gate', lines: [{ id: 'a', label: 'Evidence captured', ok: true }, { id: 'g', label: 'Team gate', ok: false, fix: 'run atlas_mux.py spawn-team' }] },
     { id: 'routing', title: 'Tool routing', lines: [{ id: 'denied', label: 'Policy denies', ok: true }] },
   ];
   test('the failing check is named by its failing line, not its group', () => {

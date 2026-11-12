@@ -64,11 +64,12 @@ export type Tally = { ok: number; total: number };
 /** Stop's open-item count over the board store (scripts/atlas_todo.py open_items): rows not archived, not a human's manual note,
  * stamped with this session, not completed. Dispatch rows count (Stop counts the gamma dispatch row the Board folds away), so the
  * band's plan `todo n/m` plus this count is how a screen shows what Stop will refuse on. `sessionId` absent: the caller has scoped the rows. */
-export const openWork = (items: readonly object[], sessionId?: string): number =>
+export const openItems = <T extends object>(items: readonly T[], sessionId?: string): T[] =>
   items.filter((it) => {
     const r = it as { archived?: boolean; origin?: string; session_id?: string; status?: string };
     return !r.archived && r.origin !== "manual" && r.status !== "completed" && (sessionId === undefined || r.session_id === sessionId);
-  }).length;
+  });
+export const openWork = (items: readonly object[], sessionId?: string): number => openItems(items, sessionId).length;
 
 export type CoreModel = {
   contract: {

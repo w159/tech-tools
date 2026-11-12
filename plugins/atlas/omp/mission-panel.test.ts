@@ -159,18 +159,18 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ◐1`", () => {
+test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ◐ 1 running`", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 1/4 · ◐1");
+	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ todo 1/4 · ◐ 1 running");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 
-test("blocked: `▲ blocked: needs you` with the warn glyph instead of the phase", () => {
+test("blocked: `■ blocked: needs you` with the red square instead of the phase", () => {
 	const m = model({ blocked: true, team: "fix/low", workers: [] });
-	expect(head(m)).toContain("▲ blocked: needs you");
-	expect(renderPanel(m)[0]).toContain("38;2;249;226;175");
+	expect(head(m)).toContain("■ blocked: needs you");
+	expect(renderPanel(m)[0]).toContain("38;2;243;139;168");
 });
 
 test("tones are the Catppuccin hexes: panel #181825, capsule fill and caps accent #cba6f7, ink #11111b", () => {

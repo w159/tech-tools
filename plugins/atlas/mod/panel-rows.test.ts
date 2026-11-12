@@ -102,7 +102,7 @@ describe('channel tab: header, columns and marks', () => {
   test('marks: blocked and handoff carry a glyph and a word; a note to a peer names it; a note to all names nobody', () => {
     const out = body('channel', 120, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' }), note({ from: 'd', to: 'peer-1' }), note({ from: 'e', to: 'all' }), note({ from: 'f', kind: 'blocked', to: 'peer-1' })] });
     expect(out.slice(1).map((l) => l.replace(/ +10:02$/, ''))).toEqual([
-      '  ▲ a  blocked hello', '  ● b  handoff hello', '  ● c  done    hello', '    d          ▸ peer-1 hello', '    e          hello', '  ▲ f  blocked hello',
+      '  ■ a  blocked hello', '  ● b  handoff hello', '  ● c  done    hello', '    d          ▸ peer-1 hello', '    e          hello', '  ■ f  blocked hello',
     ]);
   });
   test('a note is one line: whitespace and line breaks collapse', () => {
@@ -222,11 +222,11 @@ describe('route tab: blocked owner, phase position', () => {
   const todo = (id: string, state: PanelTodo['state'], over: Partial<PanelTodo> = {}): PanelTodo => ({ id, label: `task ${id}`, state, ...over });
   test('a blocked task shows the blocked mark, its word, its owner and why from 100 columns', () => {
     const out = body('route', 120, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe(`  ▲ task b                blocked blocked: waiting for lead reply${' '.repeat(46)}impl-live`);
+    expect(out.find((l) => l.includes('task b'))).toBe(`  ■ task b                blocked blocked: waiting for lead reply${' '.repeat(46)}impl-live`);
   });
   test('below 100 columns the reason leaves the row (the owner stays right-aligned); the mark, label and word stay', () => {
     const out = body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe(`  ▲ task b                blocked${' '.repeat(38)}impl-live`); // the reason leaves the row at 80 (open the row to read it)
+    expect(out.find((l) => l.includes('task b'))).toBe(`  ■ task b                blocked${' '.repeat(38)}impl-live`); // the reason leaves the row at 80 (open the row to read it)
     expect(body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })], expanded: 'task:b' }).join('\n')).toContain('    owner impl-live · blocked: waiting for lead reply');
   });
   test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {

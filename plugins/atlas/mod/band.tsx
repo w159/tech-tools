@@ -8,7 +8,7 @@ import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
 import { isPlanItem, ownTodos, planBasis, todoCounts } from './data/todos';
-import { openWork } from './data/core';
+import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
 import { hostEnv, LINGER_MS, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
@@ -101,10 +101,12 @@ function lastRun(all: readonly LiveWorker[], now: number, owners: readonly strin
 
 /** Stop's open rows that the plan count does not carry, read from the snapshot the plan count reads (never the core model, which is rebuilt on its own slower tick and
  * trailed the plan: `5/5 · 1 open` under a full plan, critique 11). The core model only ever held plan rows, so it could not see the dispatch rows Stop counts. */
-function openRows(s: LiveSnapshot): { openWork: number; openDispatch: number } {
+function openRows(s: LiveSnapshot): { openWork: number; openDispatch: number; openDispatchTitle?: string } {
   const rows = s.todos ?? [];
   const planOpen = planBasis(rows, s.sessionId).filter((it) => it.status !== 'completed').length;
-  return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(rows.filter((it) => (it as { origin?: string }).origin === 'dispatch'), s.sessionId) };
+  const dispatch = rows.filter((it) => (it as { origin?: string }).origin === 'dispatch');
+  const title = (openItems(dispatch, s.sessionId)[0] as { content?: string } | undefined)?.content; // the first open dispatch row, by its title (the GOAL line)
+  return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(dispatch, s.sessionId), ...(title ? { openDispatchTitle: title } : {}) };
 }
 
 function missionModel(b: BandModel & { maxRows: number }): MissionModel {

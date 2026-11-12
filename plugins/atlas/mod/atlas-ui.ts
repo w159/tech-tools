@@ -227,9 +227,9 @@ export type UiState = 'queued' | 'running' | 'done' | 'failed' | 'blocked' | 'wa
 export const UI_STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 /** The one order states are counted and ranked in on every surface (band, HUD, board): attention first, finished last. */
 export const COUNT_ORDER: readonly UiState[] = ['running', 'blocked', 'failed', 'waiting', 'queued', 'done'];
-export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '▲', waiting: '◉' };
-export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: '#', blocked: '!', waiting: '?' };
-export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'warn', waiting: 'info' };
+export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '■', waiting: '◉' };
+export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: '#', blocked: '#', waiting: '?' };
+export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'bad', waiting: 'info' };
 
 /** `returned` is a word, not a seventh state: the owner agent ended and the store row is still open (a normal hand-back to the lead). It counts as
  * `blocked` everywhere a count is kept, but its mark is its own: a hand-back arrow in the accent tone, never the amber warning triangle. */
@@ -242,8 +242,8 @@ export type MarkState = UiState | typeof RETURNED;
 export const markOf = (state: UiState, word?: string): MarkState => (word === RETURNED ? RETURNED : state);
 /** The token of a mark: the state's own, or the accent for `returned`. */
 export const markToken = (s: MarkState): Token => (s === RETURNED ? 'accent' : STATE_TOKEN[s]);
-/** The one tone of a row's state WORD on every surface (HUD, side panel): failed red, blocked amber, `returned` accent, the rest the quiet sub tone. */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : state === 'failed' ? 'bad' : state === 'blocked' ? 'warn' : 'sub');
+/** The one tone of a row's state WORD on every surface (HUD, side panel): failed and blocked red, `returned` accent, the rest the quiet sub tone. */
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'accent' : state === 'failed' || state === 'blocked' ? 'bad' : 'sub');
 
 export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s] : STATE_GLYPHS[s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
@@ -252,8 +252,10 @@ export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
   return { t: g, tone: ui.ascii ? 'text' : glyphTone(markToken(s), ui.theme) };
 }
 /** THE mark of a `warning` (a failing check while Stop did not refuse): the amber attention triangle on the band head, the checks row and the gates tab alike.
- * Red `■` stays the mark of a failed worker or task; a warning is never red (critique 11: amber `▲` on the band, red `■` on the checks row and the gates tab). */
-export const warnMark = (ui: Ui): Run => stateRun('blocked', ui);
+ * Blocked is its own state, the red `■` (critique 16 A2: one blocked glyph and tone on every surface); a warning is never red and never the blocked mark. */
+export const WARN_GLYPH = '▲';
+export const WARN_ASCII = '!';
+export const warnMark = (ui: Ui): Run => ({ t: ui.ascii ? WARN_ASCII : WARN_GLYPH, tone: ui.ascii ? 'text' : glyphTone('warn', ui.theme) });
 /** Tone of a state WORD (text, 4.5:1): the state's token where it reaches 4.5:1 on the panel, else `text`; `text` in ASCII mode. */
 export function stateWordTone(s: UiState, ui: Pick<Ui, 'ascii' | 'theme'>): Token {
   if (ui.ascii) return 'text';
