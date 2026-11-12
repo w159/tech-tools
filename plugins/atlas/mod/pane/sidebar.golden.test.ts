@@ -47,10 +47,10 @@ describe('sidebar golden text', () => {
     expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
     expect(r[3]).toMatch(/^ {2}■ runner-1\s+failed/);
   });
-  test('team at 38 columns (the 110-column pane) draws the keyed strip wrapped to two rows (one form on every tab), and keeps name and state', () => {
+  test('team at 38 columns (the 110-column pane) draws the six whole words on one row (critique 18; one form on every tab), and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]!.trimEnd()).toBe(' r: route  t: team  c: channel');
-    expect(r[3]!.trimEnd()).toBe('              ━━━━'); // the rule under the lit team tab
+    expect(r[2]!.trimEnd()).toBe(' route team channel gates core board');
+    expect(r[3]!.trimEnd()).toBe('       ━━━━'); // the rule under the lit team tab
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
   });

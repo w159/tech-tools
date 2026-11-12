@@ -164,8 +164,8 @@ describe('4. no fold marker', () => {
 
 describe('5. the plan row budget and the overflow row', () => {
   test('five todos and three agents: the compact form holds all five plan rows', () => {
-    // ribbon + 5 plan rows + agents ribbon + 3 agents = 10 rows (the column header is drawn only with a spare row)
-    expect(hudCompactRows(input, 88)).toBe(10);
+    // ribbon + 5 plan rows + agents ribbon + the column names + 3 agents = 11 rows (critique 18: the names are part of the floor)
+    expect(hudCompactRows(input, 88)).toBe(11);
     const rows = hudLines(input, view(88, hudBudget(13, hudCompactRows(input, 88), 7, true))).map(runsString);
     expect(rows.filter((r) => /T\d /.test(r) && !r.includes('haiku'))).toHaveLength(5);
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
@@ -191,18 +191,17 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
   const hudIn: HudInput = { todos: planDone, agents };
   const budget = 16; // the live frame's 15 slot rows less the host's line (14), plus the Subagents column-header row and its blank
+  const cap = 9; // a slot that cuts the plan: the compact floor itself holds the column names and all five plan rows now (critique 18), so it no longer cuts
   const snapshot = busySnap();
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
   const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));
 
   test('the band at the live budget spends rows on blanks while the plan is cut', () => {
-    const cap = hudBudget(budget, hudCompactRows(hudIn, 88), 7, true);
     const first = draw(cap);
     expect(first.map(runsString).some((r) => /\d+ more todos? not shown/.test(r))).toBe(true); // the defect
     expect(bandSpareRows(bandModel(budget - first.length))).toBeGreaterThan(0);
   });
   test('reclaimBlanks shows every plan row once the blanks are handed over, and the band loses only blanks', () => {
-    const cap = hudBudget(budget, hudCompactRows(hudIn, 88), 7, true);
     const first = draw(cap);
     const hud = reclaimBlanks(first, cap, budget, (h) => bandSpareRows(bandModel(budget - h.length)), draw);
     const rows = hud.map(runsString);

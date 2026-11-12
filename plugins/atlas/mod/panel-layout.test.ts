@@ -57,7 +57,7 @@ describe('tab strip', () => {
       const bare = stripLayout(cols, 'route').bare; // A1: the words alone on one row, no `k: ` (the keys stay bound by the host layer)
       const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => (bare ? /^ (route|team)/.test(l) : /^\w: /.test(l.trim())));
       for (const l of rowsOut) expect(cells(l)).toBeLessThanOrEqual(cols);
-      if (bare) expect(rowsOut.map((l) => l.trim())).toEqual(['route team channel gates core board']);
+      if (bare) expect(rowsOut.map((l) => l.trim().replace(/ +/g, ' '))).toEqual(['route team channel gates core board']); // critique 18: one row of whole words (one or two cells apart) from 36 cells up to where the keys fit
       else expect(rowsOut.join(' ').split(/\s+/).filter((w) => /^\w:$/.test(w)).join('')).toBe(STRIP_TABS.map((t) => `${t.key}:`).join(''));
     }
   });
