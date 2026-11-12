@@ -26,9 +26,9 @@ describe('hostEnv', () => {
 describe('countRuns', () => {
   test('without a spin frame the running glyph is the first frame, followed by a blank', () => {
     const runs = countRuns('running', 2, ui);
-    expect(runs[0]!.t).toBe('⠋ ');
+    expect(runs[0]!.t).toBe('◐ ');
     expect(runs[1]).toEqual({ t: '2 running', tone: 'text' });
-    expect(countRuns('running', 2, ui, 1)[0]!.t).toBe('⠙ ');
+    expect(countRuns('running', 2, ui, 1)[0]!.t).toBe('◓ ');
   });
 });
 

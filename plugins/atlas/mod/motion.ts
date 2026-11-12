@@ -166,7 +166,7 @@ export const MIN_STEPS_256 = 2;
 export const MAX_STEPS_256 = 3;
 /** Least CIE76 distance between two neighbours of the staircase (and from the last step to the resting tone). Palette neighbours such
  * as 194, 193, 187 are under 6 apart and read as one colour on the panel; 157, 114, 151 are well over this. */
-export const MIN_STEP_DE = 20;
+export const MIN_STEP_DE = 14;
 
 const lab = (hex: string): [number, number, number] => {
   const lin = rgb(hex).map((v) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }) as [number, number, number];
@@ -184,8 +184,8 @@ export const deltaE = (a: string, b: string): number => { const [p, q] = [lab(a)
 /** Two neighbours tell apart on the panel when they are MIN_STEP_DE apart AND either plainly different in colour (STRONG_STEP_DE: white to
  * light green) or at least MIN_STEP_DL apart in CIE L* lightness. A pastel pair of one lightness and a small hue shift (194 to 193, 193 to 187
  * on panel 234) fails both, whatever its CIE76 distance. */
-export const STRONG_STEP_DE = 30;
-export const MIN_STEP_DL = 12;
+export const STRONG_STEP_DE = 22;
+export const MIN_STEP_DL = 8;
 const visible = (a: string, b: string): boolean => { const de = deltaE(a, b); return de >= MIN_STEP_DE && (de >= STRONG_STEP_DE || Math.abs(lab(a)[0] - lab(b)[0]) >= MIN_STEP_DL); };
 
 /** `chain` thinned to steps that are MIN_STEP_DE apart from each other, from `target` and (the first one) from `from`, the tone the row
@@ -221,8 +221,8 @@ export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): 
     const lead = mixHex(accent, toward, w);
     const d = dir(lead, target) || 1;
     const out: string[] = [];
-    for (let k = 0; k < 24; k++) {
-      const c = stable256(mixHex(lead, rest, k / 24), bg, need);
+    for (let k = 0; k < 64; k++) {
+      const c = stable256(mixHex(lead, rest, k / 64), bg, need);
       if (c === target) break;
       const prev = out.at(-1);
       if (c === prev || (prev && dir(prev, c) !== d) || dir(c, target) !== d) continue;

@@ -124,6 +124,8 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
   const working = active.filter((w) => w.state === 'working' || w.state === 'blocked');
+  const closedOwners = new Set(ownTodos(s.todos, s.sessionId).filter((t) => t.origin === 'dispatch' && t.owner && t.status === 'completed').map((t) => t.owner!));
+  const closed = all.filter((w) => w.state === 'failed' && closedOwners.has(w.name)).length; // a failed worker whose dispatch row is closed reads `● 1 closed`, not `■ 1 failed`
   return {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now: spinClock(now, b.tick), // the one spinner clock: the band turns the frame the HUD and the panel turn (critique 19)
     project: boardOf(s), scope: b.team,
@@ -140,7 +142,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     ctx: s.contextPct > 0 ? Math.min(1, s.contextPct / 100) : undefined,
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
-    turnSecs: b.workSecs, ranSecs: b.ranSecs,
+    turnSecs: b.workSecs, ranSecs: b.ranSecs, ...(closed ? { closed } : {}),
     workersInHud: b.workersInHud, eased: b.eased, ...(b.motion ? { motion: b.motion } : {}),
   };
 }

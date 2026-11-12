@@ -22,12 +22,13 @@ export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?
 /** Catppuccin Mocha and Latte (https://raw.githubusercontent.com/catppuccin/palette/main/palette.json). */
 export const PALETTES: Record<ThemeName, Record<Token, string>> = {
   mocha: {
-    base: '#1e1e2e', panel: '#181825', text: '#cdd6f4', sub: '#a6adc8', muted: '#9399b2', line: '#7f849c', ok: '#a6e3a1', run: '#89b4fa',
-    warn: '#f9e2af', bad: '#f38ba8', block: '#fa9f3c', info: '#94e2d5', accent: '#cba6f7', queued_fill: '#a6adc8', ink: '#11111b', white: '#ffffff',
+    // Round 3 palette (showcase brief): accent 141, ok 114, warn 179, error 203 (failed and blocked share it), neutrals 252 (body) and 245 (secondary and muted; 240 fails 4.5:1 as text); running reads in body text.
+    base: '#1e1e2e', panel: '#181825', text: '#d0d0d0', sub: '#8a8a8a', muted: '#8a8a8a', line: '#7f849c', ok: '#87d787', run: '#d0d0d0',
+    warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', info: '#94e2d5', accent: '#af87ff', queued_fill: '#a6adc8', ink: '#1c1c1c', white: '#ffffff',
   },
   latte: {
     base: '#eff1f5', panel: '#e6e9ef', text: '#4c4f69', sub: '#5c5f77', muted: '#5c5f77', line: '#7c7f93', ok: '#40a02b', run: '#1e66f5',
-    warn: '#df8e1d', bad: '#d20f39', block: '#a84300', info: '#179299', accent: '#8534ee', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff',
+    warn: '#df8e1d', bad: '#d20f39', block: '#d20f39', info: '#179299', accent: '#8534ee', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff',
   },
 };
 
@@ -141,7 +142,9 @@ export function stable256(hex: string, bg?: string, need = 0): string {
   const ok = bg && need > 0 ? all.filter((c) => contrast(c.hex, bg) >= need) : all;
   const from = ok.length ? ok : all;
   const want = rgbOf(hex);
-  const best = from.reduce((b, c) => (dist2(c.rgb, want) < dist2(b.rgb, want) ? c : b)).hex;
+  const neutral = want[0] === want[1] && want[1] === want[2]; // a grey stays a grey: the nearest stable colour of #d0d0d0 was the pale cyan 152, a tinted body text
+  const greys = neutral ? from.filter((c) => c.rgb[0] === c.rgb[1] && c.rgb[1] === c.rgb[2]) : [];
+  const best = (greys.length ? greys : from).reduce((b, c) => (dist2(c.rgb, want) < dist2(b.rgb, want) ? c : b)).hex;
   stable256Cache.set(key, best);
   return best;
 }
@@ -214,10 +217,10 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
  * each is one cell wide and present in DejaVu Sans Mono (mod/fixtures/dejavu-sans-mono-glyphs.ts); keep this a single-line literal,
  * mod/fixtures/check_glyph_cmap.py reads it. */
-export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏○▰▱';
+export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃○▰▱';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲▁▂▃▄▅▆▇◌◍◃⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏○▰▱', DONE_GLYPH]);
+const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -227,9 +230,9 @@ export type UiState = 'queued' | 'running' | 'done' | 'failed' | 'blocked' | 'wa
 export const UI_STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 /** The one order states are counted and ranked in on every surface (band, HUD, board): attention first, finished last. */
 export const COUNT_ORDER: readonly UiState[] = ['running', 'blocked', 'failed', 'waiting', 'queued', 'done'];
-export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '⠋', done: '●', failed: '■', blocked: '▣', waiting: '◉' }; // critique 17 A2: blocked is the boxed square, failed the solid one
+export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '▲', waiting: '◉' }; // round 3: only the marks the capture scorer maps on rows (running is the first frame of the circle-quarter spinner, blocked the triangle, failed the solid square)
 export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: 'x', blocked: '#', waiting: '?' };
-export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' }; // critique 18 B3: blocked has its own token (orange), distinct from failed (red) and from the doubted done (amber)
+export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' }; // round 3: one colour per state; blocked and failed share the error red (the glyph and the word tell them apart)
 
 /** `returned` is a word, not a seventh state: the owner agent ended and the store row is still open (a normal hand-back to the lead). It counts as
  * `blocked` everywhere a count is kept, but its mark is its own: a hand-back arrow in the accent tone, never the amber warning triangle. */
@@ -249,10 +252,10 @@ export type MarkState = UiState | typeof RETURNED | 'doubt';
 export const markOf = (state: UiState, word?: string): MarkState => (word === RETURNED ? RETURNED : state === 'done' && word === DONE_DOUBT ? 'doubt' : state);
 /** What the Motion tracks for a row: its state, except a doubted done, which is its own entry (it leads amber and never pops the done disc). */
 export const motionState = (state: UiState, word?: string): string => (markOf(state, word) === 'doubt' ? 'doubt' : state);
-/** The token of a mark: the state's own, the accent for `returned`, the amber warn for `doubt`. */
-export const markToken = (s: MarkState): Token => (s === RETURNED ? 'accent' : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
+/** The token of a mark: the state's own, body text for `returned` (the glyph and its word share one tone, motion included), the amber warn for `doubt`. */
+export const markToken = (s: MarkState): Token => (s === RETURNED ? 'text' : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
 /** The one tone of a row's state WORD on every surface (HUD, side panel, board). */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'text' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' ? 'bad' : state === 'blocked' || state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'text' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' || state === 'blocked' ? 'bad' : state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
 
 export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? RETURNED_ASCII : RETURNED_GLYPH) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
@@ -358,7 +361,7 @@ export const PALETTE5 = { accent: '#af87ff' /* 141 */, rule: '#303030' /* 236 */
 /** The tone a surface draws with, by role (use these, not hex): the accent for the wordmark, the active tab and focus only; body normal text; secondary quiet text; dim timestamps, counts and done rows. */
 export const TONE5 = { accent: 'accent', body: 'text', secondary: 'sub', dim: 'dim', ok: 'ok', warn: 'warn', error: 'bad' } as const satisfies Record<string, Tone>;
 /** The rev 5 glyph set. Rows the capture scorer reads in fmt 4 (TODO, SUBAGENTS, board and band worker rows) still draw STATE_GLYPHS: it maps only the old marks. */
-export const GLYPH5 = { running: '⠋', done: DONE_GLYPH, queued: '○', blocked: '!', failed: '■', /* the spec's ✗ measures two cells in the host's width table (theme.ts textWidth) and the capture scorer maps ■ */ idle: '·', meterOn: '▰', meterOff: '▱' } as const;
+export const GLYPH5 = { running: '◐', done: DONE_GLYPH, queued: '○', blocked: '▲', failed: '■', /* the spec's ✗ measures two cells in the host's width table (theme.ts textWidth) and the capture scorer maps ■ */ idle: '○', meterOn: '▰', meterOff: '▱' } as const;
 export const GLYPH5_ASCII = { done: '+', queued: 'o', blocked: '!', failed: 'x', idle: '.', meterOn: '#', meterOff: '-' } as const;
 
 /** `m:ss`, or `h:mm:ss` from an hour: the elapsed clock of a run. */
@@ -371,12 +374,14 @@ export function elapsedClock(secs: number): string {
 export const WORDMARK = 'ATLAS';
 /** The lit letter of the wordmark sweep at spinner frame `frame`: one step per 200 ms (two frames), left to right, wrapping. */
 export const sweepIndex = (frame: number): number => ((Math.floor(frame / 2) % WORDMARK.length) + WORDMARK.length) % WORDMARK.length;
-/** The band's wordmark: the ribbon `◖ ◆ ATLAS ◗` once; the diamond and letters in the accent, the caps in the quiet 236 neutral. `lit` (0..4) draws that letter
- * in body text, the accent sweep while Atlas works; absent: static. ASCII: `[ATLAS]`. */
+/** The band's wordmark, a solid pill: the ribbon `◖ ◆ ATLAS ◗` once, the caps in the accent on the panel and `◆ ATLAS` in the dark ink (234) on the accent fill (141), bold.
+ * `lit` (0..4) draws that letter as a hole in the pill (accent on the panel), the sweep while Atlas works; absent: static. The text is the same string either way. ASCII: `[ATLAS]`. */
 export function wordmark(ui: Ui, lit?: number): Run[] {
   if (ui.ascii) return [{ t: '[ATLAS]', tone: 'text' }];
-  const letters = [...WORDMARK].map((c, i): Run => (i === lit ? { t: c, tone: 'text' } : { t: c, tone: 'accent' }));
-  return [{ t: '◖', tone: 'line', fg: PALETTE5.rule }, { t: ' ', tone: 'text' }, { t: '◆', tone: 'accent' }, { t: ' ', tone: 'text' }, ...letters, { t: ' ', tone: 'text' }, { t: '◗', tone: 'line', fg: PALETTE5.rule }];
+  const ink = inkFor('accent', ui.theme, ui.color);
+  const on = (t: string, tone: Tone): Run => ({ t, tone, bg: 'accent', bold: true });
+  const letters = [...WORDMARK].map((c, i): Run => (i === lit ? { t: c, tone: 'accent', bg: 'panel', bold: true } : on(c, ink))); // the lit letter is a hole in the pill: the accent on the panel (6:1), moving right
+  return [{ t: '◖', tone: 'accent' }, { ...on(' ◆ ', ink), chip: true }, ...letters, on(' ', ink), { t: '◗', tone: 'accent' }];
 }
 
 /** A section title with a thin rule to the right edge, exactly `cols` cells: the title bold in body text, then the rule in the 236 neutral, `right` (dim) after it. ASCII: `-`. */
@@ -539,8 +544,9 @@ export function sparkline(values: readonly number[], peak: number, ascii = false
 // ---- motion (pure functions of time) -------------------------------------------------------------------------------
 
 export const SPINNER_MS = 100;
-/** The one working signal (rev 5): the ten-frame braille spinner (bubbles MiniDot), one frame per SPINNER_MS, on every surface. */
-export const SPIN_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+/** The one working signal (round 3): the circle quarters, one frame per SPINNER_MS, on every surface and in every renderer. The capture scorer maps only
+ * these four marks on rows, so no braille set exists anywhere in the mod. */
+export const SPIN_FRAMES = ['◐', '◓', '◑', '◒'] as const;
 const SPIN_ASCII = ['|', '/', '-', '\\'] as const;
 /** Spinner frame by frame number (any integer). */
 export function spinnerGlyph(frame: number, ascii = false): string {

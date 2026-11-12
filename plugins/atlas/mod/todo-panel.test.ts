@@ -32,10 +32,10 @@ describe('slot rows', () => {
     expect(rows).toHaveLength(4);
     for (let cols = 20; cols <= 130; cols += 7) for (const r of todoRows(worldItems(), o(cols))) expect([cols, textWidth(text(r))]).toEqual([cols, cols]);
   });
-  test('the running row spins with the tick (⠋ ⠙ ⠹ ⠸ ⠼) and nothing else moves', () => {
+  test('the running row spins with the tick (◐ ◓ ◑ ◒ ◐) and nothing else moves', () => {
     const run = (tick: number) => text(todoRows(worldItems(), o(120, { tick }))[4]!);
-    expect([0, 1, 2, 3, 4].map((t) => run(t).slice(2, 3))).toEqual(['⠋', '⠙', '⠹', '⠸', '⠼']);
-    expect(run(0).replace('⠋', '')).toBe(run(1).replace('⠙', ''));
+    expect([0, 1, 2, 3, 4].map((t) => run(t).slice(2, 3))).toEqual(['◐', '◓', '◑', '◒', '◐']);
+    expect(run(0).replace('◐', '')).toBe(run(1).replace('◓', ''));
   });
   test('colour is state only: glyphs and chips take the state token, text the text tokens, nothing a hard-coded hex', () => {
     const rows = todoRows(worldItems(), o(120, { rich: true }));

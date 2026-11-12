@@ -11,7 +11,11 @@ const stableRef = (): number[] => Array.from({ length: 240 }, (_, k) => k + 16).
 const stable256Ref = (hex: string, bg?: string, need = 0): string => {
   const all = stableRef().map(xtermHex);
   const ok = bg && need > 0 ? all.filter((c) => contrast(c, bg) >= need) : all;
-  return (ok.length ? ok : all).reduce((best, c) => (dist2(c, hex) < dist2(best, hex) ? c : best));
+  const from = ok.length ? ok : all;
+  const [r, g, b] = rgb(hex);
+  const grey = (c: string): boolean => new Set(rgb(c)).size === 1;
+  const greys = r === g && g === b ? from.filter(grey) : []; // a neutral stays a neutral (the body text #d0d0d0 is not pulled to a tinted index)
+  return (greys.length ? greys : from).reduce((best, c) => (dist2(c, hex) < dist2(best, hex) ? c : best));
 };
 const surfaceRef = (tok: Token, theme: ThemeName): string => stable256Ref(PALETTES[theme][tok]);
 const fitRef = (hex: string, theme: ThemeName): string => {

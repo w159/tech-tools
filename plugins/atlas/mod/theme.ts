@@ -5,7 +5,7 @@
 import { BRAND, type AgentState, type PhaseId } from './contract';
 
 /** Single-cell glyphs used across the mod surfaces. Every value is ONE code point that
- * renders 1 cell in Ghostty/iTerm/kitty: ASCII, box drawing, geometric shapes and braille.
+ * renders 1 cell in Ghostty/iTerm/kitty: ASCII, box drawing and geometric shapes.
  * Never add the wide hexagon block (U+2B00-2BFF), U+25E2..25E5 triangles, emoji or anything East Asian Wide;
  * theme.test.ts enforces an allowlist of ranges. */
 export const glyph = {
@@ -72,7 +72,7 @@ export function mix(a: string, b: string, t: number): string {
 export const MOCHA = {
  panel: '#11111b', panel2: '#181825', base: '#1e1e2e', text: '#cdd6f4', muted: '#6c7086', dim: '#45475a',
  violet: '#cba6f7', teal: '#94e2d5', sky: '#89dceb', blue: '#89b4fa', green: '#a6e3a1', peach: '#fab387',
- red: '#f38ba8', yellow: '#f9e2af', pink: '#f5c2e7', grey: '#585b70', grey2: '#313244', white: '#ffffff',
+ red: '#ff5f5f', yellow: '#f9e2af', pink: '#f5c2e7', grey: '#585b70', grey2: '#313244', white: '#ffffff',
 } as const;
 
 const PHASE_HUES: Record<string, string> = {
@@ -138,24 +138,13 @@ export function blink(periodMs = 500, nowMs: number = Date.now()): 0 | 1 {
  return (Math.floor(nowMs / periodMs) % 2) as 0 | 1;
 }
 
-/** Braille spinner frames (one cell each). */
-const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+/** The one spinner: the circle quarters (the same four marks atlas-ui SPIN_FRAMES draws; the capture scorer maps only these on rows). */
+const SPIN = ['◐', '◓', '◑', '◒'] as const;
 
-/** Per-phase activity frames (one cell each); phases not listed use SPIN.
- *  Six frames, not four: the tick is 250 ms, so a 4-frame table repeats every 1 s and any
- *  whole-second sample (a screenshot, a person glancing) always saw the same glyph. */
-const PHASE_FRAMES: Readonly<Record<string, readonly string[]>> = {
- research: ['◜', '◠', '◝', '◞', '◡', '◟'],
- theory: ['✶', '✷', '✸', '✹', '✺', '✻'],
- test: ['⠁', '⠂', '⠄', '⡀', '⢀', '⠠'],
- implement: ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟'],
- verify: ['◐', '◓', '◑', '◒', '◔', '◕'],
-}
-
-/** Spinner frame for an animation counter (any integer), from the phase's frame table when it has one. */
-export function spin(frame: number, phase?: string): string {
- const frames = (phase && PHASE_FRAMES[phase]) || SPIN
- return frames[Math.abs(Math.floor(frame)) % frames.length] ?? SPIN[0]
+/** Spinner frame for an animation counter (any integer). One set for every phase: the old per-phase tables (braille, stars, arcs) are gone, so two spinner families
+ * never share a screen. `_phase` is kept for callers that still pass one and is ignored. */
+export function spin(frame: number, _phase?: string): string {
+ return SPIN[((Math.floor(frame) % SPIN.length) + SPIN.length) % SPIN.length]!
 }
 /** Inclusive code point span. */
 export type Span = readonly [number, number];

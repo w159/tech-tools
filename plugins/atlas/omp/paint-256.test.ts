@@ -8,7 +8,7 @@ import { boardLines } from "./todo-panel";
 
 const TONES: Tone[] = ["text", "sub", "muted", "ok", "run", "warn", "bad", "info", "accent"];
 const ui: Ui = { theme: "mocha", ascii: false, color: "256" };
-const model: PanelModel = { width: 120, maxLines: 12, phase: "implement", spin: "◆", laneSpin: "⠋", tick: 0, done: 0, total: 1, workers: [], notes: [], gates: [], ui };
+const model: PanelModel = { width: 120, maxLines: 12, phase: "implement", spin: "◆", laneSpin: "◐", tick: 0, done: 0, total: 1, workers: [], notes: [], gates: [], ui };
 const fgs = (s: string): string[] => s.match(/38;5;\d+/g) ?? [];
 
 test("panel-view and hud-paint paint every tone exactly as paintAnsi does", () => {

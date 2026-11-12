@@ -13,7 +13,7 @@ const CONTRACT = JSON.stringify({
   itemPhasePrefix: '[<phase>] ',
 });
 const T0 = 1_800_000_000_000;
-const SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u;
+const SPIN = /[◐◓◑◒◐◓◑◒◐◓]/u;
 
 /** Boot the real module with an empty board and NO listed worker: the lead is the only thing that can be working. */
 function boot(on: On, agents: unknown[] = []) {

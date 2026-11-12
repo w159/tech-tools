@@ -48,7 +48,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 failed');
+    expect(route).toContain(' agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
     expect(body('team', 120, { lead, mates }).some((l) => /^ {2}◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {
@@ -102,7 +102,7 @@ describe('channel tab: header, columns and marks', () => {
   test('marks: blocked and handoff carry a glyph and a word; a note to a peer names it; a note to all names nobody', () => {
     const out = body('channel', 120, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' }), note({ from: 'd', to: 'peer-1' }), note({ from: 'e', to: 'all' }), note({ from: 'f', kind: 'blocked', to: 'peer-1' })] });
     expect(out.slice(1).map((l) => l.replace(/ +10:02$/, ''))).toEqual([
-      '  ▣ a  blocked hello', '  ● b  handoff hello', '  ● c  done    hello', '    d          ▸ peer-1 hello', '    e          hello', '  ▣ f  blocked hello',
+      '  ▲ a  blocked hello', '  ● b  handoff hello', '  ● c  done    hello', '    d          ▸ peer-1 hello', '    e          hello', '  ▲ f  blocked hello',
     ]);
   });
   test('a note is one line: whitespace and line breaks collapse', () => {
@@ -112,10 +112,10 @@ describe('channel tab: header, columns and marks', () => {
     const out = body('channel', 120, { notes: [note({ to: 'peer-1' })] }, ascii);
     expect(out[1]!.replace(/ +10:02$/, '')).toBe('    lead > peer-1 hello');
   });
-  test('a blocked note word reads the block tone like rowWordTone; handoff and done stay ok', () => {
+  test('a blocked note word reads the error tone like rowWordTone; handoff and done stay ok', () => {
     const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' })] }));
     const word = (i: number, t: string) => l[i]!.runs.find((x) => x.t.trim() === t)!.tone;
-    expect([word(1, 'blocked'), word(2, 'handoff'), word(3, 'done')]).toEqual(['warn', 'ok', 'ok']);
+    expect([word(1, 'blocked'), word(2, 'handoff'), word(3, 'done')]).toEqual(['bad', 'ok', 'ok']);
   });
   test('no persona colour: a nick is bold text whoever speaks', () => {
     const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ from: 'implementer-live' }), note({ from: 'lead' })] }));
@@ -227,11 +227,11 @@ describe('route tab: blocked owner, phase position', () => {
   const todo = (id: string, state: PanelTodo['state'], over: Partial<PanelTodo> = {}): PanelTodo => ({ id, label: `task ${id}`, state, ...over });
   test('a blocked task shows the blocked mark, its word, its owner and why from 100 columns', () => {
     const out = body('route', 120, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe(`  ▣ task b                blocked blocked: waiting for lead reply${' '.repeat(46)}impl-live`);
+    expect(out.find((l) => l.includes('task b'))).toBe(`  ▲ task b                blocked blocked: waiting for lead reply${' '.repeat(46)}impl-live`);
   });
   test('below 100 columns the reason leaves the row (the owner stays right-aligned); the mark, label and word stay', () => {
     const out = body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe(`  ▣ task b                blocked${' '.repeat(38)}impl-live`); // the reason leaves the row at 80 (open the row to read it)
+    expect(out.find((l) => l.includes('task b'))).toBe(`  ▲ task b                blocked${' '.repeat(38)}impl-live`); // the reason leaves the row at 80 (open the row to read it)
     expect(body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })], expanded: 'task:b' }).join('\n')).toContain('    owner impl-live · blocked: waiting for lead reply');
   });
   test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {

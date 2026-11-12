@@ -16,6 +16,7 @@ import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hud
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
+import type { GateLine } from './pane/sidebar-types';
 import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
@@ -590,6 +591,39 @@ async function gatesSigOf($: EngineInterface, root: string): Promise<string> {
 	return (await Promise.all(paths.map((p) => statSig($, p)))).join('|');
 }
 
+/** The gate groups with this session's Stop verdict (`stop-verdict.json`, completion_gate_core's record) written into the completion group as the `stop-verdict` line
+ * atlas_gates.py would print: `Last Stop blocked` with the recorded plain words as its detail, or `Last Stop allowed`. A record without this session leaves the groups as they are. */
+export function withStopVerdict(groups: readonly GateGroup[], text: string, session: string): GateGroup[] {
+	let rec: { blocked?: unknown; why?: unknown } | undefined;
+	try {
+		rec = (JSON.parse(text) as { sessions?: Record<string, { blocked?: unknown; why?: unknown }> }).sessions?.[session];
+	} catch {
+		return [...groups];
+	}
+	if (!rec) return [...groups];
+	const why = (Array.isArray(rec.why) ? rec.why : []).map((x) => String(x).trim()).filter(Boolean);
+	const line: GateLine = rec.blocked === true ? { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: why.join(', ') || 'gate' } : { id: 'stop-verdict', label: 'Last Stop allowed', ok: true };
+	if (!groups.some((g) => g.id === 'completion')) return [...groups, { id: 'completion', title: 'Completion gate', lines: [line] }];
+	return groups.map((g) => (g.id === 'completion' ? { ...g, lines: [...g.lines.filter((l) => l.id !== 'stop-verdict'), line] } : g));
+}
+
+/** One stat of the Stop verdict file. When it moved, the verdict is read and written into the gate groups on THIS call (the band flips to BLOCKED on the refusal's own frame, not
+ * after the atlas_gates.py run that follows), and the full run is queued as urgent. Called every poll and, while Atlas works, every spinner tick. */
+async function verdictPoll($: EngineInterface, root: string): Promise<void> {
+	if (root === '' || sessionUuid === '') return;
+	const path = `${root.replace(/\/+$/, '')}/.atlas/.run/stop-verdict.json`;
+	const vsig = await statSig($, path);
+	const moved = verdictSig !== '' && vsig !== verdictSig;
+	verdictSig = vsig;
+	if (!moved) return;
+	gatesUrgent = gatesDirty = true;
+	const text = await $.fs.read(path).catch(() => undefined);
+	if (text === undefined) return;
+	const groups = await read($, gatesState);
+	const next = withStopVerdict(groups, text, sessionUuid);
+	if (JSON.stringify(next) !== JSON.stringify(groups)) await update($, gatesState, () => next);
+}
+
 /** POLL_MS tick: a change to a gate file marks the gates stale; they re-run on this poll once GATES_MIN_MS has passed since
  * the last run (never wait out the 30 s backstop to show a check that just failed). The run starts here and is not awaited:
  * the tick must not wait on a python run (gatesBusy keeps a second one from starting). */
@@ -600,9 +634,7 @@ async function gatesPoll($: EngineInterface): Promise<void> {
 	if (gatesSig !== '' && sig !== gatesSig) gatesDirty = true; // the first sight only records
 	gatesSig = sig;
 	// The Stop verdict is the one file that is not throttled: a refusal must reach the band on the poll that sees it. One stat per poll.
-	const vsig = await statSig($, `${root.replace(/\/+$/, '')}/.atlas/.run/stop-verdict.json`);
-	if (verdictSig !== '' && vsig !== verdictSig) gatesUrgent = gatesDirty = true;
-	verdictSig = vsig;
+	await verdictPoll($, root);
 	if (gatesDirty && !gatesBusy && (gatesUrgent || (await $.clock.now()) - gatesRunAt >= GATES_MIN_MS)) void runGates($).catch(() => undefined);
 }
 
@@ -984,6 +1016,11 @@ async function spinTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
 		await update($, spinnerTickState, (n) => n + 1); // one last redraw: the band reads `done 1:12` or `idle`, not the last spinner frame
 	}
 }
+/** The spinner tick's look at the Stop verdict: the fast path of gatesPoll, plus the urgent gate run it queues (gatesPoll would start it on the next 500 ms poll). */
+async function verdictFast($: EngineInterface, snap: LiveSnapshot): Promise<void> {
+	await verdictPoll($, rootOf(snap));
+	if (gatesDirty && gatesUrgent && !gatesBusy) void runGates($).catch(() => undefined);
+}
 let wired = false;
 async function boot($: EngineInterface, cwd: string, interactive: boolean): Promise<void> {
 	shownFailures.clear(); // a new session may toast its failures again
@@ -1054,6 +1091,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					await easeTick($, snap as LiveSnapshot);
 					await motionTick($, snap as LiveSnapshot);
 					await spinTick($, snap as LiveSnapshot);
+					if (isWorkingNow(snap as LiveSnapshot, hostWorking)) await verdictFast($, snap as LiveSnapshot); // the Stop hook runs inside a busy turn: read its write on this tick
 				})().catch(() => undefined);
 			});
 		}

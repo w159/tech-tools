@@ -42,7 +42,7 @@ describe('runstate: blocked shows glyph, word and reason at every width; a faili
   for (const cols of [40, 60, 80, 120]) {
     test(`${cols} cells`, () => {
       const t = runsText(bandLines(model({ cols, checks, stopGates: ['tripwire'] }))[0]!.runs);
-      expect(t).toContain('! blocked');
+      expect(t).toContain('▲ blocked');
       expect(textWidth(t)).toBeLessThanOrEqual(cols);
       if (cols >= 60) expect(t).toContain('tripwire');
       const w = runsText(bandLines(model({ cols, checks }))[0]!.runs);
@@ -67,7 +67,7 @@ describe('runstate: blocked shows glyph, word and reason at every width; a faili
     expect(gates).toEqual(['1 todo open']);
     for (const cols of [60, 80, 110, 150]) {
       const t = runsText(bandLines(model({ cols, stopGates: gates, done: 4, openWork: 1 }))[0]!.runs); // an open plan row: `4/5` and `1 todo open` agree (a full plan reads `retry stop`, critique 18 A1)
-      expect(t).toContain('blocked: 1 todo open');
+      expect(t).toContain('blocked · 1 todo open');
       expect(t).not.toContain('stop:');
       expect(t).not.toMatch(/\br\b/);
     }
@@ -83,7 +83,7 @@ describe('runstate: blocked shows glyph, word and reason at every width; a faili
     expect(warningText(['a', 'b'])).toBe('2 gates warning');
   });
   test('declared blocked says needs you', () => {
-    expect(runsText(bandLines(model({ blocked: true, phase: 'blocked' }))[0]!.runs)).toContain('! blocked: needs you');
+    expect(runsText(bandLines(model({ blocked: true, phase: 'blocked' }))[0]!.runs)).toContain('▲ blocked · needs you');
   });
   test('blockReasons', () => {
     expect(blockReasons(false, ['tripwire']).long).toBe('tripwire');

@@ -65,14 +65,17 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(rows[0]).toContain('2/11');
     expect(rows[0]).not.toContain('13');
   });
-  test('wordmark: the diamond and letters in the accent, the caps in the quiet 236 neutral, no fill anywhere; every cell is on the panel; no cost', () => {
+  test('wordmark: a solid pill, the caps in the accent 141 on the panel, `◆ ATLAS` in the dark ink on the accent fill; nothing else is filled; no cost', () => {
     const { rowNodes, all } = panel(160);
     const head = rowNodes[0]!;
     const mocha = PALETTES.mocha;
-    expect(cellOf(head, '◖').props).toMatchObject({ color: PALETTE5.rule, backgroundColor: mocha.panel });
-    expect(cellOf(head, '◗').props).toMatchObject({ color: PALETTE5.rule, backgroundColor: mocha.panel });
-    expect(cellOf(head, '◆').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
-    expect(cells(head).filter((t) => t.props.backgroundColor !== mocha.panel)).toHaveLength(0); // no chip: the wordmark is a quiet frame
+    expect(cellOf(head, '◖').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
+    expect(cellOf(head, '◗').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
+    const filled = cells(head).filter((t) => t.props.backgroundColor !== mocha.panel);
+    expect(filled.map((t) => String(t.props.children)).join('')).toMatch(/^ ◆ A?T?L?A?S? $/); // the pill, and only the pill (the sweep's lit letter is a hole in it, on the panel)
+    expect(filled.every((t) => t.props.backgroundColor === mocha.accent && t.props.bold === true)).toBe(true);
+    expect(text(head)).toContain('◖ ◆ ATLAS ◗'); // the literal ribbon text, whatever the sweep lights
+    expect(filled.filter((t) => t.props.color === mocha.ink).length).toBeGreaterThan(0);
     expect(all).not.toMatch(/\$/);
     expect(cells(rowNodes[1]!).every((t) => t.props.backgroundColor === mocha.panel)).toBe(true);
   });
@@ -89,7 +92,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('latte paints the latte panel; ASCII swaps the capsule; NO_COLOR keeps words and drops every colour', () => {
     const latte = panel(160, { ui: { theme: 'latte', ascii: false, color: 'truecolor' } });
     expect(cells(latte.rowNodes[0]!).filter((t) => t.props.backgroundColor === PALETTES.latte.panel).length).toBeGreaterThan(3);
-    expect(cellOf(latte.rowNodes[0]!, '◆').props.color).toBe(PALETTES.latte.accent);
+    expect(cellOf(latte.rowNodes[0]!, '◖').props.color).toBe(PALETTES.latte.accent);
     const ascii = panel(160, { ui: { theme: 'mocha', ascii: true, color: 'truecolor' } });
     expect(ascii.rows[0]).toContain('[ATLAS]');
     expect(ascii.rows[0]).not.toMatch(/[◖◗◆]/);
@@ -97,13 +100,13 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(plain.rows[0]).toContain('◖ ◆ ATLAS ◗');
     expect(cells(plain.rowNodes[0]!).every((t) => t.props.color === undefined && t.props.backgroundColor === undefined)).toBe(true);
   });
-  test('blocked reads `! blocked: needs you` and the phase rail keeps the last real phase lit', () => {
+  test('blocked reads `▲ blocked · needs you` and the phase rail keeps the last real phase lit', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
     const { rows } = panel(160, { snapshot, live: [], lastPhase: 'implement', rich: true });
     expect(rows[0]).toContain('▸ 4 implement');
     const band = panel(160, { snapshot, live: [], lastPhase: 'implement' }).rows[0]!;
-    expect(band).toContain('! blocked: needs you');
+    expect(band).toContain('▲ blocked · needs you');
     expect(band).not.toContain('idle');
   });
   test('rich: capsule with the numbered phase rail, a blank row, then the gauges', () => {
@@ -158,15 +161,15 @@ describe('workers: a row each, in words', () => {
     const run = rowOf(rowNodes, 'explorer-1');
     expect(text(run)).toContain(`${spin(3)} explorer-1`);
     expect(cells(run)[1]!.props.color).toBe(TONE_HEX.run);
-    expect(cellOf(run, 'Grep').props).toMatchObject({ color: TONE_HEX.text, bold: true });
+    expect(text(run)).toMatch(/explorer-1 +running {2}grep/); // the row the capture scorer reads: glyph, name, state word, last
     const wait = rowOf(rowNodes, 'impl-auth');
     expect(text(wait)).toContain('◉ impl-auth');
     expect(cells(wait)[1]!.props.color).toBe(TONE_HEX.info);
-    expect(cellOf(wait, 'waiting').props.color).toBe(TONE_HEX.text);
+    expect(cells(wait).find((t) => String(t.props.children).trim() === 'waiting')!.props.color).toBe(TONE_HEX.warn);
     const fail = rowOf(rowNodes, 'runner-1');
     expect(text(fail)).toContain('■ runner-1');
     expect(cells(fail)[1]!.props.color).toBe(TONE_HEX.bad);
-    expect(cellOf(fail, 'failed').props).toMatchObject({ color: TONE_HEX.text, bold: true });
+    expect(cells(fail).find((t) => String(t.props.children).trim() === 'failed')!.props).toMatchObject({ color: TONE_HEX.bad, bold: true });
   });
   test('only a worker with a tool in flight spins; a failed or waiting one never moves', () => {
     const at = (tick: number) => panel(160, { tick }).rows;
@@ -179,23 +182,22 @@ describe('workers: a row each, in words', () => {
   test('running shows the short tool name and its target', () => {
     const snapshot = busySnap();
     snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: 'mcp__lean-ctx__ctx_shell', target: 'sleep 5' } as never;
-    expect(panel(160, { snapshot, live: liveWorkers(snapshot, NOW) }).all).toMatch(/ctx_shell {2}sleep 5/);
+    expect(panel(160, { snapshot, live: liveWorkers(snapshot, NOW) }).all).toMatch(/ctx_shell sleep 5/);
   });
   test('thinking: a grey spinner, the word, and the last tool dimmed, never "-"', () => {
     const snapshot = busySnap();
     snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: 'mcp__lean-ctx__ctx_shell', target: 'sleep 5', mood: 'thinking' };
     const { rowNodes, all } = panel(160, { snapshot, live: liveWorkers(snapshot, NOW) });
     const row = rowOf(rowNodes, 'explorer-1');
-    expect(text(row)).toMatch(/thinking {3}last ctx_shell sleep 5/);
+    expect(text(row)).toMatch(/explorer-1 +running {2}thinking/);
     expect(cells(row)[1]!.props.color).toBe(TONE_HEX.muted); // grey spinner
-    expect(cellOf(row, 'ctx_shell').props.color).toBe(TONE_HEX.muted);
     expect(all).not.toMatch(/ -( |$)/);
   });
   test('a host-listed worker with no call yet is running (thinking), never starting: no clock decides a state word', () => {
     const snapshot = busySnap();
     snapshot.activity['explorer-1'] = { ...snapshot.activity['explorer-1']!, tool: null, lastTool: null, startedAt: NOW - 5_000 } as never;
     const row = rowOf(panel(160, { snapshot, live: liveWorkers(snapshot, NOW) }).rowNodes, 'explorer-1');
-    expect(text(row)).toMatch(/explorer-1 +explorer +thinking/);
+    expect(text(row)).toMatch(/explorer-1 +running +thinking/);
     expect(text(row)).not.toMatch(/starting|queued/);
   });
   test('a dispatched member the host does not list yet is a queued row: a hollow dot and the word', () => {
@@ -204,14 +206,15 @@ describe('workers: a row each, in words', () => {
     expect(text(rowOf(rowNodes, 'runner-2'))).toMatch(/◇ runner-2 .*queued/);
     expect(rows[0]).toContain('◇ 1 queued');
   });
-  test('role column joins at 100 columns; below it the name keeps the room', () => {
-    expect(panel(100).rows.find((r) => r.includes('explorer-1'))).toContain('explorer-1  explorer');
-    const narrow = panel(99).rows.find((r) => r.includes('explorer-1'))!;
-    expect(narrow).not.toMatch(/explorer-1 +explorer/);
-    expect(narrow).toMatch(/Grep/);
+  test('every width draws the same row: glyph, name, state word, last action (no role column)', () => {
+    for (const columns of [99, 100, 160]) {
+      const row = panel(columns).rows.find((r) => r.includes('explorer-1'))!;
+      expect([columns, /^ \S explorer-1 +running {2}grep/.test(row)]).toEqual([columns, true]);
+      expect(row).not.toMatch(/explorer-1 +explorer/);
+    }
   });
   test('the elapsed time ends the row', () => {
-    for (const columns of [80, 100, 160, 200]) expect(panel(columns).rows.find((r) => r.includes('explorer-1'))).toMatch(/ 42s $/);
+    for (const columns of [80, 100, 160, 200]) expect(panel(columns).rows.find((r) => r.includes('explorer-1'))).toMatch(/ 00:42 $/);
   });
   test('shortTool strips mcp server prefixes', () => {
     expect(shortTool('mcp__lean-ctx__ctx_shell')).toBe('ctx_shell');
@@ -236,7 +239,7 @@ describe('15 s linger', () => {
   test('a finished worker keeps its row for 15 s, green, reading `finished`', () => {
     const { rowNodes, rows } = withDone(15_000);
     const row = rowOf(rowNodes, 'verifier-9');
-    expect(text(row)).toMatch(/● verifier-9 +verifier +finished/);
+    expect(text(row)).toMatch(/● verifier-9 +done +verifier finished/);
     expect(cellOf(row, '●').props.color).toBe(TONE_HEX.ok);
     expect(rows.findIndex((r) => r.includes('verifier-9'))).toBeGreaterThan(rows.findIndex((r) => r.includes('explorer-1'))); // finished sorts last
   });
@@ -301,7 +304,7 @@ describe('the board slot', () => {
   test('expanded lists every item right under the band (header, then one row each); folded costs nothing', () => {
     const { rows } = panel(160, { snapshot: busySnap({ todos: boardTodos as any }), todoExpanded: true, maxRows: 14 });
     expect(rows[1]!.trim()).toMatch(/^ITEM +STATE +OWNER +DETAIL$/);
-    expect(rows.slice(2, 5).map((r) => r.trim().replace(/^▸ /, '').slice(0, 1))).toEqual(['●', '▣', '◇']); // the in-progress item's owner waits, so the item reads blocked (data/live.ts: board state from the owner)
+    expect(rows.slice(2, 5).map((r) => r.trim().replace(/^▸ /, '').slice(0, 1))).toEqual(['●', '▲', '◇']); // the in-progress item's owner waits, so the item reads blocked (data/live.ts: board state from the owner)
     expect(rows.slice(2, 5).map((r) => r.includes('done') || r.includes('blocked') || r.includes('queued'))).toEqual([true, true, true]);
   });
   test('a tight budget shrinks the board before it takes the footer or the attention workers', () => {
@@ -311,7 +314,7 @@ describe('the board slot', () => {
     expect(rows.length).toBeLessThanOrEqual(8);
     expect(rows.some((r) => r.includes('runner-1'))).toBe(true);
     expect(rows.at(-1)).toContain('checks');
-    const boardRows = (rs: string[]) => rs.filter((r) => /^[ ▸] [●⠋⠙⠹⠸◇■▣▲] .* (done|running|queued|failed|blocked) /.test(r) && !/(runner|implementer|explorer) {2,}/.test(r)).length;
+    const boardRows = (rs: string[]) => rs.filter((r) => /^[ ▸] [●◐◓◑◒◇■▲▲] .* (done|running|queued|failed|blocked) /.test(r) && !/(runner|implementer|explorer) {2,}/.test(r)).length;
     expect(boardRows(roomy)).toBe(3);
     expect(boardRows(rows)).toBeLessThanOrEqual(boardRows(roomy)); // the board's header and three items fit in the 8 rows beside the attention worker and the footer
   });
@@ -386,7 +389,7 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠸ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ todo 1/4 · ◒ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
     expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);

@@ -83,17 +83,17 @@ describe('A1: a completed row whose worker failed is never the plain green done'
 });
 
 describe('A2: blocked has its own glyph, distinct from failed', () => {
-  test('▣ for blocked, ■ for failed; ASCII # for blocked, x for failed; blocked has its own tone (critique 18 B3), failed stays bad', () => {
-    expect([STATE_GLYPHS.blocked, STATE_GLYPHS.failed]).toEqual(['▣', '■']);
+  test('▲ for blocked, ■ for failed; ASCII # for blocked, x for failed; blocked has its own tone (critique 18 B3), failed stays bad', () => {
+    expect([STATE_GLYPHS.blocked, STATE_GLYPHS.failed]).toEqual(['▲', '■']);
     expect([STATE_ASCII.blocked, STATE_ASCII.failed]).toEqual(['#', 'x']);
     expect([STATE_TOKEN.blocked, STATE_TOKEN.failed]).toEqual(['block', 'bad']);
-    expect(stateRun('blocked', ui)).toEqual({ t: '▣', tone: 'block' });
+    expect(stateRun('blocked', ui)).toEqual({ t: '▲', tone: 'block' });
     expect(stateRun('failed', ui)).toEqual({ t: '■', tone: 'bad' });
     expect(stateRun('blocked', ascii).t).not.toBe(stateRun('failed', ascii).t);
     expect(new Set(Object.values(STATE_GLYPHS)).size).toBe(Object.keys(STATE_GLYPHS).length);
   });
   test('one cell wide each', () => {
-    expect([cells('▣'), cells('■')]).toEqual([1, 1]);
+    expect([cells('▲'), cells('■')]).toEqual([1, 1]);
   });
 });
 
@@ -145,9 +145,9 @@ describe('A4: the band names the open row by its plan title and never leaves col
   const row = (mm: MissionModel): string => runsText(bandLines(mm)[0]!.runs);
   test('93 columns: the named open row, the todo figure and the failed count with its word', () => {
     const t = row(m(93));
-    expect(t).toContain('! blocked: dispatch T2 read ghost.py open');
+    expect(t).toContain('▲ blocked · needs: close T2');
     expect(t).toContain('todo 4/5');
-    expect(t).toMatch(/▣ 1 blocked/);
+    expect(t).toMatch(/▲ 1 blocked/);
     expect(t).toMatch(/■ 1 failed/);
     expect(t).not.toMatch(/\.\.\.|…/);
     expect(t).not.toContain('Attempt');
@@ -168,10 +168,10 @@ describe('A4: the band names the open row by its plan title and never leaves col
     }
     expect(seen).toBe(true);
   });
-  test('the todo figure and a named open row are separated by the middle dot: `1 dispatch open · ▣ 1 blocked`', () => {
+  test('the todo figure and a named open row are separated by the middle dot: `1 dispatch open · ▲ 1 blocked`', () => {
     const t = row(m(93, { blocked: false, stopGates: [], openDispatchTitle: undefined, workers: [], openWork: 2, openDispatch: 2 }));
-    expect(t).toContain('todo 4/5 · 1 dispatch open · ▣ 1 blocked');
-    expect(t).not.toContain('open ▣');
+    expect(t).toContain('todo 4/5 · 1 dispatch open · ▲ 1 blocked');
+    expect(t).not.toContain('open ▲');
   });
 });
 

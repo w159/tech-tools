@@ -32,10 +32,10 @@ const mission = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150
 const band = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs);
 
 describe('A1: the band counts the plan rows the TODO header counts, and names the open dispatch row', () => {
-  test('f0090 from the store: band reads todo 5/5 and `blocked: dispatch ghost-explorer open` (no plan row names the worker: its agent), never 5/6', () => {
+  test('f0090 from the store: band reads todo 5/5 and `blocked · needs: close ghost-explorer` (no plan row names the worker: its agent), never 5/6', () => {
     const out = rows(idle({ todos: stopStore }), [stopGroup('1 todo open')]).join('\n');
     expect(out).toMatch(/todo [^0-9]*5\/5/);
-    expect(out).toContain('blocked: dispatch ghost-explorer open');
+    expect(out).toContain('blocked · needs: close ghost-explorer');
     expect(out).not.toContain('5/6');
     expect(out).not.toContain('1 dispatch open'); // said once, in the reason
   });
@@ -47,7 +47,7 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
       row('dg', 'pending', 'dispatch', SESSION, 'Read ghost.py first (it does not exist), then, one Read call at a time, README.md, util.py and only then report.', 'ghost-explorer'),
     ];
     const out = rows(idle({ todos: named }), [stopGroup('1 todo open')]).join('\n');
-    expect(out).toContain('blocked: dispatch T2 read ghost.py open');
+    expect(out).toContain('blocked · needs: close T2');
     expect(out).not.toMatch(/Read ghost|first|\.\.\./);
   });
   test('the reason holds while the lead declares the block: the open row is named in both frames, never `needs you` over an open row Stop refused on', () => {
@@ -63,7 +63,7 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
       expect(t).not.toContain('5/6');
       if (cols >= 80) expect(t).toContain('5/5');
     }
-    expect(band({ ...m, cols: 150 })).toContain('blocked: dispatch read ghost.py open');
+    expect(band({ ...m, cols: 150 })).toContain('blocked · needs: close read ghost.py');
   });
   test('not blocked, the open dispatch row is still named beside the plan count (unchanged)', () => {
     expect(band(mission({ openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py' }))).toContain('5/5 · 1 dispatch open');
@@ -79,15 +79,15 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
 
 describe('A2: blocked is one red square, warnings keep the amber triangle, counts are words', () => {
   test('tokens', () => {
-    expect(STATE_GLYPHS.blocked).toBe('▣');
+    expect(STATE_GLYPHS.blocked).toBe('▲');
     expect(STATE_GLYPHS.failed).toBe('■');
     expect(STATE_TOKEN.blocked).toBe('block'); // critique 18 B3: blocked is orange, failed stays red
     expect(warnMark(ui).t).toBe('▲');
   });
   test('the band never prints a bare glyph-and-number count (`▲1 · ■2`) at any width', () => {
     const m = mission({ todoBlocked: 1, workers: [{ name: 'a', state: 'failed', secs: 1 }, { name: 'b', state: 'failed', secs: 1 }, { name: 'c', state: 'running', secs: 1 }] });
-    for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[■▣▲⠋◇◉]\d/);
-    for (const cols of [50, 40]) expect(band({ ...m, cols })).not.toMatch(/[■▣▲]1/); // narrower than the word forms: the blocked count is dropped, never a bare glyph and number
+    for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[■▲▲◐◇◉]\d/);
+    for (const cols of [50, 40]) expect(band({ ...m, cols })).not.toMatch(/[■▲▲]1/); // narrower than the word forms: the blocked count is dropped, never a bare glyph and number
     expect(band({ ...m, cols: 73 })).toContain('1 running');
     expect(band({ ...m, cols: 110 })).toContain('2 failed');
   });
@@ -157,18 +157,18 @@ describe('A4: the gates figure never rises and falls in a clean run; a check Sto
 });
 
 describe('A5: the docked 110-column band (73 cells) uses the words of the 150-column band', () => {
-  // live-110-e4a8186a-1 f0035..f0067: `todo 0/5 · ⠙1`, `⠸2`; stoprun-110-e4a8186a-1 f0054..f0061: `· 2 dispatches open · ⠹1 ■1`.
+  // live-110-e4a8186a-1 f0035..f0067: `todo 0/5 · ◓1`, `◒2`; stoprun-110-e4a8186a-1 f0054..f0061: `· 2 dispatches open · ◑1 ■1`.
   const at = (cols: number, over: Partial<MissionModel>): string => band(mission({ cols, done: 0, total: 5, ...over }));
   const run = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `w${i}`, state: 'running' as const, secs: 3 }));
   test('running agents read `2 running`, never the bare glyph and number', () => {
     for (const cols of [73, 93, 150]) expect(at(cols, { workers: run(2) })).toMatch(/2 running/);
-    expect(at(73, { workers: run(2) })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]2/);
+    expect(at(73, { workers: run(2) })).not.toMatch(/[◐◓◑◒◐◓◑◒◐◓]2/);
   });
   test('the stop-run shape keeps both counts in words; the open-dispatch note is the first segment to go at 73 cells (the state word, spinner and todo come first)', () => {
     const w = [...run(1), { name: 'g', state: 'failed' as const, secs: 3 }];
     const t = at(73, { openWork: 7, openDispatch: 2, workers: w });
     expect(t).toMatch(/working · todo 0\/5 · .* 1 running · .* 1 failed/);
-    expect(t).not.toMatch(/[■⠋⠙⠹⠸]1\b/);
+    expect(t).not.toMatch(/[■◐◓◑◒]1\b/);
     expect(at(150, { openWork: 7, openDispatch: 2, workers: w })).toMatch(/todo .* 0\/5 · 2 dispatches open +agents .* 1 running +■ 1 failed/);
   });
 });

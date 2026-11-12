@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clip, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, gauge, padEnd, PALETTES, percent, rail, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, sweepIndex, uiFromEnv, warnMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clip, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, gauge, padEnd, PALETTES, percent, rail, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, sweepIndex, uiFromEnv, warnMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons, warningText } from './data/runstate';
 import { displayName } from './hud';
@@ -102,15 +102,15 @@ export type MissionModel = {
   turnSecs?: number;
   /** Seconds the last run took: the `1:12` after `done`. Absent: the last wave's. */
   ranSecs?: number;
+  /** Failed workers whose dispatch row is closed (the work was finished another way): the band draws them as a dim `● n closed`, not as `■ n failed`. */
+  closed?: number;
   /** No wordmark sweep (ATLAS_REDUCED_MOTION, NO_COLOR); the spinner frames still step. Absent: read from the environment. */
   still?: boolean;
 };
 
 const MID = 80; // below this, only the band
 const NAME_MAX = 18;
-const ROLE_W = 13;
 const TIME_W = 7;
-const FULL = 100; // the role column joins at this width
 
 const r = (t: string, tone: Tone = 'text', bold = false): Run => (bold ? { t, tone, bold } : { t, tone });
 export const runsWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + textWidth(x.t), 0);
@@ -152,10 +152,12 @@ export const uiStateOf = (s: WorkerState): UiState => (s === 'thinking' ? 'runni
 
 /** Failed workers on the band: the listed workers, and on an idle band the last wave's failures too (idle never hides a failure). */
 const failedCount = (m: MissionModel): number => Math.max(m.workers.filter((w) => uiStateOf(w.state) === 'failed').length, isRunning(m) ? 0 : m.lastRun?.failed ?? 0);
+/** Of those, the ones whose dispatch row was closed: no longer a failure to act on (round 3: `■ 1 failed` stayed red after the row closed). */
+const closedCount = (m: MissionModel): number => Math.min(Math.max(0, m.closed ?? 0), failedCount(m));
 
 /** Agent counts by state, in the order the band shows them; zero counts are left out. `words`: `◐ 1 running`; otherwise glyph and
  * number (`◐1`), where queued gives way. `noun`: the basis, `agents`, in front (the todo count is tasks; the two are never mixed). */
-const countOf = (m: MissionModel, s: UiState): number => (s === 'failed' ? failedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
+const countOf = (m: MissionModel, s: UiState): number => (s === 'failed' ? failedCount(m) - closedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
 /** What the Motion observes of the band: each state's agent count, so a count that moves is drawn mid-transition. */
 export const bandMotionItems = (m: MissionModel): MotionItem[] => COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) }));
 
@@ -168,7 +170,12 @@ function countFrame(m: MissionModel, s: UiState): number {
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   ', queued = true): Run[] {
   const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
-  const parts = order.filter((s) => n(s) > 0).map((s): Run[] => animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s)) : [stateRun(s, ui, countFrame(m, s)), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS));
+  const closed = closedCount(m);
+  const closedRuns: Run[] = [{ t: ui.ascii ? `${GLYPH5_ASCII.done} ` : `${STATE_GLYPHS.done} `, tone: 'dim' }, r(`${closed} closed`, 'dim')]; // a closed failure is a dim record, never the red mark
+  const parts = order.flatMap((s): Run[][] => [
+    ...(n(s) > 0 ? [animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s)) : [stateRun(s, ui, countFrame(m, s)), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
+    ...(s === 'failed' && words && closed > 0 ? [closedRuns] : []),
+  ]);
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
 }
@@ -212,7 +219,7 @@ const JOIN_MAX = 92;
 
 /** The one run state every form below reads. `blocked`: the lead declared it, or the Stop gate refused the stop (never inferred from a failing check alone).
  * `warn`: idle while a check fails and Stop did not refuse (`tripwire warning`). `flagged`: either, the band's attention state. */
-export type BandKind = 'working' | 'idle' | 'done' | 'blocked' | 'warn';
+export type BandKind = 'working' | 'idle' | 'done' | 'blocked';
 export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; kind: BandKind; reason: { long: string; short: string } } {
   const stopGates = m.stopGates ?? [];
   const blocked = !!m.blocked || stopGates.length > 0;
@@ -222,8 +229,9 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? warningText(failing) : undefined;
   // The reason is read against the figure beside it (critique 18 A1): a plan that reads n/n never sits beside `1 todo open`.
   const now = { allDone: m.total > 0 && m.done >= m.total, openLeft: Math.max(0, (m.openWork ?? 0) - (m.total - m.done)) };
-  // The state the band leads with: blocked (the lead or Stop says so), working (a turn, a worker or a running plan row), a warning, done (the plan is full and nothing runs), else idle.
-  const kind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : warn ? 'warn' : m.phase === 'done' || (m.total > 0 && m.done >= m.total) ? 'done' : 'idle';
+  // The state the band leads with: blocked (the lead or Stop says so), working (a turn, a worker or a running plan row), done (the plan is full and nothing runs), else idle.
+  // A gate warning never leads (round 3): it rides the second segment of a done, idle or working band (`warn`).
+  const kind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : m.phase === 'done' || (m.total > 0 && m.done >= m.total) ? 'done' : 'idle';
   return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, kind, reason: blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now) };
 }
 
@@ -236,19 +244,35 @@ function ribbonOf(m: MissionModel, ui: Ui, kind: BandKind): Run[] {
   return wordmark(ui, kind === 'working' && !still ? sweepIndex(bandFrame(m)) : undefined);
 }
 
-/** The attention mark of a blocked or warning band: `!` in the warn tone (ASCII the same). */
-const attn = (ui: Ui): Run => ({ t: GLYPH5.blocked, tone: ui.ascii ? 'text' : 'warn' });
+/** What a blocked band needs, in the lead's words: `dispatch T2 read ghost.py open` reads `needs: close T2`; `retry stop` reads `needs: stop again`; other reasons stay as the gates word them. */
+export function needsOf(reason: string): string {
+  const open = /^dispatch (\S.*?) open$/.exec(reason);
+  if (open) return `needs: close ${/^T\d+\b/.exec(open[1]!)?.[0] ?? open[1]}`;
+  return reason === 'retry stop' ? 'needs: stop again' : reason;
+}
 
-/** The state the band leads with, by glyph AND word (never colour alone): `⠹ working 0:42`, `· idle`, `✓ done 1:12`, `! blocked: <reason>`, `! <n> warning` (the scorer maps neither mark, so the words carry the state).
- * Working turns the spinner and counts up; warn text is never bold. `elapsed` false drops the clock (the tightest forms). */
+/** The second segment of a quiet band: a failing gate, ` · ▲ 2 gates warning` (amber, never the lead). */
+const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>): Run[] => (st.warn ? [r(' · ', 'dim'), warnMark(ui), r(` ${st.warn}`, 'warn')] : []);
+
+/** The state the band leads with, by glyph AND word (never colour alone), four states on the one spinner clock:
+ * working `◐ working 0:36` (body, bold word); done `● done 5/5 · 1:02` (ok, bold); idle `○ idle` (dim); blocked `▲ blocked · needs: close T2` (error, bold).
+ * While blocked and the host turn is busy the lead keeps moving: `· ◐ fixing`. A gate warning follows the lead as the second segment (`warnSeg`), it never leads.
+ * `elapsed` false drops the clock (the tightest forms). */
 function stateRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, reason?: string, elapsed = true): Run[] {
   const clockOf = (secs: number | undefined): Run[] => (elapsed && secs !== undefined ? [r(` ${elapsedClock(secs)}`, 'dim')] : []);
+  const mark = (glyph: string, tone: Tone, bold = false): Run => ({ t: glyph, tone: ui.ascii ? 'text' : tone, ...(bold ? { bold: true } : {}) });
   switch (st.kind) {
-    case 'working': return [{ t: spinnerGlyph(bandFrame(m), ui.ascii), tone: ui.ascii ? 'text' : 'accent' }, r(' '), r('working', 'text', true), ...clockOf(m.turnSecs ?? m.elapsedSecs), ...(st.warn ? [r(' · '), warnMark(ui), r(` ${st.warn}`, 'warn')] : [])]; // a failing check never hides behind the spinner
-    case 'done': return [{ t: ui.ascii ? GLYPH5_ASCII.done : GLYPH5.done, tone: ui.ascii ? 'text' : 'ok' }, r(' '), r('done', 'ok', true), ...clockOf(m.ranSecs ?? m.lastRun?.secs)];
-    case 'blocked': return [attn(ui), r(reason ? ' blocked:' : ' blocked', 'warn'), ...(reason ? [r(` ${reason}`, 'sub')] : [])];
-    case 'warn': return [warnMark(ui), r(` ${st.warn ?? ''}`, 'warn')];
-    case 'idle': return [{ t: ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'dim' }, r(' '), r('idle', 'dim')];
+    case 'working': return [mark(spinnerGlyph(bandFrame(m), ui.ascii), 'text'), r(' '), r('working', 'text', true), ...clockOf(m.turnSecs ?? m.elapsedSecs), ...warnSeg(ui, st)]; // a failing check never hides behind the spinner
+    case 'done': {
+      const secs = m.ranSecs ?? m.lastRun?.secs;
+      const facts = [elapsed && m.total ? `${m.done}/${m.total}` : '', elapsed && secs !== undefined ? elapsedClock(secs) : ''].filter(Boolean).join(' · '); // the tightest forms keep the word alone
+      return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r(facts ? `done ${facts}` : 'done', 'ok', true), ...warnSeg(ui, st)];
+    }
+    case 'blocked': return [
+      mark(ui.ascii ? GLYPH5_ASCII.blocked : GLYPH5.blocked, 'bad', true), r(' blocked', 'bad', true), ...(reason ? [r(` · ${needsOf(reason)}`, 'bad', true)] : []),
+      ...(m.busy ? [r(' · ', 'bad'), mark(spinnerGlyph(bandFrame(m), ui.ascii), 'text'), r(' fixing', 'text')] : []), // the host is still working on it: the band keeps moving
+    ];
+    case 'idle': return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'dim'), r(' '), r('idle', 'dim'), ...warnSeg(ui, st)];
   }
 }
 
@@ -375,31 +399,14 @@ function mark(w: MissionWorker, m: MissionModel, ui: Ui): Run {
   }
 }
 
-/** What the worker is doing, in words. */
-function activity(w: MissionWorker): Run[] {
-  const target = w.target ? [r('  '), r(w.target, 'sub')] : [];
-  switch (w.state) {
-    case 'running': return [r(w.tool ?? 'working', 'text', true), ...target];
-    case 'thinking': return [r('thinking', 'sub'), ...(w.tool ? [r('   last ', 'muted'), r(w.tool, 'muted'), ...(w.target ? [r(` ${w.target}`, 'muted')] : [])] : [])];
-    case 'queued': return [r('queued', 'sub')];
-    case 'waiting': return [r('waiting', 'text'), ...target];
-    case 'failed': return [r('failed', 'text', true), ...target];
-    case 'done': return [r('finished', 'sub')];
-  }
+/** The name column of the worker rows: the longest name up to NAME_MAX (at least 8). */
+function workerNameW(m: MissionModel): number {
+  return Math.min(NAME_MAX, Math.max(8, ...m.workers.map((w) => textWidth(w.name))));
 }
 
-type Cols = { name: number; role: number };
-function workerCols(m: MissionModel): Cols {
-  const longest = Math.max(8, ...m.workers.map((w) => textWidth(w.name)));
-  return { name: Math.min(NAME_MAX, longest) + 2, role: m.cols >= FULL ? ROLE_W : 0 };
-}
-
-function workerLine(w: MissionWorker, m: MissionModel, c: Cols): Line {
-  const ui = uiOf(m);
-  const head = [r(' '), mark(w, m, ui), r(' '), r(padTo(w.name, c.name - 1) + ' ', w.state === 'done' ? 'sub' : 'text', w.state !== 'done'), ...(c.role ? [r(padTo(w.role ?? '', c.role - 1) + ' ', 'sub')] : [])];
-  const time = r(clip(formatDuration(w.secs * 1000), TIME_W - 1).padStart(TIME_W - 1) + ' ', 'sub');
-  const room = m.cols - runsWidth(head) - TIME_W;
-  return { runs: [...head, ...fitRuns(activity(w), Math.max(0, room)), time] };
+/** One worker row, `G name  state  last  time` (compactLine): the form the capture scorer reads, with or without the HUD's Subagents block. */
+function workerLine(w: MissionWorker, m: MissionModel, nameW: number): Line {
+  return compactLine(w, m, nameW);
 }
 
 /** `+2 more · 1 waiting`: the hidden workers, with any that need attention named by state. */
@@ -588,9 +595,9 @@ function runningLines(m: MissionModel): Line[] {
   const boardWant = m.boardRows ?? 0;
   const board = boardWant && m.maxRows - band.length >= 4 ? Math.min(boardWant, m.maxRows - band.length - 3) : 0; // keep a worker, the message and the footer
   const plan = planRows(m.maxRows - board - (band.length - 2), shown.length, !!m.note, foot.length);
-  const c = workerCols(m);
+  const nameW = workerNameW(m);
   const head: Line[] = [...band, ...(board ? [{ runs: [], board }] : [])];
-  const rows: Line[] = shown.slice(0, plan.lanes).map((w) => workerLine(w, m, c));
+  const rows: Line[] = shown.slice(0, plan.lanes).map((w) => workerLine(w, m, nameW));
   const extras: Line[] = [...(plan.more ? [moreLine(shown.slice(plan.lanes), m.cols)] : []), ...(plan.ticker && m.note ? [noteLine(m.note, m.cols)] : [])];
   const tail: Line[] = foot.slice(foot.length - plan.footerRows); // the key row outlasts the checks row
   // Spare rows breathe: one blank under the band, then one between the workers and the message; the first to go.

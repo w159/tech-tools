@@ -13,7 +13,7 @@ export const todo_120 = [
   "▸ ◐ Subagents block           running       elapsed 00:42 of 05:00",
   "  ◇ Gate tests                queued        after Subagents block",
   "  ■ Changelog                 failed        tests red 3",
-  "  ▣ Ship board mod            blocked       needs your approval"
+  "  ▲ Ship board mod            blocked       needs your approval"
 ];
 
 export const todo_120_rich = [
@@ -25,7 +25,7 @@ export const todo_120_rich = [
   "▸ ◐ Subagents block            RUNNING      elapsed 00:42 of 05:00",
   "  ◇ Gate tests                 QUEUED       after Subagents block",
   "  ■ Changelog                  FAILED       tests red 3",
-  "  ▣ Ship board mod             BLOCKED      needs your approval"
+  "  ▲ Ship board mod             BLOCKED      needs your approval"
 ];
 
 export const todo_80 = [
@@ -36,7 +36,7 @@ export const todo_80 = [
   "▸ ◐ Subagents block       running",
   "  ◇ Gate tests            queued",
   "  ■ Changelog             failed",
-  "  ▣ Ship board mod        blocked"
+  "  ▲ Ship board mod        blocked"
 ];
 
 export const todo_40 = [
@@ -47,7 +47,7 @@ export const todo_40 = [
   "▸ ◐ Subagents block    running",
   "  ◇ Gate tests         queued",
   "  ■ Changelog          failed",
-  "  ▣ Ship board mod     blocked"
+  "  ▲ Ship board mod     blocked"
 ];
 
 export const subagents_120 = [
