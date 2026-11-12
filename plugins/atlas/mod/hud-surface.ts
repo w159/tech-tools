@@ -48,18 +48,20 @@ export function meterRuns(done: number, total: number, ui: Ui): Run[] {
 }
 /** The title: bold 252 (the body grey) in every theme but latte. */
 const titleRun = (text: string, ui: Pick<Ui, 'theme'>): Run => ({ t: text, tone: 'text', bold: true, ...(ui.theme === 'latte' ? {} : { fg: PALETTE5.body }) });
-/** The top edge of a box (lipgloss rounded): `+- brand > TITLE  count mid ---------+` with rounded corners, in exactly `cols` cells. The brand and the rule are quiet 240, the title bold 252, the count and the `mid` runs (the meter,
- * the spinner and counts) sit inside the rule. The rule ends in the rounded corner in the last cell: the host draws its own `[-]` in the five cells it adds to the right of the row (not the mod), so the corner closes the box
- * and `[-]` sits beside it. Wider than `cols` when the parts and the two closing cells do not fit; callers try narrower forms. */
+/** The top edge of a box: `+- brand > TITLE  count mid ------------` with a rounded left corner, in exactly `cols` cells. The brand and the rule are quiet 240, the title bold 252, the count and the `mid` runs (the meter,
+ * the spinner and counts) sit inside the rule. The rule runs to the LAST cell with no right corner: the host draws its own `[-]` in the five cells it adds to the right of the tree's first row
+ * (types/claude-code AbovePrompt: `bodyColumns` is the column less the engine's five, which hold the `[-]`; the mod cannot draw in them), so an open end lets `[-]` read as the label at the right end of the
+ * rule, not as a mark hanging outside a closed box (critique 23: `[-]` outside the box, `f0051:28`). Wider than `cols` when the parts and the closing cells do not fit; callers try narrower forms. */
 export function titleRow(cols: number, title: string, count: string, mid: readonly Run[], ui: Ui): Run[] {
   const left: Run[] = [dimRun(ui.ascii ? '+- ' : '╭─ ', ui), ...brand(ui), dimRun(ui.ascii ? ' > ' : ' ▸ ', ui), titleRun(title, ui), ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), ...(mid.length > 0 ? [dimRun(' ', ui), ...mid] : []), dimRun(' ', ui)];
-  const room = Math.max(2, cols - runsCells(left)); // the rule and the corner
-  return [...left, dimRun(ui.ascii ? `${'-'.repeat(room - 1)}+` : `${RULE.repeat(room - 1)}╮`, ui)];
+  const room = Math.max(2, cols - runsCells(left)); // the rule to the last cell
+  return [...left, dimRun((ui.ascii ? '-' : RULE).repeat(room), ui)];
 }
-/** The bottom edge that closes a box: a rounded bottom-left and bottom-right corner joined by the rule, in the 240 neutral across `cols` cells (ASCII `+---+`). The capture scorer skips a row with no space after its first character. */
+/** The bottom edge that closes a box: a rounded bottom-left corner and the rule to the last cell, in the 240 neutral across `cols` cells (ASCII `+---`). Open on the right like the title rule (no side walls, so
+ * no right corners). The capture scorer skips a row with no space after its first character. */
 export const bottomRule = (cols: number, ui: Ui): Run[] => {
   const w = Math.max(2, cols);
-  return [dimRun(ui.ascii ? `+${'-'.repeat(w - 2)}+` : `╰${RULE.repeat(w - 2)}╯`, ui)];
+  return [dimRun(ui.ascii ? `+${'-'.repeat(w - 1)}` : `╰${RULE.repeat(w - 1)}`, ui)];
 };
 
 /** The tone and weight of a row's state word. The tone is the ONE shared table (atlas-ui rowWordTone), so the HUD, the route tab and the board never disagree on a row's colour
@@ -108,7 +110,8 @@ const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!
 const wordRun = (r: Pick<TodoRow, 'state' | 'word'>, text: string): Run => { const s = wordStyle(r); return t(text, s.tone, s.bold ? { bold: true } : {}); };
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
-const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
+/** The selection cursor: the accent (141) on every frame at every width. The motion leaves it be (critique 23: the cursor read 182 for a beat at 110 columns and 231/147 at 150 as its row arrived). */
+const focusMark = (focus: boolean, ui: Ui): Run => (focus ? calmRun(t(ui.ascii ? '>' : '▸', 'accent', { bold: true })) : t(' '));
 
 /** `1 queued · 1 running · 2 done · 1 failed`: only states that occur, so the header always equals the row sums. */
 export function stateCounts(states: readonly UiState[]): string {
@@ -298,10 +301,12 @@ const taskText = (r: AgentRow): string => taskCell(r.tasks) || flat(r.task ?? ''
 /** The task column's width: constant. */
 const taskWidth = (_rows: readonly AgentRow[]): number => TASK_W;
 
-/** Which optional columns fit, and where they start. A narrow row drops LAST first, then MODEL, before a TASK is cut (the model gives its cells to the task);
+/** Which optional columns fit, and where they start. A narrow row drops MODEL first (its cells go to LAST, then to the task) before LAST or a TASK is cut;
  * only when the task alone still does not fit is it ended on a whole word. A name is never cut here. The last text ends on a whole word from LAST_MIN cells. */
 type AgentCols = { model?: number; modelW: number; task?: number; taskW: number; last?: number; ctx?: number };
 const LAST_MIN = 8;
+/** The LAST width the full grid (with MODEL) must leave before MODEL stays: `2 functions` is 11 cells, `read alpha.py` 13. */
+const LAST_WANT = 14;
 function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number): AgentCols {
   // Critique 19 B2: one grid. The MODEL column was 10 cells wide in one frame and 7 in the next (a long LAST text took its slack); its width now depends on the models only.
   return agentColsAt(rows, o, rich, stateAt, rich ? 8 : 7);
@@ -321,16 +326,20 @@ function agentColsAt(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, s
   }
   const modelAt = stateAt + 12;
   const taskAt = modelAt + modelW + 1;
-  const fullTask = taskAt + plan.taskW <= cols;
-  if (fullTask) { // model, whole task, and the last text when it has LAST_MIN cells left
+  const lastAt = taskAt + plan.taskW + 1;
+  if (lastAt + LAST_WANT <= cols) { // the whole grid: model, whole task and a LAST that holds an outcome or a call (`read alpha.py`)
     plan.model = modelAt;
     plan.task = taskAt;
-    const lastAt = taskAt + plan.taskW + 1;
-    if (lastAt + LAST_MIN <= cols) plan.last = lastAt;
+    plan.last = lastAt;
     return plan;
   }
-  // The task does not fit beside the model: the model goes (LAST went already), the task takes its place, whole when it fits there.
-  if (modelAt + TASK_W <= cols) { plan.task = modelAt; plan.taskW = Math.min(plan.taskW, cols - modelAt); }
+  // LAST would be cut (critique 23: `2 funct…` at 110 columns): the MODEL column gives its cells to LAST first, so the task keeps its place and LAST takes the rest of the row.
+  if (modelAt + TASK_W <= cols) {
+    plan.task = modelAt;
+    plan.taskW = Math.min(plan.taskW, cols - modelAt);
+    const lastBare = modelAt + plan.taskW + 1;
+    if (lastBare + LAST_MIN <= cols) plan.last = lastBare;
+  }
   return plan;
 }
 
@@ -417,18 +426,15 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   const n = s.todos.length;
   const m = s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean };
-  // Rev 5: the column names stay while the grid shows (critique 17.13.0: the AGENT/STATE header was missing while agents ran). Round 3 (critique 22): the box NEVER changes shape, so every try closes
-  // each block with its rounded bottom rule (only the one-row ribbon form has no body to close). A short slot gives up, in order: the rail, then the finished plan rows (folded into a count), then the blank
-  // between the blocks, then plan rows (counted on the title); the closing rules go last of all, and only with the last row of the block. Every plan row is drawn while the rows fit at all (critique 18 B1).
-  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, { spacers: true, extras: false, close: true, foldDone: true }, { spacers: false, extras: false, close: true, foldDone: true }, { spacers: false, extras: false, close: true }];
-  for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, close: true, todoCap: cap }); // a cap is a count of rows: the rest is counted on the title
+  // A short slot gives up decoration before it gives up a row (critique 23: `2 more todos not shown` beside spare rows, finished rows dropped from a slot that fitted them): the rail, then the two
+  // bottom rules together (a box is closed on both blocks or on neither), then the SUBAGENTS column names, then the finished plan rows (counted on the title, `3/5 · 3 done`), then the blank between
+  // the blocks, and only then plan rows (counted on the title). The blank between the blocks is the one separator the stacked form keeps in every try that has both blocks and room for it.
+  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, { spacers: true, extras: false }, { spacers: true, extras: false, header: false }, { spacers: true, extras: false, header: false, foldDone: true }, { spacers: false, extras: false, header: false, foldDone: true }, { spacers: false, extras: false, header: false }];
+  for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, header: false, todoCap: cap }); // a cap is a count of rows: the rest is counted on the title
   // The plan gives way before the last running agent does: its box goes, then agents are windowed (two slots at least show one agent and the count of the rest).
-  tries.push({ spacers: false, extras: false, close: true, hideTodo: true });
-  for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, close: true, hideTodo: true, agentCap: cap });
+  tries.push({ spacers: false, extras: false, hideTodo: true });
+  for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, agentCap: cap });
   // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
-  tries.push({ spacers: false, extras: false, close: true, hideTodo: true, header: false });
-  for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, close: true, hideTodo: true, header: false, agentCap: cap });
-  // Too short even for a box around one agent row and the count of the rest: the agent rows without their closing rule (a running agent keeps its row before any rule), then the ribbon alone.
   tries.push({ spacers: false, extras: false, hideTodo: true, header: false });
   for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, header: false, agentCap: cap });
   tries.push({ spacers: false, extras: false, todoCap: 0, agentCap: 0, header: false });

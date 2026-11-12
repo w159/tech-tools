@@ -64,7 +64,7 @@ describe('step 1: a quiet header', () => {
         expect([ribbon.tone, ribbon.fg, ribbon.bg, ribbon.chip]).toEqual(['dim', PALETTE5.dim, undefined, undefined]);
         const name = head.find((x) => x.t === title)!;
         expect([name.tone, name.bold, name.fg]).toEqual(['text', true, PALETTE5.body]);
-        const rule = head.find((x) => /^─+╮$/.test(x.t))!;
+        const rule = head.find((x) => /^─+$/.test(x.t))!;
         expect([rule.tone, rule.fg]).toEqual(['dim', PALETTE5.dim]);
         expect(head.filter((x) => x.chip === true || x.bg !== undefined)).toEqual([]); // the band alone carries the solid chip
       }
@@ -72,8 +72,8 @@ describe('step 1: a quiet header', () => {
   }
   test('the count and the meter follow the title: TODO has `n/m` and the meter, SUBAGENTS the spinner and the counts', () => {
     const rows = text(draw(working, 150));
-    expect(rows[0]).toMatch(/▸ TODO {2}0\/5 ▱{8} ─+╮$/);
-    expect(rows.find((r) => r.includes('SUBAGENTS'))).toMatch(/▸ SUBAGENTS [◐◓◑◒] 3 running ─+╮$/);
+    expect(rows[0]).toMatch(/▸ TODO {2}0\/5 ▱{8} ─+$/);
+    expect(rows.find((r) => r.includes('SUBAGENTS'))).toMatch(/▸ SUBAGENTS [◐◓◑◒] 3 running ─+$/);
   });
 });
 
@@ -85,14 +85,14 @@ describe('step 2: a rounded box that never changes shape', () => {
       const heads = out.map((l, i) => [l, i] as const).filter(([l]) => isBlockHeader(l));
       expect(heads.map(([l]) => /▸ (TODO|SUBAGENTS)/.exec(l)![1])).toEqual(['TODO', 'SUBAGENTS']);
       for (const [l, i] of heads) {
-        expect([l.startsWith('╭─ '), l.endsWith('─╮'), cells(l)]).toEqual([true, true, cols]);
+        expect([l.startsWith('╭─ '), l.endsWith('─'), cells(l)]).toEqual([true, true, cols]);
         expect(cells(runsString(rows[i]!))).toBe(cols); // padded to the one width in every state
       }
       const closes = out.map((l, i) => [l, i] as const).filter(([l]) => l.startsWith('╰'));
-      expect(closes.map(([l]) => l)).toEqual([`╰${'─'.repeat(cols - 2)}╯`, `╰${'─'.repeat(cols - 2)}╯`]); // both blocks, every state
+      expect(closes.map(([l]) => l)).toEqual([`╰${'─'.repeat(cols - 1)}`, `╰${'─'.repeat(cols - 1)}`]); // both blocks, every state
       expect(closes[1]![1]).toBe(out.length - 1); // SUBAGENTS closes the HUD; the host or the register adds the blank under it
       const subAt = heads[1]![1];
-      expect([out[subAt - 2], out[subAt - 1]]).toEqual([`╰${'─'.repeat(cols - 2)}╯`, '']); // exactly one blank between TODO and SUBAGENTS
+      expect([out[subAt - 2], out[subAt - 1]]).toEqual([`╰${'─'.repeat(cols - 1)}`, '']); // exactly one blank between TODO and SUBAGENTS
       expect(out.filter((l) => l === '')).toHaveLength(1);
       for (const l of out) expect(cells(l)).toBeLessThanOrEqual(cols);
       expect(out.slice(1).some((l) => /^[│┃]/.test(l.trim()) && !l.startsWith('╰'))).toBe(false); // rows carry no side border: the scorer reads the glyph first
@@ -106,28 +106,33 @@ describe('step 2: a rounded box that never changes shape', () => {
       expect([...widths]).toEqual([cols]);
     }
   });
-  test('ASCII keeps the same shape: `+-` and `-+` on the header, `+---+` closing, `[ATLAS]` for the ribbon', () => {
+  test('ASCII keeps the same shape: `+-` on the header, `+---` closing, no right corner, `[ATLAS]` for the ribbon', () => {
     const out = text(hudLines(working, { cols: 110, maxRows: 40, ui: { theme: 'mocha', ascii: true, color: 'none' }, now: NOW }));
-    expect(out[0]).toMatch(/^\+- \[ATLAS\] > TODO .*-\+$/);
-    expect(out.filter((l) => /^\+-+\+$/.test(l))).toHaveLength(2);
+    expect(out[0]).toMatch(/^\+- \[ATLAS\] > TODO .*-$/); // the rule runs to the last cell: the host's `[-]` ends it
+    expect(out.filter((l) => /^\+-+$/.test(l))).toHaveLength(2);
     for (const l of out.filter((x) => x.trim() !== '')) expect(cells(l)).toBeLessThanOrEqual(110);
   });
-  test('a short budget drops the finished rows first, then the blank rows, never a closing rule', () => {
+  test('a short budget drops the rules first, then the column names, then the blank, and only then folds the finished rows (critique 23)', () => {
     for (const cols of [150, 110]) {
       const input: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'completed', OWNERS[1]), todo(3, 'in_progress', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: OWNERS.map((n, i) => agent(n, i < 2 ? 'done' : 'working', i < 2 ? 'done' : 'running', { tool: 'Read', target: 'x.py' })) };
       const at = (n: number): string[] => text(draw(input, cols, n));
-      const full = at(40);
-      expect(full).toHaveLength(14);
-      for (let n = 14; n >= 9; n--) {
+      const plan = (out: string[]): string[] => out.filter((l) => /\bT[1-5] /.test(l) && !l.includes('haiku'));
+      expect(at(40)).toHaveLength(14);
+      expect(at(14).filter((l) => l.startsWith('╰'))).toHaveLength(2);
+      for (let n = 13; n >= 11; n--) {
         const out = at(n);
-        expect([cols, n, out.filter((l) => l.startsWith('╰')).length]).toEqual([cols, n, 2]); // never a closing rule while the budget holds both boxes (at 9 rows the plan is one row and its count)
+        expect([cols, n, out.filter((l) => l.startsWith('╰')).length]).toEqual([cols, n, 0]); // the closing rules go before any plan row
+        expect([cols, n, plan(out).length]).toEqual([cols, n, 5]); // every plan row stays
+        expect([cols, n, out.filter((l) => l === '').length]).toEqual([cols, n, 1]); // ...with the one blank row between the blocks
         expect([cols, n, out.length <= n]).toEqual([cols, n, true]);
       }
-      expect(at(13).some((l) => /T[12] read/.test(l))).toBe(false); // the finished rows fold into the count first
-      expect(at(13)[0]).toMatch(/2 done/);
-      expect(at(13).filter((l) => l === '')).toHaveLength(1); // ...with the blank still there
-      expect(at(11).filter((l) => l === '')).toHaveLength(0); // then the blank goes
-      expect(at(11).filter((l) => /T[345] /.test(l) && !l.includes('haiku'))).toHaveLength(3); // while every open plan row keeps its place
+      expect(at(12).some((l) => /AGENT\s+STATE/.test(l))).toBe(true); // the names outlast the rules
+      expect(at(10).some((l) => /AGENT\s+STATE/.test(l))).toBe(false); // ...and go before the blank
+      expect(at(10).filter((l) => l === '')).toHaveLength(1);
+      expect(at(10)[0]).toMatch(/2 done/); // the finished rows fold into the count last of all
+      expect(at(10).some((l) => /T[12] read/.test(l) && !l.includes('haiku'))).toBe(false);
+      expect(at(8).filter((l) => l === '')).toHaveLength(0); // then the blank
+      expect(plan(at(8)).filter((l) => /T[345] /.test(l))).toHaveLength(3); // while every open plan row keeps its place
     }
   });
 });
@@ -202,7 +207,7 @@ describe('step 3: honest rows', () => {
     for (const cols of [110, 57]) {
       const out = text(draw(working, cols, 14));
       expect(out).toHaveLength(14);
-      expect(out.filter((l) => /\bT[1-5] /.test(l) && !l.includes('haiku'))).toHaveLength(5);
+      expect(out.filter((l) => /^[▸ ]\s*\S T[1-5] /.test(l))).toHaveLength(5);
       expect(out[0]).not.toMatch(/more/);
     }
   });

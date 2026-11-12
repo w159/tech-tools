@@ -34,10 +34,11 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect(rows.filter((r) => /haiku/.test(r))).toHaveLength(3);
   });
   test('when the rows truly do not fit, open rows keep their place and the ribbon says how many were left out', () => {
-    const rows = hud(93, 13); // round 3: a finished row folds before the blank goes
+    const rows = hud(93, 10); // a finished row folds into the count only after the closing rules, the column names and the room for them are gone (critique 23)
     expect(rows.filter((r) => /\bT[2-5] /.test(r) && !/haiku/.test(r))).toHaveLength(4);
     expect(rows[0]).toMatch(/1 done/);
-    expect(rows.some((r) => /AGENT\s+STATE/.test(r))).toBe(true); // rev 5: the column names stay, the finished row folds into the count
+    expect(rows.some((r) => /AGENT\s+STATE/.test(r))).toBe(false); // the names went first
+    expect(hud(93, 11).filter((r) => /\bT[1-5] /.test(r) && !/haiku/.test(r))).toHaveLength(5); // one row more: every row, T1 included
   });
 });
 

@@ -12,7 +12,7 @@ import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
 import { bandSpareRows, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, ranSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
-import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, isRunning, reclaimBlanks, segmentOf } from './hud';
+import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isRunning, reclaimBlanks, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -409,12 +409,15 @@ export function effectiveRows(maxRows: number, viewport: { rows: number; isFulls
 const BAND_KEEP_ROWS = 1;
 
 /** Rows the HUD may take of `budget`. `hudBudget` gives the compact floor (the plan, the agents, no column names); where the slot can also hold the
- * SUBAGENTS column-name row, the blank between the plan and the agents, one blank under the agents and the band's title row, the floor
- * is raised to hold them (critique 14: the header was in 3 of 33 frames at 110 columns and went missing mid-run at 150). */
-export function hudSlotCap(budget: number, compact: number, floor: number, bandRows: number, running: boolean, agentsListed: boolean): number {
+ * blank between the plan and the agents, the floor is raised to hold it. `want` (hud.ts hudWantRows) is what the HUD asks for: every plan row and agent row with both closing rules. The HUD is given
+ * that much whenever the band keeps its title row and, with agents listed, the one blank under them, so a slot that fits the plan shows every row; hud-surface fitRows gives up decoration (rules, column
+ * names) before a row (critique 23: `2 more todos not shown` at 150 columns beside spare rows). */
+export function hudSlotCap(budget: number, compact: number, floor: number, bandRows: number, running: boolean, agentsListed: boolean, want = 0): number {
 	const base = hudBudget(budget, compact, bandRows, running);
-	if (!agentsListed) return base;
-	const cap = budget - floor - 1 >= BAND_KEEP_ROWS ? Math.max(base, floor) : base; // floor: hudFloorRows, the compact form with the column names and the blank between the blocks
+	const room = budget - BAND_KEEP_ROWS - (agentsListed ? 1 : 0); // the most the HUD can take while the band keeps its title row (and the blank under the agents)
+	const asked = want > 0 ? Math.min(want, room) : 0;
+	if (!agentsListed) return Math.max(base, asked);
+	const cap = Math.max(budget - floor - 1 >= BAND_KEEP_ROWS ? Math.max(base, floor) : base, asked); // floor: hudFloorRows, the compact form with the blank between the blocks
 	// While an agent runs the band keeps its row (critique 17: 110 columns, 10 rows, 3 agents: the HUD took all 10 and no band line was drawn); the HUD folds to fit (hud-surface fitRows).
 	return running && budget > BAND_KEEP_ROWS + 1 ? Math.min(cap, budget - BAND_KEEP_ROWS) : cap;
 }
@@ -1307,7 +1310,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const core = await read($, coreState);
 		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(ranSecsOf(runClock) !== undefined ? { ranSecs: ranSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
-		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed);
+		const want = hudWantRows(hudIn, columns, snapshot.now);
+		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed, want);
 		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
 		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
 		const hudFull = hudOn ? reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandIn(rows as Segment[][])), drawHud) as Segment[][] : [];
@@ -1316,7 +1320,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
 		const compact = hudCompactRows(hudIn, columns);
 		const floor = hudFloorRows(hudIn, columns, snapshot.now);
-		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudSlotCap(cap, compact, floor, BAND_MIN_ROWS, running, agentsListed) }).length : 0;
+		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudSlotCap(cap, compact, floor, BAND_MIN_ROWS, running, agentsListed, want) }).length : 0;
 		const inline = e.viewport !== undefined && e.viewport.isFullscreen !== true;
 		void publishHudState($, snapshot.root, {
 			maxRows: budget,
