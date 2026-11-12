@@ -1,6 +1,6 @@
 # Atlas mod (Claude Code)
 
-Last verified against the source tree on 2026-10-13 (atlas 12.0.0, the Command Center redesign): `claude plugin test plugins/atlas` passes 249 mod tests, 0 mod fail. The full plugin walk reports 169 additional failures, all pre-existing `plugins/atlas/colony/**` or `plugins/atlas/omp/**` files importing `bun:test`, which the plugin test host forbids (those suites stay on `bun test`). `bunx tsc --noEmit -p plugins/atlas/mod/tsconfig.json` is 0 errors. Paths are relative to `plugins/atlas/` unless they start with `docs/`.
+Terminal UI sections verified against main a7bc7b0d (atlas 17.14.0) on 2026-11-12; sections dated earlier describe 12.x and are marked where the 17.14.0 section supersedes them. Earlier note, 2026-10-13 (atlas 12.0.0, the Command Center redesign): `claude plugin test plugins/atlas` passes 249 mod tests, 0 mod fail. The full plugin walk reports 169 additional failures, all pre-existing `plugins/atlas/colony/**` or `plugins/atlas/omp/**` files importing `bun:test`, which the plugin test host forbids (those suites stay on `bun test`). `bunx tsc --noEmit -p plugins/atlas/mod/tsconfig.json` is 0 errors. Paths are relative to `plugins/atlas/` unless they start with `docs/`.
 
 The mod draws two native surfaces: a one-row band above the prompt and a tabbed sidebar pane (route/team/channel/gates). It also restyles five built-in Claude Code sites (the contract header, spinner, tool-use cards, turn receipt, prompt hint). Design rationale and decision log: `docs/plans/2026-10-13_atlas-command-center-redesign.md`. Earlier design history (the Client-pane Colony/Squad/Board/Channel/Collab tabs, persona sprites, the three-gutter-row band): `plugins/atlas/CHANGELOG.md` entries 11.0.0 through 11.1.7.
 
@@ -19,7 +19,23 @@ The Atlas mod is an in-process UI plugin module for Claude Code mods (Claude Cod
 
 Both surfaces are drawn with native elements (`$.ui.resolve(e)` from the `ui.render` hooks in `mod/register.ts:582-612`), not `Client` surface modules: a `Client` only receives keys after a mouse click, so native Buttons and Inputs are required to join the engine's own focus ring.
 
-### The band (always on)
+### Terminal UI as shipped (atlas 17.14.0, main a7bc7b0d)
+
+This section wins over the 12.x sections below where they differ. Paths are under `plugins/atlas/`.
+
+- **Slot order.** The band and its worker rows come first, then one blank row, then the HUD (TODO box, one blank, SUBAGENTS box), so a host clip eats HUD rows, never the band (`atlasSlot`, `mod/register.ts:391`).
+- **Hold.** While a run lasts the slot keeps its height: `hudHoldRows` (`mod/hud.ts:352`) reserves a typical five-row plan and up to three agents once a phase header, a plan or an agent exists (`hudRunRows`, `mod/hud.ts:339`); `slotHold` (`mod/register.ts:398`, called at `:1376`) never falls during the run, never passes the budget, and is 0 at rest.
+- **Run start and end.** The clock starts at the person's prompt (`armedAt`, `mod/register.ts:1031`, `:1240`) and ends on the host's own turn end with no grace (`stepRun`, `mod/band-motion.ts:70-77`; `END_GRACE_MS` applies only where the host gives no turn signal). The first done frame already shows the final time (`finalSecsOf`, `mod/band-motion.ts:86`). The band reads `idle` after `IDLE_AFTER_SECS = 30` (`mod/mission-layout.ts:221`).
+- **Frame clock.** `FRAME_MS = 100` (`mod/band-motion.ts:51`), the loop armed at `mod/register.ts:1097`: at most 10 redraws a second. One frame index per render is shared by every surface (`withSpinFrame`, `mod/atlas-ui.ts:647`).
+- **Spinner sets.** Braille `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏` (`LEAD_FRAMES`, `mod/atlas-ui.ts:609`) on the band lead and agents count, the SUBAGENTS title and the panel agent rows; circle quarters `◐◓◑◒` (`SPIN_FRAMES`, `:607`) on TODO, SUBAGENTS agent rows, board and band worker rows, because the capture scorer reads them (`SCORER_READS_CIRCLES`, `mod/hud-surface.ts:20`).
+- **Fit ladder.** `fitRows` (`mod/hud-surface.ts:437`): progress rail, blank row, both closing rules together, finished TODO rows (`n/m · k done`), agent rows (down to one), TODO rows, the TODO box, the SUBAGENTS column names last. Overflow is one wording in the title: `figure · +N more` (`:172`), `3 running · +2 more` (`:285`). Boxes are closed on both blocks or flat on both, never a top rule without a bottom (`titleRow(..., flat)`, `:57`).
+- **Truth.** The side panel draws the snapshot as is, with no hold. The phase is never `done` while a dispatch row is open or a worker runs (`currentPhase`, `mod/data/todos.ts:270`). A row whose owner returned is a neutral `◉` with the word in 245 (`mod/hud-surface.ts:25`). The lead header line is lower case with no `▌` after the host's `●` (`displayLine`, `mod/transcript/leadheader.ts:41`; the chip, `:64`).
+- **Durations.** An agent's run is `m:ss` (`h:mm:ss` from an hour) on every surface (`elapsedClock`, `mod/atlas-ui.ts:413`). A plan row's `ran` and `elapsed ... of` detail is `mm:ss` (`mod/hud.ts:99`, `mod/board-model.ts:66`).
+- **Palette.** `PALETTE5` (`mod/atlas-ui.ts:405`): accent 141, ok 114, warn 179, error 203, neutrals 236, 240, 245, 252. In 256-colour output every surface is limited to those, the panel fills 234 and 235, and 231 as a fade's first step (`PALETTE_INDICES`, `mod/surface_indices.ts:24`, checked by `mod/critique26.test.ts:39`).
+- **Done motion.** A done mark holds its first state `DONE_HOLD_MS = 1000` (`mod/motion.ts:29`), then three `MOTION_STEP_MS = 200` beats (`:23`); the timer runs at `MOTION_FRAME_MS = 100` (`:16`).
+- **Host load rules.** The host drops the whole mod if `$` is assigned, stored, returned or spread, or if mod code has a `.json` import or a dynamic `import()` (`mod/host-load-rules.test.ts:228`, `:232`; `hooks/test_atlas_contract.py:1858`).
+
+#### The band, 12.x history (superseded by the list above)
 
 Since 12.2.0 the band is the "Mission Control" panel: a framed multi-row block above the prompt (`mod/band.tsx` `bandTree`), drawn only for the terminal surface in an interactive session with the mod on. `register.ts` hands it the snapshot, the `liveWorkers()` list, the gate groups, the column count, a row budget (`maxRows`) and the spinner tick. Rows, top to bottom:
 
@@ -56,13 +72,7 @@ Since 12.3.0 worker cards are filled stripe cards with a state chip and goal, no
 
 One `Pane` with id `atlas`. Placement: the pane docks itself, unasked, only on the first render that knows the viewport, only when the terminal is fullscreen and at least 110 columns wide (`register.ts:34,37` `DOCK_MIN_COLUMNS`, `shouldDock`, checked once via `paneChecked`); it opens undocked at `PANE_DOCK` (56 columns, auto rows). Everywhere else the pane stays closed until `/atlas-cc`, which opens a focused, closable 12-row inline pane (`register.ts:32` `PANE_ON_DEMAND`) and closes with Esc or the close mark (clearing `paneOpenedState` so `/atlas-cc` reopens it next time, `register.ts:636-639`).
 
-**Tab strip** (`sidebar.tsx:20-44` `tabStrip`). Four plain hotkey Buttons, the current one bold and inverse, separated by a dim ` │ ` pipe, plus a right-pushed hint (`r t c g keys · ↑↓ Enter`) when the pane is at least 60 columns inside:
-
-```
-r: ◎ route │ t: ● team │ c: ✉ channel │ g: ✗ 2
-```
-
-The gates tab label is `✗ N` (error color) when gates are open, else `✓ gates`. Exactly one view renders below the strip at a time (`sidebar.tsx:46` `VIEWS` map), switched by `on.setView` (hotkeys `r`/`t`/`c`/`g` live while the pane holds focus) or the arrow-key focus ring.
+**Tab strip** (`STRIP_TABS`, `mod/panel-layout.ts:28`). Six names only, `route  team  channel  gates  core  board`, at every width: the lit name bold accent with a one-row accent rule under it, the rest dim. The keys `r t c g k o` stay bound on the zero-width layer; a dim `keys  r t c g k o` line sits on the last spare row of a tall pane (`mod/panel-layout.ts:1060`). Exactly one view renders below the strip at a time (`sidebar.tsx` `VIEWS` map), switched by `on.setView`.
 
 - **Route** (`mod/panel-layout.ts` `routeBody`; `pane/sidebar-route.tsx` `routeRows` is a one-line wrapper over `viewRows`). The rev 4 route tab: a `phase` row with the position on the numbered rail (`research 2/4`; a phase the rail does not know prints no position, `done` prints N/N), the `gates` summary, the `todo` gauge, the `agents` row of state counts, then one row per plan item with its state mark, word and (from 100 columns) owner and reason. A blocked item keeps its owner's mark and reason. Done items are listed at every width. Enter toggles a row's evidence line.
 - **Team** (`mod/panel-layout.ts` `teamBody`; `pane/sidebar-team.tsx` `teamRows` wraps `viewRows`). The lead's own row first (`◉ lead  waiting  idle`; state from its mood, `pane/sidebar-roster.ts` `leadMood`), then every subagent by name with its state word, model, plan row and last action, then roster members the squad does not list (`queued`, their last words), then the lead's tally last (`lead  1 queued · 1 running · 2 done · 1 failed`, running always shown, zero counts dropped). Other sessions' leads and workers resting for over two hours are left out (`sidebar-roster.ts` `mates`). The state word is the one from `mod/data/live.ts` `liveState`, the same on the HUD, the band and this tab: a worker that has made no call yet reads `queued` for 90 seconds, then `running`. A message `Input` (`▸ to <recipient>`, Enter sends) sits below the table (`inputEl` in `pane/sidebar-paint.tsx`).
@@ -228,7 +238,7 @@ Colocated `*.test.ts` files use the `claude-code/testing` kit. `scripts/sprite_r
 
 ## Rev 4 terminal UI (2026-11-11)
 
-Matches the code at HEAD; the design record is `docs/specs/2026-11-10_atlas-terminal-ui.md`. Where an older section above
+Matches the code at its date (superseded in part by "Terminal UI as shipped" above); the design record is `docs/specs/2026-11-10_atlas-terminal-ui.md`. Where an older section above
 disagrees (the one-row band, `mission-layout.ts` runs, a fixed 26-cell board state column, the `starting` worker state),
 this section wins. Paths are under `plugins/atlas/`.
 

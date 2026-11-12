@@ -96,7 +96,16 @@ segment. The `⠋` is a braille spinner that steps every 100 ms. The run clock
 starts at your prompt and stops when Claude Code reports its turn idle. Set
 `ATLAS_BAND_RICH=1` for the tall form with the phase rail. The HUD under the band
 draws the TODO and SUBAGENTS boxes: closed rounded boxes, with SUBAGENTS as a
-table of `AGENT STATE MODEL TASK LAST RESULT` (MODEL from 120 columns).
+table of `AGENT STATE MODEL TASK LAST RESULT` (MODEL from 120 columns). The two
+boxes keep or lose their rules together, so a top rule never stands without a
+bottom one. When the slot is short the boxes give up, in order, the blank row,
+the closing rules, finished TODO rows, agent rows and TODO rows; hidden rows are
+counted in the title as `+N more`. A run holds its HUD height from the first
+frame, so the band keeps its screen row. The side panel never says `done` while a
+dispatch is open or a worker runs. Every agent run time reads `m:ss`, a row whose
+agent returned is a neutral `◉`, and 256-colour terminals see only Atlas's palette
+indices. Detail and file:line references are in
+[plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
 
 ![Band with two running workers](img/showcase/cc-band-running.png)
 
