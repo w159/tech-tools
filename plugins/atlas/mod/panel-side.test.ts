@@ -36,10 +36,10 @@ describe('gates figure: the band and the side panel read gateTally', () => {
     const checks = rows.find((r) => r.includes('checks'))!;
     const all = /all (\d+) pass/.exec(checks);
     if (all) return [Number(all[1]), Number(all[1])];
-    const pairs = [...checks.matchAll(/([●▲]) \S+/g)].map((x) => x[1]);
+    const pairs = [...checks.matchAll(/([●▲△]) \S+/g)].map((x) => x[1]);
     if (pairs.length) return [pairs.filter((g) => g === '●').length, pairs.length];
     const ok = Number(/(\d+) ok/.exec(checks)![1]);
-    return [ok, ok + (checks.match(/▲/g) ?? []).length];
+    return [ok, ok + (checks.match(/[▲△]/g) ?? []).length];
   };
   const figure = (text: string): [number, number] | undefined => {
     const m = /(\d+)(?: of |\/)(\d+)(?: green)?\s*$/.exec(text); // the route row reads `n of m green`, the gates ribbon `n/m`

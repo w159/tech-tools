@@ -31,14 +31,14 @@ describe('C1: the band is never idle once a turn runs', () => {
     const done = ['alpha', 'beta', 'gamma'].map((n, i) => ({ id: `d${i}`, content: `${n} read`, status: 'completed', origin: 'dispatch', session_id: 'd87fbe79', owner: `${n}-explorer` }));
     const out = bandOf({ snap: { todos: done, activity: lead('working') } }, [grp('completion', true), grp('routing', false)]).join('\n');
     expect(out).toContain('last run');
-    expect(out).toContain('▲ routing');
+    expect(out).toContain('△ routing');
     expect(out).not.toContain('all ok');
     expect(bandOf({ snap: { todos: done, activity: lead('working') } }, [grp('completion', true), grp('routing', true)]).join('\n')).toContain('all ok');
   });
   test('f0095 (110): phase `done` is not drawn beside a failing check', () => {
     const m: MissionModel = { cols: 110, maxRows: 12, tick: 0, project: 'p', phases: ['research', 'plan', 'done'], phase: 'done', done: 5, total: 5, workers: [], busy: true, checks: [{ id: 'routing', ok: false, name: 'routing' }, { id: 'completion', ok: true }], ui: mocha };
     const head = runsText(bandLines(m)[0]!.runs);
-    expect(head).toContain('▲');
+    expect(head).toContain('△');
     expect(head).not.toMatch(/\bdone\b/);
     expect(runsText(bandLines({ ...m, busy: false, checks: [{ id: 'completion', ok: true }] })[0]!.runs)).toMatch(/\bdone\b/);
   });

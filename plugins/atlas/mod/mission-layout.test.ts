@@ -75,18 +75,19 @@ describe('mission-layout: the header never reads idle or all ok beside a failing
     for (const cols of [160, 120, 100, 80, 60, 40]) {
       const b = band(model({ cols, checks: bad, phase: 'verify', done: 3 }));
       expect(b).not.toContain('blocked');
-      expect(b).toContain('routing warning');
+      expect(b).toContain(cols >= 60 ? '1 gate to check' : '1 gate'); // the short form below 60 cells
       expect([cols, /ATLAS ◗ +[●○] (done|idle)/.test(b)]).toEqual([cols, true]); // the state leads
-      expect([cols, b.indexOf('▲') > b.search(/[●○] (done|idle)/)]).toEqual([cols, true]); // and the warning follows it
+      expect([cols, b.indexOf('△') > b.search(/[●○] (done|idle)/)]).toEqual([cols, true]); // and the warning follows it
+      expect([cols, b.includes('▲')]).toEqual([cols, false]); // and never wears the solid blocked triangle
     }
-    expect(band(model({ checks: [{ id: 'a', ok: false }, { id: 'b', ok: false }] }))).toContain('2 gates warning');
+    expect(band(model({ checks: [{ id: 'a', ok: false }, { id: 'b', ok: false }] }))).toContain('2 gates to check');
     expect(band(model({ checks: [{ id: 'routing', ok: true }] }))).toContain('idle');
     expect(band(model({ checks: null }))).toContain('idle');
   });
   test('the rich band says warning too, after the state', () => {
     const b = runsText(bandLines(model({ cols: 160, rich: true, checks: bad }))[0]!.runs);
     expect(b).not.toContain('blocked');
-    expect(b).toMatch(/ATLAS ◗ +[●○] (done|idle) · ▲ routing warning/);
+    expect(b).toMatch(/ATLAS ◗ +[●○] (done|idle) · △ 1 gate to check/);
   });
   test('a refused Stop reads BLOCKED with the refusing gate named, in every width form and the rich band', () => {
     for (const cols of [160, 120, 100, 80, 60, 40]) {
@@ -247,7 +248,7 @@ describe('mission-layout: a full plan with open store work never reads as all do
   test('critique 16 A1 (stoprun-150-e4a8186a-1 f0090): blocked on one open dispatch row, the count stays the plan\'s own 5/5 and the reason names the row', () => {
     const m = model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py', stopGates: ['1 todo open'], workers: [] });
     const line = band(m);
-    expect(line).toContain('blocked · needs: close read ghost.py');
+    expect(line).toContain('blocked · needs: close dispatch read ghost.py');
     expect(line).toContain('5/5');
     expect(line).not.toContain('5/6');
     for (const cols of [120, 100, 80]) expect(band({ ...m, cols })).not.toContain('5/6');

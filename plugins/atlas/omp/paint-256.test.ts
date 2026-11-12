@@ -20,10 +20,11 @@ test("panel-view and hud-paint paint every tone exactly as paintAnsi does", () =
 	expect(panelRun({ t: "x", tone: "text" }, ui)).toContain("48;5;234");
 });
 test("mission band and todo board draw only stable palette colours", () => {
-	const allowed = new Set(stable256Indices().map((i) => `38;5;${i}`));
+	// Round 3: the brief's seven xterm indices are painted as themselves (handed to the host as each index's pre-image), on top of the stable set.
+	const allowed = new Set([...stable256Indices(), 141, 203, 179, 114, 252, 245, 240].map((i) => `38;5;${i}`));
 	const out = [...renderPanel(model), ...boardLines([{ content: "t", status: "in_progress", owner: "a" }], { width: 100, tick: 0, ui })];
 	const used = out.flatMap(fgs);
 	expect(used.length).toBeGreaterThan(0);
-	for (const f of used) expect(allowed.has(f)).toBe(true);
+	for (const f of used) expect([f, allowed.has(f)]).toEqual([f, true]);
 	expect(out.join("")).toContain("48;5;234");
 });

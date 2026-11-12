@@ -47,9 +47,9 @@ describe('runstate: blocked shows glyph, word and reason at every width; a faili
       if (cols >= 60) expect(t).toContain('tripwire');
       const w = runsText(bandLines(model({ cols, checks }))[0]!.runs);
       expect(w).not.toContain('blocked');
-      expect(w).toContain('▲');
+      expect(w).toContain('△');
       expect(textWidth(w)).toBeLessThanOrEqual(cols);
-      if (cols >= 60) expect(w).toContain('tripwire warning');
+      if (cols >= 60) expect(w).toContain('1 gate to check');
     });
   }
   test('the tally reads the Stop verdict line and never counts it as a check', () => {
@@ -106,7 +106,9 @@ describe('runstate: one vocabulary at every width', () => {
   }
   test('abbreviates only when the long word does not fit', () => {
     const t = runsText(bandLines(m(48))[0]!.runs);
-    expect(t.includes('ph 3/5') || !t.includes('phase')).toBe(true);
+    expect(textWidth(t)).toBeLessThanOrEqual(48);
+    expect(t).toContain('phase 3/5'); // round 3: the long word fits at 48 (the lead is shorter), so it is never abbreviated
+    expect(t).not.toMatch(/\bph \d/);
   });
 });
 

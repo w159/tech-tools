@@ -76,7 +76,7 @@ const todoOf = (text: string): [number, number] | undefined => {
 const GATE_NAMES = world.gates.map((g) => g.name).join('|');
 const gatePairs = (text: string): Record<string, boolean> => {
   const out: Record<string, boolean> = {};
-  for (const m of text.matchAll(new RegExp(`([●■▲▲]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
+  for (const m of text.matchAll(new RegExp(`([●■▲△]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
   return out;
 };
 /** Rows `glyph name  word`: the glyph must agree with the word. */

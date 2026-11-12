@@ -41,7 +41,7 @@ describe('B1: the blocker has one name on the band, the gates tab and the tally'
   test('the band header reads the team gate and the gates tab lists a Team gate row', () => {
     const t = gateTally(teamGate);
     const head = runsText(bandLines(mission({ checks: t.checks }))[0]!.runs);
-    expect(head).toContain('▲ team gate warning'); // a failing check alone, Stop not refused
+    expect(head).toContain('△ 1 gate to check'); // a failing check alone, Stop not refused (the gate's name is the checks row's and the gates tab's)
     expect(head).not.toContain('blocked');
     expect(runsText(bandLines(mission({ checks: t.checks, stopGates: t.names }))[0]!.runs)).toContain('blocked · team gate'); // the Stop gate refused
     const rows = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');

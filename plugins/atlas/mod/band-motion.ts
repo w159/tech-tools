@@ -40,3 +40,35 @@ export const allSettled = (g: GaugeMoves, now: number): boolean => settled(g.tod
 
 /** The values on screen: what the band passes as `eased`. */
 export const easedNow = (g: GaugeMoves, now: number): { todo: number; ctx?: number } => ({ todo: displayed(g.todo, now), ...(g.ctx ? { ctx: displayed(g.ctx, now) } : {}) });
+
+// ---- the run clock and the frame beat (round 3) ----------------------------------------------------------------------------
+// The band's `working 0:42` and its `done . 1:08` are wall-clock readings of one RunClock, never a count of ticks: a tick that is late, skipped or
+// refused cannot stall the figure, and a run that flickers (a worker ends a beat before the next starts) neither resets the clock to 0:00 nor
+// ends the run. The spinner is driven by FRAME_MS beats of one `$.clock.every` loop (register.ts) that waits for nothing: no store update,
+// no poll, no snapshot. A watchdog (`beatStale`) re-arms the loop when the host ended it.
+
+/** One spinner frame per beat: 110 ms is 9 redraws a second, under the host's ten (index.d.ts: a redraw, ten a second at most). */
+export const FRAME_MS = 110;
+/** Not working for this long ends a run; a gap shorter than that is the same run (a worker ending a beat before the next starts). */
+export const END_GRACE_MS = 1_500;
+/** The loop is presumed dead (the host refused a period and ended the interval) when no beat landed for this many frames. */
+export const STALE_BEATS = 5;
+
+/** `startMs`: when the current run began (null at rest). `lastSeenMs`: the last beat that found Atlas working. `ranMs`: how long the last finished run lasted, frozen until the next run ends. `endedMs`: when it ended. */
+export type RunClock = { startMs: number | null; lastSeenMs: number; ranMs?: number; endedMs?: number };
+export const newRunClock = (): RunClock => ({ startMs: null, lastSeenMs: 0 });
+
+/** The clock after a beat at `now` that found Atlas `working` or not. Returns the same object when nothing changed. */
+export function stepRun(c: RunClock, working: boolean, now: number): RunClock {
+  if (working) return c.startMs === null ? { ...c, startMs: now, lastSeenMs: now } : c.lastSeenMs === now ? c : { ...c, lastSeenMs: now };
+  if (c.startMs !== null && now - c.lastSeenMs >= END_GRACE_MS) return { startMs: null, lastSeenMs: c.lastSeenMs, ranMs: Math.max(0, c.lastSeenMs - c.startMs), endedMs: c.lastSeenMs };
+  return c;
+}
+/** Whole seconds the current run has lasted; undefined at rest. */
+export const workSecsOf = (c: RunClock, now: number): number | undefined => (c.startMs === null ? undefined : Math.max(0, Math.floor((now - c.startMs) / 1000)));
+/** Whole seconds the last run took (frozen); undefined before any run ended. */
+export const ranSecsOf = (c: RunClock): number | undefined => (c.ranMs === undefined ? undefined : Math.floor(c.ranMs / 1000));
+/** Whole seconds at rest since the last run ended; undefined while one runs or before any ended. */
+export const restSecsOf = (c: RunClock, now: number): number | undefined => (c.startMs === null && c.endedMs !== undefined ? Math.max(0, Math.floor((now - c.endedMs) / 1000)) : undefined);
+/** The frame loop is stale: Atlas is working, yet no beat landed for STALE_BEATS frames. */
+export const beatStale = (lastBeatMs: number, now: number): boolean => now - lastBeatMs > STALE_BEATS * FRAME_MS;

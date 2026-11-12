@@ -10,7 +10,7 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, contrast, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, RETURNED, stable256, stateGlyph, surfaceHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
+import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, RETURNED, stable256, stateGlyph, surfaceHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
 
 /** A frame every 100 ms, the spinner's rate: the motion timer's period and the length of one beat of a transition. */
 export const MOTION_FRAME_MS = 100;
@@ -212,8 +212,8 @@ export function easeSteps256(accent: string, rest: string, theme: Ui['theme']): 
   if (hit) return hit;
   const bg = surfaceHex('panel', { theme, color: '256' });
   const need = Math.min(4.5, contrast(rest, PALETTES[theme].panel));
-  const target = fitHex(rest, theme);
-  const before = fitHex(PALETTES[theme].text, theme); // a row changes state from its body tone
+  const target = drawnHex(fitHex(rest, theme)); // the colour the terminal draws for the resting tone (an exact-index tone is handed to the host as its pre-image)
+  const before = drawnHex(fitHex(PALETTES[theme].text, theme)); // a row changes state from its body tone
   const toward = theme === 'latte' ? PALETTES.latte.ink : '#ffffff';
   const dir = (a: string, b: string): number => Math.sign(luminance(b) - luminance(a));
   let best: string[] = [];

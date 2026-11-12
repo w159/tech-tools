@@ -160,7 +160,7 @@ describe('blocked band at 61 cells (critique 19 Band 2: todo and failed dropped)
     expect(row).toMatch(/■\s?1/);
   });
   test('wide bands keep the whole reason', () => {
-    expect(blockedAt(93)).toContain('blocked · needs: close T2');
+    expect(blockedAt(93)).toContain('blocked · needs: close dispatch T2');
   });
 });
 

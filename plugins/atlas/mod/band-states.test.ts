@@ -43,9 +43,10 @@ describe('A2: idle, done and needs-you', () => {
     expect(t).not.toMatch(new RegExp(SPIN));
     expect(t).not.toMatch(/\d:\d\d/);
   });
-  test('done reads `● done n/m · clock`: the plan figure, then how long the run took', () => {
-    const t = head(model({ phase: 'done', done: 7, total: 7, ranSecs: 70 }));
-    expect(t).toContain('● done 7/7 · 1:10');
+  test('done reads `● done · clock · todo n/m`: how long the run took, then the plan figure once', () => {
+    const t = head(model({ phase: 'done', done: 7, total: 7, ranSecs: 70, cols: 110 }));
+    expect(t).toContain('● done · 1:10 · todo 7/7');
+    expect(t.match(/7\/7/g)).toHaveLength(1);
     expect(t).not.toMatch(new RegExp(SPIN));
   });
   for (const cols of [150, 110]) {
@@ -78,10 +79,10 @@ describe('A3: the wordmark sweep and the reduced-motion off switch', () => {
     const at = runs.findIndex((x) => x.t === 'A');
     return [...WORDMARK].findIndex((_, i) => runs[at + i]!.bg === 'panel');
   };
-  test('while working one letter of ATLAS is lit and the lit letter walks left to right, one step per 200 ms (two frames)', () => {
-    const lit = [0, 2, 4, 6, 8].map((tick) => litLetter(model({ busy: true, tick })));
-    expect(lit).toEqual([0, 1, 2, 3, 4]);
-    expect(sweepIndex(10)).toBe(0); // and wraps
+  test('round 3: no letter of ATLAS is ever a hole in the pill (the inverted-letter shimmer read as a stray cursor); the chip is solid at every tick', () => {
+    const lit = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((tick) => litLetter(model({ busy: true, tick })));
+    expect(lit).toEqual(Array(9).fill(-1));
+    expect(sweepIndex(10)).toBe(0); // the retired helper still wraps
   });
   test('idle has no lit letter: the wordmark is still', () => {
     expect(litLetter(model({ phase: 'research', done: 0, total: 0 }))).toBe(-1);

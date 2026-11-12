@@ -45,7 +45,7 @@ const boardTodos = [
 describe('band: the brand capsule and the facts, and nowhere else the task count', () => {
   test('reads the phase, the todo gauge and the ctx gauge and the worker counts, tick 3', () => {
     const { rows } = panel(160, { gates: [gate] });
-    expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ${spin(3)} working 0:42   implement   `); // the state word and the clock lead, then the phase
+    expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ${spin(3)} working 0:42   todo `); // the state word and the clock lead, then the todo figure (round 3: the phase word is the rail's, not the band's)
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
     expect(rows[0]).toContain('ctx ▰▱▱▱▱▱▱▱ 12%');
@@ -121,7 +121,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
-    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · implement · todo 1/4 · ctx 12% · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3)
+    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting · ctx 12%`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
     expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ${spin(3)} working 0:42 · todo 1/4`); // 40 columns: the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
   });
@@ -270,9 +270,9 @@ describe('message and footer', () => {
   test('checks name each group with a mark and a word; failures take the text tone', () => {
     const { rows, rowNodes } = panel(160, { gates: [gate, okGate] });
     const foot = rows.at(-1)!;
-    expect(foot).toContain('checks  ▲ completion  ● routing');
+    expect(foot).toContain('checks  △ completion  ● routing');
     const row = rowNodes.at(-1)!;
-    expect(cellOf(row, '▲').props.color).toBe(TONE_HEX.warn); // a warning is the amber triangle on the checks row, as on the band head and the gates tab (critique 11)
+    expect(cellOf(row, '△').props.color).toBe(TONE_HEX.warn); // a warning is the amber triangle on the checks row, as on the band head and the gates tab (critique 11)
     expect(cellOf(row, ' completion').props.color).toBe(TONE_HEX.text);
     expect(cellOf(row, '●').props.color).toBe(TONE_HEX.ok);
     expect(cellOf(row, ' routing').props.color).toBe(TONE_HEX.sub);
@@ -290,10 +290,10 @@ describe('message and footer', () => {
   test('when tight the footer keeps only failures, then a bare mark', () => {
     const groups = ['completion', 'tripwire', 'routing', 'verdict'].map((id, i) => ({ id, title: id, lines: [{ ok: i !== 1, label: id }] })) as any;
     const foot = (columns: number) => panel(columns, { gates: groups, snapshot: idleSnap(), live: [] }).rows.at(-1)!.trim();
-    expect(foot(100)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3/4 green'); // the gates tab's own n/m unit
-    expect(foot(80)).toBe('checks  ● completion  ▲ tripwire  ● routing  ● verdict  3/4 green');
+    expect(foot(100)).toBe('checks  ● completion  △ tripwire  ● routing  ● verdict  3/4 green'); // the gates tab's own n/m unit
+    expect(foot(80)).toBe('checks  ● completion  △ tripwire  ● routing  ● verdict  3/4 green');
     const none = (columns: number) => panel(columns, { gates: groups, snapshot: idleSnap(), live: [], core: undefined }).rows.at(-1)!.trim();
-    expect(none(80)).toContain('▲ tripwire');
+    expect(none(80)).toContain('△ tripwire');
   });
   test('no checks reported yet: no footer row', () => {
     expect(panel(160, { gates: [] }).rows.some((r) => r.includes('checks'))).toBe(false);
@@ -324,12 +324,13 @@ describe('the board slot', () => {
     expect(open).toContain('Trace gate path');
     expect(open).not.toMatch(/\[(research|label)\]/);
   });
-  test('the running board item turns the snapshot clock\'s frame for its owner, whatever the tick, as in omp', () => {
+  test('the running board item turns the shared spinner frame (round 3: the snapshot clock moved on by the ticker, the frame the band and the HUD turn), whatever the owner', () => {
     const snapshot = busySnap({ todos: [{ id: 'b', content: '[research] edit auth middleware', status: 'in_progress', owner: 'explorer-1' }] as any });
     const row = (tick: number) => panel(200, { snapshot, tick, todoExpanded: true }).rows[2]!;
-    const want = spinnerGlyph(spinFrameOf(snapshot.now, 'explorer-1'));
-    expect(row(0)).toMatch(new RegExp(`^▸ ${want} edit auth middleware +running +explorer-1`));
-    expect(row(1)).toBe(row(0));
+    for (const tick of [0, 1, 2]) {
+      const want = spinnerGlyph(spinFrameOf(spinClock(snapshot.now, tick), 'explorer-1'));
+      expect(row(tick)).toMatch(new RegExp(`^▸ ${want} edit auth middleware +running +explorer-1`));
+    }
   });
 });
 

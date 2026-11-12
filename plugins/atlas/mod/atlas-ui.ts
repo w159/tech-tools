@@ -99,6 +99,25 @@ export function hexTo256(hex: string): number {
 }
 
 const CUBE_LEVELS = [0, 95, 135, 175, 215, 255] as const;
+/** Round 3 (showcase brief): the brief's colours are xterm indices, painted AS indices in 256-colour mode (never nearest-matched from a hex). The Claude Code host downsamples
+ * a hex with hostTo256, so the hex handed to it is the index's pre-image (each channel k * 51, or the grey that rounds to the index); the direct ANSI painters read the pre-image back
+ * to the index (sgrColor). 141 accent, 203 error, 179 warn, 114 ok, 252 body, 245 secondary, 240 dim. */
+const EXACT_256: Readonly<Record<string, number>> = { '#af87ff': 141, '#ff5f5f': 203, '#d7af5f': 179, '#87d787': 114, '#d0d0d0': 252, '#8a8a8a': 245, '#585b70': 240, '#585858': 240 };
+/** The exact xterm index the brief names for a palette hex, if it names one. */
+export const exactIndex = (hex: string): number | undefined => EXACT_256[hex];
+export const preImage = (i: number): string => {
+  if (i >= 232) {
+    const v = Math.round(8 + ((i - 232) * 247) / 24);
+    return `#${v.toString(16).padStart(2, '0').repeat(3)}`;
+  }
+  const n = i - 16;
+  return `#${[Math.floor(n / 36), Math.floor(n / 6) % 6, n % 6].map((k) => (k * 51).toString(16).padStart(2, '0')).join('')}`;
+};
+const PRE_IMAGE: ReadonlyMap<string, string> = new Map(Object.entries(EXACT_256).map(([hex, i]) => [hex, preImage(i)]));
+const PRE_INDEX: ReadonlyMap<string, number> = new Map(Object.entries(EXACT_256).map(([hex, i]) => [preImage(i), i]));
+/** The colour a #rrggbb really is on screen in 256-colour mode: the exact index's own colour for a pre-image, else the hex itself. */
+export const drawnHex = (hex: string): string => { const i = PRE_INDEX.get(hex); return i === undefined ? hex : xtermHex(i); };
+
 /** The #rrggbb of xterm-256 palette index `i` (16..255: the 6x6x6 cube, then the 24-step grey ramp). */
 export function xtermHex(i: number): string {
   const grey = 8 + 10 * (i - 232);
@@ -157,7 +176,7 @@ export function surfaceHex(tok: Token, ui: Pick<Ui, 'theme' | 'color'>): string 
   if (ui.color !== '256') return hex;
   const key = `${tok}|${ui.theme}`;
   let out = surfaceCache.get(key);
-  if (out === undefined) surfaceCache.set(key, (out = stable256(hex)));
+  if (out === undefined) surfaceCache.set(key, (out = PRE_IMAGE.get(hex) ?? stable256(hex)));
   return out;
 }
 
@@ -168,7 +187,11 @@ export function fitHex(hex: string, theme: ThemeName): string {
   const hit = fitCache.get(key);
   if (hit !== undefined) return hit;
   stableSwatches();
-  const out = swatchHexes!.has(hex) // already a planned palette colour
+  const out = PRE_IMAGE.has(hex) // a brief colour: its index exactly (the host turns the pre-image back into it)
+    ? PRE_IMAGE.get(hex)!
+    : PRE_INDEX.has(hex) // a pre-image already (a ramp's resting step): fitting it again changes nothing
+    ? hex
+    : swatchHexes!.has(hex) // already a planned palette colour
     ? hex
     : stable256(hex, surfaceHex('panel', { theme, color: '256' }), Math.min(NEED.text, contrast(hex, PALETTES[theme].panel)));
   fitCache.set(key, out);
@@ -178,7 +201,7 @@ export function fitHex(hex: string, theme: ThemeName): string {
 /** SGR parameter for a foreground (`38`) or background (`48`) colour; empty when colour is off. */
 export function sgrColor(hex: string, layer: 38 | 48, mode: ColorMode): string {
   if (mode === 'none') return '';
-  if (mode === '256') return `${layer};5;${hexTo256(hex)}`;
+  if (mode === '256') return `${layer};5;${PRE_INDEX.get(hex) ?? EXACT_256[hex] ?? hexTo256(hex)}`;
   const [r, g, b] = rgbOf(hex);
   return `${layer};2;${r};${g};${b}`;
 }
@@ -210,17 +233,17 @@ export function glyphTone(tok: Token, theme: ThemeName): Token {
 }
 /** `ink` or `white`, whichever reads better on `fill`. */
 export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecolor'): 'ink' | 'white' {
-  const on = surfaceHex(fill, { theme, color: mode }); // the fill as drawn: in 256 colours the palette colour nearest it
-  return contrast(surfaceHex('ink', { theme, color: mode }), on) >= contrast(surfaceHex('white', { theme, color: mode }), on) ? 'ink' : 'white';
+  const on = drawnHex(surfaceHex(fill, { theme, color: mode })); // the fill as drawn: in 256 colours its exact index's colour
+  return contrast(drawnHex(surfaceHex('ink', { theme, color: mode })), on) >= contrast(drawnHex(surfaceHex('white', { theme, color: mode })), on) ? 'ink' : 'white';
 }
 
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
  * each is one cell wide and present in DejaVu Sans Mono (mod/fixtures/dejavu-sans-mono-glyphs.ts); keep this a single-line literal,
  * mod/fixtures/check_glyph_cmap.py reads it. */
-export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃○▰▱';
+export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉△━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃○▰▱';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
+const NON_TEXT = new Set([...'┌┐└┘│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲△▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -268,6 +291,10 @@ export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
 export const WARN_GLYPH = '▲';
 export const WARN_ASCII = '!';
 export const warnMark = (ui: Ui): Run => ({ t: ui.ascii ? WARN_ASCII : WARN_GLYPH, tone: ui.ascii ? 'text' : glyphTone('warn', ui.theme) });
+/** Round 3: the band's gate warning mark, the hollow triangle in the warn amber (179). The solid `▲` is the blocked state's mark alone (the capture scorer reads it as blocked on a row), so a gate warning never wears it
+ * and never leads. The band and the omp panel draw this one (mission-layout.ts); the side panel's gates tab still draws `warnMark`. */
+export const WARN_HOLLOW = '△';
+export const gateMark = (ui: Ui): Run => ({ t: ui.ascii ? WARN_ASCII : WARN_HOLLOW, tone: ui.ascii ? 'text' : glyphTone('warn', ui.theme) });
 /** Tone of a state WORD (text, 4.5:1): the state's token where it reaches 4.5:1 on the panel, else `text`; `text` in ASCII mode. */
 export function stateWordTone(s: UiState, ui: Pick<Ui, 'ascii' | 'theme'>): Token {
   if (ui.ascii) return 'text';
@@ -372,16 +399,15 @@ export function elapsedClock(secs: number): string {
 }
 
 export const WORDMARK = 'ATLAS';
-/** The lit letter of the wordmark sweep at spinner frame `frame`: one step per 200 ms (two frames), left to right, wrapping. */
+/** Retired (round 3): the lit-letter sweep read as a stray cursor. Kept so old callers compile; nothing draws it. */
 export const sweepIndex = (frame: number): number => ((Math.floor(frame / 2) % WORDMARK.length) + WORDMARK.length) % WORDMARK.length;
 /** The band's wordmark, a solid pill: the ribbon `◖ ◆ ATLAS ◗` once, the caps in the accent on the panel and `◆ ATLAS` in the dark ink (234) on the accent fill (141), bold.
- * `lit` (0..4) draws that letter as a hole in the pill (accent on the panel), the sweep while Atlas works; absent: static. The text is the same string either way. ASCII: `[ATLAS]`. */
-export function wordmark(ui: Ui, lit?: number): Run[] {
+ * The chip stays solid in every state (round 3: no inverted-letter shimmer); motion comes from the spinner alone. `lit` is accepted and ignored. ASCII: `[ATLAS]`. */
+export function wordmark(ui: Ui, _lit?: number): Run[] {
   if (ui.ascii) return [{ t: '[ATLAS]', tone: 'text' }];
   const ink = inkFor('accent', ui.theme, ui.color);
   const on = (t: string, tone: Tone): Run => ({ t, tone, bg: 'accent', bold: true });
-  const letters = [...WORDMARK].map((c, i): Run => (i === lit ? { t: c, tone: 'accent', bg: 'panel', bold: true } : on(c, ink))); // the lit letter is a hole in the pill: the accent on the panel (6:1), moving right
-  return [{ t: '◖', tone: 'accent' }, { ...on(' ◆ ', ink), chip: true }, ...letters, on(' ', ink), { t: '◗', tone: 'accent' }];
+  return [{ t: '◖', tone: 'accent' }, { ...on(' ◆ ', ink), chip: true }, ...[...WORDMARK].map((c): Run => on(c, ink)), on(' ', ink), { t: '◗', tone: 'accent' }];
 }
 
 /** A section title with a thin rule to the right edge, exactly `cols` cells: the title bold in body text, then the rule in the 236 neutral, `right` (dim) after it. ASCII: `-`. */
@@ -560,7 +586,35 @@ export function spinFrameOf(nowMs: number, _id = ''): number {
 }
 /** The one spinner clock: the snapshot's `now` moved on by the ticker (one SPINNER_MS per tick), so a spinner turns between data polls.
  * Every surface turns spinFrameOf(spinClock(snapshot.now, tick), the agent's squad name); none reads `now` alone or a display name. */
-export const spinClock = (nowMs: number, tick = 0): number => nowMs + tick * SPINNER_MS;
+export const spinClock = (nowMs: number, tick = 0): number => (shared === null ? nowMs + tick * SPINNER_MS : shared * SPINNER_MS);
+
+/** The one shared frame index of a render (round 3): register.ts reads the frame beat's counter once per render and draws every surface (band, HUD rows, SUBAGENTS header, side panel,
+ * board) inside `withSpinFrame(frame, ...)`, so spinClock answers the same frame to all of them. A frame is one beat of the render loop, not a reading of `snapshot.now` (which moves only
+ * on a poll and put the panel and the band a quarter turn apart). Outside a render nothing is set and spinClock is the pure `now + tick * SPINNER_MS`. */
+let shared: number | null = null;
+let holds = 0;
+/** Share `frame` until the returned release runs. Renders overlap (the band and the side panel draw concurrently), so holds count: the frame clears when the last release runs. */
+export function holdSpinFrame(frame: number): () => void {
+  shared = Math.floor(frame);
+  holds++;
+  let open = true;
+  return () => {
+    if (!open) return;
+    open = false;
+    if (--holds <= 0) { holds = 0; shared = null; }
+  };
+}
+/** `draw()` with `frame` shared, released when it returns or throws. */
+export function withSpinFrame<T>(frame: number, draw: () => T): T {
+  const release = holdSpinFrame(frame);
+  try {
+    return draw();
+  } finally {
+    release();
+  }
+}
+/** The frame index a render in progress shares (null outside `withSpinFrame`): the name other slices read. */
+export const sharedSpinFrame = (): number | null => shared;
 /** Spinner glyph at wall-clock `nowMs`: one frame per 100 ms. */
 export const spinnerFrame = (nowMs: number, ascii = false): string => spinnerGlyph(Math.floor(nowMs / SPINNER_MS), ascii);
 
@@ -579,8 +633,8 @@ export type Pair = { kind: 'text' | 'glyph'; fg: string; bg: string; need: numbe
 export function emittedPairs(theme: ThemeName, mode: ColorMode = 'truecolor'): Pair[] {
   const p = PALETTES[theme];
   const out: Pair[] = [];
-  const hex = (fg: Token): string => (mode === '256' ? fitHex(p[fg], theme) : p[fg]);
-  const fill = (bg: Token): string => surfaceHex(bg, { theme, color: mode });
+  const hex = (fg: Token): string => (mode === '256' ? drawnHex(fitHex(p[fg], theme)) : p[fg]);
+  const fill = (bg: Token): string => (mode === '256' ? drawnHex(surfaceHex(bg, { theme, color: mode })) : surfaceHex(bg, { theme, color: mode }));
   const add = (kind: Pair['kind'], fg: Token, bg: Token, what: string): number => out.push({ kind, fg: hex(fg), bg: fill(bg), need: NEED[kind], ratio: contrast(hex(fg), fill(bg)), what });
   for (const t of ['text', 'sub', 'muted'] as const) add('text', t, 'panel', `text ${t}`);
   for (const t of ['line', 'accent', 'ok', 'run', 'warn', 'bad', 'block', 'info', 'muted'] as const) add('glyph', glyphTone(t, theme), 'panel', `glyph ${t}`);
