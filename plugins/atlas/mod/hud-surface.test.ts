@@ -284,13 +284,14 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
 
 describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
   const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py', ctx: null, focus: false, ...o });
-  test('B5 (critique 18): the column names outlive the blank between TODO and SUBAGENTS: the budgeted stack drops the blank at 110 columns and keeps the names', () => {
+  test('B5 (critique 19 A4): while an agent runs the blank between TODO and SUBAGENTS outlives the column names at 110 columns; the names come back with one more row', () => {
     const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
-    const out = text(fitStack({ todos, agents: rows }, opts(110), 8)); // ribbon + 3 plan rows + ribbon + names + 2 agents
+    const out = text(fitStack({ todos, agents: rows }, opts(110), 8)); // ribbon + 3 plan rows + blank + ribbon + 2 agents
     expect(out.length).toBe(8);
-    expect(out[4]).toContain('SUBAGENTS');
-    expect(out[5]).toMatch(/^ {4}AGENT +STATE/);
+    expect(out[4]).toBe('');
+    expect(out[5]).toContain('SUBAGENTS');
+    expect(out.some((l) => /^ {4}AGENT +STATE/.test(l))).toBe(false);
     const roomy = text(fitStack({ todos, agents: rows }, opts(110), 9)); // one more row: the blank comes back
     expect(roomy.some((l) => /^ {4}AGENT +STATE +MODEL +TASK +LAST$/.test(l))).toBe(true);
     expect(roomy[4]).toBe('');

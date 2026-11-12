@@ -4,7 +4,7 @@
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, calmRun, revealProgress, revealRuns, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
-import { planFigure } from './board-model';
+import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { cells, CHIP_W, COUNT_ORDER, DONE_KILLED, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
@@ -47,7 +47,9 @@ const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich 
 /** A completed row whose worker failed or was killed (critique 17 A1). */
 const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
 /** The state cell's text: the row's word, and for a doubted done in the plain form `done · worker killed` (critique 18 B2: the amber tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
-const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? DONE_KILLED : r.word ?? r.state);
+const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? DONE_KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
+/** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
+const wordTone = (r: Pick<TodoRow, 'state' | 'word'>): Run['tone'] => (r.word === WORKER_DOWN ? 'bad' : rowWordTone(r.state, r.word));
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
 const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
@@ -129,7 +131,7 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   const text = clip(flat(r.label), labelW);
   const label = r.state === 'done' && markOf(r.state, r.word) !== 'doubt' ? t(text, 'sub', { strike: true }) : t(text, 'text', { bold: r.focus });
   if (stateAt === 0) return [...head, label];
-  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(r.word, markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(wordOf(r, rich), rowWordTone(r.state, r.word))];
+  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : t(wordOf(r, rich), wordTone(r))];
   const detail = detailOf(r, rich);
   if (tier !== 'full' || detail === '') return row;
   const meta = t(clip(flat(detail), Math.max(1, o.cols - metaAt)), 'sub');
@@ -326,12 +328,14 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   // The blank between TODO and SUBAGENTS outlives the rail and the column names (critique 11: at 110 columns the blocks butted together).
   // Every plan row is drawn while the rows fit at all: the blank and the column names go before a finished row does (critique 18 B1: T1 left the block under `1/5 · 1 done`
   // although ribbon, five rows and three agents fit in the same ten rows). Only when even that does not fit do the finished rows fold into a count (critique 17, B4).
-  // While an agent runs the column names outlive both the blank and a finished row (critique 18 C1, stoprun-150-562576ed-1/f0080.ans lost them while beta ran): the header-keeping folds come before any try that drops the header.
+  // Critique 19 A1/A4: every plan row is drawn before a finished row folds (stoprun-150-232567af-3/f0104.ans lost T1 under `1/5 · 1 done` although ten rows held all five without the column
+  // names), and while an agent runs the blank between the blocks stays (f0093.ans:29-30 butted the blocks): of the blank and the column names, which cost one row each, the names go.
   const running = s.agents.some((a) => a.state === 'running');
-  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: true }, { spacers: false, extras: false }];
-  if (running) tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: false, extras: false, foldDone: true });
+  const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }];
+  if (running) tries.push({ spacers: true, extras: false, header: false });
+  tries.push({ spacers: false, extras: true }, { spacers: false, extras: false });
   tries.push({ spacers: true, extras: false, header: false }, { spacers: false, extras: false, header: false });
-  tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: true, extras: false, header: false, foldDone: true });
+  tries.push({ spacers: true, extras: false, foldDone: true }, { spacers: false, extras: false, foldDone: true }, { spacers: true, extras: false, header: false, foldDone: true });
   for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, todoCap: cap, header: false }); // a cap is a count of rows: the rest is counted on the ribbon
   // The plan gives way before the last running agent does: its ribbon goes, then agents are windowed (two slots at least show one agent and the count of the rest).
   tries.push({ spacers: false, extras: false, hideTodo: true });

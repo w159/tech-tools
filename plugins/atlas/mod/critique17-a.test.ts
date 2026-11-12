@@ -20,7 +20,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(todoState('completed', 'done')).toEqual({ state: 'done' });
     expect(todoState('completed')).toEqual({ state: 'done' });
     // the T3 case (stoprun-150-562576ed-2, critique 18 B3): the store holds `pending`, the worker was killed: the row stays queued and the owner is named failed beside it
-    expect(todoState('pending', 'failed')).toEqual({ state: 'queued' });
+    expect(todoState('pending', 'failed')).toEqual({ state: 'queued', word: 'worker failed' }); // critique 19 A3
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
   });
   test('the mark is amber warn, the word is amber, and it is its own motion entry (no fade-to-done pop)', () => {

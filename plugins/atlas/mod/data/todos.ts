@@ -6,15 +6,16 @@ import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } f
 import type { TodoGroup } from '../orchestra-types';
 import { contractGlyph } from '../theme';
 import { DONE_DOUBT, type UiState } from '../atlas-ui';
-import { itemState, titleOwner } from '../board-model';
+import { DONE_RETRIED, itemState, titleOwner, WORKER_DOWN } from '../board-model';
 
 /** The one derived state of a plan row, shared by the HUD TODO block and the side panel's route tab: the board's rule (board-model itemState),
  * plus `returned` (attention tone, so state `blocked`): the owner agent has ended but the store row is not completed, which never reads `queued`.
  * `word` is the state word as drawn when it differs from `state`. */
-export function todoState(status: string, ownerState?: UiState): { state: UiState; word?: string } {
+export function todoState(status: string, ownerState?: UiState, retried = false): { state: UiState; word?: string } {
   const state = itemState(status, ownerState);
-  if (state === 'done') return ownerState === 'failed' ? { state, word: DONE_DOUBT } : { state }; // critique 17 A1: a completed row whose worker failed reads `done` in the amber tone, never the green one
+  if (state === 'done') return ownerState === 'failed' ? { state, word: DONE_DOUBT } : retried ? { state, word: DONE_RETRIED } : { state }; // critique 17 A1: a completed row whose worker failed reads `done` in the amber tone, never the green one; critique 19 A3: its re-dispatch finished, `retried · done`
   if (ownerState === 'done' && (state === 'queued' || state === 'running' || status === 'ended')) return { state: 'blocked', word: 'returned' };
+  if (state === 'queued' && ownerState === 'failed') return { state, word: WORKER_DOWN }; // critique 19 A3: the store row is still pending (the glyph stays queued), its worker failed: the word says so
   return { state };
 }
 

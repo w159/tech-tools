@@ -1,5 +1,6 @@
 // One worker list for every surface: squad + per-agent activity, lead excluded, urgent first.
 import type { UiState } from '../atlas-ui';
+import { ownerOutcome } from '../board-model';
 import type { LiveSnapshot } from '../orchestra-types';
 
 export interface LiveWorker {
@@ -114,5 +115,8 @@ export function workerStates(s: Pick<LiveSnapshot, 'members' | 'squad'>, workers
 }
 
 /** Items with their owner's state word attached (`ownerState`), for the board and the TODO tree. */
-export const withOwnerStates = <T extends { owner?: string }>(items: readonly T[], states: ReadonlyMap<string, UiState>): (T & { ownerState?: UiState })[] =>
-  items.map((it) => { const o = it.owner ? states.get(it.owner) : undefined; return o ? { ...it, ownerState: o } : { ...it }; });
+export const withOwnerStates = <T extends { owner?: string }>(items: readonly T[], states: ReadonlyMap<string, UiState>): (T & { ownerState?: UiState; retried?: boolean })[] =>
+  items.map((it) => {
+    const o = it.owner ? ownerOutcome(states, it.owner) : undefined; // the owner's LATEST instance (`name #2` after a kill), as the HUD reads it (critique 19 A3)
+    return o?.state ? { ...it, ownerState: o.state, ...(o.retried ? { retried: true } : {}) } : { ...it };
+  });

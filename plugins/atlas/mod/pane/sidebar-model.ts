@@ -8,6 +8,7 @@ import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '.
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
 import { hudAgents, lastOf, ownerStatesOf } from '../hud';
+import { ownerOutcome } from '../board-model';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
 import type { SidebarModel } from './sidebar-types';
@@ -43,7 +44,8 @@ function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] 
   return rows.map((it): PanelTodo => {
     const owner = it.owner ?? undefined;
     const w = owner ? workers.find((x) => x.name === owner) : undefined;
-    const { state, word } = todoState(it.status, owner ? owners.get(owner) : undefined); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
+    const oc = owner ? ownerOutcome(owners, owner) : undefined; // the owner's latest instance (`beta-explorer #2`): the same state as the HUD and the board (critique 19 A3)
+    const { state, word } = todoState(it.status, oc?.state, oc?.retried); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
     const detail = state === 'done' && word === DONE_DOUBT ? WORKER_FAILED : state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
     return { id: it.id, label: one(it.content), state, ...(word ? { word } : {}), owner: owner ? one(owner) : undefined, detail, evidence: it.evidence ?? null };
   });
