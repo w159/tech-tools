@@ -61,14 +61,16 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
 
 /** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding: the widest label form that fits one row, else the
  * full words wrapped onto a second row. The rule under the lit tab is as wide as the drawn label. */
-export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number; /** True when the `k: ` prefix is not drawn (the keys stay bound; see mod/pane/sidebar.tsx): the words alone fit one row where the prefixed forms do not. */ bare: boolean } {
+export function stripLayout(cols: number, lit?: string): { rows: StripTab[][]; gap: number; /** True when the `k: ` prefix is not drawn (the keys stay bound; see mod/pane/sidebar.tsx): the words alone fit one row where the prefixed forms do not. */ bare: boolean } {
   const inner = Math.max(1, cols - STRIP_PAD);
   for (const f of STRIP_FORMS) {
     const tabs = formTabs(f);
     if (stripWidth(tabs, f.gap) <= inner) return { rows: [tabs], gap: f.gap, bare: false };
   }
   const bareTabs = formTabs(STRIP_FORMS[1]!);
-  if (stripWidth(bareTabs, 1, 0) <= inner) return { rows: [bareTabs], gap: 1, bare: true };
+  // The board view keeps its keys on screen (`r: route`), wrapped onto a second row: the Board pane's tab strip is the only place that names the hotkeys
+  // once the board has replaced the view the person was on (live 110: bare words under `▸ BOARD` left the pane unidentifiable, board 0.0).
+  if (lit !== 'board' && stripWidth(bareTabs, 1, 0) <= inner) return { rows: [bareTabs], gap: 1, bare: true };
   const wide = STRIP_FORMS[0]!;
   return { rows: stripRows(formTabs(wide), inner, wide.gap), gap: wide.gap, bare: false };
 }
