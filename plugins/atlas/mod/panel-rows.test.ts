@@ -48,7 +48,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain(' agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
+    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 failed');
     expect(body('team', 120, { lead, mates }).some((l) => /^ {2}◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {
@@ -73,8 +73,8 @@ describe('channel tab: header, columns and marks', () => {
     expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
   test('critique 12: a generated launch id (`lc-opl0e60i`) is no channel name: the ribbon says `this run`, the header keeps the words and also the real name (`this run · #lc-opl0e60i`, live 6b7f637d lost channel_name_shown), a named channel keeps its #name', () => {
-    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe(`    this run  2 people${' '.repeat(45)}#lc-opl0e60i`);
-    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] }).join('\n')).toContain('#lc-opl0e60i');
+    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe('    this run  2 people'); // critique 23: no truncated slug on the head
+    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [{ at: '10:02', from: 'lead', text: 'hello' }] }).join('\n')).toContain('#lc-opl0e60i'); // the id stays as a dim foot line
     expect(body('channel', 80, { channel: 'atlas-board-mod', people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
   test('a missing channel name reads #channel', () => {

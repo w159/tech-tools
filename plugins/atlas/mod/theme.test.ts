@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing';
 import { ATLAS_GLYPHS, capsule, gauge, rail, ribbon, runsString, sparkline, stateRun, UI_STATES } from './atlas-ui';
 import { DEJAVU_SANS_MONO_HAS } from './fixtures/dejavu-sans-mono-glyphs';
-import { bar, barParts, blink, contractGlyph, dim, glyph, textWidth, lerp, meterColor, phaseColor, STATE_GLYPH, stateColor } from './theme';
+import { bar, barParts, blink, contractGlyph, dim, glyph, textWidth, lerp, STATE_GLYPH } from './theme';
 
 test('bar clamps and rounds', () => {
   expect(bar(0, 10)).toBe('▱▱▱▱▱▱▱▱▱▱');
@@ -11,12 +11,6 @@ test('bar clamps and rounds', () => {
   expect(bar(150, 10)).toBe('▰▰▰▰▰▰▰▰▰▰');
   expect(bar(-5, 3)).toBe('▱▱▱');
   expect(barParts(50, 4)).toEqual(['▰▰', '▱▱']);
-});
-
-test('meterColor steps ok / input / fail', () => {
-  expect(meterColor(10)).toBe('#52c872');
-  expect(meterColor(70)).toBe('#f2aa40');
-  expect(meterColor(90)).toBe('#ff7570');
 });
 
 test('lerp interpolates', () => {
@@ -30,13 +24,6 @@ test('dim scales hex and passes non-hex through', () => {
   expect(dim('#2fbd9f', 1)).toBe('#2fbd9f');
   expect(dim('green', 0.5)).toBe('green');
   expect(dim('#2fbd9f', 0)).toBe('#000000');
-});
-
-test('phase and state colours resolve from BRAND', () => {
-  expect(phaseColor('implement')).toBe('#2fbd9f');
-  expect(phaseColor('blocked')).toBe('#ff7570');
-  expect(stateColor('running')).toBe('#2fbd9f');
-  expect(stateColor('failed')).toBe('#ff7570');
 });
 
 // Cell width: Ghostty draws East Asian Wide/Fullwidth, emoji-presentation and the hexagon

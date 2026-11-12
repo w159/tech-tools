@@ -106,7 +106,7 @@ function openRows(s: LiveSnapshot, owners: ReadonlyMap<string, UiState>): { open
   const rows = s.todos ?? [];
   const planOpen = planBasis(rows, s.sessionId).filter((it) => it.status !== 'completed').length;
   const dispatch = rows.filter((it) => (it as { origin?: string }).origin === 'dispatch');
-  // The row the reason names must agree with the TODO beside it: a dispatch row the board already draws done (its worker failed or was killed: `done · worker killed`) is not what the band asks the lead to close.
+  // The row the reason names must agree with the TODO beside it: a dispatch row the board already draws done (its worker failed or was killed: `closed · worker killed`) is not what the band asks the lead to close.
   const shown = withOwnerStates(openItems(dispatch, s.sessionId) as { owner?: string }[], owners).filter((it) => it.ownerState !== 'failed');
   const title = openRowName(ownPlan(rows, s.sessionId), shown[0]); // the first open dispatch row, by its plan row's title (T-id and title), else its agent
   return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(dispatch, s.sessionId), ...(title ? { openDispatchTitle: title } : {}) };
@@ -134,7 +134,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     project: boardOf(s), scope: b.team,
     phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
     done, total, ...openRows(s, owners), todoBlocked: blockedCount(plan, owners),
-    busy: !!b.working || leadBusy(s) || planBusy(plan, owners),
+    busy: b.working === false ? false : !!b.working || leadBusy(s) || planBusy(plan, owners), // the host's own `isWorking: false` is the turn end: stale lead or plan marks do not keep the band working past it
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,

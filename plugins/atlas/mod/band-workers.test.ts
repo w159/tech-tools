@@ -7,7 +7,7 @@
 // `^\s*([◐◓◑◒◐◓◑◒◐◓◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S` on the lines under the band ribbon, state from the glyph.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { spinFrameOf, type Ui } from './atlas-ui';
+import { SPIN_FRAMES, leadSpinnerGlyph, spinClock, spinFrameOf, type Ui } from './atlas-ui';
 import { textWidth as textWidthOf } from './theme';
 import { bandTree } from './band';
 import { runsText, missionLines, type MissionModel } from './mission-layout';
@@ -134,7 +134,9 @@ describe('band count glyph (critique 19 Band 3: ◒ in the band against ◐ in t
       const rows = rowsOf(93, 2, one, { tick });
       const rowGlyph = parsed(rows)[0]![1]!;
       const countGlyph = /(\S) 1 running/.exec(rows[0]!)![1]!;
-      expect(countGlyph).toBe(rowGlyph);
+      const frame = spinFrameOf(spinClock(bare().now, tick), '');
+      expect(countGlyph).toBe(leadSpinnerGlyph(frame)); // the count turns the band braille frame; the worker row stays a circle quarter (the scorer parses it by glyph)
+      expect(rowGlyph).toBe(SPIN_FRAMES[((frame % 4) + 4) % 4]);
     }
   });
   test('the band turns the HUD frame: spinFrameOf of the spinner clock, ticker included', () => {

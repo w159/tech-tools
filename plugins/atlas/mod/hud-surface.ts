@@ -5,11 +5,11 @@
 import { animateRow, calmRun, MOTION_MS, MOTION_STEP_MS, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
-import { cells, CHIP_W, COUNT_ORDER, DONE_KILLED, GLYPH5, LINGER_MS, PALETTE5, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What LAST reads when the agent has no outcome or call to show (its last tool word, else the elapsed clock): never the state word again. */ fallback?: string };
+export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What RESULT reads when the agent has no outcome or call to show (its last tool word): never the state word again. */ fallback?: string; /** The LAST column: the elapsed clock since the agent started (`0:13`), frozen at its end. */ elapsed?: string };
 /** The one spinner frame of the HUD: the shared clock's frame (spinFrameOf of spinClock) when the snapshot's `now` is known, else the caller's tick.
  * Rev 5: ONE phase for every row and title in a frame (no per-row id: out-of-phase spinners read as noise, critique 17.13.0 problem 1). */
 const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), '') : o.tick ?? 0);
@@ -24,6 +24,7 @@ export const rowSpinnerGlyph = (frame: number, ascii = false): string => (SCORER
 function markRun(s: MarkState, o: Pick<SurfaceOpts, 'now' | 'tick' | 'ui'>): Run {
   if (s === RETURNED) return stateRun('done', o.ui); // `returned` is a finished hand-back: the done mark and the dim word, never the unreadable hand-back arrow the scorer counts as unknown
   const base = stateRun(s, o.ui, spinOf(o));
+  if (s === 'doubt') return o.ui.ascii ? base : { ...base, tone: 'bad' }; // a closed row whose worker was killed keeps the done mark in the error 203, not the amber of a warning
   return s === 'running' ? { ...base, t: rowSpinnerGlyph(spinOf(o), o.ui.ascii) } : base;
 }
 
@@ -48,17 +49,18 @@ export function meterRuns(done: number, total: number, ui: Ui): Run[] {
 }
 /** The title: bold 252 (the body grey) in every theme but latte. */
 const titleRun = (text: string, ui: Pick<Ui, 'theme'>): Run => ({ t: text, tone: 'text', bold: true, ...(ui.theme === 'latte' ? {} : { fg: PALETTE5.body }) });
-/** The top edge of a box (lipgloss rounded): `+- brand > TITLE  count mid ---------+` with rounded corners, in exactly `cols` cells. The brand and the rule are quiet 240, the title bold 252, the count and the `mid` runs (the meter,
- * the spinner and counts) sit inside the rule. The rule ends in the rounded corner in the last cell: the host draws its own `[-]` in the five cells it adds to the right of the row (not the mod), so the corner closes the box
- * and `[-]` sits beside it. Wider than `cols` when the parts and the two closing cells do not fit; callers try narrower forms. */
+/** The top edge of a box: `╭─ brand ▸ TITLE  count mid ────────╮` in exactly `cols` cells, the same shape in every state. The brand and the rule are quiet 240, the title bold 252, the count and the `mid` runs (the meter,
+ * the spinner and counts) sit inside the rule, and the rule ends in a right corner on the LAST cell of the tree (`bodyColumns`). The host draws its `[-]` in the five cells it adds to the right of the tree's
+ * first row (host types AbovePrompt, .claude-plugin/types/claude-code/index.d.ts:11227 and :11262-11270: `bodyColumns` is the column less the engine's five, which hold the `[-]`; the mod cannot draw in them and
+ * the types give a mod no way to place text inside them), so the corner stands against the host's cells and `[-]` sits right of it, never inside the rule. Wider than `cols` when the parts and the corner do not fit; callers try narrower forms. */
 export function titleRow(cols: number, title: string, count: string, mid: readonly Run[], ui: Ui): Run[] {
   const left: Run[] = [dimRun(ui.ascii ? '+- ' : '╭─ ', ui), ...brand(ui), dimRun(ui.ascii ? ' > ' : ' ▸ ', ui), titleRun(title, ui), ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), ...(mid.length > 0 ? [dimRun(' ', ui), ...mid] : []), dimRun(' ', ui)];
-  const room = Math.max(2, cols - runsCells(left)); // the rule and the corner
-  return [...left, dimRun(ui.ascii ? `${'-'.repeat(room - 1)}+` : `${RULE.repeat(room - 1)}╮`, ui)];
+  const room = Math.max(1, cols - runsCells(left) - 1); // the rule to the cell before the corner
+  return [...left, dimRun((ui.ascii ? '-' : RULE).repeat(room) + (ui.ascii ? '+' : '╮'), ui)];
 }
-/** The bottom edge that closes a box: a rounded bottom-left and bottom-right corner joined by the rule, in the 240 neutral across `cols` cells (ASCII `+---+`). The capture scorer skips a row with no space after its first character. */
+/** The bottom edge that closes a box: `╰────╯` in exactly `cols` cells in the 240 neutral (ASCII `+---+`), under the last row of a block in every state. The capture scorer skips a row with no space after its first character. */
 export const bottomRule = (cols: number, ui: Ui): Run[] => {
-  const w = Math.max(2, cols);
+  const w = Math.max(3, cols);
   return [dimRun(ui.ascii ? `+${'-'.repeat(w - 2)}+` : `╰${RULE.repeat(w - 2)}╯`, ui)];
 };
 
@@ -66,7 +68,7 @@ export const bottomRule = (cols: number, ui: Ui): Run[] => {
  * (phase-sync.test.ts); rev 5 asks that table for: running `text`, finished and queued `muted`, failed `bad`, blocked/waiting/doubt `warn`, returned `text`. Weight: the running word
  * is bold, a warning never is. `worker failed` (a pending row whose worker died) is the error tone. */
 function wordStyle(r: Pick<TodoRow, 'state' | 'word'>): { tone: Run['tone']; bold?: boolean } {
-  const tone = r.word === WORKER_DOWN ? 'bad' : r.word === RETURNED ? 'dim' : rowWordTone(r.state, r.word); // `returned` is the dim word beside the done mark
+  const tone = r.word === WORKER_DOWN || isDoubt(r) ? 'bad' : r.word === RETURNED ? 'dim' : rowWordTone(r.state, r.word); // a doubted done is the error tone in the HUD (`closed · worker killed`) // `returned` is the dim word beside the done mark
   return r.state === 'running' && r.word === undefined ? { tone, bold: true } : { tone };
 }
 export type SurfaceOpts = {
@@ -84,8 +86,8 @@ export type SurfaceOpts = {
   now?: number | undefined;
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
-/** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so it outlives the blank rows. */
-export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** Close the box with a `└───┘` rule under the last row (a block with no row under its title has nothing to close). */ close?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean };
+/** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so a drawn HUD prints it in every state until a budget too small turns it off. */
+export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** The `╰───╯` rule under the last row (a block with no row under its title has nothing to close); `stack` asks for it in every state. */ close?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean };
 
 const t = (text: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run => ({ t: text, tone, ...extra });
 const BLANK: Run[] = [];
@@ -102,13 +104,27 @@ const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || (!rich && isDoubt(r))) ? '' : r.detail); // a doubted done says `worker killed` in its state cell (non-rich), so the detail column does not say it again
 /** A completed row whose worker failed or was killed (critique 17 A1). */
 const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
-/** The state cell's text: the row's word, and for a doubted done in the plain form `done · worker killed` (critique 18 B2: the amber tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
-const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? DONE_KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
+/** A doubted done spelled out in the plain form (the atlas-ui word, one source): the lead CLOSED the row (the store says completed) but its worker was killed, so the HUD does not call it done. The scorer reads the glyph (`●`, completed), which is the store's truth. */
+export const CLOSED_KILLED = DONE_KILLED;
+/** The state cell's text: the row's word, and for a doubted done in the plain form `closed · worker killed` (critique 18 B2: a tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
+const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? CLOSED_KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
 /** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
 const wordRun = (r: Pick<TodoRow, 'state' | 'word'>, text: string): Run => { const s = wordStyle(r); return t(text, s.tone, s.bold ? { bold: true } : {}); };
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
 const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n, cells(x)), 0);
-const focusMark = (focus: boolean, ui: Ui): Run => (focus ? t(ui.ascii ? '>' : '▸', 'accent', { bold: true }) : t(' '));
+/** The selection cursor: the accent (141) on every frame at every width. The motion leaves it be (critique 23: the cursor read 182 for a beat at 110 columns and 231/147 at 150 as its row arrived). */
+const focusMark = (focus: boolean, ui: Ui): Run => (focus ? calmRun(t(ui.ascii ? '>' : '▸', 'accent', { bold: true })) : t(' '));
+
+/** The fill of the selected row's bar: xterm 236 in the dark theme, the light theme's own quiet grey. */
+const SELECT_BG = { mocha: PALETTE5.rule, latte: PALETTES.latte.queued_fill } as const;
+/** The selected row as a full-width bar: every run on the 236 fill and the rest of the row padded in it (the name is already bold, the `▸ ` cursor text stays so the scorer still reads the row). NO_COLOR draws no fill. */
+function barRow(runs: Run[], cols: number, ui: Ui): Run[] {
+  if (ui.color === 'none') return runs;
+  const bgHex = SELECT_BG[ui.theme === 'latte' ? 'latte' : 'mocha'];
+  const filled = runs.map((r) => ({ ...r, bgHex }));
+  const w = runsCells(filled);
+  return w < cols ? [...filled, { t: ' '.repeat(cols - w), tone: 'text', bgHex }] : filled;
+}
 
 /** `1 queued · 1 running · 2 done · 1 failed`: only states that occur, so the header always equals the row sums. */
 export function stateCounts(states: readonly UiState[]): string {
@@ -215,7 +231,8 @@ function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich:
 
 function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string): Run[] {
   const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt, detail);
-  return r.key === undefined ? runs : animateRow(runs, r.key, markOf(r.state, r.word), o.motion, o.ui, { pop: false }); // no pop glyph: the `●` itself steps from bright to ok (critique 21: `◌` reads empty)
+  const moved = r.key === undefined ? runs : animateRow(runs, r.key, markOf(r.state, r.word), o.motion, o.ui, { pop: false }); // no pop glyph: the `●` itself steps from bright to ok (critique 21: `◌` reads empty)
+  return r.focus && r.state !== 'queued' ? barRow(moved, o.cols, o.ui) : moved; // the row with the cursor is the selected one
 }
 
 function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string): Run[] {
@@ -261,8 +278,8 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
-  // The working signal rides the title, inside the rule: the quarter-circle spinner (one shared clock and phase, the mark of every running row) before the counts while any agent runs.
-  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o)), t: rowSpinnerGlyph(spinOf(o), ui.ascii) }, t(' ')] : [];
+  // The working signal rides the title, inside the rule: the band lead's braille spinner (the shared clock and frame) before the counts while any agent runs.
+  const spin: Run[] = rows.some((r) => r.state === 'running') ? [stateRun('running', ui, spinOf(o), true), t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
   const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...spin, t(c, 'sub')] : spin.slice(0, 1), ui);
   const head = counts.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
   const out: Run[][] = [head];
@@ -273,7 +290,7 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const nameW = Math.max(1, Math.min(Math.max(cols >= 80 ? 19 : 8, maxLen(rows.map((r) => flat(r.name)))), cols - NAME_AT - AGENT_GUTTER - wordW));
   const stateAt = NAME_AT + nameW + AGENT_GUTTER;
   const plan = agentCols(rows, o, rich, stateAt);
-  if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the spacer row names the columns (80 columns and up: a wide terminal with the pane docked gets fewer columns, never fewer cells)
+  if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the column names: `stack` always asks for them (k9s), so every drawn HUD prints them; only a budget that cannot hold them asks for `header: false`
   const { shown, hidden } = windowRows(rows, b.cap);
   for (const r of shown) out.push(agentRow(r, o, rich, stateAt, nameW, plan));
   if (hidden > 0) out.push(more(hidden, hidden === 1 ? 'agent' : 'agents'));
@@ -298,49 +315,48 @@ const taskText = (r: AgentRow): string => taskCell(r.tasks) || flat(r.task ?? ''
 /** The task column's width: constant. */
 const taskWidth = (_rows: readonly AgentRow[]): number => TASK_W;
 
-/** Which optional columns fit, and where they start. A narrow row drops LAST first, then MODEL, before a TASK is cut (the model gives its cells to the task);
- * only when the task alone still does not fit is it ended on a whole word. A name is never cut here. The last text ends on a whole word from LAST_MIN cells. */
-type AgentCols = { model?: number; modelW: number; task?: number; taskW: number; last?: number; ctx?: number };
-const LAST_MIN = 8;
+/** Which columns fit, and where they start: `AGENT STATE [MODEL] TASK LAST [RESULT]`. LAST is always the elapsed clock (one type in the column, frozen when the agent ends); RESULT, the dim last tool or outcome, takes the
+ * cells after it only when at least RESULT_MIN remain. MODEL shows from 120 columns; a narrower row drops RESULT, then MODEL, then TASK before LAST is cut. A name is never cut here. */
+type AgentCols = { model?: number; modelW: number; task?: number; taskW: number; last?: number; result?: number; ctx?: number };
+const LAST_W = 7; // `59:59` is 5 cells, `1:02:03` 7
+const RESULT_MIN = 10;
+const MODEL_FROM = 120;
 function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number): AgentCols {
-  // Critique 19 B2: one grid. The MODEL column was 10 cells wide in one frame and 7 in the next (a long LAST text took its slack); its width now depends on the models only.
-  return agentColsAt(rows, o, rich, stateAt, rich ? 8 : 7);
-}
-function agentColsAt(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, stateAt: number, modelMin: number): AgentCols {
   const { cols } = o;
-  const modelW = Math.max(modelMin, ...rows.map((r) => cells(r.model) + 1)); // the cell includes one blank, and the column after it starts one more cell on: MODEL and TASK never run together (critique 18: `haiku T1`)
-  const plan: AgentCols = { modelW, taskW: taskWidth(rows) };
+  // Critique 19 B2: one grid. The MODEL column width depends on the models only (the cell includes one blank, and the column after it starts one more cell on: MODEL and TASK never run together).
+  const modelW = Math.max(rich ? 8 : 7, ...rows.map((r) => cells(r.model) + 1));
+  const plan: AgentCols = { modelW, taskW: TASK_W };
+  const resultAfter = (lastAt: number): void => { const at = lastAt + LAST_W + 1; if (at + RESULT_MIN <= cols) plan.result = at; };
   if (rich) {
     if (stateAt + 14 + 4 + 8 + 5 <= cols) plan.ctx = stateAt + 14;
     const modelAt = stateAt + 34;
-    if (modelAt + modelW - 1 <= cols) {
-      plan.model = modelAt;
-      if (modelAt + modelW + LAST_MIN <= cols) plan.last = modelAt + modelW;
-    }
+    if (modelAt + modelW - 1 <= cols) plan.model = modelAt;
+    const lastAt = modelAt + modelW;
+    if (lastAt + LAST_W <= cols) { plan.last = lastAt; resultAfter(lastAt); }
     return plan;
   }
   const modelAt = stateAt + 12;
-  const taskAt = modelAt + modelW + 1;
-  const fullTask = taskAt + plan.taskW <= cols;
-  if (fullTask) { // model, whole task, and the last text when it has LAST_MIN cells left
-    plan.model = modelAt;
+  for (const withModel of cols >= MODEL_FROM ? [true, false] : [false]) {
+    const taskAt = withModel ? modelAt + modelW + 1 : modelAt;
+    const lastAt = taskAt + TASK_W + 1;
+    if (lastAt + LAST_W > cols) continue;
+    if (withModel) plan.model = modelAt;
     plan.task = taskAt;
-    const lastAt = taskAt + plan.taskW + 1;
-    if (lastAt + LAST_MIN <= cols) plan.last = lastAt;
+    plan.last = lastAt;
+    resultAfter(lastAt);
     return plan;
   }
-  // The task does not fit beside the model: the model goes (LAST went already), the task takes its place, whole when it fits there.
-  if (modelAt + TASK_W <= cols) { plan.task = modelAt; plan.taskW = Math.min(plan.taskW, cols - modelAt); }
+  if (modelAt + LAST_W <= cols) plan.last = modelAt; // no room for TASK: LAST is the one column kept
   return plan;
 }
 
-/** `AGENT  STATE  MODEL  TASK  LAST`: the column words of the full form, in the spacer row under the ribbon; only the columns the rows show. */
+/** `AGENT  STATE  MODEL  TASK  LAST  RESULT`: the column names, printed in every state; only the columns the rows show. */
 function agentHeader(o: SurfaceOpts, rich: boolean, stateAt: number, plan: AgentCols): Run[] {
   const h = (text: string, at: number | undefined): void => { if (at !== undefined && at < o.cols) row = [...toCol(row, at), t(text, 'muted')]; };
   let row: Run[] = [t(' ', 'muted')];
   h('AGENT', 4);
   h('STATE', stateAt);
-  if (rich) { h('CTX', plan.ctx); h('MODEL', plan.model); h('LAST', plan.last); } else { h('MODEL', plan.model); h('TASK', plan.task); h('LAST', plan.last); }
+  if (rich) { h('CTX', plan.ctx); h('MODEL', plan.model); h('LAST', plan.last); h('RESULT', plan.result); } else { h('MODEL', plan.model); h('TASK', plan.task); h('LAST', plan.last); h('RESULT', plan.result); }
   return row;
 }
 
@@ -350,9 +366,9 @@ const NAME_AT = 4;
 const AGENT_GUTTER = 2;
 function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
   const runs = agentRowResting(r, o, rich, stateAt, nameW, plan);
-  if (r.key === undefined) return runs;
   // A new row never types its name in: the AGENT cell is whole on every frame (critique 22: a blank AGENT cell at the first beat of the reveal), as are MODEL, TASK and LAST.
-  return animateRow(runs, r.key, r.state, o.motion, o.ui, { reveal: false, pop: false }); // no pop glyph: the done disc steps from bright to ok on its own (critique 21)
+  const moved = r.key === undefined ? runs : animateRow(runs, r.key, r.state, o.motion, o.ui, { reveal: false, pop: false }); // no pop glyph: the done disc steps from bright to ok on its own (critique 21)
+  return r.focus ? barRow(moved, o.cols, o.ui) : moved;
 }
 
 function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
@@ -362,7 +378,7 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   const head: Run[] = [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), t(clipEll(flat(r.name) || flat(r.id ?? '') || 'agent', nameW, ellOf(ui)), finished ? 'muted' : 'text', { bold: r.focus })]; // an agent is never nameless // bold marks the selected row only
   let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : wordRun(r, r.state)];
   /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. `fallback`: what a cell reads when its text is empty or only a bare verb fits. */
-  const cell = (text: string, at: number | undefined, width: number, words = false, still = false, fallback = ''): void => {
+  const cell = (text: string, at: number | undefined, width: number, words = false, still = false, fallback = '', dim = false): void => {
     if (at === undefined) return;
     const room = Math.max(1, Math.min(width, cols - at));
     const whole = flat(text);
@@ -372,13 +388,14 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
     // All or none: a text that fits is whole, one that does not ends in the one-cell ellipsis (on a word, else by the cell), never swapped for another word; only a cell with nothing to say (or under 3 cells) reads its fallback, `-` last.
     const marked = whole !== '' && (cut === '' || bare) && room >= 3 ? clipEll(whole, room, ell) : cut;
     const shown = marked !== '' ? marked : clipEll(fallback || NONE, room, ell);
-    const tone = finished || shown === NONE || marked === '' ? 'muted' : 'sub';
+    const tone = dim || finished || shown === NONE || marked === '' ? 'muted' : 'sub';
     row = [...toCol(row, at), still ? calmRun(t(shown, tone)) : t(shown, tone)]; // MODEL and TASK never change with the state: the motion leaves them be
   };
   if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
   cell(r.model, plan.model, plan.modelW, false, true);
   if (!rich) cell(taskText(r), plan.task, plan.taskW, true, true, NONE); // a column never goes blank: `-` says there is nothing
-  cell(lastFor(lastText(r.tool)), plan.last, cols, true, false, r.fallback ?? ''); // LAST is never blank or raw: the text whole, or cut with the ellipsis, else the last tool or the elapsed clock (critique 22: LAST at 110 repeated `done`)
+  cell(r.elapsed ?? NONE, plan.last, LAST_W); // LAST is one type: the elapsed clock, frozen when the agent ends (hud.ts agentModel)
+  cell(lastFor(lastText(r.tool)), plan.result, cols, true, false, r.fallback ?? '', true); // RESULT: the outcome or the last call, whole or cut with the ellipsis, else the last tool word; always the dim tone
   return row;
 }
 
@@ -395,8 +412,8 @@ export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] 
 
 /** Both blocks stacked (a blank between them when `spacers`). */
 export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean }): Run[][] {
-  const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), ...(b.close ? { close: true } : {}) });
-  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true, ...(b.close ? { close: true } : {}) }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
+  const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), close: b.close !== false });
+  const agents = agentRows(s.agents, o, { spacers: b.spacers, extras: b.extras, cap: b.agentCap, header: b.header ?? true, close: b.close !== false }); // the column names stay while the agents do: columns drop (LAST, then MODEL) before the header does
   return [...todo, ...(b.spacers && todo.length > 0 && agents.length > 0 ? [BLANK] : []), ...agents];
 }
 
@@ -409,7 +426,7 @@ export const padRows = (rows: readonly Run[][], cols: number): Run[][] =>
 
 /** The design rows for `maxRows`: the full form, then no spacers, no rail or progress, then the tree windowed down to its ribbon, then the agents. A running agent keeps its row before the plan keeps its last. */
 export function fitStack(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
-  return fitRows(s, o, maxRows); // the title rule of each block already runs to the last cell, where the host draws its `[-]` (titleRow)
+  return fitRows(s, o, maxRows); // every box is the same shape: a top rule ending in `╮` on the last cell, a bottom rule `╰──╯` under its rows (titleRow, bottomRule)
 }
 
 function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
@@ -417,21 +434,23 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   const n = s.todos.length;
   const m = s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean };
-  // Rev 5: the column names stay while the grid shows (critique 17.13.0: the AGENT/STATE header was missing while agents ran). Round 3 (critique 22): the box NEVER changes shape, so every try closes
-  // each block with its rounded bottom rule (only the one-row ribbon form has no body to close). A short slot gives up, in order: the rail, then the finished plan rows (folded into a count), then the blank
-  // between the blocks, then plan rows (counted on the title); the closing rules go last of all, and only with the last row of the block. Every plan row is drawn while the rows fit at all (critique 18 B1).
-  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, { spacers: true, extras: false, close: true, foldDone: true }, { spacers: false, extras: false, close: true, foldDone: true }, { spacers: false, extras: false, close: true }];
-  for (let cap = n - 1; cap >= 0; cap--) tries.push({ spacers: false, extras: false, close: true, todoCap: cap }); // a cap is a count of rows: the rest is counted on the title
-  // The plan gives way before the last running agent does: its box goes, then agents are windowed (two slots at least show one agent and the count of the rest).
-  tries.push({ spacers: false, extras: false, close: true, hideTodo: true });
-  for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, close: true, hideTodo: true, agentCap: cap });
-  // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
-  tries.push({ spacers: false, extras: false, close: true, hideTodo: true, header: false });
-  for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, close: true, hideTodo: true, header: false, agentCap: cap });
-  // Too short even for a box around one agent row and the count of the rest: the agent rows without their closing rule (a running agent keeps its row before any rule), then the ribbon alone.
-  tries.push({ spacers: false, extras: false, hideTodo: true, header: false });
-  for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, header: false, agentCap: cap });
-  tries.push({ spacers: false, extras: false, todoCap: 0, agentCap: 0, header: false });
+  // The box keeps its shape: a short slot gives up the rail, then the blank between the blocks, then the SUBAGENTS column names, then the finished plan rows (counted on the title, `3/5 · 3 done`), then plan
+  // rows (counted on the title), and only then the plan's box and the agents' windowing; the rules (the top rule with its `╮` and the bottom `╰──╯`) are the last decoration to go: the second pass
+  // below, with no bottom rule, is reached only by a slot too small for a rule beside the rows.
+  const ladder = (close: boolean): Try[] => {
+    const tries: Try[] = [{ spacers: true, extras: true }, { spacers: true, extras: false }, { spacers: false, extras: false }, { spacers: false, extras: false, header: false }, { spacers: false, extras: false, header: false, foldDone: true }];
+    for (let cap = n - 1; cap >= 1; cap--) tries.push({ spacers: false, extras: false, header: false, todoCap: cap }); // a cap is a count of rows: the rest is counted on the title
+    // The plan gives way before the last running agent does: its box goes, then agents are windowed (two slots at least show one agent and the count of the rest).
+    if (m > 0) {
+      tries.push({ spacers: false, extras: false, hideTodo: true });
+      for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, agentCap: cap });
+      // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
+      tries.push({ spacers: false, extras: false, hideTodo: true, header: false });
+      for (let cap = m - 1; cap >= 2; cap--) tries.push({ spacers: false, extras: false, hideTodo: true, header: false, agentCap: cap });
+    }
+    return tries.map((tr) => ({ ...tr, close }));
+  };
+  const tries: Try[] = [...ladder(true), ...ladder(false), { spacers: false, extras: false, todoCap: 0, agentCap: 0, header: false, close: false }];
   const ss = { todos: s.todos, agents: m > 0 ? s.agents : [] };
   for (const tr of tries) {
     const rows = stack(tr.hideTodo ? { ...ss, todos: [] } : ss, o, tr);

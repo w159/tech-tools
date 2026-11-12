@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { worldSidebar, worldSnapshot } from '../contracts/world-live';
 import { liveWorkers } from './data/live';
-import { SPINNER_MS, runsString, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
+import { SPINNER_MS, runsString, spinClock, spinFrameOf, leadSpinnerGlyph, type Ui } from './atlas-ui';
 import { hudAgents, hudLines } from './hud';
 import { rowSpinnerGlyph } from './hud-surface';
 import { panelModelOf } from './pane/sidebar-model';
@@ -36,7 +36,7 @@ describe('the HUD and the side panel turn one frame per agent', () => {
       for (const a of running) {
         const id = a.key ?? a.name; // the squad name the panel rows carry
         expect([a.name, glyphOf(hud, a.name)]).toEqual([a.name, rowSpinnerGlyph(spinFrameOf(spinClock(snap.now, tick), ''))]); // rev 5: one phase for every HUD row
-        expect([id, glyphOf(panel, id)]).toEqual([id, spinnerGlyph(spinFrameOf(spinClock(snap.now, tick), id))]);
+        expect([id, glyphOf(panel, id)]).toEqual([id, leadSpinnerGlyph(spinFrameOf(spinClock(snap.now, tick), id))]);
       }
     });
   }

@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world, worldModel } from '../contracts/band-world';
 import { band_120, band_120_rich, band_40, band_60, band_80 } from '../contracts/band-world-golden';
-import { chipCount, contrast, glyphTone, NEED, PALETTES, runKind, runsString, toneHex, type Run, type Ui } from './atlas-ui';
+import { chipCount, contrast, DECOR_TONES, glyphTone, NEED, PALETTES, runKind, runsString, toneHex, type Run, type Ui } from './atlas-ui';
 import { bandLines, runsWidth } from './mission-layout';
 
 const ui = (theme: 'mocha' | 'latte'): Ui => ({ theme, ascii: false, color: 'truecolor' });
@@ -39,7 +39,7 @@ describe('WCAG on every rendered run', () => {
           for (const r of bandLines(worldModel(cols, ui(theme), { ...over, rich, maxRows: rich ? 3 : 1 })).flatMap((l) => l.runs)) {
             if (!r.t.trim()) continue;
             const bg = r.bg ? toneHex(r.bg, theme) : p.panel;
-            const need = r.chip ? NEED.text : NEED[runKind(r.t)];
+            const need = r.chip ? NEED.text : DECOR_TONES.has(r.tone) ? NEED.decor : NEED[runKind(r.t)];
             const ratio = contrast(toneHex(r.tone, theme), bg);
             expect([theme, cols, r.t, r.tone, ratio >= need]).toEqual([theme, cols, r.t, r.tone, true]);
             checked++;

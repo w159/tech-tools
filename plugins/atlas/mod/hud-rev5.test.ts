@@ -2,7 +2,7 @@
 // stays while the grid shows, and a LAST that is never blank. Live shape: stoprun-150-4b5b5a94-1/frames/f0075.ans:24-35 (TODO 0/5 with two
 // running rows out of phase, SUBAGENTS without its column header, ragged `killed`).
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, rowWordTone, runsString, spinClock, spinFrameOf, type Run, type Ui } from './atlas-ui';
+import { cells, leadSpinnerGlyph, rowWordTone, runsString, spinClock, spinFrameOf, type Run, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, type HudAgent } from './hud';
 import { rowSpinnerGlyph } from './hud-surface';
@@ -60,7 +60,7 @@ describe('SUBAGENTS title: the working signal rides the title', () => {
     const frame = spinFrameOf(spinClock(NOW, 0), '');
     const run = rows(todo(2, () => 'in_progress'), [ag('alpha-explorer', 'working')]);
     const head = text(run.find((r) => text(r).includes('SUBAGENTS'))!);
-    expect(head).toContain(`${rowSpinnerGlyph(frame)} 1 running ─`);
+    expect(head).toContain(`${leadSpinnerGlyph(frame)} 1 running ─`); // the title turns the band's braille frame
     const idle = rows(todo(2, () => 'completed'), [ag('alpha-explorer', 'done')]);
     const idleHead = text(idle.find((r) => text(r).includes('SUBAGENTS'))!);
     expect(idleHead).toContain('1 done');
@@ -68,17 +68,18 @@ describe('SUBAGENTS title: the working signal rides the title', () => {
   });
   test('the spinner advances with the tick', () => {
     const at = (tick: number): string => text(rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working')], { tick }).find((r) => text(r).includes('SUBAGENTS'))!);
-    expect(at(0)).toContain(`${rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))} 1 running`);
-    expect(at(1)).toContain(`${rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), ''))} 1 running`);
-    expect(rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))).not.toBe(rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
+    expect(at(0)).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))} 1 running`);
+    expect(at(1)).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), ''))} 1 running`);
+    expect(leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))).not.toBe(leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
   });
-  test('critique 21: ONE spinner set on the block: the title and every running row turn the same quarter circle on one clock, no braille anywhere', () => {
+  test('critique 25: the title alone turns the band braille frame (same index as the band); every running row keeps one circle quarter on that clock', () => {
     for (const tick of [0, 1, 2, 3]) {
       const out = rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working', { tool: 'Read', target: 'a.py' })], { tick });
-      const all = out.map(text).join('\n');
-      expect(all).not.toMatch(/[⠀-⣿]/);
+      const title = text(out.find((r) => text(r).includes('SUBAGENTS'))!);
+      expect(title).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, tick), ''))} 1 running`);
+      expect(out.filter((r) => !text(r).includes('SUBAGENTS')).map(text).join('\n')).not.toMatch(/[⠀-⣿]/); // the rows are glyph-parsed: circles only
       const marks = new Set(out.flatMap((r) => [...text(r)]).filter((c) => '◐◓◑◒'.includes(c)));
-      expect(marks.size).toBe(1); // title, TODO rows and agent row on one frame
+      expect(marks.size).toBe(1); // TODO rows and agent row on one frame
     }
   });
 });
@@ -119,17 +120,38 @@ describe('rows: one phase, dim done rows, state words by weight', () => {
 describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK are never blank', () => {
   const plan = todo(5, () => 'pending', (i) => (i < 3 ? ['alpha-explorer', 'ghost-explorer', 'beta-explorer'][i] : undefined));
   const agents = [ag('alpha-explorer', 'working', { tool: 'Read', target: 'alpha.py' }), ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), ag('beta-explorer', 'working', { tool: 'Read', target: 'beta.py' })];
-  test('f0075: 11 rows for 5 todos and 3 agents keep the AGENT/STATE header (12 rows would not fit, so the blank row goes, not the header)', () => {
-    const out = rows(plan, agents, { maxRows: 11 }).map(text);
-    expect(out.length).toBeLessThanOrEqual(11);
-    expect(out.some((r) => /AGENT\s+STATE\s+MODEL\s+TASK\s+LAST/.test(r))).toBe(true);
-    expect(out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length).toBe(3);
+  const planRows = (out: string[]): number => out.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(r)).length;
+  const agentLines = (out: string[]): number => out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length;
+  const corners = (out: string[]): [number, number] => [out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length, out.filter((r) => r.startsWith('╰') && r.endsWith('╯')).length];
+  test('14 rows for 5 todos and 3 agents keep every row, the blank, the AGENT/STATE header and both closed boxes', () => {
+    const out = rows(plan, agents, { maxRows: 14 }).map(text);
+    expect(out).toHaveLength(14);
+    expect(out.some((r) => /AGENT\s+STATE\s+MODEL\s+TASK\s+LAST\s+RESULT/.test(r))).toBe(true);
+    expect(out.filter((r) => r.trim() === '')).toHaveLength(1);
+    expect(agentLines(out)).toBe(3);
+    expect(planRows(out)).toBe(5);
+    expect(corners(out)).toEqual([2, 2]);
   });
-  test('a tighter slot caps the TODO rows before it drops the header', () => {
+  test('13 rows lose the blank first, 12 the column names next; the five plan rows, the three agents and both closed boxes stay', () => {
+    const thirteen = rows(plan, agents, { maxRows: 13 }).map(text);
+    expect(thirteen).toHaveLength(13);
+    expect(thirteen.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    expect(thirteen.filter((r) => r.trim() === '')).toHaveLength(0);
+    const out = rows(plan, agents, { maxRows: 12 }).map(text);
+    expect(out).toHaveLength(12);
+    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(false);
+    expect(out.filter((r) => r.trim() === '')).toHaveLength(0);
+    for (const o of [thirteen, out]) {
+      expect(agentLines(o)).toBe(3);
+      expect(planRows(o)).toBe(5);
+      expect(corners(o)).toEqual([2, 2]);
+    }
+  });
+  test('a tighter slot gives up the column names, then the blank, then plan rows, and keeps every agent row', () => {
     const out = rows(plan, agents, { maxRows: 9 }).map(text);
     expect(out.length).toBeLessThanOrEqual(9);
-    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
     expect(out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length).toBe(3);
+    expect(out.some((r) => /more todos? not shown|\+\d+ more/.test(r))).toBe(true);
   });
   test('an agent with no task and no last call reads `-` in TASK and LAST, at 150 and at 110 (61-cell pane)', () => {
     const bare = [ag('lone-explorer', 'queued', { model: 'haiku' })];
@@ -138,6 +160,6 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
       expect([cols, row.trimEnd().endsWith('-')]).toEqual([cols, true]);
     }
     const wide = rows([], bare, { cols: 150 }).map(text).find((r) => r.includes('lone-explorer'))!;
-    expect(wide).toMatch(/queued\s+haiku\s+-\s+-\s*$/);
+    expect(wide).toMatch(/queued\s+haiku\s+-\s+0:00\s+-\s*$/); // TASK `-`, LAST the clock (a queued agent has run for 0:00), RESULT `-`
   });
 });

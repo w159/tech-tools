@@ -24,20 +24,30 @@ const agent = (name: string, state: string, ui_: string): HudAgent => ({ name, r
 const agents = [agent(names[0]!, 'done', 'done'), agent(names[1]!, 'failed', 'failed'), agent(names[2]!, 'failed', 'failed')];
 const hud = (cols: number, maxRows: number, input: HudInput = { todos: plan(), agents }): string[] => hudLines(input, { cols, maxRows, ui, now: NOW }).map(runsString);
 
+/** A plan row: its glyph starts the line (agent rows start with theirs too, but name a worker, not `T<n> <title>`). */
+const PLAN_ROW = /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] [a-z]/;
+
 describe('B1: a completed row never leaves the TODO block while the rows fit', () => {
   test('93 cells, 14 rows (f0086; the column names, both closing rules and the blank take four): all five rows are drawn, T1 included, with no `done` fold on the ribbon', () => {
     const rows = hud(93, 14);
-    expect(rows.filter((r) => /\bT[1-5] /.test(r) && !/haiku/.test(r))).toHaveLength(5);
+    expect(rows.filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
     expect(rows.find((r) => r.includes('T1 read alpha.py'))).toMatch(/done/);
     expect(rows[0]).toContain('1/5');
     expect(rows[0]).not.toMatch(/· \d+ done/);
-    expect(rows.filter((r) => /haiku/.test(r))).toHaveLength(3);
+    expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r))).toHaveLength(3);
   });
   test('when the rows truly do not fit, open rows keep their place and the ribbon says how many were left out', () => {
-    const rows = hud(93, 13); // round 3: a finished row folds before the blank goes
-    expect(rows.filter((r) => /\bT[2-5] /.test(r) && !/haiku/.test(r))).toHaveLength(4);
-    expect(rows[0]).toMatch(/1 done/);
-    expect(rows.some((r) => /AGENT\s+STATE/.test(r))).toBe(true); // rev 5: the column names stay, the finished row folds into the count
+    const open = (n: number): string[] => hud(93, n).filter((r) => PLAN_ROW.test(r) && !/T1 /.test(r));
+    const eleven = hud(93, 11); // the blank and the column names go first (round 5), then a finished row folds into the count; both closing rules stay
+    expect(open(11)).toHaveLength(4);
+    expect(eleven[0]).toMatch(/1 done/);
+    expect(eleven.some((r) => /AGENT\s+STATE/.test(r))).toBe(false); // the names went first
+    expect(eleven.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(2);
+    expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5); // one row more: every row, T1 included
+    const ten = hud(93, 10); // then open rows are cut and the ribbon counts them
+    expect(open(10)).toHaveLength(3);
+    expect(ten[0]).toMatch(/2 more todos not shown/);
+    expect(ten.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(2);
   });
 });
 
@@ -86,9 +96,9 @@ describe('B3 (round 3): blocked and failed share the one error colour; the glyph
 
 describe('B2: a killed worker reads in words, not only in colour', () => {
   const done = [item(1, 'completed', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'completed', 'T2 read ghost.py (ghost-explorer)', names[1])];
-  test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `done · worker killed`', () => {
+  test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `closed · worker killed`', () => {
     const t2 = hud(93, 12, { todos: done, agents }).find((r) => r.includes('T2 read ghost.py'))!;
-    expect(t2).toContain('done · worker killed');
+    expect(t2).toContain('closed · worker killed');
     expect(hud(93, 12, { todos: done, agents }).find((r) => r.includes('T1 read alpha.py'))).not.toContain('worker killed');
   });
   test('HUD row in the 61-cell strip keeps the words and fits', () => {
@@ -96,11 +106,11 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
     expect(t2).toContain('worker killed');
     expect(cells(t2)).toBeLessThanOrEqual(61);
   });
-  test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `done · worker killed` in the state cell', () => {
+  test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `closed · worker killed` in the state cell', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const at = (cols: number): string => boardText(boardLines(boardRowsOf(src), { cols, ui, ribbon: false, title: false })).join('\n');
-    expect(at(120)).toMatch(/done\s+ghost-explorer\s+worker killed/);
-    expect(at(60)).toContain('done · worker killed');
+    expect(at(120)).toMatch(/closed\s+ghost-explorer\s+worker killed/);
+    expect(at(60)).toContain('closed · worker killed');
   });
   test('board row at 37 cells keeps `done` in the state cell and says `worker killed` on the sub-line under the row', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];

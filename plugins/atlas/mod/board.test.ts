@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world, worldModel } from '../contracts/band-world';
 import { board_120, board_120_rich, board_80, worldBoardRows } from '../contracts/board-golden';
 import { band_120 } from '../contracts/band-world-golden';
-import { cells, chipCount, contrast, NEED, PALETTES, runKind, toneHex, type Ui } from './atlas-ui';
+import { cells, chipCount, contrast, DECOR_TONES, NEED, PALETTES, runKind, toneHex, type Ui } from './atlas-ui';
 import { bandLines, runsWidth } from './mission-layout';
 import type { UiState } from './atlas-ui';
 import { blockedCount, boardBody, boardCounts, boardLines, boardRowsOf, boardText, mmss, stateOfStatus, toBoardRow } from './board-model';
@@ -159,7 +159,7 @@ describe('chips and contrast', () => {
           if (!r.t.trim()) continue;
           const ratio = contrast(toneHex(r.tone, theme), r.bg ? toneHex(r.bg, theme) : p.panel);
           if (/^▱+$/.test(r.t)) continue; // the meter's empty track is the quiet tone on purpose (the HUD draws the same)
-          expect([theme, cols, r.t, ratio >= (r.chip ? NEED.text : /^[─━]+$/.test(r.t) ? NEED.glyph : NEED[runKind(r.t)])]).toEqual([theme, cols, r.t, true]);
+          expect([theme, cols, r.t, ratio >= (r.chip ? NEED.text : DECOR_TONES.has(r.tone) ? NEED.decor : /^[─━]+$/.test(r.t) ? NEED.glyph : NEED[runKind(r.t)])]).toEqual([theme, cols, r.t, true]);
           checked++;
         }
       }

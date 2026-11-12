@@ -35,7 +35,7 @@ test('C22: a cold hook (env never read) answers the lead header with the chip at
     const first = draw(line)
     expect([line, first instanceof Promise]).toEqual([line, false])
     const text = flat(first)
-    expect([line, text.includes('ATLAS'), text.includes('host row'), text.includes('|')]).toEqual([line, true, false, false])
+    expect([line, text.includes('▌'), text.includes('host row'), text.includes('|')]).toEqual([line, true, false, false])
   }
 })
 

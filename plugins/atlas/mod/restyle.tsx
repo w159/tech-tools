@@ -6,11 +6,10 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
 import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
-import { BRAND } from './contract'
 import { PHASES } from './intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
-import { contractGlyph, formatDuration, glyph, MOCHA, phaseHue } from './theme'
-import { MARK as BRAND_MARK, shortTool } from './band'
+import { glyph } from './theme'
+import { shortTool } from './band'
 import type { ActivityEntry, LiveSnapshot } from './orchestra-types'
 import { activeCount, liveWorkers } from './data/live'
 import type { LiveWorker } from './data/live'
@@ -18,8 +17,10 @@ import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
 import { cardAged, hideNotification, placedTree } from './transcript/placed'
-import { noteDoneChip } from './transcript/superseded'
+import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
+import { elapsedClock, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
+import { displayDelta, leadOf, leadRow, partialLead } from './transcript/leadheader'
 import type { Outcome } from './transcript/outcome'
 
 // The live snapshot is read from $.state while drawing, so a snapshot write redraws
@@ -114,9 +115,9 @@ export function noisyTree(props: ToolUsePropsLike & { output?: unknown }): Rende
   const size = outputSize(props.output)
   if (size < NOISY_BYTES) return null
   return txt({},
-    txt({ color: BRAND.subagent, bold: true }, `${props.tool} `),
-    txt({ color: BRAND.dim }, toolTarget(props.input)),
-    txt({ color: BRAND.accent, inverse: true }, ` ▸ ${fmtBytes(size)} `),
+    txt({ color: PALETTE5.body, bold: true }, `${props.tool} `),
+    txt({ color: PALETTE5.secondary }, toolTarget(props.input)),
+    txt({ color: PALETTE5.secondary, inverse: true }, ` ▸ ${fmtBytes(size)} `),
   )
 }
 
@@ -177,45 +178,10 @@ const doingOf = (a: ActivityEntry): string => {
 function nowOf(snap: AtlasSnapshot, name?: string): string {
  const a = activityOf(snap, name)
  if (!a) return ''
- return [doingOf(a), `${formatDuration(snap.now - (a.startedAt ?? a.since))} · ${a.toolCount} tools`].filter(Boolean).join(' · ')
+ return [doingOf(a), `${elapsedClock((snap.now - (a.startedAt ?? a.since)) / 1000)} · ${a.toolCount} tools`].filter(Boolean).join(' · ')
 }
 
 // ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----
-
-const PILL_NARROW = 40 // below this many columns the header keeps its two pills only
-const fixed = { wrap: 'truncate-end' }
-const isNarrow = (columns: number): boolean => columns > 0 && columns < PILL_NARROW
-const firstText = (k: RenderNode): string => (k as { children: string[] }).children[0] ?? ''
-
-/** ` ◆ ATLAS ` on violet and ` ⚒ IMPLEMENT ` on the phase hue, both dark bold text. */
-function pills(mid: string, phase: PhaseId, superseded = false): RenderNode[] {
- const mark = contractGlyph(mid.trim().split(/\s+/)[0] ?? '')
- // A done chip a Stop refusal overturned keeps its word but reads struck through on a quiet fill, and says why beside it (critique 21).
- const phasePill = superseded
-  ? txt({ ...fixed, color: MOCHA.muted, backgroundColor: MOCHA.panel2, strikethrough: true }, ` ${mark} ${phase.toUpperCase()} `)
-  : txt({ ...fixed, color: MOCHA.base, backgroundColor: phaseHue(phase), bold: true }, ` ${mark} ${phase.toUpperCase()} `)
- return [
-  txt({ ...fixed, color: MOCHA.base, backgroundColor: MOCHA.violet, bold: true }, ` ${BRAND_MARK} ATLAS `),
-  phasePill,
-  ...(superseded ? [txt({ ...fixed, color: MOCHA.muted }, ' superseded')] : []),
- ]
-}
-
-/** ` 3/5` muted, then ` sentence` in a Text that wraps: in the pills' row it shrinks to the room left and hangs under itself, so the
- * lead's words are never cut (critique 14 B2: `marking T1 compl...` at the 66 columns a docked transcript has). */
-function tailOf(nm: RegExpExecArray | null, sentence: string): RenderNode[] {
- const count = nm ? ` ${nm[1]}/${nm[2]}` : ''
- const rest = sentence ? ` ${sentence}` : ''
- return [txt({ ...fixed, color: MOCHA.muted }, count), txt({ wrap: 'wrap' }, rest)].filter((k) => firstText(k) !== '')
-}
-
-/** Filled pills then the state text, never a glued pipe; under 40 columns the two pills only. */
-function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, sentence: string, columns: number, superseded = false): RenderNode[] {
- // Each chip sits in its own non-shrinking Box: a Text cannot opt out of flex shrink, so with a long sentence beside it the host cut the chips
- // (`◆ ATLA… ◎ RESEARC…` at 110, critique 15 C2). The sentence is what gives way.
- const kids = pills(mid, phase, superseded).map((chip): RenderNode => ({ type: 'Box', props: { flexShrink: 0 }, children: [chip] }))
- return isNarrow(columns) ? kids : [...kids, ...tailOf(nm, sentence)]
-}
 
 /** Every assistant text the transcript drew, by message id: whether its first line is the ATLAS header (a chip). `turn.complete` fires once per turn and
  * `$.session.messages()` is empty live, so the header tally had one answer where the transcript showed a chip per text block (critique 11: `0 of 1`
@@ -231,49 +197,49 @@ export const drawnHeaderTally = (): { ok: number; total: number } => {
  for (const v of drawnHeaders.values()) if (v) ok++
  return { ok, total: ok > 0 ? ok : drawnHeaders.size }
 }
-export const forgetDrawnHeaders = (): void => drawnHeaders.clear()
+export const forgetDrawnHeaders = (): void => { drawnHeaders.clear(); leads.length = 0; leadAt.clear() }
+
+/** The lead headers in the order the transcript first drew them: a header whose phase is the previous header's draws as a quiet continuation (bar and state, no word), so
+ * three `◎ RESEARCH` rows in a row read as one (critique 23: three identical chips); the decision is per message id, redrawn from the same neighbour. */
+const leads: { id: string; phase: string; sentence: string }[] = []
+const leadAt = new Map<string, number>()
+const LEADS_MAX = 300
+function quietLead(id: string | undefined, text: string, pattern: string): boolean {
+ const lead = leadOf(text, pattern)
+ if (!id || !lead) return false
+ let i = leadAt.get(id)
+ if (i === undefined) {
+  i = leads.length
+  leads.push({ id, phase: lead.phase, sentence: lead.sentence })
+  leadAt.set(id, i)
+  if (leads.length > LEADS_MAX) { const d = leads.shift()!; leadAt.delete(d.id); for (const [k, v] of leadAt) leadAt.set(k, v - 1); i-- }
+ } else leads[i] = { id, phase: lead.phase, sentence: lead.sentence }
+ return i > 0 && leads[i - 1]!.phase === lead.phase
+}
+
+/** The look the chip draws with, kept from the host's own read (look.ts, async) so the synchronous draw path has a theme without awaiting. */
+let leadUi: Ui | null = null
 function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): void {
  if (!text.trim()) return
  const key = id ?? text.slice(0, 120)
  drawnHeaders.delete(key) // re-insert last: the oldest drops first
- drawnHeaders.set(key, headerPhaseOf(text, snap) !== null)
+ drawnHeaders.set(key, leadOf(text, snap.contract.headerFirstLinePattern) !== null)
  if (drawnHeaders.size > DRAWN_MAX) drawnHeaders.delete(drawnHeaders.keys().next().value as string)
 }
 
-/** A header line still streaming in (`ATLAS |`, `ATLAS | 🏁 do`, `ATLAS | 🏁 done | all fin`): the contract pattern needs the whole `| state` before it matches, so the host drew the raw
- * `● ATLAS | 🏁 done | ...` line for the frames until it did (critique 21: 22 raw frames in 11 of 12 runs). The pills draw from the first `ATLAS |`: the brand pill at once, the phase pill when the phase word is
- * whole, and from the state's first character the strict pattern draws the whole header. A line that is complete (a newline follows) and does not match the pattern is not a header and stays the host's own row. */
-function partialHeaderTree(text: string, _columns: number): RenderElement | null {
- if (text.includes('\n') || !text.startsWith('ATLAS |')) return null
- const pipes = text.split('|')
- const sentence = pipes.slice(2).join('|').trim()
- if (pipes.length >= 3 && sentence !== '') return null // the state has begun: the contract's strict pattern decides (an unknown phase stays the host's own row)
- const words = (pipes[1] ?? '').trim().split(/\s+/).filter(Boolean)
- const phaseWord = words[1]
- const pillNodes: RenderNode[] = phaseWord !== undefined && (PHASES as readonly string[]).includes(phaseWord)
-  ? pills(words[0] ?? '', phaseWord as PhaseId)
-  : [txt({ ...fixed, color: MOCHA.base, backgroundColor: MOCHA.violet, bold: true }, ` ${BRAND_MARK} ATLAS `)]
- const kids = pillNodes.map((chip): RenderNode => ({ type: 'Box', props: { flexShrink: 0 }, children: [chip] }))
- return { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: kids }
-}
-
-/** `ATLAS | ⚒ implement 3/5 | sentence` drawn in place as filled pills, body kept under it. */
-export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0, superseded = false): RenderElement | null {
+/** The lead's header as a chip drawn from either form of the line (contract or display, mod/transcript/leadheader.ts): no fill, a bar in the phase colour, the phase word, the state.
+ * `quiet` (the previous header was this phase) drops the word; `superseded` is a done chip a Stop refusal overturned. A finished first line that is no header stays the host's own row. */
+export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0, superseded = false, ui: Ui = uiFromEnv(), quiet = false): RenderElement | null {
  if (props.isSummary || !props.text) return null
- const first = props.text.split('\n', 1)[0] ?? ''
- const phase = headerPhaseOf(props.text, snap)
- if (phase === null) return partialHeaderTree(props.text, columns)
- const [, mid = '', ...tail] = first.split('|')
- const nm = /(\d+)\s*\/\s*(\d+)/.exec(mid)
- const rest = props.text.slice(first.length).replace(/^\n/, '')
- const kids = headerPills(mid, phase, nm, tail.join('|').trim(), columns, superseded)
-
- const row: RenderElement = { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: kids }
+ const lead = leadOf(props.text, snap?.contract.headerFirstLinePattern ?? '')
+ if (lead === null) return partialLead(props.text, ui)
+ const rest = props.text.slice(lead.first.length).replace(/^\n/, '')
+ const row = leadRow(lead, { ui, columns, superseded, quiet })
  if (!rest.trim()) return row
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }
 
-// ---- TurnDuration: `▸ 4m12s · +3 done · 2 workers · ctx 41%` ----
+// ---- TurnDuration: `▸ 4:12 · +3 done · 2 workers · ctx 41%` (the band's clock format, frozen once drawn) ----
 
 export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
@@ -282,14 +248,14 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  const delta = snap.counts.done - (tracker.done ?? snap.counts.done)
  const active = activeCount(workersOf(snap))
  const parts = [
-  formatDuration(durationMs),
+  elapsedClock(durationMs / 1000),
   delta > 0 ? `+${delta} done` : null,
   active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
  ].filter((part): part is string => part !== null)
  tracker.done = snap.counts.done
  return txt({ dimColor: true },
-  txt({ color: BRAND.accent }, `${MARK} `),
+  txt({ color: PALETTE5.dim }, `${MARK} `),
   parts.join(' · '),
  )
 }
@@ -355,13 +321,18 @@ export function registerRestyle(on: On): void {
  on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => {
   const draw = (snap: AtlasSnapshot | null) => {
    if (snap && !e.props.isSummary) noteDrawn(snap, e.requestId, e.props.text)
-   const superseded = snap && !e.props.isSummary && headerPhaseOf(e.props.text, snap) === 'done' ? noteDoneChip(e.requestId) : false
-   return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0, superseded) ?? next(e)) : next(e)
+   const pattern = snap?.contract.headerFirstLinePattern ?? ''
+   const superseded = snap && !e.props.isSummary && leadOf(e.props.text, pattern)?.phase === 'done' ? noteDoneChip(e.requestId) : false
+   const quiet = snap && !e.props.isSummary ? quietLead(e.requestId, e.props.text, pattern) : false
+   return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0, superseded, leadUi ?? uiFromEnv(), quiet) ?? next(e)) : next(e)
   }
   try {
    // A message drawn before anything primed the env read (a session's first reply, a turn the engine started without our turn.start) used to wait on `ready`'s promise and
    // paint the host's raw `● ATLAS | ...` row meanwhile (critique 22: 24 raw frames in 11 of 12 runs). The bundled pattern needs no read, so the chip answers at once; the env read
    // is primed behind it, and ATLAS_MOD=off is honoured from the next draw.
+   // The Stop-refusal listener (below) calls `$.ui.invalidate` at the call site: the host refuses `$` stored, passed or returned from a hook, so it is re-armed here per draw.
+   onSuperseded(() => { void Promise.resolve().then(() => { try { $.ui.invalidate('ui.render') } catch { /* nothing drawn to refresh */ } }) })
+   if (leadUi === null) void lookOf($).then((l) => { leadUi = l.ui }, () => undefined)
    if (cache.envOff === undefined) void primeEnv($, cache).catch(() => undefined)
    const known = cache.envOff !== true ? patternSnap() : null
    if (known) return draw(known)
@@ -369,10 +340,18 @@ export function registerRestyle(on: On): void {
   } catch { return next(e) }
  })
 
+ // A footer is the receipt of a finished turn: it freezes at the value it was first drawn with. Redrawn live (critique 25), its `+N done` fell to nothing on the second draw (the tracker had moved on)
+ // and its `ctx` and worker count followed the next turn's snapshot.
+ const frozenFooters = new Map<string, RenderElement>()
  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => {
   try {
+   const kept = e.requestId ? frozenFooters.get(e.requestId) : undefined
+   if (kept) return kept
    const snap = await ready($, cache)
-   return snap ? durationTree(snap, e.props, tracker, await nowMs($)) : next(e)
+   if (!snap) return next(e)
+   const tree = durationTree(snap, e.props, tracker, await nowMs($))
+   if (e.requestId) frozenFooters.set(e.requestId, tree)
+   return tree
   } catch { return next(e) }
  })
 
@@ -417,5 +396,19 @@ export function registerRestyle(on: On): void {
    const now = ((await read($, snapshotState)) as AtlasSnapshot | null)?.now ?? 0 // read while drawing: the card redraws as the snapshot's clock moves
    return placedTree(e.props.id, (await lookOf($)).ui, cardAged(e.props.id, now)) ?? next(e)
   } catch { return next(e) }
+ })
+
+ // Critique 23: the raw `● ATLAS | 🏁 done | ...` rows are not a draw the mod can answer in time. While a reply streams the host paints each flushed batch of whole lines itself and
+ // asks `ui.render` for the message only once it is complete (the raw row stood three 0.5 s frames in live-110-513bb41c-1 f0062-f0064, chip at f0065). The classic `MessageDisplay`
+ // event sees those batches and rewrites them for the screen alone: the header line leaves as `▌ research 1/3 · state`, so no frame carries the pipes or the emoji. The stored message,
+ // the model and the Stop gate keep the contract line; the chip draws from either form (transcript/leadheader.ts).
+ on('classic.MessageDisplay', async ($, e, next) => {
+  const base = await next(e)
+  try {
+   await primeEnv($, cache)
+   if (cache.envOff || e.index !== 0) return base
+   const shown = displayDelta(base?.displayContent ?? e.delta, headerPattern)
+   return shown === null ? base : { ...base, displayContent: shown }
+  } catch { return base }
  })
 }

@@ -11,18 +11,18 @@ const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [
 const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}): string[] => bodyLines(panelWorld(t, cols, mocha, { core, ...over })).map(lineText).map((l) => l.trimEnd());
 
 describe('critique 19 C4: the route tab reads a killed worker in words', () => {
-  // stoprun-150-232567af-1: T2 closed by the lead after its worker was killed: the HUD says `done · worker killed`, the panel said an amber `done`.
+  // stoprun-150-232567af-1: T2 closed by the lead after its worker was killed: the HUD says `closed · worker killed`, the panel said an amber `done`.
   const todos = [
     { id: 't1', label: 'T1 read alpha.py (alpha-explorer)', state: 'done' as const, owner: 'alpha-explorer' },
     { id: 't2', label: 'T2 read ghost.py (ghost-explorer)', state: 'done' as const, word: DONE_DOUBT, owner: 'ghost-explorer', detail: 'worker killed' },
     { id: 't3', label: 'T3 combine the reports', state: 'done' as const },
   ];
   for (const cols of [64, 56, 38]) {
-    test(`${cols} cells: the T2 row says \`done · worker killed\` (or the second line does), the others plain done, nothing wider than the pane`, () => {
+    test(`${cols} cells: the T2 row says \`closed · worker killed\` (or the second line does), the others plain done, nothing wider than the pane`, () => {
       const rows = body('route', cols, { todos });
-      const at = rows.findIndex((l) => l.includes('T2 read ghost.py'));
+      const at = rows.findIndex((l) => l.includes('T2 read ghost'));
       expect(at).toBeGreaterThan(-1);
-      expect(rows.slice(at, at + 3).join(' ').replace(/\s+/g, ' ')).toContain('done · worker killed');
+      expect(rows.slice(at, at + 3).join(' ').replace(/\s+/g, ' ')).toContain('closed · worker killed');
       expect(rows.join('\n').match(/worker killed/g)!.length).toBe(1);
       for (const l of rows) expect(cells(l)).toBeLessThanOrEqual(cols);
     });

@@ -17,14 +17,14 @@ export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' 
 /** A run's role. `dim` is the legacy tone (mission-layout TONE_HEX before rev 4); it has no token and paints as `line`. */
 export type Tone = Token | 'dim';
 /** One styled piece of a row. `bg` overrides the row surface (chips, the capsule); `chip` marks a fill (one per row). */
-export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; chip?: boolean; /** Motion override: a #rrggbb foreground that replaces the tone's colour for this frame (mod/motion.ts). */ fg?: string };
+export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; /** A fill as #rrggbb (the selected row's 236 bar), when no theme token is the colour; wins over `bg`. */ bgHex?: string; chip?: boolean; /** Motion override: a #rrggbb foreground that replaces the tone's colour for this frame (mod/motion.ts). */ fg?: string };
 
 /** Catppuccin Mocha and Latte (https://raw.githubusercontent.com/catppuccin/palette/main/palette.json). */
 export const PALETTES: Record<ThemeName, Record<Token, string>> = {
   mocha: {
     // Round 3 palette (showcase brief): accent 141, ok 114, warn 179, error 203 (failed and blocked share it), neutrals 252 (body) and 245 (secondary and muted; 240 fails 4.5:1 as text); running reads in body text.
-    base: '#1e1e2e', panel: '#181825', text: '#d0d0d0', sub: '#8a8a8a', muted: '#8a8a8a', line: '#7f849c', ok: '#87d787', run: '#d0d0d0',
-    warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', info: '#94e2d5', accent: '#af87ff', queued_fill: '#a6adc8', ink: '#1c1c1c', white: '#ffffff',
+    base: '#1e1e2e', panel: '#181825', text: '#d0d0d0', sub: '#8a8a8a', muted: '#8a8a8a', line: '#585858', ok: '#87d787', run: '#d0d0d0',
+    warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', info: '#af87ff', accent: '#af87ff', queued_fill: '#8a8a8a', ink: '#1c1c1c', white: '#ffffff',
   },
   latte: {
     base: '#eff1f5', panel: '#e6e9ef', text: '#4c4f69', sub: '#5c5f77', muted: '#5c5f77', line: '#7c7f93', ok: '#40a02b', run: '#1e66f5',
@@ -34,7 +34,7 @@ export const PALETTES: Record<ThemeName, Record<Token, string>> = {
 
 /** Hex of a tone in a theme. Legacy `dim` is `line` on Mocha and `muted` on Latte (line fails 4.5:1 as text). */
 export function toneHex(tone: Tone, theme: ThemeName = 'mocha'): string {
-  if (tone === 'dim') return theme === 'latte' ? PALETTES.latte.muted : '#585b70';
+  if (tone === 'dim') return theme === 'latte' ? PALETTES.latte.muted : PALETTE5.dim;
   return PALETTES[theme][tone];
 }
 
@@ -102,7 +102,7 @@ const CUBE_LEVELS = [0, 95, 135, 175, 215, 255] as const;
 /** Round 3 (showcase brief): the brief's colours are xterm indices, painted AS indices in 256-colour mode (never nearest-matched from a hex). The Claude Code host downsamples
  * a hex with hostTo256, so the hex handed to it is the index's pre-image (each channel k * 51, or the grey that rounds to the index); the direct ANSI painters read the pre-image back
  * to the index (sgrColor). 141 accent, 203 error, 179 warn, 114 ok, 252 body, 245 secondary, 240 dim. */
-const EXACT_256: Readonly<Record<string, number>> = { '#af87ff': 141, '#ff5f5f': 203, '#d7af5f': 179, '#87d787': 114, '#d0d0d0': 252, '#8a8a8a': 245, '#585b70': 240, '#585858': 240 };
+const EXACT_256: Readonly<Record<string, number>> = { '#af87ff': 141, '#ff5f5f': 203, '#d7af5f': 179, '#87d787': 114, '#d0d0d0': 252, '#8a8a8a': 245, '#585858': 240 };
 /** The exact xterm index the brief names for a palette hex, if it names one. */
 export const exactIndex = (hex: string): number | undefined => EXACT_256[hex];
 export const preImage = (i: number): string => {
@@ -126,7 +126,7 @@ export function xtermHex(i: number): string {
 }
 
 /** The index the Claude Code host's own downsampler gives a #rrggbb (the common rgb -> ansi256 formula: grey ramp when r = g = b, else
- * round(v / 255 * 5) per channel into the cube). Seen live: #181825 reaches the terminal as `48;5;17` (navy) and #cdd6f4 as `38;5;189`. */
+ * round(v / 255 * 5) per channel into the cube). Seen live: #181825 reaches the terminal as `48;5;17` (navy) and the old pastel text colour as `38;5;189`. */
 export function hostTo256(hex: string): number {
   const [r, g, b] = rgbOf(hex);
   if (r === g && g === b) return r < 8 ? 16 : r > 248 ? 231 : Math.round(((r - 8) / 247) * 24) + 232;
@@ -180,6 +180,16 @@ export function surfaceHex(tok: Token, ui: Pick<Ui, 'theme' | 'color'>): string 
   return out;
 }
 
+const fillCache = new Map<string, string>();
+/** The fill of a run: its own `bgHex` (in 256 colours the stable palette colour nearest it, as for a surface), else its `bg` token's surface, else the panel. */
+export function fillHex(x: Pick<Run, 'bg' | 'bgHex'>, ui: Pick<Ui, 'theme' | 'color'>): string {
+  if (x.bgHex === undefined) return surfaceHex(x.bg ?? 'panel', ui);
+  if (ui.color !== '256') return x.bgHex;
+  let out = fillCache.get(x.bgHex);
+  if (out === undefined) fillCache.set(x.bgHex, (out = PRE_IMAGE.get(x.bgHex) ?? stable256(x.bgHex)));
+  return out;
+}
+
 const fitCache = new Map<string, string>();
 /** `hex` as drawn in 256-colour mode on the theme's panel: the nearest stable palette colour that keeps the contrast the original had (to 4.5:1). Memoised. */
 export function fitHex(hex: string, theme: ThemeName): string {
@@ -210,7 +220,7 @@ export function sgrColor(hex: string, layer: 38 | 48, mode: ColorMode): string {
  * panel unless the run carries its own). In 256-colour mode both colours are stable palette colours. Colour off keeps bold and strike only. */
 export function paintAnsi(x: Run, ui: Ui): string {
   if (x.t === '') return '';
-  const sgr = [x.bold ? '1' : '', x.strike ? '9' : '', sgrColor(runHex(x, ui.theme, ui.color), 38, ui.color), sgrColor(surfaceHex(x.bg ?? 'panel', ui), 48, ui.color)].filter(Boolean).join(';');
+  const sgr = [x.bold ? '1' : '', x.strike ? '9' : '', sgrColor(runHex(x, ui.theme, ui.color), 38, ui.color), sgrColor(fillHex(x, ui), 48, ui.color)].filter(Boolean).join(';');
   return sgr ? `\x1b[${sgr}m${x.t}\x1b[0m` : x.t;
 }
 
@@ -225,7 +235,9 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 /** Threshold by kind: text 4.5:1, glyphs and rules 3:1. */
-export const NEED = { text: 4.5, glyph: 3 } as const;
+export const NEED = { text: 4.5, glyph: 3, decor: 2.4 } as const;
+/** The tones that draw the one dim grey (240, critique 25): rules, the brand mark, the idle gate segment. Decorative by design, so they are held to `NEED.decor` (240 on the panel is 2.47:1), not to 3:1. */
+export const DECOR_TONES: ReadonlySet<string> = new Set(['line', 'dim']);
 
 /** Colour for a glyph token on the panel: the token when it reaches 3:1, else `text` (rev 4 section 3 rules). */
 export function glyphTone(tok: Token, theme: ThemeName): Token {
@@ -243,7 +255,7 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉△━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃○▰▱';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘╭╮╰╯│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒◉◇●■▣▲△▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
+const NON_TEXT = new Set([...'┌┐└┘╭╮╰╯│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◉◇●■▣▲△▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -262,12 +274,12 @@ export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: '
 export const RETURNED = 'returned';
 export const RETURNED_GLYPH = '◃'; // the small triangle pointing back to the lead (U+25C3, hollow: a hand-back, not a fault; the focus mark ▸ points the other way)
 export const RETURNED_ASCII = '<';
-/** `doubt`: a row the store holds `completed` whose owner agent failed or was killed (critique 17 A1). It reads `done` in the amber warn tone with the detail
- * `worker failed` (the lead may have finished the work itself); it is never the green done mark and never the fade-to-done pop. Carried as the row's word `done`
- * on a `done` state, the one case a row's word equals its state. */
-export const DONE_DOUBT = 'done';
+/** `doubt`: a row the store holds `completed` whose owner agent failed or was killed (critique 17 A1). It reads `closed` (the lead closed the row over a dead worker) with the detail `worker killed`,
+ * the done mark `●` (the capture scorer's ground truth for the closed dispatch row is `completed`: a `■` would score it failed) and the word in the error red (203), the same on the HUD, the board and the side
+ * panel (critique 25). It is never the green done mark and never the fade-to-done pop. Carried as the row's word `closed` on a `done` state. */
+export const DONE_DOUBT = 'closed';
 export const WORKER_FAILED = 'worker killed';
-/** A doubted done spelled out where no detail column shows it: `done · worker killed` (critique 18 B2: the amber tone alone certified a killed worker). */
+/** A doubted done spelled out where no detail column shows it: `closed · worker killed` (critique 18 B2: a tone alone certified a killed worker). */
 export const DONE_KILLED = `${DONE_DOUBT} · ${WORKER_FAILED}`;
 /** What a row's mark shows: a state, `returned`, or `doubt`. */
 export type MarkState = UiState | typeof RETURNED | 'doubt';
@@ -275,15 +287,15 @@ export type MarkState = UiState | typeof RETURNED | 'doubt';
 export const markOf = (state: UiState, word?: string): MarkState => (word === RETURNED ? RETURNED : state === 'done' && word === DONE_DOUBT ? 'doubt' : state);
 /** What the Motion tracks for a row: its state, except a doubted done, which is its own entry (it leads amber and never pops the done disc). */
 export const motionState = (state: UiState, word?: string): string => (markOf(state, word) === 'doubt' ? 'doubt' : state);
-/** The token of a mark: the state's own, body text for `returned` (the glyph and its word share one tone, motion included), the amber warn for `doubt`. */
-export const markToken = (s: MarkState): Token => (s === RETURNED ? STATE_TOKEN.done : s === 'doubt' ? 'warn' : STATE_TOKEN[s]);
+/** The token of a mark: the state's own, body text for `returned` (the glyph and its word share one tone, motion included), the error red for `doubt`. */
+export const markToken = (s: MarkState): Token => (s === RETURNED ? STATE_TOKEN.done : s === 'doubt' ? 'bad' : STATE_TOKEN[s]);
 /** The one tone of a row's state WORD on every surface (HUD, side panel, board). */
-export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'dim' : markOf(state, word) === 'doubt' ? 'warn' : state === 'failed' || state === 'blocked' ? 'bad' : state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
+export const rowWordTone = (state: UiState, word?: string): Tone => (word === RETURNED ? 'dim' : markOf(state, word) === 'doubt' ? 'bad' : state === 'failed' || state === 'blocked' ? 'bad' : state === 'waiting' ? 'warn' : state === 'running' ? 'text' : 'muted'); // rev 5: running in body text, finished and queued quiet, failed red, a state that needs a look amber
 
 export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
-export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
-  const g = s === 'running' ? spinnerGlyph(spinFrame, ui.ascii) : stateGlyph(s, ui);
+export function stateRun(s: MarkState, ui: Ui, spinFrame = 0, braille = false): Run {
+  const g = s === 'running' ? (braille ? leadSpinnerGlyph(spinFrame, ui.ascii) : spinnerGlyph(spinFrame, ui.ascii)) : stateGlyph(s, ui);
   return { t: g, tone: ui.ascii ? 'text' : glyphTone(markToken(s), ui.theme) };
 }
 /** THE mark of a `warning` (a failing check while Stop did not refuse): the amber attention triangle on the band head, the checks row and the gates tab alike.
@@ -302,7 +314,9 @@ export function stateWordTone(s: UiState, ui: Pick<Ui, 'ascii' | 'theme'>): Toke
   return contrast(PALETTES[ui.theme][tok], PALETTES[ui.theme].panel) >= NEED.text ? tok : 'text';
 }
 /** `◐ 1 running`: glyph run, then the count and word in text. */
-export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0): Run[] => [{ ...stateRun(s, ui, spinFrame), t: `${stateRun(s, ui, spinFrame).t} ` }, { t: `${n} ${s}`, tone: 'text' }];
+/** `◐ 2 running`: a state's glyph and count. `braille` draws a running count with the band lead's braille frame (the same shared frame index) so a row that already carries the lead spinner
+ * never mixes braille and circles: the band's agents segment, a title count and a panel's agents line pass it; rows the capture scorer reads by glyph (TODO, SUBAGENTS, band worker rows) do not. */
+export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0, braille = false): Run[] => [{ ...stateRun(s, ui, spinFrame, braille), t: `${stateRun(s, ui, spinFrame, braille).t} ` }, { t: `${n} ${s}`, tone: 'text' }];
 
 // ---- width and clipping -------------------------------------------------------------------------
 
@@ -426,6 +440,16 @@ export function meter(width: number, value: number, ui: Pick<Ui, 'ascii'>): Run[
   const on = Math.round(w * Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0)));
   const [a, b] = ui.ascii ? [GLYPH5_ASCII.meterOn, GLYPH5_ASCII.meterOff] : [GLYPH5.meterOn, GLYPH5.meterOff];
   return [{ t: a.repeat(on), tone: 'accent' } as Run, { t: b.repeat(w - on), tone: 'dim' } as Run].filter((x) => x.t !== '');
+}
+
+/** The plan meter every surface draws (round 3, critique 23: the side panel's was lavender over 10 cells beside the HUD's green over 8): 8 cells, `ok` filled and `muted` empty; full only when everything is done, never empty once one
+ * is. mod/hud-surface.ts `meterRuns` is the same figure (todo-meter.test.ts pins them equal). ASCII: `#` and `-`. */
+export const TODO_METER_W = 8;
+export function todoMeter(done: number, total: number, ui: Pick<Ui, 'ascii'>): Run[] {
+  const w = TODO_METER_W;
+  const on = total <= 0 ? 0 : done >= total ? w : Math.min(w - 1, Math.max(done > 0 ? 1 : 0, Math.round((w * done) / total)));
+  const [a, b] = ui.ascii ? [GLYPH5_ASCII.meterOn, GLYPH5_ASCII.meterOff] : [GLYPH5.meterOn, GLYPH5.meterOff];
+  return [{ t: a.repeat(on), tone: 'ok' } as Run, { t: b.repeat(w - on), tone: 'muted' } as Run].filter((x) => x.t !== '');
 }
 
 // ---- row grammar --------------------------------------------------------------------------------------
@@ -570,13 +594,20 @@ export function sparkline(values: readonly number[], peak: number, ascii = false
 // ---- motion (pure functions of time) -------------------------------------------------------------------------------
 
 export const SPINNER_MS = 100;
-/** The one working signal (round 3): the circle quarters, one frame per SPINNER_MS, on every surface and in every renderer. The capture scorer maps only
- * these four marks on rows, so no braille set exists anywhere in the mod. */
+/** The row working signal (round 3): the circle quarters, one frame per beat of the shared clock, on every row surface (TODO, SUBAGENTS, panel, board, band worker rows).
+ * The capture scorer maps only these four marks on rows. The band's own lead spinner is the braille set below. */
 export const SPIN_FRAMES = ['◐', '◓', '◑', '◒'] as const;
+/** The band lead's spinner (MiniDot): ten braille frames, one per beat of the same shared clock. Rows never use it. */
+export const LEAD_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
 const SPIN_ASCII = ['|', '/', '-', '\\'] as const;
 /** Spinner frame by frame number (any integer). */
 export function spinnerGlyph(frame: number, ascii = false): string {
   const f = ascii ? SPIN_ASCII : SPIN_FRAMES;
+  return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
+}
+/** The band lead's spinner at frame `frame` (braille; the ASCII set in ASCII mode). */
+export function leadSpinnerGlyph(frame: number, ascii = false): string {
+  const f = ascii ? SPIN_ASCII : LEAD_FRAMES;
   return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
 }
 /** Spinner frame number at the shared clock reading `nowMs`: ONE phase for every surface in a frame. The `id` argument is kept for the callers that still pass an

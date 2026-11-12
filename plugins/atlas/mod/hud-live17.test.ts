@@ -6,7 +6,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
 import { cells, runsString, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
-import { hudBudget, hudCompactRows, hudFloorRows, hudLines, hudMotionItems, lastOf, type HudAgent, type HudInput } from './hud';
+import { hudBudget, hudCompactRows, hudFloorRows, hudWantRows, hudLines, hudMotionItems, lastOf, type HudAgent, type HudInput } from './hud';
 import { Motion } from './motion';
 import { bodyLines, lineText, stripLayout, tabRows } from './panel-layout';
 import { hudGapRows, hudSlotCap } from './register';
@@ -54,7 +54,7 @@ describe('B1: LAST is the outcome, never the raw tool echo', () => {
   });
 });
 
-describe('B2: at 110 columns the SUBAGENTS rows keep MODEL, TASK and LAST', () => {
+describe('B2: at narrow widths the SUBAGENTS rows keep TASK and LAST whole (MODEL gives its cells up first, critique 23)', () => {
   const agent = (name: string, over: Partial<HudAgent> = {}): HudAgent => ({ name, role: 'explorer', state: 'working', ui: 'running', model: 'haiku', task: `${name}: read ${name.split('-')[0]}.py`, tool: 'Read', target: `${name.split('-')[0]}.py`, ...over });
   const plan: TodoItem[] = ['alpha', 'beta', 'gamma'].map((n, i) => ({ id: `t${i}`, content: `T${i + 1} read ${n}.py (${n}-explorer)`, status: 'pending', owner: `${n}-explorer` }) as unknown as TodoItem);
   const input: HudInput = { todos: plan, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map((n) => agent(n)) };
@@ -62,7 +62,8 @@ describe('B2: at 110 columns the SUBAGENTS rows keep MODEL, TASK and LAST', () =
     const rows = hudLines(input, { cols: 61, maxRows: 30, ui, now: NOW }).map(runsString);
     const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
     expect(head).toContain('LAST');
-    for (const n of ['alpha', 'beta', 'gamma']) expect(rows.find((r) => r.includes(`${n}-explorer`) && r.includes('haiku'))).toContain(`read ${n}.py`);
+    expect(head).not.toContain('MODEL');
+    for (const n of ['alpha', 'beta', 'gamma']) expect(rows.find((r) => r.includes(`${n}-explorer`) && r.includes('running') && /\bT\d\b/.test(r))).toContain(`read ${n}.py`);
     for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(61);
   });
   test('a new row reveals its name only: MODEL and TASK are whole on every frame (f0039.ans:30 `gamma-explor` with both blank)', () => {
@@ -74,7 +75,7 @@ describe('B2: at 110 columns the SUBAGENTS rows keep MODEL, TASK and LAST', () =
       const rows = hudLines(input, { cols: 61, maxRows: 30, ui, now: 1005, motion: mo.ctx(1000 + dt) }).map(runsString);
       const agentRows = rows.slice(rows.findIndex((r) => r.includes('SUBAGENTS')) + 2); // under the column names
       const gamma = agentRows[2]!; // the newest row, third in start order
-      expect([dt, gamma.includes('haiku'), gamma.includes('T3')]).toEqual([dt, true, true]);
+      expect([dt, gamma.includes('read gamma.py'), gamma.includes('T3')]).toEqual([dt, true, true]);
     }
   });
 });
@@ -95,27 +96,31 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
   const agents = ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(agent);
   const slot = (todos: TodoItem[], cols: number, budget: number): { hud: string[]; gap: number; band: number } => {
     const input: HudInput = { todos, agents };
-    const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true);
+    const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
     const hud = hudLines(input, { cols, maxRows: cap, ui, now: NOW }).map(runsString);
     const gap = hudGapRows(hud.some((r) => r.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
     return { hud, gap, band: budget - hud.length - gap };
   };
-  test('3 done, 2 open: the done rows fold to `3 done` on the ribbon, both open rows, both closing rules, the blank and the header stay (12 rows: the boxes take two more than the bare blocks did)', () => {
-    const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 12);
+  test('3 done, 2 open: at 16 rows (the two rules take two more than critique 23) every plan row is drawn, the blank and the header stay, the band keeps a row', () => {
+    const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 16);
     expect(band).toBeGreaterThanOrEqual(1);
-    expect(hud[0]).toMatch(/TODO .*3 done/);
-    expect(hud.filter((r) => /T[45] step/.test(r))).toHaveLength(2);
-    expect(hud.some((r) => /T[123] step/.test(r))).toBe(false);
+    expect(hud.filter((r) => /\bT[1-5] step/.test(r))).toHaveLength(5);
+    expect(hud.some((r) => /not shown|\+\d+ more/.test(r))).toBe(false);
     const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
     expect(hud[at - 1]!.trim()).toBe('');
-    expect(hud[at + 1]).toMatch(/AGENT\s+STATE/);
-    expect(hud.filter((r) => /haiku/.test(r))).toHaveLength(3);
-    expect(hud.filter((r) => r.startsWith('╰'))).toHaveLength(2);
+    expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r) && /read \w+\.py/.test(r))).toHaveLength(3);
+  });
+  test('3 done, 2 open at 10 rows, where the five do not fit: the done rows fold into the ribbon count, never dropped silently', () => {
+    const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 10);
+    expect(band).toBeGreaterThanOrEqual(1);
+    expect(hud.filter((r) => /\bT[45] step/.test(r))).toHaveLength(2);
+    expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r))).toHaveLength(3);
+    expect(hud.some((r) => /\bT[1-5] step/.test(r)) && hud[0]!.includes('3 done')).toBe(hud.filter((r) => /\bT[1-5] step/.test(r)).length < 5);
   });
   test('all open (the live frame): the band still keeps a row and every agent stays', () => {
     const { hud, band } = slot(plan(['in_progress', 'in_progress', 'in_progress', 'pending', 'pending']), 61, 10);
     expect(band).toBeGreaterThanOrEqual(1);
-    expect(hud.filter((r) => /haiku/.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => /-explorer\s+running/.test(r))).toHaveLength(3);
     expect(hud.length).toBeLessThanOrEqual(9);
   });
   test('a roomy slot is unchanged (hudBudget still floors at the compact form)', () => {

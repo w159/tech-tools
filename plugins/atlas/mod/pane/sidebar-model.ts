@@ -9,7 +9,7 @@ import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
 import { hudAgents, lastOf, ownerStatesOf } from '../hud';
 import { ownerOutcome } from '../board-model';
-import { failureNotes, isoTs } from '../data/channels';
+import { failureNotes, isoTs, noteRefusal, refusalNotes } from '../data/channels';
 import { gateTally } from '../data/runstate';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
@@ -34,7 +34,7 @@ function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),
-    secs: Math.max(0, Math.round((endedAt(w, s.now) - w.startedAt) / 1000)), tools: s.activity[w.name]?.toolCount ?? 0,
+    secs: Math.max(0, Math.round((endedAt(w, s.now) - w.startedAt) / 1000)), startMs: w.startedAt, endMs: endedAt(w, s.now), tools: s.activity[w.name]?.toolCount ?? 0,
   };
 }
 
@@ -98,9 +98,10 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const spoken = new Set(notes.filter((n) => n.kind === 'blocked').map((n) => n.owner)); // a worker that already posted its own block needs no second row
   const failures = failureNotes({
     workers: workers.filter((w) => !spoken.has(w.name)).map((w) => ({ name: w.name, state: w.state, endedMs: endedMsOf(s, w.name), detail: w.state === 'failed' ? undefined : w.detail })),
-    stop: gateTally(m.gates).stop,
+    stop: null, // the refusal is a remembered row below, so it stays after Stop passes (data/channels.ts noteRefusal)
     channel: s.channel ?? '',
   });
+  noteRefusal(gateTally(m.gates).stop, s.now, s.channel ?? '');
   // The closure is a post too (wave 24): a plan row the lead closed over a failed worker reads `T2 dispatch closed after Stop refusal · ghost-explorer`, whole names, from the lead.
   const stop = gateTally(m.gates).stop;
   const todos = todosOf(s, workers);
@@ -114,6 +115,6 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
-    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...closures], isoTs(s.now)).map(noteOf),
+    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...refusalNotes(s.channel ?? ''), ...closures], isoTs(s.now)).map(noteOf),
   };
 }

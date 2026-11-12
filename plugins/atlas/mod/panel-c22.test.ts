@@ -3,7 +3,7 @@
 // and the spinner frame the band turns.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
-import { DONE_DOUBT, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
+import { DONE_DOUBT, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { boardLines, boardText, boardTimeline, type BoardRow } from './board-model';
 import { bodyLines, channelLabel, lineText, panelLines, panelText, ribbonRow, type PanelModel, type PanelNote, type PanelTab } from './panel-layout';
 import { panelModelOf } from './pane/sidebar-model';
@@ -30,7 +30,7 @@ describe('step 2: one vocabulary with the HUD', () => {
   test('the route meter is the HUD one, `▰▱`', () => {
     const todos = [{ id: '1', label: 'a', state: 'done' as const }, { id: '2', label: 'b', state: 'queued' as const }];
     const row = text('route', 150, { todos }).find((l) => l.startsWith(' todo'))!;
-    expect(row).toMatch(/^ todo {3}▰{5}▱{5} 1\/2/);
+    expect(row).toMatch(/^ todo {3}▰{4}▱{4} 1\/2/);
   });
 });
 
@@ -55,11 +55,12 @@ describe('step 3: the board pane', () => {
     expect(items[1]).toContain('T2 read ghost.py');
     expect(t.join('\n')).not.toContain('...');
   });
-  test('a doubted done reads `done`, its owner dim, then `worker killed` as the suffix: never a cut `done ·…`', () => {
+  test('a doubted done reads `closed` then `worker killed` as the suffix, never a cut `closed ·…`; the owner moves to the footer where the row has no room for it', () => {
     const t = boardText(pane(59, [row(1), row(2, { label: 'T2 read ghost.py', owner: 'ghost-explorer', word: DONE_DOUBT, detail: 'worker killed' })]));
     const line = t.find((l) => l.includes('T2 read ghost.py'))!;
-    expect(line).toMatch(/T2 read ghost\.py +done {2}ghost-explorer {2}worker killed$/);
+    expect(line).toMatch(/T2 read ghost\.py +closed {2}worker killed$/);
     expect(line).not.toContain('…');
+    expect(t.join('\n')).toContain('T2 dispatch closed · ghost-explorer'); // the owner is still named, in the footer
   });
   test('no strikethrough on the board, in the pane or the full form', () => {
     for (const o of [{ pane: true, ribbon: false, title: false }, {}, { rich: true }]) for (const cols of [150, 110, 80]) {
@@ -72,11 +73,13 @@ describe('step 3: the board pane', () => {
   });
   test('the timeline is one row per agent, `alpha-explorer ━━━━ 14s ●`: the bar as long as the run, the glyph its state, queued agents left off', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
-    expect(t).toHaveLength(2);
+    expect(t).toHaveLength(4); // the two agents, a blank between them, the time axis
     expect(t[0]).toMatch(/^ {2}alpha-explorer ━+ +14s ●$/);
-    expect(t[1]).toMatch(/^ {2}gamma {10}━+ +7s [◐◓◑◒]$/);
+    expect(t[1]).toBe('');
+    expect(t[2]).toMatch(/^ {2}gamma {10}━+ +7s [◐◓◑◒]$/);
+    expect(t[3]).toMatch(/^ {17}0s ─+ 14s$/);
     const bar = (l: string): number => [...l].filter((c) => c === '━').length;
-    expect(bar(t[0]!)).toBeGreaterThan(bar(t[1]!));
+    expect(bar(t[0]!)).toBeGreaterThan(bar(t[2]!));
     expect(boardTimeline([{ name: 'a', state: 'done', secs: 3 }], { cols: 10, ui: mocha })).toEqual([]);
   });
 });
@@ -151,7 +154,8 @@ describe('step 6: one spinner clock', () => {
       const m = world('route', 110, { now: spinClock(now, tick), tick, workers: [{ name: 'alpha-explorer', state: 'running', detail: '' }], todos: [{ id: 't1', label: 'T1 read alpha.py', state: 'running', owner: 'alpha-explorer' }] });
       const rows = panelText(m).filter((l) => /alpha/.test(l));
       expect(rows.length).toBeGreaterThan(0);
-      for (const l of rows) expect([tick, l.match(/[◐◓◑◒]/)?.[0]]).toEqual([tick, glyph]);
+      const lead = leadSpinnerGlyph(spinFrameOf(spinClock(now, tick), 'alpha-explorer'));
+      for (const l of rows) expect([tick, l.match(/[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0]]).toEqual([tick, /T1 read/.test(l) ? glyph : lead]); // the plan row turns a circle quarter, the agent row the band's braille frame
       const board = boardText(boardLines([{ label: 'T1 read alpha.py', state: 'running', owner: 'alpha-explorer', detail: '' }], { cols: 80, ui: mocha, pane: true, ribbon: false, title: false, tick, nowMs: spinClock(now, tick) }));
       expect([tick, board.find((l) => /alpha/.test(l))?.match(/[◐◓◑◒]/)?.[0]]).toEqual([tick, glyph]);
     }

@@ -2,7 +2,10 @@
 // carries its own fg and bg from the Mocha palette, so the surface paints its own background.
 // Pure: they return Segments (runs.ts) that rowOf lays out; widths are terminal cells.
 import type { Segment } from './runs';
-import { MOCHA as M, textWidth } from './theme';
+import { PALETTES } from './atlas-ui';
+import { textWidth } from './theme';
+
+const M = PALETTES.mocha;
 
 /** A run on the panel background. */
 export const seg = (t: string, color?: string, bg: string = M.panel, bold?: boolean): Segment => ({ t, color, bg, bold });

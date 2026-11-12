@@ -3,11 +3,12 @@
 // live-150-a4fad2f9-1 (tab-core.png, tab-gates.png).
 import { describe, expect, test } from 'claude-code/testing';
 import type { TodoItem } from './contract';
-import { DONE_DOUBT, DONE_KILLED, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from './atlas-ui';
+import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from './atlas-ui';
 import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './board-model';
 import { openRowName, ownPlan, todoState } from './data/todos';
 import { plannedText } from './data/core';
 import { hudLines, type HudAgent } from './hud';
+import { CLOSED_KILLED } from './hud-surface';
 import { bandLines, runsText, type MissionModel } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -23,12 +24,12 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(todoState('pending', 'failed')).toEqual({ state: 'queued', word: 'worker failed' }); // critique 19 A3
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
   });
-  test('the mark is amber warn, the word is amber, and it is its own motion entry (no fade-to-done pop)', () => {
+  test('the mark is error red, the word is error red, and it is its own motion entry (no fade-to-done pop)', () => {
     expect(markOf('done', DONE_DOUBT)).toBe('doubt');
     expect(markOf('done')).toBe('done');
-    expect(rowWordTone('done', DONE_DOUBT)).toBe('warn');
+    expect(rowWordTone('done', DONE_DOUBT)).toBe('bad'); // critique 25: the killed worker reads the same error red on the HUD, the board and the panel
     expect(rowWordTone('done')).toBe('muted');
-    expect(stateRun(markOf('done', DONE_DOUBT), ui).tone).toBe('warn');
+    expect(stateRun(markOf('done', DONE_DOUBT), ui).tone).toBe('bad');
     expect(stateRun('done', ui).tone).toBe('ok');
     expect(stateGlyph('doubt', ui)).toBe(STATE_GLYPHS.done);
     expect(motionState('done', DONE_DOUBT)).toBe('doubt');
@@ -40,19 +41,19 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     { id: 't2', content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' },
   ] as TodoItem[];
   const agents: HudAgent[] = [{ name: 'alpha-explorer', role: 'explorer', state: 'done' }, { name: 'ghost-explorer', role: 'explorer', state: 'failed' }];
-  test('HUD: T2 reads `done` in the warn tone with `done · worker killed`, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
+  test('HUD: T2 reads `closed · worker killed` in the error tone, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
     const rows = hudLines({ todos: plan, agents }, { cols: 150, maxRows: 60, ui, now: 0 });
     const t2 = rows.find((r) => plain(r).includes('T2 read ghost.py'))!;
     const t1 = rows.find((r) => plain(r).includes('T1 read alpha.py'))!;
-    expect(plain(t2)).toContain('done · worker killed');
-    expect(t2.find((x) => x.t.trim() === DONE_KILLED)?.tone).toBe('warn');
+    expect(plain(t2)).toContain('closed · worker killed'); // round 5: the HUD row says closed (the store holds completed, the scorer reads the glyph)
+    expect(t2.find((x) => x.t.trim() === CLOSED_KILLED)?.tone).toBe('bad');
     expect(t2.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
-    expect(t2.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('warn');
+    expect(t2.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('bad');
     expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.strike).toBeFalsy(); // critique 21: a plain done is quiet 247 text, never struck through
     expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.tone).toBe('muted');
     expect(t1.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('ok');
   });
-  test('Board: the same row reads `done`, `worker killed`, amber; the dispatch row beside it does not make it green', () => {
+  test('Board: the same row reads `closed`, `worker killed`, error red (critique 23); the dispatch row beside it does not make it green', () => {
     const items: BoardSource[] = [
       { content: 'T2 read ghost.py (ghost-explorer)', status: 'completed' },
       { content: 'Read ghost.py first', status: 'completed', owner: 'ghost-explorer', origin: 'dispatch', ownerState: 'failed' }, // stoprun-150-a4fad2f9-2: the lead closed the dispatch row after the Stop refusal
@@ -62,8 +63,8 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(rows[0]).toMatchObject({ state: 'done', word: DONE_DOUBT, detail: WORKER_FAILED, owner: 'ghost-explorer' });
     const body = boardBody(rows, { cols: 120, ui });
     const row = body.find((l) => plain(l.runs).includes('T2 read ghost.py'))!;
-    expect(plain(row.runs)).toMatch(/done\s+ghost-explorer\s+worker killed/);
-    expect(row.runs.find((x) => x.t.trim() === 'done')?.tone).toBe('warn');
+    expect(plain(row.runs)).toMatch(/closed\s+ghost-explorer\s+worker killed/);
+    expect(row.runs.find((x) => x.t.trim() === 'closed')?.tone).toBe('bad');
     expect(row.runs.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
     expect(boardMotionItems(rows)[0]!.state).toBe('doubt');
   });

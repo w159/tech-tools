@@ -34,12 +34,12 @@ type El = { props: Record<string, unknown>; children: El[] }
 const rowsOf = (c: unknown): string[] => (c as El).children.map((r) => text(r))
 const W = 44
 
-// Critique 16 C3: one card style. The dispatch card is the rail card the finish uses (toastRuns): `▌ ◆ ATLAS  ◐ running  name  what it does  tag`, one row, never a box.
+// Critique 16 C3: one card style. The dispatch card is the rail card the finish uses (toastRuns): `▌ ◐ running  name  what it does  tag` (no brand: only the finish card carries `◆ ATLAS`), one row, never a box.
 test('running card: the rail card, the state word and name, what it is doing, then the model tag', () => {
   const c = workerCard(call(), 'running', 60, undefined, '', { now: 'Grep auth/ 12s', wave: 2 })!
   const rows = rowsOf(c)
   expect(rows).toHaveLength(1)
-  expect(rows[0]).toMatch(/^▌ ◆ ATLAS {2}◐ running {2}impl-a {2}Grep auth\/ 12s {2}sonnet$/u)
+  expect(rows[0]).toMatch(/^▌ ◐ running {2}impl-a {2}Grep auth\/ 12s {2}sonnet$/u)
   expect(textWidth(rows[0]!)).toBeLessThanOrEqual(60)
   expect(text(c)).not.toMatch(/[┌┐└┘│]/u) // no box anywhere
   expect(props(c).borderStyle).toBeUndefined()
@@ -128,7 +128,7 @@ test('phaseOf maps a finished call by its worker state, not the idle fallback', 
 test('the card row is fixed-size; a returned worker reads done, never finished-as-done twice', () => {
   const running = workerCard(call(), 'running', 60, undefined, '', { now: 'x' })!
   for (const row of (running as El).children) expect(row.props.flexShrink).toBe(0)
-  expect(rowsOf(running)[0]).toMatch(/^▌ ◆ ATLAS {2}◐ running {2}impl-a/u)
+  expect(rowsOf(running)[0]).toMatch(/^▌ ◐ running {2}impl-a/u)
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished', 60)!
   expect(rowsOf(done)[0]).toContain('done     impl-a')
 })
@@ -156,7 +156,8 @@ test('every card is one rail row no wider than asked, up to 100, at 30 to 120 co
     for (const card of cards) {
       const rows = rowsOf(card)
       expect(rows).toHaveLength(1)
-      expect(rows[0]!.startsWith('▌ ◆ ATLAS')).toBe(true)
+      expect(rows[0]!.startsWith('▌ ')).toBe(true)
+      expect(rows[0]!).not.toContain('ATLAS') // a launch card carries no brand
       for (const r of rows) expect(textWidth(r)).toBeLessThanOrEqual(Math.min(width, 100)) // a rail row never outgrows its room, nor 100 cells
     }
   }

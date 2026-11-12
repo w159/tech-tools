@@ -346,7 +346,7 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
       const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '' && !calm.has(r));
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;
-        const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585b70') : palette[r.tone]);
+        const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585858') : palette[r.tone]);
         if (ui.color === '256') {
           const steps = ramp256(palette[markToken(accent)], rest, ui.theme, r.bold !== true);
           // No staircase for this pair: the row keeps its tone (the glyph pop still moves).

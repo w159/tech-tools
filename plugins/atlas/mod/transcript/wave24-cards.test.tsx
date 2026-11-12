@@ -32,14 +32,11 @@ test('a faded done card keeps its state colour on the rail, the glyph and the wo
 const snap = { contract: { headerFirstLinePattern: (contract as { headerFirstLinePattern: string }).headerFirstLinePattern } } as unknown as AtlasSnapshot
 const DONE = 'ATLAS | 🏁 done | 5/5 board items complete'
 
-test('a header still streaming draws the brand pill from `ATLAS |`, then the phase pill once the phase word is whole', () => {
-  const brand = text(assistantTree(snap, { text: 'ATLAS |' }, 100))
-  expect(brand).toContain('ATLAS')
-  expect(brand).not.toContain('DONE')
+test('a header still streaming draws the bar from `ATLAS |`, then the phase word once it is whole', () => {
+  const bar = text(assistantTree(snap, { text: 'ATLAS |' }, 100))
+  expect(bar).toBe('▌')
   expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 do' }, 100))).not.toContain('DONE')
-  const phase = text(assistantTree(snap, { text: 'ATLAS | 🏁 done | ' }, 100))
-  expect(phase).toContain('ATLAS')
-  expect(phase).toContain('DONE')
+  expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 done | ' }, 100))).toContain('DONE')
   expect(text(assistantTree(snap, { text: DONE }, 100))).toContain('DONE')
 })
 

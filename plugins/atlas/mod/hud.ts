@@ -7,7 +7,7 @@ import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
-import { DONE_DOUBT, WORKER_FAILED, cells, elapsedClock, motionState, hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, WORKER_FAILED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -25,6 +25,8 @@ export type HudAgent = {
   detail?: string | null;
   lastTool?: string | null;
   lastLine?: string;
+  /** Epoch ms the worker started, and (with `since`, frozen at the end) the clock LAST reads. */
+  startedAt?: number;
   /** Context used, 0..1, when the host knows it (the rich form draws a gauge). */
   ctx?: number | null;
   /** The state word every surface shares (liveState), when the adapter knows the worker's age; else it is derived from `state`. */
@@ -76,7 +78,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
   const listed = [...live].sort((a, b) => started(a) - started(b)).map((w) => {
     const s = squad.find((a) => a.name === w.name);
     const name = displayName(w.name, w.role, s?.task);
-    return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, startedAt: w.startedAt, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
   return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
 }
@@ -219,12 +221,17 @@ function plain(s: string, fallback: string): string {
   return fits(clause) ? clause : fallback;
 }
 
-/** The one word of an agent's last tool (`read`, `bash`), else the elapsed clock since it last changed state (`0:24`): what LAST reads when the agent has no outcome or call to state, so the cell is
- * never blank and never the state word again (critique 22: LAST at 110 repeated `done`). */
-const lastFallback = (a: Pick<HudAgent, 'tool' | 'lastTool' | 'since'>, state: UiState, now?: number): string => {
+/** The one word of an agent's last tool (`read`, `bash`): what RESULT reads when the agent has no outcome or call to state, so the cell is never blank and never the state word again (critique 22: it repeated `done`). */
+const lastFallback = (a: Pick<HudAgent, 'tool' | 'lastTool'>): string => {
   const tool = flat(a.tool || a.lastTool).toLowerCase();
-  if (tool !== '' && !isPlumbing(tool)) return tool;
-  return state === 'running' && now !== undefined && typeof a.since === 'number' && a.since > 0 && now >= a.since ? elapsedClock((now - a.since) / 1000) : '';
+  return tool !== '' && !isPlumbing(tool) ? tool : '';
+};
+
+/** The LAST column: the clock since the agent started (`0:13`), frozen at the instant it ended (`since`, stamped by the builder when the worker finished or failed); `-` when the worker's start is not known. */
+export const elapsedOf = (a: Pick<HudAgent, 'state' | 'since' | 'startedAt'>, state: UiState, now?: number): string => {
+  if (typeof a.startedAt !== 'number' || !Number.isFinite(a.startedAt) || now === undefined) return state === 'queued' ? '0:00' : '-';
+  const ended = (state === 'done' || state === 'failed') && typeof a.since === 'number' && a.since > a.startedAt && a.since <= now;
+  return elapsedClock((Math.max(a.startedAt, ended ? a.since! : now) - a.startedAt) / 1000);
 };
 
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. `now` (epoch ms) times a running agent's LAST fallback.
@@ -243,9 +250,9 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const tasks = plan.flatMap((t, i) => (mine(t) ? [i + 1] : []));
     const state = a.ui ?? workerUiState(a.state);
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
-    const fallback = lastFallback(a, state, now);
+    const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -297,7 +304,7 @@ export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
 /** A run as a Segment: the theme's tone colour on the run's own fill or the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export function segmentOf(x: Run, ui: Ui): Segment {
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
-  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme, ui.color), bg: surfaceHex(x.bg ?? 'panel', ui), ...style };
+  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme, ui.color), bg: fillHex(x, ui), ...style };
 }
 
 /** The HUD rows above the band: TODO tree and Subagents block; [] when there is nothing to show. */
@@ -306,19 +313,26 @@ export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
   return hudLines(input, { ...opts, ui }).map((r) => r.filter((x) => x.t !== '').map((x) => segmentOf(x, ui)));
 }
 
-/** Rows of the compact form: the plan's ribbon with up to five rows, the Subagents ribbon with up to two agents. What the HUD keeps whatever the band is given. */
+/** Rows of the compact form: the plan's ribbon with up to five rows, the Subagents ribbon with up to two agents, the column names and both closing rules (the box keeps its shape). What the HUD keeps whatever the band is given. */
 export const hudCompactRows = (input: HudInput, cols = 120): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
   return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length; // critique 18: the column names are part of the floor, so the slot never drops them while the block shows (fitRows still drops them in a slot with no room)
 };
 
-/** Rows of the compact form WITH the Subagents column names and the blank between the blocks: what the register gives the HUD when the slot can hold them
+/** Rows of the compact form WITH the blank between the blocks: what the register gives the HUD when the slot can hold it
  * and the band still keeps its title row (register.ts hudSlotCap). `now`: the draw's clock, so a lingering finished wave counts (hudCompactRows has none and leaves it out). */
 export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number => {
   const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
-  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length; // the box never changes shape (critique 22): both rounded bottom rules are in the floor, so register.ts hudSlotCap sizes the band's rows from the closed boxes
+  return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length;
+};
+
+/** Rows of the roomy form: every plan row and every agent row, the blank between the blocks, the column names and both closing rules (no rail). What the HUD asks of the slot: the register gives it
+ * this many whenever the band can keep its title row, so a slot that fits the plan never prints `N more todos not shown` (critique 23: `live-150-1/f0060:24`). `now`: the draw's clock. */
+export const hudWantRows = (input: HudInput, cols = 120, now?: number): number => {
+  const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
+  return stack({ todos: s.todos, agents: s.agents }, o, { spacers: true, extras: false, header: true, close: true }).length;
 };
 
 /** Rows the HUD may take of `maxRows`. Normally what leaves the band `bandRows`; never less than the compact form, so the band gives up rows first: down to 3 (title, rail, one lane), then to none when the compact form needs every row; with an agent running the HUD keeps at least 2. */
