@@ -211,10 +211,10 @@ describe('change 10: the card and the toast', () => {
   for (const cols of [120, 80]) {
     test(`at ${cols} the card's two gauges are the same width and never touch row on row (no stepped block)`, () => {
       const rows = cardLines(worldCard(mocha), cols).map((r) => r.map((x) => x.t).join(''));
-      const gaugeRows = rows.map((r, i) => (/[█▏▎▍▌▋▊▉░]/.test(r) ? i : -1)).filter((i) => i >= 0);
+      const gaugeRows = rows.map((r, i) => (/[▰▱]/.test(r) ? i : -1)).filter((i) => i >= 0);
       expect(gaugeRows).toHaveLength(2);
       expect(gaugeRows[1]! - gaugeRows[0]!).toBeGreaterThan(1);
-      const width = (r: string): number => [...r].filter((c) => '█▏▎▍▌▋▊▉░'.includes(c)).length;
+      const width = (r: string): number => [...r].filter((c) => '▰▱'.includes(c)).length;
       expect(width(rows[gaugeRows[0]!]!)).toBe(width(rows[gaugeRows[1]!]!));
     });
   }

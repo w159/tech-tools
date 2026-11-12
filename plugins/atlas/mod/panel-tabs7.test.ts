@@ -51,11 +51,12 @@ describe('C5: the core tab says what happened', () => {
 
 describe('C5: the route progress bar is quieter than a state', () => {
   const todos = [{ id: '1', label: 'a', state: 'done' as const }, { id: '2', label: 'b', state: 'running' as const }, { id: '3', label: 'c', state: 'queued' as const }, { id: '4', label: 'd', state: 'queued' as const }];
-  const bar = (ui: Ui) => bodyLines(panelWorld('route', 80, ui, { rows: 40, todos } as never)).flatMap((l) => l.runs).filter((r) => /^[█▏▎▍▌▋▊▉░]+$/.test(r.t));
-  test('the fill is the ok tone and the track the muted tone, never info or line', () => {
+  const bar = (ui: Ui) => bodyLines(panelWorld('route', 80, ui, { rows: 40, todos } as never)).flatMap((l) => l.runs).filter((r) => /^[▰▱]+$/.test(r.t));
+  test('the bar is the HUD meter: `▰` fill in the accent, `▱` track in the dim tone, never the `█░` gauge (critique 22)', () => {
     const runs = bar(mocha);
-    expect(runs.find((r) => /█/.test(r.t))?.tone).toBe('ok');
-    expect(runs.find((r) => /░/.test(r.t))?.tone).toBe('muted');
+    expect(runs.find((r) => /▰/.test(r.t))?.tone).toBe('accent');
+    expect(runs.find((r) => /▱/.test(r.t))?.tone).toBe('dim');
+    expect(bodyLines(panelWorld('route', 80, mocha, { rows: 40, todos } as never)).flatMap((l) => l.runs).some((r) => /[█░]/.test(r.t))).toBe(false);
     expect(PALETTES.mocha.ok).not.toBe(PALETTES.mocha.info);
   });
 });

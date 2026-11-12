@@ -107,14 +107,14 @@ describe('C3: the narrow gates header carries its count', () => {
   test('at 38 cells the ribbon reads the green count in the short form', () => {
     const m = panelWorld('gates', 38, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }, { id: 'a2', label: 'y', ok: false }] }, { id: 'b', title: 'B', lines: [{ id: 'b1', label: 'z', ok: true }] }] });
     const head = lineText(ribbonRow(m)).trimEnd();
-    expect(head).toMatch(/SIDEPANEL ━+ 1\/2$/); // two groups, one green
+    expect(head).toMatch(/SIDEPANEL ─+ 1\/2$/); // two groups, one green
     expect(cells(head)).toBeLessThanOrEqual(38);
   });
   test('at 150 cells it reads `n/m` too: one gates header format at every width (critique 11)', () => {
     const m = panelWorld('gates', 150, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }] }] });
-    expect(lineText(ribbonRow(m)).trimEnd()).toMatch(/SIDEPANEL ━+ 1\/1$/);
+    expect(lineText(ribbonRow(m)).trimEnd()).toMatch(/SIDEPANEL ─+ 1\/1$/);
     const wide = lineText(ribbonRow(panelWorld('gates', 110, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }] }] }))).trimEnd();
-    expect(wide).toMatch(/SIDEPANEL ━+ 1\/1$/);
+    expect(wide).toMatch(/SIDEPANEL ─+ 1\/1$/);
   });
 });
 

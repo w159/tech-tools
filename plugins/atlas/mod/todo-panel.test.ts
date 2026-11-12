@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { board_120, board_120_rich, board_80, WORLD_NOW, worldItems } from '../contracts/board-golden';
-import { hexTo256, hostTo256, PALETTES, toneHex, type Ui } from './atlas-ui';
+import { hexTo256, hostTo256, PALETTE5, PALETTES, toneHex, type Ui } from './atlas-ui';
 import { boardTree, runSegment, todoRows } from './todo-panel';
 import { textWidth } from './theme';
 import type { Segment } from './runs';
@@ -39,11 +39,12 @@ describe('slot rows', () => {
   });
   test('colour is state only: glyphs and chips take the state token, text the text tokens, nothing a hard-coded hex', () => {
     const rows = todoRows(worldItems(), o(120, { rich: true }));
-    const palette = new Set(Object.values(PALETTES.mocha));
-    for (const r of rows) for (const s of r) for (const c of [s.color, s.bg]) if (c) expect(palette.has(c)).toBe(true);
+    const palette = new Set([...Object.values(PALETTES.mocha), ...Object.values(PALETTE5), toneHex('dim', 'mocha')]); // the rev 5 meter's dim track is a PALETTE5 token
+    for (const r of rows) for (const s of r) for (const c of [s.color, s.bg]) if (c) expect([c, palette.has(c)]).toEqual([c, true]);
     const done = rows[1]!;
     expect(done.find((s) => s.t === '●')).toMatchObject({ color: PALETTES.mocha.ok });
-    expect(done.find((s) => s.t === 'Wire band to host')).toMatchObject({ color: PALETTES.mocha.sub, strike: true });
+    expect(done.find((s) => s.t === 'Wire band to host')).toMatchObject({ color: PALETTES.mocha.sub });
+    expect(done.some((s) => s.strike)).toBe(false); // critique 22: a done row is dim, never struck through
     expect(done.find((s) => s.t.trim() === 'DONE')).toMatchObject({ bg: PALETTES.mocha.ok, bold: true });
     expect(rows[4]!.find((s) => s.t === '▸')).toMatchObject({ color: PALETTES.mocha.accent, bold: true });
   });
@@ -52,10 +53,10 @@ describe('slot rows', () => {
     expect(done.find((s) => s.t === '●')).toMatchObject({ color: PALETTES.latte.text });
     expect(done.every((s) => s.bg === PALETTES.latte.panel)).toBe(true);
   });
-  test('NO_COLOR keeps bold and strike and sets no colour at all', () => {
+  test('NO_COLOR keeps bold and sets no colour at all', () => {
     const rows = todoRows(worldItems(), o(120, { ui: { ...mocha, color: 'none' } }));
     for (const r of rows) for (const s of r) expect([s.color, s.bg]).toEqual([undefined, undefined]);
-    expect(rows[1]!.find((s) => s.t === 'Wire band to host')?.strike).toBe(true);
+    expect(rows.flat().some((s) => s.strike)).toBe(false); // no strikethrough on any surface (critique 22)
     expect(runSegment({ t: 'x', tone: 'ok' }, mocha)).toEqual({ t: 'x', color: toneHex('ok', 'mocha'), bg: PALETTES.mocha.panel });
   });
   test('rows keep todo order, with the per-subagent dispatch rows after the plan', () => {

@@ -359,7 +359,11 @@ export function registerRestyle(on: On): void {
    return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0, superseded) ?? next(e)) : next(e)
   }
   try {
-   const known = cache.envOff === false ? patternSnap() : null
+   // A message drawn before anything primed the env read (a session's first reply, a turn the engine started without our turn.start) used to wait on `ready`'s promise and
+   // paint the host's raw `● ATLAS | ...` row meanwhile (critique 22: 24 raw frames in 11 of 12 runs). The bundled pattern needs no read, so the chip answers at once; the env read
+   // is primed behind it, and ATLAS_MOD=off is honoured from the next draw.
+   if (cache.envOff === undefined) void primeEnv($, cache).catch(() => undefined)
+   const known = cache.envOff !== true ? patternSnap() : null
    if (known) return draw(known)
    return ready($, cache).then(draw, () => next(e))
   } catch { return next(e) }

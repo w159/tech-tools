@@ -36,7 +36,8 @@ describe('sidebar board tab', () => {
     const rows = board(many);
     expect(rows[0]).toContain('ATLAS');
     expect(rows[0]).toContain('▸ BOARD');
-    expect(rows[0]).toContain('12 items');
+    expect(rows[0]).not.toContain('12 items'); // the count is said once, by the summary row (critique 22)
+    expect(rows.join('\n').match(/12 items/g)!.length).toBe(1);
     expect(rows[0]).toContain('SIDEPANEL ▸ BOARD'); // C1: the strip names no keys, so the ribbon is always the breadcrumb the capture scorer reads as the pane (live_capture.py :546)
     expect(rows.join('\n').match(/BOARD/g)!.length).toBe(1);
     expect(board(many, { ui: { recipient: null, expanded: null, draft: '', view: 'route' } as never }).join('\n')).toContain('SIDEPANEL');

@@ -9,7 +9,7 @@ import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
 import { hudAgents, lastOf, ownerStatesOf } from '../hud';
 import { ownerOutcome } from '../board-model';
-import { failureNotes } from '../data/channels';
+import { failureNotes, isoTs } from '../data/channels';
 import { gateTally } from '../data/runstate';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
@@ -62,6 +62,12 @@ const kindOf = (n: ChannelNote): string | undefined => (n.kind === 'blocked' && 
 const noteOf = (n: ChannelNote): PanelNote => ({ at: hhmm(n.ts), from: n.owner, to: n.to, ...(kindOf(n) ? { kind: kindOf(n)! } : {}), text: n.text, lead: isLead(n.owner) });
 
 
+/** A kill, a refusal and a closure are three timed rows (critique 22): one the store gave no time (a refusal, a closure) is stamped with the latest time on the log before it, else `fallback`. */
+function timed(rows: readonly ChannelNote[], fallback: string): ChannelNote[] {
+  let last = '';
+  return rows.map((n) => { if (n.ts) { last = n.ts; return n; } return { ...n, ts: last || fallback }; });
+}
+
 /** When a worker ended, from the host list (the instant a killed worker left it), else undefined: the row then draws no time rather than the clock. */
 const endedMsOf = (s: LiveSnapshot, name: string): number | undefined => {
   const w = liveWorkers(s, s.now).find((x) => x.name === name);
@@ -77,7 +83,10 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const left = new Set(s.squad.filter((a) => isLeadName(a.name) || isStale(a, s.now)).map((a) => a.name));
   const queued = queuedMembers(s).map((name): PanelWorker => ({ name: one(name), role: 'unknown', state: 'queued', detail: 'dispatched, not listed yet' })); // the host does not list them: queued
   const startAt = (name: string): number => s.squad.findIndex((a) => a.name === name); // start order, not liveWorkers' urgency order: a row never moves when a worker's state changes
-  const workers = [...liveWorkers(s, s.now).sort((a, b) => startAt(a.name) - startAt(b.name)).filter((w) => !left.has(w.name)).map((w) => workerOf(s, w)), ...queued]; // start order: the layout orders them by task (panel-layout workersByTask)
+  const owned = [...new Set(s.todos.map((t) => t.owner).filter((o): o is string => !!o))];
+  // A name the host list streams in half written (`beta-e` while the plan row says `beta-explorer`) reads as the one whole name the board knows, else as it is: whole or nothing (critique 22).
+  const whole = (n: string): string => (owned.includes(n) ? n : ((c) => (c.length === 1 ? c[0]! : n))(owned.filter((o) => o.length > n.length && o.startsWith(n))));
+  const workers = [...liveWorkers(s, s.now).sort((a, b) => startAt(a.name) - startAt(b.name)).filter((w) => !left.has(w.name)).map((w) => ({ ...workerOf(s, w), name: one(whole(w.name)) })), ...queued]; // start order: the layout orders them by task (panel-layout workersByTask)
   const [leadMate] = mates(s);
   const lead: PanelWorker = { name: 'lead', role: 'lead', state: MOOD_STATE[leadMate!.mood], detail: leadMate!.text };
 
@@ -105,6 +114,6 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
-    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: [...notes, ...failures, ...closures].map(noteOf),
+    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...closures], isoTs(s.now)).map(noteOf),
   };
 }

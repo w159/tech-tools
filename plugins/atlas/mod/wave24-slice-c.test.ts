@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../contracts/core-fixture';
 import { panelWorld } from '../contracts/panel-world';
 import { cells, DONE_DOUBT, type Ui } from './atlas-ui';
-import { boardLines, boardRibbon, boardSummary, boardText, clipE, type BoardRow } from './board-model';
+import { boardLines, boardRibbon, boardSummary, boardText, boardTimeline, clipE, type BoardRow } from './board-model';
 import { coreModel, type CoreModel } from './data/core';
 import { bodyLines, lineText, panelText, verifiedFigure, type PanelModel, type PanelTab } from './panel-layout';
 
@@ -33,7 +33,7 @@ describe('board (step 1)', () => {
   });
   test('the owner sits in one right-hand column on every row and never wraps onto a second line', () => {
     const rows = [item(1, { owner: 'alpha' }), item(2, { owner: 'ghost-explorer', state: 'running' }), item(3, { owner: 'a-very-long-owner-name-that-cannot-fit', state: 'queued' })];
-    for (const cols of [50, 37]) {
+    for (const cols of [50]) { // titles first (critique 22): a pane too narrow for the widest title and an owner drops the owner column, it never cuts the title
       const out = pane(rows, cols);
       const rowsOnly = out.slice(2, 5); // the summary, a blank, then one line per item
       expect(rowsOnly).toHaveLength(3);
