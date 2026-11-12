@@ -93,7 +93,8 @@ describe('C3: Board titles at 110 columns (a 38-cell pane)', () => {
     const out = boardText(boardBody(rows, { cols: 38, ui: mocha }));
     expect(out.join('\n')).not.toMatch(/\.\.\.|…/);
     expect(out.some((l) => l.includes('T4 combine the three reports'))).toBe(true);
-    expect(out.some((l) => l.includes('alpha-explorer'))).toBe(false);
+    expect(out.filter((l) => l.trim() === 'alpha-explorer')).toHaveLength(1); // critique 15 B5: the owner stands under its row, indented, instead of vanishing
+    expect(out.some((l) => /\S.*alpha-explorer/.test(l))).toBe(false); // never as a column that would cut the title
     for (const l of out) expect(cells(l)).toBeLessThanOrEqual(38);
   });
   test('a running row keeps room for its longer state word: its title may be cut there, the line never passes the pane', () => {

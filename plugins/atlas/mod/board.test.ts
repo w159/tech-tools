@@ -63,7 +63,7 @@ describe('board goldens', () => {
     const rows = boardRowsOf([
       { content: 'T1 read alpha.py (alpha-explorer)', status: 'completed' },
       { content: 'T2 read gamma.py', status: 'pending', owner: 'gamma-explorer' },
-      { content: 'List the function names defined in alpha.py.', status: 'pending', origin: 'dispatch', owner: 'alpha-explorer' },
+      { content: 'List the function names defined in alpha.py.', status: 'completed', origin: 'dispatch', owner: 'alpha-explorer' },
       { content: 'Read beta.py and list its classes.', status: 'pending', origin: 'dispatch', owner: 'beta-explorer' },
     ]);
     expect(rows.length).toBe(3);
@@ -92,9 +92,12 @@ describe('board goldens', () => {
     expect(rows.map((x) => x.state)).toEqual(['running', 'failed', 'blocked', 'queued', 'queued']);
     expect(rows[2]!.word).toBe('returned');
     expect(rows.map((x) => x.owner)).toEqual(['w-a', 'w-b', 'w-c', '', '']);
-    // a plan row already done stays done while its worker's row is closed; an open worker row re-opens it (critique 9: the fold never hides an open row)
+    // a plan row already done stays done while its worker's row is closed; an open worker row is unfolded into its own row with its owner (critique 15 B5: the fold never hides an open row)
     expect(boardRowsOf([{ content: 'T1 x (w-a)', status: 'completed' }, disp('a', 'completed')]).map((x) => x.state)).toEqual(['done']);
-    expect(boardRowsOf([{ content: 'T1 x (w-a)', status: 'completed' }, disp('a', 'in_progress')]).map((x) => x.state)).toEqual(['running']);
+    const open = boardRowsOf([{ content: 'T1 x (w-a)', status: 'completed' }, disp('a', 'in_progress')]);
+    expect(open.map((x) => x.state)).toEqual(['done', 'running']);
+    expect(open.map((x) => x.owner)).toEqual(['w-a', 'w-a']);
+    expect(open[1]!.label).toBe('Read a.py and list its names.');
     // a dispatch row with no plan row stays, labelled by its own task text
     const lone = boardRowsOf([...plan.slice(0, 1), disp('z', 'pending'), disp('y', 'pending')]);
     expect(lone.map((x) => x.label)).toEqual(['T1 read a.py (w-a)', 'Read z.py and list its names.', 'Read y.py and list its names.']);

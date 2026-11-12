@@ -240,18 +240,18 @@ export function planPhase<T extends { status?: string; phase?: string }>(items: 
     ?? [...plan].reverse().find((it) => it.status === 'completed' && it.phase)?.phase;
 }
 
-/** Current phase: the active todo > a finished plan (`done`) > the reply header > the earliest open row's phase > the last completed row's phase > 'research' (nothing has run). */
+/** Current phase: the lead's reply header (the chip the transcript draws) > the active todo > a finished plan (`done`) > the earliest open row's phase > the last completed row's phase > 'research' (nothing has run).
+ * Critique 15: the route said `phase research 1/5` and `phase done 5/5` while the chip said IMPLEMENT; one phase for every surface means the chip decides. */
 export function currentPhase(
   items: TodoItem[],
   headerPhase: PhaseId | null,
   sessionId?: string,
 ): { phase: PhaseId; source: 'header' | 'todo' | 'default' } {
-  // The run's own active todo is the live phase; the reply header is the lead's claim for this turn only.
+  if (headerPhase) return { phase: headerPhase, source: 'header' };
   const plan = planBasis(items, sessionId);
   const active = plan.find((it) => it.status === 'in_progress');
   if (active?.phase) return { phase: active.phase, source: 'todo' };
   if (!active && plan.length > 0 && plan.every((it) => it.status === 'completed')) return { phase: 'done', source: 'todo' };
-  if (headerPhase) return { phase: headerPhase, source: 'header' };
   const last = planPhase(plan);
   return last ? { phase: last as PhaseId, source: 'todo' } : { phase: 'research', source: 'default' };
 }

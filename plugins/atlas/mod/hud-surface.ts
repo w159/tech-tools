@@ -4,7 +4,8 @@
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
-import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, markOf, markToken, percent, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
+import { planFigure } from './board-model';
+import { cells, CHIP_W, COUNT_ORDER, LINGER_MS, clip, gauge, markOf, markToken, percent, RETURNED, ribbon, rowWordTone, runsCells, spinClock, spinFrameOf, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -78,7 +79,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const tier = tierOf(cols);
   const rich = isRich(o);
   const done = rows.filter((r) => r.state === 'done').length;
-  const out: Run[][] = [ribbon(cols, 'TODO', `${done}/${rows.length}`, ui)]; // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
+  const out: Run[][] = [ribbon(cols, 'TODO', planFigure(done, rows.length, rows.filter((r) => r.word === RETURNED).length), ui)]; // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
   if (b.cap === 0) return out;
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));

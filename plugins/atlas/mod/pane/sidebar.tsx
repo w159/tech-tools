@@ -8,6 +8,7 @@ import { cells, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
 import { HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
+import { boardRibbon, boardRowsOf } from '../board-model';
 import { boardTree } from '../todo-panel';
 import { panelModelOf } from './sidebar-model';
 import { lineEl, panelBg, runEl, viewRows } from './sidebar-paint';
@@ -49,10 +50,15 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
 }
 
 /** The `o` tab: the board (mod/todo-panel.tsx) drawn inside the Atlas pane, which is the pane the host shows (a second pane opens behind it). */
+function boardItems(m: SidebarModel) {
+  const s = m.snapshot;
+  return withOwnerStates(ownTodos(s.todos ?? [], s.sessionId), workerStates(s, liveWorkers(s, s.now)));
+}
+
 function boardIn(els: ClientElements, m: SidebarModel, cols: number, ui: Ui): RenderElement {
   const s = m.snapshot;
-  const items = withOwnerStates(ownTodos(s.todos ?? [], s.sessionId), workerStates(s, liveWorkers(s, s.now)));
-  return boardTree(els, items, { ribbon: false, cols, rows: Math.max(1, m.rows - 4), tick: m.tick ?? 0, now: Math.floor(s.now / 1000), ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), ui, motion: m.motion });
+  const items = boardItems(m);
+  return boardTree(els, items, { ribbon: false, title: false, cols, rows: Math.max(1, m.rows - 4), tick: m.tick ?? 0, now: Math.floor(s.now / 1000), ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), ui, motion: m.motion });
 }
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
@@ -65,6 +71,6 @@ export function sidebarTree(els: ClientElements, model: SidebarModel, on: Sideba
     flexShrink: 0,
     width: cols,
     backgroundColor: panelBg(ui),
-    children: [lineEl(els, ribbonRow(pm), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, cols, ui)] : viewRows(model.ui.view, els, model, on, cols, pm))],
+    children: [lineEl(els, ribbonRow(pm, model.ui.view === 'board' ? boardRibbon(boardRowsOf(boardItems(model), Math.floor(model.snapshot.now / 1000))) : undefined), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, cols, ui)] : viewRows(model.ui.view, els, model, on, cols, pm))],
   });
 }

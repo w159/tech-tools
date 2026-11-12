@@ -2,7 +2,7 @@
 // and no cursor on a queued row (B4).
 import { describe, expect, test } from 'claude-code/testing';
 import { cells, runsString, type Ui } from './atlas-ui';
-import { boardBody, boardFolded, boardLines, boardRowsOf, boardText, itemState } from './board-model';
+import { boardBody, boardFolded, boardLines, boardRowsOf, boardText, itemState, planFigure } from './board-model';
 import { ownTodos } from './data/todos';
 import { todoRows, type TodoRow } from './hud-surface';
 
@@ -34,7 +34,8 @@ describe('B2: the owner column drops before a title is cut', () => {
       const text = boardBody(rows, { cols, ui }).map((l) => runsString(l.runs));
       for (const l of text) expect([cols, cells(l) <= cols]).toEqual([cols, true]);
       expect([cols, text.join('\n').includes('T4 combine th...')]).toEqual([cols, false]);
-      if (cols < 55) expect([cols, /(alpha|beta|gamma)-/.test(text.join('\n'))]).toEqual([cols, false]); // no owner cell while a title would shrink for it
+      // critique 15 B5: no owner cell while a title would shrink for it, but the owner is never dropped: it stands under its row
+      if (cols < 55) expect([cols, text.filter((l) => /^ {4}(alpha|beta|gamma)-/.test(l)).length]).toEqual([cols, 3]);
       else expect([cols, text.join('\n').includes('T4 combine the three reports')]).toEqual([cols, true]); // room for both: every title whole (the owner cell may shorten)
     }
   });
@@ -54,6 +55,16 @@ describe('B3: a queued row whose owner runs reads running', () => {
     const rows = boardRowsOf(own.map((x) => ({ ...x, ...((x as { owner?: string }).owner ? { ownerState: 'running' as const } : {}) })));
     expect(rows.map((x) => x.state)).toEqual(['running', 'running', 'running', 'queued', 'queued']);
     expect(rows.map((x) => x.label)).toEqual(['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 combine the three reports', 'T5 write the final summary']);
+  });
+});
+
+describe('critique 15 B6: one count rule for returned rows', () => {
+  test('planFigure names the returned rows beside the done count; the HUD TODO header says `0/5 · 1 returned` over a returned row (live-150-95c4a588-1 f0063)', () => {
+    expect(planFigure(0, 5)).toBe('0/5');
+    expect(planFigure(0, 5, 1)).toBe('0/5 · 1 returned');
+    const rows: TodoRow[] = [{ label: 'T1 read alpha.py', state: 'blocked', word: 'returned', detail: '', focus: false }, ...['T2', 'T3'].map((l): TodoRow => ({ label: l, state: 'queued', detail: '', focus: false }))];
+    const head = runsString(todoRows(rows, { cols: 100, ui }, { spacers: false, extras: false })[0]!);
+    expect(head).toContain('0/3 · 1 returned');
   });
 });
 

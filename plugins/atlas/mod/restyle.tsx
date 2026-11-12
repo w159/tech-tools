@@ -214,10 +214,13 @@ function headerPills(mid: string, phase: PhaseId, nm: RegExpExecArray | null, se
  * tally. A streaming text re-draws under one id, so its last draw is the one that counts. */
 const drawnHeaders = new Map<string, boolean>();
 const DRAWN_MAX = 500;
+/** The header contract as the transcript renders it (critique 15 B3): every chip drawn counts, and a headerless text block between tool calls (the lead's `Mark T1 completed...`
+ * narration) is not a reply the chip contract judges, so the figure no longer falls from 4/4 to 1/4 as the lead narrates. A run that drew text and not one chip still fails
+ * (`0 of n`); Stop's own gate (r/n) judges the final answer of each turn. */
 export const drawnHeaderTally = (): { ok: number; total: number } => {
  let ok = 0
  for (const v of drawnHeaders.values()) if (v) ok++
- return { ok, total: drawnHeaders.size }
+ return { ok, total: ok > 0 ? ok : drawnHeaders.size }
 }
 export const forgetDrawnHeaders = (): void => drawnHeaders.clear()
 function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): void {
@@ -255,7 +258,7 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  const parts = [
   formatDuration(durationMs),
   delta > 0 ? `+${delta} done` : null,
-  active > 0 ? `${active} workers` : null,
+  active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
  ].filter((part): part is string => part !== null)
  tracker.done = snap.counts.done

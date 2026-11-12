@@ -544,7 +544,10 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 	writeFileSync(join(root, ".atlas", ".run", "todos.json"), JSON.stringify({ version: 1, items: [{ status: "in_progress", phase: "test" }] }));
 	say("ATLAS | ⛭ verify | x");
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}test {3}todo/); // the active todo outranks the header
+	expect(railOf()).toMatch(/ATLAS ◗ {2}verify {3}todo/); // critique 15 B1: the header chip outranks the active todo
+	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn, no header yet: the active todo decides
+	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
+	expect(railOf()).toMatch(/ATLAS ◗ {2}test {3}todo/);
 	view.stop();
 });
 
@@ -917,7 +920,13 @@ test("D3 todo summary: every plan row done reads the done phase, not research", 
 	);
 	const sum = todoSummary(root);
 	expect(sum).toEqual({ done: 2, total: 2, phase: "done" });
-	expect(railPhase(sum.phase, "research")).toBe("done");
+	expect(railPhase(sum.phase, undefined)).toBe("done");
+});
+
+test("B1: the header chip phase decides over a stale todo phase and over a finished plan (critique 15), as in the mod's currentPhase", () => {
+	expect(railPhase("research", "implement")).toBe("implement");
+	expect(railPhase("done", "implement")).toBe("implement");
+	expect(railPhase("Audit", undefined)).toBe("implement");
 });
 
 test("R2: omp todoSummary and mod planCounts/planPhase read the same rows to the same answer (rows without session_id are the session's own)", () => {

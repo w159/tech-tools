@@ -177,7 +177,13 @@ const openMore = (m: MissionModel): string => {
   if ((m.openDispatch ?? 0) >= n && n <= m.workers.filter((w) => w.state !== 'done' && w.state !== 'failed').length) return '';
   return (m.openDispatch ?? 0) >= n ? ` · ${n} ${n === 1 ? 'dispatch' : 'dispatches'} open` : ` · ${n} open`; // an open dispatch row is named: Stop refuses on it though the plan reads full
 };
-const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.todo ?? (m.total ? Math.min(1, m.done / m.total) : 0), ui);
+/** The todo figure. A BLOCKED band whose Stop refusal rests on open rows the plan does not list counts them in the total: `5/6 · 1 dispatch open`, never `5/5` beside
+ * `blocked: 1 todo open` (critique 15 B2, stoprun f0090). Not blocked, the figure stays the plan's own and `openMore` names the open rows. */
+function figure(m: MissionModel): { done: number; total: number } {
+  const extra = m.total && runStateOf(m).blocked && openMore(m) ? Math.max(0, (m.openWork ?? 0) - (m.total - m.done)) : 0;
+  return { done: m.done, total: m.total + extra };
+}
+const todoGauge = (m: MissionModel, ui: Ui, w: number): Run[] => { const f = figure(m); return gauge(w, m.eased?.todo ?? (f.total ? Math.min(1, f.done / f.total) : 0), ui); };
 const ctxBar = (m: MissionModel, ui: Ui, w: number): Run[] => gauge(w, m.eased?.ctx ?? m.ctx ?? 0, ui);
 
 /** The one figures-and-` · ` band form (phase word, todo, ctx, counts) starts here: below a docked 150-column terminal's transcript (93), so 110 and 150 read alike. A form also has to fit. */
@@ -223,7 +229,8 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     ? [...flagHead(ui, st, reason.long), ...phaseSeg]
     : idle ? [r('idle', 'text', true), ...phaseSeg] : [r(m.phase, 'text', true), ...phaseSeg];
   const lead = idle ? 'idle · ' : '';
-  const todo = m.total ? `${m.done}/${m.total}${openMore(m)}` : '';
+  const fig = figure(m);
+  const todo = m.total ? `${fig.done}/${fig.total}${openMore(m)}` : '';
   const blockedWords = blockedRuns(m, ui, true);
   const blockedTiny = blockedRuns(m, ui, false);
   // Below GAUGE_MIN the one-row band carries figures, not gauges: an empty `░░░` track beside `0 of 5` (critique 9, the 110 band) says nothing the figure does not.
@@ -231,7 +238,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const counts = bandCounts(m, ui, true, noun, gap);
     return [
       ...cap, r('  '), ...name,
-      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${m.done}/${m.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
+      ...(m.total ? [r(gap), r('todo '), ...(gauges ? todoGauge(m, ui, gw) : []), r(`${gauges ? ' ' : ''}${fig.done}/${fig.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [r(' '), ...blockedWords] : [])] : []),
       ...(m.ctx !== undefined ? [r(gap), r('ctx '), ...(ctxGauge && gauges ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
       ...(counts.length ? [r(gap), ...counts] : []),
     ];
@@ -267,7 +274,7 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
   const st = runStateOf(m);
   const { flagged: isBlocked, idle, reason } = st;
   const head: Run[] = [...capsule(ui), r('  '), ...rail(m.phases, phaseIndex(m), ui), ...(isBlocked ? [r('   '), ...flagHead(ui, st, reason.long)] : idle ? [r('   '), r('idle', 'text', true)] : [])];
-  const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${m.done}/${m.total} · ${percent(m.done / m.total)}${openMore(m)}`, 'sub')] : [];
+  const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${figure(m).done}/${figure(m).total} · ${percent(figure(m).done / figure(m).total)}${openMore(m)}`, 'sub')] : [];
   const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxBar(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
   const counts = bandCounts(m, ui, true, true);
   const blocked = blockedRuns(m, ui, true);
