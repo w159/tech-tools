@@ -112,6 +112,11 @@ describe('channel tab: header, columns and marks', () => {
     const out = body('channel', 120, { notes: [note({ to: 'peer-1' })] }, ascii);
     expect(out[1]!.replace(/ +10:02$/, '')).toBe('    lead > peer-1 hello');
   });
+  test('a blocked note word reads the bad tone like rowWordTone; handoff and done stay ok', () => {
+    const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' })] }));
+    const word = (i: number, t: string) => l[i]!.runs.find((x) => x.t.trim() === t)!.tone;
+    expect([word(1, 'blocked'), word(2, 'handoff'), word(3, 'done')]).toEqual(['bad', 'ok', 'ok']);
+  });
   test('no persona colour: a nick is bold text whoever speaks', () => {
     const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ from: 'implementer-live' }), note({ from: 'lead' })] }));
     const nick = (i: number) => l[i]!.runs.find((x) => x.bold && x.t.trim() !== '')!;

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Wave 17 integration: the channel log's `blocked` note word reads the bad tone (`rowWordTone`) like the team-row worker word, not amber `warn` (`noteRow`, `mod/panel-rows.test.ts`).
 - Critique 16 A1: the band's todo figure is the plan's own `n/m` (the count the TODO header, the route and the board give), never `5/6`: the open dispatch row Stop refused on is named by its title in the blocked reason (`blocked: dispatch read ghost.py open`, `blockReasons` takes the title; band.tsx and omp/mission-panel.ts fill `openDispatchTitle`).
 - Critique 16 A2: blocked is one red `■` on every surface (`STATE_GLYPHS`/`STATE_TOKEN`, ASCII `#`); the amber `▲` is `warnMark` only (failing checks, off-plan team, evidence and verdict warnings on the core tab). The band keeps the words (`■ 1 blocked · ◐ 1 running · ■ 2 failed`) down to 60 columns and drops the bare blocked count below that; at 73 cells (the docked 110 band) it reads `2 running`, not `◒2` (A5 wording).
 - Critique 16 A3: the route's phase row reads `blocked` instead of `done 5/5` while the last Stop refused (`phaseRow`, the rule `leadOf` already used).

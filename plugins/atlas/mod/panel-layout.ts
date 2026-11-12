@@ -543,7 +543,7 @@ function noteRow(m: PanelModel, n: PanelNote, g: { nameW: number; wordW: number;
   return line(fitRuns(gridRow({
     cols: m.cols, ui: m.ui, mark: state ? stateRun(state, m.ui) : null,
     name: { t: n.from, bold: true }, nameW: g.nameW, gap: 2,
-    ...(g.wordW ? { word: kind ? { t: kind, tone: kind === 'blocked' ? 'warn' as const : 'ok' as const } : { t: '' }, wordW: g.wordW } : {}),
+    ...(g.wordW ? { word: kind ? { t: kind, tone: kind === 'blocked' ? rowWordTone('blocked') : 'ok' as const } : { t: '' }, wordW: g.wordW } : {}),
     ...(bare ? {} : { detail: { t: noteText(m, n), tone: 'text' as const } }),
     ...(g.timeW ? { value: { t: n.at, tone: 'muted' as const } } : {}),
   }), m.cols));
