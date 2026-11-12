@@ -6,6 +6,7 @@ import { descriptionName } from './data/orchestration';
 import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
+import { ownerOutcome } from './board-model';
 import { DONE_DOUBT, WORKER_FAILED, cells, motionState, hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
@@ -102,15 +103,17 @@ export const ownerStatesOf = (agents: readonly HudAgent[]): Map<string, UiState>
 /** Plan rows in plan order. Every row is shown with its own state; the focus mark sits on the running row, else the first open one. */
 export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map()): TodoRow[] {
   const rows = todos.map((t): TodoRow => {
-    const { state, word } = todoState(t.status, t.owner ? owners.get(t.owner) : undefined); // the one rule (data/todos todoState): a failed owner fails the item, a returned one reads `returned`
+    const oc = t.owner ? ownerOutcome(owners, t.owner) : undefined; // the owner's latest instance (`beta-explorer #2` after a kill), critique 19 A3
+    const own = oc?.state;
+    const { state, word } = todoState(t.status, own, oc?.retried); // the one rule (data/todos todoState): a failed owner fails the item, a returned one reads `returned`
     const claimed = typeof t.claimed_at === 'number' && t.claimed_at > 0 ? now - t.claimed_at * 1000 : undefined;
     const est = typeof t.estimate_s === 'number' && t.estimate_s > 0 ? ` of ${mmss(t.estimate_s * 1000)}` : ''; // the estimate only when the item carries one
-    const own = t.owner ? owners.get(t.owner) : undefined;
     const ownerWord = state !== 'done' && (own === 'failed' || own === 'waiting' || own === 'blocked') && own !== state ? `owner ${own}` : ''; // as on the board: a failed owner already fails the item, a waiting owner blocks it and is named
     const ev = flat(t.evidence);
-    const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || flat(t.owner);
+    const shownOwner = flat(t.owner) ? (oc?.state !== undefined && oc.state !== 'failed' && oc.as !== t.owner ? oc.as : flat(t.owner)) : ''; // a retry names its live instance (`beta-explorer #2`)
+    const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || shownOwner;
     const detail = word === DONE_DOUBT && state === 'done' ? WORKER_FAILED : ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base; // critique 17 A1: a done row whose worker failed says so
-    return { label: labelOf(t), ...(t.id ? { id: String(t.id) } : {}), state, ...(word ? { word } : {}), detail, focus: false, ...(flat(t.owner) ? { owner: flat(t.owner) } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
+    return { label: labelOf(t), ...(t.id ? { id: String(t.id) } : {}), state, ...(word ? { word } : {}), detail, focus: false, ...(shownOwner ? { owner: shownOwner } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
   const at = rows.findIndex((r) => r.state === 'running');
   const focus = at >= 0 ? at : rows.findIndex((r) => r.state !== 'done');

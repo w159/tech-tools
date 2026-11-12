@@ -42,13 +42,14 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
 
 describe('B3: a row the store holds as pending never reads failed', () => {
   test('todoState: pending + failed owner stays queued (the owner is named beside it); in_progress still fails', () => {
-    expect(todoState('pending', 'failed')).toEqual({ state: 'queued' });
+    expect(todoState('pending', 'failed')).toEqual({ state: 'queued', word: 'worker failed' }); // critique 19 A3: the glyph stays the store's, the word says why
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
     expect(todoState('blocked', 'failed')).toEqual({ state: 'blocked' });
   });
-  test('HUD T3 (f0097.ans:27) reads queued with `owner failed`, never failed', () => {
+  test('HUD T3 (f0097.ans:27) keeps the queued glyph and reads `worker failed` (critique 19 A3) with `owner failed`, never the failed mark', () => {
     const t3 = hud(150, 12).find((r) => r.includes('T3 read beta.py'))!;
-    expect(t3).toMatch(/queued/);
+    expect(t3).toContain('◇');
+    expect(t3).toMatch(/worker failed/);
     expect(t3).not.toContain('■');
     expect(t3).toContain('owner failed');
   });

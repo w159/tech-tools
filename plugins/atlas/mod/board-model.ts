@@ -31,7 +31,7 @@ const LABEL_MIN = 16; // the least label room the narrow form keeps before it dr
 
 /** `estimate_s`: the item's own estimate in seconds, when the board records one. `ownerState`: the state word of the item's
  * owner when the caller knows the worker (data/live.ts); a failed or waiting owner shows on the item. */
-export type BoardSource = { content: string; status: string; owner?: string; evidence?: string; claimed_at?: number | null; completed_at?: number | null; origin?: string; estimate_s?: number | null; ownerState?: UiState; openDispatch?: OpenDispatch[] };
+export type BoardSource = { content: string; status: string; owner?: string; evidence?: string; claimed_at?: number | null; completed_at?: number | null; origin?: string; estimate_s?: number | null; ownerState?: UiState; /** The owner's first worker failed and its re-dispatch did not (withOwnerStates). */ retried?: boolean; openDispatch?: OpenDispatch[] };
 
 /** The six-word vocabulary for a todo status; an unknown status reads as queued. */
 export function stateOfStatus(status: string): UiState {
@@ -67,9 +67,32 @@ export function itemState(status: string, ownerState?: UiState): UiState {
   return own;
 }
 
+/** A completed row whose first worker was killed and whose re-dispatch (`name #2`) succeeded (critique 19 A3: it read `done · worker killed`). */
+export const DONE_RETRIED = 'retried · done';
+/** The word of a row the store still holds open (pending) while its worker failed: the glyph stays the store's, the word says why (critique 19 A3: it read `queued`). */
+export const WORKER_DOWN = 'worker failed';
+const INSTANCE = /^(.*\S) #(\d+)$/;
+
+/** An owner's state across re-dispatches (critique 19 A3): the host names a second worker of one label `name #2`, so the row's owner `name` is judged by its LATEST
+ * instance, not the killed first one. `retried`: the latest instance did not fail but an earlier one did. `as`: the latest instance's name (`name #2`). */
+export function ownerOutcome(states: ReadonlyMap<string, UiState>, owner: string): { state?: UiState; retried: boolean; as: string } {
+  let best: { n: number; name: string; state: UiState } | undefined;
+  let earlierFailed = false;
+  const own = states.get(owner);
+  if (own) best = { n: 1, name: owner, state: own };
+  for (const [name, state] of states) {
+    const m = INSTANCE.exec(name);
+    if (!m || m[1] !== owner) continue;
+    const n = Number(m[2]);
+    if (!best || n > best.n) { if (best?.state === 'failed') earlierFailed = true; best = { n, name, state }; } else if (n < best.n && state === 'failed') earlierFailed = true;
+  }
+  if (!best) return { retried: false, as: owner };
+  return { state: best.state, retried: best.state !== 'failed' && earlierFailed, as: best.name };
+}
+
 /** Items whose state word is `blocked` under `itemState`, given each owner's state word. */
 export const blockedCount = (items: readonly { status: string; owner?: string }[], owners: ReadonlyMap<string, UiState>): number =>
-  items.filter((it) => itemState(it.status, it.owner ? owners.get(it.owner) : undefined) === 'blocked').length;
+  items.filter((it) => itemState(it.status, it.owner ? ownerOutcome(owners, it.owner).state : undefined) === 'blocked').length;
 
 /** `ran 03:10` for a finished item with both stamps, `elapsed` data for a running one with a claim time (its `of` only when the
  * item carries an estimate), else the evidence. An owner that failed or waits is named in front of the detail. */
@@ -81,10 +104,13 @@ export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
   // Critique 17 A1: a completed row whose worker failed or was killed reads `done` in the amber tone (the lead may have finished it), with the detail `worker failed`.
   const doubt = state === 'done' && it.ownerState === 'failed';
   const age = state !== 'done' && it.claimed_at && nowSecs !== undefined && nowSecs >= it.claimed_at ? { ageSecs: Math.round(nowSecs - it.claimed_at) } : {};
-  const base = { label: bare(it.content), state, ...age, ...(ended ? { word: RETURNED } : doubt ? { word: DONE_DOUBT } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}), ...(it.openDispatch?.length ? { openDispatch: it.openDispatch } : {}) };
+  // Critique 19 A3: a done row whose killed worker was re-dispatched and finished reads `retried · done`; a row the store still holds pending while its worker failed keeps the queued glyph and says `worker failed`.
+  const retried = state === 'done' && !doubt && it.retried === true;
+  const down = state === 'queued' && it.ownerState === 'failed';
+  const base = { label: bare(it.content), state, ...age, ...(ended ? { word: RETURNED } : doubt ? { word: DONE_DOUBT } : retried ? { word: DONE_RETRIED } : down ? { word: WORKER_DOWN } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}), ...(it.openDispatch?.length ? { openDispatch: it.openDispatch } : {}) };
   const ev = cleanEvidence(it.evidence);
-  const detail = doubt ? WORKER_FAILED : ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
-  if (state === 'done' && !doubt && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
+  const detail = doubt ? WORKER_FAILED : retried ? `retried${ev ? ` · ${ev}` : ''}` : ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
+  if (state === 'done' && !doubt && !retried && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
   if (state === 'running' && it.claimed_at && nowSecs !== undefined && nowSecs >= it.claimed_at) {
     const est = typeof it.estimate_s === 'number' && it.estimate_s > 0 ? it.estimate_s : undefined;
     return { ...base, detail, elapsed: { secs: nowSecs - it.claimed_at, ...(est ? { of: est } : {}) } };
@@ -208,6 +234,11 @@ export function labelCut(labels: readonly string[], w: number): string[] {
   return labels.map((l) => clip(l, w));
 }
 
+/** The state cell's text where the pane has room to spell a long word (`done · worker killed`, `retried · done`, `worker failed`), and where it does not (the row's own state word; the detail and the notes say the rest). */
+const spelledWord = (row: BoardRow): string => (markOf(row.state, row.word) === 'doubt' ? DONE_KILLED : row.word ?? row.state);
+const plainWord = (row: BoardRow): string => (row.word === DONE_RETRIED ? 'done' : row.word === WORKER_DOWN ? row.state : row.word ?? row.state);
+const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'doubt' || row.word === DONE_RETRIED || row.word === WORKER_DOWN;
+
 /** One row at rest. `focus` marks the row the marker `▸` points at. */
 function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const f = form(o.cols);
@@ -220,7 +251,7 @@ function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   if (f === 'narrow') return [...head, labelRun(Math.max(1, o.cols - 4))];
   const stateCol = f === 'full' ? COL.state : (o.stateCol ?? COL.stateCompact);
   const withLabel = to([...head, labelRun(stateCol - 5)], stateCol);
-  const word = o.doubtWord && markOf(row.state, row.word) === 'doubt' ? DONE_KILLED : row.word ?? row.state;
+  const word = o.doubtWord ? spelledWord(row) : plainWord(row);
   if (f === 'compact') return o.ownerW && row.owner ? [...to([...withLabel, r(word)], stateCol + (o.wordW ?? STATE_W) + 2), r(clip(row.owner, o.ownerW), 'sub')] : [...withLabel, r(word)];
   const stateCell = o.rich ? (row.word ? chip(word, markToken(markOf(row.state, row.word)), o.ui) : stateChip(row.state, o.ui)) : r(word, markOf(row.state, row.word) === 'doubt' ? 'warn' : 'text');
   const withState = to([...withLabel, stateCell], COL.owner);
@@ -246,8 +277,9 @@ function geometry(rows: readonly BoardRow[], o: BoardOpts): { compact: boolean; 
   // The state column is as wide as the longest word on this board (a board of `done` rows needs 4 cells, not the 7 of `running`), so a title keeps those cells.
   const plainW = Math.min(STATE_W, Math.max(4, ...rows.map((x) => cells(x.word ?? x.state))));
   // Critique 18 B2: a doubted done says `done · worker killed` in its state cell where the title still shows whole beside it; narrower panes say it in the notes under the rows.
-  const doubtWord = compact && rows.some((x) => markOf(x.state, x.word) === 'doubt') && o.cols - cells(DONE_KILLED) >= widest + 7;
-  const wordW = doubtWord ? cells(DONE_KILLED) : plainW;
+  const spelledW = Math.max(0, ...rows.filter(isSpelled).map((x) => cells(spelledWord(x))));
+  const doubtWord = compact && spelledW > 0 && o.cols - spelledW >= widest + 7;
+  const wordW = doubtWord ? spelledW : plainW;
   const ownerFit = Math.min(ownerAll, o.cols - Math.max(widest, LABEL_MIN) - 5 - wordW - 1 - 1);
   // Titles the row cuts anyway keep the owner only when, without it, the cut titles would read the same (one shared head): the owner then tells the rows apart,
   // and the title keeps LABEL_MIN cells beside it (the old rule). Cut titles that stay distinct on their own never trade cells for an owner.

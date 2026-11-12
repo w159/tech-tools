@@ -26,13 +26,16 @@ function slot(input: HudInput, cols: number, budget: number) {
 }
 
 describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
+  // Critique 19 A4: while an agent runs the blank between TODO and SUBAGENTS stays; of the blank and the column names (one row each) the names go in a slot that holds only one of them.
   for (const [cols, budget] of [[150, 13], [150, 12], [61, 12], [61, 11]] as const) {
-    test(`${cols} columns, ${budget} rows, an agent running: the column names stay and the band keeps a row`, () => {
+    test(`${cols} columns, ${budget} rows, an agent running: the blank stays, every agent keeps its row and the band keeps a row`, () => {
       const { hud, band } = slot(stop, cols, budget);
       const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
-      expect(at).toBeGreaterThanOrEqual(0);
-      expect(hud[at + 1]).toMatch(/AGENT\s+STATE/);
-      expect(hud.slice(at + 2).filter((r) => /-explorer/.test(r))).toHaveLength(3); // every agent keeps its row
+      expect(at).toBeGreaterThan(0);
+      if (budget >= 12) expect(hud[at - 1]!.trim()).toBe(''); // the gap row between the blocks (11 rows hold the ribbon, five plan rows, the blank, the ribbon and three agents; 10 do not)
+      expect(hud.slice(0, at).filter((r) => /T\d /.test(r))).toHaveLength(5); // every plan row
+      expect(hud.slice(at + 1).filter((r) => /-explorer/.test(r))).toHaveLength(3); // every agent keeps its row
+      if (hud[at + 1]!.match(/AGENT\s+STATE/)) expect(hud.slice(at + 2).filter((r) => /-explorer/.test(r))).toHaveLength(3); // the names show when the slot holds them too
       expect(band).toBeGreaterThanOrEqual(1);
     });
   }
