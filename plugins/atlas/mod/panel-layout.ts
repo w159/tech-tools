@@ -151,7 +151,9 @@ const frameOf = (m: Pick<PanelModel, 'now' | 'tick'>, id = ''): number => (m.now
 /** The mark of a core-tab row: a `blocked` state there is a warning (a team off plan, evidence missing, a claim no verdict backs), so it keeps the amber triangle; blocked work is the red square (critique 16 A2). */
 const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : stateRun(s, ui));
 /** The state glyph of agent `id` on its row. */
-const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => stateRun(s, m.ui, frameOf(m, id));
+/** `braille`: the band lead's frame on the same shared index, for the rows the capture scorer does not read by glyph (the agents lines: live_capture.py reads a team row by its WORD, `\S` for the glyph);
+ * the plan rows (route tab `T1`..) are read by glyph (GLYPH_STATE4) and keep the circle quarters. */
+const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = '', braille = false): Run => stateRun(s, m.ui, frameOf(m, id), braille);
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
 const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal)) || ELLIPSIS; // a worker is never a blank cell: whole name, or `…` (critique 22: `◐ running` with no AGENT)
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
@@ -273,7 +275,7 @@ function todoCount(m: PanelModel): PanelLine {
 function agentsRows(m: PanelModel): PanelLine[] {
   if (!m.workers.length) return [];
   const sep = m.cols >= WIDE ? 3 : 2;
-  const segs = UI_STATES.filter((s) => m.workers.some((w) => w.state === s)).map((s) => countRuns(s, m.workers.filter((w) => w.state === s).length, m.ui, frameOf(m, m.workers.find((w) => w.state === s)?.name)));
+  const segs = UI_STATES.filter((s) => m.workers.some((w) => w.state === s)).map((s) => countRuns(s, m.workers.filter((w) => w.state === s).length, m.ui, frameOf(m, m.workers.find((w) => w.state === s)?.name), true));
   const lead = label('agents', m.cols);
   const w0 = cells(lead.t);
   const out: Run[][] = [[lead]];
@@ -314,7 +316,7 @@ const SPILL_BELOW = 50; // panes narrower than this (the 110-column pane is 37) 
 function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: number; wordW: number; shown?: string; doubtWord?: boolean }): PanelLine[] {
   const key = `task:${t.id}`;
   const full = oneLine(t.label);
-  // Critique 19 C4: a done row whose worker was killed says so in words, as the HUD does (`done · worker killed`), not only in amber: in the state cell where the pane gave it the room (`w.doubtWord`),
+  // Critique 19 C4: a done row whose worker was killed says so in words, as the HUD does (`closed · worker killed`), not only in amber: in the state cell where the pane gave it the room (`w.doubtWord`),
   // else (the narrow pane, where the row spills) the word follows the title on its own line. From 100 columns the reason column says it.
   const doubt = markOf(t.state, t.word) === 'doubt';
   const spelled = doubt && (w.doubtWord === true || m.cols < SPILL_BELOW);
@@ -331,7 +333,7 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   if (spill) {
     const width = Math.max(8, m.cols - GRID_LEAD);
     // The title wraps, never the state: it wraps narrower by the gap and the word, so the word closes the last title line (critique 15 C2).
-    const lines = cells(full) + TODO_GAP + cells(wordRun.t) <= width ? [full] : spelled ? wrap(full, width, 3) : wrap(full, Math.max(8, width - TODO_GAP - cells(wordRun.t)), 3); // a long spelled word (`done · worker killed`) takes its own line, it does not wrap the title
+    const lines = cells(full) + TODO_GAP + cells(wordRun.t) <= width ? [full] : spelled ? wrap(full, width, 3) : wrap(full, Math.max(8, width - TODO_GAP - cells(wordRun.t)), 3); // a long spelled word (`closed · worker killed`) takes its own line, it does not wrap the title
     const head = gridRow({ cols: m.cols, ui: m.ui, mark: glyph, name: { t: lines[0]!, ...nameCell }, nameW: Math.min(width, cells(lines[0]!)), nameCut: 'end' });
     const wordTail = [r(' '.repeat(TODO_GAP)), r(wordRun.t, wordRun.tone)];
     const lastW = cells(lines[lines.length - 1]!);
@@ -392,7 +394,7 @@ const lastFit = (w: PanelWorker, room: number): string => clipWords(lastText(w.d
 function routeAgentRow(m: PanelModel, w: PanelWorker, nameW: number): PanelLine {
   const tone: Tone = rowWordTone(w.state);
   const last = m.cols >= WIDE ? lastFit(w, m.cols - 2 - (GRID_LEAD + nameW + 1 + WORD_W) - 1) : '';
-  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW, word: { t: w.state, tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
+  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW, word: { t: w.state, tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
 }
 
 function routeBody(m: PanelModel): PanelLine[] {
@@ -413,7 +415,7 @@ function routeBody(m: PanelModel): PanelLine[] {
     // Work may be running with no plan on the board: say so with the workers, never "nothing planned".
     const running = listed.length ? [] : team.filter((w) => w.state === 'running');
     const nameW = Math.min(nameCap(m.cols), Math.max(...running.map((w) => cells(nameOf(w))), 1));
-    if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
+    if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name, true), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
     else if (!m.workers.length) rows.push(BLANK, ...indentedHint(m, 'add one with /todo add')); // the `todo` row above already says `no tasks yet`
     return rows;
   }
@@ -430,7 +432,7 @@ function routeBody(m: PanelModel): PanelLine[] {
     // The owner column goes first (critique 12 A2): a row whose title already names its owner (`T1 read alpha.py (alpha-explorer)`) prints no second copy, so the title keeps the room.
     const widest = narrow ? 0 : Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...os.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
     // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
-    // Critique 19 C4: a pane that can keep a whole title beside `done · worker killed` spells it in the state cell; a narrower one (and the 100+ reason column) does not.
+    // Critique 19 C4: a pane that can keep a whole title beside `closed · worker killed` spells it in the state cell; a narrower one (and the 100+ reason column) does not.
     const doubtWord = !narrow && m.cols < WIDE && os.some((t) => markOf(t.state, t.word) === 'doubt') && m.cols - GRID_LEAD - cells(DONE_KILLED) - 1 >= TITLE_MIN_W + 4;
     const todoWordW = os.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), doubtWord ? cells(DONE_KILLED) : WORD_W); // 8 while a row reads `returned`
     const titleMax = m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols; // from 100 columns the title leaves the reason a column
@@ -515,7 +517,7 @@ function workerRows(m: PanelModel, w: PanelWorker, g: TeamGrid, focus: boolean):
     ...(g.ageW ? [r('  '), r(pad(ageOf(w), g.ageW), 'muted')] : []),
     ...(last ? [r('  '), r(last, 'muted')] : []),
   ];
-  const runs = gridRow({ cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW: g.nameW, tail });
+  const runs = gridRow({ cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW: g.nameW, tail });
   const out = [line(fitRuns(moving(runs, key, w.state, m), m.cols), { kind: 'worker', key, name: w.name })];
   if (m.expanded === key) {
     out.push(...workerDetail(m, w));
@@ -1104,21 +1106,23 @@ export function cardLines(c: CardModel, cols = 120): Run[][] {
 /** Cells the state word of a rail card (and a toast) takes before the two-cell gap and the name: the widest word is `waiting` / `running` / `blocked`. */
 export const CARD_WORD_W = 7;
 
-/** The head of a toast: a left bar in `tone` (`▌`, `|` in ASCII), then the ATLAS mark. */
-const toastHead = (tone: Tone, ui: Ui): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...(ui.ascii ? brandMark(ui) : [r('◆ ', 'dim'), r('ATLAS', 'dim')]), r('  ')]; // the mark is dim: the one solid chip belongs to the band, a card repeats only the name (critique 22: ten ATLAS marks on one screen)
+/** The head of a toast: a left bar in `tone` (`▌`, `|` in ASCII), then, only on a finish card (`brand`), the ATLAS mark. The mark is one grey (dim, 240) wherever it is drawn: the one solid chip belongs
+ * to the band, the ribbons and the side panel title carry the brand, and a start card, a failure card, a toast and a note repeat only the name (critique 25: `◆ ATLAS` seven times on one screen, in two greys).
+ * The finish card keeps it: the capture scorer locates a card by `▌ ◆ ATLAS  <glyph> done  name  role finished` (live_capture.py :676). */
+const toastHead = (tone: Tone, ui: Ui, brand = false): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...(!brand ? [] : ui.ascii ? brandMark(ui) : [r('◆ ', 'dim'), r('ATLAS', 'dim')]), ...(brand ? [r('  ')] : [])];
 
-/** `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps`: the bar and the state word in the state's tone, then the mark, the state, the
+/** `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps` (a finish card, `brand`) or `▌ ◐ running  implementer-layout  what it does`: the bar and the state word in the state's tone, the state, the
  * name, one fact. No full stop. */
-export function toastRuns(state: UiState, name: string, fact: string, ui: Ui): Run[] {
+export function toastRuns(state: UiState, name: string, fact: string, ui: Ui, brand = false): Run[] {
   const g = stateRun(state, ui);
   // Design rev 5, C3: the state word sits in a fixed-width column (CARD_WORD_W), so the name starts at the same cell on every card; `failed` and `killed` are the same width.
-  return [...toastHead(g.tone, ui), { ...g, t: `${g.t} ` }, r(state, stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
+  return [...toastHead(state === 'running' ? 'accent' : g.tone, ui, brand), { ...g, t: `${g.t} ` }, r(state, stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
 }
 export const toastText = (state: UiState, name: string, fact: string, ui: Ui): string => runsText(toastRuns(state, name, fact, ui));
 
-/** A note toast: the same head in the accent tone, the word `note`, the sender, a preview. */
+/** A note toast: the same head in the note grey (245), the word `note`, the sender, a preview. */
 export function noteToastRuns(sender: string, preview: string, ui: Ui): Run[] {
-  return [...toastHead('accent', ui), r('note', 'accent', { bold: true }), r(`  ${sender}`), ...(preview ? [r(`  ${oneLine(preview)}`, 'sub')] : [])];
+  return [...toastHead('sub', ui), r('note', 'text', { bold: true }), r(`  ${sender}`), ...(preview ? [r(`  ${oneLine(preview)}`, 'sub')] : [])];
 }
 export const noteToastText = (sender: string, preview: string, ui: Ui): string => runsText(noteToastRuns(sender, preview, ui));
 export { stateGlyph };

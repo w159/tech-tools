@@ -26,6 +26,17 @@ describe('the board timeline is a Gantt', () => {
     expect([tone(0), tone(2), tone(4)]).toEqual(['ok', 'accent', 'bad']);
     expect(text.at(-1)).toMatch(/0s ─+ 20s$/);
   });
+  test('critique 25: the axis scales to the longest bar end: no bar runs past the hairline, and the hairline ends where the longest bar does', () => {
+    for (const cols of [60, 80, 120]) {
+      const t = boardText(boardTimeline(agents, { cols, ui: mocha }));
+      const axis = t.at(-1)!;
+      const barEnds = t.slice(0, -1).filter((l) => l.includes('━')).map((l) => l.lastIndexOf('━'));
+      const hairlineEnd = axis.lastIndexOf('─');
+      expect([cols, Math.max(...barEnds) <= hairlineEnd]).toEqual([cols, true]);
+      expect([cols, hairlineEnd - Math.max(...barEnds) <= 1]).toEqual([cols, true]); // the hairline stops at the longest bar's end (the label follows it)
+      expect(axis).toMatch(/0s ─+ 20s$/);
+    }
+  });
   test('a pane with no room for a name and a bar draws no chart', () => {
     expect(boardTimeline(agents, { cols: 20, ui: mocha })).toEqual([]);
   });

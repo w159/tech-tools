@@ -11,7 +11,7 @@ import { band_120, band_120_rich, band_40, band_60, band_80 } from "./band-world
 
 /** Running: the band, workers (failed and waiting first, then running, queued, done), the newest message, the checks footer. */
 export const golden: string[] = [
-  "◖ ◆ ATLAS ◗  ⠋ working 0:42  todo ▰▰▰▱▱▱▱▱ 3/7 · ▲ 1 blocked  ctx 62%  agents ◐ 1 running  ■ 1 failed  ◇ 1 queued",
+  "◖ ◆ ATLAS ◗  ⠋ working 0:42  todo ▰▰▰▱▱▱▱▱ 3/7 · ▲ 1 blocked  ctx 62%  agents ⠋ 1 running  ■ 1 failed  ◇ 1 queued",
   "",
   " ■ implementer-live   failed   killed                                                                             01:35",
   " ◐ implementer-band   running  read runs.ts:17                                                                    00:42",

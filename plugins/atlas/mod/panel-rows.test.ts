@@ -48,7 +48,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain(' agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
+    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 failed');
     expect(body('team', 120, { lead, mates }).some((l) => /^ {2}◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {

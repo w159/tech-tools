@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandRows, bandTree, missionTree, planRows, railPhase, shortTool } from './band';
 import { worldModel } from '../contracts/band-world';
-import { PALETTE5, PALETTES, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
+import { PALETTE5, PALETTES, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { computeCounts, groupTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
@@ -19,6 +19,8 @@ const cells = (row: Node): Node[] => row.props.children as Node[];
 const text = (row: Node): string => cells(row).map((t) => t.props.children).join('');
 /** The glyph the band turns for `explorer-1` on `tick`: the spinner clock (snapshot.now moved on by the ticker), the frame the HUD and the panel turn (critique 19 Band 3). */
 const spin = (tick: number): string => spinnerGlyph(spinFrameOf(spinClock(NOW, tick), 'explorer-1'));
+/** The braille frame the band lead and the agents count turn on the same index. */
+const lspin = (tick: number): string => leadSpinnerGlyph(spinFrameOf(spinClock(NOW, tick), ''));
 const gate = { id: 'completion' as const, title: 'Gates', lines: [{ ok: false, label: 'x' }] } as any;
 const okGate = { id: 'routing' as const, title: 'Routing', lines: [{ ok: true, label: 'y' }] } as any;
 
@@ -49,7 +51,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
     expect(rows[0]).toContain('ctx ▰▱▱▱▱▱▱▱ 12%');
-    expect(rows[0]).toContain(`agents ${spin(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
+    expect(rows[0]).toContain(`agents ${lspin(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
     const withTodos = panel(160, { gates: [gate], snapshot: busySnap({ todos: boardTodos as any }) });
     expect(withTodos.rows).toHaveLength(panel(160, { gates: [gate] }).rows.length); // a folded board costs no row
   });
@@ -121,8 +123,8 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
-    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting · ctx 12%`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
+    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed · ◉ 1 waiting · ctx 12%`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4`); // 40 columns: the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
   });
   test('idle shows the last run under the band', () => {
@@ -390,10 +392,10 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ todo 1/4 · ◒ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${spin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
+    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {

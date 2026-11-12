@@ -1,8 +1,7 @@
-// Atlas mod theme: brand glyphs, colour helpers and the bar gauge.
-// Every colour traces to BRAND (contract.ts); helpers never hardcode a hex.
-// Brand tokens mirror scripts/dashboard_ui/css/tokens.css.
+// Atlas mod theme: brand glyphs, colour arithmetic and the bar gauge.
+// Glyphs, width helpers and the bar gauge. Colours live in atlas-ui.ts (PALETTES, the round 3 palette): this module draws none.
 
-import { BRAND, type AgentState, type PhaseId } from './contract';
+import type { AgentState } from './contract';
 
 /** Single-cell glyphs used across the mod surfaces. Every value is ONE code point that
  * renders 1 cell in Ghostty/iTerm/kitty: ASCII, box drawing and geometric shapes.
@@ -67,55 +66,6 @@ export function mix(a: string, b: string, t: number): string {
  return `#${x.map((v, i) => Math.round(v + ((y[i] ?? 0) - v) * k).toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** Catppuccin Mocha truecolor palette for the filled surfaces (band, cards, reply pills): they paint their own
- * background, so they read the same on light and dark terminals. */
-export const MOCHA = {
- panel: '#11111b', panel2: '#181825', base: '#1e1e2e', text: '#cdd6f4', muted: '#6c7086', dim: '#45475a',
- violet: '#cba6f7', teal: '#94e2d5', sky: '#89dceb', blue: '#89b4fa', green: '#a6e3a1', peach: '#fab387',
- red: '#ff5f5f', yellow: '#f9e2af', pink: '#f5c2e7', grey: '#585b70', grey2: '#313244', white: '#ffffff',
-} as const;
-
-const PHASE_HUES: Record<string, string> = {
- research: MOCHA.blue, theory: MOCHA.violet, test: MOCHA.yellow, validate: MOCHA.sky,
- implement: MOCHA.peach, verify: MOCHA.green, done: MOCHA.teal, blocked: MOCHA.red,
-};
-
-/** Mocha hue of a contract phase (unknown ids read violet). */
-export const phaseHue = (phase: string): string => PHASE_HUES[phase] ?? MOCHA.violet;
-
-const PHASE_COLORS = {
- research: BRAND.working,
- theory: BRAND.subagent,
- test: BRAND.input,
- validate: BRAND.focus,
- implement: BRAND.accent,
- verify: BRAND.ok,
- done: BRAND.accent,
- blocked: BRAND.fail,
-} satisfies Record<PhaseId, string>;
-
-/** Hex colour for a contract phase. */
-export function phaseColor(phase: PhaseId): string {
- return PHASE_COLORS[phase];
-}
-
-const STATE_COLORS = {
- spawning: BRAND.subagent,
- running: BRAND.accent,
- idle: BRAND.idle,
- input: BRAND.input,
- stuck: BRAND.fail,
- parked: BRAND.dim,
- finished: BRAND.ok,
- failed: BRAND.fail,
- dead: BRAND.dim,
-} satisfies Record<AgentState, string>;
-
-/** Hex colour for a squad agent state. Requires a defined state. */
-export function stateColor(s: AgentState): string {
- return STATE_COLORS[s];
-}
-
 /** Bar split: [filled, empty] strings, pct clamped 0-100, width cells total. */
 export function barParts(pct: number, width: number): [string, string] {
  const p = Math.max(0, Math.min(100, pct));
@@ -126,11 +76,6 @@ export function barParts(pct: number, width: number): [string, string] {
 /** Bar gauge: pct (0-100, clamped) across width cells, ▰ filled + ▱ empty. */
 export function bar(pct: number, width: number): string {
  return barParts(pct, width).join('');
-}
-
-/** Fill colour for a percentage meter: ok under 60, input (amber) under 85, fail above. */
-export function meterColor(pct: number): string {
- return pct >= 85 ? BRAND.fail : pct >= 60 ? BRAND.input : BRAND.ok;
 }
 
 /** 1 when the wall-clock blink is "on" for the given period, else 0 (1 Hz breathing at 500 ms). */

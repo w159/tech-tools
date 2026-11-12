@@ -1,21 +1,24 @@
 /** Palette and paint primitives shared by mission-panel.ts and todo-panel.ts (kept apart so the two panels do not import each other). */
+import { PALETTE5, PALETTES } from "../mod/atlas-ui";
 export type Rgb = readonly [number, number, number];
 export const hx = (s: string): Rgb => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
-export const PANEL = hx("#11111b");
-export const PANEL2 = hx("#181825");
-export const BASE = hx("#1e1e2e");
-export const TXT = hx("#cdd6f4");
-export const MUT = hx("#6c7086");
-export const DIM = hx("#45475a");
-export const VIOLET = hx("#cba6f7");
-export const TEAL = hx("#94e2d5");
-export const SKY = hx("#89dceb");
-export const BLUE = hx("#89b4fa");
-export const GREEN = hx("#a6e3a1");
-export const PEACH = hx("#fab387");
-export const RED = hx("#f38ba8");
-export const YEL = hx("#f9e2af");
-export const PINK = hx("#f5c2e7");
+// One restrained palette (critique 25): the same tokens the Claude mod draws with (mod/atlas-ui.ts PALETTES.mocha and PALETTE5), not a second pastel set. The names stay for the callers;
+// the hues collapse to the five roles: accent 141, ok 114, warn 179, error 203 and the neutrals 240 / 245 / 252.
+export const PANEL = hx(PALETTES.mocha.panel);
+export const PANEL2 = hx(PALETTES.mocha.panel);
+export const BASE = hx(PALETTES.mocha.base);
+export const TXT = hx(PALETTE5.body);
+export const MUT = hx(PALETTE5.secondary);
+export const DIM = hx(PALETTE5.dim);
+export const VIOLET = hx(PALETTE5.accent);
+export const TEAL = hx(PALETTE5.accent);
+export const SKY = hx(PALETTE5.accent);
+export const BLUE = hx(PALETTE5.accent);
+export const GREEN = hx(PALETTES.mocha.ok);
+export const PEACH = hx(PALETTES.mocha.warn);
+export const RED = hx(PALETTES.mocha.bad);
+export const YEL = hx(PALETTES.mocha.warn);
+export const PINK = hx(PALETTE5.accent);
 export const WHITE: Rgb = [255, 255, 255];
 
 const EIGHTHS = " ▏▎▍▌▋▊▉█";

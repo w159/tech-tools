@@ -77,7 +77,7 @@ describe('A3: a retry reads as one row, in one voice on the HUD, the panel rule 
   });
   test('todoState: the retried word is only for a completed row; a pending row whose worker failed says `worker failed` and keeps the queued glyph', () => {
     expect(todoState('completed', 'done', true)).toEqual({ state: 'done', word: 'retried · done' });
-    expect(todoState('completed', 'failed', false)).toEqual({ state: 'done', word: 'done' });
+    expect(todoState('completed', 'failed', false)).toEqual({ state: 'done', word: 'closed' });
     expect(todoState('pending', 'failed')).toEqual({ state: 'queued', word: 'worker failed' });
     expect(todoState('pending', 'running')).toEqual({ state: 'running' });
   });

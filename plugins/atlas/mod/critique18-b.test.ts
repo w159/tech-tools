@@ -106,11 +106,11 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
     expect(t2).toContain('worker killed');
     expect(cells(t2)).toBeLessThanOrEqual(61);
   });
-  test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `done · worker killed` in the state cell', () => {
+  test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `closed · worker killed` in the state cell', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const at = (cols: number): string => boardText(boardLines(boardRowsOf(src), { cols, ui, ribbon: false, title: false })).join('\n');
-    expect(at(120)).toMatch(/done\s+ghost-explorer\s+worker killed/);
-    expect(at(60)).toContain('done · worker killed');
+    expect(at(120)).toMatch(/closed\s+ghost-explorer\s+worker killed/);
+    expect(at(60)).toContain('closed · worker killed');
   });
   test('board row at 37 cells keeps `done` in the state cell and says `worker killed` on the sub-line under the row', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];

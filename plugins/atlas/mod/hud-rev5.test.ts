@@ -2,7 +2,7 @@
 // stays while the grid shows, and a LAST that is never blank. Live shape: stoprun-150-4b5b5a94-1/frames/f0075.ans:24-35 (TODO 0/5 with two
 // running rows out of phase, SUBAGENTS without its column header, ragged `killed`).
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, rowWordTone, runsString, spinClock, spinFrameOf, type Run, type Ui } from './atlas-ui';
+import { cells, leadSpinnerGlyph, rowWordTone, runsString, spinClock, spinFrameOf, type Run, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, type HudAgent } from './hud';
 import { rowSpinnerGlyph } from './hud-surface';
@@ -60,7 +60,7 @@ describe('SUBAGENTS title: the working signal rides the title', () => {
     const frame = spinFrameOf(spinClock(NOW, 0), '');
     const run = rows(todo(2, () => 'in_progress'), [ag('alpha-explorer', 'working')]);
     const head = text(run.find((r) => text(r).includes('SUBAGENTS'))!);
-    expect(head).toContain(`${rowSpinnerGlyph(frame)} 1 running ─`);
+    expect(head).toContain(`${leadSpinnerGlyph(frame)} 1 running ─`); // the title turns the band's braille frame
     const idle = rows(todo(2, () => 'completed'), [ag('alpha-explorer', 'done')]);
     const idleHead = text(idle.find((r) => text(r).includes('SUBAGENTS'))!);
     expect(idleHead).toContain('1 done');
@@ -68,17 +68,18 @@ describe('SUBAGENTS title: the working signal rides the title', () => {
   });
   test('the spinner advances with the tick', () => {
     const at = (tick: number): string => text(rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working')], { tick }).find((r) => text(r).includes('SUBAGENTS'))!);
-    expect(at(0)).toContain(`${rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))} 1 running`);
-    expect(at(1)).toContain(`${rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), ''))} 1 running`);
-    expect(rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))).not.toBe(rowSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
+    expect(at(0)).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))} 1 running`);
+    expect(at(1)).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), ''))} 1 running`);
+    expect(leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))).not.toBe(leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
   });
-  test('critique 21: ONE spinner set on the block: the title and every running row turn the same quarter circle on one clock, no braille anywhere', () => {
+  test('critique 25: the title alone turns the band braille frame (same index as the band); every running row keeps one circle quarter on that clock', () => {
     for (const tick of [0, 1, 2, 3]) {
       const out = rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working', { tool: 'Read', target: 'a.py' })], { tick });
-      const all = out.map(text).join('\n');
-      expect(all).not.toMatch(/[⠀-⣿]/);
+      const title = text(out.find((r) => text(r).includes('SUBAGENTS'))!);
+      expect(title).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, tick), ''))} 1 running`);
+      expect(out.filter((r) => !text(r).includes('SUBAGENTS')).map(text).join('\n')).not.toMatch(/[⠀-⣿]/); // the rows are glyph-parsed: circles only
       const marks = new Set(out.flatMap((r) => [...text(r)]).filter((c) => '◐◓◑◒'.includes(c)));
-      expect(marks.size).toBe(1); // title, TODO rows and agent row on one frame
+      expect(marks.size).toBe(1); // TODO rows and agent row on one frame
     }
   });
 });

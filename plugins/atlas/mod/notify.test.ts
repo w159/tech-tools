@@ -288,7 +288,7 @@ describe('registerNotify toasts', () => {
 		const { toasts } = await run(prev, next);
 		// One toast per turn: a burst of six left the stack undrawn and the host printed a notice into the transcript.
 		// `+N more` counts only the other toasts of the first one's kind (critique 11): one waiting agent among failures, spawns and todos is alone.
-		expect(toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  wait']);
+		expect(toasts).toEqual(['▌ ◉ waiting  wait  needs a reply']);
 		expect(cells(toasts[0]!)).toBeLessThanOrEqual(TOAST_MAX);
 		expect(toasts[0]).not.toMatch(/[✓✗⏸▸]/u);
 	});
@@ -316,11 +316,11 @@ describe('registerNotify toasts', () => {
 		await turn(at(11_000, ['finished', 'failed', 'running', 'running'], 3)); // a failure: no host toast (critique 16 C2)
 		expect(shown).toHaveLength(0);
 		await turn(at(11_500, ['finished', 'failed', 'input', 'running'], 4)); // a wait the person must answer: shown at once
-		expect(shown.map((t) => t.text)).toEqual(['▌ ◆ ATLAS  ◉ waiting  gamma']);
+		expect(shown.map((t) => t.text)).toEqual(['▌ ◉ waiting  gamma  needs a reply']);
 		expect(shown[0]!.opts).toEqual({ timeoutMs: TOAST_MS });
 		await turn(at(12_000, ['finished', 'failed', 'input', 'input'], 5)); // 0.5s later, one more wait: never held, one row
 		expect(shown).toHaveLength(2);
-		expect(shown[1]!.text).toBe('▌ ◆ ATLAS  ◉ waiting  delta');
+		expect(shown[1]!.text).toBe('▌ ◉ waiting  delta  needs a reply');
 		expect(cells(shown[1]!.text)).toBeLessThanOrEqual(TOAST_MAX);
 	});
 	test('critique 14 B4: a routine start or finish sends no host toast (it overlaid the transcript and cut names: `alpha-expl... +1 more`); only a wait or a note to the person does (critique 16 C2: not a failure)', async () => {
@@ -331,14 +331,14 @@ describe('registerNotify toasts', () => {
 		const failing = withActivity({ now: 13_000, todos: [todo('t1', 'completed', 'task one')], squad: [agent(names[0]!, 'finished'), agent(names[1]!, 'failed'), agent(names[2]!, 'running')] }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0 })])));
 		expect((await run(prev, failing)).toasts).toEqual([]);
 		const waiting = withActivity({ now: 13_000, squad: [agent(names[0]!, 'finished'), agent(names[1]!, 'input'), agent(names[2]!, 'running')] }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0 })])));
-		expect((await run(prev, waiting)).toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  beta-explorer']); // the fact would push the row past the host's 40 cell text box
+		expect((await run(prev, waiting)).toasts).toEqual(['▌ ◉ waiting  beta-explorer']); // the fact would push the row past the host's 40 cell text box
 		expect((await run(snap(), snap({ notes: [note(1, 'human', 'ship it')] }))).toasts).toHaveLength(1);
 		expect((await run(snap(), snap({ notes: [note(1, 'lead', 'ship it')] }))).toasts).toEqual([]); // a note to the lead is the lead's to read
 	});
 	test('trailing blanks are trimmed from fail and blocked toasts; complete without age or line is bare', async () => {
 		const prev = withActivity({ squad: [agent('a', 'running'), agent('b', 'running'), agent('c', 'running')] }, { a: act(), b: act(), c: act() });
 		const next = withActivity({ squad: [agent('a', 'failed'), agent('b', 'input'), agent('c', 'finished')] }, { a: act(), b: act({ mood: 'blocked' }), c: act() });
-		expect((await run(prev, next)).toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  b  needs a reply']);
+		expect((await run(prev, next)).toasts).toEqual(['▌ ◉ waiting  b  needs a reply']);
 	});
 	test('mergeToasts: one passes through, many fold into one row of at most TOAST_MAX cells, the count last', () => {
 		expect(mergeToasts([])).toBeNull();
@@ -356,7 +356,7 @@ describe('registerNotify toasts', () => {
 		const prev = withActivity({ now: 0, todos: ['t1', 't2', 't3', 't4', 't5'].map((id) => todo(id, 'in_progress', `task ${id}`)), squad: names.map((n) => agent(n, 'running')) }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0 })])));
 		const next = withActivity({ now: 12_000, todos: ['t1', 't2', 't3', 't4', 't5'].map((id) => todo(id, 'completed', `task ${id}`)), squad: names.map((n) => agent(n, 'input')) }, Object.fromEntries(names.map((n) => [n, act({ startedAt: 0, mood: 'blocked' })])));
 		const { toasts } = await run(prev, next);
-		expect(toasts).toEqual(['▌ ◆ ATLAS  ◉ waiting  alpha-explorer +2']);
+		expect(toasts).toEqual(['▌ ◉ waiting  alpha-explorer +2 more']);
 		expect(cells(toasts[0]!)).toBeLessThanOrEqual(TOAST_MAX); // the host's 40 cell text box: no mid-phrase wrap (`after` / `11s +1 more`)
 		const one = await run(prev, withActivity({ now: 12_000, squad: [agent(names[0]!, 'input'), agent(names[1]!, 'running'), agent(names[2]!, 'running')] }, Object.fromEntries(names.map((n, i) => [n, act({ startedAt: 0, ...(i === 0 ? { mood: 'blocked' as const } : {}) })]))));
 		expect(one.toasts[0]).not.toContain('+'); // a lone wait has nobody to count

@@ -3,7 +3,7 @@
 // and the spinner frame the band turns.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
-import { DONE_DOUBT, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
+import { DONE_DOUBT, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { boardLines, boardText, boardTimeline, type BoardRow } from './board-model';
 import { bodyLines, channelLabel, lineText, panelLines, panelText, ribbonRow, type PanelModel, type PanelNote, type PanelTab } from './panel-layout';
 import { panelModelOf } from './pane/sidebar-model';
@@ -55,11 +55,12 @@ describe('step 3: the board pane', () => {
     expect(items[1]).toContain('T2 read ghost.py');
     expect(t.join('\n')).not.toContain('...');
   });
-  test('a doubted done reads `done`, its owner dim, then `worker killed` as the suffix: never a cut `done ·…`', () => {
+  test('a doubted done reads `closed` then `worker killed` as the suffix, never a cut `closed ·…`; the owner moves to the footer where the row has no room for it', () => {
     const t = boardText(pane(59, [row(1), row(2, { label: 'T2 read ghost.py', owner: 'ghost-explorer', word: DONE_DOUBT, detail: 'worker killed' })]));
     const line = t.find((l) => l.includes('T2 read ghost.py'))!;
-    expect(line).toMatch(/T2 read ghost\.py +done {2}ghost-explorer {2}worker killed$/);
+    expect(line).toMatch(/T2 read ghost\.py +closed {2}worker killed$/);
     expect(line).not.toContain('…');
+    expect(t.join('\n')).toContain('T2 dispatch closed · ghost-explorer'); // the owner is still named, in the footer
   });
   test('no strikethrough on the board, in the pane or the full form', () => {
     for (const o of [{ pane: true, ribbon: false, title: false }, {}, { rich: true }]) for (const cols of [150, 110, 80]) {
@@ -153,7 +154,8 @@ describe('step 6: one spinner clock', () => {
       const m = world('route', 110, { now: spinClock(now, tick), tick, workers: [{ name: 'alpha-explorer', state: 'running', detail: '' }], todos: [{ id: 't1', label: 'T1 read alpha.py', state: 'running', owner: 'alpha-explorer' }] });
       const rows = panelText(m).filter((l) => /alpha/.test(l));
       expect(rows.length).toBeGreaterThan(0);
-      for (const l of rows) expect([tick, l.match(/[◐◓◑◒]/)?.[0]]).toEqual([tick, glyph]);
+      const lead = leadSpinnerGlyph(spinFrameOf(spinClock(now, tick), 'alpha-explorer'));
+      for (const l of rows) expect([tick, l.match(/[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0]]).toEqual([tick, /T1 read/.test(l) ? glyph : lead]); // the plan row turns a circle quarter, the agent row the band's braille frame
       const board = boardText(boardLines([{ label: 'T1 read alpha.py', state: 'running', owner: 'alpha-explorer', detail: '' }], { cols: 80, ui: mocha, pane: true, ribbon: false, title: false, tick, nowMs: spinClock(now, tick) }));
       expect([tick, board.find((l) => /alpha/.test(l))?.match(/[◐◓◑◒]/)?.[0]]).toEqual([tick, glyph]);
     }

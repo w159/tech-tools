@@ -15,7 +15,7 @@ const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
-const G = '[◐◓◑◒◐◓◑◒◐◓◐◓◑◒◐◓◇●■▲△◉]';
+const G = '[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇●■▲△◉]';
 const WORD = '(queued|running|done|failed|blocked|waiting)';
 const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => bodyLines(panelWorld(t, cols, ui, { core, ...over })).map(lineText).map((l) => l.trimEnd());
 const taskRows = (rows: readonly string[]): string[] => rows.filter((l) => new RegExp(`^[▸ ] ${G} `).test(l));
@@ -170,22 +170,22 @@ describe('one row grammar on all five tabs', () => {
 // ---- change 10 --------------------------------------------------------------------------------------------------------
 
 describe('change 10: the card and the toast', () => {
-  test('the toast reads bar, ATLAS mark, state, name, fact', () => {
+  test('the toast reads bar, state, name, fact: no brand mark (critique 25: ◆ ATLAS only on the band, the block ribbons, the panel title and the finish cards)', () => {
     const t = L.toastText('failed', 'implementer-live', 'tests red 3', mocha);
     expect(t.startsWith('▌ ')).toBe(true);
-    expect(t).toContain('◆ ATLAS');
-    expect([t.indexOf('ATLAS'), t.indexOf('failed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]).toEqual([...[t.indexOf('ATLAS'), t.indexOf('failed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]].sort((a, b) => a - b));
+    expect(t).not.toContain('ATLAS');
+    expect([t.indexOf('failed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]).toEqual([...[t.indexOf('failed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]].sort((a, b) => a - b));
     expect(L.toastText('done', 'a', '', ascii).startsWith('| ')).toBe(true);
     expect(L.toastText('done', 'a', '', ascii)).toMatch(/^[\x20-\x7e]*$/);
   });
   test('the left bar and the state word carry the state tone; the rest keeps its own', () => {
-    const tones: Record<string, string> = { running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' };
+    const tones: Record<string, string> = { running: 'accent', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' };
     for (const s of Object.keys(tones) as UI.UiState[]) {
       const runs = L.toastRuns(s, 'name', 'fact', mocha);
       expect(runs[0]!.t.trim()).toBe('▌');
       expect(runs[0]!.tone).toBe(tones[s]);
       const word = runs.find((x) => x.t.trim() === s)!;
-      expect(word.tone).toBe(tones[s]);
+      expect(word.tone).toBe(s === 'running' ? 'run' : tones[s]);
       expect(word.bold).toBe(true);
     }
     const q = L.toastRuns('queued', 'name', '', mocha);

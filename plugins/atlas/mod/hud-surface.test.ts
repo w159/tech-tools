@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../contracts/hud-golden';
-import { chipCount, elapsedClock, runsCells, runsString, type Run, type Ui } from './atlas-ui';
+import { chipCount, elapsedClock, leadSpinnerGlyph, runsCells, runsString, type Run, type Ui } from './atlas-ui';
 import { COUNT_ORDER, type UiState } from './atlas-ui';
 import { textWidth } from './theme';
 import { agentRows, fitStack, padRows, rowSpinnerGlyph, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
@@ -13,8 +13,8 @@ export const worldAgents = (): AgentRow[] => // the adapter's order (hud.ts agen
   sortAgents(world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running', elapsed: elapsedClock(w.age_s) })));
 const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
-/** A golden title carries `@SPIN@` for the spinner glyph at frame 0 (the HUD's one spinner set, not this golden's). */
-const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(rowSpinnerGlyph(0), '@SPIN@') : r));
+/** A golden title carries `@SPIN@` for the band's braille spinner glyph at frame 0 (the title turns the band frame; the rows keep the circle quarters). */
+const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(leadSpinnerGlyph(0), '@SPIN@') : r));
 const full = { spacers: true, extras: true, close: true };
 
 describe('TODO surface goldens (rev 4)', () => {

@@ -5,7 +5,7 @@
 import { animateRow, calmRun, MOTION_MS, MOTION_STEP_MS, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
-import { cells, CHIP_W, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, WORKER_FAILED, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -104,8 +104,8 @@ const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || (!rich && isDoubt(r))) ? '' : r.detail); // a doubted done says `worker killed` in its state cell (non-rich), so the detail column does not say it again
 /** A completed row whose worker failed or was killed (critique 17 A1). */
 const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
-/** A doubted done spelled out in the plain form: the lead CLOSED the row (the store says completed) but its worker was killed, so the HUD does not call it done. The scorer reads the glyph (`●`, completed), which is the store's truth. */
-export const CLOSED_KILLED = `closed · ${WORKER_FAILED}`;
+/** A doubted done spelled out in the plain form (the atlas-ui word, one source): the lead CLOSED the row (the store says completed) but its worker was killed, so the HUD does not call it done. The scorer reads the glyph (`●`, completed), which is the store's truth. */
+export const CLOSED_KILLED = DONE_KILLED;
 /** The state cell's text: the row's word, and for a doubted done in the plain form `closed · worker killed` (critique 18 B2: a tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
 const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? CLOSED_KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
 /** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
@@ -116,7 +116,7 @@ const maxLen = (xs: readonly string[]): number => xs.reduce((n, x) => Math.max(n
 const focusMark = (focus: boolean, ui: Ui): Run => (focus ? calmRun(t(ui.ascii ? '>' : '▸', 'accent', { bold: true })) : t(' '));
 
 /** The fill of the selected row's bar: xterm 236 in the dark theme, the light theme's own quiet grey. */
-const SELECT_BG = { mocha: '#303030', latte: '#dcdfe8' } as const;
+const SELECT_BG = { mocha: PALETTE5.rule, latte: PALETTES.latte.queued_fill } as const;
 /** The selected row as a full-width bar: every run on the 236 fill and the rest of the row padded in it (the name is already bold, the `▸ ` cursor text stays so the scorer still reads the row). NO_COLOR draws no fill. */
 function barRow(runs: Run[], cols: number, ui: Ui): Run[] {
   if (ui.color === 'none') return runs;
@@ -278,8 +278,8 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
-  // The working signal rides the title, inside the rule: the quarter-circle spinner (one shared clock and phase, the mark of every running row) before the counts while any agent runs.
-  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o)), t: rowSpinnerGlyph(spinOf(o), ui.ascii) }, t(' ')] : [];
+  // The working signal rides the title, inside the rule: the band lead's braille spinner (the shared clock and frame) before the counts while any agent runs.
+  const spin: Run[] = rows.some((r) => r.state === 'running') ? [stateRun('running', ui, spinOf(o), true), t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
   const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...spin, t(c, 'sub')] : spin.slice(0, 1), ui);
   const head = counts.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
   const out: Run[][] = [head];

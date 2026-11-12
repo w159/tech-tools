@@ -6,10 +6,9 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
 import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
-import { BRAND } from './contract'
 import { PHASES } from './intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
-import { formatDuration, glyph } from './theme'
+import { glyph } from './theme'
 import { shortTool } from './band'
 import type { ActivityEntry, LiveSnapshot } from './orchestra-types'
 import { activeCount, liveWorkers } from './data/live'
@@ -20,7 +19,7 @@ import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
 import { cardAged, hideNotification, placedTree } from './transcript/placed'
 import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
-import { uiFromEnv, type Ui } from './atlas-ui'
+import { elapsedClock, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
 import { displayDelta, leadOf, leadRow, partialLead } from './transcript/leadheader'
 import type { Outcome } from './transcript/outcome'
 
@@ -116,9 +115,9 @@ export function noisyTree(props: ToolUsePropsLike & { output?: unknown }): Rende
   const size = outputSize(props.output)
   if (size < NOISY_BYTES) return null
   return txt({},
-    txt({ color: BRAND.subagent, bold: true }, `${props.tool} `),
-    txt({ color: BRAND.dim }, toolTarget(props.input)),
-    txt({ color: BRAND.accent, inverse: true }, ` ▸ ${fmtBytes(size)} `),
+    txt({ color: PALETTE5.body, bold: true }, `${props.tool} `),
+    txt({ color: PALETTE5.secondary }, toolTarget(props.input)),
+    txt({ color: PALETTE5.secondary, inverse: true }, ` ▸ ${fmtBytes(size)} `),
   )
 }
 
@@ -179,7 +178,7 @@ const doingOf = (a: ActivityEntry): string => {
 function nowOf(snap: AtlasSnapshot, name?: string): string {
  const a = activityOf(snap, name)
  if (!a) return ''
- return [doingOf(a), `${formatDuration(snap.now - (a.startedAt ?? a.since))} · ${a.toolCount} tools`].filter(Boolean).join(' · ')
+ return [doingOf(a), `${elapsedClock((snap.now - (a.startedAt ?? a.since)) / 1000)} · ${a.toolCount} tools`].filter(Boolean).join(' · ')
 }
 
 // ---- AssistantMessage: the ATLAS contract header drawn on one styled row; headerless replies stay engine-drawn ----
@@ -240,7 +239,7 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }
 
-// ---- TurnDuration: `▸ 4m12s · +3 done · 2 workers · ctx 41%` ----
+// ---- TurnDuration: `▸ 4:12 · +3 done · 2 workers · ctx 41%` (the band's clock format, frozen once drawn) ----
 
 export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
@@ -249,14 +248,14 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  const delta = snap.counts.done - (tracker.done ?? snap.counts.done)
  const active = activeCount(workersOf(snap))
  const parts = [
-  formatDuration(durationMs),
+  elapsedClock(durationMs / 1000),
   delta > 0 ? `+${delta} done` : null,
   active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
  ].filter((part): part is string => part !== null)
  tracker.done = snap.counts.done
  return txt({ dimColor: true },
-  txt({ color: BRAND.accent }, `${MARK} `),
+  txt({ color: PALETTE5.dim }, `${MARK} `),
   parts.join(' · '),
  )
 }
@@ -341,10 +340,18 @@ export function registerRestyle(on: On): void {
   } catch { return next(e) }
  })
 
+ // A footer is the receipt of a finished turn: it freezes at the value it was first drawn with. Redrawn live (critique 25), its `+N done` fell to nothing on the second draw (the tracker had moved on)
+ // and its `ctx` and worker count followed the next turn's snapshot.
+ const frozenFooters = new Map<string, RenderElement>()
  on('ui.render', { component: 'TurnDuration' }, async ($, e, next) => {
   try {
+   const kept = e.requestId ? frozenFooters.get(e.requestId) : undefined
+   if (kept) return kept
    const snap = await ready($, cache)
-   return snap ? durationTree(snap, e.props, tracker, await nowMs($)) : next(e)
+   if (!snap) return next(e)
+   const tree = durationTree(snap, e.props, tracker, await nowMs($))
+   if (e.requestId) frozenFooters.set(e.requestId, tree)
+   return tree
   } catch { return next(e) }
  })
 

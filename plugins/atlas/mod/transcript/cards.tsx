@@ -3,9 +3,8 @@
 // ToolUse / ToolGroup / UserMessage and falls back to next(e) on null or a throw.
 
 import type { RenderElement, RenderNode } from 'claude-code'
-import { BRAND } from '../contract'
 import type { AgentState } from '../contract'
-import { surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
+import { PALETTE5, surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
 import { CARD_W, toastRuns } from '../panel-layout'
 import { cells } from '../atlas-ui'
 import { clipE as clip } from '../board-model'
@@ -123,7 +122,7 @@ export function workerCard(c: CallLike, state: AgentState, width = 0, name?: str
  const cardName = displayName(i.name ?? name ?? role, role, i.description)
  const w = Math.max(20, Math.min(RAIL_W, width > 0 ? width : RAIL_W))
  // One card style (critique 16 C3: the boxed `┌─ ◆ done beta-explorer-2 ─┐` card sat beside the rail card for the same worker in 61 frames): the dispatch card is the
- // rail card the finish uses, `▌ ◆ ATLAS  ◐ running  name  what it is doing`. The name is never cut: the fact is clipped to the room left, the model tag goes first.
+ // rail card the finish uses, `▌ ◐ running  name  what it is doing` (no brand: only the finish card carries `◆ ATLAS`). The name is never cut: the fact is clipped to the room left, the model tag goes first.
  const head = toastRuns(phase.ui, cardName, '', ui)
  const used = head.reduce((n, x) => n + cells(x.t), 0)
  const last = lastOf(c, phase.ui === 'running', extra, word, w - used - 2)
@@ -143,7 +142,7 @@ const waveLayout = (columns: number, count: number): { side: boolean; w: number 
 }
 const waveHeader = (calls: ReadonlyArray<CallLike>, n: number) => {
  const live = calls.filter((c) => c.isRunning).length
- return t({ color: BRAND.accent, bold: true }, `WAVE ${n} · ${calls.length} workers${live ? ` · ${live} running` : ' · finished'}`)
+ return t({ color: PALETTE5.body, bold: true }, `WAVE ${n} · ${calls.length} workers${live ? ` · ${live} running` : ' · finished'}`)
 }
 
 /** WAVE strip: 2+ calls, all atlas Agent/Task. */
@@ -158,11 +157,11 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer  outcome` (state, name, role, outcome). */
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), aged = false): RenderElement {
  if (failed) return failedTree(name, outcome, ui, aged)
- const runs = toastRuns('done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui)
+ const runs = toastRuns('done', displayName(name, role), clip([role, stripStatus(outcome)].filter(Boolean).join('  '), 80), ui, true) // the finish card keeps `◆ ATLAS` (dim, 240): the scorer finds a card by it
  // An old card (critique 17 C3: cards held full colour for 40 frames) keeps its words and drops to the muted tone, unbold: the run has moved on.
- // The rail `▌` is the card's state colour and stays (critique 21: older cards turned wholly grey and lost it); the glyph run and the state word beside it stay too.
+ // The rail `▌` is the card's state colour and stays (critique 21: older cards turned wholly grey and lost it); the glyph run and the state word beside it stay too, and so does the brand mark: one grey (240) on every card, old or new (critique 25: two greys).
  const word = runs.findIndex((x) => x.t === 'done')
- return rowEl(aged ? runs.map((x, i) => (i === 0 || i === word || i === word - 1 ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
+ return rowEl(aged ? runs.map((x, i) => (i === 0 || i === word || i === word - 1 || x.tone === 'dim' ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
 }
 
 /** A failure card carries one verb (critique 19 B4: `■ failed ghost-explorer explorer killed · 6s` said it twice): the end word the outcome leads with (`killed`, `failed`) is the state word,
@@ -171,11 +170,11 @@ function failedTree(name: string, outcome: string, ui: Ui, aged: boolean): Rende
  const m = /^\s*(killed|failed)\b[\s·:.,;-]*([\s\S]*)$/i.exec(stripStatus(outcome))
  const verb = m ? m[1]!.toLowerCase() : 'failed'
  const rest = clip((m ? m[2]! : stripStatus(outcome)).replace(/\s+/g, ' ').trim(), 80)
- const head = toastRuns('failed', displayName(name, ''), '', ui)
+ const head = toastRuns('failed', displayName(name, ''), '', ui, true) // a finish card, so it keeps the dim `◆ ATLAS` like the done card
  const word = head.findIndex((x) => x.t === 'failed')
  const runs: UiRun[] = head.map((x, i) => (i === word ? { ...x, t: verb } : x))
  if (rest) runs.push({ t: ` · ${rest}`, tone: 'sub' })
- const stays = (i: number): boolean => i === 0 || (i <= word && i >= word - 1) // the rail, the glyph run and the state word
+ const stays = (i: number): boolean => i === 0 || (i <= word && i >= word - 1) || head[i]?.tone === 'dim' // the rail, the brand, the glyph run and the state word
  return rowEl(aged ? runs.map((x, i) => (stays(i) ? x : { ...x, tone: 'muted' as const, bold: false })) : runs, ui)
 }
 
@@ -186,8 +185,8 @@ export function bubbleTree(text: string, from: string | undefined, to = 'lead', 
  const bar = Array(lines.length + 1).fill('▌').join('\n')
  const body = columns > 4 ? lines.map((l) => fitText(l, columns - 3)).join('\n') : lines.join('\n')
  return el('Box', { flexDirection: 'row' },
-  t({ color: BRAND.subagent }, bar),
+  t({ color: PALETTE5.secondary }, bar),
   el('Box', { flexDirection: 'column', paddingLeft: 1 },
-   t({ color: BRAND.subagent, bold: true }, `#atlas ${from} › ${to}`),
-   t({ color: BRAND.text }, body)))
+   t({ color: PALETTE5.body, bold: true }, `#atlas ${from} › ${to}`),
+   t({ color: PALETTE5.body }, body)))
 }

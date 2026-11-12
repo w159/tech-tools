@@ -85,7 +85,7 @@ export function itemState(status: string, ownerState?: UiState): UiState {
   return own;
 }
 
-/** A completed row whose first worker was killed and whose re-dispatch (`name #2`) succeeded (critique 19 A3: it read `done · worker killed`). */
+/** A completed row whose first worker was killed and whose re-dispatch (`name #2`) succeeded (critique 19 A3: it read `closed · worker killed`). */
 export const DONE_RETRIED = 'retried · done';
 /** The word of a row the store still holds open (pending) while its worker failed: the glyph stays the store's, the word says why (critique 19 A3: it read `queued`). */
 export const WORKER_DOWN = 'worker failed';
@@ -218,7 +218,7 @@ const r = (t: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run
 const to = (runs: Run[], col: number): Run[] => [...runs, r(' '.repeat(Math.max(1, col - runsCells(runs))))];
 
 /** `stateCol`: the compact form's state column, set by `boardBody` from the widest label so a label is not cut at the fixed 26. */
-export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** `boardLines`: how many of those folded dispatch rows are still open in the store; the footer then reads `N items · K dispatch open`. */ openFolded?: number; /** `boardLines`: draw the `ATLAS ▸ BOARD` ribbon and its blank row (default true). Off inside the side panel, which already has its own header: the footer then carries the one count. */ ribbon?: boolean; /** `boardLines`, ribbon off: false draws no title row either (the host's own ribbon names the board). */ title?: boolean; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Compact form: the state column's width (the longest word on the board; absent: 7). */ wordW?: number; /** `boardLines`: the owner that does not fit beside its row is named in the notes under the rows, not on a line of its own. */ notes?: boolean; /** Compact form: a doubted done is drawn `done · worker killed` in its state cell (boardBody sets it when the label still shows whole beside it). */ doubtWord?: boolean; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string; /** The side panel's board (wave 24): a summary row (`5 items · 3 dispatches` and a meter), every row's owner in one fixed right column that never wraps, a footer that records how the run closed. */ pane?: boolean; /** `pane`: every dispatch row of the store (folded or standing alone): the summary says it once. Absent: the folded count. */ dispatches?: number; /** `pane`: the last Stop verdict refused the stop: a closed dispatch row says `after Stop refusal`. */ stopRefused?: boolean };
+export type BoardOpts = { cols: number; ui: Ui; rich?: boolean; tick?: number; /** The snapshot clock in epoch ms: the spinner turns the shared frame (spinFrameOf) of the row's owner, else of its label. Absent: `tick`. */ nowMs?: number; stateCol?: number; /** `boardLines`: how many dispatch rows were folded into plan rows; its footer names them. */ folded?: number; /** `boardLines`: how many of those folded dispatch rows are still open in the store; the footer then reads `N items · K dispatch open`. */ openFolded?: number; /** `boardLines`: draw the `ATLAS ▸ BOARD` ribbon and its blank row (default true). Off inside the side panel, which already has its own header: the footer then carries the one count. */ ribbon?: boolean; /** `boardLines`, ribbon off: false draws no title row either (the host's own ribbon names the board). */ title?: boolean; /** The label as drawn (already cut so rows with one shared head stay apart); absent: the row's own label. */ shown?: string; /** Compact form: the owner column's width (0 or absent: none). */ ownerW?: number; /** Compact form: the state column's width (the longest word on the board; absent: 7). */ wordW?: number; /** `boardLines`: the owner that does not fit beside its row is named in the notes under the rows, not on a line of its own. */ notes?: boolean; /** Compact form: a doubted done is drawn `closed · worker killed` in its state cell (boardBody sets it when the label still shows whole beside it). */ doubtWord?: boolean; /** Motion view (mod/motion.ts): a changed or new row is drawn mid-transition. Absent: the resting render. */ motion?: MotionCtx | undefined; /** The row's motion key (boardBody sets it from the row's position among its twins). */ key?: string; /** The side panel's board (wave 24): a summary row (`5 items · 3 dispatches` and a meter), every row's owner in one fixed right column that never wraps, a footer that records how the run closed. */ pane?: boolean; /** `pane`: every dispatch row of the store (folded or standing alone): the summary says it once. Absent: the folded count. */ dispatches?: number; /** `pane`: the last Stop verdict refused the stop: a closed dispatch row says `after Stop refusal`. */ stopRefused?: boolean };
 
 const form = (cols: number): 'full' | 'compact' | 'narrow' => (cols >= FULL_MIN ? 'full' : cols >= NARROW_MIN ? 'compact' : 'narrow');
 
@@ -252,7 +252,7 @@ export function labelCut(labels: readonly string[], w: number): string[] {
   return labels.map((l) => clipE(l, w));
 }
 
-/** The state cell's text where the pane has room to spell a long word (`done · worker killed`, `retried · done`, `worker failed`), and where it does not (the row's own state word; the detail and the notes say the rest). */
+/** The state cell's text where the pane has room to spell a long word (`closed · worker killed`, `retried · done`, `worker failed`), and where it does not (the row's own state word; the detail and the notes say the rest). */
 const spelledWord = (row: BoardRow): string => (markOf(row.state, row.word) === 'doubt' ? DONE_KILLED : row.word ?? row.state);
 const plainWord = (row: BoardRow): string => (row.word === DONE_RETRIED ? 'done' : row.word === WORKER_DOWN ? row.state : row.word ?? row.state);
 const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'doubt' || row.word === DONE_RETRIED || row.word === WORKER_DOWN;
@@ -261,7 +261,7 @@ const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'd
 function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
   const f = form(o.cols);
   const doubt = markOf(row.state, row.word) === 'doubt';
-  // Critique 23: a killed worker's row is error red (203) on the board tab, glyph and word alike; the amber `warn` stays the HUD's and the compact tab's (the scorer reads the `done` word and the ● disc).
+  // Critique 25: a killed worker's row reads `closed` in error red (203) on every surface, glyph and word alike (the ● disc stays: the scorer's truth for the closed dispatch row is completed).
   const mark = stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0);
   const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), doubt && !o.ui.ascii ? { ...mark, tone: 'bad' } : mark, r(' ')];
   // Full form: done dim (never struck through: the HUD draws none), the focus bold. The 80 mock draws labels plain (text), the 40 mock dims a done one (sub).
@@ -300,9 +300,9 @@ function geometry(rows: readonly BoardRow[], o: BoardOpts): { compact: boolean; 
   const widest = Math.max(0, ...rows.map((x) => cells(x.label)));
   // The state column is as wide as the longest word on this board (a board of `done` rows needs 4 cells, not the 7 of `running`), so a title keeps those cells.
   const plainW = Math.min(STATE_W, Math.max(4, ...rows.map((x) => cells(x.word ?? x.state))));
-  // Critique 18 B2: a doubted done says `done · worker killed` in its state cell where the title still shows whole beside it; narrower panes say it in the notes under the rows.
+  // Critique 18 B2: a doubted done says `closed · worker killed` in its state cell where the title still shows whole beside it; narrower panes say it in the notes under the rows.
   const spelledW = Math.max(0, ...rows.filter(isSpelled).map((x) => cells(spelledWord(x))));
-  const doubtWord = compact && spelledW > 0 && o.cols - spelledW >= widest + 7;
+  const doubtWord = compact && spelledW > 0 && o.cols - spelledW >= widest + 5; // +5 since the spelled word grew two cells (`closed`, critique 25) and the 60 pane must still say it
   const wordW = doubtWord ? spelledW : plainW;
   const ownerFit = Math.min(ownerAll, o.cols - Math.max(widest, LABEL_MIN) - 5 - wordW - 1 - 1);
   // Titles the row cuts anyway keep the owner only when, without it, the cut titles would read the same (one shared head): the owner then tells the rows apart,
@@ -369,13 +369,13 @@ function paneGeometry(rows: readonly BoardRow[], cols: number): { labelW: number
 
 function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<typeof paneGeometry>): Run[] {
   const doubt = markOf(row.state, row.word) === 'doubt';
-  // Critique 23: a killed worker's row is error red (203) on the board tab, glyph and word alike; the amber `warn` stays the HUD's and the compact tab's (the scorer reads the `done` word and the ● disc).
+  // Critique 25: a killed worker's row reads `closed` in error red (203) on every surface, glyph and word alike (the ● disc stays: the scorer's truth for the closed dispatch row is completed).
   const mark = stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0);
   const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), doubt && !o.ui.ascii ? { ...mark, tone: 'bad' } : mark, r(' ')];
   const title = clipE(row.label, g.labelW);
   const gutter = r(' '.repeat(PANE_GUTTER));
   const out: Run[] = [...head, r(title + ' '.repeat(Math.max(0, g.labelW - cells(title))), row.state === 'done' && !doubt ? 'sub' : 'text', { bold: focus })];
-  if (g.wordW) { const word = clipE(doubt ? 'done' : plainWord(row), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), doubt ? 'bad' : rowWordTone(row.state, row.word))); }
+  if (g.wordW) { const word = clipE(doubt ? DONE_DOUBT : plainWord(row), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), doubt ? 'bad' : rowWordTone(row.state, row.word))); }
   // The reason (`owner failed`, `worker killed`) and the age ride the same row as a dim suffix, cut with `…` to the room left: never a row of its own (critique 22: `owner failed` wrapped under T2).
   // Where the owner column leaves no room for it, the reason takes the owner's cell: why a row is open says more than who holds it.
   const suffix = noteOf(row, false);
@@ -469,7 +469,9 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const t0 = Math.min(...spans.map((x) => x.from));
   const total = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0);
   const timeW = Math.max(...ran.map((a) => cells(clock(a.secs ?? 0))));
-  const barMax = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bars), gap, time, gap, glyph
+  const rightLabel = clock(total / 1000); // the axis ends with the longest bar's end, in words
+  const room = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bars), gap, time, gap, glyph
+  const barMax = room - cells(rightLabel) - 1; // the axis label `17s` sits after the hairline: no bar runs past the hairline's end (critique 25: beta's bar ran past the axis end)
   if (barMax < 6) return [];
   const bar = o.ui.ascii ? '=' : '━';
   const gaps = max >= ran.length * 2 + 1 // rows for the agents, a blank between each, the axis
@@ -484,7 +486,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     const tone = barTone(a.state);
     const runs: Run[] = [
       r('  '), r(name + ' '.repeat(nameW - cells(name)), 'sub'), r(' '),
-      r(' '.repeat(off)), r(bar.repeat(len), tone), r(' '.repeat(barMax - off - len + 1)),
+      r(' '.repeat(off)), r(bar.repeat(len), tone), r(' '.repeat(room - off - len + 1)),
       r(clock(a.secs ?? 0).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, a.name) : o.tick ?? 0),
     ];
     if (gaps && i > 0) out.push({ runs: [r(' ')] });
@@ -492,8 +494,8 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   });
   // The axis: `0s` at the run's start, the run's length at the right edge, a hairline between them.
   const left = '0s';
-  const right = clock(total / 1000);
-  const fill = Math.max(1, barMax - cells(left) - cells(right) - 2);
+  const right = rightLabel;
+  const fill = Math.max(1, room - cells(left) - cells(right) - 2); // the hairline ends where the longest bar ends; the label follows it
   out.push({ runs: [r(' '.repeat(2 + nameW + 1)), r(`${left} ${(o.ui.ascii ? '-' : '─').repeat(fill)} ${right}`, 'dim')] });
   return out;
 }
@@ -510,7 +512,7 @@ function noteOf(x: BoardRow, doubtWord: boolean): string {
 function subLines(owner: string, note: string, row: BoardRow, cols: number): BoardLine[] {
   const room = Math.max(1, cols - 4);
   const doubt = markOf(row.state, row.word) === 'doubt';
-  const tone: Run['tone'] = doubt ? 'warn' : rowWordTone(row.state, row.word);
+  const tone: Run['tone'] = doubt ? 'bad' : rowWordTone(row.state, row.word);
   if (owner && note && cells(owner) + 2 + cells(note) > room) return [{ runs: [r('    '), r(clipE(owner, room), 'sub')] }, { runs: [r('      '), r(clipE(note, Math.max(1, room - 2)), tone)] }];
   return [{ runs: [r('    '), ...(owner ? [r(clipE(owner, room), 'sub')] : []), ...(note ? [r(`${owner ? '  ' : ''}${clipE(note, Math.max(1, room - (owner ? cells(owner) + 2 : 0)))}`, tone)] : [])] }];
 }
