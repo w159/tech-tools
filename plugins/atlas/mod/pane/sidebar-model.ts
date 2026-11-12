@@ -1,12 +1,13 @@
 // sidebar-model.ts: the Claude Code SidebarModel as the host-free PanelModel (mod/panel-layout.ts).
 import type { ChannelNote } from '../contract';
 import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
-import { ownPlan, todoState } from '../data/todos';
+import { isPlanItem, ownPlan, ownTodos, todoState } from '../data/todos';
+import { lastText } from '../data/lasttext';
 import { spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
-import { hudAgents, lastAction, ownerStatesOf } from '../hud';
+import { hudAgents, lastOf, ownerStatesOf } from '../hud';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
 import type { SidebarModel } from './sidebar-types';
@@ -14,12 +15,19 @@ import type { SidebarModel } from './sidebar-types';
 const isLead = isLeadName;
 const one = (t: string | null | undefined): string => scrub(t ?? '').replace(/\s+/g, ' ').trim();
 
+/** The evidence of every row `name` owns on the board: plan rows first, then the hook's dispatch row (which holds the worker's report). */
+const ownEvidence = (s: LiveSnapshot, name: string): (string | null | undefined)[] => {
+  const mine = ownTodos(s.todos ?? [], s.sessionId).filter((t) => t.owner === name);
+  return [...mine.filter(isPlanItem), ...mine.filter((t) => !isPlanItem(t))].map((t) => t.evidence);
+};
+
 /** One worker in the six-word vocabulary: a worker that waits on the lead reads waiting, parked reads queued. */
 function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const a = s.squad.find((x) => x.name === w.name);
   const state: UiState = liveState(w);
-  const call = one(lastAction(w)); // the HUD's LAST (`read gamma.py`): the call, never the result text that followed it
-  const detail = state === 'failed' ? one(w.lastLine) || 'failed' : state === 'waiting' ? 'waiting for lead reply' : state === 'done' ? call || 'finished' : state === 'queued' ? 'parked' : call || 'thinking';
+  // The HUD's LAST (hud lastOf): a finished worker's outcome (its rows' evidence), a live or failed one's call (`read gamma.py`), never the result text that followed it.
+  const call = one(lastText(lastOf(w, state, ownEvidence(s, w.name))));
+  const detail = state === 'failed' ? call || 'failed' : state === 'waiting' ? 'waiting for lead reply' : state === 'done' ? call || 'finished' : state === 'queued' ? 'parked' : call || 'thinking';
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),
@@ -61,10 +69,11 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const [leadMate] = mates(s);
   const lead: PanelWorker = { name: 'lead', role: 'lead', state: MOOD_STATE[leadMate!.mood], detail: leadMate!.text };
 
-  const live = workers.filter((w) => w.state !== 'done').map((w) => w.name);
+  const ended = new Set(workers.filter((w) => w.state === 'done' || w.state === 'failed').map((w) => w.name)); // a killed worker never gets an end time in the registry, yet it is not in the channel (stoprun-150-e4a8186a-1: shown 2, true 1)
+  const live = workers.filter((w) => !ended.has(w.name)).map((w) => w.name);
   const notes = s.notes;
   const lastLead = notes.map((n) => isLead(n.owner)).lastIndexOf(true);
-  const people = new Set([...notes.map((n) => n.owner), ...s.members.filter((x) => !x.ended_at).map((x) => x.name), ...live]).size;
+  const people = new Set([...notes.map((n) => n.owner), ...s.members.filter((x) => !x.ended_at && !ended.has(x.name)).map((x) => x.name), ...live]).size;
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
