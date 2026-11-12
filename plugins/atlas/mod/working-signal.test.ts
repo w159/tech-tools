@@ -46,7 +46,7 @@ function boot(on: On, agents: unknown[] = []) {
 
 type Mounted = Awaited<ReturnType<Engine['ui']['mount']>>;
 const mountBand = ($: Engine, isWorking: boolean, cols = 150): Promise<Mounted> =>
-  $.ui.mount({ plugin: 'atlas', surface: 'terminal', component: 'AbovePrompt', requestId: 'band', props: { bodyColumns: cols, hasSurvey: false, isWorking, maxRows: 3 } as never });
+  $.ui.mount({ plugin: 'atlas', surface: 'terminal', component: 'AbovePrompt', requestId: 'band', props: { bodyColumns: cols, hasSurvey: false, isWorking, maxRows: 3 } as never }) as unknown as Promise<Mounted>;
 const text = async (ui: Mounted): Promise<string> => {
   const nodes = (await ui.findAll({})) as { props?: { children?: unknown } }[];
   return nodes.map((n) => (typeof n.props?.children === 'string' ? n.props.children : '')).join('');

@@ -32,7 +32,7 @@ describe('motion-demo frames', () => {
       for (const f of frames) expect(['◇', '◆'].some((g) => row(f).includes(g))).toBe(false); // queued and the capsule keep their glyphs
       expect(frames.at(-1)).not.toBe(files[`${s}-99-done.ans`]);
       expect(plain(files[`${s}-99-done.ans`]!)).toContain('●');
-      expect(plain(files[`${s}-00-running.ans`]!)).toContain('⠋');
+      expect(plain(files[`${s}-00-running.ans`]!)).toMatch(/[⠋◐]/);
     }
   });
   test('critique 12: the ramp is visible for the whole 600 ms - every held step differs from its neighbour and from the resting row, in 24-bit and 256 colours', () => {

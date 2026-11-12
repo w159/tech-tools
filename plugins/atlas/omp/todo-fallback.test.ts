@@ -42,7 +42,7 @@ test("tree: the rev 4 TODO surface, one row per plan item with its state word, t
 	]);
 	const rows = lines.slice(1);
 	expect(rows).toHaveLength(5);
-	const want: Array<[string, string]> = [["●", "trace calc module done"], ["⠋", "map call paths running"], ["◇", "add mul queued"], ["■", "run tests failed"], ["▣", "changelog blocked"]];
+	const want: Array<[string, string]> = [["●", "trace calc module done"], ["◐", "map call paths running"], ["◇", "add mul queued"], ["■", "run tests failed"], ["▣", "changelog blocked"]];
 	rows.forEach((r, i) => expect(r.replace(/ +/g, " ").replace(/^[ ▸] ?/, "")).toBe(`${want[i]![0]} ${want[i]![1]}`));
 	expect(rows[1]!.startsWith("▸")).toBe(true);
 	expect(lines.some((l) => /^progress /.test(l))).toBe(false); // one count: the ribbon's
@@ -62,7 +62,7 @@ test("fallback widget appears for board items when no native todo has run", () =
 	h.fire("before_agent_start");
 	const last = h.widgets.at(-1);
 	expect(title(last)).toContain("▸ TODO");
-	expect(strip(last ?? [])).toMatch(/▸ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] a +running/);
+	expect(strip(last ?? [])).toMatch(/▸ [◐◓◑◒] a +running/);
 });
 
 test("a successful native todo result removes the fallback and keeps it removed", () => {
@@ -194,7 +194,7 @@ test("long item text is clipped with `...` inside the row width, and short text 
 	const long = "x".repeat(300);
 	const lines = todoTreeLines([{ content: `Research: ${long}`, status: "in_progress" }, { content: "Research: short one", status: "pending" }]).map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
 	const rows = lines.slice(1);
-	expect(rows[0]).toMatch(/^▸ ⠋ x+\.\.\./);
+	expect(rows[0]).toMatch(/^▸ ◐ x+\.\.\./);
 	expect(rows[0]!.length).toBeLessThan(200);
 	expect(rows[0]).not.toContain("x".repeat(250));
 	expect(rows[1]).toMatch(/◇ short one +queued/);
@@ -220,7 +220,7 @@ test("A4: a running plan row turns its spinner every 100 ms on its own timer (in
 	const ctx = { agent: { kind: "main" }, cwd: b.root, ui, hasUI: true, sessionManager: { getSessionId: () => "s1" } };
 	handlers.before_agent_start?.forEach(h => h({}, ctx));
 	expect(frame).toBeDefined();
-	const glyph = () => strip(widgets.at(-1) ?? []).match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0];
+	const glyph = () => strip(widgets.at(-1) ?? []).match(/[◐◓◑◒]/)?.[0];
 	const seen: Array<string | undefined> = [glyph()];
 	for (let i = 1; i < 4; i++) {
 		clock = i * 100;
