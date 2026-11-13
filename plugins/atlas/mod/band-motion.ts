@@ -141,3 +141,7 @@ export function stepKind(h: KindHold, computed: KindWord, now: number): { hold: 
 	if (h.kind !== null && h.kind !== 'idle' && now - h.at < KIND_HOLD_MS) return { hold: h, shown: h.kind };
 	return { hold: h.kind === 'idle' ? h : { kind: 'idle', at: now }, shown: 'idle' };
 }
+
+/** Truth 41 (stoprun-110-2 f0096-f0097: `⠹ working 0:38` drawn twice, 1.81 s apart): whether a beat redraws the surfaces. A frame is due while Atlas works, while the band's drawn word is `working` (whatever holds it: the idle hold, a blocked verdict
+ * still in its debounce), while a run clock is open, and on the beats a run ends or a finished run flips to idle. So a working glyph on screen advances on every beat, and a word that stops being worked is redrawn the beat it ends. */
+export const beatDue = (o: { working: boolean; shown: KindWord | null; open: boolean; ended: boolean; flip: boolean }): boolean => o.working || o.shown === 'working' || o.open || o.ended || o.flip;

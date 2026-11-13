@@ -252,13 +252,19 @@ const FUNCTION = /\b(?:def|function|func|fn)\s+\w/g;
  * it gives with a line (`alpha_one (line 1), alpha_two (line 5)`); the largest figure any row holds wins. */
 const LINE_NAME = /\b([A-Za-z_]\w*)\s*\((?:at\s+)?lines?\s+\d+\)/g;
 const SAID_COUNT = /\b(\d+)\s+functions?\b/i;
+/** Truth 41 (live-150-1 f0092:34: alpha's report said `alpha.py defines two functions` and listed `alpha_one()` defined at alpha.py:1, so FN read `-` where the stop run's `2 functions` read 2): a count in words, and the names a report says are defined. */
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const SAID_WORD = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:top-level\s+)?functions?\b/i;
+const DEFINED_NAME = /`?\b([A-Za-z_]\w*)\([^)\n]*\)`?\s+(?:is\s+)?defined\b/g;
 export function functionsIn(texts: readonly (string | null | undefined)[]): number {
   let best = 0;
   for (const raw of texts) {
     const text = flat(raw).replace(LIST_NUMBER, '');
     if (text === '') continue;
     const names = new Set([...text.matchAll(LINE_NAME)].map((m) => m[1]!)).size;
-    best = Math.max(best, (text.match(FUNCTION) ?? []).length, Number(FN_TAIL.exec(text)?.[1] ?? 0), Number(SAID_COUNT.exec(text)?.[1] ?? 0), names);
+    const words = SAID_WORD.exec(text);
+    const defined = new Set([...text.matchAll(DEFINED_NAME)].map((m) => m[1]!)).size;
+    best = Math.max(best, (text.match(FUNCTION) ?? []).length, Number(FN_TAIL.exec(text)?.[1] ?? 0), Number(SAID_COUNT.exec(text)?.[1] ?? 0), names, words ? NUMBER_WORDS.indexOf(words[1]!.toLowerCase()) : 0, defined);
   }
   return best;
 }
@@ -399,9 +405,11 @@ export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
 }
 
 /** At rest the block is quiet (critique 29: idle and done drew the same green boxes): every run but the 240 rules and the done and failed marks reads 245, no weight, no fill. */
-const idleRow = (row: Run[]): Run[] => row.map((x) => (x.tone === 'dim' || IDLE_MARK.has(x.t) ? x : { t: x.t, tone: 'sub' as const, ...(x.strike ? { strike: true } : {}) }));
+const idleRow = (row: Run[]): Run[] => row.map((x) => (x.tone === 'dim' || IDLE_MARK.has(x.t) || (x.tone === 'bad' && METER_CELLS.test(x.t)) ? x : { t: x.t, tone: 'sub' as const, ...(x.strike ? { strike: true } : {}) }));
 /** State 39 (idle turned all five done circles 245, hiding that the work finished): the done `●` (114) and the failed `■` (203) keep their colour at rest; only the titles and words go quiet. */
 const IDLE_MARK = new Set(['●', '■']);
+/** Truth 41 (stoprun-110-2 f0076: the meter was all 245 at rest while f0096 drew its 203 cell): the failed cell of the TODO meter keeps its colour at rest, like the failed `■`. */
+const METER_CELLS = /^[▰!]+$/u;
 
 /** A run as a Segment: the theme's tone colour on the run's own fill or the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export function segmentOf(x: Run, ui: Ui): Segment {

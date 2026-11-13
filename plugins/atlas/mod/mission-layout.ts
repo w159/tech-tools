@@ -265,9 +265,11 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const hold = !!m.holdBlocked; // wave 36: a blocked verdict the band has not confirmed yet (register.ts stepBlocked) is not shown
   const stopGates = hold ? [] : m.stopGates ?? [];
   const held = hold ? 0 : dispatchHeld(m);
-  const blocked = !hold && (!!m.blocked || stopGates.length > 0 || held > 0);
+  // Truth 41 (stoprun-110-2 f0076: `○ idle · 0:38` with a failed worker): a run that ends with a worker failed and not closed is blocked, never idle or done. Only for a run the clock has seen end (`ranSecs`) and only once nothing runs: a failure beside live work stays a count on a `working` band.
+  const failedOpen = m.ranSecs !== undefined && !isAlive(m) && !m.busy && failedCount(m) - closedCount(m) > 0;
+  const blocked = !hold && (!!m.blocked || stopGates.length > 0 || held > 0 || failedOpen);
   // Wave 37: a blocked verdict held back by the debounce is a turn that has not finished: the band keeps reading `working` until it is confirmed, so working -> blocked never passes through one `idle` frame.
-  const pending = hold && (!!m.blocked || (m.stopGates?.length ?? 0) > 0 || dispatchHeld(m) > 0);
+  const pending = hold && (!!m.blocked || (m.stopGates?.length ?? 0) > 0 || dispatchHeld(m) > 0 || failedOpen);
   const quiet = !blocked && !pending && !isAlive(m) && !m.busy;
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber triangle).

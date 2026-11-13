@@ -14,6 +14,7 @@ import { forgetRefusals } from './data/channels';
 import { agentModel, hudAgents } from './hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
+import type { LiveSnapshot } from './orchestra-types';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');
@@ -115,12 +116,11 @@ describe('step 2: one run total on the band, the panel, the board and the axis (
     expect(src).not.toContain('startMs: snapshot.now - elapsedMs');
   });
   test('a worker\'s time on the panel lane is the SUBAGENTS row\'s on the same frame (live-150-1 f0063: alpha 0:16 against 0:17)', () => {
-    const running = world({ squad: [{ name: 'alpha-explorer', persona: 'explorer', state: 'running', source: 'task' }], activity: { lead: act({ mood: 'working', startedAt: NOW - 20000 }), 'alpha-explorer': act({ startedAt: NOW - 15_400, since: NOW, mood: 'working', toolCount: 1 }) } }) as never as { now: number };
+    const s = world({ squad: [{ name: 'alpha-explorer', persona: 'explorer', state: 'running', source: 'task' }], activity: { lead: act({ mood: 'working', startedAt: NOW - 20000 }), 'alpha-explorer': act({ startedAt: NOW - 15_400, since: NOW, mood: 'working', toolCount: 1 }) } }) as unknown as LiveSnapshot;
     const clock = NOW + 1_000; // the shared clock runs ahead of the snapshot between polls: the HUD reads the larger
-    const s = running as never;
     const hud = agentModel(hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), s.todos, null, Math.max(clock, s.now));
     const row = hud.find((a) => a.name.startsWith('alpha'))!;
-    const lane = panelModelOf(model(s, 'team', { kind: 'working', secs: 20 }, { clock }), ui, 110).workers.find((w) => w.name.startsWith('alpha'))!;
+    const lane = panelModelOf(model(s as never, 'team', { kind: 'working', secs: 20 }, { clock }), ui, 110).workers.find((w) => w.name.startsWith('alpha'))!;
     expect(elapsedClock(lane.secs!)).toBe(row.elapsed);
     expect(row.elapsed).toBe('0:16');
   });
@@ -162,5 +162,85 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
     expect(src).toContain('...runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look })');
     expect(src).toContain('...runBandModel({ snapshot, live: paneLive,');
     expect(src).toContain('frame: paneFrame % 10');
+  });
+});
+
+import { hudLines, type HudAgent, type HudInput } from './hud';
+import { runsString } from './atlas-ui';
+import { ownTodos } from './data/todos';
+import { functionsIn } from './hud';
+import { blockedText } from './data/runstate';
+import { beatDue, KIND_HOLD_MS, newKindHold, stepKind, type KindWord } from './band-motion';
+
+describe('step 4: a refused stop or a failed worker reads blocked, never idle, and no working glyph is ever drawn frozen', () => {
+  const base: MissionModel = { cols: 110, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'implement', 'done'], phase: 'implement', done: 4, total: 5, workers: [{ name: 'ghost-explorer', state: 'failed', secs: 4 }, { name: 'alpha-explorer', state: 'done', secs: 13 }], checks: null, ui, ranSecs: 38, restSecs: 3, tally: { running: 0, waiting: 0, queued: 0, failed: 1, done: 2, blocked: 0 } as never };
+  const text = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs).replace(/\s+/g, ' ');
+  test('stoprun-110-2 f0076: a closed run with a failed worker reads `▲ blocked · 1 failed 0:38`, never `○ idle · 0:38`', () => {
+    expect(text(base)).toMatch(/▲ blocked · 1 failed 0:38/);
+    expect(text(base)).not.toContain('idle');
+  });
+  test('it stays blocked as the rest grows, until a new run (not idle at 60 s, not done)', () => {
+    for (const restSecs of [0, 3, 30, 60, 600]) expect(text({ ...base, restSecs }), String(restSecs)).toMatch(/▲ blocked · 1 failed 0:38/);
+    expect(text({ ...base, restSecs: 600, phase: 'done', done: 5, total: 5 })).toMatch(/▲ blocked/);
+  });
+  test('a failure beside live work stays a count on a working band; a closed failure is not a block; no run seen keeps the old reading', () => {
+    expect(text({ ...base, busy: true })).toMatch(/working/);
+    expect(text({ ...base, closed: 1 })).not.toMatch(/blocked/);
+    const { ranSecs: _r, ...noRun } = base;
+    expect(text(noRun as MissionModel)).toMatch(/idle/);
+  });
+  test('the blocked word and the reason are the card\'s own: `1 failed`', () => {
+    expect(blockedText({ refused: false, failed: 1 })).toBe('1 failed');
+  });
+  test('a held `working` word beats on: every beat is due while the band draws working, whatever holds it (f0096-f0097: two beats-worth frames frozen for 1.81 s)', () => {
+    for (const shown of ['working'] as KindWord[]) expect(beatDue({ working: false, shown, open: false, ended: false, flip: false })).toBe(true);
+    expect(beatDue({ working: false, shown: 'idle', open: false, ended: false, flip: false })).toBe(false);
+    expect(beatDue({ working: false, shown: 'blocked', open: false, ended: false, flip: false })).toBe(false);
+  });
+  test('the idle hold shows `working` only for KIND_HOLD_MS, and a beat is due for every one of those frames', () => {
+    let h = newKindHold();
+    h = stepKind(h, 'working', 1_000).hold;
+    let frozen = 0;
+    for (let t = 1_100; t <= 4_000; t += 100) {
+      const s = stepKind(h, 'idle', t);
+      h = s.hold;
+      if (s.shown === 'working') { expect(beatDue({ working: false, shown: s.shown, open: false, ended: false, flip: false })).toBe(true); frozen += 100; }
+    }
+    expect(frozen).toBeLessThanOrEqual(KIND_HOLD_MS);
+  });
+  test('register.ts redraws on beatDue and records the word the band drew', () => {
+    expect(src).toContain('beatDue({ working, shown: shownKind,');
+    expect(src).toContain('shownKind = kStep.shown;');
+  });
+});
+
+describe('step 5: small truth items', () => {
+  const ag = (name: string, state: string, ui2: HudAgent['ui']): HudAgent => ({ name, role: 'explorer', state, ui: ui2, model: 'haiku', since: NOW - 5000, startedAt: NOW - 20000 });
+  const todos = ownTodos(['alpha', 'beta'].map((n, i) => ({ id: `t${i + 1}`, content: `T${i + 1} read ${n}.py (${n}-explorer)`, status: 'completed', owner: `${n}-explorer` })) as never);
+  const input = (states: Array<[string, HudAgent['ui']]>): HudInput => ({ todos: todos as unknown as HudInput['todos'], agents: states.map(([s, u], i) => ag(i ? 'beta-explorer' : 'alpha-explorer', s, u)) });
+  test('the idle TODO meter keeps its 203 cell for a failed row (stoprun-110-2 f0076:22 against f0096:22)', () => {
+    const failedTodos = ownTodos([{ id: 't1', content: 'T1 read alpha.py (alpha-explorer)', status: 'completed', owner: 'alpha-explorer' }, { id: 't2', content: 'T2 read ghost.py (ghost-explorer)', status: 'blocked', owner: 'ghost-explorer' }] as never);
+    const inp: HudInput = { todos: failedTodos as unknown as HudInput['todos'], agents: [ag('alpha-explorer', 'done', 'done'), ag('ghost-explorer', 'failed', 'failed')] };
+    const rows = (idle: boolean) => hudLines(inp, { cols: 110, maxRows: 30, ui, rich: false, now: NOW, ...(idle ? { idle: true } : {}) }).find((l) => l.some((x) => x.t === '▰' || /^▰+$/.test(x.t)));
+    const cells = (idle: boolean) => rows(idle)!.filter((x) => /^▰+$/.test(x.t)).map((x) => x.tone);
+    expect(cells(false)).toContain('bad');
+    expect(cells(true)).toContain('bad');
+  });
+  test('FN reads 2 for alpha when its report says `defines two functions` and lists `alpha_one()` defined at alpha.py:1 (live-150-1 f0092:34)', () => {
+    expect(functionsIn(['STATUS: Done. alpha.py defines two functions.'])).toBe(2);
+    expect(functionsIn(['EVIDENCE:\n- `alpha_one()` defined at /tmp/x/alpha.py:1\n- `alpha_two(x)` defined at /tmp/x/alpha.py:5'])).toBe(2);
+    expect(functionsIn(['3 functions', 'nothing here'])).toBe(3);
+    expect(functionsIn(['read the whole thing, one file'])).toBe(0);
+  });
+  test('SUBAGENTS column starts are the same working and at rest at one terminal width (stoprun-110-2: 12 against 16 cells was the host\'s reflow, 61 against 71 columns)', () => {
+    const starts = (cols: number, states: Array<[string, HudAgent['ui']]>, extra: object): number[] => {
+      const head = hudLines(input(states), { cols, maxRows: 30, ui, rich: false, now: NOW, merge: false, ...extra }).map(runsString).find((r) => /AGENT\s+STATE/.test(r))!;
+      return ['AGENT', 'STATE', 'TIME', 'CALLS', 'FN', 'LAST'].map((w) => head.indexOf(w));
+    };
+    for (const cols of [61, 80, 110, 150]) {
+      const idle = starts(cols, [['done', 'done'], ['done', 'done']], { idle: true });
+      const work = starts(cols, [['working', 'running'], ['done', 'done']], { working: true });
+      expect(work, String(cols)).toEqual(idle);
+    }
   });
 });

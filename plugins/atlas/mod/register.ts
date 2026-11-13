@@ -14,7 +14,7 @@ import { bandBlockedOf, bandKindOf, bandTree, hudPhases, railPhase, type BandHan
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
-import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
+import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
@@ -1058,8 +1058,10 @@ let blockedStreak = 0;
 let blockedAllow: boolean | null = null;
 let kindHold: KindHold = newKindHold(); // state 38: the last non-idle band word, held 1 s before idle (band-motion stepKind)
 let heldKind: KindHold['kind'] = null;
+/** The word the band drew on its last render (state 38 hold applied). While it reads `working` the frame loop keeps beating: a working glyph that is on screen must advance every frame, whatever holds the word (truth 41: stoprun-110-2 f0096-f0097 drew `⠹ working` twice for 1.81 s). */
+let shownKind: KindHold['kind'] = null;
 /** Test seam: forget the debounce. */
-export const resetBlockedDebounce = (): void => { stopRefused = false; blockedStreak = 0; blockedAllow = null; kindHold = newKindHold(); heldKind = null; };
+export const resetBlockedDebounce = (): void => { stopRefused = false; blockedStreak = 0; blockedAllow = null; kindHold = newKindHold(); heldKind = null; shownKind = null; };
 /** Test seam: forget the last blocked state drawn. */
 export const resetBlockedMark = (): void => { blockedDrawn = false; };
 /** Look at the blocked state (the snapshot's phase, the Stop verdict) and redraw when it changed. Called on every beat, tick and poll. */
@@ -1126,7 +1128,7 @@ async function frameBeat($: EngineInterface): Promise<void> {
 		verdictBusy = true;
 		try { await verdictFast($, snap as LiveSnapshot); } finally { verdictBusy = false; }
 	}
-	if (working || runClock.startMs !== null || ended || flip) await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; });
+	if (beatDue({ working, shown: shownKind, open: runClock.startMs !== null, ended, flip })) await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; });
 	await observeBlocked($); // after the bump: the band's redraw is already asked for when the panel's clock starts
 	if (cardsDue()) await placeFinished($, snap as LiveSnapshot, snap as LiveSnapshot); // the run card and the blocked card, on the beat after the band drew the state they name
 }
@@ -1431,6 +1433,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const kStep = stepKind(kindHold, bandKindOf(bandIn([], 1)), clockNow);
 		kindHold = kStep.hold;
 		heldKind = kStep.shown !== 'idle' ? kStep.shown : null;
+		shownKind = kStep.shown;
 		// State 38: the run card and the band flip on the same render, on the band's final clock.
 		const finalNow = runClock.startMs === null && kStep.shown === 'done' ? heldFinal() ?? null : null;
 		noteRunFinal(finalNow); // truth 39: the run card is placed on the next beat, never inside this render, so it cannot land a frame before the band that reads done
@@ -1536,6 +1539,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		frameTimer?.cancel();
 		frameTimer = null;
 		clockHeld = null;
+		shownKind = null;
 		runOrigin = null;
 		resumedAt = null;
 		runClock = newRunClock(); // a new session starts its work clock from nothing
