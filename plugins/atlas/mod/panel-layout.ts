@@ -954,7 +954,11 @@ function channelLog(m: PanelModel): PanelLine[] {
   const title = channelLabel(m.channel);
   const head = line(fitRuns([r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted')], m.cols));
   // Wave 32 (critique 30: `no messages yet` floated mid-pane over 90% blank): an empty channel is one left-aligned row straight under the head, the pane fill carries the surface to the foot.
-  if (!m.notes.length) return [head, line(fitRuns([r(`${ind}${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} no messages`, 'dim')], m.cols)), ...quietSenders(m)]; // wave 36 (critique 35: the channel tab about 95% empty): nothing said is one dim line under the head, never a block of blank rows; the status view's footer carries `0 messages`
+  if (!m.notes.length) {
+    const senders = quietSenders(m);
+    if (senders.length) return [head, ...senders, BLANK, dimLine(m, '0 messages')]; // truth 39 (live-110-1 tab-channel: `○ no messages` over a senders block): with senders shown the count sits under them, in the footer's own words
+    return [head, line(fitRuns([r(`${ind}${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} no messages`, 'dim')], m.cols))];
+  } // wave 36 (critique 35: the channel tab about 95% empty): nothing said is one dim line under the head, never a block of blank rows; the status view's footer carries `0 messages`
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane
   const ageW = !m.run && m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(ageOfNote(m, n)))) : 0;

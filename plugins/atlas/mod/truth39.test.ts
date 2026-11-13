@@ -34,6 +34,23 @@ describe('step 1: no `working` after done or idle without a new prompt, and the 
   });
 });
 
+describe('step 3: the channel tab does not contradict itself', () => {
+  const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  const text = (over: Partial<PanelModel>): string[] => panelLines(panelWorld('channel', 110, ui, { rows: 40, now: 2_000_000, notes: [], ...over })).map(lineText);
+  test('senders shown: no `○ no messages` above them, `0 messages` under them', () => {
+    const t = text({});
+    expect(t.some((l) => l.includes('senders'))).toBe(true);
+    expect(t.join('\n')).not.toContain('no messages');
+    const at = (re: RegExp): number => t.findIndex((l) => re.test(l));
+    expect(at(/^\s+0 messages$/)).toBeGreaterThan(at(/senders/));
+  });
+  test('no senders: the tab keeps its one `○ no messages` line', () => {
+    const t = text({ workers: [], mates: [], lead: undefined });
+    expect(t.filter((l) => l.includes('○ no messages'))).toHaveLength(1);
+    expect(t.join('\n')).not.toContain('senders');
+  });
+});
+
 describe('step 2: the side panel phase row prints the band\'s glyph, word and clock', () => {
   const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
   const NOW = 2_000_000;

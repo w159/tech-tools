@@ -106,12 +106,12 @@ describe('step 4: the channel', () => {
     for (const who of ['ghost-explorer', 'stop gate', 'lead']) expect(t.some((l) => l.includes(who))).toBe(true);
     expect(t.filter((l) => /\d\d:\d\d$/.test(l)).length).toBe(3);
   });
-  test('with nothing to say the pane holds one dim line under the head (left-aligned since wave 32)', () => {
-    const t = text('channel', 80, { notes: [] });
+  test('with nothing to say and no sender the pane holds one dim line under the head (left-aligned since wave 32)', () => {
+    const t = text('channel', 80, { notes: [], workers: [] });
     const say = t.filter((l) => l.includes('○ no messages'));
     expect(say).toHaveLength(1);
     expect(say[0]!.length - say[0]!.trimStart().length).toBe(4); // wave 32: left-aligned under the head, not centred
-    const runs = panelLines(world('channel', 80, { notes: [] })).flatMap((l) => l.runs).filter((x) => x.t.includes('no messages'));
+    const runs = panelLines(world('channel', 80, { notes: [], workers: [] })).flatMap((l) => l.runs).filter((x) => x.t.includes('no messages'));
     expect(runs.map((x) => x.tone)).toEqual(['dim']); // wave 36: one dim (240) line, as every quiet empty row
   });
   test('the live model stamps a refusal and a closure with the time of the log before them, so all three rows carry a time', () => {
