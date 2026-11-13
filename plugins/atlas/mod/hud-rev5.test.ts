@@ -153,7 +153,7 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
     const out = rows(plan, agents, { maxRows: 9 }).map(text);
     expect(out.length).toBeLessThanOrEqual(9);
     expect(corners(out)).toEqual([2, 2]);
-    expect(out[0]).toMatch(/TODO {2}0\/5 · \+3 more/);
+    expect(out[0]).toMatch(/TODO {2}0\/5 · ■1 · \+3 more/);
     expect(planRows(out)).toBeGreaterThanOrEqual(2);
     expect(agentLines(out)).toBe(3);
     expect(out.some((r) => /not shown/.test(r))).toBe(false);

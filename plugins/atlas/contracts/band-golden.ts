@@ -26,7 +26,7 @@ export const golden: string[] = [
 /** Idle with a failing check (`△ doctor`): the run is closed, every plan row done, the band reads a warning (never idle beside a failing check, and never BLOCKED unless Stop refused) and keeps the failed worker, the last run follows (it counts the failure
  * too), then the core row (core-golden.ts) and the footer. The Claude band adds its key buttons to the footer only when handlers are wired. */
 export const idleGolden: string[] = [
-  "◖ ◆ ATLAS ◗  ● done · 0:42   todo ▰▰▰▰▰▰▰▰▰▰ 7/7 · ■ 1 failed",
+  "◖ ◆ ATLAS ◗  ● done · 0:42   todo ▰▰▰▰▰▰▰▰▰▱ 6/7 · ■ 1 failed",
   " last run  1 worker · 0:42 · 1 failed",
   " verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked",
   " checks  ● lint  ● test  △ doctor  2/3 green"

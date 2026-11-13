@@ -72,13 +72,14 @@ const FINISHED: Shape = { working: false, rest: 2, agents: NAMES.map((name) => (
 const IDLE: Shape = { ...FINISHED, rest: 60 };
 /** The lead closed every plan row and claims done; the third worker died and the Stop gate refused. */
 const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents[1]!, { name: NAMES[2]!, squad: 'failed', mood: 'failed' }], gates: runstate.stopRefusal([], 'Done claimed too early: 1 open dispatch row.') as unknown[] };
+// Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 236, blocked 203.
 const STATES: [string, Shape, string, string, boolean][] = [
   ['working', RUNNING, 'accent', '[⠀-⣿] working 0:42', true],
-  ['done', FINISHED, 'ok', '● done · 1:12', false],
-  ['idle', IDLE, 'muted', '○ idle', false],
+  ['done', FINISHED, 'ok', '● done 1:12', false],
+  ['idle', IDLE, 'muted', '○ idle · 1:12', false],
   ['blocked', STOP, 'bad', '▲ blocked', true],
 ];
-const fill = (token: 'accent' | 'ok' | 'muted' | 'bad'): string => PALETTES.mocha[token];
+const fill = (token: 'accent' | 'ok' | 'muted' | 'bad'): string => (token === 'muted' ? xtermHex(236) : PALETTES.mocha[token]);
 
 describe('1. the band is three segments: state | plan | workers, in block elements', () => {
   for (const [cols, screen, body] of SIZES) {
@@ -91,12 +92,14 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
         const runs = bandRuns(f.model);
         const fills = runs.map((x) => x.bgHex).filter((h): h is string => h !== undefined);
         const order = [...new Set(fills)];
-        expect(order[0], `${name} state fill`).toBe(fill(token as 'accent'));
-        expect(order[1], `${name} plan fill`).toBe(xtermHex(237));
-        if (workers) expect(order[2], `${name} workers fill`).toBe(xtermHex(235));
-        else expect(order, `${name}: no workers listed, no workers segment`).toHaveLength(2);
-        const word = runs.find((x) => x.t === name || x.t === ' blocked')!;
-        expect([word.tone, word.bgHex], name).toEqual(['ink', fill(token as 'accent')]); // dark or white ink on the state fill (231 / 234)
+        expect(order[0], `${name} pill fill`).toBe(xtermHex(97));
+        expect(order[1], `${name} state fill`).toBe(fill(token as 'accent'));
+        expect(order[2], `${name} plan fill`).toBe(xtermHex(237));
+        if (workers && !(name === 'blocked' && body < 90)) expect(order[3], `${name} workers fill`).toBe(xtermHex(235)); // wave 36: a blocked lead (gates chip, open dispatch) gives the workers segment up first at 56 cells
+        else if (!workers) expect(order, `${name}: no workers listed, no workers segment`).toHaveLength(3);
+        const word = runs.find((x) => /^ ?(?:working|blocked|done|idle)/.test(x.t) && x.bgHex === fill(token as 'accent'))!;
+        expect(word.bgHex, name).toBe(fill(token as 'accent'));
+        expect(word.tone === 'ink' || word.tone === 'white' || word.tone === 'text' || word.tone === 'sub' || word.tone === 'muted', `${name}: ${word.tone}`).toBe(true);
         expect(runs.reduce((n, x) => n + [...x.t].length, 0), 'the bar is exactly the body wide').toBe(body);
         expect(runs.at(-1)!.bgHex, 'the last segment fill runs to the last cell').toBeDefined();
       });
@@ -114,10 +117,10 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
     expect(text({ theme: 'mocha', ascii: false, color: '256' })).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:42 ▌ todo 2\/5/);
     for (const color of ['256', 'none'] as const) expect(text({ theme: 'mocha', ascii: false, color })).not.toMatch(PUA);
   });
-  test('256 colours keep the stable palette fills (141 / 237 / 235), never an RGB approximation', () => {
+  test('256 colours keep the stable palette fills (141 / 237 / 235), never an RGB approximation (the pill 97 first)', () => {
     const f = frameOf(RUNNING, 93, 45, '256');
     const fills = [...new Set(bandRuns(f.model).map((x) => x.bgHex).filter((h): h is string => h !== undefined))];
-    expect(fills.slice(0, 3)).toEqual([PALETTES.mocha.accent, xtermHex(237), xtermHex(235)]);
+    expect(fills.slice(0, 4)).toEqual([xtermHex(97), PALETTES.mocha.accent, xtermHex(237), xtermHex(235)]);
   });
   test('a narrow bar drops the workers segment first, then the plan detail, and never the state word or the clock', () => {
     const seen: string[] = [];
@@ -198,32 +201,33 @@ describe('5. one state per item: a row whose worker died is `■ failed` from th
 
 describe('6. SUBAGENTS: one rule while they run, a k9s-style table once they have stopped', () => {
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: while agents run there is one rule and no header row`, () => {
+    test(`${cols} columns: while agents run the same titled table shows, header row included (wave 36)`, () => {
       const f = frameOf(RUNNING, body, screen);
       const marks = f.hud.filter((r) => r.includes('◖ ◆ ATLAS ◗ ▸ SUBAGENTS'));
       expect(marks).toHaveLength(1);
-      expect(marks[0]).toMatch(/^╰.*[⠀-⣿] 3 running/);
-      expect(f.hud.some((r) => /^\s+AGENT\s+TIME/.test(r))).toBe(false);
+      expect(marks[0]).toMatch(/^╭.*[⠀-⣿] 3 running/);
+      expect(f.hud.some((r) => /^\s+AGENT\s+STATE\s+TIME/.test(r)), 'wave 36: the table header shows while they run too').toBe(true);
     });
-    test(`${cols} columns: at done the table is AGENT TIME, one row per agent with the disc, the name and the clock`, () => {
+    test(`${cols} columns: at done the table is AGENT STATE TIME, one row per agent with the name, the state and the clock`, () => {
       const f = frameOf(FINISHED, body, screen);
-      const head = f.hud.findIndex((r) => /^\s+AGENT\s+TIME/.test(r));
+      const head = f.hud.findIndex((r) => /^\s+AGENT\s+STATE\s+TIME/.test(r));
       expect(head).toBeGreaterThan(0);
       expect(f.hud[head - 1]).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done/);
       const header = f.hudSegs[head]!.find((x) => x.t.includes('AGENT'))!;
       expect(header.color).toBe(xtermHex(245));
       NAMES.forEach((n, i) => {
         const row = f.hud[head + 1 + i]!;
-        expect(row, n).toMatch(new RegExp(`^ ● ${n}\\s+\\d+:\\d\\d`));
+        expect(row, n).toMatch(new RegExp(`^ {2}${n}\\s+● done\\s+\\d+:\\d\\d`));
       });
     });
     test(`${cols} columns: a failed agent's row is \`■\` in 203`, () => {
       const f = frameOf(STOP, body, screen);
-      const at = f.hud.findIndex((r) => /^ ■ gamma-explorer/.test(r));
+      const at = f.hud.findIndex((r) => /^ {2}gamma-explorer\s+■ failed/.test(r));
       expect(at).toBeGreaterThan(0);
       const segs = f.hudSegs[at]!;
       expect(segs.find((x) => x.t === '■')?.color).toBe(PALETTES.mocha.bad);
       expect(segs.find((x) => x.t.includes('gamma-explorer'))?.color).toBe(PALETTES.mocha.bad);
+      expect(segs.find((x) => x.t === 'failed')?.color).toBe(PALETTES.mocha.bad);
     });
   }
   test('at 110 columns the narrow table keeps the names and the times', () => {

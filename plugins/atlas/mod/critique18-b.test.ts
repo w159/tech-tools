@@ -44,7 +44,7 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect([names(14), names(13), names(12)]).toEqual([true, true, false]); // the column names go before a plan row does
     expect(hud(93, 12)[0]).not.toMatch(/done/);
     expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
-    expect(hud(93, 11)[0]).toMatch(/1\/5 · 1 done/); // then the finished row folds into the title
+    expect(hud(93, 11)[0]).toMatch(/1\/5 · ■2 · 1 done/); // then the finished row folds into the title (wave 36: failed rows are counted on the title)
     expect(open(11)).toHaveLength(4);
     expect(open(10)).toHaveLength(3);
     expect(hud(93, 10)[0]).toMatch(/\+2 more/);
@@ -95,7 +95,7 @@ describe('B3 (round 3): blocked and failed share the one error colour; the glyph
       expect(contrast(PALETTES[theme][STATE_TOKEN.blocked], PALETTES[theme].panel)).toBeGreaterThanOrEqual(3);
     }
     expect(PALETTES.mocha.bad).toBe('#ff5f5f'); // error 203
-    const rows = hudLines({ todos: plan(), agents }, { cols: 150, maxRows: 12, ui, now: NOW });
+    const rows = hudLines({ todos: plan(), agents }, { cols: 150, maxRows: 18, ui, now: NOW }); // wave 36: the table under the plan takes rows, so the budget is roomier
     const toneOf = (needle: string, word: string) => rows.find((r) => runsString(r).includes(needle))!.find((x) => x.t.trim() === word)!.tone;
     const glyphOf = (needle: string) => rows.find((r) => runsString(r).includes(needle))![2]!.tone;
     expect(toneOf('T2 read ghost.py', 'failed')).toBe(rowWordTone('failed')); // wave 35: a row over a failed worker reads failed, in the shared table's failed tone

@@ -184,3 +184,14 @@ export const runElapsed = (c: { startMs: number | null; ranMs?: number; endedMs?
   if (c.ranMs !== undefined && c.endedMs !== undefined) return Math.max(0, Math.floor((c.ranMs + Math.max(0, now - c.endedMs)) / 1000));
   return undefined;
 };
+
+/** The blocked debounce (wave 36, critique 35: one false `blocked` frame while the host was still working). The band may read blocked only on the host's Stop event (`stopEvent`: the completion gate refused the Stop),
+ * or after two consecutive renders that both computed blocked while the host turn is NOT active; while the host works it never reads blocked. `streak` counts the consecutive host-idle renders that computed blocked.
+ * `allow` is what the band is told (`BandModel.blockedConfirmed`). */
+export function stepBlocked(streak: number, computed: boolean, hostActive: boolean, stopEvent: boolean): { streak: number; allow: boolean } {
+  if (!computed) return { streak: 0, allow: false };
+  if (stopEvent) return { streak: streak + 1, allow: true };
+  if (hostActive) return { streak: 0, allow: false };
+  const next = streak + 1;
+  return { streak: next, allow: next >= 2 };
+}

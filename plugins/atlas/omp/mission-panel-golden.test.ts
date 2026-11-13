@@ -18,7 +18,7 @@ test("renders the shared world to the golden rows (plain text, 120 columns, tick
 
 test("idle renders the shared idle golden, core row included, a failed worker still counted", () => {
 	const idleModel = worldOmp(120, {
-		phase: "done", done: 7, elapsedSecs: undefined, todos: worldIdleSnapshot().todos, idle: { workers: 1, secs: 42, failed: 1 },
+		phase: "done", done: 6, elapsedSecs: undefined, todos: worldIdleSnapshot().todos, idle: { workers: 1, secs: 42, failed: 1 },
 		workers: worldOmp(120).workers.map((w: { state?: string }) => (w.state === "failed" ? w : { ...w, state: "done", tool: undefined })),
 		core: coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 }),
 	});

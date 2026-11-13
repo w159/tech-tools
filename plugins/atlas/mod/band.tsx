@@ -26,7 +26,7 @@ import { textWidth } from './theme';
 export { planRows } from './mission-layout';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; /** The HUD draws an agent running (listed, resumed or queued): the band reads working whatever the host's turn flag says. */ agentsRunning?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; /** Wave 36 (debounce): false holds back a blocked verdict that is not confirmed yet (register.ts stepBlocked); absent or true: the band reads it as computed. */ blockedConfirmed?: boolean; /** The HUD draws an agent running (listed, resumed or queued): the band reads working whatever the host's turn flag says. */ agentsRunning?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 // `team` (omp: the team record's `<class>/<effort>`) is the header's scope label; `leadName` (omp: `lead-<sid6>`)
 // names the lead in the message row. Both absent: not shown / `lead`. `ui` (theme, ASCII, colour depth) defaults to the
 // environment; `rich` (ATLAS_BAND_RICH=1) draws the tall band when the rows allow. `workersInHud`: the HUD's Subagents
@@ -39,7 +39,7 @@ export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
 export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void };
 /** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
-export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = STRIP_TABS; // the side panel's own tab strip (route team channel gates core board)
+export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = STRIP_TABS.map((b) => (b.id === 'route' ? { ...b, label: 'status' } : b)); // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
 /** How to give the band the keyboard; shown after the keys when it fits. */
 export const BAND_HINT = 'ctrl+x tab';
 const buttonWidth = (b: { label: string }): number => 3 + textWidth(b.label) + 2; // engine draws `k: label`, two cells between buttons
@@ -158,7 +158,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
     turnSecs: b.workSecs, ranSecs: b.ranSecs, ...(b.restSecs !== undefined ? { restSecs: b.restSecs } : {}), ...(closed ? { closed } : {}),
-    workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.motion ? { motion: b.motion } : {}),
+    workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.motion ? { motion: b.motion } : {}),
   };
 }
 

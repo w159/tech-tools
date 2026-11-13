@@ -27,7 +27,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const rows = text(todoRows(worldTodos(), opts(60), full));
     expect(rows.slice(1, -1)).toEqual(todo_40.slice(1, -1));
     expect(rows[0]!.length).toBe(60); // the title rule runs to the last cell, where the host draws its `[-]`
-    expect(rows[0]!).toMatch(/TODO {2}3\/7 ▰{3}▱{5} ─+╮$/); // critique 21: the count and the meter sit INSIDE the rule, which runs on to the corner at the edge
+    expect(rows[0]!).toMatch(/TODO {2}3\/7 · ■1 ▰{4}▱{4} ─+╮$/); // wave 36: the failed row is counted apart (`· ■1`) and has its own meter cell; critique 21: the count and the meter sit INSIDE the rule, which runs on to the corner at the edge
     expect(rows.at(-1)).toBe(`╰${'─'.repeat(58)}╯`); // the box closes at the width of the surface
   });
   test('completed rows are drawn as done: a green disc, the word, and quiet 247 text that is never struck through (critique 21)', () => {
