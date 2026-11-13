@@ -47,24 +47,23 @@ test('C3: a worker the lead stopped and then resumed reads `finished` on its own
   noteFailed('a1') // the kill card (placed.ts, the host row) already saw it fail: failure is sticky by id
   const row = flat(await sites().UserMessage!(lead({ squadState: 'finished', killed: true, messages: [stop, resume] }), notice('completed'), next))
   expect(row).toContain('● done')
-  expect(row).not.toMatch(/■ (failed|killed)/)
+  expect(row).not.toMatch(/■ failed/)
 })
 
-test('C3: a worker stopped and never resumed keeps its failure, and a TaskStop kill always says `killed` (one verb)', async () => {
+test('C3: a worker stopped and never resumed keeps its failure, and a TaskStop kill always says `failed` (one verb)', async () => {
   for (const messages of [[stop], []]) {
     forgetPlaced()
     const row = flat(await sites().UserMessage!(lead({ squadState: 'failed', killed: true, messages }), notice('completed'), next))
-    expect(row).toContain('■ killed')
-    expect(row).not.toContain('■ failed')
+    expect(row).toContain('■ failed')
   }
 })
 
-test('C3: a failure no TaskStop caused reads `killed` too (wave 30: one word for a worker that did not finish)', async () => {
+test('C3: a failure no TaskStop caused reads `failed` too (wave 33: one word for a worker that did not finish)', async () => {
   const row = flat(await sites().UserMessage!(lead({ squadState: 'failed', killed: false, messages: [] }), notice('failed'), next))
-  expect(row).toContain('■ killed')
+  expect(row).toContain('■ failed')
 })
 
 test('C3: a SendMessage that came before the TaskStop is no resume', async () => {
   const row = flat(await sites().UserMessage!(lead({ squadState: 'failed', killed: true, messages: [resume, stop] }), notice('completed'), next))
-  expect(row).toContain('■ killed')
+  expect(row).toContain('■ failed')
 })

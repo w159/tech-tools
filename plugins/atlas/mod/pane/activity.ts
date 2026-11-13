@@ -2,10 +2,11 @@
 // an activity sparkline over a worker's own run, and the team's totals. Host free; nothing here draws.
 import type { UiState } from '../atlas-ui';
 
-/** The one word for a worker that did not finish (critique 28: `closed`, `worker killed`, `failed` and `killed` named one fact four ways). It reads `killed`, with the `■` mark, in error 203. */
-export const KILLED = 'killed';
-/** The word a surface of this wave draws for a state: `failed` reads `killed`, every other state is its own word. */
-export const wordOf = (s: string): string => (s === 'failed' ? KILLED : s);
+/** The one word for a worker that did not finish (critique 28: `closed`, `worker killed`, `failed` and `killed` named one fact four ways). Wave 33 (critique 31: the SUBAGENTS title said `1 failed`, the row said `killed`):
+ * the word is `failed` on every surface, with the `■` mark, in error 203. The export keeps its wave 30 name. */
+export const KILLED = 'failed';
+/** The word a surface draws for a state: every state is its own word (`failed` is the one failure word). */
+export const wordOf = (s: string): string => s;
 
 /** `20s`, `3m`, `2h`: how long ago, one figure. */
 export function ageWord(ms: number): string {
@@ -32,8 +33,8 @@ export function sparkOf(calls: readonly number[] | undefined, startMs: number | 
   return buckets.map((v) => (v === 0 ? chars[0]! : chars[Math.max(1, Math.min(top, Math.round((v / peak) * top)))]!)).join('');
 }
 
-/** Wave 32 (critique 30: each team sparkline was stretched over its own agent's span, so the shapes lined up with nothing): `n` cells over the RUN's window (`from` to `to`), one axis for every row. A cell outside the agent's own
- * run (`startMs` to `endMs`) is blank; inside it an empty bucket is the lowest bar. */
+/** Wave 32 (critique 30: each team sparkline was stretched over its own agent's span, so the shapes lined up with nothing): `n` cells over the RUN's window (`from` to `to`), one axis for every row. Wave 33 (critique 31: the
+ * sparklines were 3 cells of a 12 cell column): every row is exactly `n` bar cells, a cell outside the agent's own run (`startMs` to `endMs`) or with no call in it the lowest bar, the floor. */
 export function sparkOver(calls: readonly number[] | undefined, from: number, to: number, startMs: number | undefined, endMs: number | undefined, n: number, ascii = false): string {
   const chars = ascii ? BLOCKS_ASCII : BLOCKS;
   const top = chars.length - 1;
@@ -45,9 +46,8 @@ export function sparkOver(calls: readonly number[] | undefined, from: number, to
     buckets[Math.min(cells - 1, Math.floor(((t - from) / span) * cells))]! += 1;
   }
   const peak = Math.max(1, ...buckets);
-  const first = startMs === undefined ? 0 : Math.max(0, Math.min(cells - 1, Math.floor(((startMs - from) / span) * cells)));
-  const last = endMs === undefined ? cells - 1 : Math.max(first, Math.min(cells - 1, Math.floor(((endMs - from) / span) * cells)));
-  return buckets.map((v, i) => (i < first || i > last ? ' ' : v === 0 ? chars[0]! : chars[Math.max(1, Math.min(top, Math.round((v / peak) * top)))]!)).join('');
+  void startMs; void endMs; // the agent's own span no longer blanks cells: a quiet stretch and the time before it or after it are the same floor
+  return buckets.map((v) => (v === 0 ? chars[0]! : chars[Math.max(1, Math.min(top, Math.round((v / peak) * top)))]!)).join('');
 }
 
 /** What the team did: a count per state and the run's length from the first start to the last end. */

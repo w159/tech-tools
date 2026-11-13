@@ -45,13 +45,13 @@ test('running card: the rail card, the state word and name, what it is doing, th
   expect(props(c).borderStyle).toBeUndefined()
 })
 
-test('the rail bar takes the state hue: running, done and failed differ; the state word stays plain text', () => {
+test('the rail bar is one colour for running, done and failed (wave 33); the state word stays plain text', () => {
   const frame = (c: unknown): unknown => (((c as El).children[0]!.children[0]!).props as Record<string, unknown>).color
   const run = frame(workerCard(call(), 'running')!)
   const done = frame(workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished')!)
   const bad = frame(workerCard(call({ isRunning: false, isErrored: true }), 'failed')!)
-  expect(new Set([run, done, bad]).size).toBe(3)
-  expect(bad).toBe(runHex({ tone: 'bad' }, 'mocha', uiFromEnv().color)) // the bad tone in the depth the card is drawn in
+  expect(new Set([run, done, bad]).size).toBe(1) // wave 33 (critique 31): one bar colour for every card kind, 141 for the first second
+  expect(bad).toBe(runHex({ tone: 'accent' }, 'mocha', uiFromEnv().color))
 })
 
 test('done card shows the result line after the name; errored reads killed in the state word (wave 30)', () => {
@@ -60,7 +60,7 @@ test('done card shows the result line after the name; errored reads killed in th
   expect(text(done)).not.toContain('STATUS')
   expect(text(done)).not.toContain('DONE')
   const bad = workerCard(call({ isRunning: false, isErrored: true }), 'failed')!
-  expect(rowsOf(bad)[0]).toContain('killed   impl-a')
+  expect(rowsOf(bad)[0]).toContain('failed   impl-a')
 })
 
 test('non-atlas Agent call is left to the engine', () => {
@@ -108,7 +108,7 @@ test('denied dispatch: killed in the state word, the first sentence of the reaso
   const output = 'Error: PreToolUse:Agent hook error: DENY - this dispatch to atlas:explorer has no `SCOPE: <class>/<effort>` line. Classify the task, then resolve its team:\n  python3 x'
   const c = workerCard(call({ input: { subagent_type: 'atlas:explorer', prompt, model: 'sonnet', effort: 'low' }, isRunning: false, isErrored: true, output }), 'failed', 120)!
   const t = text(c)
-  expect(rowsOf(c)[0]).toContain('killed   explorer')
+  expect(rowsOf(c)[0]).toContain('failed   explorer')
   expect(t).toContain('denied: this dispatch to atlas:')
   expect(t).not.toContain('Classify the task')
   expect(t).not.toContain('TOOLS:')
@@ -194,7 +194,7 @@ test('the outcome of a background worker follows its name on the rail row', () =
 test('a killed or failed background worker reads killed on the rail; a finished one reads done', () => {
   const launch = call({ isRunning: false, output: { status: 'async_launched', agentId: 'a1' } })
   const card = (ended: string) => workerCard(launch, 'finished', 60, undefined, '', { ended, outcome: '' })!
-  for (const ended of ['killed', 'failed']) expect([ended, rowsOf(card(ended))[0]!.includes('killed   impl-a')]).toEqual([ended, true])
+  for (const ended of ['killed', 'failed']) expect([ended, rowsOf(card(ended))[0]!.includes('failed   impl-a')]).toEqual([ended, true])
   expect(rowsOf(card('finished'))[0]).toContain('done     impl-a')
 })
 
@@ -202,7 +202,7 @@ test('the notification row is state, name, role and outcome', () => {
   // Wave 31: a finish card is one row, the one-line shape the capture scorer reads.
   const title = (n: unknown): string => text((n as El).children[0])
   expect(title(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a$/) // wave 32: no `explorer finished` after the name
-  expect(title(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ killed {2}wave-a/)
+  expect(title(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ failed {2}wave-a/)
 })
 
 // Critique 19 B4 (stoprun-150-232567af-3/f0132.ans:4, -1/f0093.ans:15 vs :20): one verb per card, and a failure keeps its red glyph and word as it ages.
@@ -216,16 +216,15 @@ const parts = (n: unknown): Array<{ t: string; color: unknown }> => {
 test('B4: a killed worker reads one verb: `killed name · 6s`, not `failed name explorer killed · 6s`', () => {
   const card = text(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true))
   expect(card).not.toContain('\n')
-  expect(card).toMatch(/■ killed {2}ghost-explorer\s+0:06$/)
-  expect(card).not.toContain('failed')
-  expect(text(notificationTree('ghost-explorer', 'explorer', 'failed · tests red · 6s', true))).toMatch(/■ killed {2}ghost-explorer\s+0:06$/) // the result line lives in the HUD's RESULT column, not on the card
+  expect(card).toMatch(/■ failed {2}ghost-explorer\s+0:06$/)
+  expect(text(notificationTree('ghost-explorer', 'explorer', 'failed · tests red · 6s', true))).toMatch(/■ failed {2}ghost-explorer\s+0:06$/) // the result line lives in the HUD's RESULT column, not on the card
 })
 test('B4: an aged failure card is drawn exactly as a fresh one (critique 26: one text grey on every card)', () => {
   const fresh = parts(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, uiFromEnv(), false))
   const aged = parts(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, uiFromEnv(), true))
   const at = (xs: typeof fresh, w: string) => xs.find((x) => x.t.trim() === w)!
   expect(at(aged, '■').color).toBe(at(fresh, '■').color)
-  expect(at(aged, 'killed').color).toBe(at(fresh, 'killed').color)
+  expect(at(aged, 'failed').color).toBe(at(fresh, 'failed').color)
   expect(at(aged, 'ghost-explorer').color).toBe(at(fresh, 'ghost-explorer').color)
 })
 

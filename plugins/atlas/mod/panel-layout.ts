@@ -193,8 +193,8 @@ const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
   return UI_STATES.filter((s) => n(s)).map((s) => `${n(s)} ${wordOf(s)}`).join(` ${dot(ui)} `);
 };
 
-/** A channel as a person reads it: a generated id (`lc-opl0e60i`, a launch code) is no name, so it reads `this run`; a named channel keeps its `#name` (critique 12). */
-export const channelLabel = (name: string | undefined, fallback = 'channel'): string => (name && /^lc-[\w-]{4,}$/i.test(name) ? 'this run' : `#${name ?? fallback}`);
+/** A channel as a person reads it: a generated id (`lc-opl0e60i`, a launch code, with or without its `@master` branch) is no name, so it reads `this run`; a named channel keeps its `#name` (critique 12). */
+export const channelLabel = (name: string | undefined, fallback = 'channel'): string => (name && /^lc-[\w-]{4,}(@[\w./-]+)?$/i.test(name) ? 'this run' : `#${name ?? fallback}`);
 
 /** The ribbon's right-hand text: what the active tab counts, always with its word. */
 function ribbonRight(m: PanelModel): string {
@@ -442,9 +442,10 @@ function routeSummary(m: PanelModel): PanelLine[] {
   const gates = gatesRow(m);
   if (gates) rows.push(gates);
   rows.push(...agentsRows(m));
-  rows.push(todoCount(m));
+  if (!m.todos.length) rows.push(todoCount(m)); // `todo  no tasks yet`; with a plan its figure is the plan header's meter below
   if (!m.todos.length && !m.workers.length) { rows.push(BLANK, ...indentedHint(m, 'add one with /todo add')); return rows; } // the `todo` row above already says `no tasks yet`
   rows.push(BLANK, line(fitRuns([r(`${' '.repeat(GRID_LEAD)}timeline`, 'muted', { bold: true })], m.cols)), ...phaseChain(m));
+  if (m.todos.length) rows.push(BLANK, planHeader(m));
   rows.push(...planTimeline(m, Math.max(1, m.rows - headerRows(m).length - rows.length - 2)));
   return rows;
 }
@@ -478,15 +479,25 @@ function planStarts(m: PanelModel): (number | undefined)[] {
   });
 }
 
+/** Wave 33 (critique 31: the route tab was 70% empty): the plan's header, `plan  ▰▰▰▰▰▱▱▱ 3/5`: the HUD's meter of the rows done and the plan figure, over one row per plan item. */
+function planHeader(m: PanelModel): PanelLine {
+  const done = m.todos.filter((t) => t.state === 'done').length;
+  const total = m.todos.length;
+  return heading('plan', [...todoMeter(done, total, m.ui), r(' '), r(planFigure(done, total, m.todos.filter((t) => t.word === RETURNED).length), 'muted')], m);
+}
+
 function planTimeline(m: PanelModel, room: number): PanelLine[] {
   if (!m.todos.length || room < 1) return [];
   const stamps = planStarts(m).map((x) => (x === undefined ? '' : `+${shortAge(x)}`));
   const valueW = Math.max(0, ...stamps.map((x) => cells(x)));
+  const items = m.todos.map(withoutOwner); // `T1 read alpha.py (alpha-explorer)` reads `T1 read alpha.py`: the agent has its own column
+  const owners = items.map((t) => (t.owner ? clipE(oneLine(t.owner), OWNER_W) : ''));
+  const ownerW = m.cols >= 56 ? Math.max(0, ...owners.map((x) => cells(x))) : 0;
   const shown = m.todos.length > room ? Math.max(1, room - 1) : m.todos.length;
-  const nameW = Math.max(6, Math.min(m.cols - GRID_LEAD - 1 - (valueW ? valueW + 2 : 0), ...[Math.max(...m.todos.map((x) => cells(oneLine(x.label))))]));
-  const rows = m.todos.slice(0, shown).map((t, i): PanelLine => {
+  const nameW = Math.max(6, Math.min(m.cols - GRID_LEAD - 1 - (valueW ? valueW + 2 : 0) - (ownerW ? ownerW + 2 : 0), ...[Math.max(...items.map((x) => cells(oneLine(x.label))))]));
+  const rows = items.slice(0, shown).map((t, i): PanelLine => {
     const mk = markOf(t.state, t.word);
-    const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateMark(mk === 'doubt' ? 'failed' : mk, m, t.owner || t.id), name: { t: oneLine(t.label), tone: t.state === 'done' && mk !== 'doubt' ? 'sub' : 'text' }, nameW, nameCut: 'end', ...(stamps[i] ? { value: { t: stamps[i]!, tone: 'dim' as Tone } } : {}) });
+    const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateMark(mk === 'doubt' ? 'failed' : mk, m, t.owner || t.id), name: { t: oneLine(t.label), tone: t.state === 'done' && mk !== 'doubt' ? 'sub' : 'text' }, nameW, nameCut: 'end', ...(ownerW ? { word: { t: owners[i]!, tone: 'sub' as Tone }, wordW: ownerW } : {}), ...(stamps[i] ? { value: { t: stamps[i]!, tone: 'dim' as Tone } } : {}) });
     return line(fitRuns(moving(runs, `task:${t.id}`, mk, m), m.cols));
   });
   return [...rows, ...(shown < m.todos.length ? [line([r(`    +${m.todos.length - shown} more on the board`, 'muted')])] : [])];
@@ -620,7 +631,8 @@ function workerRows(m: PanelModel, w: PanelWorker, g: TeamGrid, focus: boolean):
   const used = GRID_LEAD + g.nameW + 2 + g.wordW + (g.roleW ? 2 + g.roleW : 0) + (g.ageW ? 2 + g.ageW : 0) + (g.sparkW ? 2 + g.sparkW : 0);
   const wide = m.cols >= WIDE;
   const room = m.cols - 1 - used - 2;
-  const last = wide && room >= 8 ? lastFit(w, room) : '';
+  const said = wide && room >= 8 ? lastFit(w, room) : '';
+  const last = said === wordOf(w.state) ? '' : said; // a failed worker's `failed` after its state word says it twice (wave 33)
   const spark = g.sparkW && w.state !== 'queued' ? (g.win ? sparkOver(w.calls, g.win.from, g.win.to, w.startMs, w.endMs, g.sparkW, m.ui.ascii) : sparkOf(w.calls, w.startMs, w.endMs, g.sparkW, m.ui.ascii)) : ' '.repeat(g.sparkW);
   const tail: Run[] = [
     ...(g.roleW ? [r('  '), r(pad(clipE(roleOf(w), g.roleW), g.roleW), 'sub')] : []),
@@ -722,7 +734,9 @@ function teamBody(m: PanelModel): PanelLine[] {
   const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet') : [];
   const head = [...(leadRow ? rows([leadRow]) : []), ...hint, ...rows(workers), ...rows(mates)];
   const body = [...head, ...(m.lead ? [BLANK, ...leadSummary(m)] : [])]; // one row per agent, at every height
-  return [...body, ...(tall(m) ? recentRows(m, spareRows(m, body.length)) : [])]; // the last posts only on a tall pane: a short one stays one row per agent
+  const failedNames = new Set(m.workers.filter((w) => w.state === 'failed').map((w) => w.name)); // a failure its row already says is not a post again (wave 33)
+  const posts = { ...m, notes: m.notes.filter((n) => !(n.kind === 'failed' && failedNames.has(n.from)) && !/^(T\d+|row) failed\b/.test(n.text)) };
+  return [...body, ...(tall(m) ? recentRows(posts, spareRows(m, body.length)) : [])]; // the last posts only on a tall pane: a short one stays one row per agent
 }
 
 // ---- channel ------------------------------------------------------------------------------------------------------------------
@@ -773,27 +787,14 @@ const NOTE_LINES_SHORT = 2; // rows one message may take on a short pane
 const NOTE_INLINE_MIN = 20; // cells of text a one-row post needs beside its whole name; less and the post takes two rows
 
 // Wave 30 (critique 28): the generated `#lc-...` slug is no part of the view. The head row says `this run` once; a named channel keeps its `#name` in the ribbon.
-/** Under the log (wave 31, critique 29: the channel tab was 80% empty): what the posts add up to and each sender's last one, from the notes the tab already holds. A count per kind (`6 posts · 1 failed · 1 blocked`), then one row per sender,
- * newest first, as many as the pane has rows for (a blank row, the counts, a blank row, `last by sender`, the senders). */
+/** Under the log (wave 31, critique 29: the channel tab was 80% empty): what the posts add up to, from the notes the tab already holds. A count per kind (`6 posts · 1 failed · 1 blocked`). Wave 33: the `last by sender`
+ * block is gone (critique 31: it repeated the log's own rows). */
 function channelSummary(m: PanelModel, spare: number): PanelLine[] {
   if (!m.notes.length || spare < 3) return [];
   const kinds = new Map<string, number>();
   for (const n of m.notes) { const w = noteState(n).word; if (w) kinds.set(w, (kinds.get(w) ?? 0) + 1); }
   const counts = [`${m.notes.length} ${m.notes.length === 1 ? 'post' : 'posts'}`, ...[...kinds].map(([w, c]) => `${c} ${w}`)].join(` ${dot(m.ui)} `);
   const out: PanelLine[] = [BLANK, line(fitRuns([r(' '.repeat(GRID_LEAD)), r('posts  ', 'text', { bold: true }), r(counts, 'muted')], m.cols))];
-  const latest = new Map<string, PanelNote>();
-  for (const n of m.notes) latest.set(n.from, n);
-  const room = Math.min(latest.size, spare - out.length - 2, 6);
-  if (room < 1) return out;
-  const senders = [...latest.values()].sort((x, y) => (y.ms ?? 0) - (x.ms ?? 0)).slice(0, room);
-  const who = Math.min(18, Math.max(...senders.map((n) => cells(n.from))));
-  out.push(BLANK, line(fitRuns([r(' '.repeat(GRID_LEAD)), r('last by sender', 'text', { bold: true })], m.cols)));
-  for (const n of senders) {
-    const time = r(`${stampOf(m, n).padEnd(7)}  `, 'dim');
-    const name = r(pad(clipE(n.from, who), who) + '  ', noteState(n).state === 'failed' ? 'bad' : 'sub');
-    const left = m.cols - 1 - GRID_LEAD - cells(time.t) - cells(name.t);
-    out.push(line(fitRuns([r(' '.repeat(GRID_LEAD)), time, name, r(left > 3 ? clipE(oneLine(noteText(m, n)), left) : '', 'muted')], m.cols)));
-  }
   return out;
 }
 const channelBody = (m: PanelModel): PanelLine[] => {
@@ -1294,21 +1295,23 @@ export const CARD_WORD_W = 7;
 /** The head of a toast: a left bar in `tone` (`▌`, `|` in ASCII), then, only on a finish card (`brand`), the ATLAS mark. The mark is one grey (dim, 240) wherever it is drawn: the one solid chip belongs
  * to the band, the ribbons and the side panel title carry the brand, and a start card, a failure card, a toast and a note repeat only the name (critique 25: `◆ ATLAS` seven times on one screen, in two greys).
  * The finish card keeps it: the capture scorer locates a card by `▌ ◆ ATLAS  <glyph> done  name  role finished` (live_capture.py :676). */
-const toastHead = (tone: Tone, ui: Ui, brand = false): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...(!brand ? [] : ui.ascii ? brandMark(ui) : [r('◆ ', 'accent'), r('ATLAS', 'accent')]), ...(brand ? [r('  ')] : [])];
+/** Wave 33 (critique 31: toast bars were 141, 114, 203 and 245 by card kind): every card kind wears the same bar, the accent 141 for its first second and the secondary grey 245 after (`fade` 0..1 from the card's age, half and over is the grey). */
+export const cardBarTone = (fade: number): Tone => (fade >= 0.5 ? 'sub' : 'accent');
+const toastHead = (fade: number, ui: Ui, brand = false): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : cardBarTone(fade)), r(' '), ...(!brand ? [] : ui.ascii ? brandMark(ui) : [r('◆ ', 'accent'), r('ATLAS', 'accent')]), ...(brand ? [r('  ')] : [])];
 
 /** `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps` (a finish card, `brand`) or `▌ ◐ running  implementer-layout  what it does`: the bar and the state word in the state's tone, the state, the
  * name, one fact. No full stop. */
-export function toastRuns(state: UiState, name: string, fact: string, ui: Ui, brand = false, frame = 0): Run[] {
+export function toastRuns(state: UiState, name: string, fact: string, ui: Ui, brand = false, frame = 0, fade = 0): Run[] {
   // Wave 32 (critique 30: the start card's `◐` was a static half circle): a running card wears the band's braille spinner in 141, turning with `frame`.
   const g = state === 'running' && !ui.ascii ? { ...stateRun('running', ui, frame, true), tone: 'accent' as const } : stateRun(state, ui, frame, true);
-  // Design rev 5, C3: the state word sits in a fixed-width column (CARD_WORD_W), so the name starts at the same cell on every card; `failed` and `killed` are the same width.
-  return [...toastHead(state === 'running' ? 'accent' : g.tone, ui, brand), { ...g, t: `${g.t} ` }, r(wordOf(state), stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
+  // Design rev 5, C3: the state word sits in a fixed-width column (CARD_WORD_W), so the name starts at the same cell on every card; `failed` is the one failure word.
+  return [...toastHead(fade, ui, brand), { ...g, t: `${g.t} ` }, r(wordOf(state), stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
 }
 export const toastText = (state: UiState, name: string, fact: string, ui: Ui): string => runsText(toastRuns(state, name, fact, ui));
 
 /** A note toast: the same head in the note grey (245), the word `note`, the sender, a preview. */
-export function noteToastRuns(sender: string, preview: string, ui: Ui): Run[] {
-  return [...toastHead('sub', ui), r('note', 'text', { bold: true }), r(`  ${sender}`), ...(preview ? [r(`  ${oneLine(preview)}`, 'sub')] : [])];
+export function noteToastRuns(sender: string, preview: string, ui: Ui, fade = 0): Run[] {
+  return [...toastHead(fade, ui), r('note', 'text', { bold: true }), r(`  ${sender}`), ...(preview ? [r(`  ${oneLine(preview)}`, 'sub')] : [])];
 }
 export const noteToastText = (sender: string, preview: string, ui: Ui): string => runsText(noteToastRuns(sender, preview, ui));
 export { stateGlyph };

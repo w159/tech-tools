@@ -447,16 +447,6 @@ function paneSummary(rows: readonly BoardRow[], o: BoardOpts): BoardLine {
   return { runs: [r(text, 'text', { bold: true }), ...bar] };
 }
 
-/** How the run closed, one line per closed dispatch (a plan row whose worker failed and whose row the lead closed): `T2 dispatch closed after Stop refusal · ghost-explorer`; a settled plan adds nothing (the summary row and its full meter say it). */
-function paneFooter(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
-  const dot = o.ui.ascii ? '|' : '·';
-  // Whole on one row where it fits; else wrapped on its words (a continuation indented), never cut mid-word.
-  const closed = rows.filter((x) => markOf(x.state, x.word) === 'doubt' && x.owner).flatMap((x): BoardLine[] =>
-    wordRows(`${o.ui.ascii ? 'x' : '■'} ${rowId(x.label)} ${KILLED}${o.stopRefused ? ' after Stop refusal' : ''} ${dot} ${x.owner}`, o.cols - 1, '  ', '    ').map((t, i): BoardLine => ({ runs: [r(t, i === 0 ? 'bad' : 'sub')] })));
-  if (closed.length) return closed;
-  return []; // wave 32 (critique 30: `closed · 5 of 5 items done` repeated the summary row's `5 items` and its full meter): a settled plan says nothing more
-}
-
 /** One agent on the board's timeline: its name, state, how long it has run, and (for the Gantt) when it started and ended, in the snapshot clock's ms; `calls` are its tool-call times (the activity row under its bar). */
 export type TimelineAgent = { name: string; state: UiState; secs?: number | undefined; startMs?: number | undefined; endMs?: number | undefined; calls?: readonly number[] | undefined };
 
@@ -474,7 +464,7 @@ const RULE_FG = '#303030'; // 236: the divider grey (PALETTE5.rule), never the 2
  * over the same axis) on the row under its bar. A running agent's bar ends at the clock (`nowMs`) and carries a pulsing leading edge, so it grows and moves while its worker runs.
  * Every bar starts where its agent started (the run's first start is the left edge). A queued agent has no run to draw and is left off. `max` caps the rows; none when there is no room for a name and a bar.
  * A row's `motion` key is `worker:<name>` (the panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). `spark: false` leaves the activity rows off; `spacers` puts a blank row between agents. */
-export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean }, max = 12): BoardLine[] {
+export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean; /** Agents whose failure a plan row already says: their bar keeps its colour and draws no `■` at its end. */ quiet?: ReadonlySet<string> }, max = 12): BoardLine[] {
   const ran = agents.filter((a) => a.state !== 'queued').map((a, i) => ({ a, i })).sort((x, y) => (x.a.startMs ?? 0) - (y.a.startMs ?? 0) || x.i - y.i).map((x) => x.a); // start order (alpha, beta, ghost), never reversed
   if (!ran.length || max < 3) return [];
   const live = (a: TimelineAgent): boolean => a.state === 'running' && o.nowMs !== undefined;
@@ -500,16 +490,19 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   // While a worker runs the axis ends at the next tick past the clock, so its bar grows inside a steady scale and the leading edge has a cell to pulse in; a finished run's axis is exactly its length.
   const total = (Math.floor(spanSecs / step) + 1) * step * 1000; // the axis always runs past the longest bar (critique 29: it stopped at 0:10 under bars to 0:13)
   const totalSecs = total / 1000;
+  // Wave 33 (critique 31: `┬────────┬─────────┬`, ticks 9 and 10 cells apart): the axis is an integer number of cells per step, so every tick sits the same distance from the one before it; the bars draw over the same `plotW` cells.
+  const pitch = Math.max(1, Math.floor(barW / (total / (step * 1000))));
+  const plotW = pitch * (total / (step * 1000));
   const tickCols = new Set<number>();
   // Wave 32 (critique 30: `0:15 0:20` collided, dotted columns ran past the bars): a tick sits only where a bar has run (at or before the longest bar's end), never past it.
-  for (let k = 0; k * step <= Math.max(spanSecs, ...(ran.some(live) ? [totalSecs] : [])) && k * step <= totalSecs; k++) tickCols.add(Math.min(barW - 1, Math.round((k * step * 1000 * barW) / total)));
+  for (let k = 0; k * step <= Math.max(spanSecs, ...(ran.some(live) ? [totalSecs] : [])) && k * step <= totalSecs; k++) tickCols.add(k * pitch);
   const lead = ' '.repeat(2 + nameW + 1);
   const rows = Math.min(ran.length, Math.max(1, Math.floor((max - 2) / ((o.spark ? 2 : 1) + (o.spacers ? 1 : 0)))));
   const out: BoardLine[] = [];
   ran.slice(0, rows).forEach((a, i) => {
     const { from, to } = spans[i]!;
-    const startCell = Math.min(barW - 1, Math.floor((barW * (from - t0)) / total));
-    const endE = Math.max(startCell * 8 + 1, Math.round((8 * barW * (to - t0)) / total)); // end in eighths of a cell
+    const startCell = Math.min(plotW - 1, Math.floor((plotW * (from - t0)) / total));
+    const endE = Math.max(startCell * 8 + 1, Math.round((8 * plotW * (to - t0)) / total)); // end in eighths of a cell
     const tone = barTone(a.state);
     const grid: Run[] = [];
     for (let c = 0; c < barW; c++) {
@@ -525,12 +518,12 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     const name = clipE(a.name, nameW);
     const runs: Run[] = [
       r('  '), r(name + ' '.repeat(nameW - cells(name)), 'sub'), r(' '), ...bar, r(' '),
-      r(clock((to - from) / 1000).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, frame, true),
+      r(clock((to - from) / 1000).padStart(timeW), 'dim'), r(' '), a.state === 'failed' && o.quiet?.has(a.name) ? r(' ') : stateRun(a.state, o.ui, frame, true),
     ];
     if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
     out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
     if (o.spark) {
-      const sp = sparkOf(a.calls, t0, t0 + total, barW, ascii);
+      const sp = sparkOf(a.calls, t0, t0 + total, plotW, ascii).padEnd(barW);
       out.push({ runs: [r(lead), r(sp, 'dim'), r(' '), r(callsLabel(a).padStart(timeW), 'dim'), r(' ')] }); // 'dim' for a failed agent too: a red floor ran the full width under the killed row
     }
   });
@@ -540,7 +533,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const labelled = new Set<number>();
   let free = 0;
   for (const c of [...tickCols].sort((x, y) => x - y)) {
-    const k = Math.round((c / barW) * totalSecs / step);
+    const k = Math.round(c / pitch);
     const text = clock(k * step);
     if (c < free || c + text.length > barW) continue;
     [...text].forEach((ch, j) => { labels[c + j] = ch; });
@@ -553,17 +546,17 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   return out;
 }
 
-/** The board's totals line under the chart: a count per state and the run's length, `● 2 done  ■ 1 killed  ◐ 0 running · total 0:27`. */
-export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'> & { runSecs?: number }): BoardLine[] {
+/** The board's totals line under the chart: a count per state and the run's length, `● 2 done  ■ 1 failed  ◐ 0 running · total 0:27`. */
+export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'> & { runSecs?: number; /** A plan row on the board already says `failed`: the totals do not count it again. */ hideFailed?: boolean }): BoardLine[] {
   const ran = agents.filter((a) => a.state !== 'queued');
   if (!ran.length) return [];
   const n = (s: UiState): number => ran.filter((a) => a.state === s).length;
   const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
   const parts: Run[] = [];
   for (const s of ['running', 'done', 'failed', 'blocked', 'waiting'] as const) {
-    if (!n(s)) continue;
+    if (!n(s) || (s === 'failed' && o.hideFailed)) continue;
     const g = stateRun(s, o.ui, frame, true); // a working mark is the band's braille (wave 32)
-    parts.push(...(parts.length ? [r('  ')] : []), { ...g, tone: s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(` ${n(s)} ${s === 'failed' ? 'killed' : s}`, n(s) ? 'text' : 'muted'));
+    parts.push(...(parts.length ? [r('  ')] : []), { ...g, tone: s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(` ${n(s)} ${s}`, n(s) ? 'text' : 'muted'));
   }
   const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');
   const ends = ran.map((a) => (a.state === 'running' && o.nowMs !== undefined ? o.nowMs : a.endMs)).filter((x): x is number => typeof x === 'number');
@@ -596,7 +589,8 @@ function subLines(owner: string, note: string, row: BoardRow, cols: number): Boa
  * its own header) the surface opens with one title row, `▸ BOARD  5 items` (the ribbon's own marker, so one search finds the board in either form): the only mark that says which view this is (critique 12: with the chrome gone,
  * nothing named the board and the capture script could not find it). That row says the count, so the footer carries only the folds. */
 export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
-  if (o.pane) return rows.length ? [paneSummary(rows, o), { runs: [r(' ')] }, ...paneBody(rows, o), ...(() => { const f = paneFooter(rows, o); return f.length ? [{ runs: [r(' ')] }, ...f] : []; })()] : [];
+  // Wave 33 (critique 31: one kill stood four times in one board pane): the pane has no closure line under its rows. A failed worker's plan row says `failed` and names its agent, once; the totals, the chart and the recent posts do not repeat it.
+  if (o.pane) return rows.length ? [paneSummary(rows, o), { runs: [r(' ')] }, ...paneBody(rows, o)] : [];
   const withRibbon = o.ribbon !== false;
   const rib = lightRibbon(ribbon(o.cols, 'BOARD', o.rich ? '' : `${rows.length} items`, o.ui), o.ui);
   const n = o.folded ?? 0;

@@ -29,7 +29,7 @@ describe('critique 19 C5: the channel tab under failure', () => {
       const text = rows.join('\n');
       expect(text).not.toContain('no messages yet');
       expect(text).toContain('ghost-explorer'); // a name is whole on the channel (wave 24); it was cut to the design's 12 cells before
-      expect(text).toMatch(/■ ghost-explorer\s+killed/);
+      expect(text).toMatch(/■ ghost-explorer\s+failed/);
         for (const l of rows) expect([...l].length).toBeLessThanOrEqual(cols);
     }
   });

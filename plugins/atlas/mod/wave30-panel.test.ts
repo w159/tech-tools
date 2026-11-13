@@ -93,7 +93,7 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     const out = render('board', cols, rows);
     test(`pane ${cols}x${rows}: no run of more than 3 blank rows and the content reaches the foot`, () => {
       expect(blankRun(out)).toBeLessThanOrEqual(3);
-      expect(lastContent(out)).toBeGreaterThanOrEqual(rows - 8); // wave 32: was rows - 6; the closing `closed · N of N` line and the tick-stub rows are gone, so a run-less pane ends two rows higher (a live pane pins the footer to the foot)
+      expect(lastContent(out)).toBeGreaterThanOrEqual(rows - 11); // wave 33: the closure footer line is gone (the plan row carries the failure once), three rows higher again. wave 32: was rows - 6; the closing `closed · N of N` line and the tick-stub rows are gone, so a run-less pane ends two rows higher (a live pane pins the footer to the foot)
     });
     test(`pane ${cols}x${rows}: the bars are solid fills and the axis has tick marks with labels`, () => {
       const text = out.join('\n');
@@ -105,7 +105,7 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     });
     test(`pane ${cols}x${rows}: a summary names the states and the total elapsed time`, () => {
       const text = out.join('\n');
-      expect(text).toMatch(/1 killed/);
+      expect(text).toMatch(/■ T2/); // wave 33: the plan row marks the failure once, the totals do not count it again
       expect(text).toMatch(/2 done/);
       expect(text).toMatch(/total\s+0:2\d/);
     });
@@ -135,13 +135,13 @@ describe('wave 30 item 2: the team tab names each seat with role, state, time an
   test('every worker row has glyph, name, role, state word, elapsed time and a 12-cell activity sparkline', () => {
     for (const n of ['alpha-explorer', 'ghost-explorer', 'beta-explorer']) {
       const l = rows.find((x) => x.includes(n))!;
-      expect(l).toMatch(/explorer\s+(done|killed)\s+\d:\d\d\s+[▁-█ ·]{12}/);
+      expect(l).toMatch(/explorer\s+(done|failed)\s+\d:\d\d\s+[▁-█ ·]{12}/);
     }
   });
   test('a team summary line counts the states and the total time, and the pane is filled', () => {
-    expect(rows.join('\n')).toMatch(/workers\s+0 running · 2 done · 1 killed/);
+    expect(rows.join('\n')).toMatch(/workers\s+0 running · 2 done · 1 failed/);
     expect(rows.join('\n')).toMatch(/total\s+0:2\d/);
-    expect(lastContent(rows)).toBeGreaterThanOrEqual(12);
+    expect(lastContent(rows)).toBeGreaterThanOrEqual(11); // wave 33: the failure note is no longer repeated under recent
   });
 });
 
@@ -164,24 +164,24 @@ describe('wave 30 item 4: the route tab gives the title the space (stoprun-150-a
   });
 });
 
-describe('wave 30 item 6: one word per failure, `■ killed` in error 203', () => {
+describe('wave 30 item 6: one word per failure, `■ failed` in error 203 (wave 33: the word is `failed`)', () => {
   const all = (): string[] => [...render('board', 65, 45), ...render('team', 65, 45), ...render('channel', 65, 45), ...render('route', 57, 45), ...render('board', 43, 40)];
-  test('no surface of this wave says closed, worker killed or failed', () => {
+  test('no surface of this wave says closed, worker killed or killed', () => {
     const text = all().join('\n');
     expect(text).not.toMatch(/\bclosed\b/);
     expect(text).not.toMatch(/worker killed/);
-    expect(text).not.toMatch(/\bfailed\b/);
-    expect(text).toMatch(/■ [^\n]*\bkilled\b/);
+    expect(text).not.toMatch(/\bkilled\b/);
+    expect(text).toMatch(/■ [^\n]*\bfailed\b/);
   });
-  test('the killed word is the error tone', () => {
+  test('the failed word is the error tone', () => {
     forgetRefusals();
     const pm = panelModelOf(model(snap(), 'team', 66, 45), ui, 65);
     const row = bodyLines(pm).find((l) => lineText(l).includes('ghost-explorer'))!;
-    expect(row.runs.find((x) => x.t.trim() === 'killed')?.tone).toBe('bad');
+    expect(row.runs.find((x) => x.t.trim() === 'failed')?.tone).toBe('bad');
   });
-  test('a failure card says killed', () => {
-    expect(rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'failed · 0:10', true, ui)).join('\n')).toMatch(/■\s+killed/);
-    expect(toastRuns('failed', 'ghost-explorer', '', ui).map((x) => x.t).join('')).toMatch(/killed/);
+  test('a failure card says failed', () => {
+    expect(rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'failed · 0:10', true, ui)).join('\n')).toMatch(/■\s+failed/);
+    expect(toastRuns('failed', 'ghost-explorer', '', ui).map((x) => x.t).join('')).toMatch(/failed/);
   });
 });
 
@@ -209,9 +209,9 @@ describe('wave 30 item 5 (rewritten in wave 31): the finish card is one row (cri
     expect(c).toContain('#af87ff');
     expect(c).toContain('#87d787');
   });
-  test('a failure card is killed and says so in 203', () => {
+  test('a failure card is failed and says so in 203', () => {
     const f = rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui));
-    expect(f.some((l) => /◆ ATLAS\s+■\s+killed\s+ghost-explorer/.test(l))).toBe(true);
+    expect(f.some((l) => /◆ ATLAS\s+■\s+failed\s+ghost-explorer/.test(l))).toBe(true);
     expect(colorsOf(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui))).toContain('#ff5f5f');
   });
   test('a card with a result stays one row', () => {

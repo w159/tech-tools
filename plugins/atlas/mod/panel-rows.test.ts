@@ -26,11 +26,11 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   test('the lead row is first and the tally is last; the ribbon counts only the workers', () => {
     const out = body('team', 120, { lead, mates });
     expect(out[0]!.startsWith('  ◉ lead')).toBe(true);
-    expect(out.at(-1)).toBe('    workers  1 queued · 1 running · 2 done · 1 killed');
+    expect(out.at(-1)).toBe('    workers  1 queued · 1 running · 2 done · 1 failed');
   });
   test('the tally always says running, and drops the other states with no worker', () => {
     expect(body('team', 80, { lead, workers: [] }).at(-1)).toBe('    workers  0 running');
-    expect(body('team', 80, { lead, workers: [w('a', 'failed')] }).at(-1)).toBe('    workers  0 running · 1 killed');
+    expect(body('team', 80, { lead, workers: [w('a', 'failed')] }).at(-1)).toBe('    workers  0 running · 1 failed');
     expect(body('team', 80, { lead, workers: [w('a', 'done'), w('b', 'done')] }).at(-1)).toBe('    workers  0 running · 2 done');
     expect(body('team', 80, { lead, workers: [w('a', 'running'), w('b', 'waiting')] }).at(-1)).toBe('    workers  1 running · 1 waiting');
   });
@@ -48,7 +48,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 killed');
+    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 failed');
     expect(body('team', 120, { lead, mates }).some((l) => /^ {2}◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {

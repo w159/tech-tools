@@ -100,10 +100,10 @@ describe('4: no side panel row is nameless or wrapped', () => {
           const own = rows.filter((l) => new RegExp(`\\b${id} `).test(l));
           expect([kind, cols, id, own.length]).toEqual([kind, cols, id, 1]);
           expect(own[0]).toMatch(/-explorer/); // the name, never the task, is what the cut takes
-          expect(own[0]).toMatch(/\b(running|done|killed|failed|queued|[a-z]+-explorer)$/); // the state closes the row, or the owner column after it
+          expect(own[0]).toMatch(/\b(running|done|failed|queued|[a-z]+-explorer)$/); // the state closes the row, or the owner column after it
         }
-        expect(rows.filter((l) => /^\s+(closed|worker killed|killed)\b/.test(l))).toEqual([]);
-        if (kind === 'killed') expect(rows.find((l) => /\bT3 /.test(l))).toMatch(/killed$/);
+        expect(rows.filter((l) => /^\s+(closed|worker killed|killed|failed)\b/.test(l))).toEqual([]);
+        if (kind === 'killed') expect(rows.find((l) => /\bT3 /.test(l))).toMatch(/failed$/);
       }
     }
   });

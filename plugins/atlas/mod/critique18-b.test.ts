@@ -108,7 +108,7 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
   const done = [item(1, 'completed', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'completed', 'T2 read ghost.py (ghost-explorer)', names[1])];
   test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `closed · worker killed`', () => {
     const t2 = hud(93, 12, { todos: done, agents }).find((r) => r.includes('T2 read ghost.py'))!;
-    expect(t2).toContain('■ T2'); expect(t2).toContain('killed'); expect(t2).not.toContain('worker killed'); // critique 28: one glyph and one word for a killed worker
+    expect(t2).toContain('■ T2'); expect(t2).toContain('killed'); expect(t2).not.toContain('worker killed'); // critique 28: one glyph and one word for a failed worker (the HUD is the band implementer's: it keeps `killed` until that wave lands)
     expect(hud(93, 12, { todos: done, agents }).find((r) => r.includes('T1 read alpha.py'))).not.toContain('worker killed');
   });
   test('HUD row in the 61-cell strip keeps the words and fits', () => {
@@ -119,15 +119,15 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
   test('board row (wave 30, one word): a killed worker row reads `killed` once, at 120 and at 60 cells, with no `closed` and no `worker killed`', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const at = (cols: number): string => boardText(boardLines(boardRowsOf(src), { cols, ui, ribbon: false, title: false })).join('\n');
-    expect(at(120)).toMatch(/killed\s+ghost-explorer\s*$/m);
+    expect(at(120)).toMatch(/failed\s+ghost-explorer\s*$/m);
     expect(at(120)).not.toMatch(/closed|worker killed/);
-    expect(at(60)).toContain('killed');
+    expect(at(60)).toContain('failed');
     expect(at(60)).not.toMatch(/closed|worker killed/);
   });
   test('board row at 37 cells keeps `killed` in the state cell and the owner on the sub-line under the row', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const text = boardText(boardLines(boardRowsOf(src), { cols: 37, ui, ribbon: false, title: false }));
-    expect(text.join('\n')).toMatch(/T2 read ghost\.py[^\n]* killed\n\s+ghost-explorer\s*$/m); // critique 19 C1: on the sub-line under its own row
+    expect(text.join('\n')).toMatch(/T2 read ghost\.py[^\n]* failed\n\s+ghost-explorer\s*$/m); // critique 19 C1: on the sub-line under its own row
     for (const r of text) expect(cells(r)).toBeLessThanOrEqual(37);
   });
 });

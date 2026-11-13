@@ -11,7 +11,7 @@
 import type { RenderElement, RenderNode } from 'claude-code'
 import { PHASES } from '../intents'
 import type { PhaseId } from '../contract'
-import { runHex, type Ui } from '../atlas-ui'
+import { runHex, stateRun, type Ui } from '../atlas-ui'
 
 export interface Lead { phase: PhaseId; count: string; sentence: string; first: string; form: 'contract' | 'display' }
 
@@ -59,17 +59,31 @@ const fixed = { wrap: 'truncate-end' }
  * and superseded bars and the notes' bars take the secondary grey (245). */
 export const leadTone = (phase: PhaseId): 'accent' | 'ok' | 'bad' => (phase === 'done' ? 'ok' : phase === 'blocked' ? 'bad' : 'accent')
 
-export interface LeadOpts { ui: Ui; columns: number; /** A done chip a Stop refusal overturned: the word is struck and quiet, and says why. */ superseded?: boolean; /** The previous header was this phase: no word, a quiet bar and the state. */ quiet?: boolean }
+/** Wave 33 (critique 31: a green `▌ done all finished` over a failed worker and an open dispatch row): what the run really closed with. `done` with a failure or an open dispatch reads `▌ done · 1 failed` in the warn
+ * amber (179); once the Stop hook refused it reads `▌ ▲ blocked · 1 dispatch open` in the error red (203). Never the lead's own `all finished` over either. */
+export interface LeadVerdict { tone: 'warn' | 'bad'; phase: 'done' | 'blocked'; text: string }
+export const verdictOf = (failed: number, open: number, refused: boolean): LeadVerdict | null => {
+  if (failed <= 0 && open <= 0) return null
+  const text = [failed > 0 ? `${failed} failed` : '', open > 0 ? `${open} ${open === 1 ? 'dispatch' : 'dispatches'} open` : ''].filter(Boolean).join(' · ')
+  return refused ? { tone: 'bad', phase: 'blocked', text } : { tone: 'warn', phase: 'done', text }
+}
+
+export interface LeadOpts { ui: Ui; columns: number; /** The run's real close (verdictOf): a done chip that the data contradicts says so, in place of the lead's own sentence. */ verdict?: LeadVerdict | null; /** A done chip a Stop refusal overturned: the word is struck and quiet, and says why. */ superseded?: boolean; /** The previous header was this phase: no word, a quiet bar and the state. */ quiet?: boolean }
 
 /** The chip's row: `▌ research 3/5 state`, the phase word in lower case like the band's. No background. Under 40 columns the bar and the word only. */
 export function leadRow(l: Lead, o: LeadOpts): RenderElement {
-  const paint = (tone: 'accent' | 'ok' | 'bad' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: runHex({ tone }, o.ui.theme, o.ui.color) })
+  const paint = (tone: 'accent' | 'ok' | 'bad' | 'warn' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: runHex({ tone }, o.ui.theme, o.ui.color) })
   const dead = o.superseded === true
   // Wave 30 (critique 28: `▌ done 4/5` in the done green): a `done` header over a partial count is a progress note, the accent and the word `working`; the done green and the word are for a complete count or none.
   const part = /^(\d+)\/(\d+)$/.exec(l.count)
   const progress = l.phase === 'done' && part !== null && Number(part[1]) < Number(part[2])
   // A quiet chip that has only a bare count to say prints no row of its own.
   if (o.quiet && !dead && !l.sentence) return { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] }
+  if (o.verdict && l.phase === 'done' && !progress && !o.quiet) {
+    const v = o.verdict
+    const glyph = v.phase === 'blocked' ? [keep(txt({ ...fixed, ...paint(v.tone) }, ` ${stateRun('blocked', o.ui).t}`))] : []
+    return { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: [keep(txt({ ...fixed, ...paint(v.tone) }, '▌')), ...glyph, keep(txt({ ...fixed, ...paint(v.phase === 'blocked' ? 'bad' : 'text'), bold: true }, ` ${v.phase}`)), ...(o.columns > 0 && o.columns < 40 ? [] : [txt({ wrap: 'wrap', ...paint(v.tone) }, ` · ${v.text}`)])] }
+  }
   const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'sub' : progress ? 'accent' : leadTone(l.phase)) }, '▌')
   const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${progress ? 'working' : l.phase}`)
   const count = l.count ? [txt({ ...fixed, ...paint('sub') }, ` ${l.count}`)] : []

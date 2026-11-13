@@ -153,10 +153,10 @@ describe('wave 31 item 3: the channel tab times are the run clock and the pane i
   test('there is no `0s` age column', () => {
     expect(rows.filter((l) => /\b\d+s\s*$/.test(l))).toHaveLength(0);
   });
-  test('the empty pane is filled with counts per kind and the last message per agent', () => {
+  test('the pane carries the counts per kind; the `last by sender` block is gone (wave 33)', () => {
     const text = rows.join('\n');
     expect(text).toMatch(/\d+ posts/);
-    expect(text).toMatch(/last by sender/);
+    expect(text).not.toMatch(/last by sender/);
   });
 });
 
@@ -187,9 +187,9 @@ describe('wave 31 item 5: the board has a ticked axis, N calls labels and rows i
     expect(labels.every((v, i) => i === 0 || v - labels[i - 1]! === 5)).toBe(true);
     expect(labels.at(-1)!).toBeGreaterThanOrEqual(20);
   });
-  test('the killed row is named once per pane and no full-width rule runs under it', () => {
+  test('the failed word is shown once per pane (wave 33) and no full-width rule runs under it', () => {
     const out = render('board', 65, 45, { kind: 'working', secs: 28 });
-    expect(out.filter((l) => /T\d killed · ghost-explorer/.test(l))).toHaveLength(1);
+    expect(out.filter((l) => /\bfailed\b/.test(l))).toHaveLength(1);
     expect(out.filter((l) => /^\s*[━─]{40,}\s*$/.test(l))).toHaveLength(0);
   });
   test('the sparkline rows say `N calls`', () => {
@@ -199,14 +199,14 @@ describe('wave 31 item 5: the board has a ticked axis, N calls labels and rows i
 });
 
 describe('wave 31 item 6: one failure word', () => {
-  test('the card says `killed`, never `failed`', () => {
+  test('the card says `failed` (wave 33), never `killed`', () => {
     const card = rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'failed · 0:06', true, ui, false, { cols: 110 }))[0]!;
-    expect(card).toMatch(/■\s+killed/);
-    expect(card).not.toMatch(/failed/);
+    expect(card).toMatch(/■\s+failed/);
+    expect(card).not.toMatch(/killed/);
   });
-  test('the board says `killed`', () => {
+  test('the board says `failed` (wave 33), never `killed`', () => {
     const out = render('board', 65, 45, { kind: 'working', secs: 28 }).join('\n');
-    expect(out).toMatch(/■ killed|■ T2 killed/);
-    expect(out).not.toMatch(/\bfailed\b/);
+    expect(out).toMatch(/■ [^\n]*\bfailed\b/);
+    expect(out).not.toMatch(/\bkilled\b/);
   });
 });

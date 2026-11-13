@@ -63,7 +63,7 @@ export const cardDesign: Record<number, string[]> = {
 };
 export const toastDesign: string[] = [
   "▌ ● done     implementer-layout  9 of 9 steps",
-  "▌ ■ killed   implementer-live  tests red 3"
+  "▌ ■ failed   implementer-live  tests red 3"
 ];
 export const subagentsDesign: Record<number, string[]> = {
  "80": [
@@ -71,14 +71,14 @@ export const subagentsDesign: Record<number, string[]> = {
   "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
   "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
   "  ◇ runner-land         queued",
-  "  ■ implementer-live    killed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁"
+  "  ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁"
  ],
  "120": [
   "  ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  9 of 9 steps",
   "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  golden tests written",
   "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  read runs.ts:17",
   "  ◇ runner-land         queued                       waits on implementer-live",
-  "  ■ implementer-live    killed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3"
+  "  ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3"
  ]
 };
 export const tabGolden: Record<string, Record<number, string[]>> = {
@@ -91,12 +91,12 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "",
       " phase  ◐ research",
       " gates  ● lint   ● test   △ doctor   2/3 green",
-      " agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 killed",
+      " agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 failed",
       "    ● implementer-layout done    9 of 9 steps",
       "    ● implementer-gates  done    golden tests written",
       "    ⠋ implementer-band   running read runs.ts:17",
       "    ◇ runner-land        queued  waits on implementer-live",
-      "    ■ implementer-live   killed  tests red 3",
+      "    ■ implementer-live   failed  tests red 3",
       "",
       " todo   ▰▰▰▱▱▱▱▱ 3/7",
       "  ● Wire band to host     done    ran 03:10                                                           implementer-layout",
@@ -104,7 +104,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● Gate golden tests     done    ran 01:58                                                            implementer-gates",
       "  ◐ Subagents block       running elapsed 00:42 of 05:00                                                implementer-band",
       "  ◇ Gate tests            queued  after Subagents block                                                      runner-land",
-      "  ■ Changelog             killed  tests red 3                                                           implementer-live",
+      "  ■ Changelog             failed  tests red 3                                                           implementer-live",
       "  ▲ Ship board mod        blocked needs your approval                                                                you",
     ],
     80: [
@@ -114,12 +114,12 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "━━━━━",
       " phase  ◐ research",
       " gates  ● lint   ● test   △ doctor   2/3 green",
-      " agents ◇ 1 queued  ⠋ 1 running  ● 2 done  ■ 1 killed",
+      " agents ◇ 1 queued  ⠋ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
       "    ⠋ implementer-band   running",
       "    ◇ runner-land        queued",
-      "    ■ implementer-live   killed",
+      "    ■ implementer-live   failed",
       "",
       " todo   ▰▰▰▱▱▱▱▱ 3/7",
       "  ● Wire band to host     done                                implementer-layout",
@@ -127,7 +127,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● Gate golden tests     done                                 implementer-gates",
       "  ◐ Subagents block       running                               implementer-band",
       "  ◇ Gate tests            queued                                     runner-land",
-      "  ■ Changelog             killed                                implementer-live",
+      "  ■ Changelog             failed                                implementer-live",
       "  ▲ Ship board mod        blocked                                            you",
     ],
     56: [
@@ -137,12 +137,12 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "━━━━━",
       " phase  ◐ research",
       " gates  ● lint   ● test   △ doctor   2/3 green",
-      " agents ◇ 1 queued  ⠋ 1 running  ● 2 done  ■ 1 killed",
+      " agents ◇ 1 queued  ⠋ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
       "    ⠋ implementer-band   running",
       "    ◇ runner-land        queued",
-      "    ■ implementer-live   killed",
+      "    ■ implementer-live   failed",
       "",
       " todo   ▰▰▰▱▱▱▱▱ 3/7",
       "  ● Wire band to host     done        implementer-layout",
@@ -150,13 +150,13 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● Gate golden tests     done         implementer-gates",
       "  ◐ Subagents block       running       implementer-band",
       "  ◇ Gate tests            queued             runner-land",
-      "  ■ Changelog             killed        implementer-live",
+      "  ■ Changelog             failed        implementer-live",
       "  ▲ Ship board mod        blocked                    you",
     ],
   },
   team: {
     120: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────── 1 queued · 1 running · 2 done · 1 killed",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────── 1 queued · 1 running · 2 done · 1 failed",
       "",
       "route  team  channel  gates  core  board",
       "       ━━━━",
@@ -165,7 +165,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  golden tests written",
       "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  read runs.ts:17",
       "  ◇ runner-land         queued                       waits on implementer-live",
-      "  ■ implementer-live    killed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3",
+      "  ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3",
       "",
       "    recent",
       "    10:02  lead                ▸ implementer-band take T4, then run the gate tests",
@@ -173,7 +173,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    10:07  implementer-layout  T1 and T2 merged",
     ],
     80: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── 1 queued · 1 running · 2 done · 1 killed",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── 1 queued · 1 running · 2 done · 1 failed",
       "",
       "route  team  channel  gates  core  board",
       "       ━━━━",
@@ -181,7 +181,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "  ◇ runner-land         queued",
-      "  ■ implementer-live    killed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
+      "  ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "",
       "    recent",
       "    10:02  lead                ▸ implementer-band take T4, then run the gate t…",
@@ -197,7 +197,7 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "  ◇ runner-land         queued",
-      "  ■ implementer-live    killed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
+      "  ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "",
       "    recent",
       "    10:02  lead                ▸ implementer-band take…",
@@ -387,10 +387,10 @@ export const teamLiveGolden: Record<number, string[]> = {
     "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  golden tests written",
     "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  read runs.ts:17",
     "  ◇ runner-land         queued                       waits on implementer-live",
-    "  ■ implementer-live    killed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3",
+    "  ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3",
     "  ◇ leader              queued                       idle",
     "",
-    "    workers  1 queued · 1 running · 2 done · 1 killed",
+    "    workers  1 queued · 1 running · 2 done · 1 failed",
     "",
     "    recent",
     "    10:02  lead                ▸ implementer-band take T4, then run the gate tests",
@@ -403,10 +403,10 @@ export const teamLiveGolden: Record<number, string[]> = {
     "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
     "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
     "  ◇ runner-land         queued",
-    "  ■ implementer-live    killed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
+    "  ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
     "  ◇ leader              queued",
     "",
-    "    workers  1 queued · 1 running · 2 done · 1 killed",
+    "    workers  1 queued · 1 running · 2 done · 1 failed",
     "",
     "    recent",
     "    10:02  lead                ▸ implementer-band take T4, then run the gate t…",

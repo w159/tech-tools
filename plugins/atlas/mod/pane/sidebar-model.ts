@@ -62,7 +62,7 @@ const hms = (iso: string): string => {
   return iso === '' ? '' : Number.isNaN(d.getTime()) ? '--:--:--' : `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
 };
 /** A kill is a failure, not a block: the store's row for a killed worker says `worker killed` (or `killed`) under the blocked kind, the channel draws it `■ killed`. */
-const kindOf = (n: ChannelNote): string | undefined => (n.kind === 'blocked' && /^(worker )?killed/.test(n.text) ? 'failed' : n.kind);
+const kindOf = (n: ChannelNote): string | undefined => (n.kind === 'blocked' && /^(worker )?(killed|failed)/.test(n.text) ? 'failed' : n.kind);
 const msOf = (iso: string): number | undefined => { const ms = Date.parse(iso); return Number.isNaN(ms) ? undefined : ms; };
 const noteOf = (n: ChannelNote): PanelNote => ({ at: hms(n.ts), ...(msOf(n.ts) !== undefined ? { ms: msOf(n.ts)! } : {}), from: n.owner, to: n.to, ...(kindOf(n) ? { kind: kindOf(n)! } : {}), text: n.text, lead: isLead(n.owner) });
 
@@ -121,7 +121,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   // The closure is a post too (wave 24): a plan row the lead closed over a failed worker reads `T2 dispatch closed after Stop refusal · ghost-explorer`, whole names, from the lead.
   const stop = gateTally(m.gates).stop;
   const todos = todosOf(s, workers);
-  const closures: ChannelNote[] = todos.filter((t) => t.state === 'done' && t.word === DONE_DOUBT && t.owner).map((t) => ({ ts: '', seq: 0, owner: 'lead', to: 'all', text: `${/^T\d+\b/i.exec(t.label)?.[0] ?? 'row'} killed${stop?.blocked ? ' after Stop refusal' : ''} · ${t.owner}`, channel: s.channel ?? '', kind: 'done' }));
+  const closures: ChannelNote[] = todos.filter((t) => t.state === 'done' && t.word === DONE_DOUBT && t.owner).map((t) => ({ ts: '', seq: 0, owner: 'lead', to: 'all', text: `${/^T\d+\b/i.exec(t.label)?.[0] ?? 'row'} failed${stop?.blocked ? ' after Stop refusal' : ''} · ${t.owner}`, channel: s.channel ?? '', kind: 'done' }));
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {

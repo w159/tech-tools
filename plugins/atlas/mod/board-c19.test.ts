@@ -42,7 +42,7 @@ describe('critique 19 C1: board owners', () => {
     for (const cols of [36, 64]) {
       const t = draw(cols);
       const i = t.findIndex((l) => l.includes('T2 read ghost.py'));
-      expect(`${t[i]}\n${t[i + 1]}`).toMatch(/killed/);
+      expect(`${t[i]}\n${t[i + 1]}`).toMatch(/failed/);
     }
   });
   test('an open row with an age says how long it has been open, on its own sub-line', () => {
