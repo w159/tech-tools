@@ -14,7 +14,7 @@ import { bandBlockedOf, bandKindOf, bandTree, hudPhases, railPhase, type BandHan
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
-import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, holdClock, newKindHold, newRunClock, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
+import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
@@ -24,7 +24,7 @@ import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';
-import { asksUser, gateTally, leadBusy, planBusy, runElapsed, stepBlocked, stopRefusal, withCoreTally } from './data/runstate';
+import { asksUser, gateTally, leadBusy, planBusy, stepBlocked, stopRefusal, withCoreTally } from './data/runstate';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -1019,6 +1019,8 @@ export const turnEnded = (): boolean => stopSeen;
 export const hostTurnRunning = (isWorking: boolean | undefined, stopped: boolean): boolean => isWorking === true && !stopped;
 /** The band's render has seen the host's own turn flag at least once: before that `hostWorking === false` means unknown, not idle. */
 let hostKnown = false;
+/** The host's own turn flag as the last band render read it (`undefined` before it said). The panel derives the turn from this and `stopSeen` on its own render, so a Stop event reaches both surfaces together (truth 41). */
+let hostFlag: boolean | undefined;
 /** When the person's last prompt armed the next run clock (`$.clock.now()`); null once a run started from it or it went stale. The run starts at the prompt, not at a later event. */
 let armedAt: number | null = null;
 /** The run clock (band-motion.ts): wall-clock start, end and frozen duration of Atlas's work, read by every render. */
@@ -1027,11 +1029,18 @@ let runClock: RunClock = newRunClock();
 let resumedAt: number | null = null;
 /** The largest run-clock figure the band or panel showed for the current run: the clock never steps back (band-motion holdClock). */
 let clockHeld: ClockHold = null;
+/** The run's start in the snapshot's own clock, fixed the first time a render sees the run: the side panel stamps every event and every bar from it, so the channel tab and the events list read the same `+0:33` (truth 41). A new run starts over. */
+let runOrigin: { key: number; ms: number } | null = null;
+const originOf = (snapNow: number, clockNow: number): number | undefined => {
+	const key = runKey(runClock);
+	if (key === undefined) return undefined;
+	if (runOrigin === null || runOrigin.key !== key) runOrigin = { key, ms: snapNow - (clockNow - key) };
+	return runOrigin.ms;
+};
 const resumedNow = (now: number): boolean => resumeOk(runClock, resumedAt, now);
-/** The run clock as the surfaces show it: monotonic within a run. */
-const heldSecs = (secs: number | undefined): number | undefined => { const h = holdClock(clockHeld, runKey(runClock), secs); clockHeld = h.hold; return h.secs; };
-const heldWork = (now: number): number | undefined => heldSecs(runElapsed(runClock, now));
-const heldFinal = (): number | undefined => heldSecs(finalSecsOf(runClock));
+/** Every surface reads the run's seconds through band-motion readRun: one total, set when the run closes and never raised after (truth 41). */
+const heldWork = (now: number): number | undefined => { const r = readRun(clockHeld, runClock, now); clockHeld = r.hold; return r.work; };
+const heldFinal = (): number | undefined => { const r = readRun(clockHeld, runClock); clockHeld = r.hold; return r.final; };
 /** The last beat of the frame loop (`$.clock.now()`), for the watchdog; the loop itself, and whether the rest-to-idle redraw has been made for the current rest. */
 let lastBeatMs = 0;
 let frameTimer: { cancel(): void } | null = null;
@@ -1073,6 +1082,25 @@ export function isWorkingNow(snap: LiveSnapshot, host: boolean, hostIdle = false
 	// Wave 34: the band reads `working` exactly when this is true (a squad agent the host lists running counts: the band draws its spinner, so the loop must keep turning it); a queued dispatch never does.
 	if (hostIdle) return activeCount(live) > 0 || snap.squad.some((a) => a.name !== 'lead' && a.state === 'running'); // the host says its turn is over: a stale lead tool or plan row no longer holds the run open, only a worker still running does
 	return activeCount(live) > 0 || leadBusy(snap) || planBusy(planBasis(snap.todos ?? [], snap.sessionId), workerStates(snap, live));
+}
+
+/** Truth 41: the run state of the band, built ONE way for the band's render and the side panel's (critique 40: `⠸ working` under `● done`, `done 0:47` against `0:48`). Both pass what they read; the state kind, the three clock figures and the
+ * spinner frame come out of the same functions, so for one now the glyph, the word and the clock are identical. */
+function runBandModel(i: { snapshot: LiveSnapshot; live: BandModel['live']; gates: GateGroup[]; core: CoreModel | null; agentsAlive: boolean; isWorking: boolean | undefined; clockNow: number; look: { ui: Ui; rich: boolean } }): Pick<BandModel, 'snapshot' | 'live' | 'gates' | 'core' | 'agentsRunning' | 'hostOnly' | 'working' | 'workSecs' | 'ranSecs' | 'restSecs' | 'ui' | 'rich' | 'lastPhase' | 'leadName' | 'blockedConfirmed' | 'heldKind'> {
+	const turnOn = hostTurnRunning(i.isWorking, stopSeen);
+	const runOn = runLive(runClock, armedAt !== null, resumedNow(i.clockNow));
+	const work = heldWork(i.clockNow);
+	const ran = heldFinal();
+	const rest = restSecsOf(runClock, i.clockNow);
+	return {
+		snapshot: i.snapshot, live: i.live, gates: i.gates, core: i.core,
+		...(i.agentsAlive ? { agentsRunning: true } : {}),
+		...(turnOn && !runOn ? { hostOnly: true } : {}),
+		working: (turnOn && runOn) || (i.isWorking !== false && !stopSeen && runClock.startMs !== null),
+		...(work !== undefined ? { workSecs: work } : {}), ...(ran !== undefined ? { ranSecs: ran } : {}), ...(rest !== undefined ? { restSecs: rest } : {}),
+		ui: i.look.ui, rich: i.look.rich, lastPhase: lastRailPhase, leadName: i.snapshot.sessionId ? leadChannelName(i.snapshot.sessionId, '', '')[0] : undefined,
+		...(blockedAllow === false ? { blockedConfirmed: false } : {}), ...(heldKind ? { heldKind } : {}),
+	};
 }
 
 /** One beat of the frame loop: step the run clock, and redraw (one frame, the counter is the shared frame index of every surface) while Atlas works, on the beat a run ends,
@@ -1370,6 +1398,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const turnOn = hostTurnRunning(e.props.isWorking, stopSeen);
 			hostWorking = turnOn; // noted for the tick: the host's turn runs even when no worker is listed
 		hostKnown = typeof e.props.isWorking === 'boolean';
+		hostFlag = e.props.isWorking;
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		// The HUD draws the TODO tree and the Subagents block (rev 4 design); below 80 columns the block gives way to the band's counts.
 		const agents = hudAgents(live, snapshot.squad, queuedMembers(snapshot));
@@ -1391,9 +1420,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, ...(turnOn && !runLive(runClock, armedAt !== null, resumedNow(clockNow)) ? { hostOnly: true } : {}), working: (turnOn && runLive(runClock, armedAt !== null, resumedNow(clockNow))) || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(heldWork(clockNow) !== undefined ? { workSecs: heldWork(clockNow)! } : {}), ...(heldFinal() !== undefined ? { ranSecs: heldFinal()! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}), ...(heldKind ? { heldKind } : {}) });
+		const agentsAlive = [...agents, ...namedAgents(hudIn.todos, agents)].some(isAlive);
+		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ ...runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look }), columns, tick: frame, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, motion: motionCtx });
 		// The blocked debounce: ask the band what it computes with nothing held back, then tell it whether it may read blocked.
-		const probe = bandKindOf({ ...bandIn([], 1), blockedConfirmed: true, ...([...agents, ...namedAgents(hudIn.todos, agents)].some(isAlive) ? { agentsRunning: true } : {}) }) === 'blocked';
+		const probe = bandKindOf({ ...bandIn([], 1), blockedConfirmed: true }) === 'blocked';
 		const step = stepBlocked(blockedStreak, probe, turnOn, stopRefused || gateTally(withCoreTally(gates, core)).stop?.blocked === true);
 		blockedStreak = step.streak;
 		blockedAllow = step.allow;
@@ -1458,15 +1488,16 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
 		const paneLive = liveWorkers(snapshot, snapshot.now);
 		const paneAgents = hudAgents(paneLive, snapshot.squad, queuedMembers(snapshot));
-		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), ...(hostKnown && hostWorking && !runLive(runClock, armedAt !== null, resumedNow(paneNow)) ? { hostOnly: true } : {}), working: hostKnown ? hostWorking && runLive(runClock, armedAt !== null, resumedNow(paneNow)) : runClock.startMs !== null, ...(heldWork(paneNow) !== undefined ? { workSecs: heldWork(paneNow)! } : {}), ...(heldFinal() !== undefined ? { ranSecs: heldFinal()! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}), ...(heldKind ? { heldKind } : {}) };
-		const elapsedMs = runClock.startMs !== null ? paneNow - runClock.startMs : runClock.ranMs !== undefined && runClock.endedMs !== undefined ? runClock.ranMs + (paneNow - runClock.endedMs) : undefined;
-		const runSecs = heldSecs(runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock));
+		const bandB: BandModel = { ...runBandModel({ snapshot, live: paneLive, gates: paneGates, core: paneCore, agentsAlive: [...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive), isWorking: hostFlag, clockNow: paneNow, look }), columns: 120, tick: paneFrame };
+		const originMs = originOf(snapshot.now, paneNow);
+		const runSecs = heldWork(paneNow);
 		return sidebarTree($.ui.resolve(e), {
 			snapshot,
+			clock: paneNow,
 			look: look.ui,
 			gates: paneGates,
 			core: paneCore,
-			run: { kind: bandKind(bandB), ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(elapsedMs !== undefined ? { startMs: snapshot.now - elapsedMs } : {}) },
+			run: { kind: bandKind(bandB), frame: paneFrame % 10, ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(originMs !== undefined ? { startMs: originMs } : {}) },
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
@@ -1505,6 +1536,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		frameTimer?.cancel();
 		frameTimer = null;
 		clockHeld = null;
+		runOrigin = null;
 		resumedAt = null;
 		runClock = newRunClock(); // a new session starts its work clock from nothing
 		armedAt = null;

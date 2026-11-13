@@ -618,6 +618,11 @@ export function leadSpinnerGlyph(frame: number, ascii = false): string {
   const f = ascii ? SPIN_ASCII : LEAD_FRAMES;
   return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
 }
+/** Truth 41: the ONE glyph of a run state word, by frame index: the band's lead and the side panel's phase row both draw this and nothing else (`⠴ working`, `● done`, `○ idle`, `▲ blocked`). A working run turns the braille frame; the others do not move. */
+export function phaseGlyph(kind: 'working' | 'done' | 'blocked' | 'idle', frame: number, ascii = false): string {
+  if (kind === 'working') return leadSpinnerGlyph(frame, ascii);
+  return ascii ? GLYPH5_ASCII[kind] : kind === 'done' ? STATE_GLYPHS.done : GLYPH5[kind];
+}
 /** Spinner frame number at the shared clock reading `nowMs`: ONE phase for every surface in a frame. The `id` argument is kept for the callers that still pass an
  * agent's name and is ignored: per-row offsets read as spinners out of phase (critique, 17.13.0). */
 export function spinFrameOf(nowMs: number, _id = ''): number {

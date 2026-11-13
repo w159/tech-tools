@@ -91,16 +91,14 @@ describe('step 4: the panel phase row is the band\'s last frame', () => {
     const m = panelWorld('route', 150, ui, { rows: 40, now, run: { kind: 'working', secs: 24 }, phase: 'research', ...over });
     return panelLines(m).map(lineText).find((l) => /^\s*phase\b/.test(l))!.replace(/\s+/g, ' ').trim();
   };
-  test('band draws frame N / 0:25; the panel at the same now, one beat later and 1.9 s later has the same glyph, word and clock', () => {
+  test('the panel phase row turns the frame its run carries: same glyph, word and clock as the band for that frame, on every beat', () => {
     for (const frame of [0, 3, 5, 9]) {
-      noteBandFrame(frame, 25, NOW, 'working');
-      for (const dt of [0, 100, 1_900]) expect(rowOf(NOW + dt), `${frame}+${dt}`).toMatch(new RegExp(`^phase ${leadSpinnerGlyph(frame)} working · research 0:25`));
+      expect(rowOf(NOW, { run: { kind: 'working', secs: 25, frame } }), String(frame)).toMatch(new RegExp(`^phase ${leadSpinnerGlyph(frame)} working · research 0:25`));
     }
-    forgetBandFrame();
   });
-  test('a band frame older than 2 s is not used', () => {
-    noteBandFrame(5, 25, NOW, 'working');
-    expect(rowOf(NOW + 2_500)).not.toMatch(/0:25/);
+  test('a frame noted by the band is not read: the run alone decides', () => {
+    noteBandFrame(5, 99, NOW, 'idle');
+    expect(rowOf(NOW)).toMatch(/working · research 0:24/);
     forgetBandFrame();
   });
   test('a blocked strip puts the mark on the last phase the run entered, not on an earlier header phase', () => {

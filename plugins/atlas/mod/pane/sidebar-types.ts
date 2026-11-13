@@ -23,7 +23,9 @@ export type SidebarModel = {
   /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
   /** The band's run state and run clock (register.ts builds them from the band's own inputs, pane/band-kind.ts): the panel prints the same word and the same total. */
-  run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number };
+  /** The shared clock reading the HUD times a running agent on (`$.clock.now()`): the lanes read the same figure as the SUBAGENTS rows (truth 41: alpha 0:16 against 0:17 on one frame). */
+  clock?: number;
+  run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
 };
 export type SidebarHandlers = {
   selectRecipient(name: string): void;

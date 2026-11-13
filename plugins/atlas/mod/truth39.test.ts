@@ -209,19 +209,15 @@ describe('step 2: the side panel phase row prints the band\'s glyph, word and cl
     expect(bandFrame()).toEqual({ frame: 2, secs: 36, kind: 'blocked' });
     forgetBandFrame();
   });
-  test('stoprun-150-3 f0074: the band reads blocked 0:36, the panel (own reading: working 0:37) reads `▲ blocked 0:36`', () => {
-    noteBandFrame(2, 36, NOW, 'blocked');
-    expect(rowOf({}).replace(/\s+/g, ' ').trim()).toBe('phase ▲ blocked 0:36');
-    forgetBandFrame();
+  test('stoprun-150-3 f0074: the run built from the band\'s inputs says blocked 0:36, and the panel prints exactly that (truth 41: no copy of a note)', () => {
+    expect(rowOf({ run: { kind: 'blocked', secs: 36 } }).replace(/\s+/g, ' ').trim()).toBe('phase ▲ blocked 0:36');
   });
-  test('live-150-2 f0106: the band reads idle 0:39, the panel does not say working', () => {
-    noteBandFrame(2, 39, NOW, 'idle');
-    const row = rowOf({ run: { kind: 'working', secs: 191 } });
+  test('live-150-2 f0106: a run that reads idle 0:39 prints idle 0:39, never working', () => {
+    const row = rowOf({ run: { kind: 'idle', secs: 39 } });
     expect(row.replace(/\s+/g, ' ').trim()).toBe('phase ○ idle 0:39');
-    forgetBandFrame();
   });
-  test('a stale note is ignored: the panel keeps its own reading', () => {
-    noteBandFrame(2, 36, NOW - 5_000, 'blocked');
+  test('a band note is never read: the panel prints the run it was built with', () => {
+    noteBandFrame(2, 36, NOW, 'blocked');
     expect(rowOf({})).toContain('working');
     forgetBandFrame();
   });

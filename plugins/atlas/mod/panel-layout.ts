@@ -6,8 +6,8 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
-import { animateRow, paneBandRun, paneClockSecs, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
+import { brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
@@ -111,7 +111,8 @@ export type PanelModel = {
   motion?: MotionCtx | undefined;
   /** The band's own run state and run clock (wave 31): `kind` is runStateOf(band).kind, `secs` the figure the band prints (`working 0:28`, `done . 0:58`), `startMs` the run's start on the snapshot clock.
    * Present: the phase row prints exactly the band's glyph and word, and every total on the panel reads `secs`. Absent (omp, fixtures): the panel derives its own. */
-  run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number };
+  /** `frame`: the spinner frame index (0..9) the band turns for this render: the phase mark draws it, so band and panel show one glyph (truth 41). */
+  run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
 };
 
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
@@ -165,7 +166,7 @@ const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : 
  * the plan rows (route tab `T1`..) are read by glyph (GLYPH_STATE4) and keep the circle quarters. */
 /** A working mark is the accent (141) on every row of the panel, the colour of the band's own spinner (critique 28: the panel's spinners were 252). */
 const accentRun = (x: Run, s: MarkState, ui: Ui): Run => (s === 'running' && !ui.ascii ? { ...x, tone: 'accent' } : x);
-const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = '', braille = false): Run => accentRun(stateRun(s, m.ui, braille && m.now !== undefined ? (id === 'phase' ? paneSpinFrame(m.now) : sharedSpinFrame(m.now)) : frameOf(m, id), braille), s, m.ui);
+const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick' | 'run'>, id = '', braille = false): Run => accentRun(stateRun(s, m.ui, braille && m.now !== undefined ? (id === 'phase' && m.run?.frame !== undefined ? m.run.frame : sharedSpinFrame(m.now)) : frameOf(m, id), braille), s, m.ui); // truth 41: the phase mark turns the frame the run was built with (the band's own index), never a reading of its own
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
 const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal)) || ELLIPSIS; // a worker is never a blank cell: whole name, or `…` (critique 22: `◐ running` with no AGENT)
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
@@ -255,17 +256,8 @@ const groupPending = (g: PanelGate): boolean => groupOk(g) && g.lines.some((l) =
 const groupMark = (g: PanelGate, ui: Ui): Run => (groupPending(g) ? stateRun('queued', ui) : groupOk(g) ? stateRun('done', ui) : gateMark(ui));
 const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).length;
 
-/** Truth 39: the run state the panel prints is the band's own word and clock while the band's note is fresh (live-150-2 f0106: `phase working 0:39` under a band that said idle; stoprun-150-3 f0074: `working 0:37` under `blocked 0:36`).
- * Without a fresh note the model's own run state stands. */
-const runOf = (m: PanelModel): PanelModel['run'] => {
-  if (!m.run) return m.run;
-  const b = paneBandRun(m.now);
-  if (!b) return m.run;
-  const { secs: _own, ...rest } = m.run;
-  const secs = b.secs ?? m.run.secs;
-  return { ...rest, kind: b.kind, ...(secs !== undefined ? { secs } : {}) };
-};
-const withBandRun = (m: PanelModel): PanelModel => { const run = runOf(m); return run === m.run ? m : { ...m, run }; };
+/** Truth 41: the run the panel prints (kind, total, spinner frame) is built by register.ts from the band's own inputs and the band's own pure functions (band.tsx bandKindOf, band-motion readRun, the shared spin frame): nothing is copied from what the band last drew, so the two cannot differ for one now. */
+const withBandRun = (m: PanelModel): PanelModel => m;
 
 /** `phase   research   2/4`: the lit phase and its place on the rail. While the Stop gate refused the stop (or the lead declared it) the phase is `blocked` with no rail
  * number: never `done 5/5` beside a blocked band (critique 16 A3, stoprun f0090). */
@@ -275,10 +267,11 @@ function phaseRow(m0: PanelModel): PanelLine {
   if (m.run) {
     const ph = m.phase && m.phase !== 'blocked' && m.phase !== 'done' ? r(` ${dot(m.ui)} ${m.phase}`, 'dim') : null;
     const tail = m.run.kind === 'working' ? (ph ? [ph] : []) : []; // idle reads as the band does: `○ idle 0:39`
-    if (m.run.kind === 'blocked') return line([label('phase', m.cols), mark('blocked', m, 'phase'), r('blocked', 'bad', { bold: true })]);
-    if (m.run.kind === 'done') return line([label('phase', m.cols), mark('done', m, 'phase'), r('done', 'ok', { bold: true })]);
-    if (m.run.kind === 'working') return line([label('phase', m.cols), mark('running', m, 'phase'), r('working', 'accent', { bold: true }), ...tail]);
-    return line([label('phase', m.cols), r(`${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} `, 'muted'), r('idle', 'muted'), ...tail]);
+    const lead = (kind: 'blocked' | 'done' | 'working', st: MarkState): Run => ({ ...mark(st, m, 'phase'), t: `${phaseGlyph(kind, m.run?.frame ?? (m.now !== undefined ? sharedSpinFrame(m.now) : m.tick), m.ui.ascii)} ` }); // truth 41: the band's own glyph function
+    if (m.run.kind === 'blocked') return line([label('phase', m.cols), lead('blocked', 'blocked'), r('blocked', 'bad', { bold: true })]);
+    if (m.run.kind === 'done') return line([label('phase', m.cols), lead('done', 'done'), r('done', 'ok', { bold: true })]);
+    if (m.run.kind === 'working') return line([label('phase', m.cols), lead('working', 'running'), r('working', 'accent', { bold: true }), ...tail]);
+    return line([label('phase', m.cols), r(`${phaseGlyph('idle', 0, m.ui.ascii)} `, 'muted'), r('idle', 'muted'), ...tail]);
   }
   // Critique 18 A4: the same state the band draws: a refused Stop makes the phase `blocked` whatever the lead's last header said (`research`, `done`), and the lead's own ask of the user does too (the header phase is `blocked`).
   const blocked = m.phase === 'blocked' || !!tallyOf(gatesOf(m)).stop?.blocked;
@@ -497,7 +490,7 @@ function phaseChainRuns(m0: PanelModel, compact: boolean, raw: boolean): PanelLi
     const g: Run = cur ? (kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase', true)) : entered ? stateRun('done', m.ui) : { t: m.ui.ascii ? '.' : '\u00b7', tone: 'dim' };
     if (compact && !cur) { runs.push(g); return; } // a narrow pane names the lit phase; the rest are their dot
     runs.push({ ...g, t: `${g.t} ` }, r(p, cur ? 'text' : entered ? 'sub' : 'dim', cur ? { bold: true } : {}));
-    if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(paneClockSecs(m.run.secs, m.now))}`, 'dim'));
+    if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(m.run.secs)}`, 'dim'));
   });
   return [line(raw ? runs : fitRuns(runs, m.cols))];
 }
@@ -582,7 +575,7 @@ function statusPhase(m0: PanelModel): PanelLine[] {
   const m = withBandRun(m0);
   const head = phaseRow(m);
   const secs = m.run?.secs;
-  return [secs !== undefined ? { ...head, runs: [...head.runs, r(` ${shortAge(paneClockSecs(secs, m.now))}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
+  return [secs !== undefined ? { ...head, runs: [...head.runs, r(` ${shortAge(secs)}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
 }
 
 /** One row per agent: its mark, whole name, 12 braille cells of its calls over the run's window, and its time. */

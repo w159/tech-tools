@@ -25,7 +25,7 @@ const ownEvidence = (s: LiveSnapshot, name: string): (string | null | undefined)
 };
 
 /** One worker in the six-word vocabulary: a worker that waits on the lead reads waiting, parked reads queued. */
-function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
+function workerOf(s: LiveSnapshot, w: LiveWorker, now: number = s.now): PanelWorker {
   const a = s.squad.find((x) => x.name === w.name);
   const state: UiState = liveState(w);
   // The HUD's LAST (hud lastOf): a finished worker's outcome (its rows' evidence), a live or failed one's call (`read gamma.py`), never the result text that followed it.
@@ -34,7 +34,7 @@ function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),
-    secs: Math.max(0, Math.floor((endedAt(w, s.now) - w.startedAt) / 1000)), startMs: w.startedAt, endMs: endedAt(w, s.now), tools: s.activity[w.name]?.toolCount ?? 0, calls: w.calls,
+    secs: Math.max(0, Math.floor((endedAt(w, now) - w.startedAt) / 1000)), startMs: w.startedAt, endMs: endedAt(w, now), tools: s.activity[w.name]?.toolCount ?? 0, calls: w.calls,
   };
 }
 
@@ -107,6 +107,7 @@ const MOOD_STATE: Record<Mood, UiState> = { working: 'running', thinking: 'runni
 
 export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number = Math.max(10, m.columns - 1)): PanelModel {
   const s = m.snapshot;
+  const now = m.clock !== undefined ? Math.max(m.clock, s.now) : s.now; // the HUD's own reading (hud.ts: max of the shared clock and the snapshot's)
   const rail = railOf(contractRail(s.contract), s.phase);
   // Other sessions' leads and workers that rested more than two hours ago are not on this team (the roster rules of sidebar-roster.ts).
   const left = new Set(s.squad.filter((a) => isLeadName(a.name) || isStale(a, s.now)).map((a) => a.name));
@@ -115,7 +116,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const owned = [...new Set(s.todos.map((t) => t.owner).filter((o): o is string => !!o))];
   // A name the host list streams in half written (`beta-e` while the plan row says `beta-explorer`) reads as the one whole name the board knows, else as it is: whole or nothing (critique 22).
   const whole = (n: string): string => (owned.includes(n) ? n : ((c) => (c.length === 1 ? c[0]! : n))(owned.filter((o) => o.length > n.length && o.startsWith(n))));
-  const workers = [...liveWorkers(s, s.now).sort((a, b) => startAt(a.name) - startAt(b.name)).filter((w) => !left.has(w.name)).map((w) => ({ ...workerOf(s, w), name: one(whole(w.name)) })), ...queued]; // start order: the layout orders them by task (panel-layout workersByTask)
+  const workers = [...liveWorkers(s, s.now).sort((a, b) => startAt(a.name) - startAt(b.name)).filter((w) => !left.has(w.name)).map((w) => ({ ...workerOf(s, w, now), name: one(whole(w.name)) })), ...queued]; // start order: the layout orders them by task (panel-layout workersByTask)
   const seqs = new Map(agentModel(hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), s.todos, null, s.now).map((a) => [a.id ?? a.name, a.seq] as const)); // the SUBAGENTS table's dispatch order (hud.ts seqFor), read once per render
   const ordered = workers.map((w) => ({ ...w, ...(seqs.get(w.name) !== undefined ? { seq: seqs.get(w.name)! } : {}) }));
   const [leadMate] = mates(s);

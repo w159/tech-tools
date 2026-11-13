@@ -27,7 +27,8 @@ describe('A: the HUD draws on the band clock', () => {
     expect(view).toContain('clock: clockNow');
     const clockLine = src.slice(src.indexOf('const clockNow ='), src.indexOf('\n', src.indexOf('const clockNow =')));
     expect(clockLine).toContain('$.clock.now()');
-    expect(src).toContain('restSecsOf(runClock, clockNow)'); // the band's own figures read the same clockNow
+    expect(src).toContain('restSecsOf(runClock, i.clockNow)'); // the band's own figures read the same clockNow, through the one builder (truth 41)
+    expect(src).toContain('runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look })');
   });
 });
 

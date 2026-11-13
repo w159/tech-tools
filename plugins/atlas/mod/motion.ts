@@ -29,7 +29,7 @@ export const forgetBandFrame = (): void => { bandNote = null; };
 /** Truth 40 (critique 39: the panel's spinner differed from the band's in 24 of 30 frames, live-150-2 f0040-f0069): the panel draws the band's last glyph index, word and clock for as long as that frame is under two seconds old, however many beats the panel's own clock moved since. */
 export const PANE_NOTE_MS = 2000;
 const freshNote = (now: number | undefined): typeof bandNote => (bandNote !== null && bandNote.at !== undefined && now !== undefined && Math.abs(now - bandNote.at) <= PANE_NOTE_MS ? bandNote : null);
-export const paneSpinFrame = (now: number): number => freshNote(now)?.frame ?? sharedSpinFrame(now);
+export const paneSpinFrame = (now: number): number => sharedSpinFrame(now); // truth 41: a pure reading of the one clock; a copy of the band's last frame was a render behind it
 /** The side panel's clock: the seconds the band last drew when it drew a clock in a fresh frame, else the panel's own figure. */
 export const paneClockSecs = (own: number, now?: number): number => { const n = freshNote(now)?.secs; return n !== undefined && n !== null ? n : own; }; // the band's reading wins whenever its frame is fresh; a stale note never replaces the figure
 /** Truth 39: the band's own state word and clock while its note is fresh (the panel's phase row prints exactly this, never a reading of its own that can lag a render behind); null when the band drew nothing lately. */

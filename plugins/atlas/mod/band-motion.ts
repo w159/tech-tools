@@ -98,6 +98,24 @@ export const holdClock = (h: ClockHold, key: number | undefined, secs: number | 
   const max = h && h.key === key ? Math.max(h.max, secs) : secs;
   return { hold: { key, max }, secs: max };
 };
+/** Truth 41 (live-150-1 f0093-f0095: `● done 0:46`, `0:47`, `0:48` under a card that said 0:46): a run that has closed has ONE total, set when it closed and never raised after: the largest figure the run showed while it was open, or its own frozen
+ * duration, whichever is more. `runElapsed` keeps adding the rest to a closed clock for RESUME_MS (so a resume never steps back); a reader of the closed total must not feed that figure into the hold. The band, the run card, the side panel, the board and the
+ * channel tab all read the closed total through this one function. Open clock (`startMs` set): the caller holds its own reading with `holdClock`. */
+export const closedTotal = (h: ClockHold, c: RunClock): { hold: ClockHold; secs: number | undefined } => {
+  const key = runKey(c);
+  if (c.startMs !== null || key === undefined) return { hold: h, secs: undefined };
+  const own = ranSecsOf(c) ?? 0;
+  return holdClock(h, key, Math.max(own, h && h.key === key ? h.max : 0));
+};
+/** The run's seconds as every surface reads them (truth 41): `work` while the clock is open (never steps back), `final` for the band's `done`, the run card and the toast. A closed run reads its one total for both and nothing here raises it again.
+ * `now` is left out by the card's reader, which must not move the hold. */
+export function readRun(h: ClockHold, c: RunClock, now?: number): { hold: ClockHold; work: number | undefined; final: number | undefined } {
+  if (c.startMs === null) { const t = closedTotal(h, c); return { hold: t.hold, work: t.secs, final: t.secs }; }
+  const key = runKey(c);
+  const w = now === undefined ? { hold: h, secs: undefined } : holdClock(h, key, workSecsOf(c, now));
+  const f = holdClock(w.hold, key, finalSecsOf(c));
+  return { hold: f.hold, work: w.secs, final: f.secs };
+}
 /** Identity of the run a clock belongs to: its start, open or closed. */
 export const runKey = (c: RunClock): number | undefined => (c.startMs !== null ? c.startMs : c.endedMs !== undefined && c.ranMs !== undefined ? c.endedMs - c.ranMs : undefined);
 /** Whole seconds the current run has lasted; undefined at rest. */

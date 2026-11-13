@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
@@ -325,21 +325,21 @@ const LEAD_FULL: LeadOpts = { clock: true, reason: 'long', fix: true };
  * The todo figure is its own segment (standardForms), so no count is said twice. */
 function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, reason: string | undefined, o: LeadOpts): Run[] {
   const mark = (glyph: string, tone: Tone, bold = false): Run => ({ t: glyph, tone: ui.ascii ? 'text' : tone, ...(bold ? { bold: true } : {}) });
-  const spin = (): Run => mark(leadSpinnerGlyph(bandFrame(m), ui.ascii), 'accent');
+  const spin = (): Run => mark(phaseGlyph('working', bandFrame(m), ui.ascii), 'accent');
   const ran = m.ranSecs ?? m.lastRun?.secs; // the run clock's own figure (the host's wall time of the run); the worker wave's span only where no clock ran (omp)
   switch (st.kind) {
     // Wave 35: the Claude Code bar always carries the run clock while it works (one clock, never dropped); a model with no reading yet starts at 0:00.
     case 'working': { const secs = m.hostOnly ? undefined : m.turnSecs ?? m.elapsedSecs ?? (m.bar ? 0 : undefined); return [spin(), r(' '), r('working', 'text', true), ...(o.clock && secs !== undefined ? [r(` ${elapsedClock(secs)}`, 'sub')] : [])]; }
     // Wave 36: on the filled bar a done state is `● done 0:32` in bold dark ink on the 114 slab (the clock bold too), an idle one `○ idle · 0:32` in 245 on the 236 slab; the dot-joined forms keep `done · 0:32` and `idle · last run 0:32`.
-    case 'done': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [f ? r(` ${elapsedClock(ran)}`, 'ok', true) : r(` · ${elapsedClock(ran)}`, 'sub')] : [])]; }
-    case 'idle': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short || f ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])]; }
+    case 'done': { const f = segmentedOn(m, ui); return [mark(phaseGlyph('done', 0, ui.ascii), 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [f ? r(` ${elapsedClock(ran)}`, 'ok', true) : r(` · ${elapsedClock(ran)}`, 'sub')] : [])]; }
+    case 'idle': { const f = segmentedOn(m, ui); return [mark(phaseGlyph('idle', 0, ui.ascii), 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short || f ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])]; }
     case 'blocked': {
       // State 38: `▲ blocked · stop refused 0:37`: the reason (two words only, blockedText) then the run clock, which narrower forms keep after the reason is gone (`▲ blocked 0:37`).
       const why = reason && o.reason !== 'none' ? reason : '';
       const secs = o.clock ? ran ?? m.turnSecs : undefined;
       const clockText = secs !== undefined ? elapsedClock(secs) : '';
       return [
-        mark(ui.ascii ? GLYPH5_ASCII.blocked : GLYPH5.blocked, 'bad', true), r(' blocked', 'bad', true),
+        mark(phaseGlyph('blocked', 0, ui.ascii), 'bad', true), r(' blocked', 'bad', true),
         ...(why || clockText ? [r(` ${why ? '· ' : ''}${[why, clockText].filter(Boolean).join(' ')}`, 'bad', true)] : []),
       ];
     }
