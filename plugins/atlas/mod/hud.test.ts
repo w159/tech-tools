@@ -29,6 +29,9 @@ const phases = worldPhases();
 
 // Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) with the count and meter inside it, and a `╰───╯` rule closes the block, so the goldens are the rows as drawn.
 const edge = (rows: readonly string[]): string[] => [...rows];
+/** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { const m = /^ {2}[●o] (\d+) done(?: {2}[◇-] (\d+) queued)?\s*$|^ {2}[◇-] (\d+) queued\s*$/.exec(r); return n + (m ? Number(m[1] ?? 0) + Number(m[2] ?? 0) + Number(m[3] ?? 0) : 0); }, 0);
+
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
     const input: HudInput = { todos: worldPlan(), agents: [], phases };
@@ -124,7 +127,7 @@ describe('L2: the plan is not cut to "N more todos not shown"', () => {
       const rows = trimmed(hudRows({ todos: big, agents: [] }, view(120, false, h)));
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => /Step \d+/.test(l)).length;
-      const hidden = Number(/\+(\d+) more/.exec(rows.join('\n'))?.[1] ?? 0);
+      const hidden = Number(/\+(\d+) more/.exec(rows.join('\n'))?.[1] ?? 0) + summaryCount(rows);
       const shownDone = rows.filter((l) => /● Step \d+/.test(l)).length;
       const folded = hidden > 0 ? 0 : Math.max(0, Number(/TODO\s+(\d+)\/\d+/.exec(rows[0] ?? '')?.[1] ?? 0) - shownDone); // critique 17 B4 / wave 37: finished rows fold into the figure's numerator, every open row stays
       if (rows.length > 1) expect(shown + hidden + folded).toBe(12);

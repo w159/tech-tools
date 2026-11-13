@@ -186,7 +186,7 @@ describe('5. the plan row budget and the overflow row', () => {
   test('a plan longer than five still keeps its window and counts the rest', () => {
     const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));
     const rows = hudLines({ todos: many, agents: [] }, view(88, hudCompactRows({ todos: many, agents: [] }, 88))).map(runsString);
-    expect(rows.some((r) => /\+\d+ more/.test(r))).toBe(true);
+    expect(rows.some((r) => /\+\d+ more|◇ \d+ queued/.test(r))).toBe(true);
   });
 });
 
@@ -262,7 +262,7 @@ describe('5d. a task that just completed stays in the folded plan', () => {
     const rows = hudLines({ todos: plan, agents: [] }, { cols: 104, maxRows: 4, ui, rich: false, now: NOW }).map(runsString);
     expect(rows.some((r) => r.includes('T3 read gamma.py'))).toBe(true);
     expect(rows.some((r) => r.includes('T2 read beta.py'))).toBe(true);
-    expect(rows.some((r) => /\+\d+ more/.test(r))).toBe(true);
+    expect(rows.some((r) => /\+\d+ more|◇ \d+ queued/.test(r))).toBe(true);
   });
 });
 

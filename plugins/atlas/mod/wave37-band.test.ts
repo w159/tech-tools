@@ -179,11 +179,11 @@ describe('4. the TODO HUD', () => {
     expect(stop).toMatch(/TODO\s+4\/5 · ■1/);
     expect(stop).not.toMatch(/done/);
   });
-  test('no `└ explorer-xxxx queued` child once the turn ended or the parent row is terminal; one while the turn is alive', () => {
+  test('state 38: no `└ explorer-xxxx queued` child row in any state', () => {
     const open = [T(1, 'completed'), T(2, 'in_progress'), T(3, 'pending')];
     const queued = ag('explorer-7a37', 'queued', 'queued');
-    expect(rows(open, [queued]).filter((r) => r.includes('└')), 'a queued worker, turn alive').toHaveLength(1);
-    expect(rows(open, [queued, ag('alpha-explorer', 'working', 'running')]).some((r) => r.includes('└') && r.includes('explorer-7a37 queued')), 'beside a running worker').toBe(true);
+    expect(rows(open, [queued]).filter((r) => r.includes('└')), 'a queued worker, turn alive').toHaveLength(0);
+    expect(rows(open, [queued, ag('alpha-explorer', 'working', 'running')]).some((r) => r.includes('└')), 'beside a running worker').toBe(false);
     const ended = [queued, ag('alpha-explorer', 'done', 'done'), ag('beta-explorer', 'failed', 'failed')];
     expect(rows(open, ended).filter((r) => r.includes('└')), 'the turn ended').toHaveLength(0);
     expect(rows(open, ended).join('\n')).not.toMatch(/explorer-7a37 queued/);

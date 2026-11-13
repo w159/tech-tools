@@ -108,9 +108,10 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
     const seven = rows(7); // then the finished row folds into the count on the title
     expect(seven[0]).toMatch(/1\/3/); // wave 37: the folded count is the figure itself, never `· 1 done` beside it
     expect(seven[0]).not.toMatch(/done/);
-    expect(seven.filter((r) => /T[23] item/.test(r))).toHaveLength(2);
+    expect(seven.filter((r) => /T[23] item/.test(r))).toHaveLength(1); // state 38: the finished row rides the one summary row, which takes a slot
+    expect(seven.some((r) => /^ {2}● 1 done/.test(r))).toBe(true);
     const six = rows(6); // then plan rows are cut, and the title says so, in one wording at every width
-    expect(six[0]).toMatch(/\+\d+ more/);
+    expect(six.some((r) => /\+\d+ more|● \d+ done|◇ \d+ queued/.test(r)), six.join('\n')).toBe(true); // the rest is counted on the title or the summary row
     expect(tops(six)).toBe(2);
     const four = rows(4); // the agent keeps its row and its closed box; the plan box goes whole
     expect(tops(four)).toBe(1);

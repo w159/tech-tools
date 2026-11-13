@@ -23,6 +23,9 @@ const input = (n: number): HudInput => ({ todos: ownTodos(PLAN), agents: ['alpha
 const draw = (n: number, cols: number, maxRows: number): string[] => hudLines(input(n), { merge: false, cols, maxRows, ui, rich: false, now: 0 }).map((r) => runsString(r).trimEnd());
 const todoRowsOf = (rows: string[]): string[] => rows.filter((t) => /T\d\b/.test(t));
 
+/** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { const m = /^ {2}[●o] (\d+) done(?: {2}[◇-] (\d+) queued)?\s*$|^ {2}[◇-] (\d+) queued\s*$/.exec(r); return n + (m ? Number(m[1] ?? 0) + Number(m[2] ?? 0) + Number(m[3] ?? 0) : 0); }, 0);
+
 describe('layout28 item 1: the TODO box shrinks first and every agent row stays (critique 28)', () => {
   // 150x45 gives a 12-row slot (11 for the HUD under the band row), 110x40 a 10-row slot (9 for the HUD).
   for (const [cols, rows] of [[150, 11], [110, 9]] as const) {
@@ -33,7 +36,7 @@ describe('layout28 item 1: the TODO box shrinks first and every agent row stays 
       expect(out.filter((l) => /^╰─+╯$/.test(l))).toHaveLength(2);
       expect(out.filter((l) => /-explorer\s+running/.test(l))).toHaveLength(3);
       const shown = todoRowsOf(out).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] T\d/.test(l)).length;
-      expect(shown + Number(/\+(\d+) more/.exec(out[0]!)?.[1] ?? 0)).toBe(5);
+      expect(shown + Number(/\+(\d+) more/.exec(out[0]!)?.[1] ?? 0) + summaryCount(out)).toBe(5);
       expect(text).not.toContain('not shown');
       expect(text).toContain('SUBAGENTS');
     });

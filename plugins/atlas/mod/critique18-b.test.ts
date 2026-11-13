@@ -44,13 +44,16 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect([names(14), names(13), names(12)]).toEqual([true, true, false]); // the column names go before a plan row does
     expect(hud(93, 12)[0]).not.toMatch(/done/);
     expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
-    expect(hud(93, 11)[0]).toMatch(/1\/5 · ■2/); // then the finished row folds into the title (wave 37: failed rows are counted on the title, the done count is the figure's numerator, not a second count)
+    expect(hud(93, 11)[0]).toMatch(/1\/5 · ■2/); // then the finished row folds behind the one summary row (state 38: `● 1 done  ◇ 1 queued`; the title keeps the figure alone)
     expect(hud(93, 11)[0]).not.toMatch(/done/);
-    expect(open(11)).toHaveLength(4);
-    expect(open(10)).toHaveLength(3);
-    expect(hud(93, 10)[0]).toMatch(/\+2 more/);
-    expect(open(9)).toHaveLength(2);
-    expect(open(8)).toHaveLength(1); // then open plan rows are counted on the title, one wording at every width
+    expect(hud(93, 11).some((r) => /^ {2}● 1 done {2}◇ 1 queued/.test(r))).toBe(true);
+    expect(open(11)).toHaveLength(3);
+    expect(open(10)).toHaveLength(2);
+    expect(hud(93, 10)[0]).not.toMatch(/\+\d+ more/); // done and queued rows ride the summary row, not the title
+    expect(open(9)).toHaveLength(2); // the open rows alone fill the slots: no room for a summary row, so the title counts every row left out (state 38)
+    expect(hud(93, 9)[0]).toMatch(/\+3 more/);
+    expect(open(8)).toHaveLength(1);
+    expect(hud(93, 8)[0]).toMatch(/\+4 more/);
     for (const n of [14, 12, 11, 10, 9, 8]) {
       expect([n, agentRows(n)]).toEqual([n, 3]); // a running or listed agent keeps its row while a plan row can give way
       expect([n, closes(n)]).toEqual([n, 2]); // no box is left open at the bottom
