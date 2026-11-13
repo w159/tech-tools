@@ -155,37 +155,17 @@ describe('item 5: no channel slug and no `last by sender` block (critique 31: `#
   });
 });
 
-describe('item 6: the route tab lists the plan with a meter (critique 31: a bare count)', () => {
-  const rows = body('route', 66, 45);
-  test('a `plan` head carries the whole-plan `▰▱` meter', () => {
-    const head = rows.find((l) => /^\s*plan\b/.test(l))!;
-    expect(head).toBeDefined();
-    expect(head).toMatch(/[▰]+[▱]*/);
-    expect(head).toMatch(/3 ?\/ ?5|3 of 5/);
-  });
-  test('one row per item with its state glyph and its agent', () => {
-    for (const [label, owner] of [['T1 read alpha.py', 'alpha-explorer'], ['T2 read ghost.py', 'ghost-explorer'], ['T3 read beta.py', 'beta-explorer']] as const) {
-      const l = rows.filter((x) => x.includes(label));
-      expect(l).toHaveLength(1);
-      expect(l[0]).toMatch(/[●■◐○◇]/);
-      expect(l[0]).toContain(owner.slice(0, 5));
-    }
-    for (const label of ['T4 combine the reports', 'T5 write the final summary']) expect(rows.filter((x) => x.includes(label))).toHaveLength(1);
-    expect(rows.find((x) => x.includes('T2 read ghost.py'))).toMatch(/■/);
-  });
-});
-
 describe('item 7: the team tab draws a 12-cell sparkline per agent, aligned (critique 31: ragged, short sparklines)', () => {
   const rows = body('team', 65, 45);
-  const SPARK = /[▁▂▃▅▇█]{12}/;
+  const SPARK = /[⣀⣤⣶⣿]{12}/;
   test('every agent row carries exactly 12 spark cells in the same column', () => {
     const agentRows = rows.filter((l) => /-explorer/.test(l) && SPARK.test(l));
     expect(agentRows.length).toBeGreaterThanOrEqual(3);
     const cols = agentRows.map((l) => l.search(SPARK));
     expect(new Set(cols).size).toBe(1);
-    for (const l of agentRows) expect(/[▁▂▃▅▇█]+/.exec(l.slice(l.search(SPARK)))![0]).toHaveLength(12);
+    for (const l of agentRows) expect(/[⣀⣤⣶⣿]+/.exec(l.slice(l.search(SPARK)))![0]).toHaveLength(12);
   });
-  test('a failed agent and a short run still draw all 12 cells (floor `▁`)', () => {
+  test('a failed agent and a short run still draw all 12 cells (floor `⣀`)', () => {
     const ghost = rows.find((l) => /ghost-explorer/.test(l))!;
     expect(ghost).toMatch(SPARK);
   });

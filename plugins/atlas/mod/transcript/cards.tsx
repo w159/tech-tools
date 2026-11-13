@@ -162,10 +162,11 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 export const FINISH_W = 56
 export const finishWidth = (cols: number): number => Math.max(24, Math.min(FINISH_W, cols > 0 ? cols - 4 : FINISH_W))
 const TIME_RE = /\b\d+:\d\d(?::\d\d)?\b/
-export interface FinishOpts { cols?: number; fade?: number; /** The worker's tool calls: `· 2 fn` after the time. Absent: the time alone. */ calls?: number }
+export interface FinishOpts { cols?: number; fade?: number; /** The worker's tool calls: `· 3 calls` after the time (wave 34, critique 33: `3 fn` counted tool calls, and the worker had reported 2 functions). Absent: the time alone. */ calls?: number; /** The functions the worker reported: `· 2 fn`. Only a count taken from what the worker reported may say `fn`; nothing in the mod's inputs carries one today. */ fns?: number; /** One more fact after the name (the run card's `5/5 done`). */ fact?: string }
 
 function finishRow(state: 'done' | 'failed', name: string, fact: string, time: string, ui: Ui, o: FinishOpts): RenderElement {
- const figure = time && o.calls !== undefined && o.calls > 0 ? `${time} ${ui.ascii ? '|' : '·'} ${o.calls} fn` : time // `0:12 · 2 fn`: the run time, then its tool calls
+ const count = o.fns !== undefined && o.fns > 0 ? `${o.fns} fn` : o.calls !== undefined && o.calls > 0 ? `${o.calls} ${o.calls === 1 ? 'call' : 'calls'}` : ''
+ const figure = time && count ? `${time} ${ui.ascii ? '|' : '·'} ${count}` : time // `0:12 · 3 calls`: the run time, then what the figure counts
  const w = finishWidth(o.cols ?? 0)
  const g = stateRun(state, ui)
  const bar: UiRun = { t: ui.ascii ? '|' : '▌', tone: ui.ascii ? 'text' : cardBarTone(o.fade ?? 0) } // wave 33: one bar for every card kind, 141 for the first second, 245 after (a failure too: the state glyph and word carry 203)
@@ -195,7 +196,7 @@ const timeOf = (text: string): string => {
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false, o: FinishOpts = {}): RenderElement {
  const text = stripStatus(outcome)
  if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, o)
- return finishRow('done', displayName(name, role), '', timeOf(text), ui, o) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
+ return finishRow('done', displayName(name, role), o.fact ?? '', timeOf(text), ui, o) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */

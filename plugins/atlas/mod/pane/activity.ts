@@ -50,6 +50,23 @@ export function sparkOver(calls: readonly number[] | undefined, from: number, to
   return buckets.map((v) => (v === 0 ? chars[0]! : chars[Math.max(1, Math.min(top, Math.round((v / peak) * top)))]!)).join('');
 }
 
+const BRAILLE = '⣀⣤⣶⣿'; // the floor (a quiet stretch), then one, a few and the busiest bucket: four heights, two columns wide
+
+/** Wave 34 (critique 33: an unlabelled block histogram on the team rows): `n` braille cells over the run's window (`from` to `to`), one axis for every row. A bucket with no call is the floor `⣀`; a bucket with calls rises
+ * with its share of the busiest one (`⣤`, `⣶`, `⣿`), so a call is always visible above the floor. */
+export function sparkBraille(calls: readonly number[] | undefined, from: number, to: number, n: number, ascii = false): string {
+  if (ascii) return sparkOver(calls, from, to, undefined, undefined, n, true);
+  const cells = Math.max(1, n);
+  const span = Math.max(1000, to - from);
+  const buckets = new Array<number>(cells).fill(0);
+  for (const t of calls ?? []) {
+    if (t < from || t > to + 1) continue;
+    buckets[Math.min(cells - 1, Math.floor(((t - from) / span) * cells))]! += 1;
+  }
+  const peak = Math.max(1, ...buckets);
+  return buckets.map((v) => (v === 0 ? BRAILLE[0]! : BRAILLE[Math.max(1, Math.min(3, Math.ceil((v / peak) * 3)))]!)).join('');
+}
+
 /** What the team did: a count per state and the run's length from the first start to the last end. */
 export type Totals = { running: number; done: number; killed: number; waiting: number; queued: number; blocked: number; secs: number; calls: number };
 export function totalsOf(workers: readonly { state: UiState; startMs?: number | undefined; endMs?: number | undefined; tools?: number | undefined }[], lead?: { startMs?: number | undefined; endMs?: number | undefined } | undefined): Totals {

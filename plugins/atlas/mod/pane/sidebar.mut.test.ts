@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../live_fixture';
-import { spinClock, spinFrameOf, spinnerGlyph } from '../atlas-ui';
+import { leadSpinnerGlyph, spinClock, spinFrameOf } from '../atlas-ui';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './sidebar';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -49,18 +49,18 @@ describe('sidebar board tab', () => {
   test('a running item turns the shared spinner clock: the snapshot clock moved on by the pane tick', () => {
     const run = [todo(0, { status: 'in_progress', claimed_at: NOW / 1000 - 5 })];
     const glyphRow = (tick?: number) => board(run, tick === undefined ? {} : { tick }).join('\n');
-    for (const tick of [undefined, 0, 2]) expect(glyphRow(tick)).toContain(`${spinnerGlyph(spinFrameOf(spinClock(NOW, tick ?? 0), 'item-0'))} item-0`);
-    expect(glyphRow(1)).not.toContain(`${spinnerGlyph(spinFrameOf(NOW, 'item-0'))} item-0`); // the tick moves the clock, as in the HUD and the team tab
-    expect(spinnerGlyph(0)).not.toBe(spinnerGlyph(1));
+    for (const tick of [undefined, 0, 2]) expect(glyphRow(tick)).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, tick ?? 0), 'item-0'))} item-0`);
+    expect(glyphRow(1)).not.toContain(`${leadSpinnerGlyph(spinFrameOf(NOW, 'item-0'))} item-0`); // the tick moves the clock, as in the HUD and the team tab
+    expect(leadSpinnerGlyph(0)).not.toBe(leadSpinnerGlyph(1)); // wave 34: the panel's spinner is the braille family
   });
   test('a snapshot without a clock falls back to the pane tick for the spinner (0 when the pane has none)', () => {
     // LiveSnapshot.now is required, so a real snapshot always takes the shared clock above; this pins the documented fallback (BoardOpts.nowMs absent: `tick`).
     const run = [todo(0, { status: 'in_progress' })];
     const clockless = (tick?: number) => board(run, { snapshot: { ...busySnap(), squad: [], activity: {}, comms: [], phase: 'implement', now: undefined, todos: run } as never, ...(tick === undefined ? {} : { tick }) }).join('\n');
-    expect(clockless(2)).toContain(`${spinnerGlyph(2)} item-0`);
-    expect(clockless(1)).toContain(`${spinnerGlyph(1)} item-0`);
-    expect(clockless()).toContain(`${spinnerGlyph(0)} item-0`);
-    expect(new Set([0, 1, 2].map((f) => spinnerGlyph(f))).size).toBe(3);
+    expect(clockless(2)).toContain(`${leadSpinnerGlyph(2)} item-0`);
+    expect(clockless(1)).toContain(`${leadSpinnerGlyph(1)} item-0`);
+    expect(clockless()).toContain(`${leadSpinnerGlyph(0)} item-0`);
+    expect(new Set([0, 1, 2].map((f) => leadSpinnerGlyph(f))).size).toBe(3);
   });
   test('a running item counts its time from the snapshot clock in whole seconds', () => {
     const run = [todo(0, { status: 'in_progress', claimed_at: NOW / 1000 - 90 })];

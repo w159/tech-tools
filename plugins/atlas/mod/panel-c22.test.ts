@@ -156,7 +156,7 @@ describe('step 6: one spinner clock', () => {
       const lead = leadSpinnerGlyph(spinFrameOf(spinClock(now, tick), 'alpha-explorer'));
       for (const l of rows) expect([tick, l.match(/[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0]]).toEqual([tick, /T1 read/.test(l) ? glyph : lead]); // the plan row turns a circle quarter, the agent row the band's braille frame
       const board = boardText(boardLines([{ label: 'T1 read alpha.py', state: 'running', owner: 'alpha-explorer', detail: '' }], { cols: 80, ui: mocha, pane: true, ribbon: false, title: false, tick, nowMs: spinClock(now, tick) }));
-      expect([tick, board.find((l) => /alpha/.test(l))?.match(/[◐◓◑◒]/)?.[0]]).toEqual([tick, glyph]);
+      expect([tick, board.find((l) => /alpha/.test(l))?.match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0]]).toEqual([tick, lead]); // wave 34: the side panel's board turns the band's braille
     }
   });
 });

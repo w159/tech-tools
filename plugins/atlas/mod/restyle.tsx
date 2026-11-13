@@ -35,7 +35,7 @@ export interface ToolUsePropsLike { tool: string; output?: unknown; input: unkno
 export interface AssistantPropsLike { text: string; isFirstOfReply?: boolean; isSummary?: true }
 export interface TurnDurationPropsLike { durationMs: number }
 /** Turn-over-turn memory for the TurnDuration receipt (owned by one registerRestyle call). */
-export interface ReceiptTracker { done?: number; turnStart?: number | null }
+export interface ReceiptTracker { done?: number; turnStart?: number | null; /** Wave 34: when the run's first turn began, and whether its closing footer was drawn (the next turn then starts a new run). */ runStart?: number | null; settled?: boolean }
 
 // ---- plain element builders (StyledElement is plain data; no DOM, no globals) ----
 
@@ -265,8 +265,13 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  const durationMs = measured === null ? props.durationMs : Math.min(props.durationMs, measured)
  const delta = snap.counts.done - (tracker.done ?? snap.counts.done)
  const active = activeCount(workersOf(snap))
+ // Wave 34 (critique 33: `turn 0:05` and `turn 0:13` in one run, each with its own clock, against the band's 0:52): a turn that ends while agents still work is no receipt; it draws nothing. The one footer a run keeps
+ // is the closing one, and it reads the run's own clock from its first turn: `run 0:52`, the figure the band shows.
+ if (active > 0) return { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] }
+ const runMs = tracker.runStart != null && now != null ? Math.max(0, now - tracker.runStart) : null
+ if (runMs !== null) tracker.settled = true
  const parts = [
-  `turn ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
+  runMs !== null ? `run ${elapsedClock(runMs / 1000)}` : `turn ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
   delta > 0 ? `+${delta} done` : null,
   active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
@@ -379,6 +384,7 @@ export function registerRestyle(on: On): void {
  on('turn.start', async ($, e, next) => {
   await primeEnv($, cache) // so this turn's first AssistantMessage draw answers synchronously
   tracker.turnStart = await nowMs($)
+  if (tracker.runStart == null || tracker.settled) { tracker.runStart = tracker.turnStart; tracker.settled = false } // a turn after the closing footer starts a new run
   return next(e)
  })
 

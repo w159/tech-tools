@@ -8,7 +8,7 @@ import { cells, markOf, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
 import { centred, HOTKEY_W, recentRows, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, boardTotals, type BoardLine } from '../board-model';
+import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, boardTotals, ownerDown, type BoardLine } from '../board-model';
 import { gateTally } from '../data/runstate';
 import { noteStopVerdict } from '../transcript/superseded';
 import { panelModelOf } from './sidebar-model';
@@ -81,7 +81,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const stop = gateTally(m.gates as never).stop;
   const plan = boardRowsOf(items, Math.floor(s.now / 1000));
   // Wave 33 (critique 31: one kill stood four times in one pane): a failed worker is said by its plan row, once. The agents whose row says it are quiet in the totals, the chart and the recent posts.
-  const failedOwners = new Set(plan.filter((x) => x.owner && (x.state === 'failed' || markOf(x.state, x.word) === 'doubt')).map((x) => x.owner as string));
+  const failedOwners = new Set(plan.filter((x) => x.owner && (x.state === 'failed' || markOf(x.state, x.word) === 'doubt' || ownerDown(x))).map((x) => x.owner as string));
   const lines = items.length
     ? boardLines(plan, { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, dispatches: items.filter((i) => i.origin === 'dispatch').length, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
     : centred(pm, 'nothing on the board yet');
