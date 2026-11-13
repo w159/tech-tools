@@ -201,7 +201,7 @@ test('a killed or failed background worker reads killed on the rail; a finished 
 test('the notification row is state, name, role and outcome', () => {
   // Wave 31: a finish card is one row, the one-line shape the capture scorer reads.
   const title = (n: unknown): string => text((n as El).children[0])
-  expect(title(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a$/) // wave 32: no `explorer finished` after the name
+  expect(title(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a\s+-$/) // wave 32: no `explorer finished` after the name
   expect(title(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ failed {2}wave-a/)
 })
 
@@ -216,8 +216,8 @@ const parts = (n: unknown): Array<{ t: string; color: unknown }> => {
 test('B4: a killed worker reads one verb: `killed name · 6s`, not `failed name explorer killed · 6s`', () => {
   const card = text(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true))
   expect(card).not.toContain('\n')
-  expect(card).toMatch(/■ failed {2}ghost-explorer\s+0:06$/)
-  expect(text(notificationTree('ghost-explorer', 'explorer', 'failed · tests red · 6s', true))).toMatch(/■ failed {2}ghost-explorer\s+0:06$/) // the result line lives in the HUD's RESULT column, not on the card
+  expect(card).toMatch(/■ failed {2}ghost-explorer\s+0:06 · -$/)
+  expect(text(notificationTree('ghost-explorer', 'explorer', 'failed · tests red · 6s', true))).toMatch(/■ failed {2}ghost-explorer\s+0:06 · -$/) // the result line lives in the HUD's RESULT column, not on the card
 })
 test('B4: an aged failure card is drawn exactly as a fresh one (critique 26: one text grey on every card)', () => {
   const fresh = parts(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, uiFromEnv(), false))

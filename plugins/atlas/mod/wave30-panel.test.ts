@@ -106,7 +106,7 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     test(`pane ${cols}x${rows}: a summary names the states and the total elapsed time`, () => {
       const text = out.join('\n');
       expect(text).toMatch(/■ T2/); // wave 33: the plan row marks the failure once, the totals do not count it again
-      expect(text).toMatch(/2 done/);
+      expect(text).toMatch(/2 done|● 2 ■ 1/); // wave 37: `worker calls` is longer than `calls`, so at 43 columns the footer takes its short form
       expect(text).toMatch(/0:2\d/); // wave 35: the footer's time, `total 0:2x` where it fits and `0:2x` in the short forms
     });
   }

@@ -219,7 +219,7 @@ describe('item 5: every card number is true (critique 33)', () => {
   });
   test('`fn` appears only for functions the worker reported', () => {
     expect(card({ calls: 3, fns: 2 })).toMatch(/0:19 · 2 fn$/);
-    expect(card({})).toMatch(/0:19$/);
+    expect(card({})).toMatch(/0:19 · -$/);
   });
 
   const rec = (over: Record<string, unknown> = {}) => ({ ...(snap('verify') as object), todos: [], ...over }) as unknown as AtlasSnapshot;

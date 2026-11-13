@@ -78,14 +78,14 @@ describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: 
   test('the row reads `▌ ◆ ATLAS  ● done  beta-explorer ... 0:13` (wave 32: `explorer finished` is gone, so the scorer regex no longer applies)', () => {
     const t = rowsOfCard(notificationTree('beta-explorer', 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!;
     expect(t).toMatch(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\d+:\d\d/);
-    expect(t.trimEnd()).toMatch(/0:13$/);
+    expect(t.trimEnd()).toMatch(/0:13 · -$/); // wave 37: a card with no count ends in the calls column's dash
     expect(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)/.exec(t)!.slice(1, 4)).toEqual(['●', 'done', 'beta-explorer']);
   });
   test('a long name is cut with an ellipsis (`~` in ASCII) before anything else, and the row stays one row', () => {
     const long = 'a-very-long-worker-name-that-needs-cutting-down-to-size';
     const t = rowsOfCard(notificationTree(long, 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!;
     expect(t).toContain('…');
-    expect(t).toMatch(/0:13\s*$/);
+    expect(t).toMatch(/0:13 · -\s*$/);
     const a = rowsOfCard(notificationTree(long, 'explorer', 'finished · 0:13', false, ascii, false, { cols: 110 }))[0]!;
     expect(a).toContain('~');
     expect(a).not.toContain('…');

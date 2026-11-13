@@ -10,7 +10,7 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, DONE_DOUBT, elapsedClock, TODO_METER_W, todoMeter, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
 import { KILLED, wordOf } from './pane/activity';
 
@@ -420,8 +420,9 @@ function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<type
 /** The pane's rows: one line per item: the title, a 2-cell gutter, the state word, the owner dim, and the reason as a dim suffix. */
 function paneBody(rows0: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   // Wave 35 (critique 34: `T1 read alpha.py (alpha…` at 110): a title loses its `(owner)` tail whole before any title is cut. Wave 36: always, in this pane: the owner column (or the status and team views, where it does not fit) names the worker once.
-  const tail = (x: BoardRow): boolean => !!x.owner && x.label.endsWith(` (${x.owner})`);
-  const rows = rows0.some(tail) ? rows0.map((x) => (tail(x) ? { ...x, label: x.label.slice(0, -(x.owner.length + 3)) } : x)) : rows0;
+  // Wave 37 (critique 36: `T5 write the final summ…` at 110): the tail also goes when it names the lead or an agent by its role (`(lead)`, `(gamma-explorer)`), and the name it carried moves to the owner column.
+  const tailOf = (x: BoardRow): string => { const m = /\s+\(([a-z][a-z0-9]*(?:-[a-z0-9]+)*(?: #\d+)?)\)$/.exec(x.label); return m && (m[1] === x.owner || m[1] === LEAD || /-(?:explorer|implementer|verifier|planner|runner|reviewer|critic|engineer|curator|auditor|tester|writer|researcher)(?: #\d+)?$/.test(m[1]!)) ? m[1]! : ''; };
+  const rows = rows0.some((x) => tailOf(x)) ? rows0.map((x) => { const t = tailOf(x); return t ? { ...x, label: x.label.slice(0, x.label.lastIndexOf(` (${t})`)).trimEnd(), owner: x.owner || (t === LEAD ? '' : t) } : x; }) : rows0;
   const g = paneGeometry(rows, o.cols);
   const focus = rows.findIndex((x) => x.focus ?? x.state === 'running');
   const keys = o.motion ? boardKeys(rows) : [];
@@ -454,13 +455,26 @@ function wordRows(text: string, width: number, first: string, rest: string): str
 /** `T2` of `T2 read ghost.py`: the plan row's own id, else its whole title. */
 const rowId = (label: string): string => /^T\d+\b/i.exec(label.trim())?.[0] ?? label.trim();
 
+/** The HUD's plan meter (hud-surface meterRuns, which cannot be imported here): 8 cells, 114 for the items done, one 203 cell per failed item, the rest muted. A failed item never reads as a full green meter. */
+function planMeter(done: number, total: number, failed: number, ui: Pick<Ui, 'ascii'>): Run[] {
+  const w = TODO_METER_W;
+  const bad = Math.min(w, Math.max(0, failed));
+  const full = total > 0 && done + bad >= total;
+  const on = total <= 0 ? 0 : full ? w - bad : Math.min(w - 1 - bad, Math.max(done > 0 ? 1 : 0, Math.round((w * done) / total)));
+  const [a, b] = ui.ascii ? [GLYPH5_ASCII.meterOn, GLYPH5_ASCII.meterOff] : [GLYPH5.meterOn, GLYPH5.meterOff];
+  const fill = (t: string, tone: Run['tone']): Run => ({ t, tone });
+  return [fill(a.repeat(Math.max(0, on)), 'ok'), ...(bad > 0 ? [fill((ui.ascii ? '!' : a).repeat(bad), 'bad')] : []), fill(b.repeat(Math.max(0, w - Math.max(0, on) - bad)), 'muted')].filter((x) => x.t !== '');
+}
+
 /** The summary row: `5 items · 3 dispatches` and a `▰▱` meter of the items done, the meter on the right edge when it fits. */
 function paneSummary(rows: readonly BoardRow[], o: BoardOpts): BoardLine {
-  const s = boardSummary(rows, o.dispatches ?? o.folded);
+  // Wave 37 (critique 36: `2 dispatches` over one listed row): the count is the rows the pane lists, a folded dispatch row is not one of them.
+  const s = boardSummary(rows, o.dispatches);
   const dot = o.ui.ascii ? '|' : '·';
   const text = `  ${s.items} item${s.items === 1 ? '' : 's'}${s.dispatches > 0 ? ` ${dot} ${s.dispatches} dispatch${s.dispatches === 1 ? '' : 'es'}` : ''}`;
   const w = TODO_METER_W; // the HUD's meter: 8 cells, ok green (atlas-ui todoMeter)
-  const bar = o.cols - 1 - cells(text) - 2 >= w ? [r(' '.repeat(o.cols - 1 - cells(text) - w)), ...todoMeter(s.done, s.items, o.ui)] : [];
+  const failed = rows.filter((x) => !x.dispatch && x.state !== 'done' && (x.state === 'failed' || ownerDown(x))).length;
+  const bar = o.cols - 1 - cells(text) - 2 >= w ? [r(' '.repeat(o.cols - 1 - cells(text) - w)), ...planMeter(s.done, s.items, failed, o.ui)] : [];
   return { runs: [r(text, 'text', { bold: true }), ...bar] };
 }
 
@@ -481,7 +495,7 @@ const RULE_FG = '#303030'; // 236: the divider grey (PALETTE5.rule), never the 2
  * over the same axis) on the row under its bar. A running agent's bar ends at the clock (`nowMs`) and carries a pulsing leading edge, so it grows and moves while its worker runs.
  * Every bar starts where its agent started (the run's first start is the left edge). A queued agent has no run to draw and is left off. `max` caps the rows; none when there is no room for a name and a bar.
  * A row's `motion` key is `worker:<name>` (the panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). `spark: false` leaves the activity rows off; `spacers` puts a blank row between agents. */
-export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean; /** Wave 36 (critique 35: ~25% of the live board blank above the footer): each bar is two rows tall where the pane has the rows for it. */ tall?: boolean; /** Agents whose failure a plan row already says: their bar keeps its colour and draws no `■` at its end. */ quiet?: ReadonlySet<string> }, max = 12): BoardLine[] {
+export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean; /** Wave 36 (critique 35: ~25% of the live board blank above the footer): each bar is two rows tall where the pane has the rows for it. */ tall?: boolean; /** Agents whose failure a plan row already says: their bar keeps its colour and draws no `■` at its end. */ quiet?: ReadonlySet<string>; /** Wave 37 (critique 36: beta's bar missing while the footer counted its calls): draw every agent or nothing, so the caller can pick a denser layout than one that drops a bar. */ all?: boolean; /** Wave 37 (critique 36: the axis stopped at 0:30 under a 0:36 total): the run's length on the band's clock; the axis runs one tick past it. */ runSecs?: number }, max = 12): BoardLine[] {
   const ran = agents.filter((a) => a.state !== 'queued').map((a, i) => ({ a, i })).sort((x, y) => (x.a.startMs ?? 0) - (y.a.startMs ?? 0) || x.i - y.i).map((x) => x.a); // start order (alpha, beta, ghost), never reversed
   if (!ran.length || max < 3) return [];
   const live = (a: TimelineAgent): boolean => a.state === 'running' && o.nowMs !== undefined;
@@ -492,7 +506,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   };
   const spans = ran.map(spanOf);
   const t0 = Math.min(...spans.map((x) => x.from));
-  const spanMs = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0);
+  const spanMs = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0, o.runSecs !== undefined && Number.isFinite(o.runSecs) ? o.runSecs * 1000 : 0);
   const nameW = Math.min(o.cols >= 50 ? 20 : 14, Math.max(...ran.map((a) => cells(a.name))));
   const callsLabel = (a: TimelineAgent): string => { const n = (a.calls ?? []).length; return n ? `${n} ${n === 1 ? 'call' : 'calls'}` : ''; }; // the count says what it counts (critique 29: a bare `2 3 4`)
   const timeW = Math.max(4, ...spans.map((x) => cells(clock((x.to - x.from) / 1000))));
@@ -516,6 +530,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   for (let k = 0; k * step <= totalSecs; k++) tickCols.add(k * pitch);
   const lead = ' '.repeat(2 + nameW + 1);
   const rows = Math.min(ran.length, Math.max(1, Math.floor((max - 2) / ((o.spark ? 2 : 1) + (o.tall ? 1 : 0) + (o.spacers ? 1 : 0)))));
+  if (o.all && rows < ran.length) return [];
   const out: BoardLine[] = [];
   ran.slice(0, rows).forEach((a, i) => {
     const { from, to } = spans[i]!;
@@ -581,7 +596,7 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
   const secs = o.runSecs ?? own; // the band's run clock when the caller has it: one total on every surface (critique 29)
   const calls = ran.reduce((k, a) => k + (a.calls?.length ?? 0), 0);
   const dot = o.ui.ascii ? '|' : '·';
-  const total: Run[] = secs > 0 ? [r(`  ${dot} `, 'muted'), r('total ', 'muted'), r(clock(secs), 'text', { bold: true }), ...(calls ? [r(` ${dot} ${calls} tool calls`, 'muted')] : [])] : [];
+  const total: Run[] = secs > 0 ? [r(`  ${dot} `, 'muted'), r('total ', 'muted'), r(clock(secs), 'text', { bold: true }), ...(calls ? [r(` ${dot} ${calls} worker calls`, 'muted')] : [])] : [];
   return [{ runs: [r('  '), ...parts, ...total] }];
 }
 
@@ -599,7 +614,7 @@ export function boardFootLine(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const own = starts.length && ends.length ? Math.max(0, Math.floor((Math.max(...ends) - Math.min(...starts)) / 1000)) : 0;
   const secs = o.runSecs ?? own;
   const calls = ran.reduce((k, a) => k + (a.calls?.length ?? 0), 0);
-  const make = (words: boolean, time: 'total' | 'bare' | 'none', callWord: 'tool calls' | 'calls' | ''): Run[] => {
+  const make = (words: boolean, time: 'total' | 'bare' | 'none', callWord: 'worker calls' | ''): Run[] => {
     const parts = counts.flatMap((x, i): Run[] => {
       const g = stateRun(x.s, o.ui, frame, true);
       return [...(i ? [r(words ? '  ' : ' ')] : []), { ...g, tone: x.s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(words ? ` ${x.n} ${x.s}` : ` ${x.n}`, 'text')];
@@ -609,7 +624,7 @@ export function boardFootLine(agents: readonly TimelineAgent[], o: Pick<BoardOpt
       : [];
     return [r('  '), ...parts, ...tail];
   };
-  const forms = [make(true, 'total', 'tool calls'), make(true, 'bare', 'calls'), make(false, 'bare', 'calls'), make(false, 'bare', ''), make(false, 'none', '')];
+  const forms = [make(true, 'total', 'worker calls'), make(true, 'bare', 'worker calls'), make(false, 'bare', 'worker calls'), make(false, 'bare', ''), make(false, 'none', '')];
   const fit = forms.find((f) => runsCells(f) <= o.cols - 1) ?? forms[forms.length - 1]!;
   return { runs: fit };
 }

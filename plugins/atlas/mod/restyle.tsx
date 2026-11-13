@@ -243,7 +243,8 @@ function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): v
  if (drawnHeaders.size > DRAWN_MAX) drawnHeaders.delete(drawnHeaders.keys().next().value as string)
 }
 
-const BARE_DONE = /^(?:all )?(?:done|complete|completed|finished|all finished|all done)[.!]?$/i
+// Wave 37 (critique 36: `▌ done 5/5` under `◆ ATLAS ● done 5/5 · 3 workers`): a sentence that only restates the count or says the run is over (`5/5`, `complete`, `run complete`, `all 5 done`) is the run card again.
+const BARE_DONE = /^(?:(?:all|run|everything|work)\s+)?(?:\d+\/\d+\s+)?(?:done|complete|completed|finished|all finished|all done|\d+\/\d+)(?:\s+\d+\/\d+)?[.!]?$/i
 
 /** The lead's header as a chip drawn from either form of the line (contract or display, mod/transcript/leadheader.ts): no fill, a bar in the phase colour, the phase word, the state.
  * `quiet` (the previous header was this phase) drops the word; `superseded` is a done chip a Stop refusal overturned. A finished first line that is no header stays the host's own row. */
