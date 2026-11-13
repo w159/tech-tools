@@ -26,6 +26,17 @@ export interface LiveWorker {
 
 const ORDER = { blocked: 0, failed: 1, working: 2, parked: 3, done: 4 } as const;
 
+/** Wave 37 (card/HUD agreement): workers a completion signal (the lead transcript's `<task-notification>` for the agent) has ended, with the outcome and the clock reading (ms) of the signal. The transcript card and the HUD rows read the
+ * same fact: a worker the signal names is `done` (or `failed`) on the very render the card prints, though the snapshot that lists it has not been rebuilt yet. An instance that started after the signal (a retry that
+ * reuses the name) is a new run and is not ended by it. */
+const signalled = new Map<string, { outcome: 'done' | 'failed'; at: number }>();
+export const noteEnded = (name: string, outcome: 'done' | 'failed', at: number): void => { if (name) signalled.set(name, { outcome, at }); };
+export const forgetEnded = (): void => signalled.clear();
+/** The task-notification texts' (`<task-id>`, `<status>`) pairs: which host task ended and how (`completed` reads done; `failed`, `killed`, `stopped` read failed). */
+export function notifiedEnds(text: string): { id: string; outcome: 'done' | 'failed' }[] {
+  return [...text.matchAll(/<task-id>([^<]+)<\/task-id>[\s\S]*?<status>([^<]*)<\/status>/g)].map((m) => ({ id: m[1]!.trim(), outcome: /^(completed|idle|done|finished)$/i.test(m[2]!.trim()) ? 'done' as const : 'failed' as const }));
+}
+
 // Takes LiveSnapshot (AtlasSnapshot & activity): AtlasSnapshot alone has no per-agent activity.
 export function liveWorkers(snapshot: LiveSnapshot, now: number): LiveWorker[] {
   return snapshot.squad
@@ -41,7 +52,9 @@ export function liveWorkers(snapshot: LiveSnapshot, now: number): LiveWorker[] {
         : act?.mood === 'failed' ? 'failed'
         : act?.mood === 'done' ? 'done'
         : 'working';
-      return { name: a.name, role: a.persona, state, tool: act?.tool ?? null, lastTool: act?.lastTool ?? null, since: act?.since ?? now, startedAt: act?.startedAt ?? act?.since ?? now, target: act?.target ?? null, detail: act?.detail ?? null, lastLine: act?.lastLine ?? '', calls: act?.calls ?? [], scope: act?.scope ?? null };
+      const sig = signalled.get(a.name);
+      const ended = sig !== undefined && state !== 'done' && state !== 'failed' && (act?.startedAt ?? 0) <= sig.at; // the completion signal names it: terminal, whatever the snapshot has not caught up with
+      return { name: a.name, role: a.persona, state: ended ? sig.outcome : state, tool: ended ? null : act?.tool ?? null, lastTool: act?.lastTool ?? null, since: ended ? Math.min(Math.max(sig.at, (act?.startedAt ?? 0) + 1), now) : act?.since ?? now, startedAt: act?.startedAt ?? act?.since ?? now, target: act?.target ?? null, detail: act?.detail ?? null, lastLine: act?.lastLine ?? '', calls: act?.calls ?? [], scope: act?.scope ?? null };
     })
     .sort((x, y) => ORDER[x.state] - ORDER[y.state]);
 }

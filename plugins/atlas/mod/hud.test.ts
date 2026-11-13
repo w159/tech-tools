@@ -125,7 +125,8 @@ describe('L2: the plan is not cut to "N more todos not shown"', () => {
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => /Step \d+/.test(l)).length;
       const hidden = Number(/\+(\d+) more/.exec(rows.join('\n'))?.[1] ?? 0);
-      const folded = Number(/TODO .*· (\d+) done/.exec(rows[0] ?? '')?.[1] ?? 0); // critique 17 B4: finished rows fold into a `2 done` count, every open row stays
+      const shownDone = rows.filter((l) => /● Step \d+/.test(l)).length;
+      const folded = hidden > 0 ? 0 : Math.max(0, Number(/TODO\s+(\d+)\/\d+/.exec(rows[0] ?? '')?.[1] ?? 0) - shownDone); // critique 17 B4 / wave 37: finished rows fold into the figure's numerator, every open row stays
       if (rows.length > 1) expect(shown + hidden + folded).toBe(12);
     }
   });

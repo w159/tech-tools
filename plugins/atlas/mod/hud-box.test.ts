@@ -106,7 +106,8 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
     expect(eight[0]).not.toMatch(/done/);
     expect(eight.filter((r) => /T\d item/.test(r))).toHaveLength(3);
     const seven = rows(7); // then the finished row folds into the count on the title
-    expect(seven[0]).toMatch(/1 done/);
+    expect(seven[0]).toMatch(/1\/3/); // wave 37: the folded count is the figure itself, never `· 1 done` beside it
+    expect(seven[0]).not.toMatch(/done/);
     expect(seven.filter((r) => /T[23] item/.test(r))).toHaveLength(2);
     const six = rows(6); // then plan rows are cut, and the title says so, in one wording at every width
     expect(six[0]).toMatch(/\+\d+ more/);

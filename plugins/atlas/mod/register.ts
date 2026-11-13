@@ -17,7 +17,7 @@ import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
 import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
-import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
+import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import type { GateLine } from './pane/sidebar-types';
 import { boardTree } from './todo-panel';
@@ -513,6 +513,15 @@ export function rebuild($: EngineInterface): Promise<void> {
 		return rebuild($);
 	});
 	return rebuildFollow;
+}
+
+/** Wave 37: the completion signal the transcript card is drawn from (the lead's `<task-notification>`) ends the named worker in data/live.ts at once, then a rebuild redraws the HUD rows and the band, so the card and the rows change in one render. */
+async function noteNotified($: EngineInterface, text: string): Promise<void> {
+	const ends = notifiedEnds(text);
+	if (ends.length === 0) return;
+	const at = await $.clock.now().catch(() => Date.now());
+	for (const x of ends) noteEnded(nameMemo[x.id] ?? x.id, x.outcome, at);
+	void rebuild($).catch(() => undefined);
 }
 
 async function rebuildOnce($: EngineInterface): Promise<void> {
@@ -1230,6 +1239,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		stopRefused = false;
 		const opening = dockOnPrompt($);
 		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') armedAt = await $.clock.now().catch(() => null); // a background task's notification is not the person's prompt: it starts no run
+		else await noteNotified($, (e as { text?: string }).text ?? ''); // the notification that draws the card also ends the worker in the HUD rows, on this very render
 		await update($, headerPhaseState, () => null).catch(() => undefined); // a person's prompt starts new work: the last reply's header phase is not this run's (a turn.start also fires for subagents and Stop-hook continuations, which keep it)
 		const out = disciplinePrompt($, e, next, disciplineDeps);
 		await opening;

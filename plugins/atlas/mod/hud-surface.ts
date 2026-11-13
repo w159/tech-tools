@@ -2,10 +2,10 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
-import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, type MotionCtx } from './motion';
+import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
-import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -13,6 +13,8 @@ export type AgentRow = { /** Dispatch order (wave 36): the agent's place in the 
 /** The one spinner frame of the HUD: the shared clock's frame (spinFrameOf of spinClock) when the snapshot's `now` is known, else the caller's tick.
  * Rev 5: ONE phase for every row and title in a frame (no per-row id: out-of-phase spinners read as noise, critique 17.13.0 problem 1). */
 const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), '') : o.tick ?? 0);
+/** The braille spinner of the SUBAGENTS header and rows: the one shared tick (motion.ts sharedSpinFrame), the same beat spinOf counts for the circles. */
+const brailleOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? sharedSpinFrame(spinClock(o.now, o.tick)) : o.tick ?? 0);
 
 /** The running mark of a HUD row. The capture scorer (round2/tools/live_capture.py GLYPH_STATE4, :467-469) reads a TODO item's state from its glyph alone and a SUBAGENTS row
  * only when its glyph is one of `◐◓◑◒◇■▲◉●`, so a braille frame there scores `wrong_state`/a missing row. Until the scorer maps braille, a row keeps the four-frame mark
@@ -188,7 +190,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const foldable = rows.filter((r) => !stays(r)).length;
   const fold = b.foldDone === true && foldable > 0 && foldable < rows.length; // a plan that is all done keeps its rows
   const { shown, hidden } = fold ? { shown: rows.filter(stays), hidden: foldable } : windowRows(rows, b.cap, o.now, false);
-  const forms = hidden > 0 ? [fold ? `${figure} · ${hidden} done` : `${figure} · +${hidden} more`, ...figures] : figures; // one wording at every width (critique 26: `1 more todo not shown` at 150, `+2 more` at 110)
+  const forms = hidden > 0 && !fold ? [`${figure} · +${hidden} more`, ...figures] : figures; // wave 37: folded finished rows ride the figure's own done count (`1/5 · ■1`), never `1/5 · ■1 · 1 done` // one wording at every width (critique 26: `1 more todo not shown` at 150, `+2 more` at 110)
   const out: Run[][] = [head(forms)];
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
   if (tier === 'full' && b.extras && rich && o.phases && o.phases.ids.length > 0) out.push(railRow(o.phases.ids, o.phases.active, ui));
@@ -286,11 +288,12 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   // Wave 34: a merged row with no agent cell has free cells to its right: its title takes them (the state word follows it) instead of ending in `…` at the shared column (`T4 combine the three reports` at 110).
   const wordCells = r.word ? cells(r.word) : cells(r.state);
   const flex = merged && right === undefined && stateAt > 0 ? Math.max(0, Math.min(cells(flat(r.label)), o.cols - 4 - 1 - Math.max(7, wordCells)) - (stateAt - 5)) : 0;
-  const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5 + flex;
-  const text = clipEll(flat(r.label), labelW, ellOf(ui));
   const finished = r.state === 'done' && markOf(r.state, r.word) !== 'doubt';
-  const quiet = merged && finished; // wave 32: a finished row of the merged block is dim 240 text, with no `done` word (the green mark says it)
-  const label = quiet ? dimRun(text, ui) : t(text, finished ? 'muted' : r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is quiet 247 text beside its green `●`, never struck through (critique 21: a finished plan read as cancelled); bold marks the selected row only
+  const quiet = merged && finished;
+  // Wave 37: a finished row of the merged block draws no state word, so its title runs on to the agent column (one blank cell between): `T4 combine the three reports`, never `T4 combine the thre…` with empty cells to its right.
+  const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : quiet && rightAt !== undefined ? Math.max(1, rightAt - 5) : stateAt - 5 + flex;
+  const text = clipEll(flat(r.label), labelW, ellOf(ui)); // wave 32: a finished row of the merged block is dim 240 text, with no `done` word (the green mark says it)
+  const label = quiet ? t(text, 'sub') : t(text, finished ? 'muted' : r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is quiet 247 text beside its green `●`, never struck through (critique 21: a finished plan read as cancelled); bold marks the selected row only
   if (stateAt === 0) return [...head, label];
   if (quiet) return right !== undefined && rightAt !== undefined ? [...toCol([...head, label], rightAt), calmRun(t(right, 'sub'))] : [...head, label];
   const row = [...toCol([...head, label], stateAt + flex), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : wordRun(r, wordOf(r, rich))];
@@ -330,7 +333,7 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
   // The working signal rides the title, inside the rule: the band lead's braille spinner (the shared clock and frame) before the counts while any agent runs.
-  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
+  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, brailleOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
   // A row the cap leaves out is counted on the title, in the one wording the TODO ribbon uses (`+2 more`), at every width: the title never says `3 running` over one drawn row without saying where the other two are
   // (critique 27, live-110-46d4825c-1 f0070:28-30). It is the last thing to give way on a narrow title.
   const hidden = windowRows(rows, b.cap, undefined, false).hidden;
@@ -525,13 +528,17 @@ export function mergedTodos(s: Surfaces): TodoRow[] {
     return named ? { ...r, label, agent: named, agentTime: '' } : r.state !== 'queued' ? { ...r, label, agent: 'lead', agentTime: '' } : { ...r, label };
   });
   const kids: string[][] = rows.map(() => []);
+  // Wave 37 (`└ explorer-xxxx queued 0:00` under a finished plan): once the turn has ended (agents ran and none is at work) no worker is still to come, so no child line is drawn.
+  const turnEnded = s.agents.some((a) => a.state === 'done' || a.state === 'failed') && !s.agents.some(isLive);
   for (const a of s.agents) {
+    if (turnEnded) break;
     // Wave 36 (critique 35: `└ explorer-7a37 queued 0:00` wandered from T1 to T2 to T5 and outlived its worker): the child line is for a worker that is still to come or at work, never a dead one, and it hangs under ONE row for its life: the row its prompt is about, else the first row.
     if (used.has(a) || a.state === 'done' || a.state === 'failed') continue;
     const home = homeOf(a.task ?? '', rows);
     if (a.state === 'queued' && home >= 0 && rows[home]!.state !== 'done') continue; // folded: the plan row carries the work
-    const to = home >= 0 ? home : 0;
-    if (rows.length > 0) kids[to]!.push(`${flat(a.name)} ${a.state}${a.elapsed && a.elapsed !== NONE ? ` ${a.elapsed}` : ''}`);
+    const firstOpen = rows.findIndex((x) => x.state !== 'done' && x.state !== 'failed'); // no fitting row: the first open one, never a finished row
+    const to = home >= 0 ? home : firstOpen;
+    if (to >= 0 && rows[to]!.state !== 'done' && rows[to]!.state !== 'failed') kids[to]!.push(`${flat(a.name)} ${a.state}${a.elapsed && a.elapsed !== NONE ? ` ${a.elapsed}` : ''}`);
   }
   return rows.map((r, i) => (kids[i]!.length ? { ...r, children: kids[i]! } : r));
 }
@@ -546,7 +553,7 @@ function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
   const states = agents.map((r) => r.state);
   const counts = stateCounts(states);
   const live = agents.some(isLive);
-  const lead: Run[] = live ? [{ ...stateRun('running', ui, spinOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' ')] : [stateRun(states.includes('failed') ? 'failed' : 'done', ui), t(' ')];
+  const lead: Run[] = live ? [{ ...stateRun('running', ui, brailleOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' ')] : [stateRun(states.includes('failed') ? 'failed' : 'done', ui), t(' ')];
   const fn = agents.reduce((n, a) => n + Number(/^(\d+) fn$/.exec(resultOf(a))?.[1] ?? 0), 0);
   const tail = live ? [] : [fn > 0 ? `${fn} fn` : ''].filter((x) => x !== ''); // wave 36: never the agents' bare clocks without their names
   // Nothing runs and some failed (wave 33): the rule leads with `■ 2 failed` in the error 203, static, then the rest of the squad (`· 1 done · 0:04 0:01 0:02`).
@@ -574,17 +581,17 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
   if (all.length === 0) return null;
   const { shown, hidden } = cap === undefined || cap >= all.length ? { shown: all, hidden: 0 } : (() => { const w = windowRows(all, cap, o.now, false); return { shown: all.filter((a) => w.shown.includes(a)), hidden: w.hidden }; })();
   const fnOf = (a: AgentRow): string => /^(\d+) fn$/.exec(resultOf(a))?.[1] ?? NONE;
-  const hasFn = all.some((a) => fnOf(a) !== NONE);
   const lastOf = (a: AgentRow): string => { const x = flat(a.tool); return x === '' || x === 'finished' || a.state === 'queued' || (a.state === 'failed' && x === KILLED) ? '' : x; }; // the filler `finished` and a failed agent's own word say nothing LAST does not
-  const hasLast = all.some((a) => lastOf(a) !== '');
-  const LEAD = 2, AGENT = 16, STATE = 9, TIME = 6, CALLS = 6, FN = 4, LAST_MIN = 8;
+  // Wave 37: the schema is frozen. The same six columns in every state (running, done, blocked, idle) and at 150 and 110 columns: LAST only shrinks (to its 4-cell header) and a count nobody knows reads `-`.
+  const LEAD = 2, AGENT = 16, STATE = 9, TIME = 6, CALLS = 6, FN = 4, LAST_MIN = 4;
   const base = LEAD + AGENT + 2 + STATE + 1 + TIME; // AGENT STATE TIME
   const withCalls = base + 1 + CALLS;
-  const withFn = withCalls + (hasFn ? 1 + FN : 0);
+  const withFn = withCalls + 1 + FN;
   const lastAt = withFn + 2;
   const showCalls = cols >= withCalls + 1;
-  const showFn = showCalls && hasFn && cols >= withFn + 1;
-  const showLast = showCalls && hasLast && cols - 1 - lastAt >= LAST_MIN;
+  const showFn = showCalls && cols >= withFn + 1;
+  const showLast = showFn && cols - 1 - lastAt >= LAST_MIN;
+  const newest = all.reduce<AgentRow | undefined>((b, a) => (a.state === 'running' && (b === undefined || (a.seq ?? 0) >= (b.seq ?? 0)) ? a : b), undefined); // the newest running row wears the 236 band
   const nameW = Math.max(6, Math.min(AGENT, cols - (LEAD + 2 + STATE + 1 + TIME) - 1)); // a very narrow row clips the name last
   const cell = (text: string, w: number, tone: Run['tone'], bold = false): Run => ({ ...t(clipEll(text, w, ell).padEnd(w), tone), ...(bold ? { bold: true } : {}) });
   const right = (text: string, w: number, tone: Run['tone'], bold = false): Run => ({ ...t(' '.repeat(Math.max(0, w - cells(text))) + clipEll(text, w, ell), tone), ...(bold ? { bold: true } : {}) });
@@ -593,7 +600,7 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
   const counts = stateCounts(all.map((a) => a.state));
   const others = counts.split(' · ').filter((x) => !/ failed$/.test(x)).join(' · ');
   const lead: Run[] = live
-    ? [{ ...stateRun('running', ui, spinOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' '), t(counts, 'sub')]
+    ? [{ ...stateRun('running', ui, brailleOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' '), t(counts, 'sub')]
     : failedN > 0 ? [stateRun('failed', ui), t(' '), t(`${failedN} failed`, ui.ascii ? 'text' : 'bad'), ...(others ? [t(` · ${others}`, 'sub')] : [])] : [stateRun('done', ui), t(' '), t(counts, 'sub')];
   const head = [lead, lead.slice(0, 1)].map((mid) => titleRow(cols, 'SUBAGENTS', '', mid, ui, false, false)).find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'SUBAGENTS', '', [], ui, false, false);
   const header: Run[] = [t(' '.repeat(LEAD)), cell('AGENT', nameW, 'muted', true), t('  '), cell('STATE', STATE, 'muted', true), t(' '), right('TIME', TIME, 'muted', true),
@@ -601,17 +608,20 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
   const rows = shown.map((a): Run[] => {
     const failed = a.state === 'failed';
     const done = a.state === 'done';
-    const mark = a.state === 'running' ? { ...stateRun('running', ui, spinOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) } : stateRun(a.state, ui);
+    const mark = a.state === 'running' ? { ...stateRun('running', ui, brailleOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) } : stateRun(a.state, ui);
     const word: Run = t(a.state, failed ? (ui.ascii ? 'text' : 'bad') : done ? (ui.ascii ? 'text' : 'ok') : a.state === 'running' ? 'text' : 'sub');
     const stateCell: Run[] = [mark, t(' '), word, t(' '.repeat(Math.max(0, STATE - 2 - cells(a.state))))];
     const time = a.elapsed && a.elapsed !== NONE ? a.elapsed : NONE;
     const tone: Run['tone'] = done ? 'muted' : 'sub';
-    return [
+    const row: Run[] = [
       t(' '.repeat(LEAD)), cell(flat(a.name) || flat(a.id ?? '') || 'agent', nameW, failed ? (ui.ascii ? 'text' : 'bad') : done ? 'muted' : 'text'), t('  '), ...stateCell, t(' '), right(time, TIME, tone),
       ...(showCalls ? [t(' '), right(a.calls !== undefined && a.calls > 0 ? String(a.calls) : NONE, CALLS, tone)] : []),
       ...(showFn ? [t(' '), right(fnOf(a), FN, tone)] : []),
       ...(showLast ? [t('  '), cell(lastOf(a), cols - 1 - lastAt, 'muted')] : []),
     ];
+    if (a !== newest) return row;
+    const band = xtermHex(236);
+    return [...row, t(' '.repeat(Math.max(0, cols - runsCells(row))))].map((x) => ({ ...x, bgHex: band })); // padded to the last cell: a band, not a coloured word
   });
   return [head, header, ...rows, ...(hidden > 0 ? [[t(' '.repeat(LEAD)), t(`+${hidden} more`, 'sub')]] : []), bottomRule(cols, ui)];
 }

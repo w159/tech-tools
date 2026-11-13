@@ -72,7 +72,7 @@ const FINISHED: Shape = { working: false, rest: 2, agents: NAMES.map((name) => (
 const IDLE: Shape = { ...FINISHED, rest: 60 };
 /** The lead closed every plan row and claims done; the third worker died and the Stop gate refused. */
 const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents[1]!, { name: NAMES[2]!, squad: 'failed', mood: 'failed' }], gates: runstate.stopRefusal([], 'Done claimed too early: 1 open dispatch row.') as unknown[] };
-// Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 236, blocked 203.
+// Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 240, blocked 203.
 const STATES: [string, Shape, string, string, boolean][] = [
   ['working', RUNNING, 'accent', '[⠀-⣿] working 0:42', true],
   ['done', FINISHED, 'ok', '● done 1:12', false],
@@ -97,8 +97,8 @@ describe('1. state colours: 179 is the gates chip only', () => {
     }
   });
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: working 141, done 114, idle 236, blocked 203 are the state slab; no state fill is the amber 179`, () => {
-      const want: [string, Shape, string][] = [['working', RUNNING, PALETTES.mocha.accent], ['done', FINISHED, ok], ['idle', IDLE, xtermHex(236)], ['blocked', STOP, bad]];
+    test(`${cols} columns: working 141, done 114, idle 240, blocked 203 are the state slab; no state fill is the amber 179`, () => {
+      const want: [string, Shape, string][] = [['working', RUNNING, PALETTES.mocha.accent], ['done', FINISHED, ok], ['idle', IDLE, xtermHex(240)], ['blocked', STOP, bad]];
       for (const [name, sh, hex] of want) {
         const runs = bandRuns(frameOf(sh, body, screen).model);
         const fills = [...new Set(runs.map((x) => x.bgHex).filter((h): h is string => h !== undefined))];
@@ -113,8 +113,8 @@ describe('1. state colours: 179 is the gates chip only', () => {
       expect(word.tone, 'done is dark ink').toBe('ink');
       expect(done.filter((x) => x.bgHex === ok).map((x) => x.t).join('')).toMatch(/^ ?● done 1:12 ?$/);
       const idle = bandRuns(frameOf(IDLE, body, screen).model);
-      expect(idle.filter((x) => x.bgHex === xtermHex(236)).map((x) => x.t).join('')).toMatch(/^ ?○ idle · 1:12 ?$/);
-      expect(idle.find((x) => x.t.includes('idle') && x.bgHex === xtermHex(236))!.tone).toBe('muted');
+      expect(idle.filter((x) => x.bgHex === xtermHex(240)).map((x) => x.t).join('')).toMatch(/^ ?○ idle · 1:12 ?$/);
+      expect(idle.find((x) => x.t.includes('idle') && x.bgHex === xtermHex(240))!.tone).toBe('text'); // wave 37: 252 ink on the 240 slab
     });
   }
   test('179 appears as a separate `△ gates` chip in the last segment, on no fill', () => {
@@ -195,7 +195,7 @@ describe('4. the TODO HUD: one state per failed row, one count, one anchored chi
     });
     test(`${cols} columns: the band count is the title count, and a failed row is \`■\` in 203, never a green \`●\``, () => {
       const f = frameOf(STOP, body, screen);
-      expect(f.band).toMatch(/todo 4\/5/);
+      expect(f.band).toMatch(/(todo )?4\/5 ■1/);
       const at = f.hud.findIndex((r) => /^[ ▸] [■●◇◐◓◑◒] T3/.test(r));
       expect(f.hud[at]).toMatch(/^[ ▸] ■ T3/);
       expect(f.hudSegs[at]!.find((x) => x.t === '■')?.color).toBe(bad);
@@ -251,10 +251,10 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
       for (const f of [run, stop, frameOf(FINISHED, body, screen)]) for (const r of f.hud) expect(r, 'never a bare list of clocks').not.toMatch(/^[\s│]*(?:\d+:\d\d\s+)+\d+:\d\d\s*$/);
     });
   }
-  test('TIME is a right-aligned column and FN shows only with real counts', () => {
+  test('TIME is a right-aligned column and the frozen header always carries FN (`-` for an unknown count)', () => {
     const f = frameOf(RUNNING, 93, 45);
     const head = f.hud.find((r) => /^ {2}AGENT\s+STATE\s+TIME/.test(r))!;
-    expect(head).not.toMatch(/\bFN\b/);
+    expect(head).toMatch(/AGENT {2,}STATE {2,}TIME {2,}CALLS {2,}FN {2,}LAST/); // wave 37: one header in every state and width
     const rows = f.hud.filter((r) => /^ {2}\S+-explorer\s+[⠀-⣿] running/.test(r));
     expect(rows).toHaveLength(3);
     const ends = rows.map((r) => /\d+:\d\d/.exec(r)!).map((m) => m.index + m[0].length);

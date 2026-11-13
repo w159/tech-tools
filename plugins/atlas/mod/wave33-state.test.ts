@@ -146,13 +146,15 @@ describe('2. working whenever an agent runs (not a queued dispatch): a braille 1
 
 describe('3. blocked on the frame the host stops, at every width', () => {
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: an open dispatch row after the host stops reads \`▲ blocked · 1 dispatch open\`, static, with no Stop refusal needed`, () => {
+    test(`${cols} columns: a dispatch row whose worker died after the host stops reads \`▲ blocked · stop refused\` and counts as failed (\`■1\`), static, with no Stop refusal needed (wave 37)`, () => {
       const f = frameOf(STOP, body, screen);
       expect(f.kind).toBe('blocked');
-      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · 1 dispatch open/);
+      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · stop refused/);
+      expect(f.band).toMatch(/■1/); // the dead dispatch is a failure, never `1 dispatch open`
+      expect(f.band).not.toMatch(/dispatch open/);
       expect(f.band).not.toMatch(BRAILLE);
       expect(f.band).not.toMatch(/idle|fixing/);
-      const lead = bandRuns(f.model).filter((x) => /blocked|dispatch open/.test(x.t));
+      const lead = bandRuns(f.model).filter((x) => /blocked|stop refused/.test(x.t));
       expect(lead.length).toBeGreaterThan(0);
       for (const run of lead) expect([run.t, run.tone, run.bold, run.bgHex]).toEqual([run.t, 'ink', true, '#ff5f5f']);
     });
@@ -234,22 +236,22 @@ describe('4. done on the host turn-end event, not a later poll', () => {
 describe('5. one failure word: `■ N failed` in the error 203, in the band, the HUD rows and the SUBAGENTS rule', () => {
   const FAILED_STOP: Shape = { ...STOP, working: false, rest: 60, dispatch: STOP.dispatch!.map((d) => ({ ...d, status: 'completed' })) };
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: no row of the slot says killed; the band says \`■ 1 failed\``, () => {
+    test(`${cols} columns: no row of the slot says killed; the band says \`■1\` in the plan segment`, () => {
       for (const sh of [FAILED_STOP, STOP, { ...STOP, gates: REFUSAL() }]) {
         const f = frameOf(sh, body, screen);
         expect(f.rows.join('\n')).not.toMatch(/killed/);
-        expect(f.band).not.toMatch(/■ ?1(?! failed)/); // never the bare `■1`
+        expect(f.band).not.toMatch(/■ 1 failed/); // wave 37: the failure rides the plan segment as `■1`, one form at every width
         expect(f.hud.join('\n'), 'the failed agent is in the block').toMatch(/failed/);
-        if (body >= 93) expect(f.band).toMatch(/■ 1 failed/); // 56 cells keep the blocked reason and the todo figure first
+        expect(f.band).toMatch(/\d\/5 ■1/);
       }
     });
   }
-  test('the band colours the word with the error tone and spells it in words at every width (no `■1`)', () => {
+  test('the band colours the failure count with the error tone at every width (wave 37: `■1` in the plan segment)', () => {
     const f = frameOf(FAILED_STOP, 93, 45);
-    const run = bandRuns(f.model).find((x) => x.t === '1 failed')!;
-    expect(run.tone).toBe('bad');
-    for (const cols of [93, 80, 70]) expect(frameOf(FAILED_STOP, cols, 45).band, `${cols}`).toMatch(/■ 1 failed/);
-    for (const cols of [60, 56, 48]) expect(frameOf(FAILED_STOP, cols, 45).band, `${cols}`).not.toMatch(/■ ?1(?! failed)/);
+    const runs = bandRuns(f.model);
+    const at = runs.findIndex((x) => x.t === '■' || x.t.includes('■'));
+    expect(runs.slice(at, at + 3).find((x) => x.t === '1')!.tone).toBe('bad');
+    for (const cols of [93, 80, 70, 60, 56, 48]) expect(frameOf(FAILED_STOP, cols, 45).band, `${cols}`).toMatch(/■1/);
   });
   test('the failed row of the TODO block and the SUBAGENTS rows read failed', () => {
     const f = frameOf(FAILED_STOP, 93, 45);
@@ -298,24 +300,26 @@ describe('6. the clock stays at every width; the word `todo` goes first below 90
   });
 });
 
-describe('7. no plan: `○ idle` alone, never `todo 0/0`', () => {
+describe('7. no plan: `todo -` and `no agents`, never `todo 0/0` (wave 37: the three segments are always drawn)', () => {
   const NOPLAN: Shape = { working: false, agents: [], plan: [], rest: 60 };
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: the idle row has no count`, () => {
       const f = frameOf(NOPLAN, body, screen, { ranSecs: undefined });
-      expect(f.band.trim()).toBe('◖ ◆ ATLAS ◗ ○ idle');
-      expect(f.band).not.toMatch(/0\/0|todo|phase/);
-      expect(frameOf(NOPLAN, body, screen).band.trim()).toBe('◖ ◆ ATLAS ◗ ○ idle · 0:58'); // a clock is no count
+      expect(f.band.trim()).toBe('◖ ◆ ATLAS ◗ ○ idle ▌ todo - ▌ no agents');
+      expect(f.band).not.toMatch(/0\/0|phase/);
+      expect(frameOf(NOPLAN, body, screen).band.trim()).toBe('◖ ◆ ATLAS ◗ ○ idle · 0:58 ▌ todo - ▌ no agents'); // a clock is no count
     });
   }
-  test('a working turn with no plan says `working 0:12` alone', () => {
+  test('a working turn with no plan says `working 0:12`, `todo -` and `no agents`', () => {
     const f = frameOf({ working: true, agents: [], plan: [] }, 93, 45, { workSecs: 12 });
-    expect(f.band.trim()).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:12$/);
+    expect(f.band.trim()).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:12 ▌ todo - ▌ no agents$/);
   });
   test('bandLines with total 0 never prints a count in any state or width', () => {
     const base = { maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'research', done: 0, total: 0, openWork: 0, openDispatch: 0, todoBlocked: 0, checks: [], ui, bar: true, workers: [] } as const;
     for (const cols of [150, 93, 56, 30]) for (const extra of [{ busy: true, turnSecs: 3 }, { busy: false, restSecs: 60 }, { busy: false, restSecs: 3, phase: 'done' }]) {
-      expect(bandLines({ ...base, cols, ...extra } as never)[0]!.runs.map((x) => x.t).join(''), `${cols}`).not.toMatch(/0\/0|todo/);
+      const t = bandLines({ ...base, cols, ...extra } as never)[0]!.runs.map((x) => x.t).join('');
+      expect(t, `${cols}`).not.toMatch(/0\/0/);
+      expect(t.match(/▌/g) ?? [], `${cols}`).toHaveLength(2);
     }
   });
 });

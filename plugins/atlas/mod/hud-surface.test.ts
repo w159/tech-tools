@@ -149,8 +149,10 @@ describe('row budget never hides rows silently', () => {
       const rows = text(fitStack({ todos, agents: worldAgents() }, opts(120), h));
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => / Item \d+/.test(l)).length;
-      const hidden = Number(/\+(\d+) more/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) + Number(/TODO .*· (\d+) done/.exec(rows[0] ?? '')?.[1] ?? 0); // finished rows fold into `N done` (critique 17 B4)
-      if (rows.some((l) => l.includes('TODO') && !l.includes('SUBAGENTS')) && (shown > 0 || hidden > 0)) expect(shown + hidden).toBe(30);
+      const hidden = Number(/\+(\d+) more/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) + 0;
+      const shownDone = rows.filter((l) => /● Item \d+/.test(l)).length;
+      const folded = hidden > 0 ? 0 : Math.max(0, Number(/TODO\s+(\d+)\/\d+/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) - shownDone); // wave 37: finished rows fold into the figure's numerator (critique 17 B4)
+      if (rows.some((l) => l.includes('TODO') && !l.includes('SUBAGENTS')) && (shown > 0 || hidden > 0)) expect(shown + hidden + folded).toBe(30);
     }
   });
   test('windowRows keeps open work first, then the queue, in plan order', () => {

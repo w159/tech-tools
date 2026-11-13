@@ -48,7 +48,7 @@ describe('every plan row the slot holds is drawn', () => {
         expect(hud.filter((l) => l.startsWith('╰') && l.endsWith('╯'))).toHaveLength(2); // a box is closed at every agent count
         expect(hud.filter((l) => /^[▸ ]\s*\S (alpha|beta|gamma)-explorer /.test(l))).toHaveLength(3); // every listed agent keeps its row
         expect(planRows(hud).length).toBeGreaterThanOrEqual(2);
-        expect(planRows(hud).length + Number(/\+(\d+) more|· (\d+) done/.exec(hud[0]!)?.slice(1).find((x) => x) ?? 0)).toBe(5); // drawn or counted on the title: the whole plan
+        expect(hud[0]).toMatch(/\d+\/5/); // wave 37: the whole plan is counted on the title by its figure (n/5), never by a second `· N done`
         expect(hud.some((l) => /not shown/.test(l))).toBe(false);
         const gap = hudGapRows(hud.some((l) => l.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
         expect(budget - hud.length - gap).toBeGreaterThanOrEqual(1);

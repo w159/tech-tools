@@ -221,7 +221,7 @@ describe('5. a done row: dim title, no `done` word, the agent and its time kept,
         const t = txt(r);
         expect(t, name).not.toMatch(/\bdone\b|returned/);
         const title = r.find((x) => /^T\d /.test(x.t))!;
-        expect([name, t, title.color]).toEqual([name, t, PALETTE5.dim]); // 240
+        expect([name, t, title.color]).toEqual([name, t, PALETTE5.secondary]); // wave 37: 245
       }
       expect(txt(rows[0]!), name).toMatch(/alpha-explorer\s+0:04 $/);
     }

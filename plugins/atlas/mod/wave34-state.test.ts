@@ -180,20 +180,17 @@ describe('3. dispatches fold into the plan: one row per plan item', () => {
       const f = frameOf(SUFFIXED, body, screen);
       expect(todoRowsOf(f)).toHaveLength(5);
       expect(titleOf(f)).toMatch(/4\/5 · ■1/); // wave 36: one failed row is counted apart from the done rows
-      expect(f.band).toMatch(/todo 4\/5/); // wave 36: the failed row is not a done row
+      expect(f.band).toMatch(/(todo )?4\/5 ■1/); // wave 37: the failed row rides the plan segment; the word `todo` goes first at 56 cells // wave 36: the failed row is not a done row
     });
   }
   test('done rows keep their agent and time columns', () => {
     const f = frameOf(SUFFIXED, 93, 45);
     for (const name of ['alpha-explorer', 'beta-explorer']) expect(todoRowsOf(f).find((r) => r.includes(name)), name).toMatch(/\d:\d\d/);
   });
-  test('an open dispatch no plan row owns is one dim child line `└ explorer-4e2d queued 0:00`, only while open', () => {
-    const f = frameOf(SUFFIXED, 93, 45);
-    const kids = f.hud.filter((r) => /└/.test(r));
-    expect(kids).toHaveLength(1);
-    expect(kids[0]!.trim()).toBe('└ explorer-4e2d queued 0:00');
-    const at = f.hud.findIndex((r) => /└/.test(r));
-    expect(f.hud[at - 1]).toMatch(/T\d/);
+  test('an open dispatch no plan row owns hangs as one dim child line `└ explorer-4e2d queued 0:00` only while the turn is alive, never once it ended (wave 37)', () => {
+    const f = frameOf(SUFFIXED, 93, 45); // the host turn is over and the earlier workers ended: no phantom `queued` child
+    expect(f.hud.filter((r) => /└/.test(r))).toHaveLength(0);
+    expect(f.hud.join('\n')).not.toMatch(/explorer-4e2d/);
     const closed = frameOf({ ...SUFFIXED, dispatch: SUFFIXED.dispatch!.map((d) => ({ ...d, status: 'completed' })), members: [] }, 93, 45);
     expect(closed.hud.join('\n')).not.toMatch(/└|explorer-4e2d/);
   });

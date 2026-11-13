@@ -10,7 +10,11 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, RETURNED, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
+import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, LEAD_FRAMES, luminance, markToken, PALETTES, RETURNED, SPINNER_MS, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
+
+/** The ONE spinner tick (wave 37): the braille frame index (0..9, an index into the lead spinner's ten frames) at the clock reading `now` (ms). Every braille spinner (band lead, HUD rows, SUBAGENTS header and rows) reads this one clock, and the
+ * HUD's circles `◐◓◑◒` step on the same beat (`sharedSpinFrame(now) % 4` would restart at the wrap, so they count the same beats unwrapped: `Math.floor(now / SPINNER_MS)`). */
+export const sharedSpinFrame = (now: number): number => ((Math.floor(now / SPINNER_MS) % LEAD_FRAMES.length) + LEAD_FRAMES.length) % LEAD_FRAMES.length;
 
 /** A frame every 100 ms, the spinner's rate: the motion timer's period and the length of one beat of a transition. */
 export const MOTION_FRAME_MS = 100;

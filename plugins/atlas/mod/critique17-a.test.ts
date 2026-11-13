@@ -147,7 +147,7 @@ describe('A4: the band names the open row by its plan title and never leaves col
   const row = (mm: MissionModel): string => runsText(bandLines(mm)[0]!.runs);
   test('93 columns: the named open row, the todo figure and the failed count with its word', () => {
     const t = row(m(93));
-    expect(t).toContain('▲ blocked · needs: close dispatch T2');
+    expect(t).toContain('▲ blocked · 1 dispatch open'); // wave 37: one string table for the reason
     expect(t).toContain('todo 4/5');
     expect(t).toMatch(/■ 1 failed/); // wave 31: blocked rides the lead's state word; one failure word
     expect(t).not.toMatch(/\.\.\.|…/);
