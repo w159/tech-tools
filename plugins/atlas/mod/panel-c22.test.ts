@@ -55,12 +55,12 @@ describe('step 3: the board pane', () => {
     expect(items[1]).toContain('T2 read ghost.py');
     expect(t.join('\n')).not.toContain('...');
   });
-  test('a doubted done reads `killed` once (wave 30), never a cut word; the owner moves to the footer where the row has no room for it', () => {
+  test('a doubted done reads `failed` once (wave 33), never a cut word; the row names its owner and no footer repeats it', () => {
     const t = boardText(pane(59, [row(1), row(2, { label: 'T2 read ghost.py', owner: 'ghost-explorer', word: DONE_DOUBT, detail: 'worker killed' })]));
     const line = t.find((l) => l.includes('T2 read ghost.py'))!;
-    expect(line).toMatch(/^  ■ T2 read ghost\.py +killed {2}ghost-explorer$/);
+    expect(line).toMatch(/^  ■ T2 read ghost\.py +failed {2}ghost-explorer$/);
     expect(line).not.toContain('…');
-    expect(t.join('\n')).toContain('T2 killed · ghost-explorer'); // the owner is still named, in the footer
+    expect(t.join('\n')).not.toContain('T2 failed · ghost-explorer'); // wave 33: the footer is gone, the row is the one place
   });
   test('no strikethrough on the board, in the pane or the full form', () => {
     for (const o of [{ pane: true, ribbon: false, title: false }, {}, { rich: true }]) for (const cols of [150, 110, 80]) {

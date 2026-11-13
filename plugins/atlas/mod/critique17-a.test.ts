@@ -27,7 +27,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
   test('the mark is error red, the word is error red, and it is its own motion entry (no fade-to-done pop)', () => {
     expect(markOf('done', DONE_DOUBT)).toBe('doubt');
     expect(markOf('done')).toBe('done');
-    expect(rowWordTone('done', DONE_DOUBT)).toBe('bad'); // critique 25: the killed worker reads the same error red on the HUD, the board and the panel
+    expect(rowWordTone('done', DONE_DOUBT)).toBe('bad'); // critique 25: the failed worker reads the same error red on the HUD, the board and the panel
     expect(rowWordTone('done')).toBe('muted');
     expect(stateRun(markOf('done', DONE_DOUBT), ui).tone).toBe('bad');
     expect(stateRun('done', ui).tone).toBe('ok');
@@ -63,8 +63,8 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(rows[0]).toMatchObject({ state: 'done', word: DONE_DOUBT, detail: '', owner: 'ghost-explorer' });
     const body = boardBody(rows, { cols: 120, ui });
     const row = body.find((l) => plain(l.runs).includes('T2 read ghost.py'))!;
-    expect(plain(row.runs)).toMatch(/killed\s+ghost-explorer\s*$/);
-    expect(row.runs.find((x) => x.t.trim() === 'killed')?.tone).toBe('bad');
+    expect(plain(row.runs)).toMatch(/failed\s+ghost-explorer\s*$/);
+    expect(row.runs.find((x) => x.t.trim() === 'failed')?.tone).toBe('bad');
     expect(row.runs.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
     expect(boardMotionItems(rows)[0]!.state).toBe('doubt');
   });

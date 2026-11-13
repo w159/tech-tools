@@ -5,7 +5,7 @@
 import type { RenderElement, RenderNode } from 'claude-code'
 import type { AgentState } from '../contract'
 import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
-import { CARD_W, toastRuns } from '../panel-layout'
+import { CARD_W, cardBarTone, toastRuns } from '../panel-layout'
 import { cells } from '../atlas-ui'
 import { clipE as clip, ELLIPSIS } from '../board-model'
 import { displayName } from '../hud'
@@ -95,7 +95,7 @@ const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : r
  * `failed`, `killed`), `now` what a running worker is doing (tool, target, age), `wave` the strip number it was
  * dispatched in, `steps` and `ctx` the worker's plan progress and context held (rows appear only when known).
  * `mark` is accepted for older callers and ignored: the border's state word replaces the spinner chip. */
-export interface CardExtra { ui?: Ui; /** The shared spinner frame (the beat counter): the start card's braille turns with it. */ frame?: number; mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
+export interface CardExtra { ui?: Ui; /** 0..1: how far the card's bar has faded 141 -> 245 (placed.ts barFade). */ fade?: number; /** The shared spinner frame (the beat counter): the start card's braille turns with it. */ frame?: number; mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
 
 /** First sentence of a PreToolUse hook's DENY text, null when the call was not denied: a denied dispatch never ran. */
 function denyReason(c: CallLike): string | null {
@@ -124,7 +124,7 @@ export function workerCard(c: CallLike, state: AgentState, width = 0, name?: str
  const w = Math.max(20, Math.min(RAIL_W, width > 0 ? width : RAIL_W))
  // One card style (critique 16 C3: the boxed `┌─ ◆ done beta-explorer-2 ─┐` card sat beside the rail card for the same worker in 61 frames): the dispatch card is the
  // rail card the finish uses, `▌ ◐ running  name  what it is doing` (no brand: only the finish card carries `◆ ATLAS`). The name is never cut: the fact is clipped to the room left, the model tag goes first.
- const head = toastRuns(phase.ui, cardName, '', ui, false, extra.frame ?? 0)
+ const head = toastRuns(phase.ui, cardName, '', ui, false, extra.frame ?? 0, extra.fade ?? 0)
  const used = head.reduce((n, x) => n + cells(x.t), 0)
  const last = lastOf(c, phase.ui === 'running', extra, word, w - used - 2)
  const fact = last === 'running' ? '' : last // the state word already says it; a host label such as `pending` still shows
@@ -157,8 +157,8 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 
 /** Wave 31 (critique 29: the framed finish card wrapped to `● don` / `e` at 110 columns and stacked at ragged widths 42/62/61): a finish or failure card is ONE row, as wide as `min(56, cols - 4)` and never wrapped,
  * like a gum toast. `▌ ◆ ATLAS  ● done  beta-explorer  explorer finished  0:13`: the bar, the dim brand mark, the state glyph and word, the name (cut with `…`, `~` in ASCII, before anything else
- * is dropped), what the worker was, and its time flush right. The capture scorer finds a card by `▌ ◆ ATLAS  <glyph> <word> <name>  <role> finished` on one line. A done card's bar fades 141 -> 245
- * (`fade` 0..1, from the card's age); a failure keeps its 203 bar. */
+ * is dropped), what the worker was, and its time flush right. The capture scorer finds a card by `▌ ◆ ATLAS  <glyph> <word> <name>  <role> finished` on one line. Every card's bar fades 141 -> 245
+ * (`fade` 0..1, from the card's age), a failure's too (wave 33): the glyph and the word carry the 203. */
 export const FINISH_W = 56
 export const finishWidth = (cols: number): number => Math.max(24, Math.min(FINISH_W, cols > 0 ? cols - 4 : FINISH_W))
 const TIME_RE = /\b\d+:\d\d(?::\d\d)?\b/
@@ -168,8 +168,7 @@ function finishRow(state: 'done' | 'failed', name: string, fact: string, time: s
  const figure = time && o.calls !== undefined && o.calls > 0 ? `${time} ${ui.ascii ? '|' : '·'} ${o.calls} fn` : time // `0:12 · 2 fn`: the run time, then its tool calls
  const w = finishWidth(o.cols ?? 0)
  const g = stateRun(state, ui)
- const faded = state === 'done' && (o.fade ?? 0) >= 0.5
- const bar: UiRun = { t: ui.ascii ? '|' : '▌', tone: ui.ascii ? 'text' : state === 'failed' ? g.tone : faded ? 'sub' : 'accent' }
+ const bar: UiRun = { t: ui.ascii ? '|' : '▌', tone: ui.ascii ? 'text' : cardBarTone(o.fade ?? 0) } // wave 33: one bar for every card kind, 141 for the first second, 245 after (a failure too: the state glyph and word carry 203)
  const headOf = (sep: string): UiRun[] => [bar, { t: ' ', tone: 'text' }, ...(ui.ascii ? brandMark(ui) : [{ t: '◆ ', tone: 'accent' } as UiRun, { t: 'ATLAS', tone: 'accent' } as UiRun]), { t: '  ', tone: 'text' }, { ...g, t: `${g.t} ` }, { t: wordOf(state), tone: stateWordTone(state, ui), bold: true }, { t: sep, tone: 'text' }]
  let head = headOf('  ')
  const tail: UiRun[] = fact ? [{ t: `  ${fact}`, tone: 'sub' }] : []

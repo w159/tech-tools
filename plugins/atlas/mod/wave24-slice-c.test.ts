@@ -45,16 +45,14 @@ describe('board (step 1)', () => {
       expect(out.join('\n')).not.toContain('...');
     }
   });
-  test('the footer records how the run closed: `■ T2 killed after Stop refusal · ghost-explorer`', () => {
+  test('the failure is on the plan row only; there is no closing footer (wave 33: one kill shows once)', () => {
     const doubted = [item(1), item(2, { label: 'T2 read the ghost module', owner: 'ghost-explorer', word: DONE_DOUBT })];
-    const after = pane(doubted, 80, { stopRefused: true });
-    expect(after.join('\n')).toContain('■ T2 killed after Stop refusal · ghost-explorer');
-    const without = pane(doubted, 80, { stopRefused: false });
-    expect(without.join('\n')).toContain('■ T2 killed · ghost-explorer');
-    expect(without.join('\n')).not.toContain('Stop refusal');
-    // narrow: wrapped on its words, nothing cut
-    const narrow = pane(doubted, 37, { stopRefused: true }).join(' ').replace(/\s+/g, ' ');
-    expect(narrow).toContain('■ T2 killed after Stop refusal · ghost-explorer');
+    for (const stopRefused of [true, false]) {
+      const out = pane(doubted, 80, { stopRefused }).join('\n');
+      expect(out).toMatch(/■ T2 read the ghost module\s+failed\s+ghost-explorer/);
+      expect(out).not.toContain('Stop refusal');
+      expect(out.match(/\bfailed\b/g)).toHaveLength(1);
+    }
   });
   test('a plan that is all done adds no closing line (wave 32, critique 30: `closed · 5 of 5 items done` repeated the summary row)', () => {
     expect(pane(five, 50).join('\n')).not.toMatch(/closed|of 5 items done/);
@@ -83,9 +81,9 @@ describe('team tab (step 2)', () => {
     expect(out).toHaveLength(4);
     const col = (re: RegExp): number[] => out.map((l) => l.search(re));
     expect(new Set(col(/ (explorer|verifier|runner)  /)).size).toBe(1); // the role column
-    expect(new Set(col(/  (running|killed|done|queued)( |$)/)).size).toBe(1); // the state word column
+    expect(new Set(col(/  (running|failed|done|queued)( |$)/)).size).toBe(1); // the state word column
     expect(out[0]).toMatch(/alpha +explorer +running +0:42 +[▁-█ ]{12}/);
-    expect(out[1]).toMatch(/ghost-explorer +explorer +killed +2:15 +[▁-█ ]{12}/);
+    expect(out[1]).toMatch(/ghost-explorer +explorer +failed +2:15 +[▁-█ ]{12}/);
     expect(out[2]).toMatch(/beta +verifier +done +1:01:40 +[▁-█ ]{12}/);
     expect(out[3]).toMatch(/gamma +runner +queued$/); // a queued agent has not started: no elapsed time
   });
@@ -118,7 +116,7 @@ describe('channel tab (step 3)', () => {
       const out = body('channel', cols, { notes, channel: 'lc-qksrlqem' }).join('\n');
       expect([cols, out]).toEqual([cols, expect.stringContaining('ghost-explorer')]);
       expect(out).toContain('implementer-layout');
-      expect(out).toMatch(/■ ghost-explorer +killed/);
+      expect(out).toMatch(/■ ghost-explorer +failed/);
       expect(out).not.toMatch(/ghost-exp\.\.\./);
       expect(out).not.toMatch(/ghost-exp…/);
     }

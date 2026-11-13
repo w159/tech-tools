@@ -22,9 +22,9 @@ describe('critique 19 C4: the route tab reads a killed worker in words', () => {
       const rows = body('route', cols, { todos });
       const at = rows.findIndex((l) => l.includes('T2 read ghost') || l.includes('T2 read'));
       expect(at).toBeGreaterThan(-1);
-      expect(rows[at]).toMatch(/killed\s*$/); // one row, never a second line (critique 26)
+      expect(rows[at]).toMatch(/failed\s*$/); // one row, never a second line (critique 26)
       expect(rows[at]).toContain('ghost-explorer'); // the agent's name stays whole at every width
-      expect(rows.join('\n').match(/killed/g)!.length).toBeGreaterThanOrEqual(1);
+      expect(rows.join('\n').match(/failed/g)!.length).toBeGreaterThanOrEqual(1);
       for (const l of rows) expect(cells(l)).toBeLessThanOrEqual(cols);
     });
   }

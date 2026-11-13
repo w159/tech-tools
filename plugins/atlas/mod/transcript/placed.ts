@@ -9,7 +9,7 @@ import type { AtlasSnapshot } from '../contract'
 import type { LiveSnapshot } from '../orchestra-types'
 import { endedAt, liveWorkers } from '../data/live'
 import { notificationTree, type FinishOpts } from './cards'
-import { forgetFailed, killedNames, outcomeText } from './outcome'
+import { forgetFailed, outcomeText } from './outcome'
 import type { Ui } from '../atlas-ui'
 
 /** One finished worker, as the card needs it. */
@@ -51,21 +51,20 @@ export function finishedWorkers(prev: AtlasSnapshot | null, next: AtlasSnapshot)
 }
 
 /** `finished · 13s` / `failed · 13s`, the words the host's own row carries. */
-const textOf = (w: FinishedWorker, killed = false): string => outcomeText({ status: w.failed ? (killed ? 'killed' : 'failed') : 'completed', line: '', ...(w.durationMs > 0 ? { durationMs: w.durationMs } : {}) })
+const textOf = (w: FinishedWorker): string => outcomeText({ status: w.failed ? 'failed' : 'completed', line: '', ...(w.durationMs > 0 ? { durationMs: w.durationMs } : {}) })
 
 /** Place a card for each worker that finished between `prev` and `next`, and for each finish whose place the host refused on an earlier build
  * (critique 15 A2: one refused place lost the failed card for good in 3 of 6 stop runs). Never throws: a card is display only. */
 export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | null, next: AtlasSnapshot): Promise<void> {
   const fresh = finishedWorkers(prev, next)
   const todo = [...fresh, ...[...owed.values()].map((o) => o.w).filter((o) => !fresh.some((f) => f.name === o.name))]
-  const killed = todo.some((w) => w.failed) ? await killedNames($) : new Set<string>()
   for (const w of todo) {
     const tries = (owed.get(w.name)?.tries ?? 0) + 1
     owed.delete(w.name)
     try {
       if ((heard.get(w.name) ?? 0) > 0) { bump(heard, w.name, -1); continue } // the host row already drew this finish
       const id = `done-${w.name.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 50)}-${++counter}`
-      rows.set(id, { name: w.name, role: w.role, text: textOf(w, killed.has(w.name)), failed: w.failed, ...(w.calls ? { calls: w.calls } : {}) })
+      rows.set(id, { name: w.name, role: w.role, text: textOf(w), failed: w.failed, ...(w.calls ? { calls: w.calls } : {}) })
       capped(rows)
       const res = await $.ui.place({ id })
       if (res.isPlaced) bump(unclaimed, w.name, 1)
@@ -101,6 +100,14 @@ export function cardAged(key: string, now: number): boolean {
 /** How long a card's bar takes to fade 141 -> 245 (critique 29). */
 export const FADE_MS = 1000
 /** 0..1: how far a card's bar has faded, from its first draw on the snapshot clock (`cardAged` registers the draw). */
+const firstSeen = new Map<string, number>() // bar key -> its first draw on the snapshot clock
+/** 0..1: how far a card's bar has faded 141 -> 245, from its first draw (any card kind: start card, finish card, note). Registers the first draw. */
+export function barFade(key: string, now: number): number {
+  if (!Number.isFinite(now) || now <= 0) return 0
+  let at = firstSeen.get(key)
+  if (at === undefined) { at = now; firstSeen.set(key, at); capped(firstSeen) }
+  return Math.max(0, Math.min(1, (now - at) / FADE_MS))
+}
 export function cardFade(key: string, now: number): number {
   const first = drawn.get(key)
   return first && Number.isFinite(now) && now > 0 ? Math.max(0, Math.min(1, (now - first.at) / FADE_MS)) : 0
@@ -128,5 +135,5 @@ export function hideNotification(requestId: string, name: string): boolean {
 
 /** Forget every placed card and decision (a new session, a test). */
 export function forgetPlaced(): void {
-  rows.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
+  rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
 }

@@ -16,7 +16,7 @@ const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 const G = '[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇●■▲△◉]';
-const WORD = '(queued|running|done|failed|killed|blocked|waiting)'; // wave 30: the failed state reads killed
+const WORD = '(queued|running|done|failed|blocked|waiting)'; // wave 33: the failed state reads failed
 const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => bodyLines(panelWorld(t, cols, ui, { core, ...over })).map(lineText).map((l) => l.trimEnd());
 const taskRows = (rows: readonly string[]): string[] => rows.filter((l) => new RegExp(`^[▸ ] ${G} `).test(l));
 
@@ -174,17 +174,18 @@ describe('change 10: the card and the toast', () => {
     const t = L.toastText('failed', 'implementer-live', 'tests red 3', mocha);
     expect(t.startsWith('▌ ')).toBe(true);
     expect(t).not.toContain('ATLAS');
-    expect([t.indexOf('killed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]).toEqual([...[t.indexOf('killed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]].sort((a, b) => a - b));
+    expect([t.indexOf('failed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]).toEqual([...[t.indexOf('failed'), t.indexOf('implementer-live'), t.indexOf('tests red 3')]].sort((a, b) => a - b));
     expect(L.toastText('done', 'a', '', ascii).startsWith('| ')).toBe(true);
     expect(L.toastText('done', 'a', '', ascii)).toMatch(/^[\x20-\x7e]*$/);
   });
-  test('the left bar and the state word carry the state tone; the rest keeps its own', () => {
+  test('the left bar is one accent for every state (wave 33, fading to 245) and the state word carries the state tone; the rest keeps its own', () => {
     const tones: Record<string, string> = { running: 'accent', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' };
     for (const s of Object.keys(tones) as UI.UiState[]) {
       const runs = L.toastRuns(s, 'name', 'fact', mocha);
       expect(runs[0]!.t.trim()).toBe('▌');
-      expect(runs[0]!.tone).toBe(tones[s]);
-      const word = runs.find((x) => x.t.trim() === (s === 'failed' ? 'killed' : s))!;
+      expect(runs[0]!.tone).toBe('accent'); // wave 33 (critique 31): one bar colour for every card kind
+      expect(L.toastRuns(s, 'name', 'fact', mocha, false, 0, 1)[0]!.tone).toBe('sub');
+      const word = runs.find((x) => x.t.trim() === s)!;
       expect(word.tone).toBe(s === 'running' ? 'run' : tones[s]);
       expect(word.bold).toBe(true);
     }
@@ -195,7 +196,7 @@ describe('change 10: the card and the toast', () => {
     for (const theme of ['mocha', 'latte'] as const) {
       const ui: Ui = { theme, ascii: false, color: 'truecolor' };
       for (const s of UI_STATES) {
-        const word = L.toastRuns(s, 'n', '', ui).find((x) => x.t.trim() === (s === 'failed' ? 'killed' : s))!;
+        const word = L.toastRuns(s, 'n', '', ui).find((x) => x.t.trim() === s)!;
         expect(contrast(UI.toneHex(word.tone, theme), PALETTES[theme].panel)).toBeGreaterThanOrEqual(4.5);
       }
       expect(UI.emittedPairs(theme).filter((p) => p.what.startsWith('state word')).length).toBe(UI_STATES.length);

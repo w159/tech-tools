@@ -11,16 +11,17 @@ import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
 import { glyph } from './theme'
 import { shortTool } from './band'
 import type { ActivityEntry, LiveSnapshot } from './orchestra-types'
+import { openItems } from './data/core'
 import { activeCount, liveWorkers } from './data/live'
 import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
-import { cardAged, cardFade, cardStackHidden, hideNotification, placedTree } from './transcript/placed'
+import { barFade, cardAged, cardFade, cardStackHidden, hideNotification, placedTree } from './transcript/placed'
 import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
 import { elapsedClock, hexIn, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
-import { displayDelta, leadOf, leadRow, partialLead } from './transcript/leadheader'
+import { displayDelta, leadOf, leadRow, partialLead, verdictOf } from './transcript/leadheader'
 import type { Outcome } from './transcript/outcome'
 
 // The live snapshot is read from $.state while drawing, so a snapshot write redraws
@@ -217,6 +218,21 @@ function quietLead(id: string | undefined, text: string, pattern: string): boole
  return i > 0 && leads[i - 1]!.phase === lead.phase
 }
 
+/** What the run really holds, for the done chip: workers that failed and dispatch rows the store still holds open. Read from the full snapshot where the draw has one, else from the last one `ready` read (the
+ * chip answers from the bundled header pattern before any state read, so a done chip drawn that way still knows). */
+let health = { failed: 0, open: 0 }
+export function healthOf(snap: AtlasSnapshot): { failed: number; open: number } {
+ try {
+  const s = snap as Partial<AtlasSnapshot>
+  if (!Array.isArray(s.todos) && !Array.isArray(s.squad)) return health
+  const failed = workersOf(snap).filter((w) => w.state === 'failed').length
+  const dispatch = (s.todos ?? []).filter((t) => (t as { origin?: string }).origin === 'dispatch')
+  return { failed, open: openItems(dispatch, s.sessionId).length }
+ } catch { return health }
+}
+export const noteHealth = (snap: AtlasSnapshot): void => { health = healthOf(snap) }
+export const forgetHealth = (): void => { health = { failed: 0, open: 0 } }
+
 /** The look the chip draws with, kept from the host's own read (look.ts, async) so the synchronous draw path has a theme without awaiting. */
 let leadUi: Ui | null = null
 function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): void {
@@ -234,7 +250,9 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  const lead = leadOf(props.text, snap?.contract.headerFirstLinePattern ?? '')
  if (lead === null) return partialLead(props.text, ui)
  const rest = props.text.slice(lead.first.length).replace(/^\n/, '')
- const row = leadRow(lead, { ui, columns, superseded, quiet })
+ const h = healthOf(snap)
+ const verdict = lead.phase === 'done' ? verdictOf(h.failed, h.open, superseded) : null // wave 33: a done chip over a failed worker or an open dispatch row never reads `all finished`
+ const row = leadRow(lead, { ui, columns, superseded, quiet, verdict })
  if (!rest.trim()) return row
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }
@@ -274,7 +292,7 @@ async function ready($: EngineInterface, cache: { envOff?: boolean }): Promise<A
  await primeEnv($, cache)
  if (cache.envOff) return null
  const snap = await read($, snapshotState)
- if (snap) noteHeaderPattern(snap.contract.headerFirstLinePattern)
+ if (snap) { noteHeaderPattern(snap.contract.headerFirstLinePattern); noteHealth(snap) }
  return snap
 }
 
@@ -311,7 +329,7 @@ export function registerRestyle(on: On): void {
    const snap = await ready($, cache)
    if (!snap) return next(e)
    const agents = await $.agent.list().catch(() => [] as AgentInfo[])
-   const extra = { ...(e.props.tool === 'Agent' || e.props.tool === 'Task' ? await cardExtra($, e.props.output, agents, outcomes) : {}), ui: (await lookOf($)).ui }
+   const extra = { ...(e.props.tool === 'Agent' || e.props.tool === 'Task' ? await cardExtra($, e.props.output, agents, outcomes) : {}), ui: (await lookOf($)).ui, ...(e.props.tool === 'Agent' || e.props.tool === 'Task' ? { fade: barFade(`start-${e.requestId}`, snap.now) } : {}) }
    return toolUseTree(snap, e.props, agents, e.viewport?.columns ?? 0, extra) ?? next(e)
   } catch { return next(e) }
  })
@@ -384,7 +402,7 @@ export function registerRestyle(on: On): void {
    if (e.props.isExpanded || e.props.origin?.kind === 'composer') return next(e)
    const snap = await ready($, cache)
    if (!snap) return next(e)
-   if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name), () => cardAged(`n-${e.requestId}`, snap.now), e.viewport?.columns ?? 0)) ?? next(e)
+   if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name), () => cardAged(`n-${e.requestId}`, snap.now), e.viewport?.columns ?? 0, () => barFade(`n-${e.requestId}`, snap.now))) ?? next(e)
    return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0, (await lookOf($)).ui) ?? next(e)
   } catch { return next(e) }
  })

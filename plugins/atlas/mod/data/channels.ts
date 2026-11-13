@@ -191,7 +191,7 @@ export function failureNotes(i: { workers: readonly { name: string; state: strin
 	const rows: ChannelNote[] = [];
 	for (const w of i.workers) {
 		if (w.state !== 'failed' && w.state !== 'blocked') continue;
-		const text = w.state === 'failed' ? `killed${w.detail && w.detail !== 'failed' ? ` · ${w.detail}` : ''}` : `blocked${w.detail ? `: ${w.detail}` : ''}`;
+		const text = w.state === 'failed' ? `failed${w.detail && w.detail !== 'failed' ? ` · ${w.detail}` : ''}` : `blocked${w.detail ? `: ${w.detail}` : ''}`;
 		rows.push({ ts: w.endedMs !== undefined ? isoTs(w.endedMs) : '', seq: 0, owner: w.name, to: 'lead', text, channel, kind: 'blocked' });
 	}
 	if (i.stop?.blocked) {

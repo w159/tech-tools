@@ -4,7 +4,7 @@
 // Buttons on a clipped zero-width layer, the strip wraps only below 35 cells and never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { cells, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
+import { cells, markOf, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
 import { centred, HOTKEY_W, recentRows, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
@@ -64,7 +64,7 @@ export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { ti
   return stripLayout(cols).bare ? { ...b, title: ui.ascii ? 'SIDEPANEL > BOARD' : 'SIDEPANEL ▸ BOARD' } : b;
 }
 
-/** The board's one footer row: the totals line (`● 2 done  ■ 1 killed · total 0:57`) with the close hint flush right; the longest form of the hint the row has room for. Nothing to total: the hint alone. */
+/** The board's one footer row: the totals line (`● 2 done  ■ 1 failed · total 0:57`) with the close hint flush right; the longest form of the hint the row has room for. Nothing to total: the hint alone. */
 function footerRow(totals: readonly BoardLine[], cols: number, ui: Ui): BoardLine | null {
   const base = totals[0]?.runs ?? [{ t: '  ', tone: 'text' as const }];
   const used = base.reduce((n, x) => n + cells(x.t), 0);
@@ -79,8 +79,11 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const items = boardItems(m);
   const max = Math.max(1, m.rows - 4);
   const stop = gateTally(m.gates as never).stop;
+  const plan = boardRowsOf(items, Math.floor(s.now / 1000));
+  // Wave 33 (critique 31: one kill stood four times in one pane): a failed worker is said by its plan row, once. The agents whose row says it are quiet in the totals, the chart and the recent posts.
+  const failedOwners = new Set(plan.filter((x) => x.owner && (x.state === 'failed' || markOf(x.state, x.word) === 'doubt')).map((x) => x.owner as string));
   const lines = items.length
-    ? boardLines(boardRowsOf(items, Math.floor(s.now / 1000)), { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, dispatches: items.filter((i) => i.origin === 'dispatch').length, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
+    ? boardLines(plan, { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, dispatches: items.filter((i) => i.origin === 'dispatch').length, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
     : centred(pm, 'nothing on the board yet');
   // Wave 30 (critique 28): under the rows the pane is a chart, not a blank half. Sections, richest first, as many as the height holds: the timeline (a solid bar per agent, its activity row, the axis), the totals line, then the
   // last posts of the channel; what is left over is spread as one blank row between sections, and a dim hint closes the pane, so no run of blank rows is longer than three.
@@ -88,14 +91,15 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const agents = pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs, startMs: w.startMs, endMs: w.endMs, calls: w.calls }));
   const clock = s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) };
   const topts = { cols, ui, tick: m.tick ?? 0, motion: m.motion, ...clock };
+  const quiet = { quiet: failedOwners, hideFailed: failedOwners.size > 0 };
   const room = max - lines.length;
   const levels = [{ spark: true, spacers: true }, { spark: true, spacers: false }, { spark: false, spacers: true }, { spark: false, spacers: false }];
   let chart: BoardLine[] = [];
   let totals: BoardLine[] = [];
   if (items.length && room >= 5) {
-    totals = boardTotals(agents, { ...topts, ...(pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {}) });
+    totals = boardTotals(agents, { ...topts, hideFailed: quiet.hideFailed, ...(pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {}) });
     for (const lv of levels) {
-      const t = boardTimeline(agents, { ...topts, ...lv }, room - 2 - totals.length);
+      const t = boardTimeline(agents, { ...topts, ...lv, quiet: quiet.quiet }, room - 2 - totals.length);
       if (t.length && 1 + t.length + 1 + totals.length <= room) { chart = t; break; }
       if (!chart.length && t.length && lv === levels[levels.length - 1]) chart = t;
     }
@@ -105,7 +109,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const bodyMax = Math.max(1, max - 1);
   const sections = [lines, chart].filter((x) => x.length);
   const used = sections.reduce((n, x) => n + x.length, 0) + Math.max(0, sections.length - 1);
-  const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: pm.notes.filter((n) => !/^(T\d+|row) killed\b/.test(n.text)) }, bodyMax - used - 1) : []; // the closed row is said once, by the footer (critique 29: three times in one pane)
+  const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: pm.notes.filter((n) => !/^(T\d+|row) failed\b/.test(n.text) && !(n.kind === 'failed' && failedOwners.has(n.from))) }, bodyMax - used - 1) : []; // a failure the plan row says is not said again (critique 29: three times in one pane; critique 31: four)
   const withRecent = recent.length ? [...sections, recent.slice(1)] : sections; // recentRows opens with its own blank: the join below puts it back
   const parts = foot ? [...withRecent, [foot]] : withRecent; // the footer is the last section: it takes its share of the spacing
   const rows = parts.reduce((n, x) => n + x.length, 0) + Math.max(0, parts.length - 1);

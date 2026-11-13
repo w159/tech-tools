@@ -50,7 +50,7 @@ const MOD_ENDED: Record<string, string> = { done: 'completed', failed: 'failed' 
 
 /** Host words for a task that did not succeed (a stopped task ends `killed`; other hosts say stopped, cancelled, aborted). */
 const BAD_STATUS = /^(failed|killed|stopped|cancell?ed|aborted|errored?)$/i
-const badWord = (w: string | undefined): string | undefined => (w && BAD_STATUS.test(w.trim()) ? (/^(failed|errored?)$/i.test(w.trim()) ? 'failed' : 'killed') : undefined)
+const badWord = (w: string | undefined): string | undefined => (w && BAD_STATUS.test(w.trim()) ? 'failed' : undefined) // wave 33: killed, stopped, cancelled, aborted and errored are all `failed`, the one failure word
 
 /** Ids of workers seen failed: failure is terminal, so once any surface saw one fail no later row reads it finished (critique 15 A1:
  * the killed ghost-explorer ended as a green `explorer finished` card once the host dropped its row and its notification came up 31 s later). */
@@ -96,7 +96,7 @@ export function outcomeText(o: Outcome): string {
  return [endedWord(o), outcomeDetail(o)].filter(Boolean).join(' · ')
 }
 /** The lifecycle word, owned here: the notification row leads with it, the card uses it as its row label. */
-const endedWord = (o: Outcome): string => (o.status === 'completed' || o.status === 'idle' ? 'finished' : o.status)
+const endedWord = (o: Outcome): string => (o.status === 'completed' || o.status === 'idle' ? 'finished' : o.status === 'killed' ? 'failed' : o.status)
 /** `29s`: the report line (its `STATUS: DONE` shout cut: the state word says it) and duration, without the lifecycle word. */
 const outcomeDetail = (o: Outcome): string => [stripStatus(o.line), o.durationMs !== undefined ? msClock(o.durationMs) : ''].filter(Boolean).join(' · ')
 
@@ -159,9 +159,7 @@ async function failureOf($: EngineInterface, who: Who, taskStatus: string | unde
  const said = known ?? (recorded ? 'failed' : undefined) ?? (notified ? badWord(notifiedStatus(lead.map((m) => m.text), who.id)) : undefined)
  if (!said) return undefined
  noteFailed(who.id)
- if (said === 'killed') return said
- const stopped = await killedNames($)
- return stopped.has(who.id) || stopped.has(who.name) ? 'killed' : said
+ return 'failed' // a worker the lead stopped (TaskStop) reads the same word as any other that did not finish (wave 33, critique 31: `killed` beside `1 failed`)
 }
 
 /** An atlas worker by host id: spawn metadata names it (the band's label), the host row gives its status; a
@@ -198,12 +196,12 @@ export async function cardExtra($: EngineInterface, output: unknown, agents: rea
 
 /** Notification row for a background atlas worker; null leaves any other task's row to the engine. `hide` says the worker's finish card is
  * already in the transcript (transcript/placed.ts): the host's row then draws nothing, so a finish is one card. */
-export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean, aged?: () => boolean, cols = 0): Promise<RenderElement | null> {
+export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean, aged?: () => boolean, cols = 0, fade?: () => number): Promise<RenderElement | null> {
  const who = await whoIs($, task.id ?? '', await $.agent.list().catch(() => [] as AgentInfo[]), task.status, true)
  if (!who) return null
  if (hide?.(who.name)) return { type: 'Text', props: {}, children: [] }
  const o = await workerOutcome($, { ...who, status: badWord(who.status) ?? firstOf(task.status, who.status) }, memo, task.durationMs)
- return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui, aged?.() ?? false, { cols })
+ return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui, aged?.() ?? false, { cols, ...(fade ? { fade: fade() } : {}) })
 }
 const FAILED = new Set(['failed', 'killed'])
 
