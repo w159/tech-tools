@@ -145,14 +145,22 @@ export function tallyOf(states: readonly UiState[]): Tally {
 /** State 38 (critique: a worker card said `0:13` and no count while its SUBAGENTS row said `0:15` and `3`): the TIME and CALLS cells the SUBAGENTS table prints for a worker, noted by the table as it draws. Every worker card reads
  * them from here, so a card and its row cannot disagree; `-` only where the table cell is `-`. */
 export type WorkerFacts = { time: string; calls: string };
-const FACTS = new Map<string, WorkerFacts & { at: number }>();
+let FACT_SEQ = 0; // the order the table drew its cells in: a card compares draws by this count, never by clock readings that can tie
+const FACTS = new Map<string, WorkerFacts & { at: number; seq: number }>();
+/** How many cell draws the table has made so far. */
+export const factsSeq = (): number => FACT_SEQ;
 const FACTS_MS = 3000; // a cell older than this is from a table that is no longer drawn
 export function noteWorkerFacts(names: readonly (string | undefined)[], time: string, calls: string): void {
-  for (const n of names) if (n) FACTS.set(n, { time, calls, at: Date.now() });
+  for (const n of names) if (n) FACTS.set(n, { time, calls, at: Date.now(), seq: ++FACT_SEQ });
   if (FACTS.size > 500) for (const k of [...FACTS.keys()].slice(0, 250)) FACTS.delete(k);
 }
 export function workerFacts(name: string): WorkerFacts | undefined {
   const f = FACTS.get(name);
   return f && Date.now() - f.at < FACTS_MS ? { time: f.time, calls: f.calls } : undefined;
+}
+/** The cells with the time the table noted them (`Date.now()`), while fresh: a card placed for a worker that just ended waits for a draw made after the end (truth 40, live-150-1 f0052: beta's card said 0:10, its row 0:13). */
+export function workerFactsAt(name: string): (WorkerFacts & { at: number; seq: number }) | undefined {
+  const f = FACTS.get(name);
+  return f && Date.now() - f.at < FACTS_MS ? { ...f } : undefined;
 }
 export const resetWorkerFacts = (): void => FACTS.clear();

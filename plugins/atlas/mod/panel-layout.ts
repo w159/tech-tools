@@ -484,7 +484,9 @@ function phaseChainRuns(m0: PanelModel, compact: boolean, raw: boolean): PanelLi
   const seen = m.entered ? new Set(m.entered) : null;
   // The lit phase: the rail's own, or (a blocked reply names no phase) the last one the run entered.
   const litAt = m.phases.indexOf(m.phase);
-  const lit = kind === 'done' ? -1 : litAt >= 0 ? litAt : seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
+  const lastEntered = seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
+  // Truth 40 (stoprun-150-1 f0111:7): a blocked run's mark sits on the phase the run was in when it blocked, the last one it entered, not on an earlier header phase (`▲ research › ● implement`).
+  const lit = kind === 'done' ? -1 : kind === 'blocked' ? Math.max(litAt, lastEntered) : litAt >= 0 ? litAt : lastEntered;
   const runs: Run[] = [r(' '.repeat(GRID_LEAD))];
   const enteredAt = (p: string, i: number): boolean => (seen ? seen.has(p) : kind === 'done' || (litAt >= 0 && i < litAt)); // a phase is green only once the run was in it (never from the final status)
   const named = (_p: string, i: number): boolean => !compact || lit === i;

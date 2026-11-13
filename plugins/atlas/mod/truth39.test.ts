@@ -79,9 +79,12 @@ describe('step 5: transcript cards are immutable, ordered and complete', () => {
   test('a placed worker card is fixed: the SUBAGENTS cells moving on later (0:12 then 0:13, 3 then 4 calls) never rewrite it', async () => {
     forgetPlaced(); resetWorkerFacts();
     const ids: string[] = [];
-    noteWorkerFacts(['alpha-explorer'], '0:12', '3');
+    noteWorkerFacts(['alpha-explorer'], '0:10', '2'); // the table drew the running row
     const run = { 'alpha-explorer': 'running', 'beta-explorer': 'running', 'gamma-explorer': 'running' } as const;
     await placeFinished(engine(ids), snapAt(NOW, run), snapAt(NOW + 1_000, { ...run, 'alpha-explorer': 'finished' }));
+    expect(ids).toHaveLength(0); // truth 40: the card waits for the row drawn after the worker ended
+    noteWorkerFacts(['alpha-explorer'], '0:12', '3');
+    await placeFinished(engine(ids), snapAt(NOW + 1_000, { ...run, 'alpha-explorer': 'finished' }), snapAt(NOW + 1_000, { ...run, 'alpha-explorer': 'finished' }));
     const id = ids.find((i) => !i.startsWith('done-run'))!;
     const placed = flat(placedTree(id, ui));
     expect(placed).toMatch(/alpha-explorer\s+0:12 · 3 calls$/);
@@ -136,8 +139,8 @@ describe('step 5: transcript cards are immutable, ordered and complete', () => {
     expect(flat(tree)).toMatch(/^▌ ◆ ATLAS {2}▲ blocked · stop refused\s+0:36$/);
     expect(JSON.stringify(tree)).toMatch(/"color":"#ff5f5f"[^}]*\},"children":\["▌"\]/); // the bar is xterm 203
     expect(placedTree(cards[0]!, ui, true, { hidden: true })).toEqual(tree); // aged and stacked or not, it stays
-    noteBlocked(null); // the band left blocked; a new blocked spell prints one more
-    noteBlocked({ reason: blockedText({ refused: false, failed: 1 }), secs: 50 });
+    noteBlocked(null, 10_000); // the band left blocked for good; a new blocked spell (3 s later) prints one more
+    noteBlocked({ reason: blockedText({ refused: false, failed: 1 }), secs: 50 }, 13_100);
     await placeFinished(engine(ids), s, s);
     expect(ids.filter((i) => i.startsWith('done-blocked'))).toHaveLength(2);
     expect(flat(placedTree(ids.filter((i) => i.startsWith('done-blocked'))[1]!, ui))).toMatch(/▲ blocked · 1 failed\s+0:50$/);
@@ -172,7 +175,7 @@ describe('step 4: the narrow band keeps the state glyph, the clock and every non
     for (const cols of [62, 46]) {
       const narrow = band({ ...m, cols });
       expect(narrow, String(cols)).toMatch(/0:39/);
-      expect(narrow, String(cols)).toMatch(/ 1 ●1 ■1$/);
+      expect(narrow, String(cols)).toMatch(/[⠀-⣿]1 ●1 ■1$/);
     }
   });
 });

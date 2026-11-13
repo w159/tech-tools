@@ -130,7 +130,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
     expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 ▌ todo 1/4 ■1 ▌ ${lspin(3)} 1 running · ■1`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
     expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 ▌ todo 1/4 ■1 ▌ ${lspin(3)} 1 running · ■1`); // wave 37: the failure rides the plan segment at every width
-    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ${lspin(3)} 0:42 ▌ 1/4 ■1 ▌ ${lspin(3)} 1 ■1`); // 40 columns (wave 33: the bar holds no handle, so the clock stays): the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
+    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ${lspin(3)} 0:42 ▌ 1/4 ■1 ▌ ${lspin(3)}1 ■1`); // 40 columns (wave 33: the bar holds no handle, so the clock stays): the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
   });
   test('idle shows the last run under the band', () => {
     const snapshot = busySnap({ comms: [] });

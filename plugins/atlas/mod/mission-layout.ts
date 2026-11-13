@@ -194,7 +194,7 @@ function failedRuns(m: MissionModel, ui: Ui, _words = true): Run[] {
 function runningRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
   const n = countOf(m, 'running');
   if (n <= 0) return [];
-  return animateRow(words ? countRuns('running', n, ui, countFrame(m, 'running'), true) : [stateRun('running', ui, countFrame(m, 'running'), true), r(` ${n}`)], 'count:running', 'running', m.motion, ui, BAND_OPTS);
+  return animateRow(words ? countRuns('running', n, ui, countFrame(m, 'running'), true) : [stateRun('running', ui, countFrame(m, 'running'), true), r(`${n}`)], 'count:running', 'running', m.motion, ui, BAND_OPTS);
 }
 
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   ', queued = true): Run[] {
