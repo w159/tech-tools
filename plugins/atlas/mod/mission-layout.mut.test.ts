@@ -19,11 +19,11 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
     // critique 12 A3: one form, one ` · ` separator from 90 to 119 columns (110 undocked and 150 docked read alike)
     // round 3: the lead is `◐ working` and `todo n/m` follows it at every width; ctx is the first segment to give way, then the queued count
     // wave 31: four segments at most (state+clock, todo n/m, running count, one warning); the context figure and the blocked and queued counts are not the band's
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 killed');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 failed');
     expect(at(93)).toBe(at(100));
     expect(at(108)).toBe(at(100));
     expect(at(119)).toBe(at(108));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 killed');
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 failed');
     expect(at(150)).toBe(at(120));
   });
   test('critique 12 A3: the live-run snapshot reads the same at the 110 body (105, undocked) and the 150 body (93, docked): one separator set', () => {
@@ -38,9 +38,9 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
   });
   test('without a context figure: the ` · ` figure form from 90, the gauge form from 120', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, ctx: undefined }));
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 killed');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 failed');
     expect(at(119)).toBe(at(100));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 killed');
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 failed');
   });
 });
 

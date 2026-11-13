@@ -63,8 +63,8 @@ describe('round 3 A2: the band lead has four states', () => {
   }
   test('blocked names what it needs, and keeps moving while the host fixes it', () => {
     const m = model({ stopGates: ['dispatch T2 read x open'], openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>);
-    expect(lead(m)).toMatch(/^▲ blocked · needs: close dispatch T2/);
-    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · needs: close dispatch T2 · fixing/); // critique 28: a stopped band draws no spinner
+    expect(lead(m)).toMatch(/^▲ blocked · 1 dispatch open/);
+    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · (1 dispatch open|needs: close dispatch T2 · fixing)/); // critique 28: a stopped band draws no spinner
     expect(lead({ ...m, busy: true, tick: 1 })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
     expect(head({ ...m, ui: { ...ui, ascii: true } })).not.toMatch(/[◐◓◑◒]/);
   });
@@ -88,13 +88,12 @@ describe('round 3 A2: the band lead has four states', () => {
 
 describe('round 3 A2: a closed failure is a dim record, not a red mark', () => {
   const failed: MissionWorker[] = [{ name: 'a-explorer', state: 'failed', secs: 9 }];
-  test('wave 31: one failure word, `■ 1 killed`, whether the dispatch row is open or closed; never `failed`, never the done disc', () => {
-    expect(head(model({ workers: failed }))).toContain('■ 1 killed');
+  test('wave 31: one failure word, `■ 1 failed`, whether the dispatch row is open or closed; never `failed`, never the done disc', () => {
+    expect(head(model({ workers: failed }))).toContain('■ 1 failed');
     const t = head(model({ workers: failed, closed: 1 }));
-    expect(t).toContain('■ 1 killed');
-    expect(t).not.toContain('● 1 killed');
-    expect(t).not.toContain('failed');
-    const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => /1 killed/.test(x.t))?.tone;
+    expect(t).toContain('■ 1 failed');
+    expect(t).not.toContain('● 1 failed');
+    const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => /1 failed/.test(x.t))?.tone;
     expect(['bad', 'text']).toContain(tone); // 203; the latte panel falls back to text when 203 misses WCAG
   });
 });

@@ -41,12 +41,12 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     { id: 't2', content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' },
   ] as TodoItem[];
   const agents: HudAgent[] = [{ name: 'alpha-explorer', role: 'explorer', state: 'done' }, { name: 'ghost-explorer', role: 'explorer', state: 'failed' }];
-  test('HUD: T2 reads `■ killed` in the error tone, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
+  test('HUD: T2 reads `■ failed` in the error tone, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
     const rows = hudLines({ todos: plan, agents }, { merge: false, cols: 150, maxRows: 60, ui, now: 0 });
     const t2 = rows.find((r) => plain(r).includes('T2 read ghost.py'))!;
     const t1 = rows.find((r) => plain(r).includes('T1 read alpha.py'))!;
-    expect(plain(t2)).toMatch(/^[ ▸] ■ T2.* killed/); // critique 28: the HUD row reads `■ killed` (the board keeps `closed`)
-    expect(t2.find((x) => x.t.trim() === 'killed')?.tone).toBe('bad');
+    expect(plain(t2)).toMatch(/^[ ▸] ■ T2.* failed/); // wave 33: the HUD row reads `■ failed` (the board keeps `closed`)
+    expect(t2.find((x) => x.t.trim() === 'failed')?.tone).toBe('bad');
     expect(t2.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
     expect(t2.find((x) => x.t.trim() === STATE_GLYPHS.failed)?.tone).toBe('bad');
     expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.strike).toBeFalsy(); // critique 21: a plain done is quiet 247 text, never struck through
@@ -149,21 +149,21 @@ describe('A4: the band names the open row by its plan title and never leaves col
     const t = row(m(93));
     expect(t).toContain('▲ blocked · needs: close dispatch T2');
     expect(t).toContain('todo 4/5');
-    expect(t).toMatch(/■ 1 killed/); // wave 31: blocked rides the lead's state word; one failure word
+    expect(t).toMatch(/■ 1 failed/); // wave 31: blocked rides the lead's state word; one failure word
     expect(t).not.toMatch(/\.\.\.|…/);
     expect(t).not.toContain('Attempt');
   });
   test('the failed word survives from 80 columns up, and no width leaves its spare columns beside a clipped bare count', () => {
     for (const cols of [150, 120, 110, 100, 93, 90, 85, 80]) {
       const t = row(m(cols));
-      expect([cols, /■ 1 killed/.test(t)]).toEqual([cols, true]);
+      expect([cols, /■ 1 failed/.test(t)]).toEqual([cols, true]);
     }
     // once the words fit they stay for every wider row, and no row is wider than the terminal: a bare count (`■1`) never sits beside spare columns a word form would fill
     let seen = false;
     for (let cols = 40; cols <= 150; cols++) {
       const t = row(m(cols));
       expect([cols, cells(t.trimEnd()) <= cols]).toEqual([cols, true]);
-      const words = /■ 1 killed/.test(t);
+      const words = /■ 1 failed/.test(t);
       if (seen) expect([cols, words]).toEqual([cols, true]);
       seen = seen || words;
     }
@@ -171,7 +171,7 @@ describe('A4: the band names the open row by its plan title and never leaves col
   });
   test('the todo figure and a named open row are separated by the middle dot: `1 dispatch open · ▲ 1 blocked`', () => {
     const t = row(m(93, { blocked: false, stopGates: [], openDispatchTitle: undefined, workers: [], openWork: 2, openDispatch: 2 }));
-    expect(t).toContain('todo 4/5 · ▲ 1 blocked');
+    expect(t).toContain('todo 4/5 · 1 blocked'); // wave 33: the lead is blocked (two dispatch rows open, nothing running), so the count rides it without a second ▲
     expect(t).not.toContain('open ▲');
   });
 });

@@ -1,7 +1,7 @@
 // slot.ts: the AbovePrompt slot as one pure plan. register.ts hands it the band builder, the HUD input and the row budget; it answers with the HUD rows, the band
 // model, the blank row between them and the rows the slot holds. Pure: nothing here reads the host or keeps state (the caller keeps `held`).
 import { bandKindOf, bandRowCount, bandSpareRows, type BandModel } from './band';
-import { hudBudget, hudCompactRows, hudFloorRows, hudHoldRows, hudListsAgents, hudRows, hudWantRows, reclaimBlanks, type HudInput, type HudOpts } from './hud';
+import { hudBudget, hudCompactRows, hudFloorRows, hudHoldRows, hudListsAgents, hudRows, hudWantRows, isRunning, namedAgents, reclaimBlanks, type HudInput, type HudOpts } from './hud';
 import type { Segment } from './runs';
 
 /** The Mission Control band keeps at least this many rows; the HUD takes the rest of the budget. */
@@ -86,7 +86,14 @@ function composeFixed(i: SlotInput): SlotPlan {
 	return { hud, band, gap: 0, pad, held: total, lead: 0 };
 }
 
-export function composeSlot(i: SlotInput): SlotPlan {
+/** The band model with the HUD's own verdict on its agents: one the SUBAGENTS block draws running (listed, resumed or named by an open dispatch row) keeps the band working, so the band never reads `idle` beside a turning spinner (wave 33). */
+const withAgents = (i: SlotInput): SlotInput => {
+	const running = [...i.hudIn.agents, ...namedAgents(i.hudIn.todos, i.hudIn.agents)].some(isRunning); // exactly the agents the SUBAGENTS block draws (hud.ts surfaces): a resumed agent the host no longer lists but an open dispatch row names is queued there, so running here
+	return running ? { ...i, bandIn: (rows, maxRows) => ({ ...i.bandIn(rows, maxRows), agentsRunning: true }) } : i;
+};
+
+export function composeSlot(input: SlotInput): SlotPlan {
+	const i = withAgents(input);
 	const fixed = i.hasSlot && i.hudOn && i.budget >= 1 && (i.runOn || i.agentsListed || i.hudIn.todos.length > 0);
 	if (fixed) return composeFixed(i);
 	const { budget, columns, hudIn, hudView } = i;

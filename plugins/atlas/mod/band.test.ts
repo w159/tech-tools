@@ -51,7 +51,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
     expect(rows[0]).not.toContain('ctx'); // wave 31: the band keeps four segments at most; the context figure is the rich band's
-    expect(rows[0]).toContain(`${lspin(3)} 1 running · ■ 1 killed`); // one failure word, and the waiting count rides the worker rows
+    expect(rows[0]).toContain(`${lspin(3)} 1 running · ■ 1 failed`); // one failure word, and the waiting count rides the worker rows
     expect(rows[0]).not.toContain('waiting');
     const withTodos = panel(160, { gates: [gate], snapshot: busySnap({ todos: boardTodos as any }) });
     expect(withTodos.rows).toHaveLength(panel(160, { gates: [gate] }).rows.length); // a folded board costs no row
@@ -124,9 +124,9 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.replace(/ +\[-\] *$/, '').trim(); // wave 32: the bar's own `[-]` is not part of the figures
     expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
-    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // words, as at 150 (critique 16 A5)
-    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working · todo 1/4`); // 40 columns (wave 32: 36 beside the bar's `[-]`, so the clock gives way first): the state word and the todo figure; the lower segments (the counts) give way, never a word
+    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed`); // words, as at 150 (critique 16 A5)
+    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4`); // 40 columns (wave 33: the bar holds no handle, so the clock stays): the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
   });
   test('idle shows the last run under the band', () => {
     const snapshot = busySnap({ comms: [] });
@@ -393,10 +393,10 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running · ■ 1 killed` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running · ■ 1 failed` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.replace(/ +\[-\] *$/, '').trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // wave 32: minus the bar's `[-]`
+    expect(rows[0]!.replace(/ +\[-\] *$/, '').trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed`); // wave 32: minus the bar's `[-]`
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {

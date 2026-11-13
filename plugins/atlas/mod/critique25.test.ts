@@ -89,7 +89,7 @@ describe('a killed worker reads `closed` in error red on the HUD, the board and 
     ] as never;
     const agents = [{ name: 'alpha-explorer', role: 'explorer', state: 'done' as const }, { name: 'ghost-explorer', role: 'explorer', state: 'failed' as const }];
     const hud = hudLines({ todos: plan, agents }, { cols: 150, maxRows: 60, ui, now: 0 }).map((r) => runsString(r)).find((l) => l.includes('T2 read ghost.py'))!;
-    expect(hud).toContain('killed'); // critique 28: the HUD row reads `■ killed`; the board keeps `closed`
+    expect(hud).toContain('failed'); // wave 33: the HUD row reads `■ failed`; the board keeps `closed`
     const rows = boardRowsOf([{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }]);
     const board = boardText(boardLines(rows, { cols: 120, ui, ribbon: false, title: false })).join('\n');
     expect(board).toMatch(/killed\s+ghost-explorer/);

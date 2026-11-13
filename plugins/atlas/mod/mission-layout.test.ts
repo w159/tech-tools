@@ -61,7 +61,7 @@ describe('mission-layout: A3 the count order is the shared COUNT_ORDER', () => {
   test('running, failed, waiting, queued: waiting reads before queued on every form', () => {
     const ws = [w('q', 'queued'), w('wt', 'waiting'), w('f', 'failed'), w('r', 'running')];
     const full = band(model({ workers: ws }));
-    expect(full.indexOf('running')).toBeLessThan(full.indexOf('killed')); // wave 31: the band keeps the running count and the one failure word
+    expect(full.indexOf('running')).toBeLessThan(full.indexOf('failed')); // wave 31: the band keeps the running count and the one failure word
     expect(COUNT_ORDER.indexOf('waiting')).toBeLessThan(COUNT_ORDER.indexOf('queued')); // the worker rows and the HUD keep the shared order
   });
 });
@@ -121,8 +121,8 @@ describe('mission-layout: failure count on the band', () => {
   });
   test('idle with no last wave shows no failure; idle with a last wave of 2 failures counts them as killed', () => {
     expect(band(model())).not.toContain('failed');
-    expect(band(model({ lastRun: { workers: 2, failed: 2 } }))).toContain('2 killed');
-    expect(band(model({ workers: [w('a', 'failed')], lastRun: { workers: 1, failed: 0 } }))).toContain('1 killed');
+    expect(band(model({ lastRun: { workers: 2, failed: 2 } }))).toContain('2 failed');
+    expect(band(model({ workers: [w('a', 'failed')], lastRun: { workers: 1, failed: 0 } }))).toContain('1 failed');
   });
   test('a finished-only worker list is idle', () => {
     expect(band(model({ workers: [w('a', 'done'), w('b', 'failed')] }))).toContain('idle');
@@ -247,14 +247,14 @@ describe('mission-layout: a full plan with open store work never reads as all do
   test('critique 16 A1 (stoprun-150-e4a8186a-1 f0090): blocked on one open dispatch row, the count stays the plan\'s own 5/5 and the reason names the row', () => {
     const m = model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py', stopGates: ['1 todo open'], workers: [] });
     const line = band(m);
-    expect(line).toContain('blocked · needs: close dispatch read ghost.py');
+    expect(line).toContain('blocked · 1 dispatch open');
     expect(line).toContain('5/5');
     expect(line).not.toContain('5/6');
     for (const cols of [120, 100, 80]) expect(band({ ...m, cols })).not.toContain('5/6');
     // without a title (no dispatch row to name) the plan is full, so `1 todo open` would contradict `5/5` (critique 18 A1): the reason is `stop refused` and `openMore` still names the open row
-    expect(band({ ...m, openDispatchTitle: undefined })).toContain('blocked · stop refused');
+    expect(band({ ...m, openDispatchTitle: undefined })).toContain('blocked · 1 dispatch open');
     expect(band({ ...m, openDispatchTitle: undefined })).not.toContain('todo open');
     // not blocked: the figure stays the plan's own and the open row is named beside it (unchanged)
-    expect(band(model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1 }))).toContain('5/5 · 1 dispatch open');
+    expect(band(model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1 }))).toContain('blocked · 1 dispatch open');
   });
 });

@@ -11,7 +11,7 @@
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
 import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
-import { blockReasons } from './data/runstate';
+import { blockReasons, openWorkOnly } from './data/runstate';
 import { displayName } from './hud';
 import { fitText, textWidth } from './theme';
 
@@ -106,7 +106,7 @@ export type MissionModel = {
   closed?: number;
   /** No wordmark sweep (ATLAS_REDUCED_MOTION, NO_COLOR); the spinner frames still step. Absent: read from the environment. */
   still?: boolean;
-  /** The Claude Code band bar (wave 32, band.tsx only): the first row ends in the band's own `[-]`, the label is `todo n/m` for the whole run and the gates segment is `gates 2/4`. The omp panel draws none of these. */
+  /** The Claude Code band bar (band.tsx only): the first row ends flush at the column's last cell (the host's `[-]` follows it), the label is `todo n/m` for the whole run and the gates segment is `gates 2/4`. The omp panel draws none of these. */
   bar?: boolean;
 };
 
@@ -166,25 +166,25 @@ function countFrame(m: MissionModel, s: UiState): number {
   return first && m.now !== undefined ? spinFrameOf(m.now, first.name) : m.tick;
 }
 
-/** The one failure word on every surface (critique 29): `■ 1 killed` in the error 203, whether the dispatch row is closed or not. */
-function killedRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
+/** The one failure word on every surface (wave 33): `■ 1 failed` in the error 203, whether the dispatch row is closed or not. */
+function failedRuns(m: MissionModel, ui: Ui, _words = true): Run[] {
   const n = failedCount(m);
   if (n <= 0) return [];
   const glyph = stateRun('failed', ui);
-  return words ? [{ ...glyph, t: `${glyph.t} ` }, r(`${n} killed`, ui.ascii || contrast(PALETTES[ui.theme].bad, PALETTES[ui.theme].panel) < NEED.text ? 'text' : 'bad')] : [glyph, r(`${n}`)];
+  return [{ ...glyph, t: `${glyph.t} ` }, r(`${n} failed`, ui.ascii || contrast(PALETTES[ui.theme].bad, PALETTES[ui.theme].panel) < NEED.text ? 'text' : 'bad')]; // never the bare `■1`
 }
 /** The running count alone: `⠏ 3 running` (words) or `⠏3`. The band's third segment. */
 function runningRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
   const n = countOf(m, 'running');
   if (n <= 0) return [];
-  return animateRow(words ? countRuns('running', n, ui, countFrame(m, 'running'), true) : [stateRun('running', ui, countFrame(m, 'running'), true), r(`${n}`)], 'count:running', 'running', m.motion, ui, BAND_OPTS);
+  return animateRow(words ? countRuns('running', n, ui, countFrame(m, 'running'), true) : [stateRun('running', ui, countFrame(m, 'running'), true), r(` ${n}`)], 'count:running', 'running', m.motion, ui, BAND_OPTS);
 }
 
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   ', queued = true): Run[] {
   const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
   const parts = order.flatMap((s): Run[][] => [
-    ...(n(s) > 0 ? [animateRow(words ? (s === 'failed' ? killedRuns(m, ui, true) : countRuns(s, n(s), ui, countFrame(m, s), true)) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
+    ...(n(s) > 0 ? [animateRow(s === 'failed' ? failedRuns(m, ui) : words ? countRuns(s, n(s), ui, countFrame(m, s), true) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
   ]);
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
@@ -209,6 +209,7 @@ function phaseIndex(m: MissionModel): number {
 const openMore = (m: MissionModel): string => {
   const n = (m.openWork ?? 0) - (m.total - m.done);
   if (!m.total || n <= 0) return '';
+  if (dispatchHeld(m) > 0) return ''; // the blocked lead names the open dispatch rows; the figure says them once
   if (m.openDispatchTitle && (m.openDispatch ?? 0) >= n && (m.blocked || (m.stopGates?.length ?? 0) > 0)) return ''; // a blocked band names the row in its reason
   // An open dispatch row of a worker that is listed running is that worker: `1 dispatch open` beside `◐ 1 running` said one fact twice (critique 12 B4, f0061). The agent count carries it.
   if ((m.openDispatch ?? 0) >= n && n <= m.workers.filter((w) => w.state !== 'done' && w.state !== 'failed').length) return '';
@@ -239,9 +240,13 @@ export const IDLE_AFTER_SECS = 30;
 export type BandKind = 'working' | 'idle' | 'done' | 'blocked';
 /** `2 gates to check`, `1 gate to check`: a failing gate is something to look at, never a block and never the lead. */
 const gatesToCheck = (failing: readonly string[]): string => `${failing.length} ${failing.length === 1 ? 'gate' : 'gates'} to check`;
+/** Dispatch rows the store holds open while nothing runs: no listed worker, no host turn (wave 33). Stop refuses on them, so the band says so on the frame the turn ends, with or without the refusal. */
+export const dispatchHeld = (m: MissionModel): number => (!isRunning(m) && !m.busy ? Math.max(0, m.openDispatch ?? 0) : 0);
+const dispatchOpenWords = (n: number): string => `${n} ${n === 1 ? 'dispatch' : 'dispatches'} open`;
 export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; kind: BandKind; reason: { long: string; short: string } } {
   const stopGates = m.stopGates ?? [];
-  const blocked = !!m.blocked || stopGates.length > 0;
+  const held = dispatchHeld(m);
+  const blocked = !!m.blocked || stopGates.length > 0 || held > 0;
   const quiet = !blocked && !isRunning(m) && !m.busy;
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber triangle).
@@ -252,7 +257,8 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   // A gate warning never leads (round 3): it rides the tail of a done, idle or working band (`warn`).
   const finished = m.phase === 'done' || (m.total > 0 && m.done >= m.total);
   const kind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : finished && (m.restSecs ?? 0) < IDLE_AFTER_SECS ? 'done' : 'idle';
-  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, kind, reason: blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now) };
+  const reason = held > 0 && !m.blocked && openWorkOnly(stopGates) ? { long: dispatchOpenWords(held), short: dispatchOpenWords(held) } : blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now);
+  return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, kind, reason };
 }
 
 /** The spinner frame the band turns: the shared clock (the HUD, the panel and the counts turn the same one), else the local tick. */
@@ -294,7 +300,7 @@ const gatesSeg = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>): R
 const gateTail = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => (m.bar ? gatesSeg(m, ui, st) : warnSeg(ui, st, form));
 
 /** How much of the lead a form keeps: the clock or last run, the blocked reason (`long`, `short`, `bare`, or none) and the moving `fixing`. */
-type LeadOpts = { clock: boolean; reason: 'long' | 'short' | 'bare' | 'none'; fix: boolean };
+type LeadOpts = { clock: boolean; reason: 'long' | 'short' | 'bare' | 'none'; fix: boolean; /** The idle clock without its `last run` words (`○ idle · 0:58`): the failure count outlasts them. */ short?: true };
 const LEAD_FULL: LeadOpts = { clock: true, reason: 'long', fix: true };
 
 /** The state the band leads with, by glyph AND word (never colour alone), four states on the one spinner clock:
@@ -308,7 +314,7 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
   switch (st.kind) {
     case 'working': return [spin(), r(' '), r('working', 'text', true), ...(o.clock && (m.turnSecs ?? m.elapsedSecs) !== undefined ? [r(` ${elapsedClock((m.turnSecs ?? m.elapsedSecs)!)}`, 'sub')] : [])];
     case 'done': return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [r(` · ${elapsedClock(ran)}`, 'sub')] : [])];
-    case 'idle': return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · last run ${elapsedClock(ran)}`, 'muted')] : [])];
+    case 'idle': return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])];
     case 'blocked': {
       const why = reason && o.reason !== 'none' ? needsOf(reason, o.reason) : '';
       const retrying = why === 'retrying';
@@ -338,7 +344,8 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const blockedWords = blockedRuns(m, ui, true);
   const lead = (o: LeadOpts): Run[] => (st.kind === 'done' ? animateRow(leadRuns(m, ui, st, reason.long, o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, reason.long, o)); // wave 31: the done word fades 231, 151, 114
   // `phase n/m` only when no plan carries the progress (the lead's reply header and the plan's done count are two clocks).
-  const todoSeg = (open: boolean): Run[] => (m.total || m.bar ? [glue, r(`todo ${fig.done}/${fig.total}${open ? openMore(m) : ''}`, 'sub')] : [glue, r(`phase ${phaseNo}`, 'sub')]); // the bar's label is `todo n/m` for the whole run (it read `phase 1/5` until the plan arrived, then flipped)
+  // The bar's label is `todo n/m` for the whole run (it read `phase 1/5` until the plan arrived, then flipped). With no plan items the bar says no count at all (`○ idle`, never `todo 0/0`). `word` false: `0/5`, the narrow form that keeps the clock.
+  const todoSeg = (open: boolean, word = true): Run[] => (m.total ? [glue, r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${open ? openMore(m) : ''}`, 'sub')] : m.bar ? [] : [glue, r(`phase ${phaseNo}`, 'sub')]);
   const ctxSeg: Run[] = m.ctx !== undefined ? [glue, r('ctx '), r(percent(m.ctx), 'sub')] : [];
   type CtxMode = 'gauge' | 'text' | 'none';
   type CountMode = 'words' | 'tiny' | 'none';
@@ -348,7 +355,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   type Warn = 'long' | 'short' | 'none';
   const failN = failedCount(m);
   const warning = (counts: Counts, warn: Warn, bw: boolean): Run[] => {
-    if (failN > 0 && counts !== 'none') return [glue, ...killedRuns(m, ui, counts !== 'tiny')];
+    if (failN > 0 && counts !== 'none') return [glue, ...failedRuns(m, ui, true)]; // always spelled `■ N failed`: the one failure word at every width (wave 33), never `■1`
     if (bw && blockedWords.length) return [glue, ...blockedWords];
     if (warn !== 'none') return m.bar ? gatesSeg(m, ui, st) : st.warn ? warnSeg(ui, st, warn) : [];
     return [];
@@ -358,16 +365,16 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const counts = runningRuns(m, ui, true);
     return [
       ...cap, r('  '), ...lead(LEAD_FULL),
-      ...(m.total || m.bar ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`, 'sub')] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
+      ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`, 'sub')] : m.bar ? [] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
       ...(counts.length ? [r(gap), ...counts] : []),
       ...warn,
     ];
   };
-  type Lv = { o: LeadOpts; open: boolean; bw: boolean; counts: Counts; warn: Warn };
-  const row = (v: Lv): Form => {
+  type Lv = { o: LeadOpts; open: boolean; bw: boolean; counts: Counts; warn: Warn; bare?: true };
+  const row = (v: Lv, word = true): Form => {
     const warn = warning(v.counts, v.warn, v.bw);
     const run = v.counts === 'words' || v.counts === 'noq' ? runningRuns(m, ui, true) : v.counts === 'tiny' ? runningRuns(m, ui, false) : [];
-    return { min: 0, runs: [...cap, r(' '), ...lead(v.o), ...todoSeg(v.open && warn.length === 0), ...(run.length ? [glue, ...run] : []), ...warn] };
+    return { min: 0, runs: [...cap, r(' '), ...lead(v.o), ...todoSeg(v.open && warn.length === 0, word), ...(run.length ? [glue, ...run] : []), ...warn] };
   };
   const F = LEAD_FULL;
   const levels: Lv[] = [
@@ -377,21 +384,30 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     { o: F, open: false, bw: false, counts: 'words', warn: 'none' },
     { o: F, open: false, bw: false, counts: 'tiny', warn: 'short' },
     { o: F, open: false, bw: false, counts: 'tiny', warn: 'none' },
+    { o: { ...F, short: true }, open: false, bw: false, counts: 'tiny', warn: 'none' },
     // the lead gets shorter: the short reason, then the bare reason, then no `fixing`, no clock, no reason
     { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'tiny', warn: 'none' },
+    { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'tiny', warn: 'none' }, // wave 33: the failure count (`■ 1 failed`, spelled out) outlasts a longer reason, so the shorter reasons come before the forms that drop the counts
+    // Wave 33: then the word `todo` goes, after the lead's reason has shortened and long before the clock (`⠼ working 0:19 · 0/5 · ⠼ 3`). The 150-column band (93 cells docked) keeps `todo` for the scorer's count regex.
+    { o: F, open: false, bw: false, counts: 'tiny', warn: 'none', bare: true },
+    { o: { ...F, short: true }, open: false, bw: false, counts: 'tiny', warn: 'none', bare: true },
     { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'none', warn: 'none' },
-    { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'tiny', warn: 'none' },
     { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'none', warn: 'none' },
     // the reason text goes before the spinner does: a band that is working, fixing or retrying keeps its spinner at every width the lead fits
     { o: { clock: true, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none' },
+    // the clock is the last thing to go: the narrowest forms keep it without `todo`
+    { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'tiny', warn: 'none', bare: true },
+    { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'tiny', warn: 'none', bare: true },
+    { o: { clock: true, reason: 'none', fix: true }, open: false, bw: false, counts: 'tiny', warn: 'none', bare: true },
+    { o: { clock: true, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none', bare: true },
     { o: { clock: false, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none' },
     { o: { clock: false, reason: 'none', fix: false }, open: false, bw: false, counts: 'none', warn: 'none' },
   ];
   const out: Form[] = [
     { runs: wide(10, '   '), min: GAUGE_MIN }, { runs: wide(8, '  '), min: GAUGE_MIN },
-    ...levels.map(row),
+    ...levels.map((v) => row(v, v.bare !== true)),
     // the last resorts: the chip and the todo figure, then the chip alone
-    { runs: [...cap, r(' '), ...(m.total || m.bar ? [r(`todo ${fig.done}/${fig.total}`, 'sub')] : [])], min: 0 },
+    { runs: [...cap, r(' '), ...(m.total ? [r(`todo ${fig.done}/${fig.total}`, 'sub')] : [])], min: 0 },
     { runs: [...cap], min: 0 },
   ];
   return out;
@@ -415,15 +431,13 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
   return [{ runs: head }, { runs: [r(' ')] }, { runs: row }];
 }
 
-/** The bar's `[-]` control, inside the 234 bar at the right end of its first row in every state (wave 32): dim 240, one cell of the bar after it. The host's own `[-]` sits in the five cells right of the tree; this one is the band's. */
-export const HANDLE = '[-]';
-const HANDLE_W = HANDLE.length + 1;
-const HANDLE_MIN = 24; // a bar narrower than this has no room for the figures and the handle
-const roomFor = (m: MissionModel): number => (m.bar && m.cols >= HANDLE_MIN ? m.cols - HANDLE_W : m.cols);
-const withHandle = (m: MissionModel, runs: readonly Run[]): Run[] => (m.bar && m.cols >= HANDLE_MIN ? [...fitRuns(runs, m.cols - HANDLE_W), r(HANDLE, 'dim'), r(' ')] : fitRuns(runs, m.cols));
+/** The bar ends flush at the column's last cell (`bodyColumns`): the host draws its own `[-]` in the five cells right of the tree and the mod cannot draw in or hide them (types: AbovePrompt `bodyColumns`),
+ * so the band draws none of its own (wave 33: `[-]  [-] │` showed two handles). */
+const roomFor = (m: MissionModel): number => m.cols;
+const withHandle = (m: MissionModel, runs: readonly Run[]): Run[] => fitRuns(runs, m.cols);
 
 /** The band alone: one row in the widest standard form that fits `cols` (less the bar's handle), or the three rich rows when `m.rich`, the
- * rows allow (`maxRows` >= 3) and the width fits. Rows are padded to `cols`; the bar's first row ends in `[-]`. */
+ * rows allow (`maxRows` >= 3) and the width fits. Rows are padded to `cols`. */
 export function bandLines(m: MissionModel): Line[] {
   const ui = uiOf(m);
   if (m.rich && m.maxRows >= 3) {
@@ -518,7 +532,7 @@ function compactDetail(w: MissionWorker): string {
     case 'running': return call;
     case 'thinking': return 'thinking';
     case 'waiting': return w.target ?? '';
-    case 'failed': return w.tool ? 'killed' : ''; // stopped mid-call: the HUD's LAST says the same
+    case 'failed': return ''; // the state word says `failed`: one failure word, never a second one beside it (wave 33)
     case 'done': return `${w.role ?? 'agent'} finished`;
     case 'queued': return '';
   }

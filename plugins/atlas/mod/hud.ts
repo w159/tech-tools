@@ -7,7 +7,7 @@ import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
-import { DONE_DOUBT, RETURNED, WORKER_FAILED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -39,6 +39,8 @@ export type HudAgent = {
 
 const GENERIC = new Set(['unknown', 'general-purpose', 'task', '']);
 /** A host agent id (`a6839f49ee72a2b14`) or a bare hash: never a name. */
+/** The one failure word on every HUD row (wave 33): a stopped or failed worker is `failed`, never `killed`. */
+export const FAILED = 'failed';
 const HOST_ID = /^[a-z]?[0-9a-f]{8,}$/i;
 
 /** `explorer-3fa9c1`: a type or dispatch stem plus a 6+ hex suffix that mixes digits and letters. `decade` and `2024` are words and years, not hashes. */
@@ -126,7 +128,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const ev = flat(t.evidence);
     const shownOwner = flat(t.owner) ? (oc?.state !== undefined && oc.state !== 'failed' && oc.as !== t.owner ? oc.as : flat(t.owner)) : ''; // a retry names its live instance (`beta-explorer #2`)
     const base = ev || (state === 'running' && claimed !== undefined && claimed >= 0 ? `elapsed ${mmss(claimed)}${est}` : '') || shownOwner;
-    const detail = word === DONE_DOUBT && state === 'done' ? WORKER_FAILED : ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base; // critique 17 A1: a done row whose worker failed says so
+    const detail = word === DONE_DOUBT && state === 'done' ? `worker ${FAILED}` : ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base; // critique 17 A1: a done row whose worker failed says so
     return { label: labelOf(t), ...(t.id ? { id: String(t.id) } : {}), state, ...(word ? { word } : {}), detail, focus: false, ...(shownOwner ? { owner: shownOwner } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
   const at = rows.findIndex((r) => r.state === 'running');
@@ -177,7 +179,7 @@ export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'las
  * `read util.py` and the team tab `failed` for one agent). `evidence`: the evidence of every row the agent owns, plan rows first. */
 export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, state: UiState, evidence: readonly (string | null | undefined)[], root?: string | null): string {
   // Critique 17: a failed agent's LAST said `read ghost.py`, the call it was making when it was stopped: that is what happened to it, `killed`. A failure that left only a closing line keeps the line (`tests red 3`).
-  if (state === 'failed' && (a.tool || a.lastTool)) return 'killed';
+  if (state === 'failed' && (a.tool || a.lastTool)) return FAILED;
   if (state !== 'done') return lastAction(a, root);
   // Critique 19 B1: a finished agent's LAST is an outcome and only that: the first evidence row that states one, else its closing line, else `finished`. Never a tool error, a tool name,
   // `<file> read` or `returned`; the same words at every width.

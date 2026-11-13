@@ -110,7 +110,7 @@ describe('rows: one phase, dim done rows, state words by weight', () => {
     const run = out.find((r) => text(r).includes('step 2'))!.find((x) => x.t === 'running')!;
     expect([run.tone, run.bold]).toEqual([rowWordTone('running'), true]);
     const dead = rows(todo(2, () => 'pending', (i) => (i === 0 ? 'ghost-explorer' : undefined)), [ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' })]);
-    const failed = dead.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer\s/.test(text(r)))!.find((x) => x.t === 'killed')!; // critique 28: a failed agent that was in a call reads killed
+    const failed = dead.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer\s/.test(text(r)))!.find((x) => x.t === 'failed')!; // critique 28: a failed agent that was in a call reads killed
     expect([failed.tone, failed.bold ?? false]).toEqual(['bad', false]);
     const warn = rows(todo(1, () => 'pending', () => 'ghost-explorer'), [ag('ghost-explorer', 'blocked')]).flatMap((r) => r).find((x) => x.t === 'blocked' || x.t === 'waiting')!;
     expect([warn.tone, warn.bold ?? false]).toEqual([rowWordTone(warn.t === 'blocked' ? 'blocked' : 'waiting'), false]);

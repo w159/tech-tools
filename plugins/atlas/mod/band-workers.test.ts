@@ -83,7 +83,7 @@ describe('band worker rows beside the Subagents block (live frame shape: band sl
     expect(byName['beta-explorer']![3]).toBe('done');
     expect(byName['ghost-explorer']![1]).toBe('■');
     expect(byName['ghost-explorer']![3]).toBe('failed');
-    expect(rows.find((r) => r.includes('ghost-explorer'))).toContain('killed');
+    expect(rows.find((r) => r.includes('ghost-explorer'))).toContain('failed');
     expect(byName['gamma-explorer']![1]).toBe('◉');
     expect(byName['gamma-explorer']![3]).toBe('waiting');
     expect(SPIN).toContain(byName['alpha-explorer']![1]!);
@@ -157,12 +157,12 @@ describe('blocked band at 61 cells (critique 19 Band 2: todo and failed dropped)
   test('the 61-cell band keeps the todo figure and the failed count beside the blocked reason', () => {
     const row = blockedAt(61);
     expect(row).toContain('blocked');
-    expect(row).toContain('T2');
-    expect(row).toContain('todo 5/5');
+    expect(row).toContain('1 dispatch open');
+    expect(row).toContain('5/5');
     expect(row).toMatch(/■\s?1/);
   });
   test('wide bands keep the whole reason', () => {
-    expect(blockedAt(93)).toContain('blocked · needs: close dispatch T2');
+    expect(blockedAt(93)).toContain('blocked · 1 dispatch open');
   });
 });
 

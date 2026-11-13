@@ -15,7 +15,7 @@ import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
 import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
-import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isRunning, segmentOf } from './hud';
+import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -993,6 +993,12 @@ async function gateGroups($: EngineInterface): Promise<GateGroup[]> {
 let booted: { interactive: boolean } | null = null;
 /** The host says a model turn is running (AbovePrompt `isWorking`, noted by the band's render). The tick reads it: a lead-only turn lists no worker, yet the spinner must run. */
 let hostWorking = false;
+/** The host's Stop event was allowed (the turn is over): the band reads done on the render that event redraws, before the host's own `isWorking: false` arrives (wave 33). Cleared by the next prompt, or by the render that sees the host flag fall. */
+let stopSeen = false;
+/** Test seam: the Stop event's mark. */
+export const turnEnded = (): boolean => stopSeen;
+/** The turn runs when the host says so and its Stop event has not ended it. */
+export const hostTurnRunning = (isWorking: boolean | undefined, stopped: boolean): boolean => isWorking === true && !stopped;
 /** The band's render has seen the host's own turn flag at least once: before that `hostWorking === false` means unknown, not idle. */
 let hostKnown = false;
 /** When the person's last prompt armed the next run clock (`$.clock.now()`); null once a run started from it or it went stale. The run starts at the prompt, not at a later event. */
@@ -1204,6 +1210,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	registerDiscipline(on, disciplineDeps);
 	// The one prompt.submit hook (the host refuses a second unmatched one and drops the mod): the pane opens first, before any await.
 	on('prompt.submit', async ($, e, next) => {
+		stopSeen = false; // a new prompt (or a background task's notification) starts a new turn
 		const opening = dockOnPrompt($);
 		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') armedAt = await $.clock.now().catch(() => null); // a background task's notification is not the person's prompt: it starts no run
 		await update($, headerPhaseState, () => null).catch(() => undefined); // a person's prompt starts new work: the last reply's header phase is not this run's (a turn.start also fires for subagents and Stop-hook continuations, which keep it)
@@ -1235,6 +1242,15 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// ticks before the host draws its Stop error. The verdict file poll that follows replaces the line with the recorded one.
 	on('classic.Stop', async ($, e, next) => {
 		const r = await next(e);
+		if (!(r && typeof (r as { block?: unknown }).block === 'string') && (await read($, isModOn))) {
+			// An allowed Stop is the turn's end: the band, the HUD and the panel read done on the render this write asks for, and the hook holds its return one frame so that render is on screen before the host's prompt returns
+			// (wave 33: `working 0:57` stayed one frame past the returned prompt). Agents still running keep the band working (agentsRunning); the lead's stale marks do not.
+			stopSeen = true;
+			hostWorking = false;
+			await update($, spinnerTickState, (n) => n + 1);
+			await update($, easeTickState, (n) => n + 1);
+			try { await $.clock.sleep(STOP_SETTLE_MS); } catch { /* a refused wait only skips the settle */ }
+		}
 		if (r && typeof (r as { block?: unknown }).block === 'string') {
 			const text = (r as { block: string }).block;
 			if (await read($, isModOn)) {
@@ -1308,7 +1324,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const els = $.ui.resolve(e);
 		const columns = e.props.bodyColumns; // measured live: with the docked pane open, viewport.columns is the transcript's own width (143) and bodyColumns is that less the engine's five (138)
 		const live = liveWorkers(snapshot, snapshot.now); // one clock for the band, the HUD, the board and the pane
-			hostWorking = e.props.isWorking === true; // noted for the tick: the host's turn runs even when no worker is listed
+		if (e.props.isWorking === false) stopSeen = false; // the host's flag fell: its own word is the turn's end again
+		const turnOn = hostTurnRunning(e.props.isWorking, stopSeen);
+			hostWorking = turnOn; // noted for the tick: the host's turn runs even when no worker is listed
 		hostKnown = typeof e.props.isWorking === 'boolean';
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
 		// The HUD draws the TODO tree and the Subagents block (rev 4 design); below 80 columns the block gives way to the band's counts.
@@ -1331,7 +1349,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: turnOn || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
 		const want = hudWantRows(hudIn, columns, snapshot.now);
 		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
@@ -1383,7 +1401,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const paneCore = await read($, coreState);
 		const paneNow = await $.clock.now();
 		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
-		const bandB: BandModel = { snapshot, live: liveWorkers(snapshot, snapshot.now), gates: paneGates, working: hostKnown ? hostWorking : runClock.startMs !== null, ...(workSecsOf(runClock, paneNow) !== undefined ? { workSecs: workSecsOf(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
+		const paneLive = liveWorkers(snapshot, snapshot.now);
+		const paneAgents = hudAgents(paneLive, snapshot.squad, queuedMembers(snapshot));
+		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isRunning) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking : runClock.startMs !== null, ...(workSecsOf(runClock, paneNow) !== undefined ? { workSecs: workSecsOf(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
 		const elapsedMs = runClock.startMs !== null ? paneNow - runClock.startMs : runClock.ranMs !== undefined && runClock.endedMs !== undefined ? runClock.ranMs + (paneNow - runClock.endedMs) : undefined;
 		const runSecs = runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock);
 		return sidebarTree($.ui.resolve(e), {

@@ -25,7 +25,7 @@ import { textWidth } from './theme';
 export { planRows } from './mission-layout';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; /** The HUD draws an agent running (listed, resumed or queued): the band reads working whatever the host's turn flag says. */ agentsRunning?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 // `team` (omp: the team record's `<class>/<effort>`) is the header's scope label; `leadName` (omp: `lead-<sid6>`)
 // names the lead in the message row. Both absent: not shown / `lead`. `ui` (theme, ASCII, colour depth) defaults to the
 // environment; `rich` (ATLAS_BAND_RICH=1) draws the tall band when the rows allow. `workersInHud`: the HUD's Subagents
@@ -103,12 +103,16 @@ function lastRun(all: readonly LiveWorker[], now: number, owners: readonly strin
 /** Stop's open rows that the plan count does not carry, read from the snapshot the plan count reads (never the core model, which is rebuilt on its own slower tick and
  * trailed the plan: `5/5 · 1 open` under a full plan, critique 11). The core model only ever held plan rows, so it could not see the dispatch rows Stop counts. */
 function openRows(s: LiveSnapshot, owners: ReadonlyMap<string, UiState>): { openWork: number; openDispatch: number; openDispatchTitle?: string } {
-  const rows = s.todos ?? [];
-  const planOpen = planBasis(rows, s.sessionId).filter((it) => it.status !== 'completed').length;
+  const allRows = s.todos ?? [];
+  const planOpen = planBasis(allRows, s.sessionId).filter((it) => it.status !== 'completed').length;
+  // Wave 33: a dispatch row folds into its plan row while that row is open (same owner, or the worker named in its title): the T row carries the work, so every count stays on the plan's own /N. Once the lead closes the T row and leaves the dispatch row open, it is Stop's open row again.
+  const carried = new Set(ownPlan(allRows, s.sessionId).filter((it) => it.status !== 'completed' && (it as { owner?: string }).owner).map((it) => (it as { owner?: string }).owner!));
+  const isFolded = (it: object): boolean => (it as { origin?: string }).origin === 'dispatch' && carried.has((it as { owner?: string }).owner ?? '');
+  const rows = allRows.filter((it) => !isFolded(it));
   const dispatch = rows.filter((it) => (it as { origin?: string }).origin === 'dispatch');
   // The row the reason names must agree with the TODO beside it: a dispatch row the board already draws done (its worker failed or was killed: `closed · worker killed`) is not what the band asks the lead to close.
   const shown = withOwnerStates(openItems(dispatch, s.sessionId) as { owner?: string }[], owners).filter((it) => it.ownerState !== 'failed');
-  const title = openRowName(ownPlan(rows, s.sessionId), shown[0]); // the first open dispatch row, by its plan row's title (T-id and title), else its agent
+  const title = openRowName(ownPlan(allRows, s.sessionId), shown[0]); // the first open dispatch row, by its plan row's title (T-id and title), else its agent
   return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(dispatch, s.sessionId), ...(title ? { openDispatchTitle: title } : {}) };
 }
 
@@ -138,7 +142,9 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     project: boardOf(s), scope: b.team,
     phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
     done, total, ...openRows(s, owners), todoBlocked: blockedCount(plan, owners),
-    busy: b.working === false ? false : !!b.working || leadBusy(s) || planBusy(plan, owners), // the host's own `isWorking: false` is the turn end: stale lead or plan marks do not keep the band working past it
+    // The host's own `isWorking: false` is the turn end: stale lead or plan marks do not keep the band working past it. An agent the host lists as running (a resumed native agent whose activity record still reads done)
+    // or one the HUD draws running keeps it working at every width: the band never reads idle beside a turning spinner (wave 33).
+    busy: !!b.agentsRunning || s.squad.some((a) => a.name !== 'lead' && a.state === 'running') || (b.working === false ? false : !!b.working || leadBusy(s) || planBusy(plan, owners)),
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,
@@ -252,6 +258,9 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   });
   return panel(els, rows, cols, ui);
 }
+
+/** The band's first-row runs (text and tone) for a model: what the tree paints, for goldens and tone checks. */
+export const bandRuns = (b: BandModel): Run[] => bandLines(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() }))[0]?.runs ?? [];
 
 /** The band's run state word (`working`, `done`, `idle`, `blocked`) for a model: the one rule the HUD's idle dimming and the side panel's phase read. */
 export const bandKindOf = (b: BandModel) => runStateOf(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() })).kind;

@@ -156,26 +156,15 @@ describe('2. the rule row: a braille 141 spinner while they work, the squad line
   });
 });
 
-describe('3. [-] sits inside the band bar, right-aligned, dim 240, in every state', () => {
+describe('3. the band bar draws no handle of its own (wave 33: the host draws the one `[-]` right of the tree)', () => {
   for (const [, screen, cols] of SIZES) {
-    test(`${cols} cells: the first row is exactly the bar's width and ends in \`[-] \``, () => {
+    test(`${cols} cells: the first row is exactly the bar's width and holds no \`[-]\``, () => {
       for (const { st, f } of scenario(screen, cols)) {
         expect([st.name, [...f.rows[0]!].length]).toEqual([st.name, cols]);
-        expect(f.rows[0]!, st.name).toMatch(/ \[-\] $/);
+        expect(f.rows[0]!, st.name).not.toMatch(/\[[-+]\]/);
       }
     });
   }
-  test('bandLines: the handle is the last drawn run, tone dim, in working, done, idle and blocked', () => {
-    const base = { cols: 120, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'research', done: 2, total: 5, openWork: 3, openDispatch: 0, todoBlocked: 0, checks: [], ui, bar: true } as const;
-    for (const extra of [{ busy: true, turnSecs: 20 }, { busy: false, phase: 'done', restSecs: 3, ranSecs: 58 }, { busy: false, restSecs: 60, ranSecs: 58 }, { busy: true, stopGates: ['stop refused'] }]) {
-      const runs = bandLines({ ...base, workers: [], ...extra } as never)[0]!.runs;
-      const w = runs.reduce((n, x) => n + [...x.t].length, 0);
-      expect([JSON.stringify(extra), w]).toEqual([JSON.stringify(extra), 120]);
-      const live = runs.filter((x) => x.t.trim() !== '');
-      expect(live.at(-1)!.t, JSON.stringify(extra)).toBe('[-]');
-      expect(live.at(-1)!.tone, JSON.stringify(extra)).toBe('dim');
-    }
-  });
 });
 
 describe('4. the TODO rows are a 3-column grid: title, agent (15), time (5), one right edge', () => {
