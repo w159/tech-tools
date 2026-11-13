@@ -111,7 +111,7 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     });
   }
   test('a running bar grows with the clock and its leading edge moves between frames', () => {
-    const at = (ms: number) => render('board', 65, 45, snap({ running: true, now: NOW + ms })).find((l) => l.includes('alpha-explorer') && /▇/.test(l))!;
+    const at = (ms: number) => render('board', 65, 45, snap({ running: true, now: NOW + ms })).find((l) => /\balpha\s.*▇/.test(l))!;
     const [a, b] = [at(0), at(2000)];
     const fill = (l: string): number => [...l].filter((c) => c === '▇').length;
     expect(fill(b)).toBeGreaterThan(fill(a));
