@@ -121,8 +121,9 @@ describe('item 4: the board (critique 30: colliding axis labels, ticks past the 
       const labels = o[ticks + 1]!;
       expect(labels).not.toMatch(/\d:\d\d\d:\d\d/); // no two labels run together
       expect(labels).not.toMatch(/\S\d:\d\d/); // each label has a blank before it
-      const bars = o.filter((l) => /[█▏▎▍▌▋▊▉]/.test(l)).map((l) => l.trimEnd().length);
-      expect(o[ticks]!.trimEnd().length).toBeLessThanOrEqual(Math.max(...bars) + 1);
+      expect(o.some((l) => /▇/.test(l))).toBe(true); // wave 38: one-row `▇` bars
+      expect(labels.match(/\d:\d\d/g)!.at(-1)).toBe('1:00'); // wave 38: the axis ends at the 0:57 run rounded up to 10 s, at every width
+      expect(o[ticks]!.trimEnd().length).toBeLessThanOrEqual(cols - 1); // and no tick runs past the pane
     });
     test(`${cols} cols: the total and the close hint share the last row`, () => {
       const o = out();

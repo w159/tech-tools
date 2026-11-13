@@ -210,7 +210,7 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
     const t = rows(57, RUN, many);
     const ev = t.filter((l) => /^\s+\+\d:\d\d\s/.test(l));
     expect(ev).toHaveLength(5);
-    expect(ev.map((l) => /post number (\d)|(ghost-explorer\s+failed)|(\w+-explorer\s+done)/.exec(l)?.slice(1).find(Boolean) ?? '?')).toEqual(['ghost-explorer  failed', 'alpha-explorer  done', '7', '8', 'beta-explorer   done']); // wave 37: the finishes are events too (a worker's done row), the failure row included; the newest five, oldest first
+    expect(ev.map((l) => /post number (\d)|(ghost-explorer\s+failed)|(\w+-explorer\s+(?:done|started))/.exec(l)?.slice(1).find(Boolean) ?? '?')).toEqual(['alpha-explorer  done', 'beta-explorer   started', '7', '8', 'beta-explorer   done']); // wave 37: the finishes are events too; wave 38: so are the starts; the newest five, oldest first
     expect(ev[0]).toMatch(/^\s+\+0:\d\d\s/);
   });
   test('a section with no data is one dim line, never blank space', () => {
@@ -266,9 +266,9 @@ describe('item 4: the board (critique 34: `· total0:3 · 8 tool` at 110, `3 dis
   const board = (cols: number, s: never = snap(), run: Run = RUN): string[] => { forgetPhases(); return withGates(s, 'board', cols, 40, run); };
   const foot = (t: string[]): string => t[t.length - 1]!;
 
-  test('at 110 the footer is one clean row: `● 2 ■ 1 · 0:57 · 9 calls`, failed workers counted', () => {
+  test('at 110 the footer is one clean row that keeps its words: `● 2 done  ■ 1 failed · 0:57`, failed workers counted', () => {
     const f = foot(board(38));
-    expect(f).toMatch(/^\s*● 2 ■ 1 · 0:57 · 9 worker calls\b/);
+    expect(f).toMatch(/^\s*● 2 done {2}■ 1 failed · 0:57$/); // wave 38 (critique 37: `● 2 ■ 1 · 0:31` lost its words): `total` goes first, then `worker calls` to `calls`, then the calls; the words stay
     expect(f).not.toMatch(/total0|tool\b|·\S/); // 4fef5d66: `● 2   ■ 1   ·total0:3 · 8 tool`
   });
   test('at 150 the footer reads in words, once, and counts the failed worker', () => {

@@ -181,11 +181,12 @@ describe('wave 31 item 5: the board has a ticked axis, N calls labels and rows i
     expect(at('alpha-explorer')).toBeLessThan(at('ghost-explorer'));
     expect(at('ghost-explorer')).toBeLessThan(at('beta-explorer'));
   });
-  test('the axis runs past the longest bar with a tick label every 5 s', () => {
+  test('the axis ends at the run rounded up to 10 s, with a tick every 10 s', () => {
     const labels = (t.at(-1)!.match(/\d+:\d\d/g) ?? []).map((x) => Number(x.split(':')[0]) * 60 + Number(x.split(':')[1]));
     expect(labels[0]).toBe(0);
-    expect(labels.every((v, i) => i === 0 || v - labels[i - 1]! === 5)).toBe(true);
-    expect(labels.at(-1)!).toBeGreaterThanOrEqual(20);
+    expect(labels.every((v, i) => i === 0 || v - labels[i - 1]! === 10)).toBe(true);
+    expect(labels.at(-1)!).toBe(20); // 0:11 rounded up to the next 10 s
+    expect(t.at(-2)!.match(/┬/g)).toHaveLength(3); // 0:00, 0:10, 0:20
   });
   test('the failed word is on the plan row and in the footer count (wave 35) and no full-width rule runs under it', () => {
     const out = render('board', 65, 45, { kind: 'working', secs: 28 });

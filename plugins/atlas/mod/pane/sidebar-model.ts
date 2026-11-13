@@ -7,7 +7,7 @@ import { DONE_DOUBT, RETURNED, spinClock, uiFromEnv, type Ui, type UiState } fro
 import { forgetStamps, type PanelGate, type PanelModel, type PanelNote, type PanelTodo, type PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
-import { hudAgents, lastOf, ownerStatesOf } from '../hud';
+import { agentModel, hudAgents, lastOf, ownerStatesOf } from '../hud';
 import { ownerOutcome } from '../board-model';
 import { failureNotes, firstSeen, isoTs, noteRefusal, refusalNotes } from '../data/channels';
 import { gateTally } from '../data/runstate';
@@ -116,6 +116,8 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   // A name the host list streams in half written (`beta-e` while the plan row says `beta-explorer`) reads as the one whole name the board knows, else as it is: whole or nothing (critique 22).
   const whole = (n: string): string => (owned.includes(n) ? n : ((c) => (c.length === 1 ? c[0]! : n))(owned.filter((o) => o.length > n.length && o.startsWith(n))));
   const workers = [...liveWorkers(s, s.now).sort((a, b) => startAt(a.name) - startAt(b.name)).filter((w) => !left.has(w.name)).map((w) => ({ ...workerOf(s, w), name: one(whole(w.name)) })), ...queued]; // start order: the layout orders them by task (panel-layout workersByTask)
+  const seqs = new Map(agentModel(hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), s.todos, null, s.now).map((a) => [a.id ?? a.name, a.seq] as const)); // the SUBAGENTS table's dispatch order (hud.ts seqFor), read once per render
+  const ordered = workers.map((w) => ({ ...w, ...(seqs.get(w.name) !== undefined ? { seq: seqs.get(w.name)! } : {}) }));
   const [leadMate] = mates(s);
   const lead: PanelWorker = { name: 'lead', role: 'lead', state: MOOD_STATE[leadMate!.mood], detail: leadMate!.text, ...leadClock(s, workers, MOOD_STATE[leadMate!.mood]) };
 
@@ -133,6 +135,8 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   // Wave 37 (critique 36: `events · no events yet · 0 messages` after three agents finished): a worker that finished is an event too, stamped with the instant it ended (never the clock), unless it already posted its own done row.
   const posted = new Set(notes.filter((n) => n.kind === 'done' || n.kind === 'report' || n.kind === 'handoff').map((n) => n.owner));
   const finishes: PanelNote[] = timed(workers.filter((w) => w.state === 'done' && !posted.has(w.name)).map((w) => ({ ts: w.endMs !== undefined ? isoTs(w.endMs) : '', seq: 0, owner: w.name, to: 'lead', text: 'done', channel: s.channel ?? '', kind: 'done' })), s.now, s.channel ?? '').map(noteOf);
+  // Wave 38 (critique 37: `no events yet` while three agents ran): every worker that started is an event from its first frame, stamped with the instant its dispatch started (never the clock).
+  const starts: PanelNote[] = workers.filter((w) => w.state !== 'queued' && w.startMs !== undefined).map((w) => noteOf({ ts: isoTs(w.startMs!), seq: 0, owner: w.name, to: 'all', text: 'started', channel: s.channel ?? '', kind: 'started' }));
   noteRefusal(gateTally(m.gates).stop, s.now, s.channel ?? '');
   // The closure is a post too (wave 24): a plan row the lead closed over a failed worker reads `T2 dispatch closed after Stop refusal · ghost-explorer`, whole names, from the lead.
   const stop = gateTally(m.gates).stop;
@@ -143,12 +147,13 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   return {
     cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, tick: m.tick ?? 0, now: spinClock(s.now, m.tick ?? 0), // the one spinner clock (atlas-ui): the snapshot clock moves with the ticker, so a spinner turns between data polls
     expanded: m.ui.expanded, recipient: m.ui.recipient,
-    phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, ...(m.run ? enteredOf(s.channel ?? '', rail.ids, s.phase, m.run.kind) : {}), todos, workers, lead,
+    phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, ...(m.run ? enteredOf(s.channel ?? '', rail.ids, s.phase, m.run.kind) : {}), todos, workers: ordered, lead,
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     ...(m.run ? { run: m.run } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
     ...(finishes.length ? { finishes } : {}),
+    ...(starts.length ? { starts } : {}),
     channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...refusalNotes(s.channel ?? ''), ...closures], s.now, s.channel ?? '').map(noteOf),
   };
 }

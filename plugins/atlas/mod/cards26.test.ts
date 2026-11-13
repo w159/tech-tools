@@ -14,7 +14,7 @@ describe('the board timeline is a Gantt', () => {
   ];
   const lines = boardTimeline(agents, { cols: 60, ui: mocha });
   const text = boardText(lines);
-  const FILL = /[█▏▎▍▌▋▊▉]/;
+  const FILL = /▇/;
   // Wave 30: solid bars (a full block, the end exact to an eighth of a cell), one row per agent, the axis is two rows (ticks, labels).
   const bars = (t: string): { from: number; len: number } => ({ from: [...t].findIndex((c) => FILL.test(c)), len: [...t].filter((c) => FILL.test(c)).length });
   test('each bar starts at its agent start offset within the run', () => {
@@ -27,7 +27,7 @@ describe('the board timeline is a Gantt', () => {
     const tone = (i: number) => lines[i]!.runs.find((r) => FILL.test(r.t))?.tone;
     expect([tone(0), tone(1), tone(2)]).toEqual(['ok', 'bad', 'accent']); // start order
     expect(text.at(-2)).toMatch(/^ +┬[─┬]+$/);
-    expect(text.at(-1)).toMatch(/0:00 +0:05 +0:10 +0:15 +0:20 +0:25$/); // wave 36: the labels cover the whole span, one tick past the longest bar (20 s)
+    expect(text.at(-1)).toMatch(/0:00 +0:10 +0:20$/); // wave 38: the axis ends at the run's length (20 s) rounded up to 10 s, a tick every 10 s
   });
   test('critique 25: the axis scales to the longest bar end: no bar runs past the axis rule, and the rule ends where the longest bar does', () => {
     for (const cols of [60, 80, 120]) {
@@ -36,7 +36,7 @@ describe('the board timeline is a Gantt', () => {
       const barEnds = t.slice(0, -2).map((l) => [...l].reduce((e, c, i) => (FILL.test(c) ? i : e), -1));
       expect([cols, Math.max(...barEnds) <= rule.length - 1]).toEqual([cols, true]);
       expect([cols, rule.length - 1 - Math.max(...barEnds) >= 0]).toEqual([cols, true]); // wave 31: the axis runs past the longest bar (the last tick), never short of it
-      expect(t.at(-1)).toMatch(/0:00 .*0:2\d$/);
+      expect(t.at(-1)).toMatch(/0:00 .*0:20$/);
     }
   });
   test('a pane with no room for a name and a bar draws no chart', () => {

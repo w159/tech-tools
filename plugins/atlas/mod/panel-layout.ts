@@ -70,7 +70,7 @@ export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; 
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
-export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; /** When the worker started and when its run ended (or now), in the snapshot clock's ms: the board's Gantt places its bar by them. */ startMs?: number; endMs?: number; tools?: number; /** Start times of the worker's tool calls, in the snapshot clock's ms: the team tab's activity sparkline. */ calls?: readonly number[] };
+export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; /** When the worker started and when its run ended (or now), in the snapshot clock's ms: the board's Gantt places its bar by them. */ startMs?: number; endMs?: number; tools?: number; /** Start times of the worker's tool calls, in the snapshot clock's ms: the team tab's activity sparkline. */ calls?: readonly number[]; /** Wave 38 (critique 37: the side panel listed ghost, beta, alpha under SUBAGENTS' alpha, ghost, beta): the agent's place in the order it was dispatched, the HUD's own `seq` (hud.ts agentModel). */ seq?: number };
 export type PanelGateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string; /** Only Stop decides it (data/runstate withPending): drawn `◇`. */ pending?: boolean };
 export type PanelGate = { id: string; title: string; error?: string; lines: PanelGateLine[] };
 export type PanelNote = { at: string; /** The post's time in ms, for its relative age. */ ms?: number; from: string; to?: string; kind?: string; text: string; lead?: boolean };
@@ -105,6 +105,8 @@ export type PanelModel = {
   notes: readonly PanelNote[];
   /** Wave 37 (critique 36: `no events yet` after three agents finished): the workers that finished, one event each, stamped with the instant they ended. The status view's events list them with the notes; no other tab does. */
   finishes?: readonly PanelNote[];
+  /** Wave 38 (critique 37: `no events yet · 0 messages` while three agents ran): the workers that started, one event each, stamped with the instant their dispatch started. */
+  starts?: readonly PanelNote[];
   /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
   /** The band's own run state and run clock (wave 31): `kind` is runStateOf(band).kind, `secs` the figure the band prints (`working 0:28`, `done . 0:58`), `startMs` the run's start on the snapshot clock.
@@ -630,7 +632,7 @@ function statusBody(m: PanelModel): PanelLine[] {
   ];
 }
 /** Every event of the run: the channel's notes and the workers' finishes, a finish left out where the worker already posted its own done row. */
-const statusEvents = (m: PanelModel): readonly PanelNote[] => [...m.notes, ...(m.finishes ?? []).filter((f) => !m.notes.some((x) => x.from === f.from && (x.kind === 'done' || x.kind === 'handoff')))];
+const statusEvents = (m: PanelModel): readonly PanelNote[] => [...(m.starts ?? []), ...m.notes, ...(m.finishes ?? []).filter((f) => !m.notes.some((x) => x.from === f.from && (x.kind === 'done' || x.kind === 'handoff')))];
 const statusEventCount = (m: PanelModel): number => statusEvents(m).length;
 
 /** The route tab is the status view (wave 35): the dense status view on the Claude pane (it has the HUD), the full plan and agent list everywhere else. */
@@ -778,6 +780,8 @@ function leadOf(m: PanelModel): PanelWorker | undefined {
 /** The workers in the HUD's order (hud-surface sortAgents): by the earliest plan row (T1 before T2) each owns, whatever its state, those that own none after, then as
  * given (start order). The plan row number is its place in `m.todos` (the board's order); a worker whose row names no owner falls back to its own `T3` tag. */
 export function workersByTask(m: Pick<PanelModel, 'todos' | 'workers'>): PanelWorker[] {
+  // Wave 38: the SUBAGENTS table lists agents in dispatch order (AgentRow.seq); where every worker carries it, so does every list of the panel (one that has none yet, a queued dispatch, follows the others).
+  if (m.workers.some((w) => w.seq !== undefined)) return m.workers.map((w, i) => ({ w, i })).sort((a, b) => (a.w.seq ?? Infinity) - (b.w.seq ?? Infinity) || a.i - b.i).map((x) => x.w);
   const tag = (w: PanelWorker): number[] => { const n = /^T(\d+)$/i.exec(w.task ?? '')?.[1]; return n ? [Number(n)] : []; };
   return sortAgents(m.workers.map((w) => { const owned = m.todos.flatMap((t, i) => (t.owner === w.name ? [i + 1] : [])); return { w, tasks: owned.length ? owned : tag(w) }; })).map((x) => x.w);
 }
@@ -906,6 +910,23 @@ function senderRows(m: PanelModel, spare: number): PanelLine[] {
     return line(fitRuns([...head, r(left > 3 ? clipE(oneLine(noteText(m, v.last)), left) : '', 'muted')], m.cols));
   })];
 }
+/** Wave 38 (critique 37: the channel tab at 0 messages was `○ no messages` in an empty pane): the senders block still says who is on the channel: each worker (dispatch order) with the time of its last sign of life on the run's clock and its last status line. Only what the workers hold. */
+function quietSenders(m: PanelModel): PanelLine[] {
+  const ws = workersByTask(m).filter((w) => w.state !== 'queued');
+  const room = Math.min(8, m.rows - headerRows(m).length - 6);
+  if (!ws.length || room < 1) return [];
+  const at = (w: PanelWorker): number | undefined => (w.state === 'done' || w.state === 'failed' ? w.endMs : [...(w.calls ?? [])].sort((a, b) => b - a)[0] ?? w.startMs);
+  const shown = ws.slice(0, room);
+  const who = Math.min(18, Math.max(...shown.map((w) => cells(nameOf(w)))));
+  const rows = shown.map((w): PanelLine => {
+    const ms = at(w);
+    const time = ms === undefined ? '' : stampOf(m, { at: '', ms, from: w.name, kind: 'status', text: '' });
+    const head = [r(' '.repeat(GRID_LEAD)), r(pad(clipE(nameOf(w), who), who) + '  ', w.state === 'failed' ? 'bad' : 'sub'), r(pad(time, 6) + ' ', 'dim')];
+    const left = m.cols - 1 - head.reduce((k, x) => k + cells(x.t), 0);
+    return line(fitRuns([...head, r(left > 3 ? clipE(lastFit(w, left), left) : '', 'muted')], m.cols));
+  });
+  return [BLANK, line(fitRuns([r(' '.repeat(GRID_LEAD)), r('senders', 'text', { bold: true })], m.cols)), ...rows];
+}
 const channelBody = (m: PanelModel): PanelLine[] => {
   const log = channelLog(m);
   return [...log, ...(m.run && tall(m) ? channelSummary(m, m.rows - 1 - headerRows(m).length - log.length) : [])];
@@ -917,7 +938,7 @@ function channelLog(m: PanelModel): PanelLine[] {
   const title = channelLabel(m.channel);
   const head = line(fitRuns([r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted')], m.cols));
   // Wave 32 (critique 30: `no messages yet` floated mid-pane over 90% blank): an empty channel is one left-aligned row straight under the head, the pane fill carries the surface to the foot.
-  if (!m.notes.length) return [head, line(fitRuns([r(`${ind}${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} no messages`, 'dim')], m.cols))]; // wave 36 (critique 35: the channel tab about 95% empty): nothing said is one dim line under the head, never a block of blank rows; the status view's footer carries `0 messages`
+  if (!m.notes.length) return [head, line(fitRuns([r(`${ind}${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} no messages`, 'dim')], m.cols)), ...quietSenders(m)]; // wave 36 (critique 35: the channel tab about 95% empty): nothing said is one dim line under the head, never a block of blank rows; the status view's footer carries `0 messages`
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane
   const ageW = !m.run && m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(ageOfNote(m, n)))) : 0;
