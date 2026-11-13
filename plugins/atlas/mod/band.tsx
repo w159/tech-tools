@@ -145,6 +145,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     // The host's own `isWorking: false` is the turn end: stale lead or plan marks do not keep the band working past it. An agent the host lists as running (a resumed native agent whose activity record still reads done)
     // or one the HUD draws running keeps it working at every width: the band never reads idle beside a turning spinner (wave 33).
     busy: !!b.agentsRunning || s.squad.some((a) => a.name !== 'lead' && a.state === 'running') || (b.working === false ? false : !!b.working || leadBusy(s) || planBusy(plan, owners)),
+    queuedIdle: true,
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,

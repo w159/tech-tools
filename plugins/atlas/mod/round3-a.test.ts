@@ -61,10 +61,10 @@ describe('round 3 A2: the band lead has four states', () => {
       expect(lead(model({ cols, blocked: true, openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>))).toMatch(/^▲ blocked · /);
     });
   }
-  test('blocked names what it needs, and keeps moving while the host fixes it', () => {
+  test('blocked names what it needs, and draws no spinner whatever runs', () => {
     const m = model({ stopGates: ['dispatch T2 read x open'], openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>);
     expect(lead(m)).toMatch(/^▲ blocked · 1 dispatch open/);
-    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · (1 dispatch open|needs: close dispatch T2 · fixing)/); // critique 28: a stopped band draws no spinner
+    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · (1 dispatch open|needs: close dispatch T2)/); // critique 28: a stopped band draws no spinner
     expect(lead({ ...m, busy: true, tick: 1 })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
     expect(head({ ...m, ui: { ...ui, ascii: true } })).not.toMatch(/[◐◓◑◒]/);
   });

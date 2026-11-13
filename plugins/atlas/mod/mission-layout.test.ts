@@ -126,7 +126,8 @@ describe('mission-layout: failure count on the band', () => {
   });
   test('a finished-only worker list is idle', () => {
     expect(band(model({ workers: [w('a', 'done'), w('b', 'failed')] }))).toContain('idle');
-    expect(band(model({ workers: [w('a', 'done'), w('b', 'queued')] }))).not.toContain('idle');
+    expect(band(model({ busy: false, queuedIdle: true, workers: [w('a', 'done'), w('b', 'queued')] }))).toContain('idle'); // wave 34: a queued worker does no work; only a busy host turn or a live worker holds the band working
+    expect(band(model({ workers: [w('a', 'done'), w('b', 'running')] }))).not.toContain('idle');
   });
 });
 

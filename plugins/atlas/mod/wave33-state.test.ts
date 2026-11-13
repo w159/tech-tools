@@ -108,7 +108,7 @@ describe('1. one handle: the band bar ends flush and the host draws the only `[-
   });
 });
 
-describe('2. working whenever an agent runs: a braille 141 spinner, never idle', () => {
+describe('2. working whenever an agent runs (not a queued dispatch): a braille 141 spinner, never idle', () => {
   const RESUMED: Shape = { ...STOP, working: false, rest: 60, dispatch: [], agents: [{ name: NAMES[0]!, squad: 'running', mood: 'done', tool: 'Read' }, STOP.agents[1]!, STOP.agents[2]!] };
   const REOPENED: Shape = { ...STOP, working: false, rest: 60, agents: [STOP.agents[0]!, STOP.agents[1]!], dispatch: [{ owner: 'ghost-explorer', status: 'in_progress' }] };
   for (const [cols, screen, body] of SIZES) {
@@ -118,11 +118,11 @@ describe('2. working whenever an agent runs: a braille 141 spinner, never idle',
       expect(f.band).toMatch(/[⠀-⣿] working/);
       expect(f.band).not.toMatch(/idle/);
     });
-    test(`${cols} columns: an agent the HUD draws running (an open dispatch row names it, the host does not list it) keeps the band working`, () => {
+    test(`${cols} columns: a dispatch the host never listed (queued) does not hold the band working once the turn is over (wave 34): static blocked, no spinner`, () => {
       const f = frameOf(REOPENED, body, screen);
-      expect(f.hud.join('\n')).toMatch(/SUBAGENTS [⠀-⣿]/);
-      expect(f.kind).toBe('working');
-      expect(f.band).toMatch(/[⠀-⣿] working/);
+      expect(f.hud.join('\n')).not.toMatch(/SUBAGENTS [⠀-⣿]/);
+      expect(f.kind).toBe('blocked');
+      expect(f.band).not.toMatch(BRAILLE);
     });
   }
   test('the spinner is the accent 141', () => {
