@@ -64,14 +64,18 @@ export const newRunClock = (): RunClock => ({ startMs: null, lastSeenMs: 0 });
 /** What a beat knows beyond `working`. `hostIdle`: the host says its model turn is over (AbovePrompt `isWorking` false), so a run that no worker or lead work holds up ends now.
  * `promptMs`: when the person's prompt armed the next run. A run that already ended starts a new one only from a prompt: work with no prompt behind it (a background task's
  * notification, a worker flicker) leaves `ranMs`, `endedMs` and so `idle` exactly as they were. The very first run needs no prompt. */
-export type BeatSignal = { hostIdle?: boolean; promptMs?: number | null };
+export type BeatSignal = { hostIdle?: boolean; promptMs?: number | null; resumed?: boolean };
 
 /** The clock after a beat at `now` that found Atlas `working` or not. Returns the same object when nothing changed. */
 export function stepRun(c: RunClock, working: boolean, now: number, sig: BeatSignal = {}): RunClock {
   if (working) {
     if (c.startMs !== null) return c.lastSeenMs === now ? c : { ...c, lastSeenMs: now };
     const prompt = sig.promptMs ?? null;
-    if (c.endedMs !== undefined && prompt === null) return c; // a blip after a finished run: not a new run, not a new clock
+    if (c.endedMs !== undefined && prompt === null) {
+      // truth 40: a Stop-hook continuation or a worker notification's turn right after the run closed is the same run: the clock reopens at the run's own start and counts on.
+      if (sig.resumed === true && c.ranMs !== undefined) return { startMs: c.endedMs - c.ranMs, lastSeenMs: now, ranMs: c.ranMs, endedMs: c.endedMs };
+      return c;
+    } // a blip after a finished run: not a new run, not a new clock
     return { ...c, startMs: prompt !== null ? Math.min(prompt, now) : now, lastSeenMs: now };
   }
   if (c.startMs !== null && (sig.hostIdle === true || now - c.lastSeenMs >= END_GRACE_MS)) return { startMs: null, lastSeenMs: c.lastSeenMs, ranMs: Math.max(0, c.lastSeenMs - c.startMs), endedMs: c.lastSeenMs };
@@ -79,7 +83,23 @@ export function stepRun(c: RunClock, working: boolean, now: number, sig: BeatSig
 }
 /** A host turn or live work counts as the run only while the run clock is open, or none has ended yet, or a prompt armed the next one. A closed run with no new prompt (the host runs a slash command, f0106 of live-150-2) is not working:
  * the band keeps reading `idle`/`done` and the clock never restarts from the old start (truth 39). */
-export const runLive = (c: RunClock, armed: boolean): boolean => c.startMs !== null || c.endedMs === undefined || armed;
+export const runLive = (c: RunClock, armed: boolean, resumed = false): boolean => c.startMs !== null || c.endedMs === undefined || armed || resumed;
+/** A host turn that starts this close to the run's end belongs to that run when a Stop hook refused (its continuation) or a worker's notification woke the lead (truth 40, stoprun-110-1 f0062-f0072: `idle 0:29` for 5.6 s under the host's `Fermenting`).
+ * A slash command typed later is neither: it records no resume mark, and a mark older than this never counts. */
+export const RESUME_TURN_MS = 30_000;
+/** The notification that wakes the lead arrives a beat before the run's clock closes (f0061 34.78 s, close 35.0 s); a mark made earlier in the run belongs to an earlier turn. */
+export const RESUME_PRE_MS = 2_000;
+/** `resumedAt`: when a Stop refusal or a worker notification last started a host turn (null: none). True when that was within RESUME_TURN_MS of the closed run's end (or up to RESUME_PRE_MS before it). */
+export const resumeOk = (c: RunClock, resumedAt: number | null, now: number): boolean => resumedAt !== null && c.endedMs !== undefined && resumedAt >= c.endedMs - RESUME_PRE_MS && now - c.endedMs <= RESUME_TURN_MS;
+/** The run clock never steps back (truth 40, stoprun-110-1 f0061 `0:30`, f0062 `0:29`: the open clock counted through the end grace, the closed total stopped at the last beat). `held` is the largest figure shown for the run `key`; a new key starts over. */
+export type ClockHold = { key: number; max: number } | null;
+export const holdClock = (h: ClockHold, key: number | undefined, secs: number | undefined): { hold: ClockHold; secs: number | undefined } => {
+  if (secs === undefined || key === undefined) return { hold: h, secs };
+  const max = h && h.key === key ? Math.max(h.max, secs) : secs;
+  return { hold: { key, max }, secs: max };
+};
+/** Identity of the run a clock belongs to: its start, open or closed. */
+export const runKey = (c: RunClock): number | undefined => (c.startMs !== null ? c.startMs : c.endedMs !== undefined && c.ranMs !== undefined ? c.endedMs - c.ranMs : undefined);
 /** Whole seconds the current run has lasted; undefined at rest. */
 export const workSecsOf = (c: RunClock, now: number): number | undefined => (c.startMs === null ? undefined : Math.max(0, Math.floor((now - c.startMs) / 1000)));
 /** Whole seconds the last run took (frozen); undefined before any run ended. */

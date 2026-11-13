@@ -14,7 +14,7 @@ import { bandBlockedOf, bandKindOf, bandTree, hudPhases, railPhase, type BandHan
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
-import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, runLive, stepKind, type KindHold, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
+import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, holdClock, newKindHold, newRunClock, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
@@ -199,7 +199,7 @@ async function motionTick($: EngineInterface, snap: LiveSnapshot): Promise<void>
 	const agents = hudAgents(liveWorkers(snap, snap.now), snap.squad, queuedMembers(snap));
 	const run: Partial<BandModel> = {
 		...([...agents, ...namedAgents(ownTodos(snap.todos ?? [], snap.sessionId), agents)].some(isAlive) ? { agentsRunning: true } : {}),
-		working: hostKnown ? hostWorking && runLive(runClock, armedAt !== null) : runClock.startMs !== null,
+		working: hostKnown ? hostWorking && runLive(runClock, armedAt !== null, resumedNow(now)) : runClock.startMs !== null,
 		...(restSecsOf(runClock, now) !== undefined ? { restSecs: restSecsOf(runClock, now)! } : {}),
 	};
 	await motionDriver.step(snap, async () => motionFeed(snap, await gateGroups($), await read($, coreState), (await lookOf($)).ui, run));
@@ -1022,6 +1022,15 @@ let hostKnown = false;
 let armedAt: number | null = null;
 /** The run clock (band-motion.ts): wall-clock start, end and frozen duration of Atlas's work, read by every render. */
 let runClock: RunClock = newRunClock();
+/** When a Stop refusal or a worker's notification last started a host turn (`$.clock.now()`): that turn continues the run that just closed (band-motion resumeOk). A person's prompt clears it. */
+let resumedAt: number | null = null;
+/** The largest run-clock figure the band or panel showed for the current run: the clock never steps back (band-motion holdClock). */
+let clockHeld: ClockHold = null;
+const resumedNow = (now: number): boolean => resumeOk(runClock, resumedAt, now);
+/** The run clock as the surfaces show it: monotonic within a run. */
+const heldSecs = (secs: number | undefined): number | undefined => { const h = holdClock(clockHeld, runKey(runClock), secs); clockHeld = h.hold; return h.secs; };
+const heldWork = (now: number): number | undefined => heldSecs(runElapsed(runClock, now));
+const heldFinal = (): number | undefined => heldSecs(finalSecsOf(runClock));
 /** The last beat of the frame loop (`$.clock.now()`), for the watchdog; the loop itself, and whether the rest-to-idle redraw has been made for the current rest. */
 let lastBeatMs = 0;
 let frameTimer: { cancel(): void } | null = null;
@@ -1075,8 +1084,8 @@ async function frameBeat($: EngineInterface): Promise<void> {
 	const working = isWorkingNow(snap as LiveSnapshot, hostWorking, hostKnown && !hostWorking);
 	const before = runClock;
 	if (armedAt !== null && now - armedAt > ARM_MS) armedAt = null; // a prompt that started no work arms nothing
-	runClock = stepRun(runClock, working, now, { hostIdle: hostKnown && !hostWorking, promptMs: armedAt }); // the host's own turn end ends the run on this beat; the grace stays for fixtures without the flag
-	if (before.startMs === null && runClock.startMs !== null) armedAt = null; // the run took the prompt's time as its start
+	runClock = stepRun(runClock, working, now, { hostIdle: hostKnown && !hostWorking, promptMs: armedAt, resumed: resumedNow(now) }); // the host's own turn end ends the run on this beat; the grace stays for fixtures without the flag
+	if (before.startMs === null && runClock.startMs !== null) { armedAt = null; resumedAt = null; } // the run took the prompt's time as its start
 	const ended = before.startMs !== null && runClock.startMs === null;
 	if (ended) idleFlipped = false;
 	const rest = restSecsOf(runClock, now);
@@ -1241,8 +1250,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		stopSeen = false; // a new prompt (or a background task's notification) starts a new turn
 		stopRefused = false;
 		const opening = dockOnPrompt($);
-		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') armedAt = await $.clock.now().catch(() => null); // a background task's notification is not the person's prompt: it starts no run
-		else await noteNotified($, (e as { text?: string }).text ?? ''); // the notification that draws the card also ends the worker in the HUD rows, on this very render
+		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') { armedAt = await $.clock.now().catch(() => null); resumedAt = null; } // a background task's notification is not the person's prompt: it starts no run
+		else { resumedAt = await $.clock.now().catch(() => null); await noteNotified($, (e as { text?: string }).text ?? ''); } // the notification that draws the card also ends the worker in the HUD rows, on this very render
 		await update($, headerPhaseState, () => null).catch(() => undefined); // a person's prompt starts new work: the last reply's header phase is not this run's (a turn.start also fires for subagents and Stop-hook continuations, which keep it)
 		const out = disciplinePrompt($, e, next, disciplineDeps);
 		await opening;
@@ -1285,6 +1294,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			const text = (r as { block: string }).block;
 			if (await read($, isModOn)) {
 				stopRefused = true; // the Stop event: the band may read blocked on this render
+				resumedAt = await $.clock.now().catch(() => null); // the host goes on with the refusal as its next turn: that turn is this run's (band-motion resumeOk)
 				await update($, gatesState, (g) => stopRefusal(g, text));
 				noteStopVerdict(true); // the DONE chips drawn so far are struck on the update that carries the refusal, not on the next pane render (critique 29: an unstruck `done all finished` under the Stop error)
 				await update($, spinnerTickState, (n) => n + 1);
@@ -1380,7 +1390,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: (turnOn && runLive(runClock, armedAt !== null)) || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(runElapsed(runClock, clockNow) !== undefined ? { workSecs: runElapsed(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}), ...(heldKind ? { heldKind } : {}) });
+		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: (turnOn && runLive(runClock, armedAt !== null, resumedNow(clockNow))) || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(heldWork(clockNow) !== undefined ? { workSecs: heldWork(clockNow)! } : {}), ...(heldFinal() !== undefined ? { ranSecs: heldFinal()! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}), ...(heldKind ? { heldKind } : {}) });
 		// The blocked debounce: ask the band what it computes with nothing held back, then tell it whether it may read blocked.
 		const probe = bandKindOf({ ...bandIn([], 1), blockedConfirmed: true, ...([...agents, ...namedAgents(hudIn.todos, agents)].some(isAlive) ? { agentsRunning: true } : {}) }) === 'blocked';
 		const step = stepBlocked(blockedStreak, probe, turnOn, stopRefused || gateTally(withCoreTally(gates, core)).stop?.blocked === true);
@@ -1391,7 +1401,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		kindHold = kStep.hold;
 		heldKind = kStep.shown !== 'idle' ? kStep.shown : null;
 		// State 38: the run card and the band flip on the same render, on the band's final clock.
-		const finalNow = runClock.startMs === null && kStep.shown === 'done' ? finalSecsOf(runClock) ?? null : null;
+		const finalNow = runClock.startMs === null && kStep.shown === 'done' ? heldFinal() ?? null : null;
 		noteRunFinal(finalNow); // truth 39: the run card is placed on the next beat, never inside this render, so it cannot land a frame before the band that reads done
 		noteBlocked(kStep.shown === 'blocked' ? bandBlockedOf(bandIn([], 1)) : null);
 		const agentsListed = agents.length > 0;
@@ -1447,9 +1457,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
 		const paneLive = liveWorkers(snapshot, snapshot.now);
 		const paneAgents = hudAgents(paneLive, snapshot.squad, queuedMembers(snapshot));
-		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking && runLive(runClock, armedAt !== null) : runClock.startMs !== null, ...(runElapsed(runClock, paneNow) !== undefined ? { workSecs: runElapsed(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}), ...(heldKind ? { heldKind } : {}) };
+		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking && runLive(runClock, armedAt !== null, resumedNow(paneNow)) : runClock.startMs !== null, ...(heldWork(paneNow) !== undefined ? { workSecs: heldWork(paneNow)! } : {}), ...(heldFinal() !== undefined ? { ranSecs: heldFinal()! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}), ...(heldKind ? { heldKind } : {}) };
 		const elapsedMs = runClock.startMs !== null ? paneNow - runClock.startMs : runClock.ranMs !== undefined && runClock.endedMs !== undefined ? runClock.ranMs + (paneNow - runClock.endedMs) : undefined;
-		const runSecs = runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock);
+		const runSecs = heldSecs(runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock));
 		return sidebarTree($.ui.resolve(e), {
 			snapshot,
 			look: look.ui,
@@ -1493,6 +1503,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		tickTimer = null;
 		frameTimer?.cancel();
 		frameTimer = null;
+		clockHeld = null;
+		resumedAt = null;
 		runClock = newRunClock(); // a new session starts its work clock from nothing
 		armedAt = null;
 		hostKnown = false;
