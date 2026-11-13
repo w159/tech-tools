@@ -16,7 +16,7 @@ const walk = (n: unknown, out: El[] = []): El[] => {
   return out
 }
 const text = (n: unknown): string => (Array.isArray(n) ? n.map(text).join('') : n && typeof n === 'object' ? text((n as El).children) : typeof n === 'string' || typeof n === 'number' ? String(n) : '')
-const cellsOf = (n: unknown): El[] => (((n as El).children as El[])[1]!.children as El[]) // a finish card is a framed block: its title row is the second
+const cellsOf = (n: unknown): El[] => (((n as El).children as El[])[0]!.children as El[]) // a finish card is one row
 
 test('a faded done card is drawn exactly as a fresh one: one grey on every card (critique 26)', () => {
   const fresh = cellsOf(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui))

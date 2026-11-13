@@ -18,14 +18,14 @@ describe('the board timeline is a Gantt', () => {
   // Wave 30: solid bars (a full block, the end exact to an eighth of a cell), one row per agent, the axis is two rows (ticks, labels).
   const bars = (t: string): { from: number; len: number } => ({ from: [...t].findIndex((c) => FILL.test(c)), len: [...t].filter((c) => FILL.test(c)).length });
   test('each bar starts at its agent start offset within the run', () => {
-    const [a, b, g] = [text[0]!, text[1]!, text[2]!].map(bars);
+    const [a, g, b] = [text[0]!, text[1]!, text[2]!].map(bars); // wave 31: rows are in start order (alpha 0, gamma 5, beta 10)
     expect(a!.from).toBeLessThan(g!.from);
     expect(g!.from).toBeLessThan(b!.from);
     expect(g!.len).toBeLessThan(a!.len);
   });
   test('bars take the state colour: running 141, done 114, failed 203; the time axis closes the chart with tick marks and labels', () => {
     const tone = (i: number) => lines[i]!.runs.find((r) => FILL.test(r.t))?.tone;
-    expect([tone(0), tone(1), tone(2)]).toEqual(['ok', 'accent', 'bad']);
+    expect([tone(0), tone(1), tone(2)]).toEqual(['ok', 'bad', 'accent']); // start order
     expect(text.at(-2)).toMatch(/^ +┬[─┬]+$/);
     expect(text.at(-1)).toMatch(/0:00 +0:05 +0:10 +0:15 +0:20$/);
   });
@@ -35,8 +35,8 @@ describe('the board timeline is a Gantt', () => {
       const rule = t.at(-2)!;
       const barEnds = t.slice(0, -2).map((l) => [...l].reduce((e, c, i) => (FILL.test(c) ? i : e), -1));
       expect([cols, Math.max(...barEnds) <= rule.length - 1]).toEqual([cols, true]);
-      expect([cols, rule.length - 1 - Math.max(...barEnds) <= 1]).toEqual([cols, true]); // the rule stops at the longest bar's end
-      expect(t.at(-1)).toMatch(/0:00 .*0:20$/);
+      expect([cols, rule.length - 1 - Math.max(...barEnds) >= 0]).toEqual([cols, true]); // wave 31: the axis runs past the longest bar (the last tick), never short of it
+      expect(t.at(-1)).toMatch(/0:00 .*0:2\d$/);
     }
   });
   test('a pane with no room for a name and a bar draws no chart', () => {

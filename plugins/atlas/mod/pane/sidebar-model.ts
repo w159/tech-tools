@@ -128,6 +128,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos, workers, lead,
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
+    ...(m.run ? { run: m.run } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
     channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...refusalNotes(s.channel ?? ''), ...closures], s.now, s.channel ?? '').map(noteOf),
   };

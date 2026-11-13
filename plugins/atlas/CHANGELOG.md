@@ -14,6 +14,10 @@
 - Side panel: task titles keep the width the owner column no longer takes, the phase word wears its state glyph (`◐ working`, `● done`, `○ idle`, `▲ blocked`), panel spinners are the accent on the band's frame, the divider is 236.
 - Finish cards: a small framed block (half-block frame in 236/240, the `▌ ◆ ATLAS  ● done  name  role finished` title line, one content line only when there is a result), coloured by its true state; a `done 4/5` lead chip is a progress note in the accent, and a bare count prints no row (`mod/transcript/cards.tsx`, `mod/transcript/leadheader.ts`).
 - One word per failure: `■ killed` in error 203 on the board, route, team and channel tabs and the finish cards; `closed`, `worker killed` and `failed` are gone from those surfaces.
+- Finish cards and toasts: one row, `min(56, cols - 4)` wide and never wrapped, `▌ ◆ ATLAS  ● done  beta-explorer  explorer finished  0:13`; the name is cut with `…` (`~` in ASCII) before anything else is dropped; the bar fades 141 -> 245 over one second; at most two stack, the newest replacing the oldest; the DONE card is struck on the same frame as the Stop error (`transcript/cards.tsx`, `transcript/placed.ts`).
+- Side panel: the `phase` row is the band's state (spinner + `working` 141, `● done` 114, `○ idle` 245, `▲ blocked` 203) read from the band, not re-derived (`pane/band-kind.ts`); the route tab is a compact summary instead of the HUD's TODO and agent lists; the 234 surface runs to the pane foot.
+- Channel tab: times are the run clock (`+0:17`), the `0s` age column is gone, and the empty pane carries per-kind counts and the last post of each sender. Team tab: the sparkline column has a `scale` row.
+- Board: one run clock for every total (the band's), rows in start order, an axis past the longest bar with a tick every 5 s, `N calls` labels, no full-width rule under the killed row, `T2 killed · ghost-explorer` once per pane.
 
 ## 17.14.0 - 2026-11-12
 
