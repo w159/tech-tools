@@ -204,10 +204,12 @@ test('the pill shows the phase the header states, not a phase word in its senten
 
 // ---- TurnDuration receipt ----
 
-test('turn receipt: done delta, workers, ctx', () => {
+test('turn receipt: done delta and ctx; a turn that ends with an agent still working draws no footer (wave 34: one footer per run)', () => {
   const tracker: ReceiptTracker = { done: 0 }
-  const text = stringsOf(durationTree(snap({ squad: [worker('a', 'running')] }), { durationMs: 252_000 }, tracker))
-  expect(text).toBe('▸ turn 4:12 · +3 done · 1 worker · ctx 41%') // critique 15 B6: singular
+  expect(stringsOf(durationTree(snap({ squad: [worker('a', 'running')] }), { durationMs: 252_000 }, tracker))).toBe('')
+  expect(tracker.done).toBe(0) // the silent turn takes nothing from the closing footer's delta
+  const text = stringsOf(durationTree(snap({ squad: [worker('a', 'finished')] }), { durationMs: 252_000 }, tracker))
+  expect(text).toBe('▸ turn 4:12 · +3 done · ctx 41%')
   expect(tracker.done).toBe(3)
 })
 

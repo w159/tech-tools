@@ -13,9 +13,9 @@ import { forgetFailed, outcomeText } from './outcome'
 import type { Ui } from '../atlas-ui'
 
 /** One finished worker, as the card needs it. */
-export interface FinishedWorker { name: string; role: string; failed: boolean; durationMs: number; /** Tool calls the worker made (the card's `· 2 fn`). */ calls?: number }
+export interface FinishedWorker { name: string; role: string; failed: boolean; durationMs: number; /** Tool calls the worker made (the card's `· 3 calls`). */ calls?: number }
 /** A placed card's data, kept until the `Placed` site draws it. */
-export interface PlacedRow { name: string; role: string; text: string; failed: boolean; calls?: number }
+export interface PlacedRow { name: string; role: string; text: string; failed: boolean; calls?: number; /** The run card's one fact after the name (`5/5 done · 3 workers`). */ fact?: string }
 
 const MAX_ROWS = 200
 
@@ -26,6 +26,7 @@ const decided = new Map<string, boolean>() // notification requestId -> hidden: 
 const owed = new Map<string, { w: FinishedWorker; tries: number }>() // worker name -> a finish whose card the host refused: retried on the next builds
 const MAX_TRIES = 30
 let counter = 0
+let runCarded = false // the clean run's finish card is placed once per run: set when placed, cleared when the run is no longer clean
 
 const bump = (m: Map<string, number>, k: string, by: number): void => { m.set(k, Math.max(0, (m.get(k) ?? 0) + by)) }
 const capped = <K, V>(m: Map<K, V>): void => { while (m.size > MAX_ROWS) m.delete(m.keys().next().value as K) }
@@ -48,6 +49,16 @@ export function finishedWorkers(prev: AtlasSnapshot | null, next: AtlasSnapshot)
     out.push({ name: w.name, role: w.role, failed: w.state === 'failed', durationMs: Math.max(0, endedAt(w, next.now) - w.startedAt), ...(w.calls?.length ? { calls: w.calls.length } : {}) })
   }
   return out
+}
+
+/** Wave 34 (critique 33: a clean run ended on the host's own `verify 5/5 done` and no Atlas card): whether the snapshot is a run that closed clean. Every plan row done, at least one worker, every worker done, and no dispatch row still open. */
+export function cleanRun(s: AtlasSnapshot): { done: number; total: number; workers: number; durationMs: number } | null {
+  const ws = workersOf(s)
+  const open = (s.todos ?? []).some((t) => (t as { origin?: string }).origin === 'dispatch' && t.status !== 'completed')
+  if (!s.counts || s.counts.total <= 0 || s.counts.done < s.counts.total || !ws.length || open || ws.some((w) => w.state !== 'done')) return null
+  const start = Math.min(...ws.map((w) => w.startedAt))
+  const end = Math.max(...ws.map((w) => endedAt(w, s.now)))
+  return { done: s.counts.done, total: s.counts.total, workers: ws.length, durationMs: Math.max(0, end - start) }
 }
 
 /** `finished · 13s` / `failed · 13s`, the words the host's own row carries. */
@@ -74,6 +85,22 @@ export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | nu
       if (tries < MAX_TRIES) owed.set(w.name, { w, tries })
     }
   }
+  await placeRun($, prev, next)
+}
+
+/** The run's own finish card, `▌ ◆ ATLAS  ● done  run  5/5 done · 3 workers  0:52`, in the build where the run first reads clean (never twice, never over a failure or an open dispatch row). */
+async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: AtlasSnapshot): Promise<void> {
+  try {
+    const clean = cleanRun(next)
+    if (!clean) { runCarded = false; return }
+    if (runCarded || !prev) return
+    const id = `done-run-${++counter}`
+    rows.set(id, { name: 'run', role: '', text: textOf({ name: 'run', role: '', failed: false, durationMs: clean.durationMs }), failed: false, fact: `${clean.done}/${clean.total} done \u00b7 ${clean.workers} ${clean.workers === 1 ? 'worker' : 'workers'}` })
+    capped(rows)
+    const res = await $.ui.place({ id })
+    if (res.isPlaced) runCarded = true
+    else rows.delete(id)
+  } catch { /* a card is display only */ }
 }
 
 /** The card behind a `Placed` row id, drawn as the host's own notification row is (one shape, one look). */
@@ -81,7 +108,7 @@ export function placedTree(id: string, ui: Ui, aged = false, opts: FinishOpts & 
   const r = rows.get(id)
   if (!r) return null
   if (opts.hidden && !r.failed) return { type: 'Text', props: {}, children: [] } as RenderElement // a finish card that two newer ones replaced draws nothing (critique 29: at most two stacked)
-  return notificationTree(r.name, r.role, r.text, r.failed, ui, aged, r.calls ? { ...opts, calls: r.calls } : opts)
+  return notificationTree(r.name, r.role, r.text, r.failed, ui, aged, { ...opts, ...(r.calls ? { calls: r.calls } : {}), ...(r.fact ? { fact: r.fact } : {}) })
 }
 
 /** A card dims once the run has moved on (critique 17 C3): 20 s after it was first drawn, or 5 s after a later card was drawn. `now` is the snapshot's clock. */
@@ -135,5 +162,5 @@ export function hideNotification(requestId: string, name: string): boolean {
 
 /** Forget every placed card and decision (a new session, a test). */
 export function forgetPlaced(): void {
-  rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
+  runCarded = false; rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
 }

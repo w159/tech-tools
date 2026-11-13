@@ -6,7 +6,7 @@ import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
 import { type Ui } from './atlas-ui';
 import { bodyLines, lineText, type PanelLine } from './panel-layout';
-import { panelModelOf } from './pane/sidebar-model';
+import { forgetPhases, panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { placedTree, placeFinished, forgetPlaced } from './transcript/placed';
 import { durationTree } from './restyle';
@@ -64,15 +64,14 @@ const width = (l: string): number => [...l].length;
 
 describe('item 1: the route tab carries the phase timeline (critique 30: the tab had no content under the todo gauge)', () => {
   test('a `timeline` head and one chain of the phases, the current one braille with its elapsed time', () => {
+    forgetPhases();
     const t = render('route', 66, 45).join('\n');
     expect(t).toMatch(/timeline/);
-    expect(t).toMatch(/● research › ● theory › ● test › [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] implement 0:57 › ◇ verify/);
+    expect(t).toMatch(/· research › · theory › · test › [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] implement 0:57 › · verify/); // wave 34: a phase is green only once the run was in it
   });
-  test('each plan task is a row with the offset it started at', () => {
-    const t = render('route', 66, 45);
-    expect(t.find((l) => l.includes('T1 read alpha.py'))).toMatch(/\+0:30$/);
-    expect(t.find((l) => l.includes('T2 read ghost.py'))).toMatch(/\+0:31$/);
-    expect(t.find((l) => l.includes('T3 read beta.py'))).toMatch(/\+0:43$/);
+  test('the plan is not drawn here (wave 34: the HUD above the prompt and the board tab list it)', () => {
+    const t = render('route', 66, 45).join('\n');
+    expect(t).not.toMatch(/T1 read alpha\.py|plan {2}▰/);
   });
 });
 
@@ -102,10 +101,10 @@ describe('item 3: the team tab (critique 30: unaligned sparklines, a `scale` leg
     expect(rows().join('\n')).toMatch(/total\s+0:57/);
   });
   test('every sparkline starts in one column and ends in one column', () => {
-    const lines = rows().filter((l) => /[▁▂▃▄▅▆▇█]{2,}/.test(l) && /(explorer|lead)/.test(l));
+    const lines = rows().filter((l) => /[⣀⣤⣶⣿]{2,}/.test(l) && /(explorer|lead)/.test(l));
     expect(lines.length).toBe(4);
     const ends = new Set(lines.map((l) => width(l.trimEnd().replace(/\s+$/, ''))));
-    const starts = new Set(lines.map((l) => l.search(/[▁▂▃▄▅▆▇█ ]*[▁▂▃▄▅▆▇█]/)));
+    const starts = new Set(lines.map((l) => l.search(/[⣀⣤⣶⣿]/)));
     expect(starts.size).toBe(1);
     expect(ends.size).toBeLessThanOrEqual(3); // trailing blanks of an idle tail aside
   });
@@ -150,8 +149,8 @@ describe('item 5: one spinner vocabulary (critique 30: circles in the panel, bra
     expect(lead).not.toMatch(CIRCLE);
     expect(team.find((l) => l.includes('alpha-explorer'))).toMatch(BRAILLE);
   });
-  test('a plan task in progress keeps its circle (a per-task row)', () => {
-    expect(render('route', 66, 45).find((l) => l.includes('T4'))).toMatch(CIRCLE);
+  test('no circle spinner anywhere on the Claude pane (wave 34: one family, braille)', () => {
+    for (const v of ['route', 'team', 'channel', 'board'] as const) expect(render(v, 66, 45, snap({ running: true })).join('\n')).not.toMatch(CIRCLE);
   });
   test('the start card animates: the dispatch card takes the braille frame, frames differ', () => {
     const a = flat(toastWith(0)), b = flat(toastWith(3));
@@ -178,9 +177,9 @@ describe('item 6: the finish card (critique 30: `done ... explorer finished`, a 
     forgetPlaced();
     return row;
   };
-  test('`▌ ◆ ATLAS  ● done  alpha-explorer  ...  0:11 · 2 fn`: done once, the time then its calls', async () => {
+  test('`▌ ◆ ATLAS  ● done  alpha-explorer  ...  0:11 · 2 calls`: done once, the time then its calls', async () => {
     const row = await card();
-    expect(row).toMatch(/^▌ ◆ ATLAS\s+● done\s+alpha-explorer\s+0:11 · 2 fn$/);
+    expect(row).toMatch(/^▌ ◆ ATLAS\s+● done\s+alpha-explorer\s+0:11 · 2 calls$/); // wave 34: the figure counts tool calls, so it says calls
     expect(row).not.toContain('finished');
   });
   test('the turn footer is labelled: `turn 0:17` (the turn time, not the run total)', () => {

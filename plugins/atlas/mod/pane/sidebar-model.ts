@@ -90,6 +90,19 @@ function leadClock(s: LiveSnapshot, workers: readonly PanelWorker[], state: UiSt
   return { secs: Math.max(0, Math.floor((endMs - startMs) / 1000)), startMs, endMs, ...(calls ? { calls } : {}) };
 }
 
+/** Wave 34 (critique 33: every phase green at done, and no phase green after research ran): the rail phases the run was actually in. Each build records the lit rail phase the first time it sees it; a phase nobody lit stays unentered. The record is per channel and starts over when a finished run starts again. */
+const entered = new Map<string, string[]>();
+const lastKind = new Map<string, string>();
+export const forgetPhases = (): void => { entered.clear(); lastKind.clear(); };
+function enteredOf(channel: string, ids: readonly string[], phase: string, kind: string | undefined): { entered: string[] } {
+  if (lastKind.get(channel) === 'done' && kind === 'working') entered.delete(channel);
+  if (kind) lastKind.set(channel, kind);
+  const seen = entered.get(channel) ?? [];
+  entered.set(channel, seen);
+  if (ids.includes(phase) && !seen.includes(phase)) seen.push(phase);
+  return { entered: [...seen] };
+}
+
 const MOOD_STATE: Record<Mood, UiState> = { working: 'running', thinking: 'running', blocked: 'blocked', failed: 'failed', done: 'done', celebrate: 'done', idle: 'waiting' };
 
 export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number = Math.max(10, m.columns - 1)): PanelModel {
@@ -127,7 +140,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   return {
     cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, tick: m.tick ?? 0, now: spinClock(s.now, m.tick ?? 0), // the one spinner clock (atlas-ui): the snapshot clock moves with the ticker, so a spinner turns between data polls
     expanded: m.ui.expanded, recipient: m.ui.recipient,
-    phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, todos, workers, lead,
+    phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, ...(m.run ? enteredOf(s.channel ?? '', rail.ids, s.phase, m.run.kind) : {}), todos, workers, lead,
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     ...(m.run ? { run: m.run } : {}),

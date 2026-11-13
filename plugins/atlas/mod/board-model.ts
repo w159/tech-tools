@@ -12,7 +12,7 @@
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
 import { cells, chip, DONE_DOUBT, elapsedClock, TODO_METER_W, todoMeter, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
-import { KILLED, sparkOf, wordOf } from './pane/activity';
+import { KILLED, wordOf } from './pane/activity';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */
@@ -257,7 +257,10 @@ export function labelCut(labels: readonly string[], w: number): string[] {
 const spelledWord = (row: BoardRow): string => (markOf(row.state, row.word) === 'doubt' ? KILLED : row.word ?? row.state);
 // Wave 30 (critique 28): one word for a worker that did not finish, `killed`: a closed row, a failed one and its owner read the same.
 // The Board shared with the HUD keeps its item word (`failed`); the side panel's board pane (`pane`) says `killed`.
+/** Wave 34 (critique 33: T2 `blocked` over a bar and a recent post that said `failed`): a row that is not done and whose worker failed reads `failed` on the side panel's board, whatever word the lead gave the row. */
+export const ownerDown = (row: BoardRow): boolean => row.ownerState === 'failed' && row.state !== 'done';
 const plainWord = (row: BoardRow, pane = false): string => {
+  if (pane && ownerDown(row)) return KILLED;
   const w = markOf(row.state, row.word) === 'doubt' ? KILLED : row.word === DONE_RETRIED ? 'done' : row.word === WORKER_DOWN ? row.state : row.word ?? row.state;
   return pane ? wordOf(w) : w;
 };
@@ -265,9 +268,9 @@ const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'd
 
 /** A row's state mark: the `■` in error 203 for a killed worker's row (wave 30: it was the done disc, and read `closed`), the state's own glyph otherwise; a working mark is the accent. */
 function markRun(row: BoardRow, o: BoardOpts): Run {
-  const doubt = markOf(row.state, row.word) === 'doubt';
+  const doubt = markOf(row.state, row.word) === 'doubt' || (!!o.pane && ownerDown(row));
   const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0;
-  const g = stateRun(doubt ? 'failed' : markOf(row.state, row.word), o.ui, frame);
+  const g = stateRun(doubt ? 'failed' : markOf(row.state, row.word), o.ui, frame, !!o.pane); // the side panel's spinner is the braille family
   return row.state === 'running' && !o.ui.ascii ? { ...g, tone: 'accent' } : g;
 }
 
@@ -382,7 +385,7 @@ function paneGeometry(rows: readonly BoardRow[], cols: number): { labelW: number
 }
 
 function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<typeof paneGeometry>): Run[] {
-  const doubt = markOf(row.state, row.word) === 'doubt';
+  const doubt = markOf(row.state, row.word) === 'doubt' || ownerDown(row);
   // Critique 25: a killed worker's row reads `closed` in error red (203) on every surface, glyph and word alike (the ● disc stays: the scorer's truth for the closed dispatch row is completed).
   const mark = markRun(row, o);
   const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), mark, r(' ')];
@@ -392,12 +395,12 @@ function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<type
   if (g.wordW) { const word = clipE(plainWord(row, true), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), doubt ? 'bad' : rowWordTone(row.state, row.word))); }
   // The reason (`owner failed`, `worker killed`) and the age ride the same row as a dim suffix, cut with `…` to the room left: never a row of its own (critique 22: `owner failed` wrapped under T2).
   // Where the owner column leaves no room for it, the reason takes the owner's cell: why a row is open says more than who holds it.
-  const suffix = noteOf(row, false);
+  const suffix = noteOf(row, false).replace(ownerDown(row) ? /^owner failed( · )?/ : /^$/, ''); // the word says it: no `owner failed` after `failed`
   const used = (): number => out.reduce((n, x) => n + cells(x.t), 0);
   if (g.ownerW) {
     const owner = clipE(row.owner, g.ownerW);
     const roomAfter = o.cols - 1 - (used() + PANE_GUTTER + g.ownerW) - PANE_GUTTER;
-    if (suffix && roomAfter < Math.min(cells(suffix), PANE_SUFFIX_MIN + 8)) {
+    if (suffix && !ownerDown(row) && roomAfter < Math.min(cells(suffix), PANE_SUFFIX_MIN + 8)) { // a failed worker's name stays: who failed says more than how long the row has been open
       const w = g.ownerW;
       const reason = clipE(suffix.split(' · ')[0]!, w);
       out.push(gutter, r(reason + ' '.repeat(Math.max(0, w - cells(reason))), 'dim'));
@@ -416,6 +419,13 @@ function paneBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const focus = rows.findIndex((x) => x.focus ?? x.state === 'running');
   const keys = o.motion ? boardKeys(rows) : [];
   return rows.map((row, i): BoardLine => ({ runs: boardRowKeyed(paneRow(row, i === focus, o, g), row, o, keys[i]) }));
+}
+/** Wave 34 (critique 33: a dispatch row stood in the item list under `5 items · 3 dispatches`): the items, then a `dispatches` group of its own for the rows no plan row owns. One column set for both. */
+function paneGroups(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
+  const lines = paneBody(rows, o);
+  const first = rows.findIndex((x) => x.dispatch);
+  if (first < 0) return lines;
+  return [...lines.slice(0, first), { runs: [r(' ')] }, { runs: [r('  dispatches', 'muted', { bold: true })] }, ...lines.slice(first)];
 }
 const boardRowKeyed = (runs: Run[], row: BoardRow, o: BoardOpts, key?: string): Run[] => (key === undefined ? runs : animateRow(runs, key, accentOf(row), o.motion, o.ui, { reveal: false }));
 
@@ -478,7 +488,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const spanMs = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0);
   const nameW = Math.min(o.cols >= 50 ? 20 : 14, Math.max(...ran.map((a) => cells(a.name))));
   const callsLabel = (a: TimelineAgent): string => { const n = (a.calls ?? []).length; return n ? `${n} ${n === 1 ? 'call' : 'calls'}` : ''; }; // the count says what it counts (critique 29: a bare `2 3 4`)
-  const timeW = Math.max(4, ...spans.map((x) => cells(clock((x.to - x.from) / 1000))), ...ran.map((a) => cells(callsLabel(a))));
+  const timeW = Math.max(4, ...spans.map((x) => cells(clock((x.to - x.from) / 1000))));
   const barW = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bars), gap, time, gap, glyph
   if (barW < 8) return [];
   const ascii = o.ui.ascii;
@@ -522,10 +532,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     ];
     if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
     out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
-    if (o.spark) {
-      const sp = sparkOf(a.calls, t0, t0 + total, plotW, ascii).padEnd(barW);
-      out.push({ runs: [r(lead), r(sp, 'dim'), r(' '), r(callsLabel(a).padStart(timeW), 'dim'), r(' ')] }); // 'dim' for a failed agent too: a red floor ran the full width under the killed row
-    }
+    if (o.spark) out.push({ runs: [r(lead), r(' '.repeat(startCell)), r(callsLabel(a), 'dim')] }); // wave 34 (critique 33: tick stems hung under every bar): the calls are a caption under the bar's start, no sparkline
   });
   // The axis: a rule with a tick (`┬`) at every labelled second, the labels under it.
   // Every tick has its label and every label two clear cells after the one before it; a tick whose label would not fit is not drawn (a stub with no legend is left off).
@@ -590,7 +597,7 @@ function subLines(owner: string, note: string, row: BoardRow, cols: number): Boa
  * nothing named the board and the capture script could not find it). That row says the count, so the footer carries only the folds. */
 export function boardLines(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   // Wave 33 (critique 31: one kill stood four times in one board pane): the pane has no closure line under its rows. A failed worker's plan row says `failed` and names its agent, once; the totals, the chart and the recent posts do not repeat it.
-  if (o.pane) return rows.length ? [paneSummary(rows, o), { runs: [r(' ')] }, ...paneBody(rows, o)] : [];
+  if (o.pane) return rows.length ? [paneSummary(rows, o), { runs: [r(' ')] }, ...paneGroups(rows, o)] : [];
   const withRibbon = o.ribbon !== false;
   const rib = lightRibbon(ribbon(o.cols, 'BOARD', o.rich ? '' : `${rows.length} items`, o.ui), o.ui);
   const n = o.folded ?? 0;
