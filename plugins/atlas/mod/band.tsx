@@ -13,7 +13,7 @@ import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
 import { fillHex, hostEnv, LINGER_MS, preImage, spinClock, surfaceHex, uiFromEnv, xtermHex, type Ui, runHex } from './atlas-ui';
-import type { MotionCtx, MotionItem } from './motion';
+import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
@@ -265,6 +265,9 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const plan = bandPlan(b, !!on);
   if (!plan) return panel(els, [], Math.max(1, b.columns), b.ui ?? uiFromEnv());
   const { cols, ui, m, lines } = plan;
+  // State 38: note the spinner frame and the clock the band is drawing right now (motion.ts bandFrame).
+  const kind = runStateOf(m).kind;
+  noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? m.turnSecs ?? m.elapsedSecs ?? 0 : m.ranSecs ?? m.lastRun?.secs ?? null);
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
     if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
