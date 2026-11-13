@@ -17,6 +17,9 @@ const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd(
 const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(leadSpinnerGlyph(0), '@SPIN@') : r));
 const full = { spacers: true, extras: true, close: true };
 
+/** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { const m = /^ {2}[●o] (\d+) done(?: {2}[◇-] (\d+) queued)?\s*$|^ {2}[◇-] (\d+) queued\s*$/.exec(r); return n + (m ? Number(m[1] ?? 0) + Number(m[2] ?? 0) + Number(m[3] ?? 0) : 0); }, 0);
+
 describe('TODO surface goldens (rev 4)', () => {
   for (const [cols, rich, golden] of [[120, false, todo_120], [120, true, todo_120_rich], [80, false, todo_80], [40, false, todo_40]] as const) {
     test(`${cols} columns rich=${rich} equals the design golden`, () => {
@@ -149,7 +152,7 @@ describe('row budget never hides rows silently', () => {
       const rows = text(fitStack({ todos, agents: worldAgents() }, opts(120), h));
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => / Item \d+/.test(l)).length;
-      const hidden = Number(/\+(\d+) more/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) + 0;
+      const hidden = Number(/\+(\d+) more/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) + summaryCount(rows);
       const shownDone = rows.filter((l) => /● Item \d+/.test(l)).length;
       const folded = hidden > 0 ? 0 : Math.max(0, Number(/TODO\s+(\d+)\/\d+/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) - shownDone); // wave 37: finished rows fold into the figure's numerator (critique 17 B4)
       if (rows.some((l) => l.includes('TODO') && !l.includes('SUBAGENTS')) && (shown > 0 || hidden > 0)) expect(shown + hidden + folded).toBe(30);
@@ -345,8 +348,8 @@ describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
     expect(bare.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
     const win = at(7); // then plan rows fold into the title count (every agent keeps its row)
     expect(win.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
-    expect(win.filter((l) => l.includes('queued')).length).toBe(1);
-    expect(win[0]).toMatch(/0\/3 · \+2 more/);
+    expect(win.some((l) => /◇ 3 queued/.test(l)), win.join('\n')).toBe(true); // state 38: the plan rows left out ride one summary row (nothing is open, so all three)
+    expect(win[0]).not.toMatch(/\+\d+ more/);
     expect([tops(win), bottoms(win)]).toEqual([2, 2]);
     const packed = at(5); // then the plan box goes whole before an agent row is windowed
     expect(packed.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);

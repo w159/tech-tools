@@ -40,7 +40,7 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
     expect(lead(STATES.working!)).toMatch(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:42 · todo 3\/5 · ⠋ 2 running/);
     expect(lead(STATES.done!)).toMatch(/^● done · 1:08 · todo 5\/5/);
     expect(lead(STATES.idle!)).toMatch(/^○ idle · last run 1:08 · todo 5\/5/);
-    expect(lead(STATES.blocked!)).toMatch(/^▲ blocked · 1 dispatch open · todo 3\/5/); // wave 37: the one reason table, `n dispatch open`
+    expect(lead(STATES.blocked!)).toMatch(/^▲ blocked · stop refused · todo 3\/5/); // state 38: two reasons only, `stop refused` or `N failed`
   });
   test('the done count is said once, and a gate warning never leads', () => {
     const t = head(model({ cols: 110, ...STATES.done! }));
@@ -50,7 +50,7 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
   });
   test('the blocked reason agrees with the todo: it names the open task and the plan figure is the plan\'s own', () => {
     const t = head(model({ cols: 110, ...STATES.blocked! }));
-    expect(t).toContain('1 dispatch open'); // wave 37: the one blocked reason table
+    expect(t).toContain('stop refused'); // state 38: the one blocked wording
     expect(t).toContain('todo 3/5');
     expect(t).not.toMatch(/stop again/);
   });

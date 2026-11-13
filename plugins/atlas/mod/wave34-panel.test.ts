@@ -1,5 +1,6 @@
 // Wave 34 (critique 33, build 4d8d8eb1): the side panel as a monitor and every number on the board and the cards true. Each test fails on 4d8d8eb1; the defect it comes from is quoted beside it.
 import { describe, expect, test } from 'claude-code/testing';
+import { resetWorkerFacts } from './data/live';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
@@ -212,12 +213,14 @@ describe('item 5: every card number is true (critique 33)', () => {
     return flat(notificationTree('gamma-explorer', 'explorer', 'finished · 0:19', false, ui, false, o as never));
   };
   test('a figure that counts tool calls says `calls`, never `fn`', () => {
+    resetWorkerFacts();
     const row = card({ calls: 3 });
     expect(row).toMatch(/0:19 · 3 calls$/); // 4d8d8eb1: `0:19 · 3 fn` over a worker that reported two functions
     expect(row).not.toMatch(/\bfn\b/);
     expect(card({ calls: 1 })).toMatch(/· 1 call$/);
   });
   test('`fn` appears only for functions the worker reported', () => {
+    resetWorkerFacts();
     expect(card({ calls: 3, fns: 2 })).toMatch(/0:19 · 2 fn$/);
     expect(card({})).toMatch(/0:19 · -$/);
   });

@@ -189,6 +189,20 @@ const isSessionOrigin = (it: BoardItem, sessionId: string): boolean =>
 
 const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+/** State 38 (SUBAGENTS FN lost: alpha's evidence was cut at 200 cells before its `def` lines, so the count read `-`): the functions a worker's tool echo holds are counted on the WHOLE text, and a cut echo keeps the figure as a
+ * `[N functions]` tail that hud.ts outcomeOf reads. An evidence that fits is returned unchanged. */
+const FN_WORD = /\b(?:def|function|func|fn)\s+\w/g;
+export const FN_TAIL = /\s\[(\d+) functions?\]$/;
+export function clipEvidence(s: string, n = 200): string {
+  if (s.length <= n) return s;
+  const total = (s.match(FN_WORD) ?? []).length;
+  const head = clip(s, n);
+  const seen = (head.match(FN_WORD) ?? []).length;
+  if (total <= seen || !/->\s*(?:first|last)\s+\d+\s+lines?\b|->\s*lines?\s+\d|->\s*\d{1,4}\s+(?:def|function|func|fn|class|import)\b/i.test(s)) return head;
+  const tail = ` [${total} ${total === 1 ? 'function' : 'functions'}]`;
+  return `${clip(s, n - tail.length)}${tail}`;
+}
+
 /**
  * Contract groups (todoPhases order) hold only phased items or phase-less session-origin items ('unsorted');
  * open advisor notes form one final 'advisor' group (the pane keeps it collapsed). Live items first, empty groups dropped.
@@ -197,7 +211,7 @@ export function groupTodos(items: TodoItem[], contract: Contract, sessionId: str
   const order: (PhaseId | 'unsorted')[] = [...contract.todoPhases, 'unsorted'];
   const rank: Record<string, number> = { in_progress: 0, pending: 1, completed: 2 };
   const row = (it: BoardItem) => ({
-    id: it.id, content: clip(it.content, 160), status: it.status, owner: it.owner ?? null, evidence: it.evidence ? clip(it.evidence, 200) : null,
+    id: it.id, content: clip(it.content, 160), status: it.status, owner: it.owner ?? null, evidence: it.evidence ? clipEvidence(it.evidence) : null,
     live: isLive(it, sessionId), ...(it.origin ? { origin: it.origin } : {}),
     // another session's open backlog row: marked so the groups-only count (routeCounts) can leave it out like planCounts does
     ...(it.session_id && it.session_id !== sessionId ? { session_id: it.session_id } : {}),

@@ -5,7 +5,7 @@
 import { groupOpenCount } from '../gates';
 import { textWidth } from '../theme';
 import type { GateGroup } from '../pane/sidebar-types';
-import { clip, type UiState } from '../atlas-ui';
+import { elapsedClock, type UiState } from '../atlas-ui';
 import { todoState } from './todos';
 import { plannedText, type Route } from './core';
 
@@ -124,36 +124,26 @@ export function stopRefusal(groups: readonly GateGroup[], block: string): GateGr
 	return groups.map((g) => (g.id === 'completion' ? { ...g, lines: [...g.lines.filter((l) => l.id !== STOP_LINE), line] } : g));
 }
 
-/** The open dispatch row's title, in cells, inside `dispatch <title> open`. */
-const DISPATCH_TITLE_MAX = 22;
-const clipCells = (t: string, n: number): string => clip(t.replace(/\s+/g, ' ').trim(), n);
-
-/** Longest joined reason the band spells out; past it the count stands in (`3 reasons`). */
-const REASON_MAX = 28;
-
 const OPEN_GATE = /\bopen\b|todos? drained/;
 /** Every refusing gate is about open work (`1 dispatch row open`, `todos drained`) or has no words (`stop refused`, `retry stop`): the open rows themselves are the reason (wave 33), named by the band as `1 dispatch open`. */
 export const openWorkOnly = (stopGates: readonly string[]): boolean => stopGates.every((g) => OPEN_GATE.test(g) || g === 'stop refused' || g === 'retry stop');
 
+/** The ONE blocked wording (state 38): a blocked band and a blocked card print exactly this and nothing else. Only two reasons exist: `stop refused` (the Stop hook refused, or the store holds an open dispatch row that Stop will refuse on) and, otherwise,
+ * `N failed`. `secs` (the run clock) rides after it (`stop refused 0:37`). Neither reason: '' (a bare `blocked`). */
+export const STOP_REFUSED = 'stop refused';
+export function blockedText(o: { refused: boolean; failed: number; secs?: number | undefined }): string {
+	const why = o.refused ? STOP_REFUSED : o.failed > 0 ? `${o.failed} failed` : '';
+	return why !== '' && o.secs !== undefined && Number.isFinite(o.secs) ? `${why} ${elapsedClock(o.secs)}` : why;
+}
+
 /** What the store holds open right now, for a reason that must agree with the todo figure beside it: `allDone`: the plan reads n/n; `openLeft`: open rows past the plan's own. */
 export type OpenNow = { allDone: boolean; openLeft: number };
 
-/** Why a band is blocked, after `blocked:` and in plain words: the lead declared it (`needs you`), or the Stop gate refused the stop and said why
- * (`1 todo open`, `team gate`, `team gate, todos drained`). `long` is the whole reason; `short` is the same fact in fewer cells for a crowded row (a named dispatch row keeps its T-id and drops its title:
- * `dispatch T2 open`), so the todo figure and the agent counts stay beside it (critique 19 Band 2: the 61-cell band dropped both for the title). */
-export function blockReasons(declared: boolean, stopGates: readonly string[], dispatchTitle?: string, now?: OpenNow): { long: string; short: string } {
-  // The open row Stop refused on is a dispatch row the plan does not list: name it by its plan row's title (`dispatch T2 read ghost.py open`) instead of a count the band's todo figure would have to invent.
-  const named = dispatchTitle ? `dispatch ${clipCells(dispatchTitle, DISPATCH_TITLE_MAX)} open` : '';
-  const namedShort = dispatchTitle ? `dispatch ${/^T\d+\b/.exec(dispatchTitle.trim())?.[0] ?? clipCells(dispatchTitle, 8)} open` : '';
-  // Critique 17 A4: a declared block keeps naming the open row Stop refused on, so the reason does not flip to `needs you` when the lead's own header arrives (stoprun-150-3, f0097 to the board tab).
-  if (declared && !(named && stopGates.some((g) => OPEN_GATE.test(g)))) return { long: 'needs you', short: 'needs you' };
-  if (stopGates.length === 0) return { long: 'needs you', short: 'needs you' };
-  // Critique 18 A1: with the plan full and no dispatch row to name, `1 todo open` contradicts `todo 5/5` (stoprun-110-562576ed-1 f0113): say what is true now.
-  const stale = !named && now?.allDone ? (now.openLeft > 0 ? 'stop refused' : 'retry stop') : '';
-  const gates = stopGates.reduce<string[]>((acc, g) => { const w = OPEN_GATE.test(g) ? named || stale || g : g; return acc.includes(w) ? acc : [...acc, w]; }, []);
-  const joined = gates.join(', ');
-  const one = textWidth(joined) <= REASON_MAX || (named && gates.length === 1) ? joined : `${gates.length} reasons`;
-  return { long: one, short: named && gates.length === 1 && one === named ? namedShort : one };
+/** Why a run is blocked, in plain words: the ONE two-reason table (blockedText). `stop refused` when a gate refused the Stop, else `N failed` (`failed`: the failed workers the caller counts), else the bare `run blocked`.
+ * `dispatchTitle` and `now` stay in the signature for callers that still pass them; the reason never names a row, a todo or a gate any more. */
+export function blockReasons(_declared: boolean, stopGates: readonly string[], _dispatchTitle?: string, _now?: OpenNow, failed = 0): { long: string; short: string } {
+	const why = blockedText({ refused: stopGates.length > 0, failed }) || 'run blocked';
+	return { long: why, short: why };
 }
 
 /** The lead's reply waits on the person (critique 18 A4): it says so in words (`Waiting on your decision`, `Choose one:`, `say so and I'll write it`). Then the band reads

@@ -64,7 +64,8 @@ describe('B2: every row that fits is drawn, only the rest is folded', () => {
     const shown = rows.filter((r) => /^[▸ ]\s*\S T\d /.test(r)).length;
     const counted = /\+(\d+) more/.exec(rows[0]!);
     const done = /· (\d+) done/.exec(rows[0]!);
-    expect(shown + Number(counted?.[1] ?? 0) + Number(done?.[1] ?? 0)).toBe(5); // shown, counted on the title or folded as done: the whole plan
+    const summary = rows.map((r) => /^ {2}(?:● (\d+) done)?\s*(?:◇ (\d+) queued)?\s*$/.exec(r)).find((m) => m && (m[1] || m[2]));
+    expect(shown + Number(counted?.[1] ?? 0) + Number(done?.[1] ?? 0) + Number(summary?.[1] ?? 0) + Number(summary?.[2] ?? 0)).toBe(5); // shown, counted on the title, folded as done or on the summary row: the whole plan
     expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);
     expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] \S+-explorer/.test(r))).toHaveLength(4);
     expect(rows.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(2);

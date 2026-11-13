@@ -16,6 +16,13 @@ import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, LEAD_FRAMES, 
  * HUD's circles `◐◓◑◒` step on the same beat (`sharedSpinFrame(now) % 4` would restart at the wrap, so they count the same beats unwrapped: `Math.floor(now / SPINNER_MS)`). */
 export const sharedSpinFrame = (now: number): number => ((Math.floor(now / SPINNER_MS) % LEAD_FRAMES.length) + LEAD_FRAMES.length) % LEAD_FRAMES.length;
 
+/** State 38: the spinner frame and the clock seconds the band just drew, so a second surface (the host's own status row, the run card) can print the same pair on the same render. The band render notes them; a reader gets
+ * the last pair, or null before the band was ever drawn. `secs` is null where the band drew no clock. Plain module state: no `$`, no timer. */
+let bandNote: { frame: number; secs: number | null } | null = null;
+export function noteBandFrame(frame: number, secs: number | null): void { bandNote = { frame, secs: secs !== null && Number.isFinite(secs) ? Math.max(0, Math.floor(secs)) : null }; }
+export function bandFrame(): { frame: number; secs: number | null } | null { return bandNote === null ? null : { ...bandNote }; }
+export const forgetBandFrame = (): void => { bandNote = null; };
+
 /** A frame every 100 ms, the spinner's rate: the motion timer's period and the length of one beat of a transition. */
 export const MOTION_FRAME_MS = 100;
 /** The beats a transition draws. Every beat is a held step of its own: a 256-colour run steps one palette colour per beat (at most

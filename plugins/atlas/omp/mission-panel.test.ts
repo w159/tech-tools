@@ -169,9 +169,10 @@ test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 
-test("blocked: `▲ blocked · needs you` with the amber mark instead of the phase", () => {
+test("blocked: a bare `▲ blocked` (state 38: no `needs you`) with the amber mark instead of the phase", () => {
 	const m = model({ blocked: true, team: "fix/low", workers: [] });
-	expect(head(m)).toContain("▲ blocked · needs you");
+	expect(head(m)).toContain("▲ blocked");
+	expect(head(m)).not.toContain("needs you");
 	expect(renderPanel(m)[0]).toContain("38;2;255;95;95"); // the error tone (203): blocked is the one red state
 });
 

@@ -256,7 +256,7 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  const h = healthOf(snap)
  // Wave 35 (critique 34: a 179 `done · 1 failed · 1 dispatch open` over a 203 `▲ blocked` band): an open dispatch row with nothing running is what the band calls blocked (dispatchHeld), so the card says it too, Stop refusal or not.
  const blocked = superseded || (h.open > 0 && h.idle)
- const verdict = lead.phase === 'done' ? verdictOf(h.failed, h.open, blocked) : null // wave 33: a done chip over a failed worker or an open dispatch row never reads `all finished`
+ const verdict = lead.phase === 'done' ? verdictOf(h.failed, h.open, blocked, runSecs()) : null // wave 33: a done chip over a failed worker or an open dispatch row never reads `all finished`
  // Wave 35 (critique 34: `run 5/5 done` and then `done 5/5`): the run's finish card is placed, so the lead's bare `done 5/5` chip says nothing new and draws no row.
  // Wave 36 (critique 35: `▌ done complete` stacked under the run card): a sentence that only says the run is done (`complete`, `all finished`) is the same line again.
  const twin = lead.phase === 'done' && !verdict && (!lead.sentence || BARE_DONE.test(lead.sentence)) && !superseded && runCardPlaced()

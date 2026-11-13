@@ -133,3 +133,26 @@ export const withOwnerStates = <T extends { owner?: string }>(items: readonly T[
     const o = it.owner ? ownerOutcome(states, it.owner) : undefined; // the owner's LATEST instance (`name #2` after a kill), as the HUD reads it (critique 19 A3)
     return o?.state ? { ...it, ownerState: o.state, ...(o.retried ? { retried: true } : {}) } : { ...it };
   });
+
+/** The one agent tally (state 38): how many agents are in each state word. The SUBAGENTS title (`2 done · 1 failed`) and the band's worker segment (`● 2 done · ■1`) both read their counts from here, so no two surfaces count the same agents twice. */
+export type Tally = Record<UiState, number>;
+export function tallyOf(states: readonly UiState[]): Tally {
+  const t: Tally = { running: 0, blocked: 0, failed: 0, waiting: 0, queued: 0, done: 0 };
+  for (const s of states) t[s] += 1;
+  return t;
+}
+
+/** State 38 (critique: a worker card said `0:13` and no count while its SUBAGENTS row said `0:15` and `3`): the TIME and CALLS cells the SUBAGENTS table prints for a worker, noted by the table as it draws. Every worker card reads
+ * them from here, so a card and its row cannot disagree; `-` only where the table cell is `-`. */
+export type WorkerFacts = { time: string; calls: string };
+const FACTS = new Map<string, WorkerFacts & { at: number }>();
+const FACTS_MS = 3000; // a cell older than this is from a table that is no longer drawn
+export function noteWorkerFacts(names: readonly (string | undefined)[], time: string, calls: string): void {
+  for (const n of names) if (n) FACTS.set(n, { time, calls, at: Date.now() });
+  if (FACTS.size > 500) for (const k of [...FACTS.keys()].slice(0, 250)) FACTS.delete(k);
+}
+export function workerFacts(name: string): WorkerFacts | undefined {
+  const f = FACTS.get(name);
+  return f && Date.now() - f.at < FACTS_MS ? { time: f.time, calls: f.calls } : undefined;
+}
+export const resetWorkerFacts = (): void => FACTS.clear();

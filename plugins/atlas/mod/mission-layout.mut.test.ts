@@ -31,7 +31,7 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
     const live = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, total: 5, done: 0, openWork: 7, openDispatch: 2, todoBlocked: 0, ctx: 0.07, workers: [{ name: 'gamma-explorer', state: 'running', secs: 0 }] }));
     expect(live(105)).toBe(live(93));
     expect(live(105)).not.toMatch(/ {2}/); // no multi-space separator
-    expect(live(105)).toContain('todo 0/5 · 2 dispatches open · ⠋ 1 running');
+    expect(live(105)).toContain('todo 0/5 · ⠋ 1 running'); // state 38: a running band says nothing of its workers' open dispatch rows
   });
   test('critique 9: no gauge track below 120 columns, the same facts as figures', () => {
     for (const cols of [100, 110, 119]) expect(band(worldModel(cols, ui, { maxRows: 1 }))).not.toMatch(/[░█▌▏▎▍▋▊▉]/);

@@ -9,6 +9,7 @@ import { CARD_W, cardBarTone, toastRuns } from '../panel-layout'
 import { cells } from '../atlas-ui'
 import { clipE as clip, ELLIPSIS } from '../board-model'
 import { displayName } from '../hud'
+import { workerFacts } from '../data/live'
 import { fitText } from '../theme'
 import { wordOf } from '../pane/activity'
 
@@ -162,11 +163,15 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 export const FINISH_W = 56
 export const finishWidth = (cols: number): number => Math.max(24, Math.min(FINISH_W, cols > 0 ? cols - 4 : FINISH_W))
 const TIME_RE = /\b\d+:\d\d(?::\d\d)?\b/
-export interface FinishOpts { cols?: number; fade?: number; /** The worker's tool calls: `· 3 calls` after the time (wave 34, critique 33: `3 fn` counted tool calls, and the worker had reported 2 functions). Absent: the time alone. */ calls?: number; /** The functions the worker reported: `· 2 fn`. Only a count taken from what the worker reported may say `fn`; nothing in the mod's inputs carries one today. */ fns?: number; /** One more fact after the name (the run card's `5/5 done`). */ fact?: string; /** The run's own finish card: no name, the fact is what follows the state word. */ run?: boolean }
+export interface FinishOpts { /** The worker's name as the SUBAGENTS row keys it: the card reads its TIME and CALLS cells (data/live workerFacts). */ who?: string; cols?: number; fade?: number; /** The worker's tool calls: `· 3 calls` after the time (wave 34, critique 33: `3 fn` counted tool calls, and the worker had reported 2 functions). Absent: the time alone. */ calls?: number; /** The functions the worker reported: `· 2 fn`. Only a count taken from what the worker reported may say `fn`; nothing in the mod's inputs carries one today. */ fns?: number; /** One more fact after the name (the run card's `5/5 done`). */ fact?: string; /** The run's own finish card: no name, the fact is what follows the state word. */ run?: boolean }
 
-function finishRow(state: 'done' | 'failed', name: string, fact: string, time: string, ui: Ui, o: FinishOpts): RenderElement {
+function finishRow(state: 'done' | 'failed', name: string, fact: string, time0: string, ui: Ui, o: FinishOpts): RenderElement {
  // Wave 37 (critique 36: beta's card with no count beside gamma's `3 calls`): every worker card ends in the same flush-right calls column, a dash where the count is unknown. The run's own card has no such column.
- const count = o.run ? '' : o.fns !== undefined && o.fns > 0 ? `${o.fns} fn` : o.calls !== undefined && o.calls > 0 ? `${o.calls} ${o.calls === 1 ? 'call' : 'calls'}` : '-'
+  let time = time0
+  // State 38: a worker card prints the TIME and CALLS cells of its SUBAGENTS row (data/live workerFacts) whenever the table has drawn that worker.
+ const facts = o.run || !o.who ? undefined : workerFacts(o.who)
+ const count = o.run ? '' : facts ? (facts.calls === '-' ? '-' : `${facts.calls} ${facts.calls === '1' ? 'call' : 'calls'}`) : o.fns !== undefined && o.fns > 0 ? `${o.fns} fn` : o.calls !== undefined && o.calls > 0 ? `${o.calls} ${o.calls === 1 ? 'call' : 'calls'}` : '-'
+ if (facts) time = facts.time
  const figure = time && count ? `${time} ${ui.ascii ? '|' : '·'} ${count}` : time || count // `0:12 · 3 calls`, `0:12 · -`: the run time, then what the figure counts
  const w = finishWidth(o.cols ?? 0)
  const g = stateRun(state, ui)
@@ -197,8 +202,8 @@ const timeOf = (text: string): string => {
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false, o: FinishOpts = {}): RenderElement {
  const text = stripStatus(outcome)
  if (o.run) return finishRow('done', o.fact ?? '', '', timeOf(text), ui, o)
- if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, o)
- return finishRow('done', displayName(name, role), o.fact ?? '', timeOf(text), ui, o) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
+ if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, { ...o, who: name })
+ return finishRow('done', displayName(name, role), o.fact ?? '', timeOf(text), ui, { ...o, who: name }) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */

@@ -8,14 +8,14 @@ import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
 import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from './data/todos';
-import { planProgress } from './hud';
+import { agentTally, hudAgents, planProgress } from './hud';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
 import { fillHex, hostEnv, LINGER_MS, preImage, spinClock, surfaceHex, uiFromEnv, xtermHex, type Ui, runHex } from './atlas-ui';
-import type { MotionCtx, MotionItem } from './motion';
+import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
-import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
+import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
@@ -26,7 +26,7 @@ import { textWidth } from './theme';
 export { planRows } from './mission-layout';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; /** Wave 36 (debounce): false holds back a blocked verdict that is not confirmed yet (register.ts stepBlocked); absent or true: the band reads it as computed. */ blockedConfirmed?: boolean; /** The HUD draws an agent running (listed, resumed or queued): the band reads working whatever the host's turn flag says. */ agentsRunning?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type BandModel = { /** State 38: the word held for 1 s before idle (band-motion stepKind). */ heldKind?: BandKind; snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; /** Wave 36 (debounce): false holds back a blocked verdict that is not confirmed yet (register.ts stepBlocked); absent or true: the band reads it as computed. */ blockedConfirmed?: boolean; /** The HUD draws an agent running (listed, resumed or queued): the band reads working whatever the host's turn flag says. */ agentsRunning?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 // `team` (omp: the team record's `<class>/<effort>`) is the header's scope label; `leadName` (omp: `lead-<sid6>`)
 // names the lead in the message row. Both absent: not shown / `lead`. `ui` (theme, ASCII, colour depth) defaults to the
 // environment; `rich` (ATLAS_BAND_RICH=1) draws the tall band when the rows allow. `workersInHud`: the HUD's Subagents
@@ -150,6 +150,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     busy: !!b.agentsRunning || s.squad.some((a) => a.name !== 'lead' && a.state === 'running') || (b.working === false ? false : !!b.working || leadBusy(s) || planBusy(plan, owners)),
     queuedIdle: true,
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
+    tally: agentTally(hudAgents(b.live, s.squad, queuedMembers(s)), ownTodos(s.todos ?? [], s.sessionId)), // state 38: the SUBAGENTS title's own counts
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
@@ -160,7 +161,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
     turnSecs: b.workSecs, ranSecs: b.ranSecs, ...(b.restSecs !== undefined ? { restSecs: b.restSecs } : {}), ...(closed ? { closed } : {}),
-    workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.motion ? { motion: b.motion } : {}),
+    workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.heldKind ? { heldKind: b.heldKind } : {}), ...(b.motion ? { motion: b.motion } : {}),
   };
 }
 
@@ -264,6 +265,9 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const plan = bandPlan(b, !!on);
   if (!plan) return panel(els, [], Math.max(1, b.columns), b.ui ?? uiFromEnv());
   const { cols, ui, m, lines } = plan;
+  // State 38: note the spinner frame and the clock the band is drawing right now (motion.ts bandFrame).
+  const kind = runStateOf(m).kind;
+  noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? m.turnSecs ?? m.elapsedSecs ?? 0 : m.ranSecs ?? m.lastRun?.secs ?? null);
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
     if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];

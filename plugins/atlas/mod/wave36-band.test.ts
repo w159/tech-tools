@@ -214,9 +214,10 @@ describe('4. the TODO HUD: one state per failed row, one count, one anchored chi
   const plan = (): TodoItem[] => PLAN.map((c, i) => ({ id: `t${i + 1}`, content: c, status: i < 2 ? 'completed' : 'pending', ...(i < 2 ? { owner: NAMES[i]! } : {}) }) as unknown as TodoItem);
   const ag = (state: string, ui_: string): hud.HudAgent => ({ name: 'explorer-7a37', role: 'explorer', state, ui: ui_ as never, model: 'haiku', since: NOW_MS - 5000, task: 'read delta.py' } as never);
   const rowsFor = (a: hud.HudAgent): string[] => hud.hudLines({ todos: ownTodos(plan()), agents: [a] }, { cols: 93, maxRows: 18, ui, now: NOW_MS }).map((r) => r.map((x) => x.t).join(''));
-  test('the `└ … queued` child row hangs under one plan row while its worker is to come, and is deleted once the worker is dead', () => {
+  test('state 38: no `└ … queued` child row is ever drawn, whether the worker is to come or dead', () => {
     const queued = rowsFor(ag('queued', 'queued'));
-    expect(queued.filter((r) => r.includes('└')), 'a queued worker has one child line').toHaveLength(1);
+    expect(queued.filter((r) => r.includes('└')), 'a queued worker has no child line').toHaveLength(0);
+    expect(queued.join('\n')).not.toMatch(/explorer-7a37 queued/);
     const dead = rowsFor(ag('failed', 'failed'));
     expect(dead.filter((r) => r.includes('└')), 'a dead worker has none').toHaveLength(0);
     expect(dead.join('\n')).not.toMatch(/explorer-7a37 queued/);

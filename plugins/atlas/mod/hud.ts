@@ -3,8 +3,8 @@
 // rows, fits them to the row budget and paints Runs as Claude Code Segments. Pure: todos and agents in, Segment rows out.
 import type { SquadAgent, TodoItem } from './contract';
 import { descriptionName } from './data/orchestration';
-import { liveState, workerUiState, type LiveWorker } from './data/live';
-import { isPlanItem } from './data/todos';
+import { liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from './data/live';
+import { FN_TAIL, isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
 import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
@@ -228,7 +228,7 @@ export function outcomeOf(text: string): string {
   if (echo) {
     const result = echo[3]!.replace(/`/g, '').replace(/^["']+|["']+$/g, '');
     if (!DUMP.test(result)) return JUNK.test(result) ? '' : plain(result, '');
-    const n = (result.match(FUNCTION) ?? []).length;
+    const n = Math.max((result.match(FUNCTION) ?? []).length, Number(FN_TAIL.exec(result)?.[1] ?? 0));
     return n > 0 ? `${n} ${n === 1 ? 'function' : 'functions'}` : '';
   }
   return JUNK.test(body) ? '' : plain(body, '');
@@ -289,7 +289,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -307,13 +307,19 @@ export function namedAgents(todos: readonly TodoItem[], agents: readonly HudAgen
   return [...new Set(names)].map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }));
 }
 
+/** The agents the SUBAGENTS block lists (queued dispatches included): while one runs, all; after the wave only the done and failed. The one list the table, its title and the band's worker segment count. */
+export function shownAgents(agents: readonly HudAgent[], todos: readonly TodoItem[]): HudAgent[] {
+  const all = [...agents, ...namedAgents(todos, agents)];
+  return all.some(isRunning) ? all : all.filter((a) => a.state === 'failed' || a.state === 'done');
+}
+/** The agent tally the SUBAGENTS title prints (queued are child lines of the plan, not agents): `tallyOf` over the listed agents' state words. */
+export const agentTally = (agents: readonly HudAgent[], todos: readonly TodoItem[]): Tally => tallyOf(shownAgents(agents, todos).filter((a) => a.state !== 'queued' && a.ui !== 'queued').map((a) => a.ui ?? workerUiState(a.state)));
+
 function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agents: AgentRow[] }; o: SurfaceOpts } {
   const plan = input.todos.filter(isPlanItem);
   // The block stays after the wave: a clean finish keeps its done rows as a stop run keeps its failed one, until the roster is cleared (critique 17: live-150-a4fad2f9-3/tab-team.png
   // lost the block after DONE while the stop runs kept all three rows). Only an agent that is neither running, done nor failed (parked) is left out.
-  const all = [...input.agents, ...namedAgents(input.todos, input.agents)];
-  const running = all.some(isRunning);
-  const shown = running ? all : all.filter((a) => a.state === 'failed' || a.state === 'done');
+  const shown = shownAgents(input.agents, input.todos);
   const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.now) : (resetAgentSeq(), []); // no agent listed: the dispatch order starts over with the next run
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };

@@ -71,12 +71,13 @@ describe('fitStack with the plan folded', () => {
     const closed = (rows: string[]): number => rows.filter((l) => l.startsWith('+-') && l.endsWith('+') && !l.includes('[ATLAS]')).length; // the ASCII bottom rule
     const nine = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 9).map((r) => runsString(r));
     expect(nine.length).toBe(9);
-    expect(nine[0]).toMatch(/TODO .*0\/3 · \+1 more/); // the plan folds onto its title in one wording
+    expect(nine.some((l) => /o 2 queued/.test(l))).toBe(true); // state 38: the rows left out ride ONE summary row, not the title
+    expect(nine[0]).not.toMatch(/\+\d+ more/);
     expect(nine.filter((l) => /agent\d/.test(l)).length).toBe(3);
     expect(closed(nine)).toBe(2);
     const eight = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 8).map((r) => runsString(r));
-    expect(eight[0]).toMatch(/TODO .*0\/3 · \+2 more/);
-    expect(eight.filter((l) => /item\d/.test(l)).length).toBe(1);
+    expect(eight.some((l) => /o 3 queued/.test(l))).toBe(true);
+    expect(eight.filter((l) => /item\d/.test(l)).length).toBe(0);
     expect(eight.filter((l) => /agent\d/.test(l)).length).toBe(3);
     expect(eight.some((l) => /not shown/.test(l))).toBe(false);
     const five = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 5).map((r) => runsString(r)); // no room for a plan box: it goes whole, the three agents stay
