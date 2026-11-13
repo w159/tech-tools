@@ -1,5 +1,6 @@
 // Wave 36: the SUBAGENTS table's CALLS column and the finish card's `· N calls` read the same figure (the live worker's call list), so a finished worker never shows two counts.
 import { describe, expect, test } from 'claude-code/testing';
+import { resetWorkerFacts } from './data/live';
 import type { Ui } from './atlas-ui';
 import { hudPhases } from './band';
 import type { SquadAgent } from './contract';
@@ -47,6 +48,7 @@ function tableRow(snap: LiveSnapshot): string {
 
 describe('CALLS column and finish card share one count', () => {
   test('a finished worker with 5 calls: the table row ends the CALLS cell in 5 and the card reads `· 5 calls`', () => {
+    resetWorkerFacts();
     const prev = snapshot('running', CALLS);
     const next = snapshot('finished', CALLS);
     const fw = finishedWorkers(prev, next);
@@ -59,6 +61,7 @@ describe('CALLS column and finish card share one count', () => {
     expect(row.split(/\s+/)).toContain(String(CALLS.length));
   });
   test('no calls seen: the card prints no count and the table cell stays `-`', () => {
+    resetWorkerFacts();
     const prev = snapshot('running', undefined);
     const next = snapshot('finished', undefined);
     const fw = finishedWorkers(prev, next);

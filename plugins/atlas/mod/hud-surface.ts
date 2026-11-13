@@ -4,7 +4,7 @@
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
-import { tallyOf } from './data/live';
+import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
@@ -614,10 +614,12 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
     const word: Run = t(a.state, failed ? (ui.ascii ? 'text' : 'bad') : done ? (ui.ascii ? 'text' : 'ok') : a.state === 'running' ? 'text' : 'sub');
     const stateCell: Run[] = [mark, t(' '), word, t(' '.repeat(Math.max(0, STATE - 2 - cells(a.state))))];
     const time = a.elapsed && a.elapsed !== NONE ? a.elapsed : NONE;
+    const callsCell = a.calls !== undefined && a.calls > 0 ? String(a.calls) : NONE;
+    noteWorkerFacts([flat(a.name), flat(a.id ?? '')], time, callsCell); // the worker cards print these two cells (data/live workerFacts)
     const tone: Run['tone'] = done ? 'muted' : 'sub';
     const row: Run[] = [
       t(' '.repeat(LEAD)), cell(flat(a.name) || flat(a.id ?? '') || 'agent', nameW, failed ? (ui.ascii ? 'text' : 'bad') : done ? 'muted' : 'text'), t('  '), ...stateCell, t(' '), right(time, TIME, tone),
-      ...(showCalls ? [t(' '), right(a.calls !== undefined && a.calls > 0 ? String(a.calls) : NONE, CALLS, tone)] : []),
+      ...(showCalls ? [t(' '), right(callsCell, CALLS, tone)] : []),
       ...(showFn ? [t(' '), right(fnOf(a), FN, tone)] : []),
       ...(showLast ? [t('  '), cell(lastOf(a), cols - 1 - lastAt, 'muted')] : []),
     ];

@@ -1,5 +1,6 @@
 // Wave 37 (critique 36, build 9a2e6575): truthful, uniform cards, board and side panel. Each test names the 9a2e6575 defect it comes from.
 import { describe, expect, test } from 'claude-code/testing';
+import { resetWorkerFacts } from './data/live';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
@@ -89,6 +90,7 @@ describe('step 1: one done line (critique 36: `◆ ATLAS ● done 5/5 · 3 worke
 
 describe('step 2: uniform cards (critique 36: beta without a count beside gamma with `3 calls`)', () => {
   test('every worker card ends in the calls column: the count, or a dash when it is unknown', async () => {
+    resetWorkerFacts();
     forgetPlaced();
     const ids: string[] = [];
     await placeFinished(engine(ids), runningAt(NOW - 3000, NAMES), cleanAt(NOW - 1000, NAMES, { 'gamma-explorer': [1, 2, 3], 'alpha-explorer': [1] }));
@@ -101,6 +103,7 @@ describe('step 2: uniform cards (critique 36: beta without a count beside gamma 
     forgetPlaced();
   });
   test('a failed card has the column too', () => {
+    resetWorkerFacts();
     const card = flat(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui, false, { cols: 80 }));
     expect(card).toMatch(/■ failed {2}ghost-explorer\s+0:06 · -$/);
     expect(flat(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui, false, { cols: 80, calls: 2 }))).toMatch(/0:06 · 2 calls$/);

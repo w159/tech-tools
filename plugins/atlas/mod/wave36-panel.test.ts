@@ -1,5 +1,6 @@
 // Wave 36 (critique 35, build 28d53608): one state per item at every width, one clock, one done line and a status view with real events. Each test names the 28d53608 defect it comes from.
 import { describe, expect, test } from 'claude-code/testing';
+import { resetWorkerFacts } from './data/live';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
@@ -189,6 +190,7 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
     forgetPlaced();
   });
   test('every worker finish card prints its calls, the late count included', async () => {
+    resetWorkerFacts();
     forgetPlaced();
     const ids: string[] = [];
     await placeFinished(engine(ids), runningAt(NOW - 3000), cleanAt(NOW - 2000)); // the cards are placed before the calls are on the board
@@ -201,6 +203,7 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
     forgetPlaced();
   });
   test('a count nobody knows reads `-` on its card, in the same column as the others', async () => {
+    resetWorkerFacts();
     forgetPlaced();
     const ids: string[] = [];
     await placeFinished(engine(ids), runningAt(NOW - 3000), cleanAt(NOW - 1000, { 'beta-explorer': [1, 2, 3, 4] }));

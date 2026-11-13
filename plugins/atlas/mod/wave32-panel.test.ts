@@ -1,6 +1,7 @@
 // Wave 32 (critique 30, build a839663a): the side panel's route, channel, team and board tabs, and the transcript cards.
 // Every test fails on a839663a; the defect it comes from is quoted beside it.
 import { describe, expect, test } from 'claude-code/testing';
+import { resetWorkerFacts } from './data/live';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
@@ -178,6 +179,7 @@ describe('item 6: the finish card (critique 30: `done ... explorer finished`, a 
     return row;
   };
   test('`▌ ◆ ATLAS  ● done  alpha-explorer  ...  0:11 · 2 calls`: done once, the time then its calls', async () => {
+    resetWorkerFacts();
     const row = await card();
     expect(row).toMatch(/^▌ ◆ ATLAS\s+● done\s+alpha-explorer\s+0:11 · 2 calls$/); // wave 34: the figure counts tool calls, so it says calls
     expect(row).not.toContain('finished');

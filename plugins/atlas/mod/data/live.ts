@@ -141,3 +141,18 @@ export function tallyOf(states: readonly UiState[]): Tally {
   for (const s of states) t[s] += 1;
   return t;
 }
+
+/** State 38 (critique: a worker card said `0:13` and no count while its SUBAGENTS row said `0:15` and `3`): the TIME and CALLS cells the SUBAGENTS table prints for a worker, noted by the table as it draws. Every worker card reads
+ * them from here, so a card and its row cannot disagree; `-` only where the table cell is `-`. */
+export type WorkerFacts = { time: string; calls: string };
+const FACTS = new Map<string, WorkerFacts & { at: number }>();
+const FACTS_MS = 3000; // a cell older than this is from a table that is no longer drawn
+export function noteWorkerFacts(names: readonly (string | undefined)[], time: string, calls: string): void {
+  for (const n of names) if (n) FACTS.set(n, { time, calls, at: Date.now() });
+  if (FACTS.size > 500) for (const k of [...FACTS.keys()].slice(0, 250)) FACTS.delete(k);
+}
+export function workerFacts(name: string): WorkerFacts | undefined {
+  const f = FACTS.get(name);
+  return f && Date.now() - f.at < FACTS_MS ? { time: f.time, calls: f.calls } : undefined;
+}
+export const resetWorkerFacts = (): void => FACTS.clear();
