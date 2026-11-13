@@ -301,3 +301,21 @@ describe('step 8: the band frame round trip', () => {
     expect(f.band).toContain('0:42');
   });
 });
+
+describe('follow-up B: the 110-column HUD keeps every running plan row', () => {
+  // live-110-851e5b41-1 f0030-f0045: `0/5 · +4 more` over ONE drawn row for 7 s, three agents running, beside a full SUBAGENTS table (the slot's budget there was 10, the HUD's 9 rows).
+  for (const screen of [26, 28]) {
+    test(`110x${screen}: five plan rows, three running: all three running rows render and SUBAGENTS folds to its title`, () => {
+      const f = frameOf(RUNNING, 110, screen);
+      const hud = f.hud.map((l) => l.trimEnd());
+      expect(hud.filter((l) => /T[123] read (alpha|beta|gamma)\.py/.test(l)), hud.join('\n')).toHaveLength(3);
+      expect(hud.some((l) => /\+\d+ more/.test(l) && /TODO/.test(l)), hud.join('\n')).toBe(false);
+      expect(hud.some((l) => /SUBAGENTS/.test(l) && /3 running/.test(l)), hud.join('\n')).toBe(true);
+      expect(hud.some((l) => /^\s+alpha-explorer\s+\S+ running/.test(l)), hud.join('\n')).toBe(false); // the table gave way, not a running plan row
+    });
+  }
+  test('with room for both, SUBAGENTS keeps its table (screen 40)', () => {
+    const hud = frameOf(RUNNING, 110, 40).hud.map((l) => l.trimEnd());
+    expect(hud.filter((l) => /^\s+\w+-explorer\s+\S+ running/.test(l))).toHaveLength(3);
+  });
+});

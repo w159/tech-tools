@@ -18,10 +18,17 @@ export const sharedSpinFrame = (now: number): number => ((Math.floor(now / SPINN
 
 /** State 38: the spinner frame and the clock seconds the band just drew, so a second surface (the host's own status row, the run card) can print the same pair on the same render. The band render notes them; a reader gets
  * the last pair, or null before the band was ever drawn. `secs` is null where the band drew no clock. Plain module state: no `$`, no timer. */
-let bandNote: { frame: number; secs: number | null } | null = null;
-export function noteBandFrame(frame: number, secs: number | null): void { bandNote = { frame, secs: secs !== null && Number.isFinite(secs) ? Math.max(0, Math.floor(secs)) : null }; }
-export function bandFrame(): { frame: number; secs: number | null } | null { return bandNote === null ? null : { ...bandNote }; }
+let bandNote: { frame: number; secs: number | null; at?: number } | null = null;
+/** `now`: the snapshot clock the band drew at; the side panel trusts the note only for a render within PANE_NOTE_MS of it (a stale note from another run or fixture never overrides the panel's own reading). */
+export function noteBandFrame(frame: number, secs: number | null, now?: number): void { bandNote = { frame, secs: secs !== null && Number.isFinite(secs) ? Math.max(0, Math.floor(secs)) : null, ...(now !== undefined ? { at: now } : {}) }; }
+export function bandFrame(): { frame: number; secs: number | null } | null { return bandNote === null ? null : { frame: bandNote.frame, secs: bandNote.secs }; }
 export const forgetBandFrame = (): void => { bandNote = null; };
+/** The side panel's spinner frame: the band's last drawn frame when it has drawn one (follow-up to wave 38: the panel shows the glyph the band last drew), else the shared clock reading. */
+const PANE_NOTE_MS = 1000;
+const freshNote = (now: number | undefined): typeof bandNote => (bandNote !== null && bandNote.at !== undefined && now !== undefined && Math.abs(now - bandNote.at) <= PANE_NOTE_MS ? bandNote : null);
+export const paneSpinFrame = (now: number): number => freshNote(now)?.frame ?? sharedSpinFrame(now);
+/** The side panel's clock: the seconds the band last drew when it drew a clock within two seconds of the panel's own figure, else the panel's own figure. */
+export const paneClockSecs = (own: number, now?: number): number => { const n = freshNote(now)?.secs; return n !== undefined && n !== null && Math.abs(n - own) <= 2 ? n : own; }; // the band's reading wins only where it is a tick or two from the panel's own (a lagging redraw); a stale note never replaces the figure
 
 /** A frame every 100 ms, the spinner's rate: the motion timer's period and the length of one beat of a transition. */
 export const MOTION_FRAME_MS = 100;

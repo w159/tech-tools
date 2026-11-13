@@ -267,7 +267,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const { cols, ui, m, lines } = plan;
   // State 38: note the spinner frame and the clock the band is drawing right now (motion.ts bandFrame).
   const kind = runStateOf(m).kind;
-  noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? m.turnSecs ?? m.elapsedSecs ?? 0 : m.ranSecs ?? m.lastRun?.secs ?? null);
+  noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? m.turnSecs ?? m.elapsedSecs ?? 0 : m.ranSecs ?? m.lastRun?.secs ?? null, m.now);
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
     if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];

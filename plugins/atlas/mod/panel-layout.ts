@@ -7,7 +7,7 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { brandMark, capsule, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
-import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
+import { animateRow, paneClockSecs, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
@@ -165,7 +165,7 @@ const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : 
  * the plan rows (route tab `T1`..) are read by glyph (GLYPH_STATE4) and keep the circle quarters. */
 /** A working mark is the accent (141) on every row of the panel, the colour of the band's own spinner (critique 28: the panel's spinners were 252). */
 const accentRun = (x: Run, s: MarkState, ui: Ui): Run => (s === 'running' && !ui.ascii ? { ...x, tone: 'accent' } : x);
-const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = '', braille = false): Run => accentRun(stateRun(s, m.ui, braille && m.now !== undefined ? sharedSpinFrame(m.now) : frameOf(m, id), braille), s, m.ui);
+const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = '', braille = false): Run => accentRun(stateRun(s, m.ui, braille && m.now !== undefined ? (id === 'phase' ? paneSpinFrame(m.now) : sharedSpinFrame(m.now)) : frameOf(m, id), braille), s, m.ui);
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
 const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal)) || ELLIPSIS; // a worker is never a blank cell: whole name, or `…` (critique 22: `◐ running` with no AGENT)
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
@@ -480,7 +480,7 @@ function phaseChainRuns(m: PanelModel, compact: boolean, raw: boolean): PanelLin
     const g: Run = cur ? (kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase', true)) : entered ? stateRun('done', m.ui) : { t: m.ui.ascii ? '.' : '\u00b7', tone: 'dim' };
     if (compact && !cur) { runs.push(g); return; } // a narrow pane names the lit phase; the rest are their dot
     runs.push({ ...g, t: `${g.t} ` }, r(p, cur ? 'text' : entered ? 'sub' : 'dim', cur ? { bold: true } : {}));
-    if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(m.run.secs)}`, 'dim'));
+    if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(paneClockSecs(m.run.secs, m.now))}`, 'dim'));
   });
   return [line(raw ? runs : fitRuns(runs, m.cols))];
 }
@@ -564,7 +564,7 @@ const dimLine = (m: PanelModel, text: string): PanelLine => line(fitRuns([r(' '.
 function statusPhase(m: PanelModel): PanelLine[] {
   const head = phaseRow(m);
   const secs = m.run?.secs;
-  return [secs !== undefined && m.run?.kind !== 'idle' ? { ...head, runs: [...head.runs, r(` ${shortAge(secs)}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
+  return [secs !== undefined && m.run?.kind !== 'idle' ? { ...head, runs: [...head.runs, r(` ${shortAge(paneClockSecs(secs, m.now))}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
 }
 
 /** One row per agent: its mark, whole name, 12 braille cells of its calls over the run's window, and its time. */

@@ -600,7 +600,7 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
   const ell = ellOf(ui);
   const all = s.agents.filter((a) => a.state !== 'queued').map((a, i) => ({ a, i })).sort((x, y) => (x.a.seq ?? x.i) - (y.a.seq ?? y.i) || x.i - y.i).map((x) => x.a);
   if (all.length === 0) return null;
-  const { shown, hidden } = cap === undefined || cap >= all.length ? { shown: all, hidden: 0 } : (() => { const w = windowRows(all, cap, o.now, false); return { shown: all.filter((a) => w.shown.includes(a)), hidden: w.hidden }; })();
+  const { shown, hidden } = cap === 0 ? { shown: [], hidden: all.length } : cap === undefined || cap >= all.length ? { shown: all, hidden: 0 } : (() => { const w = windowRows(all, cap, o.now, false); return { shown: all.filter((a) => w.shown.includes(a)), hidden: w.hidden }; })();
   const fnOf = (a: AgentRow): string => /^(\d+) fn$/.exec(resultOf(a))?.[1] ?? NONE;
   // State 38: LAST is the last tool action or the final one-line result, never a restatement of FN (`2 fn` beside `2 functions`): an outcome that is only the counted figure gives way to the agent's last action.
   const lastOf = (a: AgentRow): string => {
@@ -651,6 +651,7 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
     ];
     return row;
   });
+  if (cap === 0) return [head, bottomRule(cols, ui)]; // wave 38: folded to its title row (a closed one-row box), the count in the title says how many run
   return [head, header, ...rows, ...(hidden > 0 ? [[t(' '.repeat(LEAD)), t(`+${hidden} more`, 'sub')]] : []), bottomRule(cols, ui)];
 }
 
@@ -693,7 +694,13 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
       // Wave 36: the table in every state. Decoration first (the rail), then the finished plan rows are folded onto the ribbon, then agent rows are cut to the ones that fit plus `+N more`, then the plan is windowed; never bare times.
       const k = s.agents.filter((a) => a.state !== 'queued').length;
       tries.push({ spacers: false, extras: true, close: true, table: true }, { ...flatBox, table: true }, { ...flatBox, table: true, foldDone: true });
-      for (let cap = total - 1; cap >= 1; cap--) tries.push({ ...flatBox, table: true, todoCap: cap }); // open plan rows fold onto the title first: every agent keeps its row (critique 28)
+      // Wave 38 (live-110 f0030-f0045: `0/5 · +4 more` over one drawn row while three plan rows ran, beside a full SUBAGENTS table): open plan rows fold onto the title first, every agent keeping its row (critique 28), but never below the
+      // rows that are open (running, blocked, failed, waiting). Before one of those would be hidden, SUBAGENTS gives way first and folds to its one title row (`⠸ 3 running`).
+      const open = mergedTodos(s).filter((r) => r.state !== 'done' && r.state !== 'queued').length;
+      const keep = Math.max(1, Math.min(open, total));
+      for (let cap = total - 1; cap >= keep; cap--) tries.push({ ...flatBox, table: true, todoCap: cap });
+      if (open > 1) for (let cap = total; cap >= keep; cap--) tries.push({ ...flatBox, table: true, todoCap: cap, agentCap: 0 });
+      for (let cap = keep - 1; cap >= 1; cap--) tries.push({ ...flatBox, table: true, todoCap: cap });
       for (let cap = k - 1; cap >= 1; cap--) tries.push({ ...flatBox, table: true, todoCap: 1, agentCap: cap });
       tries.push({ ...flatBox, table: true, todoCap: 0, agentCap: 1 });
     }

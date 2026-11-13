@@ -11,7 +11,7 @@
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
 import { cells, chip, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
-import { animateRow, keysOf, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
+import { animateRow, keysOf, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { KILLED, wordOf } from './pane/activity';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
@@ -582,7 +582,7 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
   const ran = agents.filter((a) => a.state !== 'queued');
   if (!ran.length) return [];
   const n = (s: UiState): number => ran.filter((a) => a.state === s).length;
-  const frame = o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : o.tick ?? 0;
+  const frame = o.nowMs !== undefined ? paneSpinFrame(o.nowMs) : o.tick ?? 0;
   const parts: Run[] = [];
   for (const s of ['running', 'done', 'failed', 'blocked', 'waiting'] as const) {
     if (!n(s) || (s === 'failed' && o.hideFailed)) continue;
@@ -605,7 +605,7 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
 export function boardFootLine(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'> & { runSecs?: number }): BoardLine | null {
   const ran = agents.filter((a) => a.state !== 'queued');
   if (!ran.length) return null;
-  const frame = o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : o.tick ?? 0;
+  const frame = o.nowMs !== undefined ? paneSpinFrame(o.nowMs) : o.tick ?? 0;
   const dot = o.ui.ascii ? '|' : '·';
   const counts = (['running', 'done', 'failed', 'blocked', 'waiting'] as const).map((s) => ({ s, n: ran.filter((a) => a.state === s).length })).filter((x) => x.n > 0);
   const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');
