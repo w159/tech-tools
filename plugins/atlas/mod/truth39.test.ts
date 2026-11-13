@@ -2,6 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { newRunClock, runLive, stepRun } from './band-motion';
 import { runElapsed } from './data/runstate';
+import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { panelWorld } from '../contracts/panel-world';
 import type { Ui } from './atlas-ui';
 import { bandFrame, forgetBandFrame, noteBandFrame } from './motion';
@@ -31,6 +32,38 @@ describe('step 1: no `working` after done or idle without a new prompt, and the 
     const total = runElapsed(c, 44_100)!;
     expect(runElapsed(c, 195_000)).toBe(total);
     expect(runElapsed(c, 44_100 + 1_000)).toBeGreaterThanOrEqual(total); // a resume inside the grace still counts on
+  });
+});
+
+describe('step 4: the narrow band keeps the state glyph, the clock and every non-zero count', () => {
+  const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  const PH = ['research', 'theory', 'test', 'implement', 'verify'] as const;
+  const base = (over: Partial<MissionModel>): MissionModel => ({ cols: 62, maxRows: 1, tick: 0, project: 'p', phases: PH, phase: 'research', done: 1, total: 5, bar: true, checks: [], workers: [], ui, ...over });
+  const w = (name: string, state: MissionWorker['state']): MissionWorker => ({ name, state, secs: 5 });
+  const band = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs).trimEnd();
+  test('stoprun-110-1 f0098: blocked at 62 cells keeps its clock, the failure and the done count (the reason text goes first)', () => {
+    const t = band(base({ stopGates: ['stop refused'], ranSecs: 48, workers: [w('a', 'done'), w('b', 'done'), w('c', 'failed')], tally: { running: 0, waiting: 0, queued: 0, failed: 1, done: 2, blocked: 0 } as never }));
+    expect(t).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked(?: · stop refused)? 0:48 ▌ (?:todo )?1\/5 ■1 ▌ .*■1/);
+    expect(t).toMatch(/●2/);
+    expect(t.length).toBeLessThanOrEqual(62);
+  });
+  test('the clock outlasts the reason at every width down to 40 cells', () => {
+    for (const cols of [90, 80, 70, 62, 56, 48, 40]) {
+      const t = band(base({ cols, stopGates: ['stop refused'], ranSecs: 48, workers: [w('c', 'failed')], tally: { running: 0, waiting: 0, queued: 0, failed: 1, done: 0, blocked: 0 } as never }));
+      expect(t, String(cols)).toContain('0:48');
+      expect(t, String(cols)).toContain('▲');
+    }
+  });
+  test('stoprun-110-2 f0078: a running worker no longer hides the failed and the done counts', () => {
+    const m = base({ turnSecs: 39, busy: true, workers: [w('a', 'running'), w('b', 'done'), w('c', 'failed')], tally: { running: 1, waiting: 0, queued: 0, failed: 1, done: 1, blocked: 0 } as never });
+    const t = band({ ...m, cols: 100 });
+    expect(t).toMatch(/working 0:39/);
+    expect(t).toMatch(/1 running · ● 1 done · ■1$/);
+    for (const cols of [62, 46]) {
+      const narrow = band({ ...m, cols });
+      expect(narrow, String(cols)).toMatch(/0:39/);
+      expect(narrow, String(cols)).toMatch(/ 1 ●1 ■1$/);
+    }
   });
 });
 

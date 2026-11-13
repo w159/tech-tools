@@ -423,16 +423,17 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const failChip: Run[] = failN > 0 ? [r(' '), stateRun('failed', ui), r(`${failN}`, badTone)] : [];
   const planFig = (open: boolean, word = true): Run[] => (m.total ? [r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${open ? openMore(m) : ''}`), ...failChip] : [r(word ? 'todo -' : '-', 'sub')]); // the narrow forms drop the word `todo`, never the segment
   // State 38: the workers segment prints the very counts the SUBAGENTS title prints (one tally, data/live.ts tallyOf): the running count while any runs, else waiting, done, then `■1` for the failed (`● 2 done · ■1`).
+  // Truth 39 (critique: `⠧ 1 running` hid 1 failed and 1 done, stoprun-110-2 f0078): every non-zero count is a fact of the segment, running first, then waiting, done and failed; the narrow forms keep them as bare figures (`⠧1 ●1 ■1`).
   const workBody = (words: boolean): Run[] => {
     const parts: Run[][] = [];
     const run = runningRuns(m, ui, words);
-    if (run.length) return run; // while any agent runs the segment is the running count alone (the title lists the rest)
+    if (run.length) parts.push(run);
     const waiting = countOf(m, 'waiting');
-    if (waiting > 0) parts.push(words ? countRuns('waiting', waiting, ui) : [stateRun('waiting', ui), r(` ${waiting}`)]);
+    if (waiting > 0 && !run.length) parts.push(words ? countRuns('waiting', waiting, ui) : [stateRun('waiting', ui), r(`${waiting}`)]); // the waiting count rides the worker rows while one runs
     const finished = doneCount(m);
-    if (finished > 0) parts.push(words ? countRuns('done', finished, ui) : [stateRun('done', ui), r(` ${finished}`)]);
-    if (failN > 0 && words) parts.push([stateRun('failed', ui), r(`${failN}`, badTone)]); // the tiny forms leave it to the plan segment's own `■1`
-    return parts.length ? joinWork(...parts) : [r(words ? 'no agents' : '-', 'sub')];
+    if (finished > 0) parts.push(words ? countRuns('done', finished, ui) : [stateRun('done', ui), r(`${finished}`)]);
+    if (failN > 0) parts.push([stateRun('failed', ui), r(`${failN}`, badTone)]);
+    return parts.length ? (words ? joinWork(...parts) : parts.flatMap((g, i) => (i ? [r(' '), ...g] : g))) : [r(words ? 'no agents' : '-', 'sub')]; // the tiny figures sit side by side: `⠧1 ■1 ●2`
   };
   const wide = (gw: number, gap: string): Run[] => {
     const warn = warning('words', 'long', true);
@@ -480,7 +481,6 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     { o: { clock: false, reason: 'none', fix: false }, open: false, bw: false, counts: 'none', warn: 'none' },
   ];
   // State 38: a blocked band's run clock (`▲ blocked · stop refused 0:37`) goes before the reason, the word `todo` or a count does: only the word forms keep it.
-  if (st.kind === 'blocked') levels.forEach((v, i) => { if (i >= 4) levels[i] = { ...v, o: { ...v.o, clock: false } }; });
   const out: Form[] = [
     { runs: wide(10, '   '), min: GAUGE_MIN }, { runs: wide(8, '  '), min: GAUGE_MIN },
     ...levels.map((v) => row(v, v.bare !== true)),
