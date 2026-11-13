@@ -132,6 +132,9 @@ const clipCells = (t: string, n: number): string => clip(t.replace(/\s+/g, ' ').
 const REASON_MAX = 28;
 
 const OPEN_GATE = /\bopen\b|todos? drained/;
+/** Every refusing gate is about open work (`1 dispatch row open`, `todos drained`) or has no words (`stop refused`, `retry stop`): the open rows themselves are the reason (wave 33), named by the band as `1 dispatch open`. */
+export const openWorkOnly = (stopGates: readonly string[]): boolean => stopGates.every((g) => OPEN_GATE.test(g) || g === 'stop refused' || g === 'retry stop');
+
 /** What the store holds open right now, for a reason that must agree with the todo figure beside it: `allDone`: the plan reads n/n; `openLeft`: open rows past the plan's own. */
 export type OpenNow = { allDone: boolean; openLeft: number };
 

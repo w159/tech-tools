@@ -108,12 +108,12 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
   const done = [item(1, 'completed', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'completed', 'T2 read ghost.py (ghost-explorer)', names[1])];
   test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `closed · worker killed`', () => {
     const t2 = hud(93, 12, { todos: done, agents }).find((r) => r.includes('T2 read ghost.py'))!;
-    expect(t2).toContain('■ T2'); expect(t2).toContain('killed'); expect(t2).not.toContain('worker killed'); // critique 28: one glyph and one word for a killed worker
-    expect(hud(93, 12, { todos: done, agents }).find((r) => r.includes('T1 read alpha.py'))).not.toContain('worker killed');
+    expect(t2).toContain('■ T2'); expect(t2).toContain('failed'); expect(t2).not.toContain('killed'); // critique 28: one glyph and one word for a killed worker
+    expect(hud(93, 12, { todos: done, agents }).find((r) => r.includes('T1 read alpha.py'))).not.toContain('killed');
   });
   test('HUD row in the 61-cell strip keeps the words and fits', () => {
     const t2 = hud(61, 12, { todos: done, agents }).find((r) => r.includes('T2 read'))!;
-    expect(t2).toContain('killed');
+    expect(t2).toContain('failed');
     expect(cells(t2)).toBeLessThanOrEqual(61);
   });
   test('board row (wave 30, one word): a killed worker row reads `killed` once, at 120 and at 60 cells, with no `closed` and no `worker killed`', () => {

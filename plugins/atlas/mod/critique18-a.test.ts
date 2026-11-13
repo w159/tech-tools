@@ -29,7 +29,7 @@ describe('A1: a reason never contradicts the todo figure beside it', () => {
   });
   test('f0102 and f0113 are one state: the open dispatch row is named while it is open', () => {
     const open = row(m(110, { stopGates: ['1 todo open'], openWork: 1, openDispatch: 1, openDispatchTitle: 'T2 read ghost.py', workers: [failed] }));
-    expect(open).toContain('blocked · needs: close dispatch T2');
+    expect(open).toContain('blocked · 1 dispatch open');
     expect(open).not.toMatch(/\b1 todo open\b/);
   });
   test('n/n with another open row reads `stop refused` (the todo figure names the row); a plan with open rows keeps `1 todo open` beside a count that is not n/n', () => {
@@ -71,14 +71,14 @@ describe('A3: a middle dot between band segments, and a count never loses its wo
   const warn = (cols: number): string => row(m(cols, { phase: 'research', done: 1, total: 5, openWork: 2, openDispatch: 2, todoBlocked: 1, checks: [{ id: 'routing', ok: false, name: 'routing' }], workers: [{ ...failed, name: 'beta-explorer' }, failed] }));
   test('no `n ▲ 1 blocked` without a dot at any width', () => {
     for (let cols = 40; cols <= 150; cols++) expect([cols, /\d ▲ \d+ blocked/.test(warn(cols))]).toEqual([cols, false]);
-    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · ■ 1 killed'); // wave 31: blocked rides the state word; the band keeps four segments
+    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · ■ 1 failed'); // wave 31: blocked rides the state word; the band keeps four segments
     expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('▲ blocked');
   });
   test('82 columns (the tab open): the words stay, a lower-priority segment goes', () => {
     const t = warn(82);
-    expect(t).toMatch(/■ 2 killed/); // wave 31: one failure word, and blocked rides the state word
+    expect(t).toMatch(/■ 2 failed/); // wave 31: one failure word, and blocked rides the state word
     expect(t).not.toMatch(/■2/);
-    expect(t).not.toContain('dispatches open');
+    expect(t).toContain('blocked · 2 dispatches open'); // wave 33: open dispatch rows with nothing running are Stop's, so the band is blocked and says so
   });
   test('no bare glyph-and-number count while a form with the words fits', () => {
     for (let cols = 62; cols <= 150; cols++) { // 62: the lead `○ idle · ▲ routing warning` is 7 cells longer than the old bare warning

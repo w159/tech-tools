@@ -35,7 +35,7 @@ describe('band beside the Subagents block: counts only', () => {
     const all = rows.join('\n');
     expect(all).not.toContain('implementer'); // no role column: the HUD block carries it
     expect(rows[0]).toContain('1 running');
-    expect(rows[0]).toContain('1 killed');
+    expect(rows[0]).toContain('1 failed');
     const listed = rows.slice(1).filter((r) => /^\s*[◐◓◑◒◐◓◑◒◐◓◇■▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/.test(r));
     expect(listed).toHaveLength(NAMES.length);
     for (const n of NAMES) expect(listed.filter((r) => r.includes(n))).toHaveLength(1);
@@ -167,13 +167,13 @@ describe('band counts what the HUD counts (critique-3 change 4)', () => {
   });
   test('the order is running, then the one failure word', () => {
     const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
-    expect(head.indexOf('running')).toBeLessThan(head.indexOf('killed'));
+    expect(head.indexOf('running')).toBeLessThan(head.indexOf('failed'));
   });
   test('idle keeps the killed count visible (the one warning)', () => {
     const snapshot = blockedSnap({ squad: [], activity: {}, comms: [] });
     const failedOnly = liveWorkers(busySnap(), NOW).map((w) => ({ ...w, state: w.name === 'runner-1' ? ('failed' as const) : ('done' as const), startedAt: NOW - 60_000, since: NOW - 30_000 }));
     const head = rowsOf(200, { snapshot, live: failedOnly })[0]!;
     expect(head).toContain('idle');
-    expect(head).toMatch(/■ 1 killed/);
+    expect(head).toMatch(/■ 1 failed/);
   });
 });

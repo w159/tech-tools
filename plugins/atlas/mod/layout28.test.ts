@@ -97,8 +97,8 @@ describe('layout28 item 5: glyphs', () => {
   test('the closed count in the band agents segment has no ● glyph', () => {
     for (const cols of [150, 110]) {
       const t = runsText(bandLines(model({ cols, workers: [{ name: 'a', state: 'failed', secs: 3 }, { name: 'b', state: 'done', secs: 3 }], closed: 1 }))[0]!.runs);
-      expect(t).toContain('1 killed');
-      expect(t).not.toMatch(/●\s*1 killed/);
+      expect(t).toContain('1 failed');
+      expect(t).not.toMatch(/●\s*1 failed/);
     }
   });
 });

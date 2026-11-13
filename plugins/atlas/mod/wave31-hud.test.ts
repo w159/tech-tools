@@ -210,13 +210,12 @@ describe('5. band segments, one failure word, one warning colour', () => {
     const rows = [150, 93, 56].map((cols) => bandLines({ ...base, cols, busy: true, turnSecs: 28, workers: [worker('running'), worker('failed')] } as never)[0]!.runs.map((x) => x.t).join('').trim());
     for (const r of rows) expect(r.split(' · ').length, r).toBeLessThanOrEqual(4);
   });
-  test('the failure word is `■ N killed` in the error colour, in working, blocked, done and idle', () => {
+  test('the failure word is `■ N failed` in the error colour, in working, blocked, done and idle', () => {
     for (const extra of [{ busy: true }, { busy: true, stopGates: ['stop refused'] }, { busy: false, phase: 'done', restSecs: 3, ranSecs: 58 }, { busy: false, restSecs: 60, ranSecs: 58, lastRun: { workers: 1, failed: 1, secs: 58 } }]) {
       const runs = bandLines({ ...base, cols: 150, workers: [worker('failed')], ...extra } as never)[0]!.runs;
       const text = runs.map((x) => x.t).join('');
-      expect(text, JSON.stringify(extra)).toContain('■ 1 killed');
-      expect(text, JSON.stringify(extra)).not.toMatch(/failed/);
-      expect(runs.find((x) => x.t === '1 killed')?.tone, JSON.stringify(extra)).toBe('bad');
+      expect(text, JSON.stringify(extra)).toContain('■ 1 failed');
+      expect(runs.find((x) => x.t === '1 failed')?.tone, JSON.stringify(extra)).toBe('bad');
     }
   });
   test('`△ N gates to check` has one tone (179) in done and idle, where it shows', () => {

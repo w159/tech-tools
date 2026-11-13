@@ -71,8 +71,8 @@ describe('counts and gauges equal the data', () => {
     expect(active).toBeGreaterThanOrEqual(0);
     expect(row).not.toMatch(/phase \d\/\d/); // the plan count is the band's progress figure
     expect(row).toMatch(/1 running/);
-    expect(row).toMatch(/1 killed/); // wave 31: the one failure word; the queued count rides the worker row
-    expect(row).not.toMatch(/failed|queued/);
+    expect(row).toMatch(/1 failed/); // wave 31: the one failure word; the queued count rides the worker row
+    expect(row).not.toMatch(/queued/);
     expect(states('running')).toBeGreaterThanOrEqual(1);
   });
   test('every gauge matches its label (within one eighth of a cell plus label rounding)', () => {

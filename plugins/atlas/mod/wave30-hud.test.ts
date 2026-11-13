@@ -207,8 +207,8 @@ describe('5. the band says each thing once', () => {
   });
 });
 
-describe('6. one glyph and one word for the killed worker', () => {
-  test('TODO, SUBAGENTS and the band all read `■ ... killed`', async () => {
+describe('6. one glyph and one word for the failed worker', () => {
+  test('TODO, SUBAGENTS and the band all read `■ ... failed`', async () => {
     const { hudLines } = await import('./hud');
     const todos: TodoItem[] = [{ id: 't1', content: 'T1 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' } as TodoItem];
     const agent = { name: 'ghost-explorer', role: 'explorer', state: 'failed', ui: 'failed', model: 'haiku', tool: null, lastTool: 'Read', startedAt: NOW - 5000, since: NOW - 1000 } as never;
@@ -216,9 +216,9 @@ describe('6. one glyph and one word for the killed worker', () => {
     const todoRow = rows.find((r) => r.includes('T1 read ghost'))!;
     const agentRow = rows.find((r) => /ghost-explorer\s+(killed|failed)/.test(r))!;
     expect(todoRow).toMatch(/^[ ▸] ■ T1/);
-    expect(todoRow).toContain('killed');
-    expect(todoRow).not.toMatch(/closed|worker killed|failed/);
-    expect(agentRow).toMatch(/^[ ▸] ■ ghost-explorer\s+killed/);
-    expect(rows.filter((r) => !r.includes('▸ SUBAGENTS')).join('\n')).not.toMatch(/\bfailed\b/); // the title keeps the count word of the shared UiState (`1 failed`); the rows read killed
+    expect(todoRow).toContain('failed');
+    expect(todoRow).not.toMatch(/closed|killed/);
+    expect(agentRow).toMatch(/^[ ▸] ■ ghost-explorer\s+failed/);
+    expect(rows.join('\n')).not.toMatch(/killed/); // wave 33: one failure word on every row and the title
   });
 });

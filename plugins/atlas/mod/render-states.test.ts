@@ -42,7 +42,7 @@ describe('B1: blocked is its own state', () => {
     expect(t2).toMatch(/\(ghost-explorer\)\s+blocked/); // the state word; the detail may still say `owner failed`
     expect(t2).toContain(STATE_GLYPHS.blocked);
     const ghost = rows.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer /.test(r))!;
-    expect(ghost).toContain('killed'); // critique 28: one word for a killed worker
+    expect(ghost).toContain('failed'); // wave 33: one failure word
     expect(ghost).not.toContain('blocked');
   });
   test('the board folds a failed dispatch row into a blocked plan row without turning it failed', () => {
@@ -113,11 +113,11 @@ describe('B4: the team and channel tabs say what the HUD says', () => {
     const snap = world([sq('ghost-explorer', 'failed')], { notes: [], members: [{ name: 'lead-104043' }, { name: 'ghost-explorer' }] });
     expect(model(snap).people).toBe(1);
   });
-  test('a failed worker row on the team tab reads `killed`, as the HUD LAST does', () => {
+  test('a failed worker row on the team tab reads `failed`, as the HUD LAST does', () => {
     const snap = world([sq('ghost-explorer', 'failed')], { notes: [], members: [] });
     const w = model(snap).workers.find((x) => x.name === 'ghost-explorer')!;
     expect(w.state).toBe('failed');
-    expect(w.detail).toBe('killed'); // critique 17: the call it was making is not what happened to it
+    expect(w.detail).toBe('failed'); // critique 17: the call it was making is not what happened to it
   });
   test('a done worker row on the team tab reads the evidence of its dispatch row, as the HUD LAST does', () => {
     const snap = world([sq('alpha-explorer', 'finished')], { notes: [], members: [], todos: [{ id: 'd1', content: 'Read alpha.py', status: 'completed', owner: 'alpha-explorer', origin: 'dispatch', session_id: '', evidence: '1. Read `/tmp/p/alpha.py` -> alpha_one (line 1)' }] });

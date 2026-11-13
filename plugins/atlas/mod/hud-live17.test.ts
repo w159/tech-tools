@@ -36,8 +36,8 @@ describe('B1: LAST is the outcome, never the raw tool echo', () => {
   test('a STATUS line gives its word', () => {
     expect(lastOf(none, 'done', ['STATUS: BLOCKED FILES_CHANGED: none'])).toBe('blocked');
   });
-  test('a killed agent reads `killed`, not the call it was making (f0088.ans:34 `read ghost.py`)', () => {
-    expect(lastOf({ ...none, lastTool: 'Read', target: 'ghost.py' }, 'failed', [])).toBe('killed');
+  test('a killed agent reads `failed`, not the call it was making (f0088.ans:34 `read ghost.py`)', () => {
+    expect(lastOf({ ...none, lastTool: 'Read', target: 'ghost.py' }, 'failed', [])).toBe('failed');
     expect(lastOf({ ...none, tool: 'Read', target: 'ghost.py' }, 'running', [])).toBe('read ghost.py');
   });
   test('the HUD rows show the outcome in the LAST column (f0088.ans:33-35)', () => {
@@ -48,7 +48,7 @@ describe('B1: LAST is the outcome, never the raw tool echo', () => {
     const rows = hudLines({ todos: [...plan, dispatch('alpha-explorer', ALPHA), dispatch('beta-explorer', BETA)], agents }, { merge: false, cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
     const of = (n: string): string => rows.find((r) => new RegExp(`^[▸ ] \\S ${n} `).test(r))!;
     expect(of('alpha-explorer')).toContain('2 fn'); // wave 31: RESULT is a count
-    expect(of('ghost-explorer')).toContain('killed');
+    expect(of('ghost-explorer')).toContain('failed');
     expect(of('beta-explorer')).toContain('1 fn');
     for (const r of rows) expect(r).not.toMatch(/first 3 lines|-> line 1/);
   });

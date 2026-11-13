@@ -158,13 +158,12 @@ describe('3b. the band rows fit their slot', () => {
 });
 
 describe('4. no fold marker', () => {
-  test('no HUD row carries a [-] or [+] marker; the band bar ends in its own [-] (wave 32), on its first row only', () => {
+  test('no HUD row carries a [-] or [+] marker, and neither does the band bar: the host draws the one handle right of the tree (wave 33)', () => {
     for (const cols of HUD_WIDTHS) {
       for (const r of hudLines(input, view(cols, 30)).map(runsString)) expect(r).not.toMatch(/\[[-+]\]/);
     }
     const band = bandRows(104, true);
-    expect(band[0]).toMatch(/ \[-\] $/);
-    for (const r of band.slice(1)) expect(r).not.toMatch(/\[[-+]\]/);
+    for (const r of band) expect(r).not.toMatch(/\[[-+]\]/);
   });
 });
 

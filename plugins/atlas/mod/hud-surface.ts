@@ -24,7 +24,7 @@ export const rowSpinnerGlyph = (frame: number, ascii = false): string => (SCORER
 function markRun(s: MarkState, o: Pick<SurfaceOpts, 'now' | 'tick' | 'ui'>): Run {
   if (s === RETURNED) return stateRun(RETURNED, o.ui); // `returned` is a hand-back, not a finish: the neutral `◉` (one the scorer reads) in body 252 and the word in 245, never the green done mark (critique 27, live-150-46d4825c-1 f0085:26)
   const base = stateRun(s, o.ui, spinOf(o));
-  if (s === 'doubt') return { ...stateRun('failed', o.ui), tone: o.ui.ascii ? 'text' : 'bad' }; // a row closed over a killed worker is `■ killed` in the error 203: one glyph and one word for a killed worker everywhere (critique 28)
+  if (s === 'doubt') return { ...stateRun('failed', o.ui), tone: o.ui.ascii ? 'text' : 'bad' }; // a row closed over a killed worker is `■ failed` in the error 203: one glyph and one word for a killed worker everywhere (critique 28)
   return s === 'running' ? { ...base, t: rowSpinnerGlyph(spinOf(o), o.ui.ascii), ...(o.ui.ascii ? {} : { tone: 'accent' as const }) } : base; // wave 31: every running circle is the accent 141, as the band spinner and the side panel's
 }
 
@@ -69,7 +69,7 @@ export const bottomRule = (cols: number, ui: Ui): Run[] => {
  * (phase-sync.test.ts); rev 5 asks that table for: running `text`, finished and queued `muted`, failed `bad`, blocked/waiting/doubt `warn`, returned `text`. Weight: the running word
  * is bold, a warning never is. `worker failed` (a pending row whose worker died) is the error tone. */
 function wordStyle(r: Pick<TodoRow, 'state' | 'word'>): { tone: Run['tone']; bold?: boolean } {
-  const tone = r.word === WORKER_DOWN || isDoubt(r) ? 'bad' : r.word === RETURNED ? 'sub' : rowWordTone(r.state, r.word); // a doubted done is the error tone in the HUD (`closed · worker killed`) // `returned` is the secondary 245 word beside its neutral mark
+  const tone = r.word === WORKER_DOWN || isDoubt(r) ? 'bad' : r.word === RETURNED ? 'sub' : rowWordTone(r.state, r.word); // a doubted done is the error tone in the HUD (`closed · worker failed`) // `returned` is the secondary 245 word beside its neutral mark
   return r.state === 'running' && r.word === undefined ? { tone, bold: true } : { tone };
 }
 export type SurfaceOpts = {
@@ -106,14 +106,14 @@ export const isRich = (o: SurfaceOpts): boolean => !!o.rich && o.cols >= 120;
 const MIN_STATE_AT = 6;
 const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 /** A row's detail column text: empty when the title already says it (`T1 read alpha.py (alpha-explorer)` with the owner `alpha-explorer` printed again beside it). */
-const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || isDoubt(r)) ? '' : r.detail); // a doubted done says `worker killed` in its state cell (non-rich), so the detail column does not say it again
+const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || isDoubt(r)) ? '' : r.detail); // a doubted done says `worker failed` in its state cell (non-rich), so the detail column does not say it again
 /** A completed row whose worker failed or was killed (critique 17 A1). */
 const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
 /** A doubted done spelled out in the plain form (the atlas-ui word, one source): the lead CLOSED the row (the store says completed) but its worker was killed, so the HUD does not call it done. The scorer reads the glyph (`●`, completed), which is the store's truth. */
 export const CLOSED_KILLED = DONE_KILLED;
 /** The one word for a worker that was stopped mid-call (critique 28), on the TODO row closed over it, the SUBAGENTS row and the band. */
-const KILLED = 'killed';
-/** The state cell's text: the row's word, and for a doubted done in the plain form `closed · worker killed` (critique 18 B2: a tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
+const KILLED = 'failed';
+/** The state cell's text: the row's word, and for a doubted done in the plain form `closed · worker failed` (critique 18 B2: a tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
 const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (isDoubt(r) ? KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
 /** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
 const wordRun = (r: Pick<TodoRow, 'state' | 'word'>, text: string): Run => { const s = wordStyle(r); return t(text, s.tone, s.bold ? { bold: true } : {}); };
@@ -319,7 +319,14 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   // (critique 27, live-110-46d4825c-1 f0070:28-30). It is the last thing to give way on a narrow title.
   const hidden = windowRows(rows, b.cap, undefined, false).hidden;
   const rest = hidden > 0 ? `+${hidden} more` : '';
+  const failedN = rows.filter((r) => r.state === 'failed').length;
+  const failedLead = spin.length === 0 && failedN > 0 && !rich; // nothing runs and some failed (wave 33): the title leads with `■ 2 failed`, static, in the error 203
   const titled = (c: string): Run[] => {
+    if (failedLead) {
+      const others = c.split(' · ').filter((x) => x !== '' && !/ failed$/.test(x));
+      const more = [...others, rest].filter((x) => x !== '').join(' · ');
+      return titleRow(cols, 'SUBAGENTS', '', [stateRun('failed', ui), t(' '), t(`${failedN} failed`, ui.ascii ? 'text' : 'bad'), ...(more ? [t(` · ${more}`, 'sub')] : [])], ui, b.close === false);
+    }
     const text = [c, rest].filter((x) => x !== '').join(' · ');
     return titleRow(cols, 'SUBAGENTS', '', text ? [...spin, t(text, 'sub')] : spin.slice(0, 1), ui, b.close === false);
   };
@@ -425,7 +432,7 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   const finished = r.state === 'done';
   // A finished row is dim in its name and text but keeps its glyph colour: the green `●` is the one mark that says done (critique 21: done rows went wholly 247, state read from a 1-cell dot).
   const head: Run[] = [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), t(clipEll(flat(r.name) || flat(r.id ?? '') || 'agent', nameW, ellOf(ui)), finished ? 'muted' : 'text', { bold: r.focus })]; // an agent is never nameless // bold marks the selected row only
-  let row = [...toCol(head, stateAt), r.state === 'failed' && r.tool === KILLED ? (rich ? chip(KILLED, markToken('failed'), ui) : wordRun(r, KILLED)) : rich ? stateChip(r.state, ui) : wordRun(r, r.state)]; // one word for a stopped worker: `■ killed` (critique 28)
+  let row = [...toCol(head, stateAt), r.state === 'failed' && r.tool === KILLED ? (rich ? chip(KILLED, markToken('failed'), ui) : wordRun(r, KILLED)) : rich ? stateChip(r.state, ui) : wordRun(r, r.state)]; // one word for a stopped worker: `■ failed` (critique 28)
   /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. `fallback`: what a cell reads when its text is empty or only a bare verb fits. */
   const cell = (text: string, at: number | undefined, width: number, words = false, still = false, fallback = '', dim = false): void => {
     if (at === undefined) return;
@@ -497,6 +504,15 @@ function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
   const times = s.agents.map((a) => a.elapsed ?? NONE).filter((x) => x !== NONE).join(' ');
   const fn = s.agents.reduce((n, a) => n + Number(/^(\d+) fn$/.exec(resultOf(a))?.[1] ?? 0), 0);
   const tail = live ? [] : [times, fn > 0 ? `${fn} fn` : ''].filter((x) => x !== '');
+  // Nothing runs and some failed (wave 33): the rule leads with `■ 2 failed` in the error 203, static, then the rest of the squad (`· 1 done · 0:04 0:01 0:02`).
+  const failedN = states.filter((x) => x === 'failed').length;
+  if (!live && failedN > 0) {
+    const bad = (c: string): Run => t(c, ui.ascii ? 'text' : 'bad');
+    const rest = counts.split(' · ').filter((x) => !/ failed$/.test(x));
+    const failedForms: string[][] = [[...rest, ...tail], rest, []];
+    const failedTitled = (more: string[]): Run[] => titleRow(cols, 'SUBAGENTS', '', [...lead.slice(0, 1), t(' '), bad(`${failedN} failed`), ...(more.length ? [t(` · ${more.join(' · ')}`, 'sub')] : [])], ui, false, true);
+    return failedForms.map(failedTitled).find((r) => runsCells(r) <= cols) ?? failedTitled([]);
+  }
   const forms = [[counts, ...tail].join(' · '), counts, counts.split(' · ')[0] ?? '', ''];
   const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...lead, t(c, 'sub')] : lead.slice(0, 1), ui, false, true);
   return forms.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
