@@ -112,7 +112,7 @@ describe('step 4: the channel', () => {
     expect(say).toHaveLength(1);
     expect(say[0]!.length - say[0]!.trimStart().length).toBe(4); // wave 32: left-aligned under the head, not centred
     const runs = panelLines(world('channel', 80, { notes: [] })).flatMap((l) => l.runs).filter((x) => x.t.includes('no messages'));
-    expect(runs.map((x) => x.tone)).toEqual(['muted']); // wave 32: the muted grey (240) of the other quiet rows
+    expect(runs.map((x) => x.tone)).toEqual(['dim']); // wave 36: one dim (240) line, as every quiet empty row
   });
   test('the live model stamps a refusal and a closure with the time of the log before them, so all three rows carry a time', () => {
     const m = baseSidebar();

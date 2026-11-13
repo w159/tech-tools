@@ -362,6 +362,9 @@ export function boardBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] 
 const PANE_OWNER_MIN = 8; // an owner column narrower than this names nobody: it is dropped
 const PANE_SUFFIX_MIN = 5; // a suffix shorter than this says nothing: it is dropped, not cut to `o…`
 const PANE_GUTTER = 2; // cells between the title, the state word and the owner
+/** Wave 36 (critique 35: lead-owned items drew no owner): a plan item no worker holds is the lead's, said in the owner column in the secondary grey; a dispatch row that stands alone names its own owner or none. */
+const LEAD = 'lead';
+const paneOwner = (x: BoardRow): string => x.owner || (x.dispatch ? '' : LEAD);
 
 /** The one summary every count on the board reads from: plan items (never a dispatch row that stands alone) and every dispatch row of the store. */
 export function boardSummary(rows: readonly BoardRow[], dispatches?: number): { items: number; dispatches: number; done: number } {
@@ -372,10 +375,11 @@ export function boardSummary(rows: readonly BoardRow[], dispatches?: number): { 
 /** Column geometry of the pane's rows: the title column, the state word column and the owner column, one set for every row. The owner is cut with `…`, never wrapped onto a second line.
  * A narrow pane whose rows are all done drops the word column (the mark, the dim title and the meter say it); an owner column gives cells up only until the title keeps 16. */
 function paneGeometry(rows: readonly BoardRow[], cols: number): { labelW: number; wordW: number; ownerW: number } {
-  const widest = Math.max(1, ...rows.map((x) => cells(x.label)));
+  // Wave 36 (critique 35): the plan titles set the column; a long dispatch prompt is cut to it, so it never takes the owner column from the items it names.
+  const widest = Math.max(1, ...(rows.some((x) => !x.dispatch) ? rows.filter((x) => !x.dispatch) : rows).map((x) => cells(x.label)));
   const quiet = cols < 46 && rows.every((x) => x.state === 'done');
   const wordW = quiet ? 0 : Math.min(STATE_W, Math.max(4, ...rows.map((x) => cells(plainWord(x, true)))));
-  const ownerAll = Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(x.owner))));
+  const ownerAll = Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(paneOwner(x)))));
   const budget = cols - 1 - 4 - (wordW ? PANE_GUTTER + wordW : 0); // right margin, head, the gutter and the word column: what titles and owners share
   // Titles first: the owner column is dropped before a title is cut, and gets only the cells left once the widest title shows whole (critique 22: `T4 combine the r...` beside an owner).
   const left = budget - widest - PANE_GUTTER;
@@ -397,28 +401,28 @@ function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<type
   const suffix = noteOf(row, false).replace(ownerDown(row) ? /^owner failed( · )?/ : /^$/, ''); // the word says it: no `owner failed` after `failed`
   const used = (): number => out.reduce((n, x) => n + cells(x.t), 0);
   if (g.ownerW) {
-    const owner = clipE(row.owner, g.ownerW);
+    const who = paneOwner(row);
+    const owner = clipE(who, g.ownerW);
     const roomAfter = o.cols - 1 - (used() + PANE_GUTTER + g.ownerW) - PANE_GUTTER;
-    if (suffix && !ownerDown(row) && roomAfter < Math.min(cells(suffix), PANE_SUFFIX_MIN + 8)) { // a failed worker's name stays: who failed says more than how long the row has been open
+    if (suffix && !ownerDown(row) && row.state !== 'failed' && !!row.owner && roomAfter < Math.min(cells(suffix), PANE_SUFFIX_MIN + 8)) { // a failed worker's name stays: who failed says more than how long the row has been open (wave 36: a failed row says `failed`, so its owner is the one fact left); the lead's rows keep `lead`
       const w = g.ownerW;
       const reason = clipE(suffix.split(' · ')[0]!, w);
       out.push(gutter, r(reason + ' '.repeat(Math.max(0, w - cells(reason))), 'dim'));
       return out;
     }
-    out.push(gutter, r(owner + ' '.repeat(Math.max(0, g.ownerW - cells(owner))), 'dim'));
+    out.push(gutter, r(owner + ' '.repeat(Math.max(0, g.ownerW - cells(owner))), who === LEAD && !row.owner ? 'sub' : 'dim'));
   }
   const room = o.cols - 1 - used() - PANE_GUTTER;
-  if (suffix && room >= PANE_SUFFIX_MIN) out.push(gutter, r(clipE(suffix, room), 'dim'));
+  if (suffix && room >= (cells(suffix) <= room ? 1 : PANE_SUFFIX_MIN + 3)) out.push(gutter, r(clipE(suffix, room), 'dim'));
   return out;
 }
 
 /** The pane's rows: one line per item: the title, a 2-cell gutter, the state word, the owner dim, and the reason as a dim suffix. */
 function paneBody(rows0: readonly BoardRow[], o: BoardOpts): BoardLine[] {
-  // Wave 35 (critique 34: `T1 read alpha.py (alpha…` at 110): a title that does not fit loses its `(owner)` tail whole before any title is cut; the owner is on the status and team views.
-  let g = paneGeometry(rows0, o.cols);
+  // Wave 35 (critique 34: `T1 read alpha.py (alpha…` at 110): a title loses its `(owner)` tail whole before any title is cut. Wave 36: always, in this pane: the owner column (or the status and team views, where it does not fit) names the worker once.
   const tail = (x: BoardRow): boolean => !!x.owner && x.label.endsWith(` (${x.owner})`);
-  const rows = rows0.some((x) => tail(x) && cells(x.label) > g.labelW) ? rows0.map((x) => (tail(x) ? { ...x, label: x.label.slice(0, -(x.owner.length + 3)) } : x)) : rows0;
-  if (rows !== rows0) g = paneGeometry(rows, o.cols);
+  const rows = rows0.some(tail) ? rows0.map((x) => (tail(x) ? { ...x, label: x.label.slice(0, -(x.owner.length + 3)) } : x)) : rows0;
+  const g = paneGeometry(rows, o.cols);
   const focus = rows.findIndex((x) => x.focus ?? x.state === 'running');
   const keys = o.motion ? boardKeys(rows) : [];
   return rows.map((row, i): BoardLine => ({ runs: boardRowKeyed(paneRow(row, i === focus, o, g), row, o, keys[i]) }));
@@ -477,7 +481,7 @@ const RULE_FG = '#303030'; // 236: the divider grey (PALETTE5.rule), never the 2
  * over the same axis) on the row under its bar. A running agent's bar ends at the clock (`nowMs`) and carries a pulsing leading edge, so it grows and moves while its worker runs.
  * Every bar starts where its agent started (the run's first start is the left edge). A queued agent has no run to draw and is left off. `max` caps the rows; none when there is no room for a name and a bar.
  * A row's `motion` key is `worker:<name>` (the panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). `spark: false` leaves the activity rows off; `spacers` puts a blank row between agents. */
-export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean; /** Agents whose failure a plan row already says: their bar keeps its colour and draws no `■` at its end. */ quiet?: ReadonlySet<string> }, max = 12): BoardLine[] {
+export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean; /** Wave 36 (critique 35: ~25% of the live board blank above the footer): each bar is two rows tall where the pane has the rows for it. */ tall?: boolean; /** Agents whose failure a plan row already says: their bar keeps its colour and draws no `■` at its end. */ quiet?: ReadonlySet<string> }, max = 12): BoardLine[] {
   const ran = agents.filter((a) => a.state !== 'queued').map((a, i) => ({ a, i })).sort((x, y) => (x.a.startMs ?? 0) - (y.a.startMs ?? 0) || x.i - y.i).map((x) => x.a); // start order (alpha, beta, ghost), never reversed
   if (!ran.length || max < 3) return [];
   const live = (a: TimelineAgent): boolean => a.state === 'running' && o.nowMs !== undefined;
@@ -508,9 +512,10 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const plotW = pitch * (total / (step * 1000));
   const tickCols = new Set<number>();
   // Wave 32 (critique 30: `0:15 0:20` collided, dotted columns ran past the bars): a tick sits only where a bar has run (at or before the longest bar's end), never past it.
-  for (let k = 0; k * step <= Math.max(spanSecs, ...(ran.some(live) ? [totalSecs] : [])) && k * step <= totalSecs; k++) tickCols.add(k * pitch);
+  // Wave 36 (critique 35: the 110 axis stopped at `0:15` under a 0:26 bar): the axis runs one tick past the longest bar and every tick up to that last one is drawn, so the labels cover the whole span.
+  for (let k = 0; k * step <= totalSecs; k++) tickCols.add(k * pitch);
   const lead = ' '.repeat(2 + nameW + 1);
-  const rows = Math.min(ran.length, Math.max(1, Math.floor((max - 2) / ((o.spark ? 2 : 1) + (o.spacers ? 1 : 0)))));
+  const rows = Math.min(ran.length, Math.max(1, Math.floor((max - 2) / ((o.spark ? 2 : 1) + (o.tall ? 1 : 0) + (o.spacers ? 1 : 0)))));
   const out: BoardLine[] = [];
   ran.slice(0, rows).forEach((a, i) => {
     const { from, to } = spans[i]!;
@@ -535,22 +540,24 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     ];
     if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
     out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
+    if (o.tall) out.push({ runs: [r(' '.repeat(2 + nameW + 1)), ...bar] }); // the same bar again under the first row: a solid two-row block
     if (o.spark) out.push({ runs: [r(lead), r(' '.repeat(startCell)), r(callsLabel(a), 'dim')] }); // wave 34 (critique 33: tick stems hung under every bar): the calls are a caption under the bar's start, no sparkline
   });
   // The axis: a rule with a tick (`┬`) at every labelled second, the labels under it.
   // Every tick has its label and every label two clear cells after the one before it; a tick whose label would not fit is not drawn (a stub with no legend is left off).
-  const labels = new Array<string>(barW).fill(' ');
+  const labelW2 = barW + 1 + timeW + 1; // the last label may run on into the time column: the axis is the row's width, not the bar's
+  const labels = new Array<string>(labelW2).fill(' ');
   const labelled = new Set<number>();
   let free = 0;
   for (const c of [...tickCols].sort((x, y) => x - y)) {
     const k = Math.round(c / pitch);
     const text = clock(k * step);
-    if (c < free || c + text.length > barW) continue;
+    if (c < free || c + text.length > labelW2) continue;
     [...text].forEach((ch, j) => { labels[c + j] = ch; });
     labelled.add(c);
     free = c + text.length + 2;
   }
-  const rule = Array.from({ length: barW }, (_, c) => (labelled.has(c) ? (ascii ? '+' : '┬') : ascii ? '-' : '─')).join('');
+  const rule = Array.from({ length: Math.max(barW, plotW + 1) }, (_, c) => (labelled.has(c) ? (ascii ? '+' : '┬') : ascii ? '-' : '─')).join('');
   out.push({ runs: [r(lead), { t: rule, tone: 'line', fg: RULE_FG }] });
   out.push({ runs: [r(lead), r(labels.join('').trimEnd(), 'dim')] });
   return out;

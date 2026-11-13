@@ -162,7 +162,7 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 export const FINISH_W = 56
 export const finishWidth = (cols: number): number => Math.max(24, Math.min(FINISH_W, cols > 0 ? cols - 4 : FINISH_W))
 const TIME_RE = /\b\d+:\d\d(?::\d\d)?\b/
-export interface FinishOpts { cols?: number; fade?: number; /** The worker's tool calls: `· 3 calls` after the time (wave 34, critique 33: `3 fn` counted tool calls, and the worker had reported 2 functions). Absent: the time alone. */ calls?: number; /** The functions the worker reported: `· 2 fn`. Only a count taken from what the worker reported may say `fn`; nothing in the mod's inputs carries one today. */ fns?: number; /** One more fact after the name (the run card's `5/5 done`). */ fact?: string }
+export interface FinishOpts { cols?: number; fade?: number; /** The worker's tool calls: `· 3 calls` after the time (wave 34, critique 33: `3 fn` counted tool calls, and the worker had reported 2 functions). Absent: the time alone. */ calls?: number; /** The functions the worker reported: `· 2 fn`. Only a count taken from what the worker reported may say `fn`; nothing in the mod's inputs carries one today. */ fns?: number; /** One more fact after the name (the run card's `5/5 done`). */ fact?: string; /** The run's own finish card: no name, the fact is what follows the state word. */ run?: boolean }
 
 function finishRow(state: 'done' | 'failed', name: string, fact: string, time: string, ui: Ui, o: FinishOpts): RenderElement {
  const count = o.fns !== undefined && o.fns > 0 ? `${o.fns} fn` : o.calls !== undefined && o.calls > 0 ? `${o.calls} ${o.calls === 1 ? 'call' : 'calls'}` : ''
@@ -195,6 +195,7 @@ const timeOf = (text: string): string => {
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer finished  0:15` (state, name, role, time). The worker's result line lives in the HUD's RESULT column, not on a second row. */
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false, o: FinishOpts = {}): RenderElement {
  const text = stripStatus(outcome)
+ if (o.run) return finishRow('done', o.fact ?? '', '', timeOf(text), ui, o)
  if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, o)
  return finishRow('done', displayName(name, role), o.fact ?? '', timeOf(text), ui, o) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
 }
