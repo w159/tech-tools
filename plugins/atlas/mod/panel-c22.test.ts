@@ -55,12 +55,12 @@ describe('step 3: the board pane', () => {
     expect(items[1]).toContain('T2 read ghost.py');
     expect(t.join('\n')).not.toContain('...');
   });
-  test('a doubted done reads `closed` then `worker killed` as the suffix, never a cut `closed ·…`; the owner moves to the footer where the row has no room for it', () => {
+  test('a doubted done reads `killed` once (wave 30), never a cut word; the owner moves to the footer where the row has no room for it', () => {
     const t = boardText(pane(59, [row(1), row(2, { label: 'T2 read ghost.py', owner: 'ghost-explorer', word: DONE_DOUBT, detail: 'worker killed' })]));
     const line = t.find((l) => l.includes('T2 read ghost.py'))!;
-    expect(line).toMatch(/T2 read ghost\.py +closed {2}worker killed$/);
+    expect(line).toMatch(/^  ■ T2 read ghost\.py +killed {2}ghost-explorer$/);
     expect(line).not.toContain('…');
-    expect(t.join('\n')).toContain('T2 dispatch closed · ghost-explorer'); // the owner is still named, in the footer
+    expect(t.join('\n')).toContain('T2 killed · ghost-explorer'); // the owner is still named, in the footer
   });
   test('no strikethrough on the board, in the pane or the full form', () => {
     for (const o of [{ pane: true, ribbon: false, title: false }, {}, { rich: true }]) for (const cols of [150, 110, 80]) {
@@ -71,15 +71,15 @@ describe('step 3: the board pane', () => {
     const rib = boardText(boardLines(rows, { cols: 120, ui: mocha }))[0]!;
     expect([rib.includes('─'), rib.includes('━')]).toEqual([true, false]);
   });
-  test('the timeline is one row per agent, `alpha-explorer ━━━━ 0:14 ●`: the bar as long as the run, the glyph its state, queued agents left off', () => {
+  test('the timeline is one row per agent, `alpha-explorer ████ 0:14 ●`: the solid bar as long as the run, the glyph its state, queued agents left off', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
-    expect(t).toHaveLength(4); // the two agents, a blank between them, the time axis
-    expect(t[0]).toMatch(/^ {2}alpha-explorer ━+ +0:14 ●$/);
-    expect(t[1]).toBe('');
-    expect(t[2]).toMatch(/^ {2}gamma {10}━+ +0:07 [◐◓◑◒]$/);
-    expect(t[3]).toMatch(/^ {17}0:00 ─+ 0:14$/);
-    const bar = (l: string): number => [...l].filter((c) => c === '━').length;
-    expect(bar(t[0]!)).toBeGreaterThan(bar(t[2]!));
+    expect(t).toHaveLength(4); // the two agents, the axis rule with its ticks, the tick labels
+    expect(t[0]).toMatch(/^ {2}alpha-explorer █+▌? +0:14 ●$/);
+    expect(t[1]).toMatch(/^ {2}gamma {10}[█▏▎▍▌▋▊▉]+[ ┊]* +0:07 [◐◓◑◒]$/);
+    expect(t[2]).toMatch(/^ {17}┬[─┬]+$/);
+    expect(t[3]).toMatch(/^ {17}0:00 .*0:1\d$/);
+    const bar = (l: string): number => [...l].filter((c) => /[█▏▎▍▌▋▊▉]/.test(c)).length;
+    expect(bar(t[0]!)).toBeGreaterThan(bar(t[1]!));
     expect(boardTimeline([{ name: 'a', state: 'done', secs: 3 }], { cols: 10, ui: mocha })).toEqual([]);
   });
 });
@@ -128,8 +128,8 @@ describe('step 5: the blocked phase and whole names', () => {
   test('a refused Stop reads `phase  blocked` whatever the lead last declared', () => {
     const gates = [{ id: 'completion', title: 'completion', lines: [{ id: 'stop-verdict', label: 'Last Stop blocked', ok: false, detail: 'Team gate' }] }];
     const t = text('route', 110, { phase: 'done', gates });
-    expect(t.find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}blocked/);
-    expect(text('route', 110, { phase: 'blocked' }).find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}blocked/);
+    expect(t.find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}▲ blocked/);
+    expect(text('route', 110, { phase: 'blocked' }).find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}▲ blocked/);
   });
   test('a worker never draws a blank name: whole, or `…`', () => {
     const t = text('route', 110, { workers: [{ name: '', state: 'running', detail: '' }] });

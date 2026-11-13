@@ -92,7 +92,7 @@ describe('a killed worker reads `closed` in error red on the HUD, the board and 
     expect(hud).toContain('closed');
     const rows = boardRowsOf([{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }]);
     const board = boardText(boardLines(rows, { cols: 120, ui, ribbon: false, title: false })).join('\n');
-    expect(board).toMatch(/closed\s+ghost-explorer\s+worker killed/);
+    expect(board).toMatch(/killed\s+ghost-explorer/);
     expect(board).not.toMatch(/\bdone\b/);
     expect(hud).not.toMatch(/\bdone\b/);
   });

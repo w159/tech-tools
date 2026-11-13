@@ -30,7 +30,7 @@ describe('side panel design goldens', () => {
     });
   }
   test('the team ribbon carries the worker counts with their words', () => {
-    expect(rows('team', 120)[0]).toContain('1 queued · 1 running · 2 done · 1 failed');
+    expect(rows('team', 120)[0]).toContain('1 queued · 1 running · 2 done · 1 killed');
   });
   for (const t of tabs) {
     for (const cols of [120, 80, 56]) {
@@ -115,7 +115,7 @@ describe('team tab lists the subagents by name and state', () => {
     const byTask = ['implementer-layout', 'implementer-gates', 'implementer-band', 'runner-land', 'implementer-live'].map((n) => world.workers.find((w) => w.name === n)!); // critique 11 A3: by task, not by state
     byTask.forEach((w, i) => {
       expect(body[i]).toContain(w.name);
-      expect(body[i]).toContain(w.state);
+      expect(body[i]).toContain(w.state === 'failed' ? 'killed' : w.state);
       expect(UI_STATES).toContain(w.state);
     });
   });
@@ -300,7 +300,7 @@ describe('shared invariants', () => {
   test('every count carries its word', () => {
     const route = rows('route', 120).join('\n');
     expect(route).toContain('3/7');
-    expect(route).toMatch(/phase +research\n/); // the phase word alone, no n/m beside it (critique 17 A5)
+    expect(route).toMatch(/phase +◐ research\n/); // the phase word alone, no n/m beside it (critique 17 A5)
     expect(route).toContain('2/3 green');
     expect(route).toMatch(/1 running/);
     for (const l of rows('route', 120).slice(0, 9)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/);
@@ -343,7 +343,7 @@ describe('toast', () => {
     expect([toastText('done', 'implementer-layout', '9 of 9 steps', mocha), toastText('failed', 'implementer-live', 'tests red 3', mocha)]).toEqual(toastDesign);
   });
   test('ASCII mode uses the ASCII state mark', () => {
-    expect(toastText('failed', 'a', 'b', ascii)).toBe('| x failed   a  b');
+    expect(toastText('failed', 'a', 'b', ascii)).toBe('| x killed   a  b');
   });
 });
 
@@ -364,10 +364,10 @@ describe('route tab names the running agents (live round2: `agents ⠋ 3 running
     expect(text).not.toContain('delta-explorer');
     expect(text).not.toContain('eps-explorer');
   });
-  test('a long group folds into `+N more`, and a failed agent reads failed', () => {
+  test('a long group folds into `+N more`, and a failed agent reads killed', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({ name: `w${i}-explorer`, state: i === 0 ? ('failed' as const) : ('running' as const), detail: 'x' }));
     const out = rows('route', 80, { todos: plan, workers: many, rows: 40 });
-    expect(out.join('\n')).toMatch(/w0-explorer\s+failed/);
+    expect(out.join('\n')).toMatch(/w0-explorer\s+killed/);
     expect(out.join('\n')).toContain('3 more on the team tab');
   });
 });

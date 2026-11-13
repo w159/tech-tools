@@ -59,9 +59,9 @@ test('C3: a worker stopped and never resumed keeps its failure, and a TaskStop k
   }
 })
 
-test('C3: a failure no TaskStop caused still reads `failed`', async () => {
+test('C3: a failure no TaskStop caused reads `killed` too (wave 30: one word for a worker that did not finish)', async () => {
   const row = flat(await sites().UserMessage!(lead({ squadState: 'failed', killed: false, messages: [] }), notice('failed'), next))
-  expect(row).toContain('■ failed')
+  expect(row).toContain('■ killed')
 })
 
 test('C3: a SendMessage that came before the TaskStop is no resume', async () => {

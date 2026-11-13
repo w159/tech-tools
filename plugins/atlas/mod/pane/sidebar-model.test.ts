@@ -24,13 +24,14 @@ describe('team rows from the live snapshot', () => {
     const s = world({ squad: [sq('a', 'running'), sq('b', 'finished')], activity: { a: act({ mood: 'working', tool: 'Grep', toolCount: 2 }) } as never });
     const out = team(s, 80);
     expect(out[0]).toMatch(/^ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] lead +running/);
-    expect(out.at(-1)).toBe('    workers  1 running · 1 done');
+    expect(out.at(-2)).toBe('    workers  1 running · 1 done');
+    expect(out.at(-1)).toMatch(/^ {4}total {4}0:\d\d · 2 tool calls$/); // wave 30: the team's total time and calls close the tab
     expect(out.some((l) => /^ ?[▸ ] ?[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] a +(runner +)?running/.test(l))).toBe(true);
     expect(out.some((l) => /● b +(runner +)?done/.test(l))).toBe(true);
   });
   test('an idle lead reads waiting and a roster member the squad does not know reads queued', () => {
     const out = team(world({ members: [{ name: 'leader' }] }), 80);
-    expect(out[0]).toBe('  ◉ lead    waiting');
+    expect(out[0]).toBe('  ◉ lead    waiting  ▁▁▁▁▁▁▁▁▁▁▁▁');
     expect(out).toContain('  ◇ leader  queued');
   });
   test('L13: a state word comes from evidence, never a clock: a host-listed worker is running at any age, a dispatched member the host does not list is queued', () => {
@@ -61,11 +62,11 @@ describe('channel tab from the live snapshot', () => {
     expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead')] as never }))[0]).toBe('    #chat  2 people');
     expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead-9f2')] as never }))[0]).toBe('    #chat  2 people');
   });
-  test('a missing channel name reads #channel; a note with a bad timestamp reads --:--; a good one reads hh:mm', () => {
+  test('a missing channel name reads #channel; a note with a bad timestamp reads --:--:--; a good one reads hh:mm:ss', () => {
     const out = chan(world({ channel: undefined as never, notes: [note(1, 'a', { ts: 'not a time' }), note(2, 'b')] as never }));
     expect(out[0]).toMatch(/^ {4}#channel /);
-    expect(out[1]).toMatch(/^ {4}a +note 1 +--:--$/); // the time is the right-aligned value column
-    expect(out[2]).toMatch(/^ {4}b +note 2 +10:02$/);
+    expect(out[1]).toMatch(/^ {4}a +note 1 +--:--:--$/); // the time is the right-aligned value column
+    expect(out[2]).toMatch(/^ {4}b +note 2 +10:02:00 +\d+[smh]$/);
   });
 });
 

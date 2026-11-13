@@ -65,8 +65,13 @@ export interface LeadOpts { ui: Ui; columns: number; /** A done chip a Stop refu
 export function leadRow(l: Lead, o: LeadOpts): RenderElement {
   const paint = (tone: 'accent' | 'ok' | 'bad' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: runHex({ tone }, o.ui.theme, o.ui.color) })
   const dead = o.superseded === true
-  const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'sub' : leadTone(l.phase)) }, '▌')
-  const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${l.phase}`)
+  // Wave 30 (critique 28: `▌ done 4/5` in the done green): a `done` header over a partial count is a progress note, the accent and the word `working`; the done green and the word are for a complete count or none.
+  const part = /^(\d+)\/(\d+)$/.exec(l.count)
+  const progress = l.phase === 'done' && part !== null && Number(part[1]) < Number(part[2])
+  // A quiet chip that has only a bare count to say prints no row of its own.
+  if (o.quiet && !dead && !l.sentence) return { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] }
+  const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'sub' : progress ? 'accent' : leadTone(l.phase)) }, '▌')
+  const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${progress ? 'working' : l.phase}`)
   const count = l.count ? [txt({ ...fixed, ...paint('sub') }, ` ${l.count}`)] : []
   const state = l.sentence ? [txt({ wrap: 'wrap', ...paint('sub') }, ` ${l.sentence}`)] : []
   const narrow = o.columns > 0 && o.columns < 40

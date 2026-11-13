@@ -10,8 +10,9 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, DONE_DOUBT, elapsedClock, TODO_METER_W, todoMeter, DONE_KILLED, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, WORKER_FAILED, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, DONE_DOUBT, elapsedClock, TODO_METER_W, todoMeter, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
+import { KILLED, sparkOf, wordOf } from './pane/activity';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */
@@ -127,7 +128,7 @@ export function toBoardRow(it: BoardSource, nowSecs?: number): BoardRow {
   const down = state === 'queued' && it.ownerState === 'failed';
   const base = { label: bare(it.content), state, ...age, ...(it.origin === 'dispatch' ? { dispatch: true as const } : {}), ...(ended ? { word: RETURNED } : doubt ? { word: DONE_DOUBT } : retried ? { word: DONE_RETRIED } : down ? { word: WORKER_DOWN } : {}), owner: it.owner ?? '', ...(ownerState ? { ownerState } : {}), ...(it.openDispatch?.length ? { openDispatch: it.openDispatch } : {}) };
   const ev = cleanEvidence(it.evidence);
-  const detail = doubt ? WORKER_FAILED : retried ? `retried${ev ? ` · ${ev}` : ''}` : ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
+  const detail = doubt ? '' : retried ? `retried${ev ? ` · ${ev}` : ''}` : ended ? `agent ended, row still open${ev ? ` · ${ev}` : ''}` : ownerState ? `owner ${ownerState}${ev ? ` · ${ev}` : ''}` : ev;
   if (state === 'done' && !doubt && !retried && it.claimed_at && it.completed_at && it.completed_at >= it.claimed_at) return { ...base, detail: `ran ${mmss(it.completed_at - it.claimed_at)}` };
   if (state === 'running' && it.claimed_at && nowSecs !== undefined && nowSecs >= it.claimed_at) {
     const est = typeof it.estimate_s === 'number' && it.estimate_s > 0 ? it.estimate_s : undefined;
@@ -253,9 +254,22 @@ export function labelCut(labels: readonly string[], w: number): string[] {
 }
 
 /** The state cell's text where the pane has room to spell a long word (`closed · worker killed`, `retried · done`, `worker failed`), and where it does not (the row's own state word; the detail and the notes say the rest). */
-const spelledWord = (row: BoardRow): string => (markOf(row.state, row.word) === 'doubt' ? DONE_KILLED : row.word ?? row.state);
-const plainWord = (row: BoardRow): string => (row.word === DONE_RETRIED ? 'done' : row.word === WORKER_DOWN ? row.state : row.word ?? row.state);
+const spelledWord = (row: BoardRow): string => (markOf(row.state, row.word) === 'doubt' ? KILLED : row.word ?? row.state);
+// Wave 30 (critique 28): one word for a worker that did not finish, `killed`: a closed row, a failed one and its owner read the same.
+// The Board shared with the HUD keeps its item word (`failed`); the side panel's board pane (`pane`) says `killed`.
+const plainWord = (row: BoardRow, pane = false): string => {
+  const w = markOf(row.state, row.word) === 'doubt' ? KILLED : row.word === DONE_RETRIED ? 'done' : row.word === WORKER_DOWN ? row.state : row.word ?? row.state;
+  return pane ? wordOf(w) : w;
+};
 const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'doubt' || row.word === DONE_RETRIED || row.word === WORKER_DOWN;
+
+/** A row's state mark: the `■` in error 203 for a killed worker's row (wave 30: it was the done disc, and read `closed`), the state's own glyph otherwise; a working mark is the accent. */
+function markRun(row: BoardRow, o: BoardOpts): Run {
+  const doubt = markOf(row.state, row.word) === 'doubt';
+  const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0;
+  const g = stateRun(doubt ? 'failed' : markOf(row.state, row.word), o.ui, frame);
+  return row.state === 'running' && !o.ui.ascii ? { ...g, tone: 'accent' } : g;
+}
 
 /** One row at rest. `focus` marks the row the marker `▸` points at. */
 function boardRowResting(row: BoardRow, focus: boolean, o: BoardOpts): Run[] {
@@ -358,7 +372,7 @@ export function boardSummary(rows: readonly BoardRow[], dispatches?: number): { 
 function paneGeometry(rows: readonly BoardRow[], cols: number): { labelW: number; wordW: number; ownerW: number } {
   const widest = Math.max(1, ...rows.map((x) => cells(x.label)));
   const quiet = cols < 46 && rows.every((x) => x.state === 'done');
-  const wordW = quiet ? 0 : Math.min(STATE_W, Math.max(4, ...rows.map((x) => cells(plainWord(x)))));
+  const wordW = quiet ? 0 : Math.min(STATE_W, Math.max(4, ...rows.map((x) => cells(plainWord(x, true)))));
   const ownerAll = Math.min(OWNER_W, Math.max(0, ...rows.map((x) => cells(x.owner))));
   const budget = cols - 1 - 4 - (wordW ? PANE_GUTTER + wordW : 0); // right margin, head, the gutter and the word column: what titles and owners share
   // Titles first: the owner column is dropped before a title is cut, and gets only the cells left once the widest title shows whole (critique 22: `T4 combine the r...` beside an owner).
@@ -370,12 +384,12 @@ function paneGeometry(rows: readonly BoardRow[], cols: number): { labelW: number
 function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<typeof paneGeometry>): Run[] {
   const doubt = markOf(row.state, row.word) === 'doubt';
   // Critique 25: a killed worker's row reads `closed` in error red (203) on every surface, glyph and word alike (the ● disc stays: the scorer's truth for the closed dispatch row is completed).
-  const mark = stateRun(markOf(row.state, row.word), o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0);
-  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), doubt && !o.ui.ascii ? { ...mark, tone: 'bad' } : mark, r(' ')];
+  const mark = markRun(row, o);
+  const head: Run[] = [focus ? r(o.ui.ascii ? '>' : '▸', 'accent', { bold: true }) : r(' '), r(' '), mark, r(' ')];
   const title = clipE(row.label, g.labelW);
   const gutter = r(' '.repeat(PANE_GUTTER));
   const out: Run[] = [...head, r(title + ' '.repeat(Math.max(0, g.labelW - cells(title))), row.state === 'done' && !doubt ? 'sub' : 'text', { bold: focus })];
-  if (g.wordW) { const word = clipE(doubt ? DONE_DOUBT : plainWord(row), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), doubt ? 'bad' : rowWordTone(row.state, row.word))); }
+  if (g.wordW) { const word = clipE(plainWord(row, true), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), doubt ? 'bad' : rowWordTone(row.state, row.word))); }
   // The reason (`owner failed`, `worker killed`) and the age ride the same row as a dim suffix, cut with `…` to the room left: never a row of its own (critique 22: `owner failed` wrapped under T2).
   // Where the owner column leaves no room for it, the reason takes the owner's cell: why a row is open says more than who holds it.
   const suffix = noteOf(row, false);
@@ -438,73 +452,131 @@ function paneFooter(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const dot = o.ui.ascii ? '|' : '·';
   // Whole on one row where it fits; else wrapped on its words (a continuation indented), never cut mid-word.
   const closed = rows.filter((x) => markOf(x.state, x.word) === 'doubt' && x.owner).flatMap((x): BoardLine[] =>
-    wordRows(`${rowId(x.label)} dispatch closed${o.stopRefused ? ' after Stop refusal' : ''} ${dot} ${x.owner}`, o.cols - 1, '  ', '    ').map((t, i): BoardLine => ({ runs: [r(t, i === 0 ? 'bad' : 'sub')] })));
+    wordRows(`${o.ui.ascii ? 'x' : '■'} ${rowId(x.label)} ${KILLED}${o.stopRefused ? ' after Stop refusal' : ''} ${dot} ${x.owner}`, o.cols - 1, '  ', '    ').map((t, i): BoardLine => ({ runs: [r(t, i === 0 ? 'bad' : 'sub')] })));
   if (closed.length) return closed;
   const s = boardSummary(rows, o.dispatches ?? o.folded);
   const settled = rows.length > 0 && rows.every((x) => x.state === 'done') && !(o.openFolded && o.openFolded > 0);
   return settled ? [{ runs: [r(clipE(`  closed ${dot} ${s.done} of ${s.items} items done`, Math.max(1, o.cols - 1)), 'muted')] }] : [];
 }
 
-/** One agent on the board's timeline: its name, state, how long it has run, and (for the Gantt) when it started and ended, in the snapshot clock's ms. */
-export type TimelineAgent = { name: string; state: UiState; secs?: number | undefined; startMs?: number | undefined; endMs?: number | undefined };
+/** One agent on the board's timeline: its name, state, how long it has run, and (for the Gantt) when it started and ended, in the snapshot clock's ms; `calls` are its tool-call times (the activity row under its bar). */
+export type TimelineAgent = { name: string; state: UiState; secs?: number | undefined; startMs?: number | undefined; endMs?: number | undefined; calls?: readonly number[] | undefined };
 
 const clock = (secs: number): string => elapsedClock(secs); // `0:14`, the HUD's LAST figure
 
 /** The bar's tone: running in the accent (141), done in ok (114), failed in error (203), blocked in warn (179). */
 const barTone = (s: UiState): Run['tone'] => (s === 'running' ? 'accent' : s === 'done' ? 'ok' : s === 'failed' ? 'bad' : s === 'blocked' || s === 'waiting' ? 'warn' : 'sub');
 
-/** The pane under the rows, a Gantt chart: one row per agent, `alpha-explorer     ━━━━━━━━━━━━  12s ●`. Every bar starts where its agent started within the run (the run's first start is the left
- * edge) and ends where it ended (or now, while it runs); the longest span fills the room. A time axis closes the chart, `0:00 ──────────── 0:12`. A queued agent has no run to draw and is left off. With room
- * for it a blank row separates the agents so the chart fills the pane's spare height. `max` caps the rows; none when there is no room for a name and a bar. A row's `motion` key is `worker:<name>` (the
- * panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). */
-export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'>, max = 8): BoardLine[] {
+const PARTIAL = ' ▏▎▍▌▋▊▉'; // eighths of a cell, left aligned: the end of a bar is exact to 1/8 cell, so a running bar grows smoothly
+const TICK_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+const RULE_FG = '#303030'; // 236: the divider grey (PALETTE5.rule), never the 240 text grey
+
+/** Wave 30 (critique 28: 45% of the pane blank under the axis, hairline bars with no fill or ticks, nothing moving). The board's timeline is a chart:
+ * one row per agent with a SOLID bar (`█`, the end exact to an eighth of a cell) in the state colour, a time axis with tick marks and labels, and, with room, the agent's activity (a sparkline of its tool calls
+ * over the same axis) on the row under its bar. A running agent's bar ends at the clock (`nowMs`) and carries a pulsing leading edge, so it grows and moves while its worker runs.
+ * Every bar starts where its agent started (the run's first start is the left edge). A queued agent has no run to draw and is left off. `max` caps the rows; none when there is no room for a name and a bar.
+ * A row's `motion` key is `worker:<name>` (the panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). `spark: false` leaves the activity rows off; `spacers` puts a blank row between agents. */
+export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean }, max = 12): BoardLine[] {
   const ran = agents.filter((a) => a.state !== 'queued');
-  if (!ran.length || max < 2) return [];
-  const nameW = Math.min(20, Math.max(...ran.map((a) => cells(a.name))));
+  if (!ran.length || max < 3) return [];
+  const live = (a: TimelineAgent): boolean => a.state === 'running' && o.nowMs !== undefined;
   const spanOf = (a: TimelineAgent): { from: number; to: number } => {
     const from = a.startMs ?? 0;
-    return { from, to: a.endMs !== undefined && a.endMs >= from ? a.endMs : a.startMs !== undefined ? from + (a.secs ?? 0) * 1000 : (a.secs ?? 0) * 1000 };
+    const to = live(a) ? Math.max(from, o.nowMs!) : a.endMs !== undefined && a.endMs >= from ? a.endMs : a.startMs !== undefined ? from + (a.secs ?? 0) * 1000 : (a.secs ?? 0) * 1000;
+    return { from, to };
   };
   const spans = ran.map(spanOf);
   const t0 = Math.min(...spans.map((x) => x.from));
-  const total = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0);
-  const timeW = Math.max(...ran.map((a) => cells(clock(a.secs ?? 0))));
-  const rightLabel = clock(total / 1000); // the axis ends with the longest bar's end, in words
-  const room = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bars), gap, time, gap, glyph
-  const barMax = room - cells(rightLabel) - 1; // the axis label `17s` sits after the hairline: no bar runs past the hairline's end (critique 25: beta's bar ran past the axis end)
-  if (barMax < 6) return [];
-  const bar = o.ui.ascii ? '=' : '━';
-  const gaps = max >= ran.length * 2 + 1 // rows for the agents, a blank between each, the axis
-  const rows = Math.min(ran.length, Math.max(1, gaps ? ran.length : max - 1));
-  const shown = ran.slice(0, rows);
+  const spanMs = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0);
+  const nameW = Math.min(o.cols >= 50 ? 20 : 14, Math.max(...ran.map((a) => cells(a.name))));
+  const timeW = Math.max(4, ...spans.map((x) => cells(clock((x.to - x.from) / 1000))));
+  const barW = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bars), gap, time, gap, glyph
+  if (barW < 8) return [];
+  const ascii = o.ui.ascii;
+  const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
+  // The axis: ticks at a round step, as many as the labels have room for (a label is at most 4 cells and a gap).
+  const spanSecs = spanMs / 1000;
+  const step = TICK_STEPS.find((t) => Math.floor(spanSecs / t) + 1 <= Math.max(2, Math.floor(barW / 6))) ?? TICK_STEPS[TICK_STEPS.length - 1]!;
+  // While a worker runs the axis ends at the next tick past the clock, so its bar grows inside a steady scale and the leading edge has a cell to pulse in; a finished run's axis is exactly its length.
+  const total = ran.some(live) ? (Math.floor(spanSecs / step) + 1) * step * 1000 : spanMs;
+  const totalSecs = total / 1000;
+  const tickCols = new Set<number>();
+  for (let k = 0; k * step <= totalSecs; k++) tickCols.add(Math.min(barW - 1, Math.round((k * step * 1000 * barW) / total)));
+  const lead = ' '.repeat(2 + nameW + 1);
+  const rows = Math.min(ran.length, Math.max(1, Math.floor((max - 2) / ((o.spark ? 2 : 1) + (o.spacers ? 1 : 0)))));
   const out: BoardLine[] = [];
-  shown.forEach((a, i) => {
+  ran.slice(0, rows).forEach((a, i) => {
     const { from, to } = spans[i]!;
-    const off = Math.min(barMax - 1, Math.round((barMax * (from - t0)) / total));
-    const len = Math.max(1, Math.min(barMax - off, Math.round((barMax * (to - from)) / total)));
-    const name = clipE(a.name, nameW);
+    const startCell = Math.min(barW - 1, Math.floor((barW * (from - t0)) / total));
+    const endE = Math.max(startCell * 8 + 1, Math.round((8 * barW * (to - t0)) / total)); // end in eighths of a cell
     const tone = barTone(a.state);
+    const grid: Run[] = [];
+    for (let c = 0; c < barW; c++) {
+      const covered = Math.max(0, Math.min(8, endE - c * 8));
+      if (c >= startCell && covered > 0) {
+        const full = covered === 8;
+        grid.push({ t: ascii ? '#' : full ? '█' : PARTIAL[covered]!, tone });
+      } else if (live(a) && c === Math.ceil(endE / 8) && c >= startCell) grid.push({ t: ascii ? '+' : Math.floor(frame / 3) % 2 === 0 ? '▓' : '▒', tone }); // the leading edge: a pulsing shade just ahead of the fill
+      else grid.push(tickCols.has(c) ? { t: ascii ? ':' : '┊', tone: 'line', fg: RULE_FG } : { t: ' ', tone: 'text' });
+    }
+    // One run per colour: adjacent cells of one tone join.
+    const bar = grid.reduce<Run[]>((acc, x) => { const l = acc[acc.length - 1]; if (l && l.tone === x.tone && l.fg === x.fg) l.t += x.t; else acc.push({ ...x }); return acc; }, []);
+    const name = clipE(a.name, nameW);
     const runs: Run[] = [
-      r('  '), r(name + ' '.repeat(nameW - cells(name)), 'sub'), r(' '),
-      r(' '.repeat(off)), r(bar.repeat(len), tone), r(' '.repeat(room - off - len + 1)),
-      r(clock(a.secs ?? 0).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, o.nowMs !== undefined ? spinFrameOf(o.nowMs, a.name) : o.tick ?? 0),
+      r('  '), r(name + ' '.repeat(nameW - cells(name)), 'sub'), r(' '), ...bar, r(' '),
+      r(clock((to - from) / 1000).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, frame),
     ];
-    if (gaps && i > 0) out.push({ runs: [r(' ')] });
+    if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
     out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
+    if (o.spark) {
+      const sp = sparkOf(a.calls, t0, t0 + total, barW, ascii);
+      const n = (a.calls ?? []).length;
+      out.push({ runs: [r(lead), r(sp, a.state === 'failed' ? 'bad' : 'dim'), r(' '), r(n ? `${n}`.padStart(timeW) : ' '.repeat(timeW), 'dim'), r(' ')] });
+    }
   });
-  // The axis: `0:00` at the run's start, the run's length at the right edge, a hairline between them.
-  const left = '0:00';
-  const right = rightLabel;
-  const fill = Math.max(1, room - cells(left) - cells(right) - 2); // the hairline ends where the longest bar ends; the label follows it
-  out.push({ runs: [r(' '.repeat(2 + nameW + 1)), r(`${left} ${(o.ui.ascii ? '-' : '─').repeat(fill)} ${right}`, 'dim')] });
+  // The axis: a rule with a tick (`┬`) at every labelled second, the labels under it.
+  const rule = Array.from({ length: barW }, (_, c) => (tickCols.has(c) ? (ascii ? '+' : '┬') : ascii ? '-' : '─')).join('');
+  const labels = new Array<string>(barW).fill(' ');
+  let free = 0;
+  for (const c of [...tickCols].sort((x, y) => x - y)) {
+    const k = Math.round((c / barW) * totalSecs / step);
+    const text = clock(k * step);
+    const at = Math.min(c, barW - text.length);
+    if (at < free) continue; // a label that would touch the one before it is left off
+    [...text].forEach((ch, j) => { labels[at + j] = ch; });
+    free = at + text.length + 1;
+  }
+  out.push({ runs: [r(lead), { t: rule, tone: 'line', fg: RULE_FG }] });
+  out.push({ runs: [r(lead), r(labels.join('').trimEnd(), 'dim')] });
   return out;
+}
+
+/** The board's totals line under the chart: a count per state and the run's length, `● 2 done  ■ 1 killed  ◐ 0 running · total 0:27`. */
+export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'>): BoardLine[] {
+  const ran = agents.filter((a) => a.state !== 'queued');
+  if (!ran.length) return [];
+  const n = (s: UiState): number => ran.filter((a) => a.state === s).length;
+  const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
+  const parts: Run[] = [];
+  for (const s of ['running', 'done', 'failed', 'blocked', 'waiting'] as const) {
+    if (!n(s)) continue;
+    const g = stateRun(s, o.ui, frame);
+    parts.push(...(parts.length ? [r('  ')] : []), { ...g, tone: s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(` ${n(s)} ${s === 'failed' ? 'killed' : s}`, n(s) ? 'text' : 'muted'));
+  }
+  const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');
+  const ends = ran.map((a) => (a.state === 'running' && o.nowMs !== undefined ? o.nowMs : a.endMs)).filter((x): x is number => typeof x === 'number');
+  const secs = starts.length && ends.length ? Math.max(0, Math.floor((Math.max(...ends) - Math.min(...starts)) / 1000)) : 0;
+  const calls = ran.reduce((k, a) => k + (a.calls?.length ?? 0), 0);
+  const dot = o.ui.ascii ? '|' : '·';
+  const total: Run[] = secs > 0 ? [r(`  ${dot} `, 'muted'), r('total ', 'muted'), r(clock(secs), 'text', { bold: true }), ...(calls ? [r(` ${dot} ${calls} tool calls`, 'muted')] : [])] : [];
+  return [{ runs: [r('  '), ...parts, ...total] }];
 }
 
 /** What a row says beside its state, for the sub-line (critique 19 C1): its reason (`worker failed`, `owner failed`) and how long it has been open. A done row says nothing
  * (`ran 03:10` is not a reason), and a doubted done that already spells `worker killed` in its state cell does not say it twice. */
-function noteOf(x: BoardRow, doubtWord: boolean): string {
+function noteOf(x: BoardRow, _doubtWord: boolean): string {
   const doubt = markOf(x.state, x.word) === 'doubt';
-  const reason = x.state === 'done' && !doubt ? '' : doubt && doubtWord ? '' : x.detail;
+  const reason = x.state === 'done' || doubt ? '' : x.detail; // wave 30: a killed worker's row says `killed` once, in its state word
   return [reason, x.state === 'done' || x.ageSecs === undefined ? '' : `open ${mmss(x.ageSecs)}`].filter(Boolean).join(' · ');
 }
 

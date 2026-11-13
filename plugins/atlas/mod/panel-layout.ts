@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { brandMark, capsule, cells, countRuns, DONE_KILLED, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { brandMark, capsule, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
@@ -15,6 +15,7 @@ import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runsta
 import { displayName } from './hud';
 import { sortAgents } from './hud-surface';
 import type { GateGroup } from './pane/sidebar-types';
+import { ageWord, KILLED, sparkOf, totalsOf, wordOf } from './pane/activity';
 
 export type PanelTab = 'route' | 'team' | 'channel' | 'gates' | 'core';
 /** Tabs in strip order. Hotkeys: r t c g k (the board toggle `o` belongs to the band). */
@@ -69,10 +70,10 @@ export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; 
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
-export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; /** When the worker started and when its run ended (or now), in the snapshot clock's ms: the board's Gantt places its bar by them. */ startMs?: number; endMs?: number; tools?: number };
+export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; /** When the worker started and when its run ended (or now), in the snapshot clock's ms: the board's Gantt places its bar by them. */ startMs?: number; endMs?: number; tools?: number; /** Start times of the worker's tool calls, in the snapshot clock's ms: the team tab's activity sparkline. */ calls?: readonly number[] };
 export type PanelGateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string; /** Only Stop decides it (data/runstate withPending): drawn `◇`. */ pending?: boolean };
 export type PanelGate = { id: string; title: string; error?: string; lines: PanelGateLine[] };
-export type PanelNote = { at: string; from: string; to?: string; kind?: string; text: string; lead?: boolean };
+export type PanelNote = { at: string; /** The post's time in ms, for its relative age. */ ms?: number; from: string; to?: string; kind?: string; text: string; lead?: boolean };
 
 export type PanelModel = {
   cols: number;
@@ -153,7 +154,9 @@ const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : 
 /** The state glyph of agent `id` on its row. */
 /** `braille`: the band lead's frame on the same shared index, for the rows the capture scorer does not read by glyph (the agents lines: live_capture.py reads a team row by its WORD, `\S` for the glyph);
  * the plan rows (route tab `T1`..) are read by glyph (GLYPH_STATE4) and keep the circle quarters. */
-const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = '', braille = false): Run => stateRun(s, m.ui, frameOf(m, id), braille);
+/** A working mark is the accent (141) on every row of the panel, the colour of the band's own spinner (critique 28: the panel's spinners were 252). */
+const accentRun = (x: Run, s: MarkState, ui: Ui): Run => (s === 'running' && !ui.ascii ? { ...x, tone: 'accent' } : x);
+const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = '', braille = false): Run => accentRun(stateRun(s, m.ui, frameOf(m, id), braille), s, m.ui);
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
 const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal)) || ELLIPSIS; // a worker is never a blank cell: whole name, or `…` (critique 22: `◐ running` with no AGENT)
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
@@ -184,7 +187,7 @@ const WIDE = 100;
 
 const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
   const n = (s: UiState): number => workers.filter((w) => w.state === s).length;
-  return UI_STATES.filter((s) => n(s)).map((s) => `${n(s)} ${s}`).join(` ${dot(ui)} `);
+  return UI_STATES.filter((s) => n(s)).map((s) => `${n(s)} ${wordOf(s)}`).join(` ${dot(ui)} `);
 };
 
 /** A channel as a person reads it: a generated id (`lc-opl0e60i`, a launch code) is no name, so it reads `this run`; a named channel keeps its `#name` (critique 12). */
@@ -246,9 +249,14 @@ const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).leng
  * number: never `done 5/5` beside a blocked band (critique 16 A3, stoprun f0090). */
 function phaseRow(m: PanelModel): PanelLine {
   // Critique 18 A4: the same state the band draws: a refused Stop makes the phase `blocked` whatever the lead's last header said (`research`, `done`), and the lead's own ask of the user does too (the header phase is `blocked`).
-  if (m.phase === 'blocked' || tallyOf(gatesOf(m)).stop?.blocked) return line([label('phase', m.cols), r('blocked', 'bad', { bold: true })]);
+  const blocked = m.phase === 'blocked' || !!tallyOf(gatesOf(m)).stop?.blocked;
+  // Wave 30 (critique 28: `phase  done` was a plain 252 word): the phase word wears its state glyph, `◐ working`, `● done`, `○ idle`, `▲ blocked`, the same marks as the band.
+  const working = m.lead?.state === 'running' || m.workers.some((w) => w.state === 'running');
+  if (blocked) return line([label('phase', m.cols), mark('blocked', m, 'phase'), r('blocked', 'bad', { bold: true })]);
+  if (m.phase === 'done') return line([label('phase', m.cols), mark('done', m, 'phase'), r('done', rowWordTone('done'))]);
   // Critique 17 A5: the phase word alone (`phase implement`): a rail number beside it (`research 1/5`) read as the same kind of figure as the todo `n/m` and went stale beside the chip.
-  return line([label('phase', m.cols), r(m.phase)]);
+  if (working) return line([label('phase', m.cols), mark('running', m, 'phase'), r(m.phase)]);
+  return line([label('phase', m.cols), r(`${m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.queued} `, 'muted'), r('idle', 'muted'), r(` ${dot(m.ui)} ${m.phase}`, 'muted')]);
 }
 
 /** `gates   ● lint   ● test   ▲ doctor   2/3 green`; names that do not fit fold to the count alone. `n/m` like the ribbon's figure (critique 12 B3). */
@@ -275,7 +283,7 @@ function todoCount(m: PanelModel): PanelLine {
 function agentsRows(m: PanelModel): PanelLine[] {
   if (!m.workers.length) return [];
   const sep = m.cols >= WIDE ? 3 : 2;
-  const segs = UI_STATES.filter((s) => m.workers.some((w) => w.state === s)).map((s) => countRuns(s, m.workers.filter((w) => w.state === s).length, m.ui, frameOf(m, m.workers.find((w) => w.state === s)?.name), true));
+  const segs = UI_STATES.filter((s) => m.workers.some((w) => w.state === s)).map((s) => countRuns(s, m.workers.filter((w) => w.state === s).length, m.ui, frameOf(m, m.workers.find((w) => w.state === s)?.name), true).map((x, i) => (i === 0 ? accentRun(x, s, m.ui) : { ...x, t: x.t.replace(/ failed$/, ` ${KILLED}`) })));
   const lead = label('agents', m.cols);
   const w0 = cells(lead.t);
   const out: Run[][] = [[lead]];
@@ -336,12 +344,13 @@ function todoRows(m: PanelModel, t: PanelTodo, w: { nameW: number; valueW: numbe
   // Critique 19 C4: a done row whose worker was killed says so in words, as the HUD does (`closed · worker killed`), not only in amber: in the state cell where the pane gave it the room (`w.doubtWord`),
   // else (the narrow pane, where the row spills) the word follows the title on its own line. From 100 columns the reason column says it.
   const doubt = markOf(t.state, t.word) === 'doubt';
-  const spelled = doubt && (w.doubtWord === true || m.cols < SPILL_BELOW);
-  const wordRun = { t: spelled ? (m.cols < SPILL_BELOW ? 'killed' : DONE_KILLED) : t.word ?? t.state, tone: rowWordTone(t.state, t.word) };
+  // Wave 30 (critique 28): a closed row reads `■ killed` in error 203 at every width, one word: the long `closed · worker killed` took 22 cells of the pane and cut the titles to 13.
+  const spelled = doubt;
+  const wordRun = { t: doubt ? KILLED : t.word ?? wordOf(t.state), tone: rowWordTone(t.state, t.word) };
   const settled = t.state === 'done' && markOf(t.state, t.word) !== 'doubt'; // a done row whose worker failed (critique 17 A1) is not struck through
   const nameCell = { tone: settled ? 'sub' as const : 'text' as const }; // a done title is dim, never struck through (the HUD draws none; critique 22)
   const accent = markOf(t.state, t.word);
-  const glyph = stateMark(accent, m, t.owner || t.id);
+  const glyph = stateMark(doubt ? 'failed' : accent, m, t.owner || t.id);
   // A title that does not fit beside its state word is drawn whole and its state follows it (critique 14, the 110-column pane: `T1 read alpha.py (alpha...` was cut
   // while the title fit the pane). A pane from SPILL_BELOW columns keeps the one-row form: it has the room.
   const room = m.cols - GRID_LEAD - (w.wordW + 1) - (w.valueW ? w.valueW + 1 : 0); // the title column's widest possible width
@@ -411,7 +420,7 @@ const lastFit = (w: PanelWorker, room: number): string => clipWords(lastText(w.d
 function routeAgentRow(m: PanelModel, w: PanelWorker, nameW: number): PanelLine {
   const tone: Tone = rowWordTone(w.state);
   const last = m.cols >= WIDE ? lastFit(w, m.cols - 2 - (GRID_LEAD + nameW + 1 + WORD_W) - 1) : '';
-  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW, word: { t: w.state, tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
+  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW, word: { t: wordOf(w.state), tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
 }
 
 function routeBody(m: PanelModel): PanelLine[] {
@@ -450,8 +459,8 @@ function routeBody(m: PanelModel): PanelLine[] {
     const widest = narrow ? 0 : Math.min(m.cols >= WIDE ? 28 : OWNER_W, Math.max(0, ...os.filter(ownerColumn).map((t) => cells(oneLine(t.owner)))));
     // The title column is as wide as the longest title the pane has room for (the state word follows it on every row, so the words line up); only a title past the room is cut, in the middle.
     // Critique 19 C4: a pane that can keep a whole title beside `closed · worker killed` spells it in the state cell; a narrower one (and the 100+ reason column) does not.
-    const doubtWord = !narrow && m.cols < WIDE && os.some((t) => markOf(t.state, t.word) === 'doubt') && m.cols - GRID_LEAD - cells(DONE_KILLED) - 1 >= TITLE_MIN_W + 4;
-    const todoWordW = os.reduce((n, t) => Math.max(n, cells(t.word ?? t.state)), doubtWord ? cells(DONE_KILLED) : WORD_W); // 8 while a row reads `returned`
+    const doubtWord = false;
+    const todoWordW = os.reduce((n, t) => Math.max(n, cells(markOf(t.state, t.word) === 'doubt' ? KILLED : t.word ?? wordOf(t.state))), WORD_W); // 8 while a row reads `returned`
     const titleMax = m.cols >= WIDE ? Math.max(TITLE_MIN_W, m.cols - 60) : m.cols; // from 100 columns the title leaves the reason a column
     const titles = [' '.repeat(TITLE_MIN_W), ...os.map((t) => oneLine(t.label))];
     const plan = gridPlan(m.cols, { names: titles, word: todoWordW, value: widest, optional: true, min: Math.min(titleMax, Math.max(8, ...os.filter((t) => t.owner && !ownerColumn(t)).map((t) => cells(oneLine(t.label))))), max: titleMax }); // a title that names its owner stays whole: the column gives way before it is cut
@@ -501,56 +510,84 @@ function workerDetail(m: PanelModel, w: PanelWorker): PanelLine[] {
     .map(([k, v]) => line(fitRuns([r(`    ${lab(k)}`, 'muted'), r(v, 'sub')], m.cols)));
 }
 
-/** The Team tab's columns, one set for every row (wave 24): `glyph name  role  state word  elapsed`. The role gives way first, then the elapsed time; the name is cut last, with `…`. */
-type TeamGrid = { nameW: number; roleW: number; wordW: number; ageW: number };
+/** The Team tab's columns, one set for every row (wave 30): `glyph name  role  state word  elapsed  activity`. Columns give way in this order: the role, then the activity sparkline (12 cells, then 8, then none), then the elapsed time;
+ * the name is cut last, with `…`. */
+type TeamGrid = { nameW: number; roleW: number; wordW: number; ageW: number; sparkW: number };
 // The role column says what the name does not: `ghost-explorer` already starts with its role, so that row leaves the column blank rather than print the word twice.
 const roleOf = (w: PanelWorker): string => (w.role && w.role !== 'unknown' && w.role !== w.name && !nameOf(w).toLowerCase().startsWith(w.role.toLowerCase()) ? w.role : '');
 // A queued agent has not started: it has no elapsed time to show.
 const ageOf = (w: PanelWorker): string => (w.secs !== undefined && w.state !== 'queued' ? shortAge(w.secs) : '');
+const SPARK_W = 12;
 
 function teamGrid(m: PanelModel, ws: readonly PanelWorker[]): TeamGrid {
   const longest = Math.max(6, ...ws.map((w) => cells(nameOf(w))));
-  const wordW = Math.max(4, ...ws.map((w) => cells(w.state)));
+  const wordW = Math.max(4, ...ws.map((w) => cells(wordOf(w.state))));
   const roleW = Math.min(11, Math.max(0, ...ws.map((w) => cells(roleOf(w)))));
   const ageW = Math.max(0, ...ws.map((w) => cells(ageOf(w))));
   const room = m.cols - 1 - GRID_LEAD; // right margin, then the glyph cells
-  const need = (withRole: boolean, withAge: boolean): number => 2 + wordW + (withRole && roleW ? 2 + roleW : 0) + (withAge && ageW ? 2 + ageW : 0);
-  for (const [withRole, withAge] of [[true, true], [false, true], [false, false]] as const) {
-    if (longest + need(withRole, withAge) <= room) return { nameW: longest, roleW: withRole ? roleW : 0, wordW, ageW: withAge ? ageW : 0 };
+  const need = (c: { role: boolean; age: boolean; spark: number }): number => 2 + wordW + (c.role && roleW ? 2 + roleW : 0) + (c.age && ageW ? 2 + ageW : 0) + (c.spark ? 2 + c.spark : 0);
+  const forms = [{ role: true, age: true, spark: SPARK_W }, { role: false, age: true, spark: SPARK_W }, { role: false, age: true, spark: 8 }, { role: false, age: true, spark: 0 }, { role: false, age: false, spark: 0 }];
+  for (const c of forms) {
+    if (longest + need(c) <= room) return { nameW: longest, roleW: c.role ? roleW : 0, wordW, ageW: c.age ? ageW : 0, sparkW: c.spark };
   }
-  return { nameW: Math.max(6, room - need(false, false)), roleW: 0, wordW, ageW: 0 };
+  return { nameW: Math.max(6, room - need(forms[forms.length - 1]!)), roleW: 0, wordW, ageW: 0, sparkW: 0 };
 }
 
 /** One agent as one row; its detail rows (what it was asked, its model, its last step) open only on a press. */
 function workerRows(m: PanelModel, w: PanelWorker, g: TeamGrid, focus: boolean): PanelLine[] {
   const key = `worker:${w.name}`;
-  const used = GRID_LEAD + g.nameW + 2 + g.wordW + (g.roleW ? 2 + g.roleW : 0) + (g.ageW ? 2 + g.ageW : 0);
+  const used = GRID_LEAD + g.nameW + 2 + g.wordW + (g.roleW ? 2 + g.roleW : 0) + (g.ageW ? 2 + g.ageW : 0) + (g.sparkW ? 2 + g.sparkW : 0);
   const wide = m.cols >= WIDE;
   const room = m.cols - 1 - used - 2;
   const last = wide && room >= 8 ? lastFit(w, room) : '';
+  const spark = g.sparkW && w.state !== 'queued' ? sparkOf(w.calls, w.startMs, w.endMs, g.sparkW, m.ui.ascii) : ' '.repeat(g.sparkW);
   const tail: Run[] = [
     ...(g.roleW ? [r('  '), r(pad(clipE(roleOf(w), g.roleW), g.roleW), 'sub')] : []),
-    r('  '), r(pad(w.state, g.wordW), rowWordTone(w.state)), // the one word tone of every surface (atlas-ui rowWordTone)
+    r('  '), r(pad(wordOf(w.state), g.wordW), rowWordTone(w.state)), // the one word tone of every surface (atlas-ui rowWordTone)
     ...(g.ageW ? [r('  '), r(pad(ageOf(w), g.ageW), 'muted')] : []),
+    ...(g.sparkW ? [r('  '), r(spark, w.state === 'running' ? 'accent' : w.state === 'failed' ? 'bad' : 'dim')] : []),
     ...(last ? [r('  '), r(last, 'muted')] : []),
   ];
   const runs = gridRow({ cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW: g.nameW, tail });
   const out = [line(fitRuns(moving(runs, key, w.state, m), m.cols), { kind: 'worker', key, name: w.name })];
   if (m.expanded === key) {
     out.push(...workerDetail(m, w));
-    out.push(line(fitRuns([r(`    ${lastFit(w, m.cols - 4) || w.state}`, 'muted')], m.cols)));
+    out.push(line(fitRuns([r(`    ${lastFit(w, m.cols - 4) || wordOf(w.state)}`, 'muted')], m.cols)));
     if (w.secs !== undefined) out.push(line(fitRuns([r(`    running ${shortAge(w.secs)}${w.tools !== undefined ? ` ${dot(m.ui)} ${w.tools} tool calls` : ''}`, 'muted')], m.cols)));
   }
   return out;
 }
 
-/** `workers  1 running · 2 done`: the tally of the lead's workers, under its own row (which already names the lead, so the name is not said twice). Running always reads; the other states only when not zero. */
-function leadSummary(m: PanelModel): PanelLine {
+/** The team's totals under its rows: `workers  0 running · 2 done · 1 killed` and `total  0:27 · 9 tool calls` (the run from the first start to the last end). Running always reads; the other states only when not zero. */
+function leadSummary(m: PanelModel): PanelLine[] {
   const n = (s: UiState): number => m.workers.filter((w) => w.state === s).length;
-  const tally = (all: boolean): string => UI_STATES.filter((s) => (all && s === 'running') || n(s)).map((s) => `${n(s)} ${s}`).join(` ${dot(m.ui)} `);
+  const tally = (all: boolean): string => UI_STATES.filter((s) => (all && s === 'running') || n(s)).map((s) => `${n(s)} ${wordOf(s)}`).join(` ${dot(m.ui)} `);
   const head = `${' '.repeat(GRID_LEAD)}workers  `;
   const parts = cells(head) + cells(tally(true)) <= m.cols - 1 ? tally(true) : tally(false) || tally(true); // a narrow pane drops the `0 running` before it cuts a figure
-  return line(fitRuns([r(' '.repeat(GRID_LEAD)), r('workers  ', 'text', { bold: true }), r(parts, 'muted')], m.cols)); // in the name column, under the lead's own row
+  const t = totalsOf(m.workers, m.lead);
+  const total = `${shortAge(t.secs)}${t.calls ? ` ${dot(m.ui)} ${t.calls} tool calls` : ''}`;
+  const key = (k: string): Run => r(' '.repeat(GRID_LEAD) + pad(k, 9), 'text', { bold: true });
+  return [
+    line(fitRuns([r(' '.repeat(GRID_LEAD)), r('workers  ', 'text', { bold: true }), r(parts, 'muted')], m.cols)), // in the name column, under the lead's own row
+    ...(m.workers.length && t.secs > 0 ? [line(fitRuns([key('total'), r(total, 'muted')], m.cols))] : []),
+  ];
+}
+
+/** The last posts of the channel under a tab's rows (`recent`): time to the second, who, what. As many as the pane has rows for. */
+export function recentRows(m: PanelModel, spare: number): PanelLine[] {
+  const room = Math.min(m.notes.length, spare - 2, 8);
+  if (room < 1) return [];
+  const ordered = m.notes.every((n) => n.ms !== undefined) ? [...m.notes].sort((x, y) => x.ms! - y.ms!) : m.notes; // a kill row is stamped with the kill instant: time order, not build order
+  const posts = ordered.slice(-room);
+  const who = Math.min(18, Math.max(...posts.map((n) => cells(n.from))));
+  return [BLANK, line(fitRuns([r(' '.repeat(GRID_LEAD)), r('recent', 'text', { bold: true })], m.cols)), ...posts.map((n): PanelLine => {
+    const text = oneLine(noteText(m, n));
+    const lead = r(' '.repeat(GRID_LEAD));
+    const time = r(n.at ? `${n.at}  ` : ' '.repeat(10), 'dim');
+    const name = r(pad(clipE(n.from, who), who) + '  ', noteState(n).state === 'failed' ? 'bad' : 'sub');
+    const left = m.cols - 1 - GRID_LEAD - cells(time.t) - cells(name.t);
+    return line(fitRuns([lead, time, name, r(left > 3 ? clipE(text, left).replace(ELLIPSIS, m.ui.ascii ? '~' : ELLIPSIS) : '', 'muted')], m.cols));
+  })];
 }
 
 /** The lead as the band would read it: while the band is BLOCKED (the lead declared it, or the Stop gate's last verdict refused the stop) the lead is not `done`; it
@@ -592,13 +629,18 @@ function teamBody(m: PanelModel): PanelLine[] {
   const mates = m.mates ?? [];
   const lead = leadOf(m);
   const workers = workersByTask(m);
-  const everyone = [...(lead ? [lead] : []), ...workers, ...mates];
+  // The lead's own activity is the whole team's: every worker's calls over the run, so its sparkline reads the pace of the run.
+  const teamCalls = [...(m.lead?.calls ?? []), ...m.workers.flatMap((w) => w.calls ?? [])];
+  const leadRow = lead ? { ...lead, calls: teamCalls } : undefined;
+  const everyone = [...(leadRow ? [leadRow] : []), ...workers, ...mates];
   if (!everyone.length) return emptyHint(m, 'nobody dispatched yet');
   const g = teamGrid(m, everyone);
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[]): PanelLine[] => ws.flatMap((w) => workerRows(m, w, g, w.name === focusName));
   const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet') : [];
-  return [...(lead ? rows([lead]) : []), ...hint, ...rows(workers), ...rows(mates), ...(m.lead ? [leadSummary(m)] : [])]; // one row per agent, at every height
+  const head = [...(leadRow ? rows([leadRow]) : []), ...hint, ...rows(workers), ...rows(mates)];
+  const body = [...head, ...(m.lead ? [BLANK, ...leadSummary(m)] : [])]; // one row per agent, at every height
+  return [...body, ...(tall(m) ? recentRows(m, spareRows(m, body.length)) : [])]; // the last posts only on a tall pane: a short one stays one row per agent
 }
 
 // ---- channel ------------------------------------------------------------------------------------------------------------------
@@ -610,36 +652,40 @@ const noteText = (m: PanelModel, n: PanelNote): string => {
 
 /** A post's state: a blocked or failed one is the blocked or failed mark and says so in a word (`failed` always sits beside a `■`); a hand-off or done reads done. */
 function noteState(n: PanelNote): { state: UiState | null; word: string } {
-  if (n.kind === 'failed') return { state: 'failed', word: 'failed' };
+  if (n.kind === 'failed') return { state: 'failed', word: KILLED };
   if (n.kind === 'blocked') return { state: 'blocked', word: 'blocked' };
   if (n.kind === 'handoff' || n.kind === 'done') return { state: 'done', word: n.kind };
   return { state: null, word: '' };
 }
-const noteTone = (word: string): Tone => (word === 'failed' ? rowWordTone('failed') : word === 'blocked' ? rowWordTone('blocked') : 'ok');
+const noteTone = (word: string): Tone => (word === KILLED ? rowWordTone('failed') : word === 'blocked' ? rowWordTone('blocked') : 'ok');
+
+/** A post's right-hand figure: its own time to the second and, dim, how long ago (`08:53:08  20s`). The age is the clock of the panel less the post's own time, so a post keeps its time and its age moves. */
+const ageOfNote = (m: PanelModel, n: PanelNote): string => (n.ms !== undefined && m.now !== undefined ? ageWord(m.now - n.ms) : '');
+const stampOf = (m: PanelModel, n: PanelNote, ageW: number): string => `${n.at}${ageW ? `  ${ageOfNote(m, n).padStart(ageW)}` : ''}`;
 
 /** A post as one row; `bare` leaves the text off (the rows under it read the whole message). */
-function noteRow(m: PanelModel, n: PanelNote, g: { nameW: number; wordW: number; timeW: number }, bare = false): PanelLine {
+function noteRow(m: PanelModel, n: PanelNote, g: { nameW: number; wordW: number; timeW: number; ageW?: number }, bare = false): PanelLine {
   const { state, word } = noteState(n);
-  return line(fitRuns(gridRow({
+  const ageW = g.ageW ?? 0;
+  const runs = gridRow({
     cols: m.cols, ui: m.ui, mark: state ? stateRun(state, m.ui) : null,
     name: { t: n.from, bold: true }, nameW: g.nameW, gap: 2,
     ...(g.wordW ? { word: word ? { t: word, tone: noteTone(word) } : { t: '' }, wordW: g.wordW } : {}),
-    ...(bare ? {} : { detail: { t: noteText(m, n), tone: 'text' as const } }),
-    ...(g.timeW ? { value: { t: n.at, tone: 'muted' as const } } : {}),
-  }), m.cols));
+    ...(bare || noteText(m, n).trim() === word ? {} : { detail: { t: noteText(m, n), tone: 'text' as const } }),
+    ...(g.timeW ? { value: { t: stampOf(m, n, ageW), tone: 'muted' as const } } : {}),
+  });
+  // The time keeps the secondary grey, the age is the dim 240 after it (wave 30).
+  const last = runs[runs.length - 1];
+  if (g.timeW && ageW && last && last.t === stampOf(m, n, ageW)) runs.splice(runs.length - 1, 1, r(n.at, 'muted'), r('  ', 'muted'), r(ageOfNote(m, n).padStart(ageW), 'dim'));
+  return line(fitRuns(runs, m.cols));
 }
 
 const NOTE_LINES = 4; // rows one message may take on a tall pane
 const NOTE_LINES_SHORT = 2; // rows one message may take on a short pane
 const NOTE_INLINE_MIN = 20; // cells of text a one-row post needs beside its whole name; less and the post takes two rows
 
-function channelBody(m: PanelModel): PanelLine[] {
-  const rows = channelLog(m);
-  // Critique 23: the generated slug is no title and not the head's business (`this run  1 person  ....  #lc-ila3f5i_` read as a cut name in an empty pane). The live scorer finds the channel by its
-  // `#name`, so the id stays as one quiet line at the foot of the log, only where the pane has a spare row for it.
-  const id = channelLabel(m.channel) === 'this run' && m.channel && m.notes.length ? `#${m.channel}` : '';
-  return id && spareRows(m, rows.length) >= 1 ? [...rows, BLANK, line(fitRuns([r(`${' '.repeat(GRID_LEAD)}${id}`, 'dim')], m.cols))] : rows;
-}
+// Wave 30 (critique 28): the generated `#lc-...` slug is no part of the view. The head row says `this run` once; a named channel keeps its `#name` in the ribbon.
+const channelBody = (m: PanelModel): PanelLine[] => channelLog(m);
 
 function channelLog(m: PanelModel): PanelLine[] {
   const ind = ' '.repeat(GRID_LEAD); // the indent every other tab's rows have: the name column (critique 11: the channel head sat one cell from the border)
@@ -649,11 +695,12 @@ function channelLog(m: PanelModel): PanelLine[] {
   if (!m.notes.length) return [head, ...centred(m, 'no messages yet')];
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane
-  const timeW = m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(n.at))) : 0;
+  const ageW = m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(ageOfNote(m, n)))) : 0;
+  const timeW = m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(stampOf(m, n, ageW)))) : 0;
   const hasKind = m.notes.some((n) => noteState(n).word !== '');
   // Names are whole: the name column is the longest name that leaves the word and time columns their room (never `ghost-exp...`).
   const plan = gridPlan(m.cols, { names: m.notes.map((n) => n.from), word: hasKind ? 7 : 0, gap: 2, value: timeW, optional: true, min: 4, max: wide ? 24 : 30 });
-  const g = { nameW: plan.nameW, wordW: plan.wordW, timeW: plan.valueW };
+  const g = { nameW: plan.nameW, wordW: plan.wordW, timeW: plan.valueW, ageW: plan.valueW ? ageW : 0 };
   // The text's room beside the whole name, the state word and the time. A pane that leaves the text NOTE_INLINE_MIN cells keeps one row per post; a narrower one gives the post two rows.
   const inline = m.cols - GRID_LEAD - g.nameW - (g.wordW ? g.wordW + 2 : 0) - (g.timeW ? g.timeW + 1 : 0) - 2;
   if (wide || inline >= NOTE_INLINE_MIN) {
@@ -1133,7 +1180,7 @@ const toastHead = (tone: Tone, ui: Ui, brand = false): Run[] => [r(ui.ascii ? '|
 export function toastRuns(state: UiState, name: string, fact: string, ui: Ui, brand = false): Run[] {
   const g = stateRun(state, ui);
   // Design rev 5, C3: the state word sits in a fixed-width column (CARD_WORD_W), so the name starts at the same cell on every card; `failed` and `killed` are the same width.
-  return [...toastHead(state === 'running' ? 'accent' : g.tone, ui, brand), { ...g, t: `${g.t} ` }, r(state, stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
+  return [...toastHead(state === 'running' ? 'accent' : g.tone, ui, brand), { ...g, t: `${g.t} ` }, r(wordOf(state), stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
 }
 export const toastText = (state: UiState, name: string, fact: string, ui: Ui): string => runsText(toastRuns(state, name, fact, ui));
 

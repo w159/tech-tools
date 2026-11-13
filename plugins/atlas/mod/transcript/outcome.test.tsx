@@ -98,7 +98,7 @@ test("critique 14 B3: a worker the mod saw end (the HUD's signal) reads done on 
   expect(out).not.toContain('running')
   const failed = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'failed', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
   expect((await cardExtra(failed, e.props.output, [e.agent], new Map())).ended).toBe('failed')
-  expect(strings(await sites().ToolUse!(failed, e, next))).toContain('failed')
+  expect(strings(await sites().ToolUse!(failed, e, next))).toContain('killed')
   forgetFailed() // an id that failed stays failed (critique 15 A1): the next case is a fresh worker
   const working = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'working', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
   expect(await cardExtra(working, e.props.output, [e.agent], new Map())).toEqual({ mark: spin(3, 'implement') })

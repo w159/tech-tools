@@ -16,7 +16,7 @@ const walk = (n: unknown, out: El[] = []): El[] => {
   return out
 }
 const text = (n: unknown): string => (Array.isArray(n) ? n.map(text).join('') : n && typeof n === 'object' ? text((n as El).children) : typeof n === 'string' || typeof n === 'number' ? String(n) : '')
-const cellsOf = (n: unknown): El[] => ((n as El).children as El[])
+const cellsOf = (n: unknown): El[] => (((n as El).children as El[])[1]!.children as El[]) // a finish card is a framed block: its title row is the second
 
 test('a faded done card is drawn exactly as a fresh one: one grey on every card (critique 26)', () => {
   const fresh = cellsOf(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui))
@@ -32,9 +32,9 @@ test('a faded done card is drawn exactly as a fresh one: one grey on every card 
 const snap = { contract: { headerFirstLinePattern: (contract as { headerFirstLinePattern: string }).headerFirstLinePattern } } as unknown as AtlasSnapshot
 const DONE = 'ATLAS | 🏁 done | 5/5 board items complete'
 
-test('a header still streaming draws the bar from `ATLAS |`, then the phase word once it is whole', () => {
+test('a header still streaming draws no bare `▌` (wave 30, critique 28), then the phase word once it is whole', () => {
   const bar = text(assistantTree(snap, { text: 'ATLAS |' }, 100))
-  expect(bar).toBe('▌')
+  expect(bar).toBe('')
   expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 do' }, 100))).not.toContain('done')
   expect(text(assistantTree(snap, { text: 'ATLAS | 🏁 done | ' }, 100))).toContain('done')
   expect(text(assistantTree(snap, { text: DONE }, 100))).toContain('done')

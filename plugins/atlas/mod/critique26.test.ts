@@ -102,7 +102,7 @@ describe('4: no side panel row is nameless or wrapped', () => {
           expect(own[0]).toMatch(/\b(running|done|killed|failed|queued|[a-z]+-explorer)$/); // the state closes the row, or the owner column after it
         }
         expect(rows.filter((l) => /^\s+(closed|worker killed|killed)\b/.test(l))).toEqual([]);
-        if (kind === 'killed') expect(rows.find((l) => /\bT3 /.test(l))).toMatch(cols < 50 ? /killed$/ : /worker killed/);
+        if (kind === 'killed') expect(rows.find((l) => /\bT3 /.test(l))).toMatch(/killed$/);
       }
     }
   });

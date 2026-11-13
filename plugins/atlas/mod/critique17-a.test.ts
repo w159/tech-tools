@@ -53,18 +53,18 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(t1.find((x) => x.t.includes('T1 read alpha.py'))?.tone).toBe('muted');
     expect(t1.find((x) => x.t.trim() === STATE_GLYPHS.done)?.tone).toBe('ok');
   });
-  test('Board: the same row reads `closed`, `worker killed`, error red (critique 23); the dispatch row beside it does not make it green', () => {
+  test('Board: the same row reads `killed` once (wave 30), error red (critique 23); the dispatch row beside it does not make it green', () => {
     const items: BoardSource[] = [
       { content: 'T2 read ghost.py (ghost-explorer)', status: 'completed' },
       { content: 'Read ghost.py first', status: 'completed', owner: 'ghost-explorer', origin: 'dispatch', ownerState: 'failed' }, // stoprun-150-a4fad2f9-2: the lead closed the dispatch row after the Stop refusal
     ];
     const rows = boardRowsOf(items);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ state: 'done', word: DONE_DOUBT, detail: WORKER_FAILED, owner: 'ghost-explorer' });
+    expect(rows[0]).toMatchObject({ state: 'done', word: DONE_DOUBT, detail: '', owner: 'ghost-explorer' });
     const body = boardBody(rows, { cols: 120, ui });
     const row = body.find((l) => plain(l.runs).includes('T2 read ghost.py'))!;
-    expect(plain(row.runs)).toMatch(/closed\s+ghost-explorer\s+worker killed/);
-    expect(row.runs.find((x) => x.t.trim() === 'closed')?.tone).toBe('bad');
+    expect(plain(row.runs)).toMatch(/killed\s+ghost-explorer\s*$/);
+    expect(row.runs.find((x) => x.t.trim() === 'killed')?.tone).toBe('bad');
     expect(row.runs.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
     expect(boardMotionItems(rows)[0]!.state).toBe('doubt');
   });
@@ -74,7 +74,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
       { content: 'Read ghost.py first', status: 'failed', owner: 'ghost-explorer', origin: 'dispatch', ownerState: 'failed' },
     ]);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ state: 'done', word: DONE_DOUBT, detail: WORKER_FAILED });
+    expect(rows[0]).toMatchObject({ state: 'done', word: DONE_DOUBT, detail: '' });
     expect(rows[1]).toMatchObject({ state: 'failed' });
   });
   test('Board: a row done by its own owner keeps `ran mm:ss` and the quiet struck done', () => {

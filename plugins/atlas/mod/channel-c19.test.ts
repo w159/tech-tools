@@ -29,9 +29,8 @@ describe('critique 19 C5: the channel tab under failure', () => {
       const text = rows.join('\n');
       expect(text).not.toContain('no messages yet');
       expect(text).toContain('ghost-explorer'); // a name is whole on the channel (wave 24); it was cut to the design's 12 cells before
-      expect(text).toMatch(/worker killed/);
-      expect(text).toMatch(/■ ghost-explorer +failed/); // wave 24: the whole name, and the word `failed` beside the `■`
-      for (const l of rows) expect([...l].length).toBeLessThanOrEqual(cols);
+      expect(text).toMatch(/■ ghost-explorer\s+killed/);
+        for (const l of rows) expect([...l].length).toBeLessThanOrEqual(cols);
     }
   });
   test('a Stop refusal is a channel row that names what Stop said', () => {
@@ -48,8 +47,8 @@ describe('critique 19 C5: the channel tab under failure', () => {
     const rows = channel(world([sq('alpha-explorer', 'finished'), sq('ghost-explorer', 'failed')], [note]), refused);
     const at = (s: string): number => rows.findIndex((l) => l.includes(s));
     expect(at('handed off alpha.py')).toBeGreaterThan(-1);
-    expect(at('worker killed')).toBeGreaterThan(at('handed off alpha.py'));
-    expect(at('Stop refused')).toBeGreaterThan(at('worker killed'));
+    expect(at('ghost-explorer')).toBeGreaterThan(at('handed off alpha.py'));
+    expect(at('Stop refused')).toBeGreaterThan(at('ghost-explorer'));
   });
   test('failureNotes: the same worker is one row however often it is built, and a stable time (the kill instant, never the clock)', () => {
     const a = failureNotes({ workers: [{ name: 'ghost-explorer', state: 'failed', endedMs: Date.parse('2026-11-12T10:05:00.000Z') }], stop: null });

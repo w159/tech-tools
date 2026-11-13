@@ -3,13 +3,13 @@ import type { ChannelNote } from '../contract';
 import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
 import { isPlanItem, ownPlan, ownTodos, todoState } from '../data/todos';
 import { lastText } from '../data/lasttext';
-import { DONE_DOUBT, WORKER_FAILED, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
+import { DONE_DOUBT, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
 import { hudAgents, lastOf, ownerStatesOf } from '../hud';
 import { ownerOutcome } from '../board-model';
-import { failureNotes, isoTs, noteRefusal, refusalNotes } from '../data/channels';
+import { failureNotes, firstSeen, isoTs, noteRefusal, refusalNotes } from '../data/channels';
 import { gateTally } from '../data/runstate';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
@@ -34,7 +34,7 @@ function workerOf(s: LiveSnapshot, w: LiveWorker): PanelWorker {
   const item = a?.item && a.item.length <= 5 ? a.item.toUpperCase() : undefined;
   return {
     name: one(w.name), role: w.role, state, detail, model: a?.model?.replace(/^claude-/, ''), task: item, ...(a?.task ? { goal: one(a.task) } : {}),
-    secs: Math.max(0, Math.floor((endedAt(w, s.now) - w.startedAt) / 1000)), startMs: w.startedAt, endMs: endedAt(w, s.now), tools: s.activity[w.name]?.toolCount ?? 0,
+    secs: Math.max(0, Math.floor((endedAt(w, s.now) - w.startedAt) / 1000)), startMs: w.startedAt, endMs: endedAt(w, s.now), tools: s.activity[w.name]?.toolCount ?? 0, calls: w.calls,
   };
 }
 
@@ -48,24 +48,27 @@ function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] 
     const w = owner ? workers.find((x) => x.name === owner) : undefined;
     const oc = owner ? ownerOutcome(owners, owner) : undefined; // the owner's latest instance (`beta-explorer #2`): the same state as the HUD and the board (critique 19 A3)
     const { state, word } = todoState(it.status, oc?.state, oc?.retried); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
-    const detail = state === 'done' && word === DONE_DOUBT ? WORKER_FAILED : state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
+    const detail = state === 'done' && word === DONE_DOUBT ? undefined : state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
     return { id: it.id, label: one(it.content), state, ...(word ? { word } : {}), owner: owner ? one(owner) : undefined, detail, evidence: it.evidence ?? null };
   });
 }
 
-const hhmm = (iso: string): string => {
+/** `08:53:08`: a post's own time to the second (wave 30: HH:MM alone read as one instant for a whole run). */
+const hms = (iso: string): string => {
   const d = new Date(iso);
-  return iso === '' ? '' : Number.isNaN(d.getTime()) ? '--:--' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const two = (n: number): string => String(n).padStart(2, '0');
+  return iso === '' ? '' : Number.isNaN(d.getTime()) ? '--:--:--' : `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
 };
-/** A kill is a failure, not a block: the store's row for a killed worker says `worker killed` under the blocked kind, the channel draws it `■ failed`. */
-const kindOf = (n: ChannelNote): string | undefined => (n.kind === 'blocked' && /^worker killed/.test(n.text) ? 'failed' : n.kind);
-const noteOf = (n: ChannelNote): PanelNote => ({ at: hhmm(n.ts), from: n.owner, to: n.to, ...(kindOf(n) ? { kind: kindOf(n)! } : {}), text: n.text, lead: isLead(n.owner) });
+/** A kill is a failure, not a block: the store's row for a killed worker says `worker killed` (or `killed`) under the blocked kind, the channel draws it `■ killed`. */
+const kindOf = (n: ChannelNote): string | undefined => (n.kind === 'blocked' && /^(worker )?killed/.test(n.text) ? 'failed' : n.kind);
+const msOf = (iso: string): number | undefined => { const ms = Date.parse(iso); return Number.isNaN(ms) ? undefined : ms; };
+const noteOf = (n: ChannelNote): PanelNote => ({ at: hms(n.ts), ...(msOf(n.ts) !== undefined ? { ms: msOf(n.ts)! } : {}), from: n.owner, to: n.to, ...(kindOf(n) ? { kind: kindOf(n)! } : {}), text: n.text, lead: isLead(n.owner) });
 
 
-/** A kill, a refusal and a closure are three timed rows (critique 22): one the store gave no time (a refusal, a closure) is stamped with the latest time on the log before it, else `fallback`. */
-function timed(rows: readonly ChannelNote[], fallback: string): ChannelNote[] {
-  let last = '';
-  return rows.map((n) => { if (n.ts) { last = n.ts; return n; } return { ...n, ts: last || fallback }; });
+/** A kill, a refusal and a closure are three timed rows (critique 22): one the store gave no time (a refusal, a closure, a note written without `ts`) keeps the snapshot clock of the first build that saw it
+ * (data/channels firstSeen), so each row has its own time and none follows the redraw clock or the row before it (critique 28: every channel row read 23:41). */
+function timed(rows: readonly ChannelNote[], nowMs: number, channel: string): ChannelNote[] {
+  return rows.map((n) => (n.ts ? n : { ...n, ts: isoTs(firstSeen(channel, `${n.owner}|${n.text}`, nowMs)) }));
 }
 
 /** When a worker ended, from the host list (the instant a killed worker left it), else undefined: the row then draws no time rather than the clock. */
@@ -73,6 +76,17 @@ const endedMsOf = (s: LiveSnapshot, name: string): number | undefined => {
   const w = liveWorkers(s, s.now).find((x) => x.name === name);
   return w ? endedAt(w, s.now) : undefined;
 };
+
+/** The lead's run, for its elapsed time and the team total (wave 30: the lead row had no time): from its own first sight, else the first worker's start, to now while it works, else to the last worker's end. */
+function leadClock(s: LiveSnapshot, workers: readonly PanelWorker[], state: UiState): { secs?: number; startMs?: number; endMs?: number; calls?: number[] } {
+  const starts = [s.activity.lead?.startedAt, ...workers.map((w) => w.startMs)].filter((x): x is number => typeof x === 'number');
+  if (!starts.length) return {};
+  const startMs = Math.min(...starts);
+  const ends = workers.map((w) => w.endMs).filter((x): x is number => typeof x === 'number');
+  const endMs = state === 'running' || !ends.length ? s.now : Math.max(...ends);
+  const calls = (s.activity.lead as { calls?: number[] } | undefined)?.calls;
+  return { secs: Math.max(0, Math.floor((endMs - startMs) / 1000)), startMs, endMs, ...(calls ? { calls } : {}) };
+}
 
 const MOOD_STATE: Record<Mood, UiState> = { working: 'running', thinking: 'running', blocked: 'blocked', failed: 'failed', done: 'done', celebrate: 'done', idle: 'waiting' };
 
@@ -88,7 +102,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const whole = (n: string): string => (owned.includes(n) ? n : ((c) => (c.length === 1 ? c[0]! : n))(owned.filter((o) => o.length > n.length && o.startsWith(n))));
   const workers = [...liveWorkers(s, s.now).sort((a, b) => startAt(a.name) - startAt(b.name)).filter((w) => !left.has(w.name)).map((w) => ({ ...workerOf(s, w), name: one(whole(w.name)) })), ...queued]; // start order: the layout orders them by task (panel-layout workersByTask)
   const [leadMate] = mates(s);
-  const lead: PanelWorker = { name: 'lead', role: 'lead', state: MOOD_STATE[leadMate!.mood], detail: leadMate!.text };
+  const lead: PanelWorker = { name: 'lead', role: 'lead', state: MOOD_STATE[leadMate!.mood], detail: leadMate!.text, ...leadClock(s, workers, MOOD_STATE[leadMate!.mood]) };
 
   const ended = new Set(workers.filter((w) => w.state === 'done' || w.state === 'failed').map((w) => w.name)); // a killed worker never gets an end time in the registry, yet it is not in the channel (stoprun-150-e4a8186a-1: shown 2, true 1)
   const live = workers.filter((w) => !ended.has(w.name)).map((w) => w.name);
@@ -105,7 +119,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   // The closure is a post too (wave 24): a plan row the lead closed over a failed worker reads `T2 dispatch closed after Stop refusal · ghost-explorer`, whole names, from the lead.
   const stop = gateTally(m.gates).stop;
   const todos = todosOf(s, workers);
-  const closures: ChannelNote[] = todos.filter((t) => t.state === 'done' && t.word === DONE_DOUBT && t.owner).map((t) => ({ ts: '', seq: 0, owner: 'lead', to: 'all', text: `${/^T\d+\b/i.exec(t.label)?.[0] ?? 'row'} dispatch closed${stop?.blocked ? ' after Stop refusal' : ''} · ${t.owner}`, channel: s.channel ?? '', kind: 'done' }));
+  const closures: ChannelNote[] = todos.filter((t) => t.state === 'done' && t.word === DONE_DOUBT && t.owner).map((t) => ({ ts: '', seq: 0, owner: 'lead', to: 'all', text: `${/^T\d+\b/i.exec(t.label)?.[0] ?? 'row'} killed${stop?.blocked ? ' after Stop refusal' : ''} · ${t.owner}`, channel: s.channel ?? '', kind: 'done' }));
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
@@ -115,6 +129,6 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
-    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...refusalNotes(s.channel ?? ''), ...closures], isoTs(s.now)).map(noteOf),
+    channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...refusalNotes(s.channel ?? ''), ...closures], s.now, s.channel ?? '').map(noteOf),
   };
 }

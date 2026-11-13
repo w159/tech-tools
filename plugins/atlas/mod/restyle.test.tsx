@@ -381,7 +381,7 @@ test('with no listed agent the card status falls back from the call flags', () =
   const s = snap()
   const label = (over: Record<string, unknown>) => stringsOf(toolUseTree(s, taskProps(over), []))
   expect(label({ isRunning: true })).toContain('running')
-  expect(label({ isErrored: true })).toContain('failed   impl-auth')
+  expect(label({ isErrored: true })).toContain('killed   impl-auth')
   expect(label({ isInterrupted: true })).toContain('blocked  impl-auth')
   expect(label({ output: undefined })).toContain('pending')
   expect(label({ output: 'ok' })).toContain('done     impl-auth')

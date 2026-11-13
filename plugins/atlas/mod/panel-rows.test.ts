@@ -26,11 +26,11 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   test('the lead row is first and the tally is last; the ribbon counts only the workers', () => {
     const out = body('team', 120, { lead, mates });
     expect(out[0]!.startsWith('  ◉ lead')).toBe(true);
-    expect(out.at(-1)).toBe('    workers  1 queued · 1 running · 2 done · 1 failed');
+    expect(out.at(-1)).toBe('    workers  1 queued · 1 running · 2 done · 1 killed');
   });
   test('the tally always says running, and drops the other states with no worker', () => {
     expect(body('team', 80, { lead, workers: [] }).at(-1)).toBe('    workers  0 running');
-    expect(body('team', 80, { lead, workers: [w('a', 'failed')] }).at(-1)).toBe('    workers  0 running · 1 failed');
+    expect(body('team', 80, { lead, workers: [w('a', 'failed')] }).at(-1)).toBe('    workers  0 running · 1 killed');
     expect(body('team', 80, { lead, workers: [w('a', 'done'), w('b', 'done')] }).at(-1)).toBe('    workers  0 running · 2 done');
     expect(body('team', 80, { lead, workers: [w('a', 'running'), w('b', 'waiting')] }).at(-1)).toBe('    workers  1 running · 1 waiting');
   });
@@ -43,12 +43,12 @@ describe('team tab: lead row, roster rows, lead tally', () => {
     expect(out.filter((l) => /^ {4}last {2}wrote the summary/.test(l))).toHaveLength(1); // different words: kept
   });
   test('no workers and no roster keeps the hint, and the lead stays above it', () => {
-    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['  ◉ lead    waiting', ' '.repeat(29) + 'nobody dispatched yet', '    workers  0 running']);
+    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['  ◉ lead    waiting  ▁▁▁▁▁▁▁▁▁▁▁▁', ' '.repeat(29) + 'nobody dispatched yet', '', '    workers  0 running']);
     expect(body('team', 80, { lead: undefined, workers: [], mates: [] })).toEqual([' '.repeat(29) + 'nobody dispatched yet']);
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 failed');
+    expect(route).toContain(' agents ◇ 1 queued   ⠋ 1 running   ● 2 done   ■ 1 killed');
     expect(body('team', 120, { lead, mates }).some((l) => /^ {2}◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {
@@ -74,7 +74,7 @@ describe('channel tab: header, columns and marks', () => {
   });
   test('critique 12: a generated launch id (`lc-opl0e60i`) is no channel name: the ribbon says `this run`, the header keeps the words and also the real name (`this run · #lc-opl0e60i`, live 6b7f637d lost channel_name_shown), a named channel keeps its #name', () => {
     expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe('    this run  2 people'); // critique 23: no truncated slug on the head
-    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [{ at: '10:02', from: 'lead', text: 'hello' }] }).join('\n')).toContain('#lc-opl0e60i'); // the id stays as a dim foot line
+    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [{ at: '10:02', from: 'lead', text: 'hello' }] }).join('\n')).not.toContain('#lc-'); // wave 30 (critique 28): the generated slug is not drawn anywhere, not even as a foot line
     expect(body('channel', 80, { channel: 'atlas-board-mod', people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
   });
   test('a missing channel name reads #channel', () => {
@@ -236,8 +236,8 @@ describe('route tab: blocked owner, phase position', () => {
   });
   test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {
     const phase = (p: string): string => body('route', 80, { phase: p, phases: ['research', 'theory', 'build', 'verify'] })[0]!;
-    expect(phase('build')).toBe(' phase  build');
-    expect(phase('somewhere')).toBe(' phase  somewhere');
-    expect(phase('done')).toBe(' phase  done');
+    expect(phase('build')).toBe(' phase  ◐ build');
+    expect(phase('somewhere')).toBe(' phase  ◐ somewhere');
+    expect(phase('done')).toBe(' phase  ● done');
   });
 });
