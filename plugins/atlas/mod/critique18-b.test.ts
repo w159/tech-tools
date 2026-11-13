@@ -36,25 +36,28 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect(rows[0]).not.toMatch(/· \d+ done/);
     expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r))).toHaveLength(3);
   });
-  test('when the rows truly do not fit, decoration goes first (critique 26): the blank and the rules, then a finished row folds into the count, then agent rows (names stay), then open plan rows', () => {
+  test('when the rows truly do not fit (critique 28): the blank goes, then the column names, then the finished row folds into the count, then open plan rows; every agent keeps its row and every box stays closed', () => {
     const open = (n: number): string[] => hud(93, n).filter((r) => PLAN_ROW.test(r) && !/T1 /.test(r));
-    const eleven = hud(93, 11); // the closing rules go before any row: every plan row, T1 included, and the column names stay
-    expect(open(11)).toHaveLength(4);
-    expect(eleven[0]).not.toMatch(/done/);
-    expect(eleven.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
-    expect(eleven.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(0);
+    const agentRows = (n: number): number => hud(93, n).filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r)).length;
+    const closes = (n: number): number => hud(93, n).filter((r) => /^╰─+╯$/.test(r)).length;
+    const names = (n: number): boolean => hud(93, n).some((r) => /AGENT\s+STATE/.test(r));
+    expect([names(14), names(13), names(12)]).toEqual([true, true, false]); // the column names go before a plan row does
+    expect(hud(93, 12)[0]).not.toMatch(/done/);
     expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
-    const ten = hud(93, 10); // then the finished row folds into the title
-    expect(open(10)).toHaveLength(4);
-    expect(ten[0]).toMatch(/1 done/);
-    expect(ten.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
-    const nine = hud(93, 9); // then agent rows go (the running count rides the ribbon), the names stay with the rows that show
-    expect(open(9)).toHaveLength(4);
-    expect(nine.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r))).toHaveLength(2);
-    expect(nine.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
-    const seven = hud(93, 7); // then the open plan rows are counted on the title, one wording at every width
-    expect(seven[0]).toMatch(/1\/5 · \+2 more/);
-    expect(hud(93, 4).filter((r) => PLAN_ROW.test(r))).toHaveLength(0); // the plan is its title alone, the agent keeps its row and the names
+    expect(hud(93, 11)[0]).toMatch(/1\/5 · 1 done/); // then the finished row folds into the title
+    expect(open(11)).toHaveLength(4);
+    expect(open(10)).toHaveLength(3);
+    expect(hud(93, 10)[0]).toMatch(/\+2 more/);
+    expect(open(9)).toHaveLength(2);
+    expect(open(8)).toHaveLength(1); // then open plan rows are counted on the title, one wording at every width
+    for (const n of [14, 12, 11, 10, 9, 8]) {
+      expect([n, agentRows(n)]).toEqual([n, 3]); // a running or listed agent keeps its row while a plan row can give way
+      expect([n, closes(n)]).toEqual([n, 2]); // no box is left open at the bottom
+    }
+    expect(hud(93, 7).some((r) => r.includes('▸ TODO'))).toBe(false); // only then the plan box goes, whole
+    expect([agentRows(7), closes(7)]).toEqual([3, 1]);
+    expect(hud(93, 4).filter((r) => PLAN_ROW.test(r))).toHaveLength(0);
+    expect(hud(93, 4)[0]).toMatch(/\+1 more/); // the agent window is the last to fold and the title counts what it hides
   });
 });
 
@@ -105,12 +108,12 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
   const done = [item(1, 'completed', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'completed', 'T2 read ghost.py (ghost-explorer)', names[1])];
   test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `closed · worker killed`', () => {
     const t2 = hud(93, 12, { todos: done, agents }).find((r) => r.includes('T2 read ghost.py'))!;
-    expect(t2).toContain('closed · worker killed');
+    expect(t2).toContain('■ T2'); expect(t2).toContain('killed'); expect(t2).not.toContain('worker killed'); // critique 28: one glyph and one word for a killed worker
     expect(hud(93, 12, { todos: done, agents }).find((r) => r.includes('T1 read alpha.py'))).not.toContain('worker killed');
   });
   test('HUD row in the 61-cell strip keeps the words and fits', () => {
     const t2 = hud(61, 12, { todos: done, agents }).find((r) => r.includes('T2 read'))!;
-    expect(t2).toContain('worker killed');
+    expect(t2).toContain('killed');
     expect(cells(t2)).toBeLessThanOrEqual(61);
   });
   test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `closed · worker killed` in the state cell', () => {

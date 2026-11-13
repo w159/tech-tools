@@ -107,7 +107,7 @@ describe('truth29 item 5: a hidden agent row is counted in the SUBAGENTS title',
   // live-110-46d4825c-1 f0071: `SUBAGENTS 3 running` over one agent row and no overflow line.
   for (const cols of [150, 110]) {
     test(`${cols} cols: 3 running and two rows hidden reads +2 more in the title`, () => {
-      const rows = rowsAt(three(), cols, 6);
+      const rows = rowsAt(three(), cols, 3); // title, one agent row, the closing rule (critique 28: boxes are closed)
       const title = rows.find((r) => r.includes('SUBAGENTS'))!;
       const shown = rows.filter((r) => /implementer-|runner-/.test(r)).length;
       expect(shown).toBe(1);

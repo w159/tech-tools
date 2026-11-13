@@ -103,6 +103,27 @@ function stopOf(groups: readonly GateGroup[]): StopVerdict | null {
   return null;
 }
 
+/** The plain words of a refused Stop for the band, parsed from the refusal's own text (the counts completion_gate_core `_done_claim_why` parses): `1 agent running`, `2 dispatch rows open`, `1 todo open`. */
+export function refusalWhy(block: string): string[] {
+	const out: string[] = [];
+	const plural = (n: string, word: string): string => `${n} ${word}${n === '1' ? '' : 's'}`;
+	let m = /(\d+) running agent/.exec(block);
+	if (m) out.push(`${plural(m[1]!, 'agent')} running`);
+	m = /(\d+) open dispatch row/.exec(block);
+	if (m) out.push(`${plural(m[1]!, 'dispatch row')} open`);
+	m = /(\d+) open todo/.exec(block);
+	if (m) out.push(`${plural(m[1]!, 'todo')} open`);
+	return out;
+}
+
+/** The gate groups with a refused Stop written in, from the hook result alone (critique 28: `blocked` drew one frame after the Stop error because the band waited for the verdict file). The host's
+ * `classic.Stop` hook calls this the moment the completion gate answers `block`; the file poll later replaces the line with the recorded one (register.ts withStopVerdict). */
+export function stopRefusal(groups: readonly GateGroup[], block: string): GateGroup[] {
+	const line = { id: STOP_LINE, label: 'Last Stop blocked', ok: true, detail: refusalWhy(block).join(', ') || 'gate' };
+	if (!groups.some((g) => g.id === 'completion')) return [...groups, { id: 'completion', title: 'Completion gate', lines: [line] }];
+	return groups.map((g) => (g.id === 'completion' ? { ...g, lines: [...g.lines.filter((l) => l.id !== STOP_LINE), line] } : g));
+}
+
 /** The open dispatch row's title, in cells, inside `dispatch <title> open`. */
 const DISPATCH_TITLE_MAX = 22;
 const clipCells = (t: string, n: number): string => clip(t.replace(/\s+/g, ' ').trim(), n);

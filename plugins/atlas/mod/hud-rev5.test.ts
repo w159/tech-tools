@@ -110,7 +110,7 @@ describe('rows: one phase, dim done rows, state words by weight', () => {
     const run = out.find((r) => text(r).includes('step 2'))!.find((x) => x.t === 'running')!;
     expect([run.tone, run.bold]).toEqual([rowWordTone('running'), true]);
     const dead = rows(todo(2, () => 'pending', (i) => (i === 0 ? 'ghost-explorer' : undefined)), [ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' })]);
-    const failed = dead.find((r) => text(r).includes('ghost-explorer') && text(r).includes('haiku'))!.find((x) => x.t === 'failed')!;
+    const failed = dead.find((r) => text(r).includes('ghost-explorer') && text(r).includes('haiku'))!.find((x) => x.t === 'killed')!; // critique 28: a failed agent that was in a call reads killed
     expect([failed.tone, failed.bold ?? false]).toEqual(['bad', false]);
     const warn = rows(todo(1, () => 'pending', () => 'ghost-explorer'), [ag('ghost-explorer', 'blocked')]).flatMap((r) => r).find((x) => x.t === 'blocked' || x.t === 'waiting')!;
     expect([warn.tone, warn.bold ?? false]).toEqual([rowWordTone(warn.t === 'blocked' ? 'blocked' : 'waiting'), false]);
@@ -121,7 +121,7 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
   const plan = todo(5, () => 'pending', (i) => (i < 3 ? ['alpha-explorer', 'ghost-explorer', 'beta-explorer'][i] : undefined));
   const agents = [ag('alpha-explorer', 'working', { tool: 'Read', target: 'alpha.py' }), ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), ag('beta-explorer', 'working', { tool: 'Read', target: 'beta.py' })];
   const planRows = (out: string[]): number => out.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(r)).length;
-  const agentLines = (out: string[]): number => out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length;
+  const agentLines = (out: string[]): number => out.filter((r) => /explorer\s+(running|failed|killed)\s+haiku/.test(r)).length;
   const corners = (out: string[]): [number, number] => [out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length, out.filter((r) => r.startsWith('╰') && r.endsWith('╯')).length];
   test('14 rows for 5 todos and 3 agents keep every row, the blank, the AGENT/STATE header and both closed boxes', () => {
     const out = rows(plan, agents, { maxRows: 14 }).map(text);
@@ -132,7 +132,7 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
     expect(planRows(out)).toBe(5);
     expect(corners(out)).toEqual([2, 2]);
   });
-  test('13 rows lose the blank first, 12 the closing rules next (and the corners with them); the five plan rows, the three agents and the column names stay (critique 26)', () => {
+  test('13 rows lose the blank first; at 12 the column names go next, never a closing rule: both boxes stay closed and the five plan rows and the three agents stay (critique 28)', () => {
     const thirteen = rows(plan, agents, { maxRows: 13 }).map(text);
     expect(thirteen).toHaveLength(13);
     expect(thirteen.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
@@ -140,21 +140,22 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
     expect(corners(thirteen)).toEqual([2, 2]);
     const out = rows(plan, agents, { maxRows: 12 }).map(text);
     expect(out.length).toBeLessThanOrEqual(12);
-    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
+    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(false);
     expect(out.filter((r) => r.trim() === '')).toHaveLength(0);
-    expect(corners(out)).toEqual([0, 0]); // critique 27: both rules go together and so do the corners: no box is left open at the bottom
-    expect(out.filter((r) => r.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(r))).toHaveLength(2);
+    expect(corners(out)).toEqual([2, 2]); // critique 28: a box is closed at every agent count
+    expect(out.filter((r) => r.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(r))).toHaveLength(0);
     for (const o of [thirteen, out]) {
       expect(agentLines(o)).toBe(3);
       expect(planRows(o)).toBe(5);
     }
   });
-  test('a tighter slot keeps the column names and every plan row, and windows the agents to the rows that fit (the running count rides the ribbon)', () => {
+  test('a tighter slot folds plan rows onto the TODO title (open rows first) and keeps every agent row; both boxes stay closed (critique 28)', () => {
     const out = rows(plan, agents, { maxRows: 9 }).map(text);
     expect(out.length).toBeLessThanOrEqual(9);
-    expect(out.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
-    expect(planRows(out)).toBe(5);
-    expect(out.filter((r) => /explorer\s+(running|failed)\s+haiku/.test(r)).length).toBeGreaterThanOrEqual(1);
+    expect(corners(out)).toEqual([2, 2]);
+    expect(out[0]).toMatch(/TODO {2}0\/5 · \+3 more/);
+    expect(planRows(out)).toBeGreaterThanOrEqual(2);
+    expect(agentLines(out)).toBe(3);
     expect(out.some((r) => /not shown/.test(r))).toBe(false);
   });
   test('an agent with no task and no last call reads `-` in TASK and LAST, at 150 and at 110 (61-cell pane)', () => {

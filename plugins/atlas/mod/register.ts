@@ -10,9 +10,10 @@ import type { ClientElements, EngineInterface, On, PluginOptions, RenderElement 
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
-import { bandRowCount, bandSpareRows, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
+import { bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
+import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
 import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
-import { hudAgents, hudBudget, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudHoldRows, hudWantRows, isRunning, reclaimBlanks, segmentOf } from './hud';
+import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isRunning, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -21,7 +22,7 @@ import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';
-import { asksUser, gateTally, leadBusy, planBusy, withCoreTally } from './data/runstate';
+import { asksUser, gateTally, leadBusy, planBusy, stopRefusal, withCoreTally } from './data/runstate';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -56,7 +57,6 @@ export const BOARD_ID = 'atlas-board';
 const PANE_BOARD = { id: BOARD_ID, title: 'Board', rows: 14, closeOnEscape: true, focus: true } as const;
 const TICK_MS = 250; // the slow tick: gauges, motion and the Stop verdict (the spinner has its own beat, FRAME_MS in band-motion.ts, and waits for none of this)
 const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
-const BAND_MIN_ROWS = 7; // the Mission Control band keeps at least this many rows; the HUD takes the rest of the budget
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
 const DOCK_ASKED_MIN_COLUMNS = 110; // an open made behind the person's prompt is "asked": the engine docks it beside a fullscreen transcript from 110 columns
 
@@ -388,17 +388,12 @@ export async function readStatuslineRows($: EngineInterface, root: string | null
 /** The AbovePrompt tree, in the one order the slot draws it: the band (with its worker rows) FIRST, then the breathing blank, then the HUD box, then whatever the next hook draws.
  * When the host clips a tree taller than the slot it keeps the top rows and prints `n more` for the rest (index.d.ts, AbovePrompt `maxRows` and `scroll.bodyRows`; inline,
  * `maxRows` is the terminal's height, so the mod cannot know how many rows will survive): a clip then eats the HUD's last rows and never the band (critique 23, live-150-1 f0053, f0055). */
-export function atlasSlot(els: ClientElements, parts: { band: RenderElement; gapRow: readonly RenderElement[]; hud: readonly RenderElement[]; pad?: readonly RenderElement[]; below: RenderElement }): RenderElement {
+export function atlasSlot(els: ClientElements, parts: { band: RenderElement; gapRow: readonly RenderElement[]; hud: readonly RenderElement[]; pad?: readonly RenderElement[]; lead?: number; below: RenderElement }): RenderElement {
 	const lower = [...parts.hud, ...(parts.pad ?? [])]; // `pad`: blank rows under the HUD that keep the slot one height through a run
-	return els.Box({ flexDirection: 'column', flexShrink: 0, children: [parts.band, ...parts.gapRow, ...(lower.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: lower })] : []), parts.below] });
+	return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(parts.lead ? [els.Box({ height: parts.lead, flexShrink: 0, children: [] })] : []), parts.band, ...parts.gapRow, ...(lower.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: lower })] : []), parts.below] });
 }
 
-/** Rows the slot holds (band, blank, HUD, pad) from the first frame of a run to its last (critique 26: the band jumped from row 31 to row 24 when SUBAGENTS appeared). It starts at what the run's full HUD
- * asks (`reserve`, hud.ts hudRunRows), never falls while the run lasts and never passes the budget; at rest nothing is held (0). The slot is bottom-anchored above the prompt, so a constant height is a band that stays on one screen row. */
-export function slotHold(prev: number, running: boolean, used: number, reserve: number, budget: number): number {
-	if (!running || budget < 1) return 0;
-	return Math.min(budget, Math.max(prev, used, reserve));
-}
+export { fitHudToBand, hudGapRows, hudSlotCap, slotHold } from './slot';
 /** The module's hold across renders: a pure function of the run, reset when no run is on. Test seam: `resetSlotHold`. */
 let slotHeld = 0;
 export const resetSlotHold = (): void => { slotHeld = 0; };
@@ -418,37 +413,6 @@ export function effectiveRows(maxRows: number, viewport: { rows: number; isFulls
 	if (viewport === undefined || viewport.isFullscreen === true || !Number.isFinite(viewport.rows)) return maxRows;
 	return Math.max(0, Math.min(maxRows, viewport.rows - inlineBelowRows(statusRows, running)));
 }
-/** Rows the band keeps once the HUD has taken the SUBAGENTS column names and the blank under the agents: its title row. */
-const BAND_KEEP_ROWS = 1;
-
-/** Rows the HUD may take of `budget`. `hudBudget` gives the compact floor (the plan, the agents, no column names); where the slot can also hold the
- * blank between the plan and the agents, the floor is raised to hold it. `want` (hud.ts hudWantRows) is what the HUD asks for: every plan row and agent row with both closing rules. The HUD is given
- * that much whenever the band keeps its title row and, with agents listed, the one blank under them, so a slot that fits the plan shows every row; hud-surface fitRows gives up decoration (rules, column
- * names) before a row (critique 23: `2 more todos not shown` at 150 columns beside spare rows). */
-export function hudSlotCap(budget: number, compact: number, floor: number, bandRows: number, running: boolean, agentsListed: boolean, want = 0): number {
-	const base = hudBudget(budget, compact, bandRows, running);
-	const room = budget - BAND_KEEP_ROWS - (agentsListed ? 1 : 0); // the most the HUD can take while the band keeps its title row (and the blank under the agents)
-	const asked = want > 0 ? Math.min(want, room) : 0;
-	if (!agentsListed) return Math.max(base, asked);
-	const cap = Math.max(budget - floor - 1 >= BAND_KEEP_ROWS ? Math.max(base, floor) : base, asked); // floor: hudFloorRows, the compact form with the blank between the blocks
-	// While an agent runs the band keeps its row (critique 17: 110 columns, 10 rows, 3 agents: the HUD took all 10 and no band line was drawn); the HUD folds to fit (hud-surface fitRows).
-	return running && budget > BAND_KEEP_ROWS + 1 ? Math.min(cap, budget - BAND_KEEP_ROWS) : cap;
-}
-
-
-/** The HUD rows that leave the band at least one row of the budget (band row, never the HUD, is the one thing that must not vanish: round 3). `gapOf` is the breathing blank the rows would draw.
- * A budget below one row means the slot is closed (the band draws nothing by design), so nothing is trimmed. */
-export function fitHudToBand<R>(hud: readonly R[], budget: number, gapOf: (rows: readonly R[]) => number): readonly R[] {
-	if (budget < 1) return hud;
-	let rows = hud;
-	while (rows.length > 0 && rows.length + gapOf(rows) > budget - 1) rows = rows.slice(0, -1);
-	return rows;
-}
-/** Blank rows between the last agent row and the band: one, while the band keeps its title row. */
-export function hudGapRows(listsAgents: boolean, hudRowCount: number, budget: number): number {
-	return listsAgents && budget - hudRowCount - 1 >= BAND_KEEP_ROWS ? 1 : 0;
-}
-
 const HUD_STATE_REFRESH_MS = 5000; // while starved the file is rewritten at least this often so the status line's freshness check holds
 let lastHudSig: string | undefined;
 let lastHudWriteMs = 0;
@@ -1263,6 +1227,21 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return next(e);
 	});
 
+	// A refused Stop is blocked on the update that carries it (critique 28): the completion gate answers `block`, and this hook writes the refusal into the gate groups and bumps the band's
+	// ticks before the host draws its Stop error. The verdict file poll that follows replaces the line with the recorded one.
+	on('classic.Stop', async ($, e, next) => {
+		const r = await next(e);
+		if (r && typeof (r as { block?: unknown }).block === 'string') {
+			const text = (r as { block: string }).block;
+			if (await read($, isModOn)) {
+				await update($, gatesState, (g) => stopRefusal(g, text));
+				await update($, spinnerTickState, (n) => n + 1);
+				await update($, easeTickState, (n) => n + 1);
+			}
+		}
+		return r;
+	});
+
 	// Usage figures (tokens / context fill), pushed after each turn.
 	on('session.measure', async ($, e, next) => {
 		if (await read($, isModOn)) {
@@ -1344,15 +1323,13 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][]): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows: e.props.maxRows === undefined ? undefined : hudRowsDrawn.length > 0 ? budget - hudRowsDrawn.length - hudGapRows(hudListsAgents(hudRowsDrawn), hudRowsDrawn.length, budget) : budget, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: e.props.isWorking === true || (e.props.isWorking !== false && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
 		const want = hudWantRows(hudIn, columns, snapshot.now);
-		const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, snapshot.now), BAND_MIN_ROWS, running, agentsListed, want);
-		const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
-		// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
-		const hudFull = hudOn ? reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandIn(rows as Segment[][])), drawHud) as Segment[][] : [];
-		// The band row never goes: whatever the HUD drew, at least one row of the budget stays for the band (a frame with no band was the hole in the readout).
-		const hud = (e.props.maxRows === undefined ? hudFull : fitHudToBand(hudFull, budget, (rows) => hudGapRows(hudListsAgents(rows as Segment[][]), rows.length, budget))) as Segment[][];
+		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
+		const plan = composeSlot({ budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView, running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: slotHeld });
+		slotHeld = plan.held;
+		const hud = plan.hud;
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
 		const compact = hudCompactRows(hudIn, columns);
 		const floor = hudFloorRows(hudIn, columns, snapshot.now);
@@ -1366,16 +1343,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			// fullscreen: the status line shares the slot, so add back what its full grid would take; inline it sits below the slot, so judge with the full grid taken off the viewport
 			starved: inline ? shownAt(effectiveRows(slotRows, e.viewport, report?.fullRows ?? null, runningCount)) < wanted : hudStarvedAtFullLine(slotRows, wanted, shownAt, report),
 		});
-		const band = bandTree(els, bandIn(hud), bandHandlers($));
+		const band = bandTree(els, plan.band, bandHandlers($));
 		// One blank row between the band and the HUD (A3), in the HUD's own panel fill.
 		const blankRow = (): RenderElement => rowOf(els, [segmentOf({ t: ' '.repeat(columns), tone: 'text' }, look.ui)], columns);
-		const gapRow = hudGapRows(hudListsAgents(hud), hud.length, budget) > 0 ? [blankRow()] : [];
-		// One slot height for the whole run: the band sits at the top of a bottom-anchored slot, so a HUD that grows (the SUBAGENTS block appearing) or an idle row that goes would move it on screen.
-		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
-		const used = bandRowCount(bandIn(hud), true) + gapRow.length + hud.length;
-		slotHeld = hudOn && e.props.maxRows !== undefined ? slotHold(slotHeld, runOn, used, BAND_KEEP_ROWS + 1 + hudHoldRows(hudIn, columns, snapshot.now, snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0), budget) : 0;
-		const pad = Array.from({ length: Math.max(0, slotHeld - used) }, blankRow);
-		return atlasSlot(els, { band, gapRow, hud: hud.map((r) => rowOf(els, r, columns)), pad, below: await next(e) });
+		const gapRow = Array.from({ length: plan.gap }, blankRow);
+		const pad = Array.from({ length: plan.pad }, blankRow);
+		return atlasSlot(els, { band, gapRow, hud: hud.map((r) => rowOf(els, r, columns)), pad, lead: plan.lead, below: await next(e) });
 		} finally {
 			release();
 		}

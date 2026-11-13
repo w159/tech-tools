@@ -117,12 +117,14 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r))).toHaveLength(3);
     expect(hud.some((r) => /\bT[1-5] step/.test(r)) && hud[0]!.includes('3 done')).toBe(hud.filter((r) => /\bT[1-5] step/.test(r)).length < 5);
   });
-  test('all open (the live frame): the band still keeps a row, every plan row and the column names stay, and an agent row shows', () => {
+  test('all open (the live frame, critique 28): the band still keeps a row, every agent row shows, both boxes close and the plan rows left out are counted on the TODO title', () => {
     const { hud, band } = slot(plan(['in_progress', 'in_progress', 'in_progress', 'pending', 'pending']), 61, 10);
     expect(band).toBeGreaterThanOrEqual(1);
-    expect(hud.filter((r) => /\bT[1-5] step/.test(r))).toHaveLength(5);
-    expect(hud.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
-    expect(hud.filter((r) => /-explorer\s+running/.test(r)).length).toBeGreaterThanOrEqual(1);
+    const shown = hud.filter((r) => /\bT[1-5] step/.test(r)).length;
+    expect(shown).toBeGreaterThanOrEqual(2);
+    expect(shown + Number(/\+(\d+) more/.exec(hud[0]!)?.[1] ?? 0)).toBe(5);
+    expect(hud.filter((r) => /-explorer\s+running/.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => r.startsWith('╰') && r.endsWith('╯'))).toHaveLength(2);
     expect(hud.length).toBeLessThanOrEqual(9);
   });
   test('a roomy slot is unchanged (hudBudget still floors at the compact form)', () => {

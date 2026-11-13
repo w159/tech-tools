@@ -28,7 +28,7 @@ describe('every plan row the slot holds is drawn', () => {
     expect(hudWantRows(working, 110, NOW)).toBe(14);
   });
   for (const cols of [150, 110]) for (const [name, input] of Object.entries(STATES)) {
-    for (const budget of [13, 14, 15, 16, 17]) {
+    for (const budget of [14, 15, 16, 17]) {
       test(`${cols} columns, ${name}, a host slot of ${budget} rows: all five plan rows, no "not shown", the band keeps its rows`, () => {
         const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
         const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
@@ -40,17 +40,20 @@ describe('every plan row the slot holds is drawn', () => {
     }
   }
   for (const cols of [150, 110]) for (const [name, input] of Object.entries(STATES)) {
-    test(`${cols} columns, ${name}, a host slot of 12 rows (the live capture's): every plan row, the column names and an agent row stay, the rules go first, the band keeps its row`, () => {
-      const cap = hudSlotCap(12, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
-      const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
-      expect(planRows(hud)).toHaveLength(5); // critique 26: `1 more todo not shown` beside a slot that held every row
-      expect(hud.some((l) => /not shown|\+\d+ more/.test(l))).toBe(false);
-      expect(hud.some((l) => /^\s+AGENT\s+STATE/.test(l))).toBe(true);
-      expect(hud.filter((l) => /^[▸ ]\s*\S (alpha|beta|gamma)-explorer /.test(l)).length).toBeGreaterThanOrEqual(1);
-      expect(hud.filter((l) => l.startsWith('╰') && l.endsWith('╯'))).toHaveLength(0);
-      const gap = hudGapRows(hud.some((l) => l.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, 12);
-      expect(12 - hud.length - gap).toBeGreaterThanOrEqual(1);
-    });
+    for (const budget of [12, 13]) {
+      test(`${cols} columns, ${name}, a host slot of ${budget} rows (critique 28): both boxes closed, every agent row drawn, the plan counted on its title, the band keeps its row`, () => {
+        const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
+        const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
+        expect(hud.filter((l) => /^╭─ .*╮$/.test(l))).toHaveLength(2);
+        expect(hud.filter((l) => l.startsWith('╰') && l.endsWith('╯'))).toHaveLength(2); // a box is closed at every agent count
+        expect(hud.filter((l) => /^[▸ ]\s*\S (alpha|beta|gamma)-explorer /.test(l))).toHaveLength(3); // every listed agent keeps its row
+        expect(planRows(hud).length).toBeGreaterThanOrEqual(2);
+        expect(planRows(hud).length + Number(/\+(\d+) more|· (\d+) done/.exec(hud[0]!)?.slice(1).find((x) => x) ?? 0)).toBe(5); // drawn or counted on the title: the whole plan
+        expect(hud.some((l) => /not shown/.test(l))).toBe(false);
+        const gap = hudGapRows(hud.some((l) => l.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
+        expect(budget - hud.length - gap).toBeGreaterThanOrEqual(1);
+      });
+    }
   }
   test('finished rows fold into the title count only when the rows truly do not fit, and never print "not shown" while a blank row remains', () => {
     const at = (n: number): string[] => text(hudLines(blocked, { cols: 110, maxRows: n, ui, now: NOW }));

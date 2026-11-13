@@ -64,8 +64,8 @@ describe('round 3 A2: the band lead has four states', () => {
   test('blocked names what it needs, and keeps moving while the host fixes it', () => {
     const m = model({ stopGates: ['dispatch T2 read x open'], openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>);
     expect(lead(m)).toMatch(/^▲ blocked · needs: close dispatch T2/);
-    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · needs: close dispatch T2 · [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] fixing/);
-    expect(lead({ ...m, busy: true, tick: 1 })).toContain('⠙ fixing');
+    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · needs: close dispatch T2 · fixing/); // critique 28: a stopped band draws no spinner
+    expect(lead({ ...m, busy: true, tick: 1 })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
     expect(head({ ...m, ui: { ...ui, ascii: true } })).not.toMatch(/[◐◓◑◒]/);
   });
   test('needsOf: a dispatch row reads as the task to close, retry stop as the spinner word retrying, others stay in the gate words', () => {
@@ -88,13 +88,13 @@ describe('round 3 A2: the band lead has four states', () => {
 
 describe('round 3 A2: a closed failure is a dim record, not a red mark', () => {
   const failed: MissionWorker[] = [{ name: 'a-explorer', state: 'failed', secs: 9 }];
-  test('while the dispatch row is open the count is `■ 1 failed`; once it closes it is the word `1 closed` with no glyph (critique 26: the done disc means done)', () => {
+  test('while the dispatch row is open the count is `■ 1 failed`; once it closes it is the word `1 killed` with no glyph (critique 26: the done disc means done)', () => {
     expect(head(model({ workers: failed }))).toContain('■ 1 failed');
     const t = head(model({ workers: failed, closed: 1 }));
-    expect(t).toContain('1 closed');
-    expect(t).not.toContain('● 1 closed');
+    expect(t).toContain('1 killed');
+    expect(t).not.toContain('● 1 killed');
     expect(t).not.toContain('■ 1 failed');
-    const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => x.t === '1 closed')?.tone;
+    const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => x.t === '1 killed')?.tone;
     expect(tone).toBe('dim');
   });
 });

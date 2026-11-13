@@ -24,7 +24,7 @@ export const rowSpinnerGlyph = (frame: number, ascii = false): string => (SCORER
 function markRun(s: MarkState, o: Pick<SurfaceOpts, 'now' | 'tick' | 'ui'>): Run {
   if (s === RETURNED) return stateRun(RETURNED, o.ui); // `returned` is a hand-back, not a finish: the neutral `◉` (one the scorer reads) in body 252 and the word in 245, never the green done mark (critique 27, live-150-46d4825c-1 f0085:26)
   const base = stateRun(s, o.ui, spinOf(o));
-  if (s === 'doubt') return o.ui.ascii ? base : { ...base, tone: 'bad' }; // a closed row whose worker was killed keeps the done mark in the error 203, not the amber of a warning
+  if (s === 'doubt') return { ...stateRun('failed', o.ui), tone: o.ui.ascii ? 'text' : 'bad' }; // a row closed over a killed worker is `■ killed` in the error 203: one glyph and one word for a killed worker everywhere (critique 28)
   return s === 'running' ? { ...base, t: rowSpinnerGlyph(spinOf(o), o.ui.ascii) } : base;
 }
 
@@ -85,6 +85,8 @@ export type SurfaceOpts = {
   motion?: MotionCtx | undefined;
   /** The snapshot clock in epoch ms: a done row that completed within LINGER_MS of it ranks with running rows when the plan folds. */
   now?: number | undefined;
+  /** The run's fixed shape (slot.ts): an empty block still draws its closed box with one quiet row (`no tasks yet`, `none running yet`), so the HUD has one shape from the first working frame to idle. */
+  reserve?: boolean | undefined;
 };
 /** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
 /** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so a drawn HUD prints it in every state until a budget too small turns it off. */
@@ -102,13 +104,15 @@ export const isRich = (o: SurfaceOpts): boolean => !!o.rich && o.cols >= 120;
 const MIN_STATE_AT = 6;
 const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
 /** A row's detail column text: empty when the title already says it (`T1 read alpha.py (alpha-explorer)` with the owner `alpha-explorer` printed again beside it). */
-const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || (!rich && isDoubt(r))) ? '' : r.detail); // a doubted done says `worker killed` in its state cell (non-rich), so the detail column does not say it again
+const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || isDoubt(r)) ? '' : r.detail); // a doubted done says `worker killed` in its state cell (non-rich), so the detail column does not say it again
 /** A completed row whose worker failed or was killed (critique 17 A1). */
 const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
 /** A doubted done spelled out in the plain form (the atlas-ui word, one source): the lead CLOSED the row (the store says completed) but its worker was killed, so the HUD does not call it done. The scorer reads the glyph (`●`, completed), which is the store's truth. */
 export const CLOSED_KILLED = DONE_KILLED;
+/** The one word for a worker that was stopped mid-call (critique 28), on the TODO row closed over it, the SUBAGENTS row and the band. */
+const KILLED = 'killed';
 /** The state cell's text: the row's word, and for a doubted done in the plain form `closed · worker killed` (critique 18 B2: a tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
-const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (!rich && isDoubt(r) ? CLOSED_KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
+const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (isDoubt(r) ? KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
 /** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
 const wordRun = (r: Pick<TodoRow, 'state' | 'word'>, text: string): Run => { const s = wordStyle(r); return t(text, s.tone, s.bold ? { bold: true } : {}); };
 const toCol = (runs: Run[], col: number): Run[] => (runsCells(runs) >= col ? runs : [...runs, t(' '.repeat(col - runsCells(runs)))]);
@@ -151,8 +155,11 @@ export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: 
 
 // ---- TODO ------------------------------------------------------------------------------------------------
 
+/** An empty block of the fixed shape: the closed box with one quiet row (critique 28: bare rows under a box). */
+const emptyBox = (o: SurfaceOpts, title: string, text: string): Run[][] => [titleRow(o.cols, title, '', [], o.ui, false), [t(`  ${text}`, 'muted')], bottomRule(o.cols, o.ui)];
+
 export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return o.reserve ? emptyBox(o, 'TODO', 'no tasks yet') : [];
   const { ui, cols } = o;
   const tier = tierOf(cols);
   const rich = isRich(o);
@@ -272,7 +279,7 @@ export const sortAgents = <T extends { tasks?: readonly number[] }>(rows: readon
 
 /** The Subagents block at every width: a docked side pane leaves the transcript about 61 cells at 110 columns, and the block still shows there with its ribbon and a row per agent (the columns drop first). */
 export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
-  if (rows.length === 0) return [];
+  if (rows.length === 0) return o.reserve ? emptyBox(o, 'SUBAGENTS', 'none running yet') : [];
   const { ui, cols } = o;
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
@@ -340,7 +347,7 @@ function agentCols(rows: readonly AgentRow[], o: SurfaceOpts, rich: boolean, sta
     if (lastAt + LAST_W <= cols) { plan.last = lastAt; resultAfter(lastAt); }
     return plan;
   }
-  const modelAt = stateAt + 12;
+  const modelAt = stateAt + (cols < 80 ? 10 : 12); // a narrow transcript (110 with the pane docked) takes 2 cells less between STATE and TASK so RESULT keeps its column (critique 28)
   for (const withModel of cols >= MODEL_FROM ? [true, false] : [false]) {
     const taskAt = withModel ? modelAt + modelW + 1 : modelAt;
     const lastAt = taskAt + TASK_W + 1;
@@ -381,7 +388,7 @@ function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: nu
   const finished = r.state === 'done';
   // A finished row is dim in its name and text but keeps its glyph colour: the green `●` is the one mark that says done (critique 21: done rows went wholly 247, state read from a 1-cell dot).
   const head: Run[] = [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), t(clipEll(flat(r.name) || flat(r.id ?? '') || 'agent', nameW, ellOf(ui)), finished ? 'muted' : 'text', { bold: r.focus })]; // an agent is never nameless // bold marks the selected row only
-  let row = [...toCol(head, stateAt), rich ? stateChip(r.state, ui) : wordRun(r, r.state)];
+  let row = [...toCol(head, stateAt), r.state === 'failed' && r.tool === KILLED ? (rich ? chip(KILLED, markToken('failed'), ui) : wordRun(r, KILLED)) : rich ? stateChip(r.state, ui) : wordRun(r, r.state)]; // one word for a stopped worker: `■ killed` (critique 28)
   /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. `fallback`: what a cell reads when its text is empty or only a bare verb fits. */
   const cell = (text: string, at: number | undefined, width: number, words = false, still = false, fallback = '', dim = false): void => {
     if (at === undefined) return;
@@ -443,19 +450,16 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   // blocks or drawn open on both, and an open block's ribbon has no corners: three agents running dropped both `╰───╯` rules while the `╭─` ribbons stayed, boxes with a top and no bottom (critique 27,
   // live-150-46d4825c-1 f0065:25-36). Then finished plan rows (counted on the title, `3/5 · 3 done`). The SUBAGENTS column names stay while an agent row shows; what folds next is agent rows (down to one, the
   // title counts the rest: `3 running · +2 more`), then plan rows (counted on the title, `0/5 · +2 more`), the last agent's box last.
-  const closed = { spacers: false, extras: false, close: true } as const; // no blank, no rail, both bottom rules
-  const open = { spacers: false, extras: false, close: false } as const; // no blank, no rail, no bottom rules and so no corners
-  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, closed, open, { ...open, foldDone: true }];
-  for (let cap = m - 1; cap >= 1; cap--) tries.push({ ...open, foldDone: true, agentCap: cap, quiet: true });
-  const keep = m > 0 ? { agentCap: Math.min(m, 1), quiet: true } : {};
-  for (let cap = n - 1; cap >= 0; cap--) tries.push({ ...open, todoCap: cap, ...keep }); // a cap is a count of rows: the rest is counted on the title
-  // The plan gives way before the last running agent does: its box goes, then agents are windowed.
-  tries.push({ ...open, hideTodo: true });
-  for (let cap = m - 1; cap >= 1; cap--) tries.push({ ...open, hideTodo: true, agentCap: cap, quiet: true });
-  // Only a budget too small for the column names and a running agent's row drops the names: the agent keeps its row.
-  tries.push({ ...open, hideTodo: true, header: false });
-  for (let cap = m - 1; cap >= 2; cap--) tries.push({ ...open, hideTodo: true, header: false, agentCap: cap, quiet: true }); // two slots are the title and one agent: below that the two bare ribbons
-  tries.push({ ...open, todoCap: 0, agentCap: 0, header: false });
+  // Critique 28: every try is a closed box. The ladder gives up decoration first (rail, blank, bottom-of-box extras), then finished rows, then the column names, then plan rows (down to one, counted on the title: `0/5 · +3 more`,
+  // so SUBAGENTS draws every running agent at 110 columns), then the plan box, and only then agent rows (`+N more` on the title).
+  const flatBox = { spacers: false, extras: false, close: true } as const; // no blank, no rail, both bottom rules
+  const tries: Try[] = [{ spacers: true, extras: true, close: true }, { spacers: true, extras: false, close: true }, flatBox];
+  tries.push({ ...flatBox, header: false }); // the column names are decoration: they go before a plan row folds
+  tries.push({ ...flatBox, foldDone: true, header: false });
+  for (let cap = n - 1; cap >= 1; cap--) tries.push({ ...flatBox, header: false, todoCap: cap }); // windowRows ranks open and fresh rows first
+  if (n > 0 && m > 0) tries.push({ ...flatBox, hideTodo: true, header: false });
+  if (m > 1) for (let cap = m - 1; cap >= 1; cap--) tries.push({ ...flatBox, hideTodo: true, header: false, agentCap: cap, quiet: true });
+  tries.push({ ...flatBox, todoCap: 0, agentCap: 0, header: false });
   const ss = { todos: s.todos, agents: m > 0 ? s.agents : [] };
   for (const tr of tries) {
     const rows = stack(tr.hideTodo ? { ...ss, todos: [] } : ss, o, tr);
