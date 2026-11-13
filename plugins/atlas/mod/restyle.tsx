@@ -17,7 +17,7 @@ import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
-import { barFade, cardAged, cardFade, cardStackHidden, hideNotification, placedTree } from './transcript/placed'
+import { barFade, cardAged, cardFade, cardStackHidden, hideNotification, placedTree, runCardPlaced } from './transcript/placed'
 import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
 import { elapsedClock, hexIn, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
@@ -220,18 +220,18 @@ function quietLead(id: string | undefined, text: string, pattern: string): boole
 
 /** What the run really holds, for the done chip: workers that failed and dispatch rows the store still holds open. Read from the full snapshot where the draw has one, else from the last one `ready` read (the
  * chip answers from the bundled header pattern before any state read, so a done chip drawn that way still knows). */
-let health = { failed: 0, open: 0 }
-export function healthOf(snap: AtlasSnapshot): { failed: number; open: number } {
+let health = { failed: 0, open: 0, idle: false }
+export function healthOf(snap: AtlasSnapshot): { failed: number; open: number; idle: boolean } {
  try {
   const s = snap as Partial<AtlasSnapshot>
   if (!Array.isArray(s.todos) && !Array.isArray(s.squad)) return health
   const failed = workersOf(snap).filter((w) => w.state === 'failed').length
   const dispatch = (s.todos ?? []).filter((t) => (t as { origin?: string }).origin === 'dispatch')
-  return { failed, open: openItems(dispatch, s.sessionId).length }
+  return { failed, open: openItems(dispatch, s.sessionId).length, idle: activeCount(workersOf(snap)) === 0 } // idle: no worker runs, so an open dispatch row is what the band calls held (mission-layout dispatchHeld)
  } catch { return health }
 }
 export const noteHealth = (snap: AtlasSnapshot): void => { health = healthOf(snap) }
-export const forgetHealth = (): void => { health = { failed: 0, open: 0 } }
+export const forgetHealth = (): void => { health = { failed: 0, open: 0, idle: false } }
 
 /** The look the chip draws with, kept from the host's own read (look.ts, async) so the synchronous draw path has a theme without awaiting. */
 let leadUi: Ui | null = null
@@ -251,8 +251,12 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  if (lead === null) return partialLead(props.text, ui)
  const rest = props.text.slice(lead.first.length).replace(/^\n/, '')
  const h = healthOf(snap)
- const verdict = lead.phase === 'done' ? verdictOf(h.failed, h.open, superseded) : null // wave 33: a done chip over a failed worker or an open dispatch row never reads `all finished`
- const row = leadRow(lead, { ui, columns, superseded, quiet, verdict })
+ // Wave 35 (critique 34: a 179 `done · 1 failed · 1 dispatch open` over a 203 `▲ blocked` band): an open dispatch row with nothing running is what the band calls blocked (dispatchHeld), so the card says it too, Stop refusal or not.
+ const blocked = superseded || (h.open > 0 && h.idle)
+ const verdict = lead.phase === 'done' ? verdictOf(h.failed, h.open, blocked) : null // wave 33: a done chip over a failed worker or an open dispatch row never reads `all finished`
+ // Wave 35 (critique 34: `run 5/5 done` and then `done 5/5`): the run's finish card is placed, so the lead's bare `done 5/5` chip says nothing new and draws no row.
+ const twin = lead.phase === 'done' && !verdict && !lead.sentence && !superseded && runCardPlaced()
+ const row = twin ? { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] } as RenderElement : leadRow(lead, { ui, columns, superseded, quiet, verdict })
  if (!rest.trim()) return row
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }

@@ -8,9 +8,10 @@ import { cells, markOf, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
 import { centred, HOTKEY_W, recentRows, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, boardTotals, ownerDown, type BoardLine } from '../board-model';
+import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, type BoardLine } from '../board-model';
 import { gateTally } from '../data/runstate';
 import { noteStopVerdict } from '../transcript/superseded';
+import { noteRunSecs } from '../transcript/placed';
 import { panelModelOf } from './sidebar-model';
 import { lineEl, panelBg, runEl, viewRows } from './sidebar-paint';
 import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
@@ -79,11 +80,12 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const items = boardItems(m);
   const max = Math.max(1, m.rows - 4);
   const stop = gateTally(m.gates as never).stop;
-  const plan = boardRowsOf(items, Math.floor(s.now / 1000));
+  // Wave 35 (critique 34: `3 dispatches` over an empty list): the dispatch group lists the OPEN dispatch rows, and the summary counts the rows it lists. A finished one is folded away.
+  const plan = boardRowsOf(items, Math.floor(s.now / 1000)).filter((x) => !x.dispatch || x.state !== 'done');
   // Wave 33 (critique 31: one kill stood four times in one pane): a failed worker is said by its plan row, once. The agents whose row says it are quiet in the totals, the chart and the recent posts.
   const failedOwners = new Set(plan.filter((x) => x.owner && (x.state === 'failed' || markOf(x.state, x.word) === 'doubt' || ownerDown(x))).map((x) => x.owner as string));
   const lines = items.length
-    ? boardLines(plan, { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, dispatches: items.filter((i) => i.origin === 'dispatch').length, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
+    ? boardLines(plan, { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
     : centred(pm, 'nothing on the board yet');
   // Wave 30 (critique 28): under the rows the pane is a chart, not a blank half. Sections, richest first, as many as the height holds: the timeline (a solid bar per agent, its activity row, the axis), the totals line, then the
   // last posts of the channel; what is left over is spread as one blank row between sections, and a dim hint closes the pane, so no run of blank rows is longer than three.
@@ -97,7 +99,8 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   let chart: BoardLine[] = [];
   let totals: BoardLine[] = [];
   if (items.length && room >= 5) {
-    totals = boardTotals(agents, { ...topts, hideFailed: quiet.hideFailed, ...(pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {}) });
+    const foot1 = boardFootLine(agents, { ...topts, ...(pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {}) }); // failed workers count too (critique 34)
+    totals = foot1 ? [foot1] : [];
     for (const lv of levels) {
       const t = boardTimeline(agents, { ...topts, ...lv, quiet: quiet.quiet }, room - 2 - totals.length);
       if (t.length && 1 + t.length + 1 + totals.length <= room) { chart = t; break; }
@@ -129,6 +132,7 @@ export function sidebarTree(els: ClientElements, model: SidebarModel, on: Sideba
   const ui = model.look ?? uiFromEnv(); // the host's one read (register.ts); the process environment only where a fixture sets none
   const cols = Math.max(10, model.columns - 1);
   const pm = panelModelOf(model, ui, cols);
+  noteRunSecs(model.run?.secs); // the run card prints the band's clock (transcript/placed.ts)
   noteStopVerdict(!!gateTally(model.gates as never).stop?.blocked); // the transcript's done chips read it: a refusal supersedes the ones drawn before it
   const blank = (): RenderElement => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, model, on, ui);
   return els.Box({

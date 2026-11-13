@@ -10,7 +10,7 @@ import type { LiveSnapshot } from '../orchestra-types'
 import { endedAt, liveWorkers } from '../data/live'
 import { notificationTree, type FinishOpts } from './cards'
 import { forgetFailed, outcomeText } from './outcome'
-import type { Ui } from '../atlas-ui'
+import { elapsedClock, type Ui } from '../atlas-ui'
 
 /** One finished worker, as the card needs it. */
 export interface FinishedWorker { name: string; role: string; failed: boolean; durationMs: number; /** Tool calls the worker made (the card's `· 3 calls`). */ calls?: number }
@@ -26,6 +26,8 @@ const decided = new Map<string, boolean>() // notification requestId -> hidden: 
 const owed = new Map<string, { w: FinishedWorker; tries: number }>() // worker name -> a finish whose card the host refused: retried on the next builds
 const MAX_TRIES = 30
 let counter = 0
+let runNote: { secs: number; at: number } | undefined // the band's run clock (register.ts hands it to the pane, the pane notes it here): the run card prints the figure the band prints
+const RUN_NOTE_MS = 5_000 // a note older than this is from a pane that is no longer drawn (it may be another run's): the card keeps what it last said
 let runCarded = false // the clean run's finish card is placed once per run: set when placed, cleared when the run is no longer clean
 
 const bump = (m: Map<string, number>, k: string, by: number): void => { m.set(k, Math.max(0, (m.get(k) ?? 0) + by)) }
@@ -103,12 +105,19 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
   } catch { /* a card is display only */ }
 }
 
+/** Wave 35 (critique 34: the run card said 0:13, the band 0:33): the band's own run seconds, noted by the pane every frame; the run card reads them when it draws. Absent (no pane open): the card keeps the workers' span. */
+export const noteRunSecs = (secs: number | undefined): void => { runNote = secs !== undefined && Number.isFinite(secs) && secs >= 0 ? { secs: Math.floor(secs), at: Date.now() } : undefined }
+/** Whether the clean run's finish card was placed: the lead's own `done 5/5` chip then draws no second line. */
+export const runCardPlaced = (): boolean => runCarded
+
 /** The card behind a `Placed` row id, drawn as the host's own notification row is (one shape, one look). */
 export function placedTree(id: string, ui: Ui, aged = false, opts: FinishOpts & { hidden?: boolean } = {}): RenderElement | null {
   const r = rows.get(id)
   if (!r) return null
   if (opts.hidden && !r.failed) return { type: 'Text', props: {}, children: [] } as RenderElement // a finish card that two newer ones replaced draws nothing (critique 29: at most two stacked)
-  return notificationTree(r.name, r.role, r.text, r.failed, ui, aged, { ...opts, ...(r.calls ? { calls: r.calls } : {}), ...(r.fact ? { fact: r.fact } : {}) })
+  if (r.name === 'run' && runNote && Date.now() - runNote.at < RUN_NOTE_MS) r.text = `finished \u00b7 ${elapsedClock(runNote.secs)}` // the run card's time is the band's run clock, kept once the pane stops saying it
+  const text = r.text
+  return notificationTree(r.name, r.role, text, r.failed, ui, aged, { ...opts, ...(r.calls ? { calls: r.calls } : {}), ...(r.fact ? { fact: r.fact } : {}) })
 }
 
 /** A card dims once the run has moved on (critique 17 C3): 20 s after it was first drawn, or 5 s after a later card was drawn. `now` is the snapshot's clock. */
@@ -162,5 +171,5 @@ export function hideNotification(requestId: string, name: string): boolean {
 
 /** Forget every placed card and decision (a new session, a test). */
 export function forgetPlaced(): void {
-  runCarded = false; rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
+  runCarded = false; runNote = undefined; rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
 }

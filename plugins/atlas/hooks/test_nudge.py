@@ -150,7 +150,7 @@ class InProcessMainTest(unittest.TestCase):
         env = dict(self.env, ATLAS_QUIET="on")
         with (
             mock.patch.object(nudge, "_check_memory_captured", return_value=False),
-            mock.patch.object(nudge, "_non_docs_changed", return_value=False),
+            mock.patch.object(nudge, "_run_non_docs_changed", return_value=False),
         ):
             code, out, _ = self._run_main({"session_id": "sess-orch"}, env=env)
         self.assertEqual((code, out), (0, ""))
@@ -159,12 +159,36 @@ class InProcessMainTest(unittest.TestCase):
         env = dict(self.env, ATLAS_QUIET="on")
         with (
             mock.patch.object(nudge, "_check_memory_captured", return_value=False),
-            mock.patch.object(nudge, "_non_docs_changed", return_value=True),
+            mock.patch.object(nudge, "_run_non_docs_changed", return_value=True),
         ):
             _, out, _ = self._run_main({"session_id": "sess-orch"}, env=env)
         msg = json.loads(out)["systemMessage"]
         self.assertEqual(len(msg.splitlines()), 1)
         self.assertNotIn("self-improvement check", msg)
+
+    def test_quiet_read_only_run_in_dirty_tree_gets_no_toast(self):
+        """Wave 35: files left dirty by an earlier session are no change of THIS run."""
+        import subprocess as sp
+
+        repo = tempfile.mkdtemp()
+        sp.run(["git", "init", "-q"], cwd=repo, check=True)
+        open(os.path.join(repo, "app.py"), "w").write("x")  # dirty tree, no run write
+        env = dict(self.env, ATLAS_QUIET="on")
+        with mock.patch.object(nudge, "_check_memory_captured", return_value=False):
+            code, out, _ = self._run_main({"session_id": "sess-orch", "cwd": repo}, env=env)
+        self.assertEqual((code, out), (0, ""))
+
+    def test_run_non_docs_changed_reads_the_run_writes(self):
+        c = atlas_db.connect(self.db_path)
+        rid = atlas_db.latest_run_id(c, "sess-orch")
+        c.close()
+        with mock.patch.dict(os.environ, self.env, clear=False):
+            self.assertFalse(nudge._run_non_docs_changed("sess-orch"))
+            with mock.patch.object(atlas_db, "run_changed_paths", return_value=["/r/docs/a.txt", "/r/README.md"]):
+                self.assertFalse(nudge._run_non_docs_changed("sess-orch"))
+            with mock.patch.object(atlas_db, "run_changed_paths", return_value=["/r/docs/a.txt", "/r/src/app.py"]):
+                self.assertTrue(nudge._run_non_docs_changed("sess-orch"))
+        self.assertIsNotNone(rid)
 
     def test_non_docs_changed_ignores_docs_and_markdown(self):
         import subprocess as sp

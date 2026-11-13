@@ -414,8 +414,12 @@ function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<type
 }
 
 /** The pane's rows: one line per item: the title, a 2-cell gutter, the state word, the owner dim, and the reason as a dim suffix. */
-function paneBody(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
-  const g = paneGeometry(rows, o.cols);
+function paneBody(rows0: readonly BoardRow[], o: BoardOpts): BoardLine[] {
+  // Wave 35 (critique 34: `T1 read alpha.py (alpha…` at 110): a title that does not fit loses its `(owner)` tail whole before any title is cut; the owner is on the status and team views.
+  let g = paneGeometry(rows0, o.cols);
+  const tail = (x: BoardRow): boolean => !!x.owner && x.label.endsWith(` (${x.owner})`);
+  const rows = rows0.some((x) => tail(x) && cells(x.label) > g.labelW) ? rows0.map((x) => (tail(x) ? { ...x, label: x.label.slice(0, -(x.owner.length + 3)) } : x)) : rows0;
+  if (rows !== rows0) g = paneGeometry(rows, o.cols);
   const focus = rows.findIndex((x) => x.focus ?? x.state === 'running');
   const keys = o.motion ? boardKeys(rows) : [];
   return rows.map((row, i): BoardLine => ({ runs: boardRowKeyed(paneRow(row, i === focus, o, g), row, o, keys[i]) }));
@@ -573,6 +577,35 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
   const dot = o.ui.ascii ? '|' : '·';
   const total: Run[] = secs > 0 ? [r(`  ${dot} `, 'muted'), r('total ', 'muted'), r(clock(secs), 'text', { bold: true }), ...(calls ? [r(` ${dot} ${calls} tool calls`, 'muted')] : [])] : [];
   return [{ runs: [r('  '), ...parts, ...total] }];
+}
+
+/** Wave 35 (critique 34: `● 2   ■ 1   ·total0:3 · 8 tool` at 110): the board's one footer row, a count per state (failed ones too), the run's time and its calls, in the longest of five forms that fits `cols - 1` cells:
+ * `● 2 done  ■ 1 failed  · total 0:31 · 8 tool calls`, the same with `0:31 · 8 calls`, then glyph and count alone (`● 2 ■ 1 · 0:31 · 8 calls`), then without the calls, then the counts. Fixed gutters: two cells between counts in the
+ * word forms, one in the short ones. */
+export function boardFootLine(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'> & { runSecs?: number }): BoardLine | null {
+  const ran = agents.filter((a) => a.state !== 'queued');
+  if (!ran.length) return null;
+  const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
+  const dot = o.ui.ascii ? '|' : '·';
+  const counts = (['running', 'done', 'failed', 'blocked', 'waiting'] as const).map((s) => ({ s, n: ran.filter((a) => a.state === s).length })).filter((x) => x.n > 0);
+  const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');
+  const ends = ran.map((a) => (a.state === 'running' && o.nowMs !== undefined ? o.nowMs : a.endMs)).filter((x): x is number => typeof x === 'number');
+  const own = starts.length && ends.length ? Math.max(0, Math.floor((Math.max(...ends) - Math.min(...starts)) / 1000)) : 0;
+  const secs = o.runSecs ?? own;
+  const calls = ran.reduce((k, a) => k + (a.calls?.length ?? 0), 0);
+  const make = (words: boolean, time: 'total' | 'bare' | 'none', callWord: 'tool calls' | 'calls' | ''): Run[] => {
+    const parts = counts.flatMap((x, i): Run[] => {
+      const g = stateRun(x.s, o.ui, frame, true);
+      return [...(i ? [r(words ? '  ' : ' ')] : []), { ...g, tone: x.s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(words ? ` ${x.n} ${x.s}` : ` ${x.n}`, 'text')];
+    });
+    const tail: Run[] = secs > 0 && time !== 'none'
+      ? [r(` ${dot} `, 'muted'), ...(time === 'total' ? [r('total ', 'muted')] : []), r(clock(secs), 'text', { bold: true }), ...(calls && callWord ? [r(` ${dot} ${calls} ${callWord}`, 'muted')] : [])]
+      : [];
+    return [r('  '), ...parts, ...tail];
+  };
+  const forms = [make(true, 'total', 'tool calls'), make(true, 'bare', 'calls'), make(false, 'bare', 'calls'), make(false, 'bare', ''), make(false, 'none', '')];
+  const fit = forms.find((f) => runsCells(f) <= o.cols - 1) ?? forms[forms.length - 1]!;
+  return { runs: fit };
 }
 
 /** What a row says beside its state, for the sub-line (critique 19 C1): its reason (`worker failed`, `owner failed`) and how long it has been open. A done row says nothing

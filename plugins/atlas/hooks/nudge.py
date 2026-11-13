@@ -65,6 +65,31 @@ def _non_docs_changed(cwd):
     return False
 
 
+def _run_non_docs_changed(session):
+    """True when THIS run wrote a file outside docs/ and not markdown (atlas_db.run_changed_paths).
+    The working tree cannot say it: a read-only run in a dirty checkout would toast a lesson for
+    changes it never made. Unknown (no run, DB error) reads as nothing changed."""
+    conn = None
+    try:
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.latest_run_id(conn, session)
+        if not rid:
+            return False
+        for path in atlas_db.run_changed_paths(conn, rid):
+            rel = str(path).replace("\\", "/")
+            if "/docs/" in rel or rel.startswith("docs/") or "/.atlas/" in rel or rel.startswith(".atlas/") or rel.endswith(".md"):
+                continue
+            return True
+    except Exception:
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
+    return False
+
+
 def main():
     payload = atlas_hook_guard.read_payload()
     payload = payload if isinstance(payload, dict) else {}
@@ -102,9 +127,9 @@ def main():
 
     quiet = os.environ.get("ATLAS_QUIET", "on").lower() != "off"
     if quiet:
-        # ATLAS_QUIET: speak only when the turn changed non-docs files, in one line
-        if not _non_docs_changed(payload.get("cwd")):
-            sys.exit(0)
+        # ATLAS_QUIET: speak only when this run wrote non-docs files, in one line
+        if not _run_non_docs_changed(session):
+            sys.exit(0)  # a read-only run gets no toast (wave 35: the old working-tree check toasted over changes the run never made)
         atlas_hook_guard.emit(
             payload,
             "nudge",

@@ -202,6 +202,7 @@ export const channelLabel = (name: string | undefined, fallback = 'channel'): st
 function ribbonRight(m: PanelModel): string {
   if (m.tab === 'team') return m.lead ? '' : m.workers.length ? countWords(m.workers, m.ui) : ''; // with a lead the tally is the `workers` row under it: once, at every width (critique 14: `3 done` twice)
   if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green}/${t.total}` : ''; } // `n/m` at every width: `2/4` at 110 and `1 of 4 green` at 150 was one figure in two formats (critique 11)
+  if (m.tab === 'route' && m.run) return 'status'; // wave 35: the first tab is the status monitor
   if (m.tab === 'channel') return m.channel && channelLabel(m.channel) !== 'this run' ? channelLabel(m.channel) : ''; // the head row says `this run` once; the ribbon names only a real channel
   return '';
 }
@@ -454,7 +455,11 @@ function routeSummary(m: PanelModel): PanelLine[] {
 /** Wave 32 (critique 30: the route tab was four stat lines and a sentence pointing at other tabs): the run as a timeline, from the data the panel already holds. The first row is the phase chain,
  * `● research › ⠋ implement 0:28 › ◇ verify` (past phases done, the lit one wearing the band's mark and the run clock, the rest queued); under it one row per plan row, `◐ T1 read alpha.py   +0:00`,
  * with the time its owner started, relative to the run's start. */
-function phaseChain(m: PanelModel): PanelLine[] {
+function phaseChain(m: PanelModel, compact: boolean | 'auto' = false): PanelLine[] {
+  if (compact === 'auto') { const full = phaseChainRuns(m, false, true); return full.length && rowWidth(full[0]!.runs) > m.cols ? phaseChain(m, true) : phaseChain(m); }
+  return phaseChainRuns(m, compact, false);
+}
+function phaseChainRuns(m: PanelModel, compact: boolean, raw: boolean): PanelLine[] {
   if (!m.phases.length) return [];
   const kind = m.run?.kind ?? 'working';
   const seen = m.entered ? new Set(m.entered) : null;
@@ -462,15 +467,18 @@ function phaseChain(m: PanelModel): PanelLine[] {
   const litAt = m.phases.indexOf(m.phase);
   const lit = kind === 'done' ? -1 : litAt >= 0 ? litAt : seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
   const runs: Run[] = [r(' '.repeat(GRID_LEAD))];
+  const enteredAt = (p: string, i: number): boolean => (seen ? seen.has(p) : kind === 'done' || (litAt >= 0 && i < litAt)); // a phase is green only once the run was in it (never from the final status)
+  const named = (_p: string, i: number): boolean => !compact || lit === i;
   m.phases.forEach((p, i) => {
-    if (i) runs.push(r(` ${m.ui.ascii ? '>' : '›'} `, 'dim'));
+    if (i) runs.push(r(named(p, i) || named(m.phases[i - 1]!, i - 1) ? ` ${m.ui.ascii ? '>' : '›'} ` : ' ', 'dim'));
     const cur = lit === i;
-    const entered = seen ? seen.has(p) : kind === 'done' || (litAt >= 0 && i < litAt); // a phase is green only once the run was in it (never from the final status)
+    const entered = enteredAt(p, i);
     const g: Run = cur ? (kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase', true)) : entered ? stateRun('done', m.ui) : { t: m.ui.ascii ? '.' : '\u00b7', tone: 'dim' };
+    if (compact && !cur) { runs.push(g); return; } // a narrow pane names the lit phase; the rest are their dot
     runs.push({ ...g, t: `${g.t} ` }, r(p, cur ? 'text' : entered ? 'sub' : 'dim', cur ? { bold: true } : {}));
     if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(m.run.secs)}`, 'dim'));
   });
-  return [line(fitRuns(runs, m.cols))];
+  return [line(raw ? runs : fitRuns(runs, m.cols))];
 }
 
 function routeBodyFull(m: PanelModel): PanelLine[] {
@@ -539,8 +547,91 @@ function routeBodyFull(m: PanelModel): PanelLine[] {
   return rows;
 }
 
-/** The route tab: the summary on the Claude pane (it has the HUD), the full plan and agent list everywhere else. */
-const routeBody = (m: PanelModel): PanelLine[] => (m.run ? routeSummary(m) : routeBodyFull(m));
+// ---- status (wave 35) ------------------------------------------------------------------------------------------------------------
+
+/** The status view's agent rows and events: at most this many of each (a short pane gives them up first). */
+const STATUS_AGENTS = 8;
+const STATUS_EVENTS = 5;
+/** Braille cells of an agent's activity over the run. */
+const STATUS_SPARK = 12;
+const dimLine = (m: PanelModel, text: string): PanelLine => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(text, 'dim')], m.cols));
+
+/** `phase  ▲ blocked 0:33` and under it the true phases (`● research › ⠋ implement › · verify`): the word and the clock are the band's own. */
+function statusPhase(m: PanelModel): PanelLine[] {
+  const head = phaseRow(m);
+  const secs = m.run?.secs;
+  return [secs !== undefined && m.run?.kind !== 'idle' ? { ...head, runs: [...head.runs, r(` ${shortAge(secs)}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
+}
+
+/** One row per agent: its mark, whole name, 12 braille cells of its calls over the run's window, and its time. */
+function statusAgentRows(m: PanelModel, ws: readonly PanelWorker[]): PanelLine[] {
+  const win = runWindow(m, ws).win;
+  const ages = ws.map((w) => ageOf(w));
+  const ageW = Math.max(0, ...ages.map((a) => cells(a)));
+  const nameW = Math.max(6, Math.min(Math.max(...ws.map((w) => cells(nameOf(w)))), m.cols - 1 - GRID_LEAD - (2 + STATUS_SPARK) - (ageW ? 2 + ageW : 0)));
+  return ws.map((w, i): PanelLine => {
+    const spark = w.state === 'queued' || !win ? ' '.repeat(STATUS_SPARK) : sparkBraille(w.calls, win.from, win.to, STATUS_SPARK, m.ui.ascii);
+    const tail: Run[] = [r('  '), r(spark, w.state === 'running' ? 'accent' : w.state === 'failed' ? 'bad' : 'sub'), ...(ageW ? [r('  '), r(ages[i]!.padStart(ageW), 'muted')] : [])];
+    return line(fitRuns(moving(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW, tail }), `worker:${w.name}`, w.state, m), m.cols));
+  });
+}
+
+/** The gates checklist: one row per counted group, its mark and a word; the figure beside the heading is the band's `gates n/m` (data/runstate gateTally over withCoreTally, the same call). */
+function statusGateRows(m: PanelModel, gs: readonly PanelGate[]): PanelLine[] {
+  const nameW = Math.min(18, Math.max(...gs.map((g) => cells(oneLine(g.title)))));
+  return gs.map((g): PanelLine => {
+    const bad = groupFailing(g);
+    const word = bad || g.error ? 'warning' : groupPending(g) ? 'pending' : 'passing';
+    const first = g.lines.find((l) => !l.ok);
+    const tail = bad && first ? oneLine(first.label) : '';
+    return line(fitRuns(gridRow({ cols: m.cols, ui: m.ui, mark: groupMark(g, m.ui), name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'warn' : groupPending(g) ? 'muted' : 'ok' }, wordW: GATE_WORD_W, ...(tail ? { detail: { t: tail } } : {}) }), m.cols));
+  });
+}
+
+/** The newest `n` posts of the run, oldest first, each `+0:23  who  what`: time on the run's clock, never the wall clock. */
+function statusEventRows(m: PanelModel, n: number): PanelLine[] {
+  const failedNames = new Set(m.workers.filter((w) => w.state === 'failed').map((w) => w.name));
+  const kept = m.notes.filter((x) => !(x.kind === 'failed' && failedNames.has(x.from)) && !/^(T\d+|row) failed\b/.test(x.text));
+  const ordered = kept.every((x) => x.ms !== undefined) ? [...kept].sort((a, b) => a.ms! - b.ms!) : kept;
+  const posts = ordered.slice(-n);
+  const who = Math.min(14, Math.max(0, ...posts.map((x) => cells(x.from))));
+  return posts.map((x): PanelLine => {
+    const time = r(`${stampOf(m, x).padEnd(6)} `, 'dim');
+    const name = r(`${pad(clipE(x.from, who), who)}  `, noteState(x).state === 'failed' ? 'bad' : 'sub');
+    const left = m.cols - 1 - GRID_LEAD - cells(time.t) - cells(name.t);
+    return line(fitRuns([r(' '.repeat(GRID_LEAD)), time, name, r(left > 3 ? clipE(oneLine(noteText(m, x)), left).replace(ELLIPSIS, m.ui.ascii ? '~' : ELLIPSIS) : '', 'muted')], m.cols));
+  });
+}
+
+/** The status view (Claude pane): the run on one screen, from data the panel already holds and nothing invented. Phase and clock, an activity line per agent, the gates checklist, the last five events. A section with no data is one dim line. */
+function statusBody(m: PanelModel): PanelLine[] {
+  const ws = workersByTask(m);
+  const gs = countedGates(gatesOf(m));
+  const phase = statusPhase(m);
+  const room = Math.max(4, m.rows - headerRows(m).length - 1);
+  let nA = Math.min(ws.length, STATUS_AGENTS);
+  let nE = Math.min(statusEventCount(m), STATUS_EVENTS);
+  const nG = gs.length;
+  const total = (): number => phase.length + 1 + 1 + Math.max(1, nA) + (ws.length > nA ? 1 : 0) + 1 + 1 + Math.max(1, nG) + 1 + 1 + Math.max(1, nE);
+  while (total() > room && (nE > 0 || nA > 1)) { if (nE > 0) nE--; else nA--; }
+  const t = tallyOf(gatesOf(m));
+  const agents = ws.length ? statusAgentRows(m, ws.slice(0, nA)) : [dimLine(m, 'no agents yet')];
+  const gates = nG ? statusGateRows(m, gs) : [dimLine(m, 'no gates reported yet')];
+  const events = nE > 0 ? statusEventRows(m, nE) : [dimLine(m, statusEventCount(m) ? 'events fold on a short pane' : 'no events yet')];
+  return [
+    ...phase, BLANK,
+    heading('agents', ws.length ? [r(`${ws.length}`, 'muted')] : [], m), ...agents, ...(ws.length > nA ? [dimLine(m, `+${ws.length - nA} more on the team tab`)] : []), BLANK,
+    heading('gates', t.total ? [r(`${t.green}/${t.total} green`, tallyTone(t.green, t.total))] : [], m), ...gates, BLANK,
+    heading('events', [], m), ...events,
+  ];
+}
+const statusEventCount = (m: PanelModel): number => {
+  const failedNames = new Set(m.workers.filter((w) => w.state === 'failed').map((w) => w.name));
+  return m.notes.filter((x) => !(x.kind === 'failed' && failedNames.has(x.from)) && !/^(T\d+|row) failed\b/.test(x.text)).length;
+};
+
+/** The route tab is the status view (wave 35): the dense status view on the Claude pane (it has the HUD), the full plan and agent list everywhere else. */
+const routeBody = (m: PanelModel): PanelLine[] => (m.run ? statusBody(m) : routeBodyFull(m));
 
 // ---- team (subagents by name and state) -----------------------------------------------------------------------------------
 
@@ -669,9 +760,12 @@ export function recentRows(m: PanelModel, spare: number): PanelLine[] {
  * reads blocked, with the reason the band gives. A failing check alone never blocks it (the band says warning then). Any other state is the lead's own. */
 function leadOf(m: PanelModel): PanelWorker | undefined {
   const lead = m.lead;
-  if (!lead || lead.state !== 'done') return lead;
+  if (!lead) return lead;
   const stop = tallyOf(gatesOf(m)).stop;
   const declared = m.phase === 'blocked';
+  // Wave 35 (critique 34: `lead done` under a blocked band): the band's own state decides. An open dispatch row holds the run with no Stop refusal and no declaration; the lead reads blocked then too, whatever it was doing.
+  if (m.run?.kind === 'blocked' && lead.state !== 'failed') return { ...lead, state: 'blocked', detail: declared || stop?.blocked ? blockReasons(declared, stop?.gates ?? ['gate']).long : 'run blocked' };
+  if (lead.state !== 'done') return lead;
   if (!declared && !stop?.blocked) return lead;
   return { ...lead, state: 'blocked', detail: blockReasons(declared, stop?.gates ?? ['gate']).long };
 }
