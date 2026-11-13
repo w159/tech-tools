@@ -77,7 +77,7 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
     forgetPhases();
     const t = render('route', 65, 45).join('\n');
     expect(t).not.toMatch(/T\d read|plan {2}▰|\+0:\d\d$/m); // 4d8d8eb1: `plan ▰▰▰▱ 3/5` and one row per item, which disagreed with the HUD
-    expect(t).toMatch(/timeline/);
+    expect(t).toMatch(/phase /); // wave 35: the status view's phase line and its chain
   });
   test('a phase is green only once the run was in it; an unentered phase is a 240 `·`', () => {
     const t = walk(['research', 'implement', 'verify'], { kind: 'working', secs: 40, startMs: NOW - 40000 }).join('\n');
@@ -187,7 +187,7 @@ describe('item 4: the board says one word per worker, keeps dispatches apart and
   });
   test('the totals, the bar and the recent list do not call it anything else', () => {
     expect(text).not.toMatch(/ghost-explorer.*(blocked|killed)/);
-    expect(out.filter((l) => /\bfailed\b/.test(l)).length).toBe(1); // said once, on the row
+    expect(out.filter((l) => /\bfailed\b/.test(l)).length).toBe(2); // the row, and the footer's count (wave 35)
   });
   test('dispatch rows stand in a `dispatches` group under the items, not among them', () => {
     const head = out.findIndex((l) => /^\s*dispatches\s*$/.test(l));

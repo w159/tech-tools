@@ -66,7 +66,7 @@ describe('item 1: the route tab carries the phase timeline (critique 30: the tab
   test('a `timeline` head and one chain of the phases, the current one braille with its elapsed time', () => {
     forgetPhases();
     const t = render('route', 66, 45).join('\n');
-    expect(t).toMatch(/timeline/);
+    expect(t).toMatch(/phase /);
     expect(t).toMatch(/· research › · theory › · test › [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] implement 0:57 › · verify/); // wave 34: a phase is green only once the run was in it
   });
   test('the plan is not drawn here (wave 34: the HUD above the prompt and the board tab list it)', () => {

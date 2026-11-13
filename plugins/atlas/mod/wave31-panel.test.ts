@@ -187,9 +187,9 @@ describe('wave 31 item 5: the board has a ticked axis, N calls labels and rows i
     expect(labels.every((v, i) => i === 0 || v - labels[i - 1]! === 5)).toBe(true);
     expect(labels.at(-1)!).toBeGreaterThanOrEqual(20);
   });
-  test('the failed word is shown once per pane (wave 33) and no full-width rule runs under it', () => {
+  test('the failed word is on the plan row and in the footer count (wave 35) and no full-width rule runs under it', () => {
     const out = render('board', 65, 45, { kind: 'working', secs: 28 });
-    expect(out.filter((l) => /\bfailed\b/.test(l))).toHaveLength(1);
+    expect(out.filter((l) => /\bfailed\b/.test(l))).toHaveLength(2);
     expect(out.filter((l) => /^\s*[━─]{40,}\s*$/.test(l))).toHaveLength(0);
   });
   test('the sparkline rows say `N calls`', () => {

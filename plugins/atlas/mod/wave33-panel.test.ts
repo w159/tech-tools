@@ -70,13 +70,13 @@ const GREEN = '#87d787'; // 114
 
 describe('item 1: one kill shows once (critique 31: the same kill printed four times on the board)', () => {
   const out = render('board', 65, 45);
-  test('the board names the failure on its plan row only', () => {
-    expect(out.filter((l) => /\bfailed\b/.test(l))).toHaveLength(1);
+  test('the board names the failure on its plan row, and the footer counts it (wave 35)', () => {
+    expect(out.filter((l) => /\bfailed\b/.test(l))).toHaveLength(2);
     expect(out.filter((l) => /^\s*■ T2/.test(l))).toHaveLength(1);
   });
   test('the totals, the chart row and the recent list do not repeat it', () => {
     expect(out.filter((l) => /ghost-explorer/.test(l) && /■/.test(l))).toHaveLength(1); // the plan row (owner shown) only; the chart row has no end mark
-    expect(out.find((l) => /\btotal\b/.test(l)) ?? '').not.toMatch(/failed|■/);
+    expect(out.find((l) => /\btotal\b/.test(l)) ?? '').toMatch(/■ 1 failed/); // wave 35: the footer counts failed workers too
     expect(out.join('\n')).not.toMatch(/T\d failed · ghost-explorer/);
   });
 });
