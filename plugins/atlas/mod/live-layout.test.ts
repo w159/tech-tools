@@ -48,8 +48,9 @@ describe('1. titles use the width the row has', () => {
       const rows = hudLines(input, view(cols, 30)).map(runsString);
       const todoRows = rows.filter((r) => PLAN_ROW.test(r)); // the agent rows also name their T1, after the worker
       expect(todoRows).toHaveLength(5);
-      expect(todoRows[0]).toContain('T1 read alpha.py (alpha-explorer)');
-      expect(todoRows[2]).toContain('T3 read gamma.py (gamma-explorer)');
+      expect(todoRows[0]).toContain('T1 read alpha.py'); // wave 32: the agent has its own column, so the title drops the `(alpha-explorer)` suffix
+      expect(todoRows[0]!.split('alpha-explorer')).toHaveLength(2);
+      expect(todoRows[2]).toContain('T3 read gamma.py');
       expect(todoRows[4]).toContain('T5 write the final two sentence summary');
       expect(todoRows.some((r) => r.includes('...'))).toBe(false);
       // one state column: the word starts in the same cell on every row
@@ -157,11 +158,13 @@ describe('3b. the band rows fit their slot', () => {
 });
 
 describe('4. no fold marker', () => {
-  test('no HUD or band row carries a [-] or [+] marker (the host draws its own beside the first row)', () => {
+  test('no HUD row carries a [-] or [+] marker; the band bar ends in its own [-] (wave 32), on its first row only', () => {
     for (const cols of HUD_WIDTHS) {
       for (const r of hudLines(input, view(cols, 30)).map(runsString)) expect(r).not.toMatch(/\[[-+]\]/);
     }
-    for (const r of bandRows(104, true)) expect(r).not.toMatch(/\[[-+]\]/);
+    const band = bandRows(104, true);
+    expect(band[0]).toMatch(/ \[-\] $/);
+    for (const r of band.slice(1)) expect(r).not.toMatch(/\[[-+]\]/);
   });
 });
 

@@ -41,7 +41,11 @@ export function demoFrames(cols = 100, step = MOTION_STEP_MS, color: Ui['color']
   };
   for (const surface of ['todo', 'agent'] as const) {
     const m = new Motion(true);
-    const seen = (state: Shown, now: number): void => m.observe(FEED[surface], hudMotionItems(demoInput(surface, state, now), { now })[surface === 'todo' ? 'todos' : 'agents'], now);
+    const seen = (state: Shown, now: number): void => {
+      const items = hudMotionItems(demoInput(surface, state, now), { now });
+      m.observe(FEED[surface], items[surface === 'todo' ? 'todos' : 'agents'], now);
+      if (surface === 'agent') m.observe(FEED.todo, items.todos, now); // wave 32: the agent rides its plan row in every state, so the row that changes is the TODO row
+    };
     seen('running', 0); // a first sight: at rest
     seen('done', 1000); // the change: the window opens at t=1000
     const strip: string[] = [];

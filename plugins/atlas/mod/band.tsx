@@ -7,11 +7,11 @@ import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
-import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from './data/todos';
+import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts, todoState } from './data/todos';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
-import { hostEnv, LINGER_MS, spinClock, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
+import { hostEnv, LINGER_MS, RETURNED, spinClock, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -122,7 +122,11 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const shown = active.length || queued.length ? [...active, ...lingering] : []; // a finished worker lingers only while the wave runs
   const plan = planBasis(s.todos, s.sessionId);
   const owners = workerStates(s, b.live);
-  const { done, total } = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
+  const counted = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
+  // Wave 32: a plan row whose agent has ended and that the lead has not closed yet is done in the HUD the moment the agent stops (hud.ts settled); the band counts it on the same event, never one beat behind.
+  const handedBack = withOwnerStates(plan, owners).filter((it) => it.status !== 'completed' && todoState(it.status, it.ownerState, it.retried).word === RETURNED).length;
+  const done = Math.min(counted.total, counted.done + handedBack);
+  const total = counted.total;
   const tally = gateTally(withCoreTally(b.gates, b.core)); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract and the dispatch plan included
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
   const last = [...s.comms].reverse().find((c) => isMessageKind(c.kind)); // joins and leaves are presence, not messages
@@ -146,7 +150,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
     turnSecs: b.workSecs, ranSecs: b.ranSecs, ...(b.restSecs !== undefined ? { restSecs: b.restSecs } : {}), ...(closed ? { closed } : {}),
-    workersInHud: b.workersInHud, eased: b.eased, ...(b.motion ? { motion: b.motion } : {}),
+    workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.motion ? { motion: b.motion } : {}),
   };
 }
 

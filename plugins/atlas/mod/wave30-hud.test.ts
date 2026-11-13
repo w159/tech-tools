@@ -149,12 +149,12 @@ describe('3. SUBAGENTS draws every running agent', () => {
     expect(agentRows).toHaveLength(3);
     for (const r of agentRows) expect(r.trimEnd(), r).toMatch(/\d+:\d\d$/); // the agent and its clock are right-aligned on the row
   });
-  test('at rest the SUBAGENTS box names the same columns at every width (RESULT does not vanish and reappear)', () => {
+  test('at rest the SUBAGENTS rule closes the TODO block at every width, with no separate box or column names (wave 32)', () => {
     for (const cols of [56, 100, 145]) {
-      // wave 31: while agents run the SUBAGENTS rule closes the merged block; at rest the box names the same five columns at every width
+      // wave 32: the SUBAGENTS rule closes the merged block in every state
       const f = frameOf({ running: 0, returned: 3, planned: true, doneTodos: 5, working: false } as Stage, cols, 18, 0);
-      const at = f.rows.findIndex((r) => /^╭.*▸ SUBAGENTS/.test(r));
-      expect(f.rows[at + 1]!, `${cols}`).toMatch(/AGENT\s+STATE\s+TASK\s+LAST\s+RESULT/);
+      expect(f.rows.some((r) => /^╰.*▸ SUBAGENTS.*╯\s*$/.test(r)), `${cols}`).toBe(true);
+      expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS/.test(r) || /AGENT\s+STATE/.test(r)), `${cols}`).toBe(false);
     }
   });
 });
@@ -212,7 +212,7 @@ describe('6. one glyph and one word for the killed worker', () => {
     const { hudLines } = await import('./hud');
     const todos: TodoItem[] = [{ id: 't1', content: 'T1 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' } as TodoItem];
     const agent = { name: 'ghost-explorer', role: 'explorer', state: 'failed', ui: 'failed', model: 'haiku', tool: null, lastTool: 'Read', startedAt: NOW - 5000, since: NOW - 1000 } as never;
-    const rows = hudLines({ todos: ownTodos(todos), agents: [agent] }, { cols: 120, maxRows: 14, ui, rich: false, now: NOW }).map(runsString);
+    const rows = hudLines({ todos: ownTodos(todos), agents: [agent] }, { cols: 120, maxRows: 14, ui, rich: false, now: NOW, merge: false }).map(runsString); // wave 32: the SUBAGENTS box this pins is the two-box shape
     const todoRow = rows.find((r) => r.includes('T1 read ghost'))!;
     const agentRow = rows.find((r) => /ghost-explorer\s+(killed|failed)/.test(r))!;
     expect(todoRow).toMatch(/^[ ▸] ■ T1/);

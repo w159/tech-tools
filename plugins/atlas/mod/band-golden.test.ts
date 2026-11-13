@@ -20,7 +20,8 @@ const mk =
 const els = { Box: mk("Box"), Text: mk("Text") } as unknown as ClientElements;
 const text = (row: Node): string =>
   (row.props.children as Node[]).map((t) => t.props.children).join("");
-const rowsOf = (tree: Node): string[] => trimRows((tree.props.children as Node[]).map(text));
+// Wave 32: the Claude band's first row ends in its own `[-]` (the omp panel draws none), so the shared golden is compared without it.
+const rowsOf = (tree: Node): string[] => trimRows((tree.props.children as Node[]).map((r) => text(r).replace(/ +\[-\] ?$/, '')));
 
 describe("band golden rows", () => {
   test("renders the shared world to the golden rows (plain text, 120 columns, tick 0)", () => {

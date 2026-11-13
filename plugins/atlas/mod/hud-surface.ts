@@ -192,20 +192,28 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const stateAt = right ? Math.min(stateAt0, right.stateMax) : stateAt0;
   const metaAt = stateAt + Math.max(14, todoWordW(rows, rich) + 2);
   const details = b.merged ? drawn.map(() => undefined) : detailCells(drawn, o, metaAt, tier, rich);
-  drawn.forEach((r, i) => out.push(todoRow(r, o, tier, rich, stateAt, metaAt, details[i], right?.cells[i], right?.at)));
+  drawn.forEach((r, i) => out.push(todoRow(r, o, tier, rich, stateAt, metaAt, details[i], right?.cells[i], right?.at, b.merged === true)));
   if (b.close === true && out.length > bodyAt) out.push(b.merged && b.closer ? b.closer : bottomRule(cols, ui));
   return out;
 }
 
-/** The right-aligned `agent  clock` cell of each merged row: the longest form that leaves the state column 14 cells or more, else the clock alone, else none. */
+/** The merged block's right-hand grid (wave 32): the agent in a 15-cell column and its clock right-aligned in a 5-cell column, one cell apart, every row ending on the same cell (`cols - 1`). A name past 15 cells ends in `…`
+ * (the column never widens, so the clocks never shift by a cell between rows or frames). The longest form that leaves the state column 14 cells or more, else the clock alone, else none. */
+export const AGENT_W = 15;
+export const TIME_W = 5;
 function rightCells(drawn: readonly TodoRow[], o: SurfaceOpts, rich: boolean): { cells: (string | undefined)[]; at: number; stateMax: number } | undefined {
   const wordW = rich ? CHIP_W : todoWordW(drawn, rich);
-  const forms: ((r: TodoRow) => string)[] = [(r) => `${r.agent}  ${r.agentTime}`, (r) => r.agentTime ?? ''];
+  const timeW = Math.max(TIME_W, ...drawn.map((r) => cells(r.agentTime ?? '')));
+  const pad = (x: string, n: number): string => x + ' '.repeat(Math.max(0, n - cells(x)));
+  const lpad = (x: string, n: number): string => ' '.repeat(Math.max(0, n - cells(x))) + x;
+  const forms: { w: number; of: (r: TodoRow) => string }[] = [
+    { w: AGENT_W + 1 + timeW, of: (r) => `${pad(clipEll(r.agent ?? '', AGENT_W, ellOf(o.ui)), AGENT_W)} ${lpad(r.agentTime ?? '', timeW)}` },
+    { w: timeW, of: (r) => lpad(r.agentTime ?? '', timeW) },
+  ];
   for (const form of forms) {
-    const texts = drawn.map((r) => (r.agent !== undefined ? form(r) : undefined));
-    const w = Math.max(0, ...texts.map((x) => (x === undefined ? 0 : cells(x))));
-    if (w === 0) return undefined;
-    const at = o.cols - w - 1;
+    const texts = drawn.map((r) => (r.agent !== undefined ? form.of(r) : undefined));
+    if (texts.every((x) => x === undefined)) return undefined;
+    const at = o.cols - form.w - 1;
     if (at - wordW - 2 >= 14) return { cells: texts, at, stateMax: at - wordW - 2 };
   }
   return undefined;
@@ -253,20 +261,22 @@ function todoStateAt(rows: readonly TodoRow[], o: SurfaceOpts, tier: Tier, rich:
   return Math.min(Math.max(tier === 'full' ? 30 : 26, maxLen(rows.map((r) => flat(r.label))) + 1 + 4), Math.max(last, 12));
 }
 
-function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string, right?: string, rightAt?: number): Run[] {
-  const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt, detail, right, rightAt);
+function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string, right?: string, rightAt?: number, merged = false): Run[] {
+  const runs = todoRowResting(r, o, tier, rich, stateAt, metaAt, detail, right, rightAt, merged);
   const moved = r.key === undefined ? runs : animateRow(runs, r.key, markOf(r.state, r.word), o.motion, o.ui, { pop: false }); // no pop glyph: the `●` itself steps from bright to ok (critique 21: `◌` reads empty)
   return r.focus && r.state !== 'queued' ? barRow(moved, o.cols, o.ui) : moved; // the row with the cursor is the selected one
 }
 
-function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string, right?: string, rightAt?: number): Run[] {
+function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string, right?: string, rightAt?: number, merged = false): Run[] {
   const { ui } = o;
   const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), markRun(markOf(r.state, r.word), o), t(' ')]; // the cursor marks work in hand, never a queued row; one spinner phase for the whole frame
   const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
   const text = clipEll(flat(r.label), labelW, ellOf(ui));
   const finished = r.state === 'done' && markOf(r.state, r.word) !== 'doubt';
-  const label = t(text, finished ? 'muted' : r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is quiet 247 text beside its green `●`, never struck through (critique 21: a finished plan read as cancelled); bold marks the selected row only
+  const quiet = merged && finished; // wave 32: a finished row of the merged block is dim 240 text, with no `done` word (the green mark says it)
+  const label = quiet ? dimRun(text, ui) : t(text, finished ? 'muted' : r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is quiet 247 text beside its green `●`, never struck through (critique 21: a finished plan read as cancelled); bold marks the selected row only
   if (stateAt === 0) return [...head, label];
+  if (quiet) return right !== undefined && rightAt !== undefined ? [...toCol([...head, label], rightAt), calmRun(t(right, 'sub'))] : [...head, label];
   const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : wordRun(r, wordOf(r, rich))];
   if (right !== undefined && rightAt !== undefined) return [...toCol(row, rightAt), calmRun(t(right, 'sub'))]; // merged: the agent and its clock, right-aligned
   if (tier !== 'full' || detail === undefined) return row;
@@ -304,7 +314,7 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
   const counts = rich ? [''] : [stateCounts(rows.map((r) => r.state)), stateCounts(rows.map((r) => r.state)).split(' · ')[0] ?? '', ''];
   // The working signal rides the title, inside the rule: the band lead's braille spinner (the shared clock and frame) before the counts while any agent runs.
-  const spin: Run[] = rows.some((r) => r.state === 'running') ? [stateRun('running', ui, spinOf(o), true), t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
+  const spin: Run[] = rows.some((r) => r.state === 'running') ? [{ ...stateRun('running', ui, spinOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' ')] : []; // the band lead's braille frame on the same shared index: a title is no row the scorer reads by glyph
   // A row the cap leaves out is counted on the title, in the one wording the TODO ribbon uses (`+2 more`), at every width: the title never says `3 running` over one drawn row without saying where the other two are
   // (critique 27, live-110-46d4825c-1 f0070:28-30). It is the last thing to give way on a narrow title.
   const hidden = windowRows(rows, b.cap, undefined, false).hidden;
@@ -453,29 +463,42 @@ export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] 
 /** An agent that works right now: the merged block draws it on its TODO row. */
 const isLive = (a: Pick<AgentRow, 'state'>): boolean => a.state === 'running' || a.state === 'queued';
 /** Whether the block is merged: an agent runs, so the SUBAGENTS box gives way to the agent and clock on each TODO row (wave 31, critique 29). */
-export const isMerged = (s: Surfaces, o: Pick<SurfaceOpts, 'merge'>): boolean => o.merge !== false && s.todos.length > 0 && s.agents.some(isLive); // no plan rows: the agents keep their own SUBAGENTS box
+export const isMerged = (s: Surfaces, o: Pick<SurfaceOpts, 'merge' | 'reserve'>): boolean => o.merge !== false && s.todos.length > 0 && (s.agents.length > 0 || o.reserve === true); // wave 32: one block in every state; no plan rows: the agents keep their own SUBAGENTS box
 
 const ownerBase = (name: string): string => name.replace(/\s+#\d+$/, '');
-/** The TODO rows of the merged block: each row names the agent that owns it with its clock; an agent that owns no plan row gets a row of its own (so a running agent is never hidden). */
+/** A plan row's `(alpha-explorer)` title suffix: a kebab name with a hyphen, optionally a retry mark. The merged block shows the agent in its own column, so the title drops it. */
+const AGENT_SUFFIX = /\s*\(([a-z][a-z0-9]*(?:-[a-z0-9]+)+(?:\s#\d+)?)\)\s*$/i;
+/** The TODO rows of the merged block: each row names the agent that owns it with its clock (the title never repeats the name); an agent that owns no plan row gets a row of its own (so no agent is hidden). */
 export function mergedTodos(s: Surfaces): TodoRow[] {
   const agentOf = (r: TodoRow): AgentRow | undefined => (r.owner === undefined ? undefined : s.agents.find((a) => a.name === r.owner || a.id === r.owner || ownerBase(a.name) === ownerBase(r.owner!)));
   const used = new Set<AgentRow>();
   const rows = s.todos.map((r): TodoRow => {
     const a = agentOf(r);
     if (a) used.add(a);
-    return a ? { ...r, agent: flat(a.name), agentTime: a.elapsed ?? NONE } : r;
+    const suffix = AGENT_SUFFIX.exec(r.label)?.[1];
+    const label = suffix === undefined ? r.label : r.label.replace(AGENT_SUFFIX, '');
+    if (a) return { ...r, label, agent: flat(a.name), agentTime: a.elapsed ?? NONE };
+    const named = flat(r.owner ?? '') || suffix; // an assignee with no listed agent yet: the name holds its column from the first frame, the clock stays blank
+    return named ? { ...r, label, agent: named, agentTime: '' } : { ...r, label };
   });
-  const extra = s.agents.filter((a) => !used.has(a) && !s.todos.some((r) => agentOf(r) === a) && (isLive(a) || a.state === 'done' || a.state === 'failed') && isLive(a)).map((a): TodoRow => ({ label: flat(a.task ?? '') || flat(a.name), state: a.state, detail: '', focus: a.focus, owner: a.name, agent: flat(a.name), agentTime: a.elapsed ?? NONE, ...(a.key !== undefined ? { key: a.key } : {}) }));
+  const extra = s.agents.filter((a) => !used.has(a) && !s.todos.some((r) => agentOf(r) === a)).map((a): TodoRow => ({ label: flat(a.task ?? '') || flat(a.name), state: a.state, detail: '', focus: a.focus, owner: a.name, agent: flat(a.name), agentTime: a.elapsed ?? NONE, ...(a.key !== undefined ? { key: a.key } : {}) }));
   return [...rows, ...extra];
 }
 
-/** The merged block's closing rule carries the SUBAGENTS title and its count: `╰─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ⠧ 3 running ───╯`. The title stays on screen in every state. */
+/** The merged block's closing rule carries the SUBAGENTS title and the squad's one line, in every state: `╰─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ⠧ 3 running ───╯` while one runs (braille spinner, accent 141),
+ * `╰─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done · 0:04 0:01 0:02 · 5 fn ───╯` once none does (the mark of the worst state, each agent's clock, the count of what they found). */
 function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
   const { ui, cols } = o;
-  const counts = stateCounts(s.agents.map((r) => r.state));
-  const spin: Run[] = [stateRun('running', ui, spinOf(o), true), t(' ')];
-  const forms = [counts, counts.split(' · ')[0] ?? '', ''];
-  const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...spin, t(c, 'sub')] : spin.slice(0, 1), ui, false, true);
+  if (s.agents.length === 0) return titleRow(cols, 'SUBAGENTS', '', [t('none running yet', 'sub')], ui, false, true); // the run's block before its first agent: the same closing rule, nothing listed yet
+  const states = s.agents.map((r) => r.state);
+  const counts = stateCounts(states);
+  const live = s.agents.some(isLive);
+  const lead: Run[] = live ? [{ ...stateRun('running', ui, spinOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' ')] : [stateRun(states.includes('failed') ? 'failed' : 'done', ui), t(' ')];
+  const times = s.agents.map((a) => a.elapsed ?? NONE).filter((x) => x !== NONE).join(' ');
+  const fn = s.agents.reduce((n, a) => n + Number(/^(\d+) fn$/.exec(resultOf(a))?.[1] ?? 0), 0);
+  const tail = live ? [] : [times, fn > 0 ? `${fn} fn` : ''].filter((x) => x !== '');
+  const forms = [[counts, ...tail].join(' · '), counts, counts.split(' · ')[0] ?? '', ''];
+  const titled = (c: string): Run[] => titleRow(cols, 'SUBAGENTS', '', c ? [...lead, t(c, 'sub')] : lead.slice(0, 1), ui, false, true);
   return forms.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
 }
 

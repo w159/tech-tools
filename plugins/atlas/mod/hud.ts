@@ -7,7 +7,7 @@ import { liveState, workerUiState, type LiveWorker } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
-import { DONE_DOUBT, WORKER_FAILED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, RETURNED, WORKER_FAILED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
 import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -85,7 +85,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
 
 /** `root` (the project root) makes paths in a tool preview project-relative. `phases` feeds the rich rail. */
 export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | null; phases?: { ids: readonly string[]; active: number } };
-export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; /** False: never merge running agents into the TODO rows (row counters ask for the roomiest form). */ merge?: boolean; /** Atlas is at rest (the band reads idle): the block draws in 240 rules and 245 text. */ idle?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; /** False: never merge running agents into the TODO rows (row counters ask for the roomiest form). */ merge?: boolean; /** The live slot (slot.ts composeFixed, wave 32): a row whose agent has ended reads done on the event that ends it, not when the lead closes the store row. */ settled?: boolean; /** Atlas is at rest (the band reads idle): the block draws in 240 rules and 245 text. */ idle?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 
 export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running' || a.state === 'queued';
 
@@ -103,7 +103,7 @@ export const ownerStatesOf = (agents: readonly HudAgent[]): Map<string, UiState>
   new Map(agents.flatMap((a): [string, UiState][] => { const ui = a.ui ?? workerUiState(a.state); return [[a.name, ui], ...(a.key !== undefined ? [[a.key, ui] as [string, UiState]] : [])]; }));
 
 /** Plan rows in plan order. Every row is shown with its own state; the focus mark sits on the running row, else the first open one. */
-export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map()): TodoRow[] {
+export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map(), handedBackDone = false): TodoRow[] {
   // A plan row whose text names a running agent (`T1 read alpha.py (alpha-explorer)`) before the lead has stamped an owner on it is that agent's row: it reads running, not queued (critique 29: T1 `queued` while alpha-explorer ran).
   const inferred = (t: TodoItem): string | undefined => {
     if (t.owner) return undefined;
@@ -116,7 +116,10 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const t = guess ? { ...raw, owner: guess } : raw;
     const oc = t.owner ? ownerOutcome(owners, t.owner) : undefined; // the owner's latest instance (`beta-explorer #2` after a kill), critique 19 A3
     const own = oc?.state;
-    const { state, word } = todoState(t.status, own, oc?.retried); // the one rule (data/todos todoState): a failed owner fails the item, a returned one reads `returned`
+    const ruled = todoState(t.status, own, oc?.retried); // the one rule (data/todos todoState): a failed owner fails the item, a returned one reads `returned`
+    // Wave 32: in the merged block the row flips to done on the event that ends its agent (the subagent stop that also places the finish card), not 4-5 s later when the lead closes the store row.
+    const handed = handedBackDone && ruled.word === RETURNED;
+    const { state, word } = handed ? { state: 'done' as UiState, word: undefined } : ruled;
     const claimed = typeof t.claimed_at === 'number' && t.claimed_at > 0 ? now - t.claimed_at * 1000 : undefined;
     const est = typeof t.estimate_s === 'number' && t.estimate_s > 0 ? ` of ${mmss(t.estimate_s * 1000)}` : ''; // the estimate only when the item carries one
     const ownerWord = state !== 'done' && (own === 'failed' || own === 'waiting' || own === 'blocked') && own !== state ? `owner ${own}` : ''; // as on the board: a failed owner already fails the item, a waiting owner blocks it and is named
@@ -290,7 +293,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
-    s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents)), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
+    s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents), opts.settled === true && opts.merge !== false), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
     o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}), ...(opts.reserve ? { reserve: true } : {}), ...(opts.merge === false ? { merge: false } : {}) },
   };
 }

@@ -121,43 +121,37 @@ describe('1. one block, no hidden rows, no spacers', () => {
   }
 });
 
-describe('2. running agents ride their TODO rows; at rest SUBAGENTS is its own box with a header', () => {
+// Wave 32 (hud32): the SUBAGENTS box and its AGENT STATE TASK LAST RESULT header are gone in every state; the lower rule of the one block carries the title (`⠹ 3 running` while they work,
+// `● 3 done · times · N fn` once they have stopped). The old at-rest box tests are replaced by the closing-rule form below.
+describe('2. agents ride their TODO rows in every state; SUBAGENTS is the lower rule of the block', () => {
   for (const [, screen, cols] of SIZES) {
-    test(`${cols} cells: agent and clock are right-aligned on the row, and the SUBAGENTS box is gone while an agent runs`, () => {
+    test(`${cols} cells: agent and clock are right-aligned on the row, and there is no SUBAGENTS box in any state`, () => {
       for (const { st, f } of scenario(screen, cols)) {
-        if (st.running === 0) continue;
         expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS/.test(r)), `${st.name}: no SUBAGENTS box`).toBe(false);
+        if (st.running + st.returned === 0) continue;
         expect(f.rows.some((r) => /^╰.*▸ SUBAGENTS.*╯\s*$/.test(r)), `${st.name}: the lower rule carries the title`).toBe(true);
+      }
+      for (const { st, f } of scenario(screen, cols)) {
         for (let i = st.returned; i < st.returned + st.running; i++) {
           const row = f.rows.find((r) => r.includes(`T${i + 1} `))!;
           expect(row, `${st.name} T${i + 1}`).toMatch(/^[ ▸] [◐◓◑◒] T\d/);
-          expect(row.trimEnd(), `${st.name} T${i + 1}`).toMatch(new RegExp(`${NAMES[i]}\\s+\\d+:\\d\\d$`));
+          expect(row.trimEnd(), `${st.name} T${i + 1}`).toMatch(new RegExp(`${(NAMES[i]!.length > 15 ? `${NAMES[i]!.slice(0, 14)}…` : NAMES[i])}\\s+\\d+:\\d\\d$`));
         }
       }
     });
-    test(`${cols} cells: at rest the SUBAGENTS box has AGENT STATE TASK LAST RESULT, RESULT is a count or -, TASK is whole`, () => {
+    test(`${cols} cells: at rest the lower rule reads \`● N done\` with the times, and carries no column header`, () => {
       for (const { st, f } of scenario(screen, cols)) {
         if (st.running !== 0 || st.returned === 0) continue;
-        const at = f.rows.findIndex((r) => /^╭.*▸ SUBAGENTS/.test(r));
-        expect(at, st.name).toBeGreaterThan(-1);
-        expect(f.rows[at + 1]!, st.name).toMatch(/AGENT\s+STATE\s+TASK\s+LAST\s+RESULT/);
-        const agentRows = f.rows.slice(at + 2).filter((r) => /^[ ▸] [●■] \S+-explorer/.test(r));
-        expect(agentRows.length, st.name).toBeGreaterThan(0);
-        for (const r of agentRows) {
-          expect(r, st.name).toMatch(/(\d+ fn|-)\s*$/);
-          expect(r, st.name).not.toMatch(/preparing|finished/);
-        }
+        const rule = f.rows.find((r) => /^╰.*▸ SUBAGENTS/.test(r));
+        expect(rule, st.name).toBeDefined();
+        expect(rule!, st.name).toMatch(/● \d+ done/);
+        expect(f.rows.some((r) => /AGENT\s+STATE\s+TASK/.test(r)), st.name).toBe(false);
       }
     });
   }
-  test('the SUBAGENTS columns are the same at 150 and 110 (docked and not)', () => {
-    const header = (cols: number, screen: number): string[] => {
-      const rest = scenario(screen, cols).find((x) => x.st.name === 'idle')!.f;
-      const h = rest.rows.find((r) => /AGENT\s+STATE/.test(r))!;
-      return ['AGENT', 'STATE', 'TASK', 'LAST', 'RESULT'].filter((w) => h.includes(w));
-    };
-    expect(header(93, 45)).toEqual(['AGENT', 'STATE', 'TASK', 'LAST', 'RESULT']);
-    expect(header(56, 40)).toEqual(['AGENT', 'STATE', 'TASK', 'LAST', 'RESULT']);
+  test('the SUBAGENTS rule is the same shape at 150 and 110 (docked and not)', () => {
+    const rule = (cols: number, screen: number): string => scenario(screen, cols).find((x) => x.st.name === 'idle')!.f.rows.find((r) => /^╰.*▸ SUBAGENTS/.test(r))!;
+    for (const [c, sc] of [[93, 45], [56, 40]] as const) expect(rule(c, sc)).toMatch(/^╰─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done.*╯\s*$/);
   });
 });
 

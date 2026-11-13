@@ -106,6 +106,8 @@ export type MissionModel = {
   closed?: number;
   /** No wordmark sweep (ATLAS_REDUCED_MOTION, NO_COLOR); the spinner frames still step. Absent: read from the environment. */
   still?: boolean;
+  /** The Claude Code band bar (wave 32, band.tsx only): the first row ends in the band's own `[-]`, the label is `todo n/m` for the whole run and the gates segment is `gates 2/4`. The omp panel draws none of these. */
+  bar?: boolean;
 };
 
 const MID = 80; // below this, only the band
@@ -279,6 +281,18 @@ const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'shor
   return [r(' · ', 'sub'), gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, ui.ascii ? 'text' : 'warn')]; // wave 31: the same 179 in every state (it was 240 at rest)
 };
 
+/** The gates segment `gates 2/4` (green of total, the gates tab's own figure): amber 179 while the band works, dim 240 once it is done or idle (wave 32: `△ 2 gates to check` stayed amber on the green done row and
+ * the grey idle row). It shows while any gate fails and Stop did not refuse; a pending gate (Stop alone decides) is not a failure. */
+const gatesSeg = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>): Run[] => {
+  const checks = m.checks ?? [];
+  if (st.blocked || !checks.some((c) => !c.ok)) return [];
+  const green = checks.filter((c) => c.ok && !c.pending).length;
+  const tone: Tone = ui.ascii ? 'text' : st.kind === 'working' ? 'warn' : 'dim';
+  return [r(' · ', 'sub'), r(`gates ${green}/${checks.length}`, tone)];
+};
+/** The gate tail the model's host draws: the Claude Code bar's `gates 2/4`, else the warn tail. */
+const gateTail = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => (m.bar ? gatesSeg(m, ui, st) : warnSeg(ui, st, form));
+
 /** How much of the lead a form keeps: the clock or last run, the blocked reason (`long`, `short`, `bare`, or none) and the moving `fixing`. */
 type LeadOpts = { clock: boolean; reason: 'long' | 'short' | 'bare' | 'none'; fix: boolean };
 const LEAD_FULL: LeadOpts = { clock: true, reason: 'long', fix: true };
@@ -324,7 +338,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const blockedWords = blockedRuns(m, ui, true);
   const lead = (o: LeadOpts): Run[] => (st.kind === 'done' ? animateRow(leadRuns(m, ui, st, reason.long, o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, reason.long, o)); // wave 31: the done word fades 231, 151, 114
   // `phase n/m` only when no plan carries the progress (the lead's reply header and the plan's done count are two clocks).
-  const todoSeg = (open: boolean): Run[] => (m.total ? [glue, r(`todo ${fig.done}/${fig.total}${open ? openMore(m) : ''}`, 'sub')] : [glue, r(`phase ${phaseNo}`, 'sub')]);
+  const todoSeg = (open: boolean): Run[] => (m.total || m.bar ? [glue, r(`todo ${fig.done}/${fig.total}${open ? openMore(m) : ''}`, 'sub')] : [glue, r(`phase ${phaseNo}`, 'sub')]); // the bar's label is `todo n/m` for the whole run (it read `phase 1/5` until the plan arrived, then flipped)
   const ctxSeg: Run[] = m.ctx !== undefined ? [glue, r('ctx '), r(percent(m.ctx), 'sub')] : [];
   type CtxMode = 'gauge' | 'text' | 'none';
   type CountMode = 'words' | 'tiny' | 'none';
@@ -336,7 +350,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const warning = (counts: Counts, warn: Warn, bw: boolean): Run[] => {
     if (failN > 0 && counts !== 'none') return [glue, ...killedRuns(m, ui, counts !== 'tiny')];
     if (bw && blockedWords.length) return [glue, ...blockedWords];
-    if (st.warn && warn !== 'none') return warnSeg(ui, st, warn);
+    if (warn !== 'none') return m.bar ? gatesSeg(m, ui, st) : st.warn ? warnSeg(ui, st, warn) : [];
     return [];
   };
   const wide = (gw: number, gap: string): Run[] => {
@@ -344,7 +358,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const counts = runningRuns(m, ui, true);
     return [
       ...cap, r('  '), ...lead(LEAD_FULL),
-      ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`, 'sub')] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
+      ...(m.total || m.bar ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`, 'sub')] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
       ...(counts.length ? [r(gap), ...counts] : []),
       ...warn,
     ];
@@ -377,7 +391,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     { runs: wide(10, '   '), min: GAUGE_MIN }, { runs: wide(8, '  '), min: GAUGE_MIN },
     ...levels.map(row),
     // the last resorts: the chip and the todo figure, then the chip alone
-    { runs: [...cap, r(' '), ...(m.total ? [r(`todo ${fig.done}/${fig.total}`, 'sub')] : [])], min: 0 },
+    { runs: [...cap, r(' '), ...(m.total || m.bar ? [r(`todo ${fig.done}/${fig.total}`, 'sub')] : [])], min: 0 },
     { runs: [...cap], min: 0 },
   ];
   return out;
@@ -387,7 +401,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
 function richBand(m: MissionModel, ui: Ui): Line[] {
   const st = runStateOf(m);
   const { reason } = st;
-  const head: Run[] = [...ribbonOf(m, ui, st.kind), r('  '), ...leadRuns(m, ui, st, reason.long, LEAD_FULL), ...warnSeg(ui, st), r('   '), ...rail(m.phases, phaseIndex(m), ui)];
+  const head: Run[] = [...ribbonOf(m, ui, st.kind), r('  '), ...leadRuns(m, ui, st, reason.long, LEAD_FULL), ...gateTail(m, ui, st), r('   '), ...rail(m.phases, phaseIndex(m), ui)];
   const todo: Run[] = m.total ? [r('todo ', 'muted'), ...todoGauge(m, ui, 16), r(` ${figure(m).done}/${figure(m).total} · ${percent(figure(m).done / figure(m).total)}${openMore(m)}`, 'sub')] : [];
   const ctx: Run[] = m.ctx !== undefined ? [r('ctx ', 'muted'), ...ctxBar(m, ui, 10), r(` ${percent(m.ctx)}`, 'sub')] : [];
   const counts = bandCounts(m, ui, true, true);
@@ -401,17 +415,25 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
   return [{ runs: head }, { runs: [r(' ')] }, { runs: row }];
 }
 
-/** The band alone: one row in the widest standard form that fits `cols`, or the three rich rows when `m.rich`, the
- * rows allow (`maxRows` >= 3) and the width fits. Rows are padded to `cols`. */
+/** The bar's `[-]` control, inside the 234 bar at the right end of its first row in every state (wave 32): dim 240, one cell of the bar after it. The host's own `[-]` sits in the five cells right of the tree; this one is the band's. */
+export const HANDLE = '[-]';
+const HANDLE_W = HANDLE.length + 1;
+const HANDLE_MIN = 24; // a bar narrower than this has no room for the figures and the handle
+const roomFor = (m: MissionModel): number => (m.bar && m.cols >= HANDLE_MIN ? m.cols - HANDLE_W : m.cols);
+const withHandle = (m: MissionModel, runs: readonly Run[]): Run[] => (m.bar && m.cols >= HANDLE_MIN ? [...fitRuns(runs, m.cols - HANDLE_W), r(HANDLE, 'dim'), r(' ')] : fitRuns(runs, m.cols));
+
+/** The band alone: one row in the widest standard form that fits `cols` (less the bar's handle), or the three rich rows when `m.rich`, the
+ * rows allow (`maxRows` >= 3) and the width fits. Rows are padded to `cols`; the bar's first row ends in `[-]`. */
 export function bandLines(m: MissionModel): Line[] {
   const ui = uiOf(m);
   if (m.rich && m.maxRows >= 3) {
     const rows = richBand(m, ui);
-    if (rows.every((l) => runsWidth(l.runs) <= m.cols)) return rows.map((l) => ({ ...l, runs: fitRuns(l.runs, m.cols) }));
+    if (rows.every((l, i) => runsWidth(l.runs) <= (i === 0 ? roomFor(m) : m.cols))) return rows.map((l, i) => ({ ...l, runs: i === 0 ? withHandle(m, l.runs) : fitRuns(l.runs, m.cols) }));
   }
   const forms = standardForms(m, ui);
-  const row = (forms.find((f) => m.cols >= f.min && runsWidth(f.runs) <= m.cols) ?? forms[forms.length - 1]!).runs;
-  return [{ runs: fitRuns(row, m.cols) }];
+  const room = roomFor(m);
+  const row = (forms.find((f) => m.cols >= f.min && runsWidth(f.runs) <= room) ?? forms[forms.length - 1]!).runs;
+  return [{ runs: withHandle(m, row) }];
 }
 
 function lastRunRuns(l: LastRun | undefined, checksFail = false): Run[] {

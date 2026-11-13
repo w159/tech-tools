@@ -122,11 +122,11 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(cellOf(rowNodes[0]!, '◇').props.color).toBe(TONE_HEX.muted);
   });
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
-    const band = (columns: number) => panel(columns).rows[0]!.trim();
+    const band = (columns: number) => panel(columns).rows[0]!.replace(/ +\[-\] *$/, '').trim(); // wave 32: the bar's own `[-]` is not part of the figures
     expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
     expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
     expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // words, as at 150 (critique 16 A5)
-    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4`); // 40 columns: the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
+    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working · todo 1/4`); // 40 columns (wave 32: 36 beside the bar's `[-]`, so the clock gives way first): the state word and the todo figure; the lower segments (the counts) give way, never a word
   });
   test('idle shows the last run under the band', () => {
     const snapshot = busySnap({ comms: [] });
@@ -396,7 +396,7 @@ describe('below 80 columns: only the band, one row', () => {
   test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running · ■ 1 killed` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`);
+    expect(rows[0]!.replace(/ +\[-\] *$/, '').trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // wave 32: minus the bar's `[-]`
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {
