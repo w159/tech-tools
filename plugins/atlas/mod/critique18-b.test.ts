@@ -44,7 +44,8 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect([names(14), names(13), names(12)]).toEqual([true, true, false]); // the column names go before a plan row does
     expect(hud(93, 12)[0]).not.toMatch(/done/);
     expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
-    expect(hud(93, 11)[0]).toMatch(/1\/5 · ■2 · 1 done/); // then the finished row folds into the title (wave 36: failed rows are counted on the title)
+    expect(hud(93, 11)[0]).toMatch(/1\/5 · ■2/); // then the finished row folds into the title (wave 37: failed rows are counted on the title, the done count is the figure's numerator, not a second count)
+    expect(hud(93, 11)[0]).not.toMatch(/done/);
     expect(open(11)).toHaveLength(4);
     expect(open(10)).toHaveLength(3);
     expect(hud(93, 10)[0]).toMatch(/\+2 more/);

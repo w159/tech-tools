@@ -417,7 +417,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   type Warn = 'long' | 'short' | 'none';
   const failN = failedCount(m);
   const warning = (counts: Counts, warn: Warn, bw: boolean): Run[] => {
-    if (failN > 0 && counts !== 'none' && !seg) return [glue, ...failedRuns(m, ui, true)]; // always spelled `■ N failed`: the one failure word at every width (wave 33), never `■1`
+    if (failN > 0 && counts !== 'none') return seg ? [] : [glue, ...failedRuns(m, ui, true)]; // on the filled bar the failure rides the plan segment (`■1`) and still outranks the other warnings; always spelled `■ N failed`: the one failure word at every width (wave 33), never `■1`
     if (bw && blockedWords.length) return [glue, ...blockedWords];
     if (warn !== 'none') return m.bar ? gatesSeg(m, ui, st) : st.warn ? warnSeg(ui, st, warn) : [];
     return [];
@@ -425,7 +425,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   // Wave 37: the plan segment is `todo n/m` (plus `■k` for failures) and the workers segment never goes: the running count, else who waits or finished, else `no agents`.
   const badTone: Tone = ui.ascii || contrast(PALETTES[ui.theme].bad, PALETTES[ui.theme].panel) < NEED.text ? 'text' : 'bad';
   const failChip: Run[] = failN > 0 ? [r(' '), stateRun('failed', ui), r(`${failN}`, badTone)] : [];
-  const planFig = (open: boolean): Run[] => (m.total ? [r(`todo ${fig.done}/${fig.total}${open ? openMore(m) : ''}`), ...failChip] : [r('todo -', 'sub')]);
+  const planFig = (open: boolean, word = true): Run[] => (m.total ? [r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${open ? openMore(m) : ''}`), ...failChip] : [r(word ? 'todo -' : '-', 'sub')]); // the narrow forms drop the word `todo`, never the segment
   const workBody = (words: boolean): Run[] => {
     const run = runningRuns(m, ui, words);
     if (run.length) return run;
@@ -450,7 +450,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const row = (v: Lv, word = true): Form => {
     const warn = warning(v.counts, v.warn, v.bw);
     const run = v.counts === 'words' || v.counts === 'noq' ? runningRuns(m, ui, true) : v.counts === 'tiny' ? runningRuns(m, ui, false) : [];
-    if (seg) return { min: 0, runs: segmented(ui, st, cap, lead(v.o), planFig(v.open && warn.length === 0), joinWork(workBody(v.counts === 'words' || v.counts === 'noq'), warn.slice(1))) };
+    if (seg) return { min: 0, runs: segmented(ui, st, cap, lead(v.o), planFig(v.open && warn.length === 0, word), joinWork(workBody(v.counts === 'words' || v.counts === 'noq'), warn.slice(1))) };
     return { min: 0, runs: [...cap, r(' '), ...lead(v.o), ...todoSeg(v.open && warn.length === 0, word), ...(run.length ? [glue, ...run] : []), ...warn] };
   };
   const F = LEAD_FULL;
@@ -483,6 +483,12 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const out: Form[] = [
     { runs: wide(10, '   '), min: GAUGE_MIN }, { runs: wide(8, '  '), min: GAUGE_MIN },
     ...levels.map((v) => row(v, v.bare !== true)),
+    // Wave 37: below that the state word goes, never a segment: glyph and clock, then the glyph alone (the fill still says which state), each beside `n/m` and the worker count.
+    ...(seg ? (['clock', 'glyph'] as const).map((k): Form => {
+      const words = new Set(['working', 'done', 'idle', 'blocked']);
+      const tiny = lead({ clock: k === 'clock', reason: 'none', fix: true }).filter((x) => x.t !== ' ' && !words.has(x.t.trim()));
+      return { min: 0, runs: segmented(ui, st, cap, tiny, planFig(false, false), workBody(false)) };
+    }) : []),
     // the last resorts: the chip and the todo figure, then the chip alone
     { runs: [...cap, r(' '), ...(m.total ? [r(`todo ${fig.done}/${fig.total}`, 'sub')] : [])], min: 0 },
     { runs: [...cap], min: 0 },

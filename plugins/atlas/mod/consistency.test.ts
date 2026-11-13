@@ -107,7 +107,11 @@ const railOf = (text: string): Facts['rail'] => {
 type Inputs = { band: LiveSnapshot; hud: LiveSnapshot; board: LiveSnapshot; panel: LiveSnapshot };
 
 /** The band's agent counts: after the `agents` noun when it is drawn, else the whole row less the todo group's own blocked count (the noun gives way to the state word on a crowded row). */
-const bandCounts = (head: string): ReturnType<typeof counts> => counts(head.includes('agents') ? head.slice(head.indexOf('agents')) : head.replace(/▲ \d+ blocked/g, ''));
+const bandCounts = (head: string): ReturnType<typeof counts> => {
+  const found = counts((head.includes('agents') ? head.slice(head.indexOf('agents')) : head.replace(/▲ \d+ blocked/g, '')).replace(/● \d+ done/g, '')); // wave 37: the finished count of the workers segment is not a state count the world is compared on
+  const failed = /■(\d+)/.exec(head); // and the failure rides the plan segment: `todo 3/7 ■1`
+  return failed ? { ...found, failed: Number(failed[1]) } : found;
+};
 
 function ccBand(s: LiveSnapshot): Facts {
   const rows = rowsOfTree(bandTree(els, { snapshot: s, live: liveWorkers(s, s.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12, ui }));

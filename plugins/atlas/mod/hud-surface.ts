@@ -168,9 +168,6 @@ export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: 
 /** An empty block of the fixed shape: the closed box with one quiet row (critique 28: bare rows under a box). */
 const emptyBox = (o: SurfaceOpts, title: string, text: string): Run[][] => [titleRow(o.cols, title, '', [], o.ui, false), [t(`  ${text}`, 'muted')], bottomRule(o.cols, o.ui)];
 
-/** The most plan rows the TODO block draws before the rest ride the title as `+N more` (wave 37: every row up to 12, at every width). */
-export const TODO_ROWS_MAX = 12;
-
 export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
   if (rows.length === 0) return o.reserve ? emptyBox(o, 'TODO', 'no tasks yet') : [];
   const { ui, cols } = o;
@@ -192,7 +189,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const stays = (r: TodoRow): boolean => r.state !== 'done' || isFresh(r, o.now); // a row that completed within LINGER_MS keeps its place, as when the plan windows
   const foldable = rows.filter((r) => !stays(r)).length;
   const fold = b.foldDone === true && foldable > 0 && foldable < rows.length; // a plan that is all done keeps its rows
-  const { shown, hidden } = fold ? { shown: rows.filter(stays), hidden: foldable } : windowRows(rows, b.cap ?? (rows.length > TODO_ROWS_MAX ? TODO_ROWS_MAX : undefined), o.now, false);
+  const { shown, hidden } = fold ? { shown: rows.filter(stays), hidden: foldable } : windowRows(rows, b.cap, o.now, false);
   const forms = hidden > 0 && !fold ? [`${figure} · +${hidden} more`, ...figures] : figures; // wave 37: folded finished rows ride the figure's own done count (`1/5 · ■1`), never `1/5 · ■1 · 1 done` // one wording at every width (critique 26: `1 more todo not shown` at 150, `+2 more` at 110)
   const out: Run[][] = [head(forms)];
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
@@ -539,8 +536,9 @@ export function mergedTodos(s: Surfaces): TodoRow[] {
     if (used.has(a) || a.state === 'done' || a.state === 'failed') continue;
     const home = homeOf(a.task ?? '', rows);
     if (a.state === 'queued' && home >= 0 && rows[home]!.state !== 'done') continue; // folded: the plan row carries the work
-    const to = home >= 0 ? home : 0;
-    if (rows.length > 0 && rows[to]!.state !== 'done' && rows[to]!.state !== 'failed') kids[to]!.push(`${flat(a.name)} ${a.state}${a.elapsed && a.elapsed !== NONE ? ` ${a.elapsed}` : ''}`);
+    const firstOpen = rows.findIndex((x) => x.state !== 'done' && x.state !== 'failed'); // no fitting row: the first open one, never a finished row
+    const to = home >= 0 ? home : firstOpen;
+    if (to >= 0 && rows[to]!.state !== 'done' && rows[to]!.state !== 'failed') kids[to]!.push(`${flat(a.name)} ${a.state}${a.elapsed && a.elapsed !== NONE ? ` ${a.elapsed}` : ''}`);
   }
   return rows.map((r, i) => (kids[i]!.length ? { ...r, children: kids[i]! } : r));
 }

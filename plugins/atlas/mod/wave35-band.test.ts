@@ -75,11 +75,11 @@ const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents
 // Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 236, blocked 203.
 const STATES: [string, Shape, string, string, boolean][] = [
   ['working', RUNNING, 'accent', '[⠀-⣿] working 0:42', true],
-  ['done', FINISHED, 'ok', '● done 1:12', false],
-  ['idle', IDLE, 'muted', '○ idle · 1:12', false],
+  ['done', FINISHED, 'ok', '● done 1:12', true],
+  ['idle', IDLE, 'muted', '○ idle · 1:12', true],
   ['blocked', STOP, 'bad', '▲ blocked', true],
 ];
-const fill = (token: 'accent' | 'ok' | 'muted' | 'bad'): string => (token === 'muted' ? xtermHex(236) : PALETTES.mocha[token]);
+const fill = (token: 'accent' | 'ok' | 'muted' | 'bad'): string => (token === 'muted' ? xtermHex(240) : PALETTES.mocha[token]);
 
 describe('1. the band is three segments: state | plan | workers, in block elements', () => {
   for (const [cols, screen, body] of SIZES) {
@@ -95,8 +95,8 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
         expect(order[0], `${name} pill fill`).toBe(xtermHex(97));
         expect(order[1], `${name} state fill`).toBe(fill(token as 'accent'));
         expect(order[2], `${name} plan fill`).toBe(xtermHex(237));
-        if (workers && !(name === 'blocked' && body < 90)) expect(order[3], `${name} workers fill`).toBe(xtermHex(235)); // wave 36: a blocked lead (gates chip, open dispatch) gives the workers segment up first at 56 cells
-        else if (!workers) expect(order, `${name}: no workers listed, no workers segment`).toHaveLength(3);
+        expect(order[3], `${name} workers fill`).toBe(xtermHex(235)); // wave 37: the workers segment is drawn in every state and width
+        expect([...f.band].filter((c) => c === '▌'), `${name}: three segments, two seams`).toHaveLength(2);
         const word = runs.find((x) => /^ ?(?:working|blocked|done|idle)/.test(x.t) && x.bgHex === fill(token as 'accent'))!;
         expect(word.bgHex, name).toBe(fill(token as 'accent'));
         expect(word.tone === 'ink' || word.tone === 'white' || word.tone === 'text' || word.tone === 'sub' || word.tone === 'muted', `${name}: ${word.tone}`).toBe(true);
@@ -122,21 +122,13 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
     const fills = [...new Set(bandRuns(f.model).map((x) => x.bgHex).filter((h): h is string => h !== undefined))];
     expect(fills.slice(0, 4)).toEqual([xtermHex(97), PALETTES.mocha.accent, xtermHex(237), xtermHex(235)]);
   });
-  test('a narrow bar drops the workers segment first, then the plan detail, and never the state word or the clock', () => {
-    const seen: string[] = [];
+  test('a narrow bar keeps all three segments and the clock; the state word is the first thing to give way (wave 37)', () => {
     for (let body = 93; body >= 34; body--) {
       const f = frameOf(RUNNING, body, 45);
-      expect(f.band, `${body}`).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:42/);
-      const workers = /running/.test(f.band);
-      const plan = /todo|\d\/5/.test(f.band);
-      if (workers) expect(plan, `${body}: the workers never outlive the plan`).toBe(true);
-      seen.push(`${workers ? 'W' : '-'}${plan ? 'P' : '-'}`);
+      expect(f.band, `${body}`).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] (working )?0:42 ▌ (todo )?\d\/5 ▌ [⠀-⣿] /);
+      expect([...f.band].filter((c) => c === '▌'), `${body}`).toHaveLength(2);
     }
-    expect(seen[0]).toBe('WP');
-    expect(seen.at(-1)).not.toBe('WP');
-    const firstNoWorkers = seen.indexOf('-P');
-    expect(firstNoWorkers).toBeGreaterThan(0);
-    expect(seen.slice(firstNoWorkers)).not.toContain('WP');
+    expect(frameOf(RUNNING, 93, 45).band).toMatch(/working 0:42 ▌ todo 0\/5 ▌ [⠀-⣿] 3 running/);
   });
 });
 
@@ -145,7 +137,7 @@ describe('3. one clock: the band always shows the elapsed time while working, re
     const base = { maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'research', done: 2, total: 5, openWork: 3, openDispatch: 0, todoBlocked: 0, checks: [], bar: true, workers: [], busy: true, ui } as const;
     for (const cols of [93, 56, 40]) {
       const text = bandLines({ ...base, cols } as never)[0]!.runs.map((x) => x.t).join('');
-      expect(text, `${cols}`).toMatch(/working 0:00/);
+      expect(text, `${cols}`).toMatch(cols >= 56 ? /working 0:00/ : /0:00/); // wave 37: below 56 the word gives way to the three segments
     }
   });
   test('runElapsed is the one reading: open clock, and a clock the run closed early keeps counting from the same start', () => {

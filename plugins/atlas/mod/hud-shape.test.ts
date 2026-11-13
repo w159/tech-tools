@@ -129,7 +129,8 @@ describe('step 2: a rounded box that never changes shape', () => {
       for (let n = 13; n >= 8; n--) expect(at(n).filter((l) => l === '')).toHaveLength(0); // no spacer row at any budget
       expect(plan(at(13))).toHaveLength(5); // every plan row stays
       expect(plan(at(12))).toHaveLength(5); // then the names go; still every plan row
-      expect(at(11)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
+      expect(at(11)[0]).toMatch(/2\/5/); // the finished rows fold into the figure after that (wave 37: no second `2 done` count)
+      expect(at(11)[0]).not.toMatch(/done/);
       expect(plan(at(11)).some((l) => /T[12] read/.test(l))).toBe(false);
       expect(plan(at(8)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place
       for (let n = 13; n >= 8; n--) expect(at(n).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(l))).toHaveLength(3); // every agent keeps its row

@@ -1,7 +1,7 @@
 // Round 3, slice A: one spinner, one palette, the four band leads, the closed count, the pill and the band's worker rows.
 import { describe, expect, test } from 'claude-code/testing';
 import { ATLAS_GLYPHS, GLYPH5, LEAD_FRAMES, PALETTES, SPIN_FRAMES, STATE_GLYPHS, spinnerGlyph, wordmark, type Ui } from './atlas-ui';
-import { bandLines, missionLines, needsOf, runsText, type MissionModel, type MissionWorker } from './mission-layout';
+import { BLOCKED_TEXT, bandLines, blockedWhy, missionLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { withStopVerdict } from './register';
 import { spin } from './theme';
 
@@ -68,13 +68,11 @@ describe('round 3 A2: the band lead has four states', () => {
     expect(lead({ ...m, busy: true, tick: 1 })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
     expect(head({ ...m, ui: { ...ui, ascii: true } })).not.toMatch(/[◐◓◑◒]/);
   });
-  test('needsOf: a dispatch row reads as the task to close, retry stop as the spinner word retrying, others stay in the gate words', () => {
-    expect(needsOf('dispatch T2 read ghost.py open')).toBe('needs: close dispatch T2');
-    expect(needsOf('dispatch T2 read ghost.py open', 'short')).toBe('needs: close T2');
-    expect(needsOf('dispatch T2 read ghost.py open', 'bare')).toBe('close T2');
-    expect(needsOf('dispatch fix the thing open')).toBe('needs: close dispatch fix the thing');
-    expect(needsOf('retry stop')).toBe('retrying');
-    expect(needsOf('routing')).toBe('routing');
+  test('blockedWhy: one string table - open dispatches count, a refused stop says so, retry stop reads retrying (wave 37)', () => {
+    expect(blockedWhy('dispatch T2 read ghost.py open', 1)).toBe(BLOCKED_TEXT.dispatch(1));
+    expect(blockedWhy('dispatch T2 read ghost.py open', 0)).toBe(BLOCKED_TEXT.stop);
+    expect(blockedWhy('retry stop', 0)).toBe(BLOCKED_TEXT.retry);
+    expect(BLOCKED_TEXT.retry).toBe('retrying');
   });
   test('a gate warning never leads: idle and done lead with their own word, the warning is the second segment', () => {
     const checks = [{ id: 'doctor', ok: false, name: 'doctor' }];
