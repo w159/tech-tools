@@ -84,7 +84,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   let chart: BoardLine[] = [];
   let totals: BoardLine[] = [];
   if (items.length && room >= 5) {
-    totals = boardTotals(agents, topts);
+    totals = boardTotals(agents, { ...topts, ...(pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {}) });
     for (const lv of levels) {
       const t = boardTimeline(agents, { ...topts, ...lv }, room - 2 - totals.length);
       if (t.length && 1 + t.length + 1 + totals.length <= room) { chart = t; break; }
@@ -93,16 +93,16 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   }
   const sections = [lines, chart, totals].filter((x) => x.length);
   const used = sections.reduce((n, x) => n + x.length, 0) + Math.max(0, sections.length - 1);
-  const recent = items.length && sections.length > 1 ? recentRows(pm, max - used - 1) : [];
+  const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: pm.notes.filter((n) => !/^(T\d+|row) killed\b/.test(n.text)) }, max - used - 1) : []; // the closed row is said once, by the footer (critique 29: three times in one pane)
   const withRecent = recent.length ? [...sections, recent.slice(1)] : sections; // recentRows opens with its own blank: the join below puts it back
   const rows = withRecent.reduce((n, x) => n + x.length, 0) + Math.max(0, withRecent.length - 1);
   const rem = Math.max(0, max - rows);
   const gaps = Math.max(0, withRecent.length - 1);
-  const extra = gaps ? Math.max(0, Math.min(1, Math.floor((rem - 2) / gaps))) : 0; // a second blank row between sections only when the pane has them to spare
+  const extra = gaps ? Math.max(0, Math.min(2, Math.floor((rem - 2) / gaps))) : 0; // a second blank row between sections only when the pane has them to spare
   const left = rem - extra * gaps;
   const body = withRecent.flatMap((x, i) => (i ? [...Array.from({ length: 1 + extra }, () => blankRow), ...x] : x));
   const hint: BoardLine[] = left >= 2 && items.length ? [...Array.from({ length: Math.min(3, left - 1) }, () => blankRow), { runs: [{ t: '  o closes the board', tone: 'muted' as const }] }] : [];
-  const filled = [...body, ...hint];
+  const filled = [...body, ...hint, ...(m.run ? Array.from({ length: Math.max(0, max - body.length - hint.length) }, () => blankRow) : [])]; // the 234 surface runs to the pane's foot (critique 29)
   const shown = filled.length <= max ? filled : [...filled.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${filled.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: shown.map((l) => lineEl(els, { runs: l.runs }, m, on, ui)) });
 }

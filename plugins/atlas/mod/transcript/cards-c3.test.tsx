@@ -10,7 +10,7 @@ const text = (n: unknown): string => (Array.isArray(n) ? n.map(text).join('') : 
 const cellsOf = (n: unknown): El[] => (((n as El).children.length > 1 ? (n as El).children[1] : (n as El).children[0]) as El).children as El[] // a launch card is a column of one row; a finish card is a framed block whose title row is the second
 const call = (over: Partial<CallLike> = {}): CallLike => ({ tool: 'Agent', input: { subagent_type: 'atlas:implementer', name: 'impl-a', description: 'desc', prompt: 'GOAL: x', model: 'sonnet' }, isRunning: true, isErrored: false, isInterrupted: false, ...over })
 
-const title = (n: unknown): string => text((n as El).children[1]) // wave 30: the title row of a framed finish card
+const title = (n: unknown): string => text((n as El).children[0]) // wave 31: a finish card is one row
 const cards = (): Record<string, string> => ({
   dispatch: text(workerCard(call(), 'running', 80, undefined, '', { ui, now: 'Grep 12s' })),
   done: title(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui)),
@@ -20,21 +20,18 @@ const cards = (): Record<string, string> => ({
   failedAged: title(notificationTree('wave-e', 'explorer', 'boom', true, ui, true)),
 })
 
-test('C3: every card opens with the rail; the finish cards (brand `◆ ATLAS  `, 9 cells) share one name column and the brand-less dispatch card starts its name 9 cells earlier', () => {
-  const at = { dispatch: 'impl-a', done: 'wave-a', failed: 'wave-b', killed: 'wave-c', doneAged: 'wave-d', failedAged: 'wave-e' }
+test('C3: every card opens with the rail; the finish cards carry the brand `◆ ATLAS  ` and the dispatch card does not', () => {
   const c = cards()
-  const cols = Object.entries(at).map(([k, name]) => { expect(c[k]!.startsWith('▌ ')).toBe(true); return [k, c[k]!.indexOf(name)] })
-  const finish = new Set(cols.slice(1).map(([, x]) => x))
-  expect(finish.size).toBe(1)
-  expect(cols[0]![1]).toBeGreaterThan(0)
-  expect(cols[0]![1]).toBe([...finish][0]! as number - 9)
+  for (const k of Object.keys(c)) expect(c[k]!.startsWith('▌ ')).toBe(true)
+  for (const k of ['done', 'failed', 'killed', 'doneAged', 'failedAged']) expect(c[k]!).toContain('◆ ATLAS  ')
+  expect(c.dispatch).not.toContain('◆ ATLAS')
 })
 
-test('C3: the state word column is fixed: the word is padded to 7 cells and two spaces follow, whatever the word', () => {
+test('C3: the state word is followed by two spaces and the name, whatever the word', () => {
   const c = cards()
-  expect(c.done).toMatch(/● done {5}wave-a/)
-  expect(c.failed).toMatch(/killed {3}wave-b/)
-  expect(c.killed).toMatch(/killed {3}wave-c/)
+  expect(c.done).toMatch(/● done {2}wave-a/)
+  expect(c.failed).toMatch(/killed {2}wave-b/)
+  expect(c.killed).toMatch(/killed {2}wave-c/)
   expect(c.dispatch).toMatch(/running {2}impl-a/)
 })
 

@@ -103,6 +103,9 @@ export type PanelModel = {
   notes: readonly PanelNote[];
   /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
+  /** The band's own run state and run clock (wave 31): `kind` is runStateOf(band).kind, `secs` the figure the band prints (`working 0:28`, `done . 0:58`), `startMs` the run's start on the snapshot clock.
+   * Present: the phase row prints exactly the band's glyph and word, and every total on the panel reads `secs`. Absent (omp, fixtures): the panel derives its own. */
+  run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number };
 };
 
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
@@ -248,6 +251,15 @@ const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).leng
 /** `phase   research   2/4`: the lit phase and its place on the rail. While the Stop gate refused the stop (or the lead declared it) the phase is `blocked` with no rail
  * number: never `done 5/5` beside a blocked band (critique 16 A3, stoprun f0090). */
 function phaseRow(m: PanelModel): PanelLine {
+  // Wave 31 (critique 29: `phase ● done` under a working band, `◒ research` after done, `● done` under an idle band): the band's own state (data/runstate via band.tsx) is printed as the band prints it.
+  if (m.run) {
+    const ph = m.phase && m.phase !== 'blocked' && m.phase !== 'done' ? r(` ${dot(m.ui)} ${m.phase}`, 'dim') : null;
+    const tail = m.run.kind === 'working' || m.run.kind === 'idle' ? (ph ? [ph] : []) : [];
+    if (m.run.kind === 'blocked') return line([label('phase', m.cols), mark('blocked', m, 'phase'), r('blocked', 'bad', { bold: true })]);
+    if (m.run.kind === 'done') return line([label('phase', m.cols), mark('done', m, 'phase'), r('done', 'ok', { bold: true })]);
+    if (m.run.kind === 'working') return line([label('phase', m.cols), mark('running', m, 'phase'), r('working', 'accent', { bold: true }), ...tail]);
+    return line([label('phase', m.cols), r(`${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} `, 'muted'), r('idle', 'muted'), ...tail]);
+  }
   // Critique 18 A4: the same state the band draws: a refused Stop makes the phase `blocked` whatever the lead's last header said (`research`, `done`), and the lead's own ask of the user does too (the header phase is `blocked`).
   const blocked = m.phase === 'blocked' || !!tallyOf(gatesOf(m)).stop?.blocked;
   // Wave 30 (critique 28: `phase  done` was a plain 252 word): the phase word wears its state glyph, `◐ working`, `● done`, `○ idle`, `▲ blocked`, the same marks as the band.
@@ -423,7 +435,20 @@ function routeAgentRow(m: PanelModel, w: PanelWorker, nameW: number): PanelLine 
   return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW, word: { t: wordOf(w.state), tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
 }
 
-function routeBody(m: PanelModel): PanelLine[] {
+/** The Claude pane's route tab (`m.run` set: the HUD above the prompt lists the plan and the agents; omp has no HUD and keeps the full list below) is a summary, not a second HUD (critique 29: the full TODO and agent lists on the panel repeated the HUD rows 9-15 of the same frame): the phase as the band reads it, the gates figure, one count per agent state and
+ * the plan's figure. The plan rows and the agent rows live on the HUD above the prompt, the whole board on the `board` tab, each agent on the `team` tab. */
+function routeSummary(m: PanelModel): PanelLine[] {
+  const rows: PanelLine[] = [phaseRow(m)];
+  const gates = gatesRow(m);
+  if (gates) rows.push(gates);
+  rows.push(...agentsRows(m));
+  rows.push(todoCount(m));
+  if (!m.todos.length && !m.workers.length) rows.push(BLANK, ...indentedHint(m, 'add one with /todo add')); // the `todo` row above already says `no tasks yet`
+  else rows.push(BLANK, ...indentedHint(m, `${m.todos.length ? 'the plan and ' : ''}the agents are on the HUD · team and board tabs hold the detail`));
+  return rows;
+}
+
+function routeBodyFull(m: PanelModel): PanelLine[] {
   const rows: PanelLine[] = [phaseRow(m)];
   const gates = gatesRow(m);
   if (gates) rows.push(gates);
@@ -488,6 +513,9 @@ function routeBody(m: PanelModel): PanelLine[] {
   }
   return rows;
 }
+
+/** The route tab: the summary on the Claude pane (it has the HUD), the full plan and agent list everywhere else. */
+const routeBody = (m: PanelModel): PanelLine[] => (m.run ? routeSummary(m) : routeBodyFull(m));
 
 // ---- team (subagents by name and state) -----------------------------------------------------------------------------------
 
@@ -565,11 +593,14 @@ function leadSummary(m: PanelModel): PanelLine[] {
   const head = `${' '.repeat(GRID_LEAD)}workers  `;
   const parts = cells(head) + cells(tally(true)) <= m.cols - 1 ? tally(true) : tally(false) || tally(true); // a narrow pane drops the `0 running` before it cuts a figure
   const t = totalsOf(m.workers, m.lead);
+  if (m.run?.secs !== undefined && m.workers.length) t.secs = m.run.secs; // the band's run clock: one total on every surface (critique 29: board 0:14, team 0:24, band 1:00)
   const total = `${shortAge(t.secs)}${t.calls ? ` ${dot(m.ui)} ${t.calls} tool calls` : ''}`;
   const key = (k: string): Run => r(' '.repeat(GRID_LEAD) + pad(k, 9), 'text', { bold: true });
+  const spark = m.run && m.cols >= 50 && m.workers.some((w) => (w.calls ?? []).length > 0) ? `${m.ui.ascii ? '_-~' : '▁▃█'} tool calls, from each agent's start to its end` : '';
   return [
     line(fitRuns([r(' '.repeat(GRID_LEAD)), r('workers  ', 'text', { bold: true }), r(parts, 'muted')], m.cols)), // in the name column, under the lead's own row
     ...(m.workers.length && t.secs > 0 ? [line(fitRuns([key('total'), r(total, 'muted')], m.cols))] : []),
+    ...(spark ? [line(fitRuns([key('scale'), r(spark, 'muted')], m.cols))] : []),
   ];
 }
 
@@ -583,7 +614,7 @@ export function recentRows(m: PanelModel, spare: number): PanelLine[] {
   return [BLANK, line(fitRuns([r(' '.repeat(GRID_LEAD)), r('recent', 'text', { bold: true })], m.cols)), ...posts.map((n): PanelLine => {
     const text = oneLine(noteText(m, n));
     const lead = r(' '.repeat(GRID_LEAD));
-    const time = r(n.at ? `${n.at}  ` : ' '.repeat(10), 'dim');
+    const time = r(m.run ? `${stampOf(m, n).padEnd(7)}  ` : n.at ? `${n.at}  ` : ' '.repeat(10), 'dim');
     const name = r(pad(clipE(n.from, who), who) + '  ', noteState(n).state === 'failed' ? 'bad' : 'sub');
     const left = m.cols - 1 - GRID_LEAD - cells(time.t) - cells(name.t);
     return line(fitRuns([lead, time, name, r(left > 3 ? clipE(text, left).replace(ELLIPSIS, m.ui.ascii ? '~' : ELLIPSIS) : '', 'muted')], m.cols));
@@ -659,9 +690,15 @@ function noteState(n: PanelNote): { state: UiState | null; word: string } {
 }
 const noteTone = (word: string): Tone => (word === KILLED ? rowWordTone('failed') : word === 'blocked' ? rowWordTone('blocked') : 'ok');
 
-/** A post's right-hand figure: its own time to the second and, dim, how long ago (`08:53:08  20s`). The age is the clock of the panel less the post's own time, so a post keeps its time and its age moves. */
+/** A post's time as the run's own clock (wave 31, critique 29: `01:30:26` and a `0s` age column on every row): `+0:17`, seconds from the run's start (the band's run, else the first post). A post with no time of its own keeps its stamp. */
+const runStart = (m: PanelModel): number | undefined => m.run?.startMs ?? (m.notes.every((n) => n.ms !== undefined) && m.notes.length ? Math.min(...m.notes.map((n) => n.ms!)) : undefined);
+const stampOf = (m: PanelModel, n: PanelNote, ageW = 0): string => {
+  if (!m.run) return `${n.at}${ageW ? `  ${ageOfNote(m, n).padStart(ageW)}` : ''}`; // omp keeps the post's own clock time and its age
+  const t0 = runStart(m);
+  return n.ms !== undefined && t0 !== undefined ? `+${elapsedClock(Math.max(0, (n.ms - t0) / 1000))}` : n.at;
+};
+/** A post's age beside its time: `20s`. The Claude pane (`m.run`) draws the time relative to the run and no age column. */
 const ageOfNote = (m: PanelModel, n: PanelNote): string => (n.ms !== undefined && m.now !== undefined ? ageWord(m.now - n.ms) : '');
-const stampOf = (m: PanelModel, n: PanelNote, ageW: number): string => `${n.at}${ageW ? `  ${ageOfNote(m, n).padStart(ageW)}` : ''}`;
 
 /** A post as one row; `bare` leaves the text off (the rows under it read the whole message). */
 function noteRow(m: PanelModel, n: PanelNote, g: { nameW: number; wordW: number; timeW: number; ageW?: number }, bare = false): PanelLine {
@@ -685,7 +722,33 @@ const NOTE_LINES_SHORT = 2; // rows one message may take on a short pane
 const NOTE_INLINE_MIN = 20; // cells of text a one-row post needs beside its whole name; less and the post takes two rows
 
 // Wave 30 (critique 28): the generated `#lc-...` slug is no part of the view. The head row says `this run` once; a named channel keeps its `#name` in the ribbon.
-const channelBody = (m: PanelModel): PanelLine[] => channelLog(m);
+/** Under the log (wave 31, critique 29: the channel tab was 80% empty): what the posts add up to and each sender's last one, from the notes the tab already holds. A count per kind (`6 posts · 1 failed · 1 blocked`), then one row per sender,
+ * newest first, as many as the pane has rows for (a blank row, the counts, a blank row, `last by sender`, the senders). */
+function channelSummary(m: PanelModel, spare: number): PanelLine[] {
+  if (!m.notes.length || spare < 3) return [];
+  const kinds = new Map<string, number>();
+  for (const n of m.notes) { const w = noteState(n).word; if (w) kinds.set(w, (kinds.get(w) ?? 0) + 1); }
+  const counts = [`${m.notes.length} ${m.notes.length === 1 ? 'post' : 'posts'}`, ...[...kinds].map(([w, c]) => `${c} ${w}`)].join(` ${dot(m.ui)} `);
+  const out: PanelLine[] = [BLANK, line(fitRuns([r(' '.repeat(GRID_LEAD)), r('posts  ', 'text', { bold: true }), r(counts, 'muted')], m.cols))];
+  const latest = new Map<string, PanelNote>();
+  for (const n of m.notes) latest.set(n.from, n);
+  const room = Math.min(latest.size, spare - out.length - 2, 6);
+  if (room < 1) return out;
+  const senders = [...latest.values()].sort((x, y) => (y.ms ?? 0) - (x.ms ?? 0)).slice(0, room);
+  const who = Math.min(18, Math.max(...senders.map((n) => cells(n.from))));
+  out.push(BLANK, line(fitRuns([r(' '.repeat(GRID_LEAD)), r('last by sender', 'text', { bold: true })], m.cols)));
+  for (const n of senders) {
+    const time = r(`${stampOf(m, n).padEnd(7)}  `, 'dim');
+    const name = r(pad(clipE(n.from, who), who) + '  ', noteState(n).state === 'failed' ? 'bad' : 'sub');
+    const left = m.cols - 1 - GRID_LEAD - cells(time.t) - cells(name.t);
+    out.push(line(fitRuns([r(' '.repeat(GRID_LEAD)), time, name, r(left > 3 ? clipE(oneLine(noteText(m, n)), left) : '', 'muted')], m.cols)));
+  }
+  return out;
+}
+const channelBody = (m: PanelModel): PanelLine[] => {
+  const log = channelLog(m);
+  return [...log, ...(m.run && tall(m) ? channelSummary(m, m.rows - 1 - headerRows(m).length - log.length) : [])];
+};
 
 function channelLog(m: PanelModel): PanelLine[] {
   const ind = ' '.repeat(GRID_LEAD); // the indent every other tab's rows have: the name column (critique 11: the channel head sat one cell from the border)
@@ -695,7 +758,7 @@ function channelLog(m: PanelModel): PanelLine[] {
   if (!m.notes.length) return [head, ...centred(m, 'no messages yet')];
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane
-  const ageW = m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(ageOfNote(m, n)))) : 0;
+  const ageW = !m.run && m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(ageOfNote(m, n)))) : 0;
   const timeW = m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(stampOf(m, n, ageW)))) : 0;
   const hasKind = m.notes.some((n) => noteState(n).word !== '');
   // Names are whole: the name column is the longest name that leaves the word and time columns their room (never `ghost-exp...`).
@@ -1096,11 +1159,15 @@ function airy(m: PanelModel, lines: PanelLine[]): PanelLine[] {
 }
 export const bodyLines = (m: PanelModel): PanelLine[] => airy(m, BODIES[m.tab](m));
 /** Tabs whose body ends where its data does: they carry the panel surface down to the pane's foot row. */
-const FILLED: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
+const FILLED_OLD: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
+/** The Claude pane (`m.run`) fills every tab to its foot row. */
+const FILLED: ReadonlySet<PanelTab> = new Set<PanelTab>(['route', 'team', 'channel', 'gates', 'core']);
+/** Tabs with a message field on the foot row; the others fill the pane to its last row (wave 31, critique 29: the 234 surface stopped where the content ended). */
+const FOOTED: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
 /** Blank rows after a `bodyLen`-row body so header + body + fill is `rows - 1` lines, the one foot row staying free (on team and channel the
  * message field is that row). Only on a tab that has fewer rows than the pane; never negative, so a body taller than the pane is untouched. */
 export function fillRows(m: PanelModel, bodyLen: number): PanelLine[] {
-  const n = FILLED.has(m.tab) ? m.rows - 1 - headerRows(m).length - bodyLen : 0;
+  const n = (m.run ? FILLED : FILLED_OLD).has(m.tab) ? m.rows - (FOOTED.has(m.tab) ? 1 : 0) - headerRows(m).length - bodyLen : 0;
   if (n <= 0) return [];
   const fill = Array.from({ length: n }, () => BLANK);
   // Design rev 5, C1: the strip names no keys, so the last spare row (above the message field) names them once, dim.

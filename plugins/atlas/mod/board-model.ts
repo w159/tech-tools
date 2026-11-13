@@ -477,7 +477,7 @@ const RULE_FG = '#303030'; // 236: the divider grey (PALETTE5.rule), never the 2
  * Every bar starts where its agent started (the run's first start is the left edge). A queued agent has no run to draw and is left off. `max` caps the rows; none when there is no room for a name and a bar.
  * A row's `motion` key is `worker:<name>` (the panel's own), so a new or changed agent fades in with the rest of the pane (motion.ts). `spark: false` leaves the activity rows off; `spacers` puts a blank row between agents. */
 export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick' | 'motion'> & { spark?: boolean; spacers?: boolean }, max = 12): BoardLine[] {
-  const ran = agents.filter((a) => a.state !== 'queued');
+  const ran = agents.filter((a) => a.state !== 'queued').map((a, i) => ({ a, i })).sort((x, y) => (x.a.startMs ?? 0) - (y.a.startMs ?? 0) || x.i - y.i).map((x) => x.a); // start order (alpha, beta, ghost), never reversed
   if (!ran.length || max < 3) return [];
   const live = (a: TimelineAgent): boolean => a.state === 'running' && o.nowMs !== undefined;
   const spanOf = (a: TimelineAgent): { from: number; to: number } => {
@@ -489,16 +489,17 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const t0 = Math.min(...spans.map((x) => x.from));
   const spanMs = Math.max(1000, Math.max(...spans.map((x) => x.to)) - t0);
   const nameW = Math.min(o.cols >= 50 ? 20 : 14, Math.max(...ran.map((a) => cells(a.name))));
-  const timeW = Math.max(4, ...spans.map((x) => cells(clock((x.to - x.from) / 1000))));
+  const callsLabel = (a: TimelineAgent): string => { const n = (a.calls ?? []).length; return n ? `${n} ${n === 1 ? 'call' : 'calls'}` : ''; }; // the count says what it counts (critique 29: a bare `2 3 4`)
+  const timeW = Math.max(4, ...spans.map((x) => cells(clock((x.to - x.from) / 1000))), ...ran.map((a) => cells(callsLabel(a))));
   const barW = o.cols - 1 - 2 - nameW - 1 - 1 - timeW - 1 - 1; // margin, lead, name, gap, (bars), gap, time, gap, glyph
   if (barW < 8) return [];
   const ascii = o.ui.ascii;
   const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
   // The axis: ticks at a round step, as many as the labels have room for (a label is at most 4 cells and a gap).
   const spanSecs = spanMs / 1000;
-  const step = TICK_STEPS.find((t) => Math.floor(spanSecs / t) + 1 <= Math.max(2, Math.floor(barW / 6))) ?? TICK_STEPS[TICK_STEPS.length - 1]!;
+  const step = TICK_STEPS.find((t) => t >= 5 && Math.floor(spanSecs / t) + 1 <= Math.max(2, Math.floor(barW / 6))) ?? TICK_STEPS[TICK_STEPS.length - 1]!; // a tick every 5 s while the labels fit
   // While a worker runs the axis ends at the next tick past the clock, so its bar grows inside a steady scale and the leading edge has a cell to pulse in; a finished run's axis is exactly its length.
-  const total = ran.some(live) ? (Math.floor(spanSecs / step) + 1) * step * 1000 : spanMs;
+  const total = (Math.floor(spanSecs / step) + 1) * step * 1000; // the axis always runs past the longest bar (critique 29: it stopped at 0:10 under bars to 0:13)
   const totalSecs = total / 1000;
   const tickCols = new Set<number>();
   for (let k = 0; k * step <= totalSecs; k++) tickCols.add(Math.min(barW - 1, Math.round((k * step * 1000 * barW) / total)));
@@ -530,8 +531,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
     if (o.spark) {
       const sp = sparkOf(a.calls, t0, t0 + total, barW, ascii);
-      const n = (a.calls ?? []).length;
-      out.push({ runs: [r(lead), r(sp, a.state === 'failed' ? 'bad' : 'dim'), r(' '), r(n ? `${n}`.padStart(timeW) : ' '.repeat(timeW), 'dim'), r(' ')] });
+      out.push({ runs: [r(lead), r(sp, 'dim'), r(' '), r(callsLabel(a).padStart(timeW), 'dim'), r(' ')] }); // 'dim' for a failed agent too: a red floor ran the full width under the killed row
     }
   });
   // The axis: a rule with a tick (`┬`) at every labelled second, the labels under it.
@@ -552,7 +552,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
 }
 
 /** The board's totals line under the chart: a count per state and the run's length, `● 2 done  ■ 1 killed  ◐ 0 running · total 0:27`. */
-export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'>): BoardLine[] {
+export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'> & { runSecs?: number }): BoardLine[] {
   const ran = agents.filter((a) => a.state !== 'queued');
   if (!ran.length) return [];
   const n = (s: UiState): number => ran.filter((a) => a.state === s).length;
@@ -565,7 +565,8 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
   }
   const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');
   const ends = ran.map((a) => (a.state === 'running' && o.nowMs !== undefined ? o.nowMs : a.endMs)).filter((x): x is number => typeof x === 'number');
-  const secs = starts.length && ends.length ? Math.max(0, Math.floor((Math.max(...ends) - Math.min(...starts)) / 1000)) : 0;
+  const own = starts.length && ends.length ? Math.max(0, Math.floor((Math.max(...ends) - Math.min(...starts)) / 1000)) : 0;
+  const secs = o.runSecs ?? own; // the band's run clock when the caller has it: one total on every surface (critique 29)
   const calls = ran.reduce((k, a) => k + (a.calls?.length ?? 0), 0);
   const dot = o.ui.ascii ? '|' : '·';
   const total: Run[] = secs > 0 ? [r(`  ${dot} `, 'muted'), r('total ', 'muted'), r(clock(secs), 'text', { bold: true }), ...(calls ? [r(` ${dot} ${calls} tool calls`, 'muted')] : [])] : [];

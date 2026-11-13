@@ -117,7 +117,8 @@ test('task-notification of an atlas worker that left the host list draws its res
   const text = strings(await sites().UserMessage!(engine([], { a1: { name: 'wave-a', type: 'atlas:explorer' } }), e, next))
   expect(text).toContain('wave-a')
   expect(text).toContain('explorer')
-  expect(text).toContain('finished · 0:29')
+  expect(text).toContain('explorer finished')
+  expect(text).toContain('0:29')
   expect(text).not.toContain('STATUS')
 })
 

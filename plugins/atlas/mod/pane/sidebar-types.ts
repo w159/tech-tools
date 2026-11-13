@@ -22,6 +22,8 @@ export type SidebarModel = {
   tick?: number;
   /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
+  /** The band's run state and run clock (register.ts builds them from the band's own inputs, pane/band-kind.ts): the panel prints the same word and the same total. */
+  run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number };
 };
 export type SidebarHandlers = {
   selectRecipient(name: string): void;

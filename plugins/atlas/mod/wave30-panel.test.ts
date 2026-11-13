@@ -193,33 +193,30 @@ const rowsOfCard = (n: unknown): string[] => {
 };
 const colorsOf = (n: unknown, out: string[] = []): string[] => { const e = n as El; if (Array.isArray(n)) n.forEach((c) => colorsOf(c, out)); else if (e && typeof e === 'object') { if (typeof e.props?.color === 'string') out.push(e.props.color); colorsOf(e.children, out); } return out; };
 
-describe('wave 30 item 5: finish cards are small framed blocks (live-150-a7bc7b0d-1 f0133:10-13: bare `▌` lines)', () => {
+describe('wave 30 item 5 (rewritten in wave 31): the finish card is one row (critique 29: a framed card wrapped at 110 columns)', () => {
   const FINISH = /▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\w+ finished/;
   const done = rowsOfCard(notificationTree('beta-explorer', 'explorer', 'finished · 0:15', false, ui));
-  test('the card is a frame: a top rule, the title line, a bottom rule', () => {
-    expect(done.length).toBeGreaterThanOrEqual(3);
-    expect(done[0]).toMatch(/^[▛╭┌]/);
-    expect(done.at(-1)).toMatch(/^[▙╰└]/);
-    expect(done.some((l) => FINISH.test(l))).toBe(true);
+  test('the card is a single row, no frame rules', () => {
+    expect(done.length).toBe(1);
+    expect(done[0]).toMatch(/^▌/);
   });
   test('the title line still matches the recording harness regex on one line', () => {
     const m = FINISH.exec(done.find((l) => FINISH.test(l))!)!;
     expect([m[1], m[2], m[3]]).toEqual(['●', 'done', 'beta-explorer']);
   });
-  test('the frame is drawn in 236 / 240, the state glyph carries the state colour', () => {
+  test('the bar is the accent and the state glyph carries the state colour', () => {
     const c = colorsOf(notificationTree('beta-explorer', 'explorer', 'finished · 0:15', false, ui));
-    expect(c).toContain('#585858');
-    expect(c).toContain('#303030');
+    expect(c).toContain('#af87ff');
+    expect(c).toContain('#87d787');
   });
   test('a failure card is killed and says so in 203', () => {
     const f = rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui));
     expect(f.some((l) => /◆ ATLAS\s+■\s+killed\s+ghost-explorer/.test(l))).toBe(true);
     expect(colorsOf(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui))).toContain('#ff5f5f');
   });
-  test('a card with a result carries it on one content line, a card without one carries no empty line', () => {
+  test('a card with a result stays one row', () => {
     const withResult = rowsOfCard(notificationTree('beta-explorer', 'explorer', 'finished · 0:15 · 1 function', false, ui));
-    expect(withResult.length).toBe(done.length + 1);
-    for (const l of [...done.slice(1, -1), ...withResult.slice(1, -1)]) expect(l.replace(/[▌▐▛▜▙▟▀▄│╭╮╰╯─\s]/g, '')).not.toBe('');
+    expect(withResult.length).toBe(1);
   });
 });
 

@@ -74,7 +74,7 @@ describe('step 3: the board pane', () => {
   test('the timeline is one row per agent, `alpha-explorer ████ 0:14 ●`: the solid bar as long as the run, the glyph its state, queued agents left off', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
     expect(t).toHaveLength(4); // the two agents, the axis rule with its ticks, the tick labels
-    expect(t[0]).toMatch(/^ {2}alpha-explorer █+▌? +0:14 ●$/);
+    expect(t[0]).toMatch(/^ {2}alpha-explorer [█▏▎▍▌▋▊▉]+[ ┊]* +0:14 ●$/);
     expect(t[1]).toMatch(/^ {2}gamma {10}[█▏▎▍▌▋▊▉]+[ ┊]* +0:07 [◐◓◑◒]$/);
     expect(t[2]).toMatch(/^ {17}┬[─┬]+$/);
     expect(t[3]).toMatch(/^ {17}0:00 .*0:1\d$/);

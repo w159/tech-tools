@@ -8,7 +8,7 @@ import type { EngineInterface, RenderElement } from 'claude-code'
 import type { AtlasSnapshot } from '../contract'
 import type { LiveSnapshot } from '../orchestra-types'
 import { endedAt, liveWorkers } from '../data/live'
-import { notificationTree } from './cards'
+import { notificationTree, type FinishOpts } from './cards'
 import { forgetFailed, killedNames, outcomeText } from './outcome'
 import type { Ui } from '../atlas-ui'
 
@@ -78,9 +78,11 @@ export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | nu
 }
 
 /** The card behind a `Placed` row id, drawn as the host's own notification row is (one shape, one look). */
-export function placedTree(id: string, ui: Ui, aged = false): RenderElement | null {
+export function placedTree(id: string, ui: Ui, aged = false, opts: FinishOpts & { hidden?: boolean } = {}): RenderElement | null {
   const r = rows.get(id)
-  return r ? notificationTree(r.name, r.role, r.text, r.failed, ui, aged) : null
+  if (!r) return null
+  if (opts.hidden && !r.failed) return { type: 'Text', props: {}, children: [] } as RenderElement // a finish card that two newer ones replaced draws nothing (critique 29: at most two stacked)
+  return notificationTree(r.name, r.role, r.text, r.failed, ui, aged, opts)
 }
 
 /** A card dims once the run has moved on (critique 17 C3): 20 s after it was first drawn, or 5 s after a later card was drawn. `now` is the snapshot's clock. */
@@ -94,6 +96,22 @@ export function cardAged(key: string, now: number): boolean {
   if (!first) { first = { at: now, seq: ++drawSeq }; drawn.set(key, first); capped(drawn) }
   const age = now - first.at
   return age >= AGE_MS || (first.seq < drawSeq && age >= SUPERSEDED_MS)
+}
+
+/** How long a card's bar takes to fade 141 -> 245 (critique 29). */
+export const FADE_MS = 1000
+/** 0..1: how far a card's bar has faded, from its first draw on the snapshot clock (`cardAged` registers the draw). */
+export function cardFade(key: string, now: number): number {
+  const first = drawn.get(key)
+  return first && Number.isFinite(now) && now > 0 ? Math.max(0, Math.min(1, (now - first.at) / FADE_MS)) : 0
+}
+/** At most two finish cards stack, the newest replacing the oldest: a card with two newer ones drawn after it, and itself aged, is hidden. */
+export function cardStackHidden(key: string, now: number): boolean {
+  const mine = drawn.get(key)
+  if (!mine || !cardAged(key, now)) return false
+  let newer = 0
+  for (const [k, v] of drawn) if (k.startsWith('done-') && v.seq > mine.seq) newer++
+  return newer >= 2
 }
 
 /** Whether the host's notification row `requestId` for worker `name` is a repeat of a card already placed: true draws it empty. */

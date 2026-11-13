@@ -11,6 +11,8 @@ import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
 import { bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
+import { bandKind } from './pane/band-kind';
+import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
 import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isRunning, segmentOf } from './hud';
@@ -1237,6 +1239,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			const text = (r as { block: string }).block;
 			if (await read($, isModOn)) {
 				await update($, gatesState, (g) => stopRefusal(g, text));
+				noteStopVerdict(true); // the DONE chips drawn so far are struck on the update that carries the refusal, not on the next pane render (critique 29: an unstruck `done all finished` under the Stop error)
 				await update($, spinnerTickState, (n) => n + 1);
 				await update($, easeTickState, (n) => n + 1);
 				// The write redraws the band at the redraw rate (one frame, FRAME_MS); the host prints its Stop error the moment this hook returns. Hold the return one frame so the band reads blocked
@@ -1376,11 +1379,19 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				cols: e.props.bodyColumns, rows: e.props.scroll.bodyRows, tick: paneFrame, now: Math.floor(snapshot.now / 1000), ui: look.ui, rich: look.rich, motion: paneMotion,
 			});
 		}
+		const paneGates = await gateGroups($);
+		const paneCore = await read($, coreState);
+		const paneNow = await $.clock.now();
+		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
+		const bandB: BandModel = { snapshot, live: liveWorkers(snapshot, snapshot.now), gates: paneGates, working: hostKnown ? hostWorking : runClock.startMs !== null, ...(workSecsOf(runClock, paneNow) !== undefined ? { workSecs: workSecsOf(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
+		const elapsedMs = runClock.startMs !== null ? paneNow - runClock.startMs : runClock.ranMs !== undefined && runClock.endedMs !== undefined ? runClock.ranMs + (paneNow - runClock.endedMs) : undefined;
+		const runSecs = runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock);
 		return sidebarTree($.ui.resolve(e), {
 			snapshot,
 			look: look.ui,
-			gates: await gateGroups($),
-			core: await read($, coreState),
+			gates: paneGates,
+			core: paneCore,
+			run: { kind: bandKind(bandB), ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(elapsedMs !== undefined ? { startMs: snapshot.now - elapsedMs } : {}) },
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,

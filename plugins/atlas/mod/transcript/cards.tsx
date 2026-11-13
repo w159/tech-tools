@@ -4,12 +4,13 @@
 
 import type { RenderElement, RenderNode } from 'claude-code'
 import type { AgentState } from '../contract'
-import { hexIn, PALETTE5, surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
+import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
 import { CARD_W, toastRuns } from '../panel-layout'
 import { cells } from '../atlas-ui'
-import { clipE as clip } from '../board-model'
+import { clipE as clip, ELLIPSIS } from '../board-model'
 import { displayName } from '../hud'
 import { fitText } from '../theme'
+import { wordOf } from '../pane/activity'
 
 export interface CallLike { tool: string; input: unknown; output?: unknown; isRunning: boolean; isErrored: boolean; isInterrupted: boolean }
 type AgentInput = { subagent_type?: string; subagentType?: string; name?: string; description?: string; prompt?: string; model?: string; effort?: string }
@@ -154,47 +155,47 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
   el('Box', { flexDirection: side ? 'row' : 'column', flexWrap: 'wrap' }, ...cards))
 }
 
-/** Wave 30 (critique 28: the finish card was a bare `▌` line, the weakest element of the transcript): a finish or failure card is a small framed block. A half-block frame in the rule grey (236), a left edge in the
-  * state's colour, the title line `▌ ◆ ATLAS  ● done  name  role finished · 0:15` (the capture scorer's one-line shape), and, only when the outcome has more to say, one content line. The card is as wide as its words (40 to 100 cells). */
-const RULE = '#303030' // 236: the divider grey (PALETTE5.rule), the frame's rules
-const frameCard = (title: UiRun[], content: string, ui: Ui): RenderElement => {
- const ascii = ui.ascii
- const edge = title[0]!.tone ?? 'text'
- const inner = Math.min(100, Math.max(40, cells(title.map((x) => x.t).join('')) + 2, content ? cells(content) + 4 : 0))
- const rule = (l: string, h: string, rr: string, lt: UiRun['tone']): UiRun[] => [{ t: l, tone: lt }, { t: h.repeat(Math.max(0, inner - 2)), tone: 'line', fg: RULE }, { t: rr, tone: 'line', fg: RULE }]
- const side = (runs: UiRun[], used: number): UiRun[] => [...runs, { t: ' '.repeat(Math.max(0, inner - 1 - used)), tone: 'text' }, { t: ascii ? '|' : '▐', tone: 'line', fg: RULE }]
- const titleUsed = cells(title.map((x) => x.t).join(''))
- const rows: UiRun[][] = [
-  ascii ? rule('+', '-', '+', 'line') : rule('▛', '▀', '▜', edge),
-  side(title, titleUsed),
-  ...(content ? [side([{ t: ascii ? '|' : '▌', tone: ascii ? 'line' : edge }, { t: ` ${content}`, tone: 'sub' }], 1 + cells(` ${content}`))] : []),
-  ascii ? rule('+', '-', '+', 'line') : rule('▙', '▄', '▟', edge),
- ]
- return el('Box', { flexDirection: 'column', flexShrink: 0 }, ...rows.map((x) => rowEl(x, ui)))
+/** Wave 31 (critique 29: the framed finish card wrapped to `● don` / `e` at 110 columns and stacked at ragged widths 42/62/61): a finish or failure card is ONE row, as wide as `min(56, cols - 4)` and never wrapped,
+ * like a gum toast. `▌ ◆ ATLAS  ● done  beta-explorer  explorer finished  0:13`: the bar, the dim brand mark, the state glyph and word, the name (cut with `…`, `~` in ASCII, before anything else
+ * is dropped), what the worker was, and its time flush right. The capture scorer finds a card by `▌ ◆ ATLAS  <glyph> <word> <name>  <role> finished` on one line. A done card's bar fades 141 -> 245
+ * (`fade` 0..1, from the card's age); a failure keeps its 203 bar. */
+export const FINISH_W = 56
+export const finishWidth = (cols: number): number => Math.max(24, Math.min(FINISH_W, cols > 0 ? cols - 4 : FINISH_W))
+const TIME_RE = /\b\d+:\d\d(?::\d\d)?\b/
+export interface FinishOpts { cols?: number; fade?: number }
+
+function finishRow(state: 'done' | 'failed', name: string, fact: string, time: string, ui: Ui, o: FinishOpts): RenderElement {
+ const w = finishWidth(o.cols ?? 0)
+ const g = stateRun(state, ui)
+ const faded = state === 'done' && (o.fade ?? 0) >= 0.5
+ const bar: UiRun = { t: ui.ascii ? '|' : '▌', tone: ui.ascii ? 'text' : state === 'failed' ? g.tone : faded ? 'sub' : 'accent' }
+ const headOf = (sep: string): UiRun[] => [bar, { t: ' ', tone: 'text' }, ...(ui.ascii ? brandMark(ui) : [{ t: '◆ ', tone: 'dim' } as UiRun, { t: 'ATLAS', tone: 'dim' } as UiRun]), { t: '  ', tone: 'text' }, { ...g, t: `${g.t} ` }, { t: wordOf(state), tone: stateWordTone(state, ui), bold: true }, { t: sep, tone: 'text' }]
+ let head = headOf('  ')
+ const tail: UiRun[] = fact ? [{ t: `  ${fact}`, tone: 'sub' }] : []
+ const used = (xs: UiRun[]): number => xs.reduce((n, x) => n + cells(x.t), 0)
+ let timeW = time ? cells(time) + 1 : 0
+ let room = w - used(head) - used(tail) - timeW
+ if (room < 6 && time) { timeW = 0; room = w - used(head) - used(tail) } // no room for the time beside a name: the name wins
+ if (cells(name) === room + 1) { head = headOf(' '); room += 1 } // one cell short of the whole name: the gap after the state word gives it up before the name is cut
+ const label = clip(name, Math.max(1, room)).replace(ELLIPSIS, ui.ascii ? '~' : ELLIPSIS)
+ const gap = Math.max(timeW ? 1 : 0, w - used(head) - cells(label) - used(tail) - (timeW ? cells(time) : 0))
+ const runs: UiRun[] = [...head, { t: label, tone: 'text' }, ...tail, ...(timeW ? [{ t: ' '.repeat(gap), tone: 'text' } as UiRun, { t: time, tone: 'muted' } as UiRun] : [])]
+ return el('Box', { flexDirection: 'column', flexShrink: 0 }, rowEl(runs, ui))
 }
 
-/** The outcome's first part (`finished`, `killed`) and time stay on the title line; what comes after the time is the content line. */
-const splitOutcome = (text: string): { head: string; content: string } => {
- const parts = text.split(/\s+[·|]\s+/).map((x) => x.trim()).filter(Boolean)
- const timed = parts.length > 1 && /^\d+[smh]$|^\d+:\d\d$/.test(parts[1]!) ? 2 : 1
- return { head: parts.slice(0, timed).join(' · '), content: parts.slice(timed).join(' · ') }
+/** The outcome's time (`0:15`) from `finished · 0:15` or `killed · 0:05`; a bare seconds figure (`15s`) reads as the clock. */
+const timeOf = (text: string): string => {
+ const m = TIME_RE.exec(text)
+ if (m) return m[0]
+ const s = /\b(\d+)s\b/.exec(text)
+ return s ? elapsedClock(Number(s[1])) : ''
 }
 
-/** One framed card for a background atlas worker's task-notification: `● done  wave-a  explorer finished · 0:15` (state, name, role, outcome), a second line only for a result. */
-export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false): RenderElement {
- if (failed) return failedTree(name, outcome, ui)
- // One grey per role on every card, old or new (critique 26): the name is body text (252), the role and the fact are secondary (245), the brand mark is 240. `_aged` is kept for the callers (transcript/placed.ts).
- const { head, content } = splitOutcome(stripStatus(outcome))
- return frameCard(toastRuns('done', displayName(name, role), clip([role, head].filter(Boolean).join(' '), 80), ui, true), clip(content, 90), ui) // the finish card keeps `◆ ATLAS` (dim, 240): the scorer finds a card by it
-}
-
-/** A failure card carries one verb, `killed` (critique 28: `closed`, `worker killed`, `failed` and `killed` were four words for one thing): the rest of the outcome (`6s`, or the worker's own line) follows the name. */
-function failedTree(name: string, outcome: string, ui: Ui): RenderElement {
- const m = /^\s*(killed|failed)\b[\s·:.,;-]*([\s\S]*)$/i.exec(stripStatus(outcome))
- const rest = (m ? m[2]! : stripStatus(outcome)).replace(/\s+/g, ' ').trim()
- const { head, content } = splitOutcome(rest)
- const title = toastRuns('failed', displayName(name, ''), clip(head, 40), ui, true) // a finish card, so it keeps the dim `◆ ATLAS` like the done card
- return frameCard(title, clip(content, 90), ui)
+/** One row for a background atlas worker's task-notification: `● done  wave-a  explorer finished  0:15` (state, name, role, time). The worker's result line lives in the HUD's RESULT column, not on a second row. */
+export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false, o: FinishOpts = {}): RenderElement {
+ const text = stripStatus(outcome)
+ if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, o)
+ return finishRow('done', displayName(name, role), `${role || 'agent'} finished`, timeOf(text), ui, o)
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */

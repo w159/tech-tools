@@ -198,12 +198,12 @@ export async function cardExtra($: EngineInterface, output: unknown, agents: rea
 
 /** Notification row for a background atlas worker; null leaves any other task's row to the engine. `hide` says the worker's finish card is
  * already in the transcript (transcript/placed.ts): the host's row then draws nothing, so a finish is one card. */
-export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean, aged?: () => boolean): Promise<RenderElement | null> {
+export async function notificationRow($: EngineInterface, task: { id?: string; status?: string; durationMs?: number }, memo: Map<string, Outcome>, hide?: (name: string) => boolean, aged?: () => boolean, cols = 0): Promise<RenderElement | null> {
  const who = await whoIs($, task.id ?? '', await $.agent.list().catch(() => [] as AgentInfo[]), task.status, true)
  if (!who) return null
  if (hide?.(who.name)) return { type: 'Text', props: {}, children: [] }
  const o = await workerOutcome($, { ...who, status: badWord(who.status) ?? firstOf(task.status, who.status) }, memo, task.durationMs)
- return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui, aged?.() ?? false)
+ return notificationTree(who.name, who.type.slice('atlas:'.length), outcomeText(o), FAILED.has(o.status), (await lookOf($)).ui, aged?.() ?? false, { cols })
 }
 const FAILED = new Set(['failed', 'killed'])
 

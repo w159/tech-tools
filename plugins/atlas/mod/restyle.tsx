@@ -16,7 +16,7 @@ import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
-import { cardAged, hideNotification, placedTree } from './transcript/placed'
+import { cardAged, cardFade, cardStackHidden, hideNotification, placedTree } from './transcript/placed'
 import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
 import { elapsedClock, hexIn, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
@@ -384,7 +384,7 @@ export function registerRestyle(on: On): void {
    if (e.props.isExpanded || e.props.origin?.kind === 'composer') return next(e)
    const snap = await ready($, cache)
    if (!snap) return next(e)
-   if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name), () => cardAged(`n-${e.requestId}`, snap.now))) ?? next(e)
+   if (e.props.task) return (await notificationRow($, e.props.task, outcomes, (name) => hideNotification(e.requestId, name), () => cardAged(`n-${e.requestId}`, snap.now), e.viewport?.columns ?? 0)) ?? next(e)
    return bubbleTree(e.props.text, e.props.from?.name, 'lead', e.viewport?.columns ?? 0, (await lookOf($)).ui) ?? next(e)
   } catch { return next(e) }
  })
@@ -394,7 +394,8 @@ export function registerRestyle(on: On): void {
   try {
    if (e.props.plugin !== 'atlas') return next(e)
    const now = ((await read($, snapshotState)) as AtlasSnapshot | null)?.now ?? 0 // read while drawing: the card redraws as the snapshot's clock moves
-   return placedTree(e.props.id, (await lookOf($)).ui, cardAged(e.props.id, now)) ?? next(e)
+   const aged = cardAged(e.props.id, now)
+   return placedTree(e.props.id, (await lookOf($)).ui, aged, { cols: e.viewport?.columns ?? 0, fade: cardFade(e.props.id, now), hidden: cardStackHidden(e.props.id, now) }) ?? next(e)
   } catch { return next(e) }
  })
 
