@@ -63,9 +63,9 @@ describe('step 1: the lead lane ends at the run total and says it (stoprun-150-3
       const ticks = [...t[axis]!].map((c, i) => (c === '┬' ? i : -1)).filter((i) => i >= 0);
       const plotW = ticks.at(-1)! - ticks[0]!;
       const axisEnd = Number(/^\s*0:00.*?(\d+):(\d\d)\s*$/.exec(t[axis + 1]!)![2]) + 60 * Number(/(\d+):(\d\d)\s*$/.exec(t[axis + 1]!)![1]);
-      expect(axisEnd).toBe(40);
+      expect(axisEnd).toBe(36); // state 40: the axis ends on the run total, not the next 10 s
       const filled = [...laneOf(t[lead]!)].filter((c) => c === '▇').length;
-      expect(filled).toBe(Math.round((plotW * 36) / axisEnd)); // 0:36 of 0:40, not 0:31
+      expect(filled).toBe(plotW); // 0:36 of 0:36, not 0:31
     });
   }
   test('the helper: a total lane runs from the first start to runSecs whatever its own clock says', () => {
@@ -73,7 +73,7 @@ describe('step 1: the lead lane ends at the run total and says it (stoprun-150-3
     const lead = t.find((l) => /^ . lead\s/.test(l))!;
     const axis = t.findIndex((l) => /┬/.test(l));
     const plotW = t[axis]!.lastIndexOf('┬') - t[axis]!.indexOf('┬');
-    expect([...laneOf(lead)].filter((c) => c === '▇')).toHaveLength(Math.round((plotW * 36) / 40));
+    expect([...laneOf(lead)].filter((c) => c === '▇')).toHaveLength(plotW);
     expect(t.some((l) => /^ {13}0:36 · /.test(l) || /^ {13}0:36$/.test(l))).toBe(true);
   });
 });
@@ -136,15 +136,15 @@ describe('step 3: the lane takes the pane (stoprun-110-1: a 12-cell lane, 1-3 ce
     expect(ticks).toBe(5);
     expect(labels.length).toBeGreaterThanOrEqual(Math.ceil(ticks / 2));
     expect(labels[0]).toBe('0:00');
-    expect(labels.at(-1)).toBe('0:40');
+    expect(labels.at(-1)).toBe('0:36');
     expect(cells(t[axis + 1]!)).toBeLessThanOrEqual(38);
   });
   test('the time leaves the lane: at the bar end where no caption row stands, under it with the calls where one does', () => {
-    const agents = [{ name: 'alpha-explorer', state: 'done' as const, secs: 13, startMs: 0, endMs: 13_000, calls: [1, 2] }];
+    const agents = [{ name: 'alpha-explorer', state: 'done' as const, secs: 13, startMs: 0, endMs: 13_000, calls: [1, 2] }, { name: 'beta-explorer', state: 'done' as const, secs: 26, startMs: 0, endMs: 26_000, calls: [1] }]; // the axis ends on the longest bar, so a shorter one leaves room for its time
     const plain = boardText(boardTimeline(agents, { cols: 38, ui, spark: false }));
     expect(plain[0]).toMatch(/^ ● alpha {5}▇+ 0:13/);
     const caps = boardText(boardTimeline(agents, { cols: 38, ui, spark: true }));
-    expect(caps[1]).toMatch(/^ {13}0:13 · 2 calls$/);
+    expect(caps.some((l) => /^ {13}0:13 · 2 calls$/.test(l))).toBe(true);
   });
   test('short names: the role tail goes while the names stay apart', () => {
     const named = (names: string[]): string[] => boardText(boardTimeline(names.map((name, i) => ({ name, state: 'done' as const, secs: 5, startMs: i * 1000, endMs: 5000 + i * 1000 })), { cols: 60, ui })).filter((l) => /▇/.test(l)).map((l) => l.slice(3, 12).trim());
