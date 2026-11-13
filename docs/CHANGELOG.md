@@ -2,7 +2,7 @@
 
 ## atlas 17.15.0 - 2026-11-13
 
-- atlas 17.15.0: waves 30 to 40 of the terminal UI (band, TODO HUD, SUBAGENTS table, board, side panel, cards). plugins/atlas/README.md and the root README were rewritten against the code on main 11e67a82. The line list is in [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).
+- atlas 17.15.0: waves 30 to 41 of the terminal UI (band, TODO HUD, SUBAGENTS table, board, side panel, cards). plugins/atlas/README.md and the root README were rewritten against the code on main ef38fc50. The line list is in [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).
 
 ## marketplace 5.20.0 - 2026-11-13
 

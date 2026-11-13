@@ -86,8 +86,8 @@ Terms used below: a "colony" is the set of named worker subagents a lead session
 ## What it looks like
 
 Every image below is a real capture of the installed plugin, taken from a tmux
-session or the browser. The terminal captures of the band, boxes and cards were taken from the 17.14.0
-build; the 17.15.0 layout of those surfaces is the one described here and in
+session or the browser. The band, box and card captures are from the 17.15.0
+build (main ef38fc50); the rendered text of each surface is in
 [plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
 
 **Mission Control band.** The band is the row above the prompt: the `◖ ◆ ATLAS ◗`
@@ -97,7 +97,10 @@ pill, then three filled segments. The first is the run state with its clock
 (`⠋ 2 running · ● 1 done · ■1`, or `no agents`). A failing gate adds a
 `△ gates 2/3` chip. The band reads `working` whenever the host's turn is on, with a
 turning braille spinner that steps every 100 ms. The run clock starts at your
-prompt, never steps back, and stops when Claude Code reports its turn idle.
+prompt, never steps back, and stops when Claude Code reports its turn idle; a
+closed run has one total, so the band, run card, side panel and board print the
+same figure and `done` does not count on. A run that ends with a failed worker or
+a refused stop reads `blocked`, not `idle`, until a new run starts.
 `ATLAS_BAND_RICH=1` draws a tall form with the phase rail.
 
 The HUD under the band draws the TODO and SUBAGENTS boxes. TODO rows share fixed
@@ -109,7 +112,8 @@ frame, so the band keeps its screen row.
 
 The side panel has six tabs: `status`, `team`, `channel`, `gates`, `core` and
 `board` (keys `r t c g k o`). The board tab lists the plan items and draws a Gantt
-timeline, one lane per agent with the lead first. The panel never says `done`
+timeline, one lane per agent with the lead first. The status tab's phase row
+shows the band's own glyph, word and clock. The panel never says `done`
 while a dispatch is open or a worker runs. The transcript gets one-row cards: a
 finish card per worker (`▌ ◆ ATLAS  ● done  beta-explorer  0:13 · 3 calls`), one
 run card per clean run, and one blocked card per blocked spell. 256-colour

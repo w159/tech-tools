@@ -575,14 +575,19 @@ Rules the band follows:
 - **Working** is shown whenever the host reports its turn is on, a worker runs or a
   plan row is running, until the host reports the turn over. The run clock starts at your prompt, never steps
   back, and ends when the host reports the turn idle (`stepRun`,
-  `mod/band-motion.ts`). A host turn with no live run, such as a slash command
+  `mod/band-motion.ts`). A closed run has one total, set when it closed and
+  never raised after (`closedTotal`): the band, the run card, the side panel's
+  phase row, the board footer and axis all print that same figure. A host turn with no live run, such as a slash command
   typed after a run finished, reads `⠋ working` with no clock and opens no run
   (`hostOnly` in `mod/band.tsx`).
-- **Done** shows the frozen run time (`● done 1:08`) for 30 seconds
+- **Done** shows the run total, frozen (`● done 1:08` stays 1:08 and does not count on), for 30 seconds
   (`IDLE_AFTER_SECS`), then the segment turns idle (`○ idle · 1:08`).
 - **Blocked** reads `▲ blocked · stop refused 0:37` when the Stop hook refused (or
   a dispatch row Stop will refuse on is still open), and `▲ blocked · 1 failed
-  0:37` when workers failed. Those are the only two reasons. The band and the side
+  0:37` when workers failed. Those are the only two reasons. A run that ends with a
+  failed worker (its dispatch row not closed) or a refused stop reads blocked from
+  the end of the run until a new run starts, never `idle` (`failedOpen` in
+  `runStateOf`, `mod/mission-layout.ts`). The band and the side
   panel read the Stop verdict on the same beat, so both switch on the same update.
 - **Width.** Below the full form the meter goes first, then `todo`, then the
   counts shrink to bare figures, then the state word goes and the clock stays.
@@ -765,8 +770,9 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
 ```
 
 - **status** (key `r`, the tab id is still `route`): the phase row wears the band's
-  own glyph, word and clock (`phase  ● done 0:29`, `phase  ▲ blocked 0:29`) and
-  holds them for up to two seconds after the band changes, then the numbered phase
+  own glyph, word and clock (`phase  ● done 0:29`, `phase  ▲ blocked 0:29`), built
+  from the band's own inputs and the same glyph function (`phaseRow` with
+  `phaseGlyph`, `mod/panel-layout.ts`), so the two never differ on one frame; then the numbered phase
   rail, a row per agent with a 12-cell braille activity line and its time, the
   gates, an events list of workers starting and finishing (`+0:13  alpha-explorer
   done`), and the todo rows.

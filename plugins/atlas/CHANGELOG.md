@@ -2,7 +2,7 @@
 
 ## 17.15.0 - 2026-11-13
 
-Terminal UI waves 30 to 40 for Claude Code, as main 11e67a82 ships them, grouped by surface. Each line names the wave that made the change; none was dropped.
+Terminal UI waves 30 to 41 for Claude Code, as main ef38fc50 ships them, grouped by surface. Each line names the wave that made the change; none was dropped.
 
 ### Band
 

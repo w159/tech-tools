@@ -187,7 +187,11 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
 
 The shipped change is in `plugins/atlas/CHANGELOG.md` (17.15.0).
 
-- [planned] Retake the `img/showcase/cc-band-*.png` and `cc-card-done.png` captures from the 17.15.0 build after reinstall; the root README says they come from 17.14.0.
+- [planned] Band at 110 columns drops the blocked reason (`· stop refused`, `· 1 failed`), so a blocked band reads only `▲ blocked 0:48`.
+- [planned] SUBAGENTS folds to its title at 110 columns while agents run; the rows should stay while a worker runs.
+- [planned] SUBAGENTS `LAST` content quality: some rows still show a shell command stub (`run a`) instead of a useful verb and target.
+- [planned] SUBAGENTS `FN` detection is text-based (it reads the worker's report); a worker that states no function count shows `-`.
+- [planned] Host-drawn items the plugin cannot change: the `[-]` handle, the tip-row jump under the band, the side-panel reflow when the panel opens, and the 153-column divider.
 - [planned] `contracts/hud-golden.ts` holds the older `agentRows` form (`AGENT STATE TASK LAST RESULT`); the table `hudLines` draws (`agentTable`: `AGENT STATE TIME CALLS FN LAST`) has no golden file. Add one generated from `mod/hud-surface.ts`.
 
 ### Atlas 17.4.3 follow-ups (added 2026-11-10)
