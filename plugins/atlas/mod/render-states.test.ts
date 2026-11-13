@@ -83,7 +83,7 @@ describe('B4: LAST is an outcome for a finished row and the current action for a
   test('a done agent reads the evidence its dispatch row holds, not `finished`', () => {
     const todos = [...PLAN, dispatch('alpha-explorer', '1. Read `/tmp/p/alpha.py` -> alpha_one (line 1), alpha_two (line 5)')];
     const rows = text(hudLines({ todos, agents: AGENTS }, { merge: false, cols: 120, maxRows: 30, ui, now: NOW }));
-    expect(lastOf(rows, 'alpha-explorer')).toMatch(/\s-\s+-\s*$/); // wave 31: RESULT is a count or `-`, never the evidence text
+    expect(lastOf(rows, "alpha-explorer")).toMatch(/\s-\s+2 fn\s*$/); // wave 31: RESULT is a count or `-`, never the evidence text (state 39: the two functions the evidence names are counted)
     expect(lastOf(rows, 'alpha-explorer')).not.toContain('finished');
     expect(lastOf(rows, 'alpha-explorer')).not.toContain('/tmp/p'); // never a path
   });

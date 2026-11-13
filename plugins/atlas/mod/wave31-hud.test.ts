@@ -132,11 +132,12 @@ describe('2. agents ride their TODO rows in every state; SUBAGENTS is the lower 
         if (!listed) continue;
         expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS.*╮\s*$/.test(r)), `${st.name}: the title rule`).toBe(true);
       }
+      const ownerW = cols - 1 - 36 >= 28 ? 16 : 12; // state 39: the OWNER column of the TODO grid
       for (const { st, f } of scenario(screen, cols)) {
         for (let i = st.returned; i < st.returned + st.running; i++) {
           const row = f.rows.find((r) => r.includes(`T${i + 1} `))!;
           expect(row, `${st.name} T${i + 1}`).toMatch(/^[ ▸] [◐◓◑◒] T\d/);
-          expect(row.trimEnd(), `${st.name} T${i + 1}`).toMatch(new RegExp(`${(NAMES[i]!.length > 15 ? `${NAMES[i]!.slice(0, 14)}…` : NAMES[i])}\\s+\\d+:\\d\\d$`));
+          expect(row.trimEnd(), `${st.name} T${i + 1}`).toMatch(new RegExp(`${(NAMES[i]!.length > ownerW ? `${NAMES[i]!.slice(0, ownerW - 1)}…` : NAMES[i])}\\s+\\d+:\\d\\d$`));
         }
       }
     });
@@ -232,12 +233,12 @@ describe('5. band segments, one failure word, one warning colour', () => {
 });
 
 describe('6. idle dims the block', () => {
-  test('idle draws 240 rules and 245 text; done keeps its colours', () => {
+  test('idle draws 240 rules and 245 text, and keeps the done mark in 114; done keeps its colours', () => {
     const run = scenario(45, 93);
     const idle = run.find((x) => x.st.name === 'idle')!.f;
     const done = run.find((x) => x.st.name === 'done')!.f;
     const colours = (f: Frame): Set<string> => new Set(f.hud.flat().map((s) => s.color!).filter(Boolean));
-    expect([...colours(idle)].sort()).toEqual([PALETTE5.dim, PALETTE5.secondary].sort());
+    expect([...colours(idle)].sort()).toEqual([PALETTE5.dim, PALETTE5.secondary, PALETTES.mocha.ok].sort()); // state 39: the finished circles keep 114 at rest, only the titles and words go 245
     expect(colours(done).has(PALETTES.mocha.ok)).toBe(true);
     expect(bandKindOf({ snapshot: snapshotOf(STAGES[7]!), live: [], gates: [], columns: 93, tick: 0, working: false, restSecs: 60, ranSecs: 58, ui } as never)).toBe('idle');
   });

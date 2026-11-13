@@ -33,6 +33,8 @@ function rowsOf(n: Node): string[] {
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const handlers = { openView: () => undefined, toggleTodos: () => undefined };
 const NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
+/** State 39: at 110 columns (a 56-cell body) AGENT is 12 cells, so a longer name ends in `…`. */
+const nameAt = (n: string, body: number): string => (body < 80 && n.length > 12 ? `${n.slice(0, 11)}…` : n);
 const PLAN = ['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 combine the reports', 'T5 write the summary'];
 const BRAILLE = /[⠀-⣿]/;
 const PUA = /[\uE000-\uF8FF]/;
@@ -209,22 +211,22 @@ describe('6. SUBAGENTS: one rule while they run, a k9s-style table once they hav
       expect(header.color).toBe(xtermHex(245));
       NAMES.forEach((n, i) => {
         const row = f.hud[head + 1 + i]!;
-        expect(row, n).toMatch(new RegExp(`^ {2}${n}\\s+● done\\s+\\d+:\\d\\d`));
+        expect(row, n).toMatch(new RegExp(`^ {2}${nameAt(n, body)}\\s+● done\\s+\\d+:\\d\\d`));
       });
     });
     test(`${cols} columns: a failed agent's row is \`■\` in 203`, () => {
       const f = frameOf(STOP, body, screen);
-      const at = f.hud.findIndex((r) => /^ {2}gamma-explorer\s+■ failed/.test(r));
+      const at = f.hud.findIndex((r) => r.startsWith(`  ${nameAt('gamma-explorer', body)}`) && /\s■ failed/.test(r));
       expect(at).toBeGreaterThan(0);
       const segs = f.hudSegs[at]!;
       expect(segs.find((x) => x.t === '■')?.color).toBe(PALETTES.mocha.bad);
-      expect(segs.find((x) => x.t.includes('gamma-explorer'))?.color).toBe(PALETTES.mocha.bad);
+      expect(segs.find((x) => x.t.includes(nameAt('gamma-explorer', body)))?.color).toBe(PALETTES.mocha.bad);
       expect(segs.find((x) => x.t === 'failed')?.color).toBe(PALETTES.mocha.bad);
     });
   }
   test('at 110 columns the narrow table keeps the names and the times', () => {
     const f = frameOf(FINISHED, 56, 40);
-    for (const n of NAMES) expect(f.hud.join('\n')).toMatch(new RegExp(`${n}\\s+\\d+:\\d\\d`));
+    for (const n of NAMES) expect(f.hud.join('\n')).toMatch(new RegExp(`${nameAt(n, 56)}\\s+(?:● done\\s+)?\\d+:\\d\\d`));
   });
   test('the TODO HUD rows for the same input are unchanged by the table (the table is a separate box under the closed plan box)', () => {
     const f = frameOf(FINISHED, 93, 45);

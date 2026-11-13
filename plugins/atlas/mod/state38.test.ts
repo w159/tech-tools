@@ -230,7 +230,7 @@ describe('step 6: SUBAGENTS FN and LAST', () => {
     const f = frameOf(FINISHED, 56, 40);
     const head = f.hud.find((l) => /AGENT\s+STATE/.test(l))!;
     expect(head, f.hud.join('\n')).toBeDefined();
-    expect(head.indexOf('LAST')).toBe(2 + 14 + 2 + 9 + 1 + 6 + 1 + 6 + 1 + 4 + 2);
+    expect(head.indexOf('LAST')).toBe(2 + 12 + 2 + 9 + 1 + 6 + 1 + 6 + 1 + 4 + 2); // state 39: AGENT is 12 here, so LAST keeps 14 cells
   });
   test('no SUBAGENTS row wears a 236 background band', () => {
     const f = frameOf(RUNNING, 93, 45);
@@ -266,7 +266,7 @@ describe('step 7: the HUD never hides a running row', () => {
     const agents = [{ name: 'alpha-explorer', role: 'explorer', state: 'working', ui: 'running', since: NOW - 2000, startedAt: NOW - 5000 } as HudAgent];
     const lines = hudLines({ todos, agents }, { cols: 93, maxRows: 20, ui, now: NOW, merge: true }).map(runsString);
     const q = lines.find((l) => /T2 combine/.test(l))!;
-    expect(q.trimEnd(), lines.join('\n')).toMatch(/queued\s+-$/);
+    expect(q.trimEnd(), lines.join('\n')).toMatch(/queued\s+-\s+-$/); // state 39: the fixed grid, owner `-` then time `-`
   });
   test('the finished row that vanished with no `+N` (live-150-1 f0045) is now a summary row', () => {
     const plan: TodoItem[] = [

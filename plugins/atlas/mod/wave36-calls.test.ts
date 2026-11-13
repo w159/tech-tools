@@ -69,6 +69,6 @@ describe('CALLS column and finish card share one count', () => {
     expect(flat(notificationTree(fw[0]!.name, fw[0]!.role, 'finished · 0:14', false, ui, false, { cols: 60, calls: fw[0]!.calls }))).not.toMatch(/calls?\b/);
     const row = tableRow(next);
     expect(row).not.toBe('');
-    expect(row.trimEnd().split(/\s+/).at(-1)).toBe('-'); // the CALLS cell, the last one at 93 cells with nothing in LAST
+    expect(row.trimEnd().split(/\s+/).at(-3)).toBe('-'); // the CALLS cell: CALLS, FN, then LAST (state 39: LAST is never blank, it reads finished here)
   });
 });

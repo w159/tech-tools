@@ -146,11 +146,11 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
       if (ui.color !== '256') { expect(ramp[1]).not.toBe(ramp[0]); expect(ramp[2]).toBe(ramp[1]); expect(ramp[3]).not.toBe(ramp[2]); }
       for (let i = at + 1; at >= 0 && i < beats.length; i++) expect(beats[i]).toBe(rest); // once at rest, it stays there
     });
-    test(`${name}: the mark of a HUD row is faded in the window, as in the side panel (wave 32: the HUD row has no \`done\` word to fade)`, () => {
+    test(`${name}: the mark of a HUD row is faded in the window, as in the side panel (state 39: the done word sits in the fixed state column)`, () => {
       const { m, after } = observed(ui);
       const mark = (rows: readonly (readonly Run[])[]): Run => rowWith(rows, 'wire the gate').find((r) => ENDS.has(r.t.trim()) && [...r.t.trim()].length === 1)!;
       const s = surfaces({ ...after, now: NOW + 5000 }, ui, m.ctx(NOW + 5000));
-      expect(rowWith(s.hud, 'wire the gate').some((r) => r.t.trim() === 'done')).toBe(false);
+      expect(rowWith(s.hud, 'wire the gate').some((r) => r.t.trim() === 'done')).toBe(true); // state 39: the fixed grid draws the state word on every row, in the quiet 245
       expect(mark(s.hud).fg).toBeDefined(); // faded in the HUD
       expect(mark(s.hud).fg).toBe(mark(s.panel).fg); // to the colour the panel fades it to
       expect(mark(surfaces(after, ui, undefined).hud).fg).toBeUndefined(); // and at rest the plain tone

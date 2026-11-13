@@ -107,15 +107,14 @@ describe('truth29 item 5: a hidden agent row is counted in the SUBAGENTS title',
   // live-110-46d4825c-1 f0071: `SUBAGENTS 3 running` over one agent row and no overflow line.
   for (const cols of [150, 110]) {
     test(`${cols} cols: 3 running and rows hidden: the merged block counts them once, on the TODO ribbon (wave 31)`, () => {
-      const rows = rowsAt(three(), cols, 3); // title, one agent row, the closing rule (critique 28: boxes are closed)
+      const rows = rowsAt(three(), cols, 3); // state 39: title, ONE dim summary row, the closing rule that carries the SUBAGENTS title (folded to its one row, never an empty box)
       const title = rows.find((r) => r.includes('SUBAGENTS'))!;
-      const shown = rows.filter((r) => /implementer-|runner-/.test(r)).length;
-      expect(shown).toBe(1);
       expect(title).toContain('3 running');
-      const ribbon = rows.find((r) => r.includes('▸ TODO'))!; // agents ride the TODO rows, so the one `+N more` is on that ribbon and the SUBAGENTS rule keeps the running count
-      expect(Number(/\+(\d+) more/.exec(ribbon)?.[1])).toBeGreaterThanOrEqual(2);
+      const summary = rows.find((r) => /^ {2}\S (?:\d+ done {2}\S )?\d+ more running/.test(r) || /more running/.test(r))!;
+      expect(summary, rows.join('\n')).toBeDefined();
+      expect(Number(/(\d+) more running/.exec(summary)?.[1])).toBeGreaterThanOrEqual(2); // the hidden running rows are counted once, on the summary row
+      expect(rows.some((r) => /\+\d+ more/.test(r))).toBe(false); // one idiom: no `+N more` on any title
       expect(title).not.toContain('more');
-      expect(rows.some((r) => /^\s*\+\d+ more/.test(r))).toBe(false); // one wording, on the ribbon
     });
   }
   test('nothing hidden, nothing counted', () => {

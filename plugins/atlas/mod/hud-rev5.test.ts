@@ -153,8 +153,10 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
     const out = rows(plan, agents, { maxRows: 9 }).map(text);
     expect(out.length).toBeLessThanOrEqual(9);
     expect(corners(out)).toEqual([2, 2]);
-    expect(out[0]).toMatch(/TODO {2}0\/5 · ■1 · \+3 more/);
-    expect(planRows(out)).toBeGreaterThanOrEqual(2);
+    expect(out[0]).toMatch(/TODO {2}0\/5 · ■1 /);
+    expect(out[0]).not.toMatch(/\+\d+ more/); // state 39: the rows left out ride ONE dim summary row inside the box, never the title
+    expect(out.some((r) => /^ {2}\S \d+ (?:more )?(?:queued|running|done)/.test(r)), out.join('\n')).toBe(true);
+    expect(planRows(out)).toBeGreaterThanOrEqual(1);
     expect(agentLines(out)).toBe(3);
     expect(out.some((r) => /not shown/.test(r))).toBe(false);
   });
