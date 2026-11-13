@@ -10,7 +10,7 @@
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
 import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
-import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
+import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons, openWorkOnly } from './data/runstate';
 import { displayName } from './hud';
 import { fitText, textWidth } from './theme';
@@ -60,6 +60,8 @@ export type MissionModel = {
   openWork?: number;
   /** Of Stop's open rows, how many are dispatch rows: the extra open rows beyond the plan read `n dispatch open` when they all are. */
   openDispatch?: number;
+  /** Of Stop's open dispatch rows, how many belong to a worker that ended failed or killed (wave 37): they are failures (`■1`), not `n dispatch open`, though the store still holds them and Stop refuses on them. */
+  failedDispatch?: number;
   /** The title of the first open dispatch row: a blocked band names it in its reason (`blocked: dispatch read ghost.py open`) and leaves the todo figure at the plan's own count. */
   openDispatchTitle?: string;
   /** The lead is mid-turn: its own tool runs or it is thinking (data/runstate leadBusy), or a plan row is running (planBusy, the HUD's TODO rule), though no worker is listed. The band never reads `idle` then. */
@@ -169,7 +171,7 @@ export const bandMotionItems = (m: MissionModel): MotionItem[] => [...COUNT_ORDE
 /** The spinner frame of a state's count: the running count turns the frame of the worker listed first (the HUD and the panel turn spinFrameOf(clock, name) for that same row, critique 19: `◒` in the band against `◐` in the HUD); the local tick otherwise. */
 function countFrame(m: MissionModel, s: UiState): number {
   const first = s === 'running' && m.now !== undefined ? byAttention(m.workers).find((w) => uiStateOf(w.state) === 'running') : undefined;
-  return first && m.now !== undefined ? spinFrameOf(m.now, first.name) : m.tick;
+  return first && m.now !== undefined ? (s === 'running' ? sharedSpinFrame(m.now) : spinFrameOf(m.now, first.name)) : m.tick;
 }
 
 /** The one failure word on every surface (wave 33): `■ 1 failed` in the error 203, whether the dispatch row is closed or not. */
@@ -247,14 +249,23 @@ export type BandKind = 'working' | 'idle' | 'done' | 'blocked';
 /** `2 gates to check`, `1 gate to check`: a failing gate is something to look at, never a block and never the lead. */
 const gatesToCheck = (failing: readonly string[]): string => `${failing.length} ${failing.length === 1 ? 'gate' : 'gates'} to check`;
 /** Dispatch rows the store holds open while nothing runs: no listed worker, no host turn (wave 33). Stop refuses on them, so the band says so on the frame the turn ends, with or without the refusal. */
-export const dispatchHeld = (m: MissionModel): number => (!isAlive(m) && !m.busy ? Math.max(0, m.openDispatch ?? 0) : 0);
-const dispatchOpenWords = (n: number): string => `${n} ${n === 1 ? 'dispatch' : 'dispatches'} open`;
+export const dispatchHeld = (m: MissionModel): number => (!isAlive(m) && !m.busy ? Math.max(0, (m.openDispatch ?? 0) + (m.failedDispatch ?? 0)) : 0);
+/** The ONE table of blocked reasons (wave 37): the band reads `▲ blocked · <reason>` with exactly these words, whatever width, segment form or gate wording produced the reason. */
+export const BLOCKED_TEXT = {
+  needs: 'needs you',
+  stop: 'stop refused',
+  retry: 'retrying',
+  dispatch: (n: number): string => `${n} ${n === 1 ? 'dispatch' : 'dispatches'} open`,
+} as const;
+const dispatchOpenWords = (n: number): string => BLOCKED_TEXT.dispatch(n);
 export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; kind: BandKind; reason: { long: string; short: string } } {
   const hold = !!m.holdBlocked; // wave 36: a blocked verdict the band has not confirmed yet (register.ts stepBlocked) is not shown
   const stopGates = hold ? [] : m.stopGates ?? [];
   const held = hold ? 0 : dispatchHeld(m);
   const blocked = !hold && (!!m.blocked || stopGates.length > 0 || held > 0);
-  const quiet = !blocked && !isAlive(m) && !m.busy;
+  // Wave 37: a blocked verdict held back by the debounce is a turn that has not finished: the band keeps reading `working` until it is confirmed, so working -> blocked never passes through one `idle` frame.
+  const pending = hold && (!!m.blocked || (m.stopGates?.length ?? 0) > 0 || dispatchHeld(m) > 0);
+  const quiet = !blocked && !pending && !isAlive(m) && !m.busy;
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber triangle).
   const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? gatesToCheck(failing) : undefined;
@@ -264,12 +275,12 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   // A gate warning never leads (round 3): it rides the tail of a done, idle or working band (`warn`).
   const finished = m.phase === 'done' || (m.total > 0 && m.done >= m.total);
   const kind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : finished && (m.restSecs ?? 0) < IDLE_AFTER_SECS ? 'done' : 'idle';
-  const reason = held > 0 && !m.blocked && openWorkOnly(stopGates) ? { long: dispatchOpenWords(held), short: dispatchOpenWords(held) } : blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now);
+  const reason = held > 0 && !m.blocked && openWorkOnly(stopGates) ? (() => { const w = (m.openDispatch ?? 0) > 0 ? dispatchOpenWords(m.openDispatch!) : BLOCKED_TEXT.stop; return { long: w, short: w }; })() : blockReasons(!!m.blocked, stopGates, m.openDispatchTitle, now);
   return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, kind, reason };
 }
 
 /** The spinner frame the band turns: the shared clock (the HUD, the panel and the counts turn the same one), else the local tick. */
-const bandFrame = (m: MissionModel): number => (m.now === undefined ? m.tick : spinFrameOf(m.now));
+const bandFrame = (m: MissionModel): number => (m.now === undefined ? m.tick : sharedSpinFrame(m.now));
 
 /** The wordmark ribbon `◖ ◆ ATLAS ◗`, once, at the left end of the band. A solid chip in every state (round 3: the inverted-letter shimmer read as a stray cursor); motion comes from the spinner alone. */
 function ribbonOf(m: MissionModel, ui: Ui, _kind: BandKind): Run[] {
@@ -280,15 +291,12 @@ function ribbonOf(m: MissionModel, ui: Ui, _kind: BandKind): Run[] {
   return runs.map((x): Run => { const { bg: _bg, ...rest } = x; return x.t === '◖' || x.t === '◗' ? { ...rest, tone: 'accent', fg: fill } : { ...rest, tone: 'white', bgHex: fill }; });
 }
 
-/** What a blocked band needs, in the lead's words: `dispatch T2 read ghost.py open` reads `needs: close dispatch T2` (`needs: close T2` short, `close T2` bare);
- * `retry stop` is the spinner word `retrying` (leadRuns draws it), not a need; other reasons stay as the gates word them. */
-export function needsOf(reason: string, form: 'long' | 'short' | 'bare' = 'long'): string {
-  const open = /^dispatch (\S.*?) open$/.exec(reason);
-  if (open) {
-    const id = /^T\d+\b/.exec(open[1]!)?.[0] ?? open[1]!;
-    return form === 'long' ? `needs: close dispatch ${id}` : form === 'short' ? `needs: close ${id}` : `close ${id}`;
-  }
-  return reason === 'retry stop' ? 'retrying' : reason;
+/** The reason after `▲ blocked ·`, from the one string table (BLOCKED_TEXT): any `dispatch ... open` wording reads `n dispatch open` (n the open dispatch rows the store holds; none open - the dispatch ended failed or
+ * killed - reads `stop refused`), the lead's own ask `needs you`, a Stop retry `retrying`; other reasons stay as the gates word them (`team gate`, `1 todo open`). */
+export function blockedWhy(reason: string, openDispatch = 0): string {
+  if (reason === 'retry stop') return BLOCKED_TEXT.retry;
+  if (/\bdispatch(?:es)?\b.*\bopen$/.test(reason)) return openDispatch > 0 ? BLOCKED_TEXT.dispatch(openDispatch) : BLOCKED_TEXT.stop;
+  return reason;
 }
 
 /** The warn tail of a quiet or working band: ` . △ 2 gates to check` (never the lead); `short`: ` . △ 2 gates`. On an idle or done band the mark AND its words are dim (240): the amber mark was still the loudest thing in
@@ -316,7 +324,7 @@ const LEAD_FULL: LeadOpts = { clock: true, reason: 'long', fix: true };
 
 /** The state the band leads with, by glyph AND word (never colour alone), four states on the one spinner clock:
  * working `◐ working 0:42` (accent spinner, bold 252 word, quiet clock); done `● done . 1:08` (ok, bold, the final duration frozen);
- * idle `○ idle . last run 1:08` (245, after IDLE_AFTER_SECS at rest); blocked `▲ blocked . needs: close dispatch T2 . ◐ fixing` (bold 203; `. ◐ retrying` when Stop is retried).
+ * idle `○ idle . last run 1:08` (245; on the filled bar 252 on the 240 slab, after IDLE_AFTER_SECS at rest); blocked `▲ blocked . needs: close dispatch T2 . ◐ fixing` (bold 203; `. ◐ retrying` when Stop is retried).
  * The todo figure is its own segment (standardForms), so no count is said twice. */
 function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, reason: string | undefined, o: LeadOpts): Run[] {
   const mark = (glyph: string, tone: Tone, bold = false): Run => ({ t: glyph, tone: ui.ascii ? 'text' : tone, ...(bold ? { bold: true } : {}) });
@@ -329,8 +337,8 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
     case 'done': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [f ? r(` ${elapsedClock(ran)}`, 'ok', true) : r(` · ${elapsedClock(ran)}`, 'sub')] : [])]; }
     case 'idle': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short || f ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])]; }
     case 'blocked': {
-      const why = reason && o.reason !== 'none' ? needsOf(reason, o.reason) : '';
-      const retrying = why === 'retrying';
+      const why = reason && o.reason !== 'none' ? blockedWhy(reason, m.openDispatch ?? 0) : '';
+      const retrying = why === BLOCKED_TEXT.retry;
       return [
         mark(ui.ascii ? GLYPH5_ASCII.blocked : GLYPH5.blocked, 'bad', true), r(' blocked', 'bad', true),
         ...(why && !retrying ? [r(` · ${why}`, 'bad', true)] : []),
@@ -346,8 +354,8 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
 // ` · ` joined text of the old bar.
 const SEG_PLAN = { mocha: xtermHex(237), latte: PALETTES.latte.queued_fill } as const;
 const SEG_WORK = { mocha: xtermHex(235), latte: PALETTES.latte.base } as const;
-/** The idle state slab: 236 with 245 text (wave 36). */
-const SEG_IDLE = { mocha: xtermHex(236), latte: PALETTES.latte.queued_fill } as const;
+/** The idle state slab: 240 with 252 text (wave 37; it was 236, which vanished beside the 237 plan segment). */
+const SEG_IDLE = { mocha: xtermHex(240), latte: PALETTES.latte.queued_fill } as const;
 /** The wordmark pill's fill: xterm 97 with white ink, darker than the 141 working slab beside it so the two never merge (wave 36). */
 const PILL = { mocha: xtermHex(97), latte: xtermHex(54) } as const;
 const EDGE = '▌';
@@ -363,7 +371,7 @@ function stateFillToken(st: ReturnType<typeof runStateOf>): Token {
 /** Runs laid on a fill: the fill rides `bgHex`, a motion tint (`fg`) is dropped; `ink` the one text tone of the whole segment (the state fill's dark ink); absent, each run keeps its own tone. */
 const onFill = (runs: readonly Run[], bgHex: string, ink?: Tone): Run[] =>
   runs.filter((x) => x.t !== '').map((x): Run => { const { fg: _fg, bg: _bg, ...rest } = x; return { ...rest, tone: ink ?? x.tone, bgHex }; });
-/** `lead | plan | work` as the three segments after the wordmark. Plan and work may be empty (the seam to a missing segment is not drawn). */
+/** `lead | plan | work` as the three segments after the wordmark (wave 37: all three are always drawn). */
 function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], plan: Run[], work: Run[]): Run[] {
   const pal = PALETTES[ui.theme];
   const token = stateFillToken(st);
@@ -372,10 +380,9 @@ function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: 
   const planBg = SEG_PLAN[ui.theme];
   const workBg = SEG_WORK[ui.theme];
   // The state fill starts at the cell after the wordmark's `◗` (its padding cell), so the row still reads `◖ ◆ ATLAS ◗ ⠸ working` for every reader of the text.
-  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, idle ? undefined : inkFor(token, ui.theme, ui.color))];
-  let at = fill;
-  if (plan.length) { out.push(edge(at, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg)); at = planBg; }
-  if (work.length) { out.push(edge(at, workBg), ...onFill([r(' '), ...work, r(' ')], workBg)); }
+  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, idle ? 'text' : inkFor(token, ui.theme, ui.color))];
+  // Wave 37: STATE | PLAN | WORKERS, always three. A caller with nothing to say in a segment still gets the segment (the forms hand `todo -` and `no agents`), so no state or width draws a different grammar.
+  out.push(edge(fill, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg), edge(planBg, workBg), ...onFill([r(' '), ...work, r(' ')], workBg));
   return out; // the last fill runs on to the last cell (withHandle pads it), right up to the host's `[-]`
 }
 /** The workers segment: the groups joined by a middle dot, empty groups left out. */
@@ -410,15 +417,28 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   type Warn = 'long' | 'short' | 'none';
   const failN = failedCount(m);
   const warning = (counts: Counts, warn: Warn, bw: boolean): Run[] => {
-    if (failN > 0 && counts !== 'none') return [glue, ...failedRuns(m, ui, true)]; // always spelled `■ N failed`: the one failure word at every width (wave 33), never `■1`
+    if (failN > 0 && counts !== 'none' && !seg) return [glue, ...failedRuns(m, ui, true)]; // always spelled `■ N failed`: the one failure word at every width (wave 33), never `■1`
     if (bw && blockedWords.length) return [glue, ...blockedWords];
     if (warn !== 'none') return m.bar ? gatesSeg(m, ui, st) : st.warn ? warnSeg(ui, st, warn) : [];
     return [];
   };
+  // Wave 37: the plan segment is `todo n/m` (plus `■k` for failures) and the workers segment never goes: the running count, else who waits or finished, else `no agents`.
+  const badTone: Tone = ui.ascii || contrast(PALETTES[ui.theme].bad, PALETTES[ui.theme].panel) < NEED.text ? 'text' : 'bad';
+  const failChip: Run[] = failN > 0 ? [r(' '), stateRun('failed', ui), r(`${failN}`, badTone)] : [];
+  const planFig = (open: boolean): Run[] => (m.total ? [r(`todo ${fig.done}/${fig.total}${open ? openMore(m) : ''}`), ...failChip] : [r('todo -', 'sub')]);
+  const workBody = (words: boolean): Run[] => {
+    const run = runningRuns(m, ui, words);
+    if (run.length) return run;
+    const waiting = countOf(m, 'waiting');
+    if (waiting > 0) return words ? countRuns('waiting', waiting, ui) : [stateRun('waiting', ui), r(` ${waiting}`)];
+    const finished = Math.max(countOf(m, 'done'), m.lastRun?.workers ? Math.max(0, m.lastRun.workers - failedCount(m)) : 0);
+    if (finished > 0) return words ? countRuns('done', finished, ui) : [stateRun('done', ui), r(` ${finished}`)];
+    return [r(words ? 'no agents' : '-', 'sub')];
+  };
   const wide = (gw: number, gap: string): Run[] => {
     const warn = warning('words', 'long', true);
-    const counts = runningRuns(m, ui, true);
-    if (seg) return segmented(ui, st, cap, lead(LEAD_FULL), m.total ? [r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`)] : [], joinWork(counts, warn.slice(1)));
+    const counts = seg ? workBody(true) : runningRuns(m, ui, true);
+    if (seg) return segmented(ui, st, cap, lead(LEAD_FULL), m.total ? [r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`), ...failChip] : planFig(false), joinWork(counts, warn.slice(1)));
     return [
       ...cap, r('  '), ...lead(LEAD_FULL),
       ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`, 'sub')] : m.bar ? [] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
@@ -430,7 +450,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const row = (v: Lv, word = true): Form => {
     const warn = warning(v.counts, v.warn, v.bw);
     const run = v.counts === 'words' || v.counts === 'noq' ? runningRuns(m, ui, true) : v.counts === 'tiny' ? runningRuns(m, ui, false) : [];
-    if (seg) return { min: 0, runs: segmented(ui, st, cap, lead(v.o), m.total ? [r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${v.open && warn.length === 0 ? openMore(m) : ''}`)] : [], joinWork(run, warn.slice(1))) };
+    if (seg) return { min: 0, runs: segmented(ui, st, cap, lead(v.o), planFig(v.open && warn.length === 0), joinWork(workBody(v.counts === 'words' || v.counts === 'noq'), warn.slice(1))) };
     return { min: 0, runs: [...cap, r(' '), ...lead(v.o), ...todoSeg(v.open && warn.length === 0, word), ...(run.length ? [glue, ...run] : []), ...warn] };
   };
   const F = LEAD_FULL;

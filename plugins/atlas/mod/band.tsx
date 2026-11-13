@@ -12,7 +12,7 @@ import { planProgress } from './hud';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
-import { fillHex, hostEnv, LINGER_MS, spinClock, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
+import { fillHex, hostEnv, LINGER_MS, preImage, spinClock, surfaceHex, uiFromEnv, xtermHex, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -103,7 +103,7 @@ function lastRun(all: readonly LiveWorker[], now: number, owners: readonly strin
 
 /** Stop's open rows that the plan count does not carry, read from the snapshot the plan count reads (never the core model, which is rebuilt on its own slower tick and
  * trailed the plan: `5/5 · 1 open` under a full plan, critique 11). The core model only ever held plan rows, so it could not see the dispatch rows Stop counts. */
-function openRows(s: LiveSnapshot, owners: ReadonlyMap<string, UiState>): { openWork: number; openDispatch: number; openDispatchTitle?: string } {
+function openRows(s: LiveSnapshot, owners: ReadonlyMap<string, UiState>): { openWork: number; openDispatch: number; failedDispatch?: number; openDispatchTitle?: string } {
   const allRows = s.todos ?? [];
   const planOpen = planBasis(allRows, s.sessionId).filter((it) => it.status !== 'completed').length;
   // Wave 33: a dispatch row folds into its plan row while that row is open (same owner, or the worker named in its title): the T row carries the work, so every count stays on the plan's own /N. Once the lead closes the T row and leaves the dispatch row open, it is Stop's open row again.
@@ -112,9 +112,11 @@ function openRows(s: LiveSnapshot, owners: ReadonlyMap<string, UiState>): { open
   const rows = allRows.filter((it) => !isFolded(it));
   const dispatch = rows.filter((it) => (it as { origin?: string }).origin === 'dispatch');
   // The row the reason names must agree with the TODO beside it: a dispatch row the board already draws done (its worker failed or was killed: `closed · worker killed`) is not what the band asks the lead to close.
+  // Wave 37: a dispatch whose worker ended failed or was killed is not open: the plan segment counts it as failed (`■1`), so no band reads `1 dispatch open` for it.
   const shown = withOwnerStates(openItems(dispatch, s.sessionId) as { owner?: string }[], owners).filter((it) => it.ownerState !== 'failed');
   const title = openRowName(ownPlan(allRows, s.sessionId), shown[0]); // the first open dispatch row, by its plan row's title (T-id and title), else its agent
-  return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: openWork(dispatch, s.sessionId), ...(title ? { openDispatchTitle: title } : {}) };
+  const failedOpen = withOwnerStates(openItems(dispatch, s.sessionId) as { owner?: string }[], owners).length - shown.length; // still open in the store (Stop counts them), but the worker ended: failed, not open
+  return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: shown.length, ...(failedOpen > 0 ? { failedDispatch: failedOpen } : {}), ...(title ? { openDispatchTitle: title } : {}) };
 }
 
 function missionModel(b: BandModel & { maxRows: number }): MissionModel {
@@ -164,13 +166,19 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
 
 // ---- paint --------------------------------------------------------------------------
 
+/** Fills whose xterm index the 256-colour table cannot reach by nearest match (97 and 54 are not stable: the host maps their own hex to another index): the wordmark pill. In 256 colours the host is handed
+ * the index's pre-image, so its own downsampler lands on exactly 97 (54 on latte). Other modes keep the hex. */
+const PINNED_256: ReadonlyMap<string, number> = new Map([[xtermHex(97), 97], [xtermHex(54), 54]]);
+const pinned = (hex: string, ui: Ui): string | undefined => (ui.color === '256' && PINNED_256.has(hex) ? preImage(PINNED_256.get(hex)!) : undefined);
+
 /** A run as a Segment: the live theme's tone colour on the run's own fill or the panel; with NO_COLOR only bold and strike remain. */
 const seg = (x: Run, ui: Ui): Segment => {
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
   if (ui.color === 'none') return { t: x.t, ...style };
   // A seam of the segmented bar (`▌`, `fg` a fill colour): both halves are fills, so the left half maps like one (never fitted to the panel's text contrast).
   const seam = x.t === '▌' && x.fg !== undefined;
-  return { t: x.t, color: seam ? fillHex({ bgHex: x.fg }, ui) : runHex(x, ui.theme, ui.color), bg: fillHex(x, ui), ...style };
+  const capFg = x.fg === undefined ? undefined : pinned(x.fg, ui);
+  return { t: x.t, color: seam ? pinned(x.fg!, ui) ?? fillHex({ bgHex: x.fg }, ui) : capFg ?? runHex(x, ui.theme, ui.color), bg: (x.bgHex === undefined ? undefined : pinned(x.bgHex, ui)) ?? fillHex(x, ui), ...style };
 };
 const segs = (l: Line, ui: Ui): Segment[] => l.runs.map((x) => seg(x, ui));
 const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : surfaceHex('panel', ui));

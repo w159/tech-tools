@@ -261,12 +261,24 @@ export const elapsedOf = (a: Pick<HudAgent, 'state' | 'since' | 'startedAt'>, st
 
 /** Agent rows, in the mocks' order. `T4` is the 1-based position of a plan row the agent owns; an agent owning several lists all of them. `now` (epoch ms) times a running agent's LAST fallback.
  * An agent the host listed with no name takes the key, the dispatch description's name, the owner of a dispatch row no other agent holds, else its role: a row never has a blank AGENT cell (critique 22). */
+/** Dispatch order (wave 37): an agent's `seq` is assigned ONCE, the first time the HUD sees it, from a counter that only grows; it is never recomputed from the list in hand, so a row that is listed late, reordered by the host or
+ * dropped for a frame keeps its place (the critique saw alpha, ghost, beta in one frame and beta, alpha, ghost in the next). The order is forgotten when no agent is listed (the run is over). */
+const seqOf = new Map<string, number>();
+let seqNext = 0;
+export const resetAgentSeq = (): void => { seqOf.clear(); seqNext = 0; };
+const seqFor = (id: string): number => {
+  let n = seqOf.get(id);
+  if (n === undefined) { n = seqNext++; seqOf.set(id, n); if (seqOf.size > 1000) { const keep = [...seqOf].slice(-500); seqOf.clear(); for (const [k, v] of keep) seqOf.set(k, v); } }
+  return n;
+};
+
 export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem[], root?: string | null, now?: number): AgentRow[] {
+  if (agents.length === 0) resetAgentSeq();
   const plan = todos.filter(isPlanItem); // T-numbers count plan rows; the hook's dispatch row of a worker holds its report, which is the outcome a finished row shows
   const held = (n: string): boolean => agents.some((x) => flat(x.name) === n || flat(x.key) === n);
   const spare = [...new Set(todos.filter((t) => (t as { origin?: string }).origin === 'dispatch').map((t) => flat(t.owner)).filter((n) => n !== '' && n !== 'lead' && !held(n)))];
   let spareAt = 0;
-  const rows = agents.map((a, seq): AgentRow => {
+  const rows = agents.map((a): AgentRow => {
     const shown = flat(a.name) || flat(a.key) || descriptionName(a.task) || spare[spareAt++] || flat(a.role) || 'agent';
     // A retry (`beta-explorer #2`) takes over the item its first run owned: the plan row names `beta-explorer`, so TASK reads `T3` for the retry too (critique 19 B2).
     const first = shown.replace(/\s+#\d+$/, '');
@@ -277,7 +289,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { seq, name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -302,7 +314,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const all = [...input.agents, ...namedAgents(input.todos, input.agents)];
   const running = all.some(isRunning);
   const shown = running ? all : all.filter((a) => a.state === 'failed' || a.state === 'done');
-  const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.now) : [];
+  const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.now) : (resetAgentSeq(), []); // no agent listed: the dispatch order starts over with the next run
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
