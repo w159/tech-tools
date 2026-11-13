@@ -32,7 +32,7 @@ describe('B1: the blocker has one name on the band, the gates tab and the tally'
   test('the failing check is named by its failing line, not its group', () => {
     const t = gateTally(teamGate);
     expect(t.names).toEqual(['team gate']);
-    expect(blockReasons(false, t.names).long).toBe('team gate');
+    expect(blockReasons(false, t.names).long).toBe('stop refused'); // state 38: two reasons only
   });
   test('a failing line whose label is long falls back to the group id', () => {
     const t = gateTally([{ id: 'tripwire', title: 'Dispatch tripwire', lines: [{ id: 'inline', label: 'Inline ops since last dispatch', ok: false }] }]);
@@ -43,7 +43,7 @@ describe('B1: the blocker has one name on the band, the gates tab and the tally'
     const head = runsText(bandLines(mission({ checks: t.checks }))[0]!.runs);
     expect(head).toContain('△ 1 gate to check'); // a failing check alone, Stop not refused (the gate's name is the checks row's and the gates tab's)
     expect(head).not.toContain('blocked');
-    expect(runsText(bandLines(mission({ checks: t.checks, stopGates: t.names }))[0]!.runs)).toContain('blocked · team gate'); // the Stop gate refused
+    expect(runsText(bandLines(mission({ checks: t.checks, stopGates: t.names }))[0]!.runs)).toContain('blocked · stop refused'); // the Stop gate refused
     const rows = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');
     expect(rows).toContain('Team gate');
   });
@@ -111,7 +111,7 @@ describe('B2: no calm word beside a block', () => {
     const row = rows.find((l) => /\blead\b/.test(l) && !l.includes('running'))!;
     expect(row).not.toMatch(/\bdone\b/);
     expect(row).toMatch(/blocked/);
-    expect(row).toContain('team gate');
+    expect(row).toContain('stop refused');
     expect(rows.join('\n')).not.toContain('Last Stop'); // the verdict is a record, not a gate row
   });
   test('a failing check with Stop allowed leaves the lead done (the band says warning)', () => {

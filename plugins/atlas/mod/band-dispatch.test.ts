@@ -104,7 +104,7 @@ describe('step 3: while work runs the spinner stays at every width (a blocked ba
     ['working', { busy: true, turnSecs: 42, workers: live, ctx: 0.4 }, /working/, true],
     ['blocked with a busy lead', { ...blocked, busy: true, workers: live.slice(0, 1) }, /blocked/, false],
     ['blocked, stop refused, busy', { stopGates: ['stop refused'], busy: true, ctx: 0.4, checks: [{ id: 'd', ok: false, name: 'doctor' }] } as Partial<MissionModel>, /blocked/, false],
-    ['retrying', { stopGates: ['retry stop'], busy: true } as Partial<MissionModel>, /retrying/, false],
+    ['a retried Stop', { stopGates: ['retry stop'], busy: true } as Partial<MissionModel>, /stop refused/, false], // state 38: `retrying` is gone; the only reasons are `stop refused` and `N failed`
   ];
   for (const [name, over, word, spins] of cases) {
     for (const cols of WIDTHS) {
@@ -135,19 +135,21 @@ describe('step 3: while work runs the spinner stays at every width (a blocked ba
   });
 });
 
-describe('step 4d: blocked while the host waits on the person is `blocked · needs you`, with no spinner and no fixing', () => {
+describe('step 4d: blocked while the host waits on the person is a bare `blocked` (state 38: no `needs you`), with no spinner and no fixing', () => {
   const asks = { blocked: true, busy: false } as Partial<MissionModel>;
   for (const cols of [150, 110, 62]) {
     test(`at ${cols} columns`, () => {
       const t = head(model({ cols, ...asks }));
-      expect(t).toContain('▲ blocked · needs you');
+      expect(t).toContain('▲ blocked');
+      expect(t).not.toContain('needs you');
       expect(t).not.toMatch(BRAILLE);
       expect(t).not.toContain('fixing');
     });
   }
-  test('the same ask with the host working still says only `needs you`, with no spinner and no `fixing` (wave 34)', () => {
+  test('the same ask with the host working says no reason either, with no spinner and no `fixing` (wave 34)', () => {
     const t = head(model({ ...asks, busy: true }));
-    expect(t).toContain('▲ blocked · needs you');
+    expect(t).toContain('▲ blocked');
+    expect(t).not.toContain('needs you');
     expect(t).not.toContain('fixing');
     expect(t.split(/\s+todo|\s·\stodo/)[0]).not.toMatch(BRAILLE);
   });

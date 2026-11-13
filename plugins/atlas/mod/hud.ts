@@ -3,7 +3,7 @@
 // rows, fits them to the row budget and paints Runs as Claude Code Segments. Pure: todos and agents in, Segment rows out.
 import type { SquadAgent, TodoItem } from './contract';
 import { descriptionName } from './data/orchestration';
-import { liveState, workerUiState, type LiveWorker } from './data/live';
+import { liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from './data/live';
 import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
@@ -307,13 +307,19 @@ export function namedAgents(todos: readonly TodoItem[], agents: readonly HudAgen
   return [...new Set(names)].map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }));
 }
 
+/** The agents the SUBAGENTS block lists (queued dispatches included): while one runs, all; after the wave only the done and failed. The one list the table, its title and the band's worker segment count. */
+export function shownAgents(agents: readonly HudAgent[], todos: readonly TodoItem[]): HudAgent[] {
+  const all = [...agents, ...namedAgents(todos, agents)];
+  return all.some(isRunning) ? all : all.filter((a) => a.state === 'failed' || a.state === 'done');
+}
+/** The agent tally the SUBAGENTS title prints (queued are child lines of the plan, not agents): `tallyOf` over the listed agents' state words. */
+export const agentTally = (agents: readonly HudAgent[], todos: readonly TodoItem[]): Tally => tallyOf(shownAgents(agents, todos).filter((a) => a.state !== 'queued' && a.ui !== 'queued').map((a) => a.ui ?? workerUiState(a.state)));
+
 function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agents: AgentRow[] }; o: SurfaceOpts } {
   const plan = input.todos.filter(isPlanItem);
   // The block stays after the wave: a clean finish keeps its done rows as a stop run keeps its failed one, until the roster is cleared (critique 17: live-150-a4fad2f9-3/tab-team.png
   // lost the block after DONE while the stop runs kept all three rows). Only an agent that is neither running, done nor failed (parked) is left out.
-  const all = [...input.agents, ...namedAgents(input.todos, input.agents)];
-  const running = all.some(isRunning);
-  const shown = running ? all : all.filter((a) => a.state === 'failed' || a.state === 'done');
+  const shown = shownAgents(input.agents, input.todos);
   const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.now) : (resetAgentSeq(), []); // no agent listed: the dispatch order starts over with the next run
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };

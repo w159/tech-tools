@@ -11,7 +11,7 @@ import { ownTodos } from './data/todos';
 import * as hud from './hud';
 import { hudAgents, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
-import { BLOCKED_TEXT, blockedWhy, runStateOf, type MissionModel } from './mission-layout';
+import { BLOCKED_TEXT, runStateOf, type MissionModel } from './mission-layout';
 import { sharedSpinFrame } from './motion';
 import type { LiveSnapshot } from './orchestra-types';
 import type { Segment } from './runs';
@@ -119,15 +119,13 @@ describe('2. the band is always state | plan | workers', () => {
     expect(frameOf(STOP, 93, 45).band).toMatch(/▌ todo 4\/5 ■1 ▌/);
     expect(frameOf(NOPLAN, 93, 45).band).toMatch(/▌ todo - ▌ no agents/);
   });
-  test('blocked text comes from one string table: `▲ blocked · <reason>`', () => {
-    expect(BLOCKED_TEXT).toMatchObject({ needs: 'needs you', stop: 'stop refused', retry: 'retrying' });
-    expect(blockedWhy('dispatch T2 read ghost.py open', 1)).toBe(BLOCKED_TEXT.dispatch(1));
-    expect(blockedWhy('dispatch T2 read ghost.py open', 3)).toBe(BLOCKED_TEXT.dispatch(3));
-    expect(blockedWhy('retry stop', 0)).toBe('retrying');
-    expect(frameOf(STOP, 93, 45).band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · stop refused ▌/);
-    const table = [BLOCKED_TEXT.needs, BLOCKED_TEXT.stop, BLOCKED_TEXT.retry, BLOCKED_TEXT.dispatch(1)];
+  test('blocked text comes from one string table: `▲ blocked · <reason>`, two reasons only (state 38)', () => {
+    expect(BLOCKED_TEXT.stop).toBe('stop refused');
+    expect(BLOCKED_TEXT.failed(1)).toBe('1 failed');
+    expect(frameOf(STOP, 93, 45).band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · stop refused(?: \d+:\d\d)? ▌/);
+    const table = [BLOCKED_TEXT.stop, BLOCKED_TEXT.failed(1), BLOCKED_TEXT.failed(2), BLOCKED_TEXT.failed(3)];
     for (const [, sh] of ALL) for (const b of [93, 56]) {
-      const why = /▲ blocked(?: · ([^▌]*?))? *▌/.exec(frameOf(sh, b, 45).band)?.[1];
+      const why = /▲ blocked(?: · ([^▌]*?))? *▌/.exec(frameOf(sh, b, 45).band)?.[1]?.replace(/ \d+:\d\d$/, '');
       if (why !== undefined) expect(table, why).toContain(why);
     }
   });

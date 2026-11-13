@@ -4,6 +4,7 @@
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
+import { tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
@@ -143,7 +144,8 @@ function barRow(runs: Run[], cols: number, ui: Ui): Run[] {
 
 /** `1 queued · 1 running · 2 done · 1 failed`: only states that occur, so the header always equals the row sums. */
 export function stateCounts(states: readonly UiState[]): string {
-  return COUNT_ORDER.map((s) => [s, states.filter((x) => x === s).length] as const).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${s}`).join(' · ');
+  const tally = tallyOf(states); // the one tally (data/live.ts): the band's worker segment reads the same counts
+  return COUNT_ORDER.map((s) => [s, tally[s]] as const).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${s}`).join(' · ');
 }
 
 /** Row slots by priority when the rows do not all fit: open work first (running, blocked, failed, waiting), then queued, then the newest done.

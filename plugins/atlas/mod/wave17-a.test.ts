@@ -32,28 +32,28 @@ const mission = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150
 const band = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs);
 
 describe('A1: the band counts the plan rows the TODO header counts, and names the open dispatch row', () => {
-  test('f0090 from the store: band reads todo 5/5 and `blocked · needs: close dispatch ghost-explorer` (no plan row names the worker: its agent), never 5/6', () => {
+  test('f0090 from the store: band reads todo 5/5 and `blocked · stop refused` (state 38), never 5/6', () => {
     const out = rows(idle({ todos: stopStore }), [stopGroup('1 todo open')]).join('\n');
     expect(out).toMatch(/todo [^0-9]*5\/5/);
-    expect(out).toContain('blocked · 1 dispatch open');
+    expect(out).toContain('blocked · stop refused');
     expect(out).not.toContain('5/6');
   });
   // Critique 17 A4 (stoprun-150-a4fad2f9-2 f0088: `dispatch Attempt to read gho... open`): the band names the open row by its plan row's title, never by the dispatch prompt.
-  test('a plan row that names its worker names the open row: `dispatch T2 read ghost.py open`, never the dispatch prompt cut mid-phrase', () => {
+  test('a plan row that names its worker never leaks the dispatch prompt into the reason: `stop refused` (state 38)', () => {
     const named = [
       ...['T1 read alpha.py (alpha-explorer)', 'T2 read ghost.py (ghost-explorer)', 'T3 read beta.py', 'T4 combine the reports', 'T5 write the final summary'].map((c, i) => row(`t${i}`, 'completed', 'session', '', c)),
       row('da', 'completed', 'dispatch', SESSION, 'List the function names defined in alpha.py.', 'alpha-explorer'),
       row('dg', 'pending', 'dispatch', SESSION, 'Read ghost.py first (it does not exist), then, one Read call at a time, README.md, util.py and only then report.', 'ghost-explorer'),
     ];
     const out = rows(idle({ todos: named }), [stopGroup('1 todo open')]).join('\n');
-    expect(out).toContain('blocked · 1 dispatch open');
+    expect(out).toContain('blocked · stop refused');
     expect(out).not.toMatch(/Read ghost|first|\.\.\./);
   });
-  test('the reason holds while the lead declares the block: the open row is named in both frames, never `needs you` over an open row Stop refused on', () => {
-    expect(blockReasons(true, ['1 todo open'], 'T2 read ghost.py').long).toBe('dispatch T2 read ghost.py open');
-    expect(blockReasons(false, ['1 todo open'], 'T2 read ghost.py').long).toBe('dispatch T2 read ghost.py open');
-    expect(blockReasons(true, [], 'T2 read ghost.py').long).toBe('needs you'); // a declared block with Stop not refusing is the lead's own word
-    expect(blockReasons(true, ['team gate'], 'T2 read ghost.py').long).toBe('needs you');
+  test('the reason holds while the lead declares the block: `stop refused` in both frames when Stop refused, never `needs you`', () => {
+    expect(blockReasons(true, ['1 todo open'], 'T2 read ghost.py').long).toBe('stop refused');
+    expect(blockReasons(false, ['1 todo open'], 'T2 read ghost.py').long).toBe('stop refused');
+    expect(blockReasons(true, [], 'T2 read ghost.py').long).toBe('run blocked'); // a declared block with Stop not refusing and no failure has no reason of its own
+    expect(blockReasons(true, ['team gate'], 'T2 read ghost.py').long).toBe('stop refused');
   });
   test('the figure is the plan\'s own at every width', () => {
     const m = mission({ openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py', stopGates: ['1 todo open'] });
@@ -62,16 +62,15 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
       expect(t).not.toContain('5/6');
       if (cols >= 80) expect(t).toContain('5/5');
     }
-    expect(band({ ...m, cols: 150 })).toContain('blocked · 1 dispatch open');
+    expect(band({ ...m, cols: 150 })).toContain('blocked · stop refused');
   });
-  test('not blocked, the open dispatch row is still named beside the plan count (unchanged)', () => {
-    expect(band(mission({ openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py' }))).toContain('blocked · 1 dispatch open');
+  test('an open dispatch row with nothing running blocks the band: `stop refused` beside the plan count', () => {
+    expect(band(mission({ openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py' }))).toContain('blocked · stop refused');
   });
-  test('blockReasons replaces the open-row gate with the dispatch title, clipped', () => {
-    expect(blockReasons(false, ['1 todo open'], 'read ghost.py').long).toBe('dispatch read ghost.py open');
-    expect(blockReasons(false, ['team gate', 'todos drained'], 'x').long).toBe('team gate, dispatch x open');
-    expect(blockReasons(false, ['team gate'], 'x').long).toBe('team gate');
-    expect(blockReasons(false, ['1 todo open']).long).toBe('1 todo open');
+  test('blockReasons never names a row or a gate: the open-row gate reads `stop refused`', () => {
+    expect(blockReasons(false, ['1 todo open'], 'read ghost.py').long).toBe('stop refused');
+    expect(blockReasons(false, ['team gate', 'todos drained'], 'x').long).toBe('stop refused');
+    expect(blockReasons(false, ['1 todo open']).long).toBe('stop refused');
     expect(blockReasons(false, ['1 todo open'], 'a very long dispatch goal that must be clipped').long.length).toBeLessThanOrEqual(40);
   });
 });

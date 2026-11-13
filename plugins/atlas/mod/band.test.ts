@@ -106,13 +106,14 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(plain.rows[0]).toContain('◖ ◆ ATLAS ◗');
     expect(cells(plain.rowNodes[0]!).every((t) => t.props.color === undefined && t.props.backgroundColor === undefined)).toBe(true);
   });
-  test('blocked reads `▲ blocked · needs you` and the phase rail keeps the last real phase lit', () => {
+  test('a declared block reads a bare `▲ blocked` (state 38: no `needs you`) and the phase rail keeps the last real phase lit', () => {
     const snapshot = idleSnap();
     snapshot.phase = 'blocked' as never;
     const { rows } = panel(160, { snapshot, live: [], lastPhase: 'implement', rich: true });
     expect(rows[0]).toContain('▸ 4 implement');
     const band = panel(160, { snapshot, live: [], lastPhase: 'implement' }).rows[0]!;
-    expect(band).toContain('▲ blocked · needs you');
+    expect(band).toContain('▲ blocked');
+    expect(band).not.toContain('needs you');
     expect(band).not.toContain('idle');
   });
   test('rich: capsule with the numbered phase rail, a blank row, then the gauges', () => {

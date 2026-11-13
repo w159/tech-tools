@@ -19,29 +19,30 @@ const failed = { name: 'ghost-explorer', state: 'failed' as const, secs: 9 };
 describe('A1: a reason never contradicts the todo figure beside it', () => {
   // stoprun-110-562576ed-1 f0113: Stop refused on the ghost dispatch row, the lead closed it; the plan reads 5/5 and nothing is open.
   const closed = (cols: number): string => row(m(cols, { blocked: false, stopGates: ['1 todo open'], openWork: 0, openDispatch: 0, workers: [failed] }));
-  test('f0113: n/n with nothing open reads `retry stop`, never `1 todo open`', () => {
+  test('f0113: n/n with nothing open reads `stop refused`, never `1 todo open` or `retrying`', () => {
     for (const cols of [62, 80, 110, 150]) {
       const t = closed(cols);
       expect([cols, /todo open/.test(t)]).toEqual([cols, false]);
-      expect(t).toMatch(/blocked · retrying/);
+      expect(t).toMatch(/blocked · stop refused/);
       expect(t).toMatch(/todo [^\d]*5\/5/);
     }
   });
-  test('f0102 and f0113 are one state: the open dispatch row is named while it is open', () => {
+  test('f0102 and f0113 are one state: a refused Stop reads `stop refused` whether the dispatch row is open or not', () => {
     const open = row(m(110, { stopGates: ['1 todo open'], openWork: 1, openDispatch: 1, openDispatchTitle: 'T2 read ghost.py', workers: [failed] }));
-    expect(open).toContain('blocked · 1 dispatch open');
+    expect(open).toContain('blocked · stop refused');
     expect(open).not.toMatch(/\b1 todo open\b/);
   });
-  test('n/n with another open row reads `stop refused` (the todo figure names the row); a plan with open rows keeps `1 todo open` beside a count that is not n/n', () => {
+  test('a refused Stop reads `stop refused` with the plan full or not (state 38: two reasons only, never `1 todo open`)', () => {
     expect(row(m(110, { stopGates: ['1 todo open'], openWork: 1, openDispatch: 0 }))).toContain('blocked · stop refused');
     const planOpen = row(m(110, { stopGates: ['1 todo open'], done: 4, total: 5, openWork: 1 }));
-    expect(planOpen).toContain('blocked · 1 todo open');
+    expect(planOpen).toContain('blocked · stop refused');
     expect(planOpen).toContain('todo 4/5');
   });
-  test('blockReasons: no open-now context keeps the gate words', () => {
-    expect(blockReasons(false, ['1 todo open']).long).toBe('1 todo open');
-    expect(blockReasons(false, ['team gate'], undefined, { allDone: true, openLeft: 0 }).long).toBe('team gate');
-    expect(blockReasons(false, ['team gate', 'todos drained'], undefined, { allDone: true, openLeft: 0 }).long).toBe('team gate, retry stop');
+  test('blockReasons: any refusing gate reads `stop refused`, a failure count otherwise, never a gate word', () => {
+    expect(blockReasons(false, ['1 todo open']).long).toBe('stop refused');
+    expect(blockReasons(false, ['team gate'], undefined, { allDone: true, openLeft: 0 }).long).toBe('stop refused');
+    expect(blockReasons(false, ['team gate', 'todos drained'], undefined, { allDone: true, openLeft: 0 }).long).toBe('stop refused');
+    expect(blockReasons(true, [], undefined, undefined, 2).long).toBe('2 failed');
   });
 });
 
@@ -78,7 +79,7 @@ describe('A3: a middle dot between band segments, and a count never loses its wo
     const t = warn(82);
     expect(t).toMatch(/■ 2 failed/); // wave 31: one failure word, and blocked rides the state word
     expect(t).not.toMatch(/■2/);
-    expect(t).toContain('blocked · 2 dispatches open'); // wave 33: open dispatch rows with nothing running are Stop's, so the band is blocked and says so
+    expect(t).toContain('blocked · stop refused'); // state 38: open dispatch rows with nothing running are Stop's, so the band is blocked and says `stop refused`
   });
   test('no bare glyph-and-number count while a form with the words fits', () => {
     for (let cols = 62; cols <= 150; cols++) { // 62: the lead `○ idle · ▲ routing warning` is 7 cells longer than the old bare warning
@@ -101,8 +102,9 @@ describe('A4: the lead waits on the person', () => {
     expect(asksUser('')).toBe(false);
     expect(asksUser(null)).toBe(false);
   });
-  test('a declared block reads `needs you` and the route phase reads blocked, not `research`', () => {
-    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).toContain('▲ blocked · needs you');
+  test('a declared block reads a bare `blocked` and the route phase reads blocked, not `research`', () => {
+    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).toContain('▲ blocked');
+    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).not.toContain('needs you');
     const route = bodyLines(panelWorld('route', 120, ui, { phase: 'blocked' as never, workers: [], todos: [] })).map(lineText).find((l) => l.trimStart().startsWith('phase'))!;
     expect(route).toContain('blocked');
   });

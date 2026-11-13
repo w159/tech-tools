@@ -93,18 +93,19 @@ describe('mission-layout: the header never reads idle or all ok beside a failing
       const b = band(model({ cols, checks: bad, stopGates: ['team gate'], phase: 'verify', done: 3 }));
       expect(b).toContain('blocked');
       expect(b).not.toContain('warning');
-      if (cols >= 60) expect(b).toContain('team gate');
+      if (cols >= 60) expect(b).toContain('stop refused'); // state 38: the gate's own name is gone, two reasons only
     }
-    expect(band(model({ checks: null, stopGates: ['a', 'b'] }))).toContain('a, b');
+    expect(band(model({ checks: null, stopGates: ['a', 'b'] }))).toContain('stop refused');
     const rich = runsText(bandLines(model({ cols: 160, rich: true, checks: bad, stopGates: ['team gate'] }))[0]!.runs);
-    expect(rich).toContain('blocked · team gate');
+    expect(rich).toContain('blocked · stop refused');
   });
   test('no Stop block and no declaration: a passing or failing check alone is never BLOCKED', () => {
     expect(band(model({ checks: bad, workers: [w('a', 'running')] }))).not.toContain('blocked');
     expect(band(model({ checks: null, stopGates: [] }))).not.toContain('blocked');
   });
-  test('a declared block still reads BLOCKED: needs you', () => {
-    expect(band(model({ blocked: true }))).toContain('blocked · needs you');
+  test('a declared block still reads BLOCKED, with no reason of its own (state 38: no `needs you`)', () => {
+    expect(band(model({ blocked: true }))).toContain('▲ blocked');
+    expect(band(model({ blocked: true }))).not.toContain('needs you');
   });
   test('last run does not say all ok while a check fails; it does when none fails', () => {
     expect(all(model({ checks: bad, lastRun }))).not.toContain('all ok');
@@ -248,14 +249,14 @@ describe('mission-layout: a full plan with open store work never reads as all do
   test('critique 16 A1 (stoprun-150-e4a8186a-1 f0090): blocked on one open dispatch row, the count stays the plan\'s own 5/5 and the reason names the row', () => {
     const m = model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1, openDispatchTitle: 'read ghost.py', stopGates: ['1 todo open'], workers: [] });
     const line = band(m);
-    expect(line).toContain('blocked · 1 dispatch open');
+    expect(line).toContain('blocked · stop refused');
     expect(line).toContain('5/5');
     expect(line).not.toContain('5/6');
     for (const cols of [120, 100, 80]) expect(band({ ...m, cols })).not.toContain('5/6');
     // without a title (no dispatch row to name) the plan is full, so `1 todo open` would contradict `5/5` (critique 18 A1): the reason is `stop refused` and `openMore` still names the open row
-    expect(band({ ...m, openDispatchTitle: undefined })).toContain('blocked · 1 dispatch open');
+    expect(band({ ...m, openDispatchTitle: undefined })).toContain('blocked · stop refused');
     expect(band({ ...m, openDispatchTitle: undefined })).not.toContain('todo open');
     // not blocked: the figure stays the plan's own and the open row is named beside it (unchanged)
-    expect(band(model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1 }))).toContain('blocked · 1 dispatch open');
+    expect(band(model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1 }))).toContain('blocked · stop refused');
   });
 });

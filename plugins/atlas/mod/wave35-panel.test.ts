@@ -102,7 +102,7 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
   test('a run that ends with a dispatch row open and nothing running reads `▌ ▲ blocked` in 203, not `done`', () => {
     const el = chip(snap('done'), 'done 5/5');
     const text = flatEl(el);
-    expect(text).toMatch(/^▌ ▲ blocked · 1 failed · 1 dispatch open/); // 4fef5d66: `▌ done · 1 failed · 1 dispatch open` in 179
+    expect(text).toMatch(/^▌ ▲ blocked · stop refused/); // 4fef5d66: `▌ done · 1 failed · 1 dispatch open` in 179
     expect(text).not.toMatch(/\bdone\b/);
     const bar = coloursOf(el).find((x) => x.t === '▌');
     expect(bar?.color).toBe(RED);
@@ -113,7 +113,7 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
     s.squad[0]!.state = 'running';
     s.activity['alpha-explorer']!.mood = 'working';
     const el = chip(s, 'done 5/5');
-    expect(flatEl(el)).toMatch(/^▌ done · 1 failed · 1 dispatch open/);
+    expect(flatEl(el)).toMatch(/^▌ done · 1 failed · 1 open/);
     expect(coloursOf(el).find((x) => x.t === '▌')?.color).not.toBe(RED);
   });
   test('a Stop refusal still blocks the card, as before', () => {

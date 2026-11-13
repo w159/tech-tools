@@ -8,7 +8,7 @@ import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
 import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from './data/todos';
-import { planProgress } from './hud';
+import { agentTally, hudAgents, planProgress } from './hud';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
@@ -150,6 +150,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     busy: !!b.agentsRunning || s.squad.some((a) => a.name !== 'lead' && a.state === 'running') || (b.working === false ? false : !!b.working || leadBusy(s) || planBusy(plan, owners)),
     queuedIdle: true,
     workers: [...shown.map((w) => missionWorker(w, now)), ...queued],
+    tally: agentTally(hudAgents(b.live, s.squad, queuedMembers(s)), ownTodos(s.todos ?? [], s.sessionId)), // state 38: the SUBAGENTS title's own counts
     note: last ? { from: named(last.from), to: named(last.to), text: last.text, at: hhmm(last.ts), kind: last.kind } : undefined,
     checks: tally.total ? tally.checks : null,
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,

@@ -10,6 +10,7 @@
 
 import type { RenderElement, RenderNode } from 'claude-code'
 import { PHASES } from '../intents'
+import { blockedText } from '../data/runstate'
 import type { PhaseId } from '../contract'
 import { runHex, stateRun, type Ui } from '../atlas-ui'
 
@@ -59,13 +60,15 @@ const fixed = { wrap: 'truncate-end' }
  * and superseded bars and the notes' bars take the secondary grey (245). */
 export const leadTone = (phase: PhaseId): 'accent' | 'ok' | 'bad' => (phase === 'done' ? 'ok' : phase === 'blocked' ? 'bad' : 'accent')
 
-/** Wave 33 (critique 31: a green `▌ done all finished` over a failed worker and an open dispatch row): what the run really closed with. `done` with a failure or an open dispatch reads `▌ done · 1 failed` in the warn
- * amber (179); once the Stop hook refused it reads `▌ ▲ blocked · 1 dispatch open` in the error red (203). Never the lead's own `all finished` over either. */
+/** Wave 33 (critique 31: a green `▌ done all finished` over a failed worker and an open dispatch row): what the run really closed with. `done` with a failure reads `▌ done · 1 failed` in the warn amber (179); when the
+ * run is blocked it reads the band's own words, `▌ ▲ blocked · stop refused` in the error red (203). State 38: the blocked text is data/runstate.ts blockedText, the very function the band calls, so the card and the band print one string.
+ * Never the lead's own `all finished` over either. `secs`: the run clock the band prints after the reason (`stop refused 0:37`); absent: the reason alone. */
 export interface LeadVerdict { tone: 'warn' | 'bad'; phase: 'done' | 'blocked'; text: string }
-export const verdictOf = (failed: number, open: number, refused: boolean): LeadVerdict | null => {
+export const verdictOf = (failed: number, open: number, refused: boolean, secs?: number): LeadVerdict | null => {
   if (failed <= 0 && open <= 0) return null
-  const text = [failed > 0 ? `${failed} failed` : '', open > 0 ? `${open} ${open === 1 ? 'dispatch' : 'dispatches'} open` : ''].filter(Boolean).join(' · ')
-  return refused ? { tone: 'bad', phase: 'blocked', text } : { tone: 'warn', phase: 'done', text }
+  if (refused) return { tone: 'bad', phase: 'blocked', text: blockedText({ refused: true, failed, secs }) }
+  const text = [failed > 0 ? `${failed} failed` : '', open > 0 ? `${open} open` : ''].filter(Boolean).join(' · ')
+  return { tone: 'warn', phase: 'done', text }
 }
 
 export interface LeadOpts { ui: Ui; columns: number; /** The run's real close (verdictOf): a done chip that the data contradicts says so, in place of the lead's own sentence. */ verdict?: LeadVerdict | null; /** A done chip a Stop refusal overturned: the word is struck and quiet, and says why. */ superseded?: boolean; /** The previous header was this phase: no word, a quiet bar and the state. */ quiet?: boolean }

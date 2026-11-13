@@ -1,7 +1,7 @@
 // Round 3, slice A: one spinner, one palette, the four band leads, the closed count, the pill and the band's worker rows.
 import { describe, expect, test } from 'claude-code/testing';
 import { ATLAS_GLYPHS, GLYPH5, LEAD_FRAMES, PALETTES, SPIN_FRAMES, STATE_GLYPHS, spinnerGlyph, wordmark, type Ui } from './atlas-ui';
-import { BLOCKED_TEXT, bandLines, blockedWhy, missionLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
+import { BLOCKED_TEXT, bandLines, missionLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { withStopVerdict } from './register';
 import { spin } from './theme';
 
@@ -63,16 +63,15 @@ describe('round 3 A2: the band lead has four states', () => {
   }
   test('blocked names what it needs, and draws no spinner whatever runs', () => {
     const m = model({ stopGates: ['dispatch T2 read x open'], openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>);
-    expect(lead(m)).toMatch(/^▲ blocked · 1 dispatch open/);
-    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · (1 dispatch open|needs: close dispatch T2)/); // critique 28: a stopped band draws no spinner
+    expect(lead(m)).toMatch(/^▲ blocked · stop refused/);
+    expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · stop refused/); // critique 28: a stopped band draws no spinner
     expect(lead({ ...m, busy: true, tick: 1 })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
     expect(head({ ...m, ui: { ...ui, ascii: true } })).not.toMatch(/[◐◓◑◒]/);
   });
-  test('blockedWhy: one string table - open dispatches count, a refused stop says so, retry stop reads retrying (wave 37)', () => {
-    expect(blockedWhy('dispatch T2 read ghost.py open', 1)).toBe(BLOCKED_TEXT.dispatch(1));
-    expect(blockedWhy('dispatch T2 read ghost.py open', 0)).toBe(BLOCKED_TEXT.stop);
-    expect(blockedWhy('retry stop', 0)).toBe(BLOCKED_TEXT.retry);
-    expect(BLOCKED_TEXT.retry).toBe('retrying');
+  test('the blocked reason table has two words only: `stop refused` and `N failed` (state 38)', () => {
+    expect(Object.keys(BLOCKED_TEXT).sort()).toEqual(['failed', 'stop']);
+    expect(BLOCKED_TEXT.stop).toBe('stop refused');
+    expect(BLOCKED_TEXT.failed(2)).toBe('2 failed');
   });
   test('a gate warning never leads: idle and done lead with their own word, the warning is the second segment', () => {
     const checks = [{ id: 'doctor', ok: false, name: 'doctor' }];

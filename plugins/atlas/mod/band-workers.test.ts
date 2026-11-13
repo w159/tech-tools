@@ -157,12 +157,12 @@ describe('blocked band at 61 cells (critique 19 Band 2: todo and failed dropped)
   test('the 61-cell band keeps the todo figure and the failed count beside the blocked reason', () => {
     const row = blockedAt(61);
     expect(row).toContain('blocked');
-    expect(row).toContain('1 dispatch open');
+    expect(row).toContain('stop refused'); // state 38: two reasons only
     expect(row).toContain('5/5');
     expect(row).toMatch(/■\s?1/);
   });
   test('wide bands keep the whole reason', () => {
-    expect(blockedAt(93)).toContain('blocked · 1 dispatch open');
+    expect(blockedAt(93)).toContain('blocked · stop refused');
   });
 });
 

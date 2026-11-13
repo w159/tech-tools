@@ -50,9 +50,9 @@ describe('B2: `n open` comes from the snapshot the plan count reads, and names w
     expect(out).toContain('5/5');
     expect(out).not.toContain('open');
   });
-  test('the gamma dispatch row is open (session-stamped, Stop counts it): the band says `1 dispatch open`', () => {
+  test('the gamma dispatch row is open (session-stamped, Stop counts it): the band says `stop refused`', () => {
     const out = rows(idle({ todos: doneStore('pending') }), [], 150, core(0)).join('\n');
-    expect(out).toContain('blocked · 1 dispatch open');
+    expect(out).toContain('blocked · stop refused');
   });
   test('an open row Stop does not count (another session, archived, manual) is never named', () => {
     const extra = [row('x', 'pending', 'session', 'other'), { ...row('y', 'pending', 'dispatch', SESSION, 'z'), archived: true }, row('m', 'pending', 'manual', SESSION)];
@@ -84,8 +84,8 @@ describe('critique 12 B1/B4: no unexplained zero, one phrase for one open dispat
     expect(out).toContain('running');
     expect(out).not.toContain('dispatch open');
   });
-  test('an open dispatch row with no worker running still reads `n dispatch open` (Stop refuses on it)', () => {
-    expect(rows(idle({ todos: doneStore('pending') }), [], 150, core(0)).join('\n')).toContain('blocked · 1 dispatch open');
+  test('an open dispatch row with no worker running still reads blocked · stop refused (Stop refuses on it)', () => {
+    expect(rows(idle({ todos: doneStore('pending') }), [], 150, core(0)).join('\n')).toContain('blocked · stop refused');
   });
 });
 

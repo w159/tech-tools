@@ -552,7 +552,7 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 	view.stop();
 });
 
-test("critique 18 A4: a lead reply that waits on the person reads `blocked · needs you` on the band until the next turn or the next words", () => {
+test("critique 18 A4 (state 38): a lead reply that waits on the person reads a bare `blocked` on the band until the next turn or the next words, never `needs you`", () => {
 	const root = atlasFixture([{ name: "w1", joined: 1 }], [{ status: "in_progress", content: "omp todo" }]);
 	const { calls, ui, deps } = harness({ ATLAS_PROJECT_ROOT: root });
 	type Handler = (e: Record<string, unknown>, c: Record<string, unknown>) => unknown;
@@ -564,16 +564,17 @@ test("critique 18 A4: a lead reply that waits on the person reads `blocked · ne
 		handlers.message_end?.forEach(h => h({ message: { role: "assistant", content: [{ type: "text", text }] } }, ctx));
 	const head = () => plain([calls.at(-1)![0]!]);
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(head()).not.toContain("needs you");
+	expect(head()).not.toContain("blocked");
 	say("ATLAS | ◎ research | waiting\nThe board is stuck.\nWaiting on your decision.\nChoose one:\n1. a\n2. b");
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(head()).toContain("blocked · needs you");
+	expect(head()).toContain("▲ blocked");
+	expect(head()).not.toContain("needs you");
 	say("ATLAS | ◎ research | sub", { cwd: root, agent: { kind: "sub" } }); // a worker's words never move the lead's state
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(head()).toContain("blocked · needs you");
+	expect(head()).toContain("▲ blocked");
 	handlers.before_agent_start?.forEach(h => h({}, main)); // the person answered: a new turn
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(head()).not.toContain("needs you");
+	expect(head()).not.toContain("blocked");
 	view.stop();
 });
 

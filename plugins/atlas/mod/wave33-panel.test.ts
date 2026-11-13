@@ -110,12 +110,12 @@ describe('item 3: the finish chip tells the truth (critique 31: a green `all fin
     expect(colorsOf(chip)[0]).toBe(AMBER);
     expect(flat(chip)).not.toMatch(/all finished/);
   });
-  test('a Stop refusal reads `▌ ▲ blocked · 1 dispatch open` in the error 203', () => {
+  test('a Stop refusal reads `▌ ▲ blocked · stop refused` in the error 203', () => {
     const chip = leadRow(lead(), { ui, columns: 100, verdict: verdictOf(0, 1, true) });
-    expect(flat(chip)).toBe('▌ ▲ blocked · 1 dispatch open');
+    expect(flat(chip)).toBe('▌ ▲ blocked · stop refused');
     expect(new Set(colorsOf(chip)).has(RED)).toBe(true);
     expect(new Set(colorsOf(chip)).has(GREEN)).toBe(false);
-    expect(verdictOf(2, 3, true)?.text).toBe('2 failed · 3 dispatches open');
+    expect(verdictOf(2, 3, true)?.text).toBe('stop refused');
   });
 });
 

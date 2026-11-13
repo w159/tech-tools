@@ -133,3 +133,11 @@ export const withOwnerStates = <T extends { owner?: string }>(items: readonly T[
     const o = it.owner ? ownerOutcome(states, it.owner) : undefined; // the owner's LATEST instance (`name #2` after a kill), as the HUD reads it (critique 19 A3)
     return o?.state ? { ...it, ownerState: o.state, ...(o.retried ? { retried: true } : {}) } : { ...it };
   });
+
+/** The one agent tally (state 38): how many agents are in each state word. The SUBAGENTS title (`2 done · 1 failed`) and the band's worker segment (`● 2 done · ■1`) both read their counts from here, so no two surfaces count the same agents twice. */
+export type Tally = Record<UiState, number>;
+export function tallyOf(states: readonly UiState[]): Tally {
+  const t: Tally = { running: 0, blocked: 0, failed: 0, waiting: 0, queued: 0, done: 0 };
+  for (const s of states) t[s] += 1;
+  return t;
+}
