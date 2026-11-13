@@ -127,7 +127,7 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
   test('a narrow bar keeps all three segments and the clock; the state word is the first thing to give way (wave 37)', () => {
     for (let body = 93; body >= 34; body--) {
       const f = frameOf(RUNNING, body, 45);
-      expect(f.band, `${body}`).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] (working )?0:42 ▌ (todo )?\d\/5 ▌ [⠀-⣿] /);
+      expect(f.band, `${body}`).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] (working )?0:42 ▌ (todo )?\d\/5 ▌ [⠀-⣿]/);
       expect([...f.band].filter((c) => c === '▌'), `${body}`).toHaveLength(2);
     }
     expect(frameOf(RUNNING, 93, 45).band).toMatch(/working 0:42 ▌ todo 0\/5 ▌ [⠀-⣿] 3 running/);

@@ -2,6 +2,8 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { holdClock, newRunClock, resumeOk, runKey, runLive, stepRun, type RunClock } from './band-motion';
 import { runElapsed } from './data/runstate';
+import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
+import type { Ui } from './atlas-ui';
 
 // the run of stoprun-110-1: it began at 6 s and its clock closed at 35.2 s (host turn flag fell), with 0:29 on the clock
 const closed = (): RunClock => stepRun(stepRun(stepRun(newRunClock(), true, 6_000), true, 35_100), false, 35_200, { hostIdle: true });
@@ -56,5 +58,20 @@ describe('the run clock never steps back', () => {
   });
   test('the key is the same open and closed', () => {
     expect(runKey(stepRun(newRunClock(), true, 6_000))).toBe(runKey(closed()));
+  });
+});
+
+describe('step 3: every non-zero count keeps its glyph and figure, and the clock shows, at every width', () => {
+  const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  const PH = ['research', 'theory', 'test', 'implement', 'verify'] as const;
+  const w = (name: string, state: MissionWorker['state']): MissionWorker => ({ name, state, secs: 5 });
+  const m: MissionModel = { cols: 110, maxRows: 1, tick: 0, project: 'p', phases: PH, phase: 'research', done: 1, total: 5, bar: true, checks: [], busy: true, turnSecs: 25, ui, workers: [w('a', 'running'), w('b', 'running'), w('c', 'done'), w('d', 'failed')], tally: { running: 2, waiting: 0, queued: 0, failed: 1, done: 1, blocked: 0 } as never };
+  test('stoprun-110 band: the running figure sits against its glyph, the done and failed counts stay', () => {
+    for (const cols of [110, 80, 62, 46]) {
+      const t = runsText(bandLines({ ...m, cols })[0]!.runs).trimEnd();
+      expect(t, String(cols)).toContain('0:25');
+      expect(t, String(cols)).toMatch(/●\s?1/);
+      expect(t, String(cols)).not.toMatch(/[⠀-⣿] 2 ●1/);
+    }
   });
 });

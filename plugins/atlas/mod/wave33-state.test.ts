@@ -290,7 +290,7 @@ describe('6. the clock stays at every width; the word `todo` goes first below 90
     expect(wide).toMatch(/working 0:19/);
     expect(frameOf(DEFAULT, 56, 40).band).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 ▌ todo 0\/5 ▌ [⠀-⣿] 3 running/); // 56 cells still hold the whole row
     const narrow = frameOf(DEFAULT, 42, 40).band;
-    expect(narrow).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 ▌ 0\/5 ▌ [⠀-⣿] 3/);
+    expect(narrow).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 ▌ 0\/5 ▌ [⠀-⣿]3/);
     expect(narrow).not.toMatch(/todo/);
   });
   test('a long blocked lead still keeps the clock-bearing state at 56 cells', () => {
