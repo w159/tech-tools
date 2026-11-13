@@ -11862,5 +11862,22 @@
     "status": "verified",
     "verified_at": "2026-11-13T00:00:30+00:00",
     "verified_by": "lead-104043"
+  },
+  {
+    "id": "S41",
+    "surface": "terminal UI recordings 150x45 and 110x40",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 17.15.0 released: working signal alive >=99.6%, no frozen working after idle",
+    "evidence": [
+      "ls-remote main and tag atlas-v17.15.0 = eeefbf4a; bun test 4084 pass 0 fail in 3 colour modes; 12/12 captures ef38fc50; working-signal alive 99.67/99.62, longest_idle_frozen 0.0/0.01 s; critique 41 6.33"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-13T17:25:02+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]
