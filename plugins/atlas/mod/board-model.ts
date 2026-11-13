@@ -11,7 +11,7 @@
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
 import { cells, chip, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
-import { animateRow, keysOf, type MotionCtx, type MotionItem } from './motion';
+import { animateRow, keysOf, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { KILLED, wordOf } from './pane/activity';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
@@ -268,7 +268,7 @@ const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'd
 /** A row's state mark: the `■` in error 203 for a killed worker's row (wave 30: it was the done disc, and read `closed`), the state's own glyph otherwise; a working mark is the accent. */
 function markRun(row: BoardRow, o: BoardOpts): Run {
   const doubt = markOf(row.state, row.word) === 'doubt' || (!!o.pane && ownerDown(row));
-  const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs, row.owner || row.label) : o.tick ?? 0;
+  const frame = o.nowMs !== undefined ? (o.pane ? sharedSpinFrame(o.nowMs) : spinFrameOf(o.nowMs, row.owner || row.label)) : o.tick ?? 0; // the pane's braille is the band's frame (motion.sharedSpinFrame)
   const g = stateRun(doubt ? 'failed' : markOf(row.state, row.word), o.ui, frame, !!o.pane); // the side panel's spinner is the braille family
   return row.state === 'running' && !o.ui.ascii ? { ...g, tone: 'accent' } : g;
 }
@@ -551,7 +551,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     const name = clipE(a.name, nameW);
     const runs: Run[] = [
       r('  '), r(name + ' '.repeat(nameW - cells(name)), 'sub'), r(' '), ...bar, r(' '),
-      r(clock((to - from) / 1000).padStart(timeW), 'dim'), r(' '), a.state === 'failed' && o.quiet?.has(a.name) ? r(' ') : stateRun(a.state, o.ui, frame, true),
+      r(clock((to - from) / 1000).padStart(timeW), 'dim'), r(' '), a.state === 'failed' && o.quiet?.has(a.name) ? r(' ') : stateRun(a.state, o.ui, o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : frame, true),
     ];
     if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
     out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
@@ -583,7 +583,7 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
   const ran = agents.filter((a) => a.state !== 'queued');
   if (!ran.length) return [];
   const n = (s: UiState): number => ran.filter((a) => a.state === s).length;
-  const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
+  const frame = o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : o.tick ?? 0;
   const parts: Run[] = [];
   for (const s of ['running', 'done', 'failed', 'blocked', 'waiting'] as const) {
     if (!n(s) || (s === 'failed' && o.hideFailed)) continue;
@@ -606,7 +606,7 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
 export function boardFootLine(agents: readonly TimelineAgent[], o: Pick<BoardOpts, 'cols' | 'ui' | 'nowMs' | 'tick'> & { runSecs?: number }): BoardLine | null {
   const ran = agents.filter((a) => a.state !== 'queued');
   if (!ran.length) return null;
-  const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
+  const frame = o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : o.tick ?? 0;
   const dot = o.ui.ascii ? '|' : '·';
   const counts = (['running', 'done', 'failed', 'blocked', 'waiting'] as const).map((s) => ({ s, n: ran.filter((a) => a.state === s).length })).filter((x) => x.n > 0);
   const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');
