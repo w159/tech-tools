@@ -67,6 +67,8 @@ export type MissionModel = {
   openDispatchTitle?: string;
   /** The lead is mid-turn: its own tool runs or it is thinking (data/runstate leadBusy), or a plan row is running (planBusy, the HUD's TODO rule), though no worker is listed. The band never reads `idle` then. */
   busy?: boolean;
+  /** Wave 40: the host turn is on with no live run: `working` and a spinner, never a clock (a slash command after a finished run). */
+  hostOnly?: boolean;
   /** Claude Code band (wave 34): a queued worker is dispatched but not listed by the host; it does no work, so it never holds the band `working`. */
   queuedIdle?: boolean;
   /** Workers to show: running, waiting, failed and recently finished (never parked). */
@@ -327,7 +329,7 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
   const ran = m.ranSecs ?? m.lastRun?.secs; // the run clock's own figure (the host's wall time of the run); the worker wave's span only where no clock ran (omp)
   switch (st.kind) {
     // Wave 35: the Claude Code bar always carries the run clock while it works (one clock, never dropped); a model with no reading yet starts at 0:00.
-    case 'working': { const secs = m.turnSecs ?? m.elapsedSecs ?? (m.bar ? 0 : undefined); return [spin(), r(' '), r('working', 'text', true), ...(o.clock && secs !== undefined ? [r(` ${elapsedClock(secs)}`, 'sub')] : [])]; }
+    case 'working': { const secs = m.hostOnly ? undefined : m.turnSecs ?? m.elapsedSecs ?? (m.bar ? 0 : undefined); return [spin(), r(' '), r('working', 'text', true), ...(o.clock && secs !== undefined ? [r(` ${elapsedClock(secs)}`, 'sub')] : [])]; }
     // Wave 36: on the filled bar a done state is `● done 0:32` in bold dark ink on the 114 slab (the clock bold too), an idle one `○ idle · 0:32` in 245 on the 236 slab; the dot-joined forms keep `done · 0:32` and `idle · last run 0:32`.
     case 'done': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [f ? r(` ${elapsedClock(ran)}`, 'ok', true) : r(` · ${elapsedClock(ran)}`, 'sub')] : [])]; }
     case 'idle': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short || f ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])]; }

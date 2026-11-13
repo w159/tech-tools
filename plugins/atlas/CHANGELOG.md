@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Merge 40 HUD clock: the SUBAGENTS TIME column is drawn from the same clock the band reads on every render, so a running worker's TIME and the band's run clock move together (tests in `mod/merge40.test.ts`).
+- Merge 40 working band: whenever the host's turn is on the band reads `working` with a turning spinner, even when no run is open (a slash command typed after a finished run shows `⠋ working`, no clock); it opens no run and extends none, so the finished run's total stays as it was.
 - Truth 40 (critique of build 29d9dbb4, tests in `mod/truth40.test.ts`): the band shows `working` while the host is running a turn that belongs to the run. A turn a Stop refusal sends the host back into, or a turn a finished worker's notification wakes within a few seconds of the run closing, is the same run: the band keeps its spinner and the run clock picks up where it stopped (0:29, 0:30, ...) instead of reading `idle 0:29` under the host's own spinner. A slash command typed later is still not part of the run: it never restarts or extends the clock.
 - Truth 40 clock: the run clock shown by the band, the side panel and the run card never steps back (it read 0:30 then 0:29 when the run closed), and a finished run's total is never below what was already shown.
 - Truth 40 narrow band: the running count sits against its spinner at every width (`⠴2 ●1 ■1`, not `⠴ 2 ●1`), with every non-zero count and the clock kept.
