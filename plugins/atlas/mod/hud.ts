@@ -4,7 +4,7 @@
 import type { SquadAgent, TodoItem } from './contract';
 import { descriptionName } from './data/orchestration';
 import { liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from './data/live';
-import { isPlanItem } from './data/todos';
+import { FN_TAIL, isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
 import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
@@ -228,7 +228,7 @@ export function outcomeOf(text: string): string {
   if (echo) {
     const result = echo[3]!.replace(/`/g, '').replace(/^["']+|["']+$/g, '');
     if (!DUMP.test(result)) return JUNK.test(result) ? '' : plain(result, '');
-    const n = (result.match(FUNCTION) ?? []).length;
+    const n = Math.max((result.match(FUNCTION) ?? []).length, Number(FN_TAIL.exec(result)?.[1] ?? 0));
     return n > 0 ? `${n} ${n === 1 ? 'function' : 'functions'}` : '';
   }
   return JUNK.test(body) ? '' : plain(body, '');
@@ -289,7 +289,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');

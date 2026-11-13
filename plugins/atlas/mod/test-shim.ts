@@ -20,7 +20,8 @@ type TestBody = (...args: unknown[]) => unknown;
 function hostAwareTest(name: string, a: unknown, b?: unknown) {
 	const body = (typeof a === "function" ? a : b) as TestBody;
 	if (body.length > 0) return bunTest.test.skip(name, () => {});
-	return bunTest.test(name, body as () => unknown);
+	// State 38: the SUBAGENTS table notes each worker's TIME and CALLS cells for the finish cards (data/live workerFacts); a test starts with none left over from an earlier test's table.
+	return bunTest.test(name, () => { try { (require("./data/live") as { resetWorkerFacts: () => void }).resetWorkerFacts(); } catch { /* not loadable yet */ } return (body as () => unknown)(); });
 }
 
 const hostOnly = (what: string) => () => {
