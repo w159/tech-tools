@@ -99,16 +99,15 @@ describe('step 1: the board header meter (critique 37: all 114 over a T2 the lea
 describe('step 2: the Gantt (critique 37: a 0:31 run on a 1:00 axis at 110, bars of 1-6 cells, a 179 lead bar)', () => {
   const labelsOf = (t: string[]): string[] => { const at = t.findIndex((l) => /┬/.test(l)); return t[at + 1]!.match(/\d+:\d\d/g) ?? []; };
   for (const [cols, rows] of [[57, 45], [38, 41]] as const) {
-    test(`${cols === 57 ? 150 : 110} cols: the axis ends at the run rounded up to the next 10 s (0:31 -> 0:40) with a tick every 10 s`, () => {
+    test(`${cols === 57 ? 150 : 110} cols: the axis ends on the run total (0:31) with a tick every 10 s inside it`, () => {
       forgetPhases();
       const t = render(stop(), 'board', cols, rows, { kind: 'done', secs: 31, startMs: NOW - 31000 });
-      expect(labelsOf(t).at(-1)).toBe('0:40');
+      expect(labelsOf(t).at(-1)).toBe('0:31'); // state 40: the run's own clock, not the next 10 s
       const rule = t.find((l) => /┬/.test(l))!;
-      expect(rule.match(/┬/g)).toHaveLength(5); // 0:00 0:10 0:20 0:30 0:40
-      const cellsPerStep = (rule.lastIndexOf('┬') - rule.indexOf('┬')) / 4;
-      expect(Number.isInteger(cellsPerStep)).toBe(true);
+      expect(rule.match(/┬/g)!.length).toBeGreaterThanOrEqual(4); // 0:00 0:10 0:20 0:30, the end shares the 0:30 cell when 31 s is under a cell more
       const at = [...rule].map((c, i) => (c === '┬' ? i : -1)).filter((i) => i >= 0);
-      expect(at.every((c, i) => i === 0 || c - at[i - 1]! === cellsPerStep)).toBe(true);
+      const cellsPerStep = at[1]! - at[0]!;
+      expect(at.slice(0, 4).every((c, i) => i === 0 || c - at[i - 1]! === cellsPerStep)).toBe(true); // the 10 s ticks stay evenly spaced
     });
     test(`${cols === 57 ? 150 : 110} cols: every bar is one row of \`▇\` and a 240 \`┊\` gridline stands at every 10 s tick of its lane`, () => {
       forgetPhases();
@@ -123,12 +122,12 @@ describe('step 2: the Gantt (critique 37: a 0:31 run on a 1:00 axis at 110, bars
       expect(ticks.every((x) => x.color === DIM)).toBe(true);
     });
   }
-  test('the timeline helper: the axis end is the run rounded up to 10 s at any width, ticks every 10 s', () => {
+  test('the timeline helper: the axis end is the run total at any width, ticks every 10 s inside it', () => {
     const agents = [{ name: 'alpha-explorer', state: 'done' as const, secs: 31, startMs: 0, endMs: 31_000 }];
     for (const cols of [38, 57, 100, 150]) {
       const t = boardText(boardTimeline(agents, { cols, ui }));
-      expect([cols, t.at(-1)!.match(/\d:\d\d/g)!.at(-1)]).toEqual([cols, '0:40']);
-      expect([cols, t.at(-2)!.match(/┬/g)!.length]).toEqual([cols, 5]);
+      expect([cols, t.at(-1)!.match(/\d:\d\d/g)!.at(-1)]).toEqual([cols, '0:31']);
+      expect([cols, t.at(-2)!.match(/┬/g)!.length >= 4]).toEqual([cols, true]);
     }
     expect(boardText(boardTimeline([{ name: 'a-explorer', state: 'done', secs: 30, startMs: 0, endMs: 30_000 }], { cols: 100, ui })).at(-1)).toMatch(/0:30$/); // exactly on a tick: no extra step
   });
@@ -136,11 +135,12 @@ describe('step 2: the Gantt (critique 37: a 0:31 run on a 1:00 axis at 110, bars
     const lead = (s: never, run: Run): string | undefined => { forgetPhases(); return texts(tree(s, 'board', 38, 41, run)).find((x) => /^▇+/.test(x.t))?.color; };
     expect(lead(stop(), { kind: 'working', secs: 31, startMs: NOW - 31000 })).toBe(VIOLET);
     expect(lead(stop(), { kind: 'done', secs: 31, startMs: NOW - 31000 })).toBe(GREEN);
-    expect(lead(stop(), { kind: 'blocked', secs: 31, startMs: NOW - 31000 })).toBe(GREEN); // a refused Stop is the band's word, not a warning on the lead's bar
+    expect(lead(stop(), { kind: 'blocked', secs: 31, startMs: NOW - 31000 })).toBe(RED); // state 40 (critique 39): the lead lane follows the run, 203 while it is blocked
     const failedLead = stop({ activity: { ...(stop() as any).activity, lead: act({ mood: 'failed', startedAt: NOW - 31000, calls: [] }) } });
     expect(lead(failedLead, { kind: 'done', secs: 31, startMs: NOW - 31000 })).toBe(RED);
-    for (const run of ['working', 'idle', 'done', 'blocked', undefined]) for (const st of ['running', 'done', 'blocked', 'waiting', 'queued'] as const) expect(['accent'].includes(leadBarState(run, st)) || leadBarState(run, st) === 'running' || leadBarState(run, st) === 'done').toBe(true);
-    expect(leadBarState('blocked', 'blocked')).not.toBe('blocked');
+    for (const run of ['working', 'idle', 'done', 'blocked', undefined]) for (const st of ['running', 'done', 'blocked', 'waiting', 'queued'] as const) expect(['running', 'done', 'blocked'].includes(leadBarState(run, st))).toBe(true); // never `waiting`, the 179 amber
+    expect(leadBarState('blocked', 'running')).toBe('blocked');
+    expect(leadBarState('done', 'failed')).toBe('failed');
     expect(AMBER).not.toBe(GREEN);
   });
 });

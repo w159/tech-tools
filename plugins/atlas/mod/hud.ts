@@ -89,7 +89,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
 
 /** `root` (the project root) makes paths in a tool preview project-relative. `phases` feeds the rich rail. */
 export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | null; phases?: { ids: readonly string[]; active: number } };
-export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; /** False: never merge running agents into the TODO rows (row counters ask for the roomiest form). */ merge?: boolean; /** The live slot (slot.ts composeFixed, wave 32): a row whose agent has ended reads done on the event that ends it, not when the lead closes the store row. */ settled?: boolean; /** Atlas is at rest (the band reads idle): the block draws in 240 rules and 245 text. */ idle?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; /** False: never merge running agents into the TODO rows (row counters ask for the roomiest form). */ merge?: boolean; /** The live slot (slot.ts composeFixed, wave 32): a row whose agent has ended reads done on the event that ends it, not when the lead closes the store row. */ settled?: boolean; /** Atlas is at rest (the band reads idle): the block draws in 240 rules and 245 text. */ idle?: boolean; /** The host turn is on (the band reads working): the lead's current item reads running (state 40). */ working?: boolean; tick?: number; now?: number; /** State 40: the render's own clock (epoch ms, the one the band's run clock reads). A running worker's TIME is `clock - start` on every render; `now` is the snapshot's, which is as old as the last poll (critique 39: TIME 2-3 s behind the host's agent list). */ clock?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 
 export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running' || a.state === 'queued';
 /** An agent that does work right now (wave 34): running, working or blocked. A queued one (dispatched, the host never listed it) is drawn but is not work: it never holds the band `working` nor turns the SUBAGENTS spinner. */
@@ -109,7 +109,7 @@ export const ownerStatesOf = (agents: readonly HudAgent[]): Map<string, UiState>
   new Map(agents.flatMap((a): [string, UiState][] => { const ui = a.ui ?? workerUiState(a.state); return [[a.name, ui], ...(a.key !== undefined ? [[a.key, ui] as [string, UiState]] : [])]; }));
 
 /** Plan rows in plan order. Every row is shown with its own state; the focus mark sits on the running row, else the first open one. */
-export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map(), handedBackDone = false): TodoRow[] {
+export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map(), handedBackDone = false, hostWorking = false): TodoRow[] {
   // A plan row whose text names a running agent (`T1 read alpha.py (alpha-explorer)`) before the lead has stamped an owner on it is that agent's row: it reads running, not queued (critique 29: T1 `queued` while alpha-explorer ran).
   const inferred = (t: TodoItem): string | undefined => {
     if (t.owner) return undefined;
@@ -135,10 +135,29 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
     const detail = word === DONE_DOUBT && state === 'done' ? `worker ${FAILED}` : ownerWord ? (ev ? `${ownerWord} · ${ev}` : ownerWord) : base; // critique 17 A1: a done row whose worker failed says so
     return { label: labelOf(t), ...(t.id ? { id: String(t.id) } : {}), state, ...(word ? { word } : {}), detail, focus: false, ...(shownOwner ? { owner: shownOwner } : {}), ...(state === 'done' && typeof t.completed_at === 'number' && t.completed_at > 0 ? { doneAt: t.completed_at * 1000 } : {}) };
   });
+  leadRunning(rows, hostWorking);
   const at = rows.findIndex((r) => r.state === 'running');
   const focus = at >= 0 ? at : rows.findIndex((r) => r.state !== 'done');
   if (focus >= 0) rows[focus] = { ...rows[focus]!, focus: true };
   return rows;
+}
+
+/** State 40 (critique 39, live-150-1 f0052: the lead's T4 read `◇ queued` for 4 s while Claude Code was Transmuting): the plan's current step is the first row that is not done; when nobody but the lead owns it, it is the lead's, and
+ * it reads `running` while the host turn is on, whatever the store row says (the lead rarely writes `in_progress`). An item whose work has begun never reads `queued` again: when the turn ends with the item still open it reads `waiting`.
+ * `started` is the ids of the lead items seen at work (like `seqOf`: a counter of this run, forgotten when the plan is empty or finished). Mutates `rows`. */
+const started = new Set<string>();
+export const resetLeadItems = (): void => started.clear();
+const isLeadOwned = (r: Pick<TodoRow, 'owner'>): boolean => r.owner === undefined || r.owner === 'lead' || /^lead-[0-9a-f]{6}$/i.test(r.owner);
+function leadRunning(rows: TodoRow[], hostWorking: boolean): void {
+  if (rows.length === 0 || rows.every((r) => r.state === 'done')) { started.clear(); return; }
+  const first = rows.findIndex((r) => r.state !== 'done');
+  rows.forEach((r, i) => {
+    const key = r.id ?? r.label;
+    if (!isLeadOwned(r)) return;
+    if (hostWorking && i === first && r.state === 'queued') rows[i] = { ...r, state: 'running' };
+    if (rows[i]!.state === 'running' && hostWorking) started.add(key);
+    else if (rows[i]!.state === 'queued' && started.has(key)) rows[i] = { ...rows[i]!, state: 'waiting' };
+  });
 }
 
 /** The TODO title's `done/total`, from the very rows the block draws (todoModel over the HUD's own agents, a row whose agent has ended settled to done as the live slot draws it): the band's `todo n/m` reads this,
@@ -171,24 +190,42 @@ const FINISHED = 'finished';
 /** Text that is a tool's failure or an empty search, not an outcome (critique 19 B1: `No matching deferred tools found.`, `no match`). */
 const JUNK = /\bno\s+match(?:es|ing)?\b|not\s+found|\bno\s+such\b|unavailable|\berrors?\b|denied|refused|\bcannot\b|\bcould\s+not\b|\bunable\s+to\b|timed?\s*out|permission|traceback|exception|proxy|\b40[0-9]\b|\b50[0-9]\b/i;
 
-/** The agent's current call (`read runs.ts:17`), else its last line, else its last call. */
-export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, root?: string | null): string {
+/** The tools whose target is a file path: LAST shows the file's base name (`read alpha.py`), never the path. */
+const FILE_TOOL = /^(read|edit|write|multiedit|notebookedit|notebookread)$/i;
+const baseName = (path: string): string => path.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? path;
+
+/** The agent's current call as verb and short target (state 40, critique 39: LAST repeated the dispatch title and was cut to `read alp…`): `read alpha.py`, `grep def`, `edit beta.py`, `run build.sh`. A file tool's target is the file's
+ * base name (the line suffix of `runs.ts:17` stays), a shell call reads `run <script>`. Between calls and after the end: the last call (its target, else its intent), then the free-text closing line only when there was no call and
+ * the line is not the worker's dispatch title (`alpha-explorer: read alpha.py` is the description it was started with, not something it did). */
+export function lastAction(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'> & { name?: string | undefined; task?: string | undefined }, root?: string | null): string {
   const base = root ? `${root.replace(/\/+$/, '')}/` : '';
   const rel = (s: string): string => (base ? s.split(base).join('') : s);
   const target = rel(flat(a.target));
+  const short = (tool: string): string => (FILE_TOOL.test(tool) && target ? baseName(target) : target);
   const command = wholeCommand(target, a.detail != null ? rel(flat(a.detail)) : a.detail);
   if (isPlumbing(a.tool) || (!a.tool && isPlumbing(a.lastTool))) return PREPARING; // loading tools is no step of the task (critique 19 B1: `toolsearch...`)
-  if (a.tool) return isShell(a.tool) && target ? shellCall(command) : `${a.tool.toLowerCase()}${target ? ` ${target}` : ''}`;
-  // Between calls and after the end: the last call (its target, else its intent), then the free-text report only when there was no call.
-  const call = isShell(a.lastTool) && target ? shellCall(command) : a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${target}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
-  return call || rel(flat(a.lastLine));
+  if (a.tool) return isShell(a.tool) && target ? shellCall(command) : `${a.tool.toLowerCase()}${target ? ` ${short(a.tool)}` : ''}`;
+  const call = isShell(a.lastTool) && target ? shellCall(command) : a.lastTool ? `${a.lastTool.toLowerCase()}${target ? ` ${short(a.lastTool)}` : flat(a.detail) ? ` ${rel(flat(a.detail))}` : ''}` : '';
+  if (call) return call;
+  const line = rel(flat(a.lastLine));
+  return isDispatchTitle(line, a) ? '' : line;
+}
+
+/** Text that is the worker's own dispatch title (`alpha-explorer: read alpha.py`, or `read alpha.py` after its name): the dispatch description, not a result. */
+export function isDispatchTitle(text: string, a: { name?: string | undefined; task?: string | undefined }): boolean {
+  const said = flat(text).toLowerCase();
+  const task = flat(a.task).toLowerCase();
+  if (said === '' || task === '') return false;
+  const bare = taskOf(a.task).toLowerCase();
+  const unnamed = said.replace(/^[a-z0-9]+(?:[-_.][a-z0-9]+)+:\s+/, '');
+  return said === task || said === bare || unnamed === bare || (a.name !== undefined && said === `${flat(a.name).toLowerCase()}: ${bare}`);
 }
 
 /** The one LAST text of an agent, for the HUD row and the team tab: a finished worker's is its outcome (critique 12: `tests green` beside `read runs.ts:17`): the evidence its plan
  * or dispatch row carries (a bare `ran 03:10` is a duration, not an outcome); with none, a finished worker that made calls reports `report returned`, never its last tool call
  * (critique 14), and its closing line stays when it made no call. A live or failed worker's is its current (else last) call, in plain words (critique 16: the HUD said
  * `read util.py` and the team tab `failed` for one agent). `evidence`: the evidence of every row the agent owns, plan rows first. */
-export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'>, state: UiState, evidence: readonly (string | null | undefined)[], root?: string | null): string {
+export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastTool' | 'lastLine'> & { name?: string; task?: string | undefined }, state: UiState, evidence: readonly (string | null | undefined)[], root?: string | null): string {
   // Critique 17: a failed agent's LAST said `read ghost.py`, the call it was making when it was stopped: that is what happened to it, `killed`. A failure that left only a closing line keeps the line (`tests red 3`).
   if (state === 'failed' && (a.tool || a.lastTool)) return FAILED;
   if (state !== 'done') return lastAction(a, root);
@@ -201,7 +238,7 @@ export function lastOf(a: Pick<HudAgent, 'tool' | 'target' | 'detail' | 'lastToo
   }
   // The closing line is a stored, clipped tool echo more often than a report: only a line that is not an echo can state an outcome (a clipped dump would count wrong).
   const closing = flat(root ? flat(a.lastLine).split(`${root.replace(/\/+$/, '')}/`).join('') : a.lastLine);
-  return (ECHO.test(closing.replace(LIST_NUMBER, '')) ? '' : outcomeOf(closing)) || FINISHED;
+  return (ECHO.test(closing.replace(LIST_NUMBER, '')) || isDispatchTitle(closing, a) ? '' : outcomeOf(closing)) || FINISHED; // state 40: the closing line is often the dispatch text (`alpha-explorer: read alpha.py`), which says nothing of what the worker did
 }
 
 /** A tool echo as the evidence rows hold it: `1. Read `/p/alpha.py` -> first 3 lines: ...` (tool, one target token and an optional `(note)`, `->`, what came back). */
@@ -336,11 +373,11 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   // The block stays after the wave: a clean finish keeps its done rows as a stop run keeps its failed one, until the roster is cleared (critique 17: live-150-a4fad2f9-3/tab-team.png
   // lost the block after DONE while the stop runs kept all three rows). Only an agent that is neither running, done nor failed (parked) is left out.
   const shown = shownAgents(input.agents, input.todos);
-  const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.now) : (resetAgentSeq(), []); // no agent listed: the dispatch order starts over with the next run
+  const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.clock !== undefined && opts.now !== undefined ? Math.max(opts.clock, opts.now) : opts.clock ?? opts.now) : (resetAgentSeq(), []); // no agent listed: the dispatch order starts over with the next run
   const ui = opts.ui ?? uiFromEnv();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
-    s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents), opts.settled === true && opts.merge !== false), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
+    s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents), opts.settled === true && opts.merge !== false, opts.working === true), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
     o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}), ...(opts.reserve ? { reserve: true } : {}), ...(opts.merge === false ? { merge: false } : {}) },
   };
 }

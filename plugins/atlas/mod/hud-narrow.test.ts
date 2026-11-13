@@ -31,7 +31,7 @@ describe('SUBAGENTS block at 61 transcript cells (110 columns with the pane dock
         expect(hud.some((r) => r.includes('▸ SUBAGENTS'))).toBe(true);
         // State 39: the rows a box leaves out are counted on one summary row inside it, which costs a row; where the slot cannot hold the plan rows, that row and the table, SUBAGENTS folds to its one title row and its tally
         // (`⠧ 3 run`) while every running plan row keeps its place (wave 38). At 61 cells AGENT is 12 cells wide, so a name ends in `…` and LAST keeps 14.
-        const table = hud.some((r) => /AGENT\s+STATE/.test(r));
+        const table = hud.some((r) => /AGENT\s+STATE/.test(r) || /^╭─.*▸ SUBAGENTS/.test(r)); // state 40: a tight slot drops the column names before a running worker's row: the table is its own box (`╭─ … SUBAGENTS`), not the plan's closing rule
         for (const name of NAMES.slice(0, n)) {
           const short = name.slice(0, 11);
           if (table) expect(hud.filter((r) => r.trimStart().startsWith(short) && /running/.test(r))).toHaveLength(1); // wave 36: the table row (the plan row only names its owner at the end)

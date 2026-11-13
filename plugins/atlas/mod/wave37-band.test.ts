@@ -214,7 +214,7 @@ describe('5. SUBAGENTS: one frozen schema', () => {
       const heads = [RUNNING, FINISHED, IDLE, STOP].map((sh) => header(frameOf(sh, body, screen)));
       expect(new Set(heads.map((h) => h.trimEnd())).size, `${cols}: ${heads.join('|')}`).toBe(1);
       const h = heads[0]!;
-      expect(h).toMatch(/^ {2}AGENT {2,}STATE {2,}TIME {2,}CALLS {2,}FN {2,}LAST/);
+      expect(h).toMatch(/^ {2}AGENT {1,}STATE {2,}TIME {1,}CALLS {1,}FN {1,}LAST/); // state 40: one cell between the numeric columns under 80 cells
     }
   });
   test('TIME and CALLS end on one cell in every row; an unknown count reads `-`', () => {

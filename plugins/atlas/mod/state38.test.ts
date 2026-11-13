@@ -230,7 +230,7 @@ describe('step 6: SUBAGENTS FN and LAST', () => {
     const f = frameOf(FINISHED, 56, 40);
     const head = f.hud.find((l) => /AGENT\s+STATE/.test(l))!;
     expect(head, f.hud.join('\n')).toBeDefined();
-    expect(head.indexOf('LAST')).toBe(2 + 12 + 2 + 9 + 1 + 6 + 1 + 6 + 1 + 4 + 2); // state 39: AGENT is 12 here, so LAST keeps 14 cells
+    expect(head.indexOf('LAST')).toBe(2 + 12 + 1 + 9 + 1 + 5 + 1 + 5 + 1 + 3 + 1); // state 40: under 80 cells the numeric columns take their header's width and the gaps are one cell; AGENT is 12 here, so LAST keeps 14 cells
   });
   test('no SUBAGENTS row wears a 236 background band', () => {
     const f = frameOf(RUNNING, 93, 45);

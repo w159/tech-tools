@@ -156,11 +156,11 @@ const PRIORITY = Object.fromEntries(COUNT_ORDER.map((s, i) => [s, i])) as Record
 const isFresh = (r: { state: UiState; doneAt?: number }, now?: number): boolean => r.state === 'done' && now !== undefined && r.doneAt !== undefined && now - r.doneAt <= LINGER_MS;
 
 /** The `slots` rows to draw, in their own order, and how many were left out. `slots` includes the overflow row when something is hidden. */
-export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: readonly T[], slots: number | undefined, now?: number, overflowRow = true): { shown: T[]; hidden: number } {
+export function windowRows<T extends { state: UiState; word?: string; doneAt?: number }>(rows: readonly T[], slots: number | undefined, now?: number, overflowRow = true): { shown: T[]; hidden: number } {
   if (slots === undefined || slots >= rows.length) return { shown: [...rows], hidden: 0 };
   const keep = overflowRow ? Math.max(0, slots - 1) : slots; // `overflowRow` false: the count of the rest rides the ribbon, so every slot holds a row
-  const rank = (r: T): number => (isFresh(r, now) ? PRIORITY.queued - 0.5 : PRIORITY[r.state]); // state 39: a row that just finished ranks after every open row (a running row is never hidden behind it) and before the queue
-  const ranked = rows.map((row, i) => ({ row, i })).sort((a, b) => rank(a.row) - rank(b.row) || (a.row.state === 'done' ? (b.row.doneAt ?? 0) - (a.row.doneAt ?? 0) || b.i - a.i : a.i - b.i));
+  const rank = (r: T): number => (isFailedRow(r) ? PRIORITY.failed : isFresh(r, now) ? PRIORITY.queued - 0.5 : PRIORITY[r.state]); // state 40: a row closed over a failed worker ranks as failed, never as a finished one // state 39: a row that just finished ranks after every open row (a running row is never hidden behind it) and before the queue
+  const ranked = rows.map((row, i) => ({ row, i })).sort((a, b) => rank(a.row) - rank(b.row) || (a.row.state === 'done' && !isFailedRow(a.row) ? (b.row.doneAt ?? 0) - (a.row.doneAt ?? 0) || b.i - a.i : a.i - b.i));
   const picked = new Set(ranked.slice(0, keep).map((x) => x.i));
   return { shown: rows.filter((_, i) => picked.has(i)), hidden: rows.length - picked.size };
 }
@@ -170,24 +170,44 @@ export function windowRows<T extends { state: UiState; doneAt?: number }>(rows: 
 /** An empty block of the fixed shape: the closed box with one quiet row (critique 28: bare rows under a box). */
 const emptyBox = (o: SurfaceOpts, title: string, text: string): Run[][] => [titleRow(o.cols, title, '', [], o.ui, false), [t(`  ${text}`, 'muted')], bottomRule(o.cols, o.ui)];
 
-/** One overflow idiom for every block (state 39): the rows a block cannot draw are counted on ONE dim summary row, the last row inside its box, never on the title: `● 1 done  ◇ 2 queued`, and a hidden open row is
- * named by its state (`⠧ 2 more running`, `■ 1 more failed`). Counts by state in, the text out (`''` when nothing is hidden). */
-export function overflowText(counts: Partial<Record<UiState, number>>, ui: Ui, spinFrame = 0): string {
-  const g = (st: UiState): string => (st === 'running' ? stateRun('running', ui, spinFrame, true).t : stateRun(st, ui).t);
-  const part = (st: UiState): string => { const n = counts[st] ?? 0; return n <= 0 ? '' : st === 'done' || st === 'queued' ? `${g(st)} ${n} ${st}` : `${g(st)} ${n} more ${st}`; };
-  return (['done', 'queued', ...COUNT_ORDER.filter((x) => x !== 'done' && x !== 'queued')] as UiState[]).map(part).filter((x) => x !== '').join('  ');
+/** One overflow idiom for every block (state 39): the rows a block cannot draw are counted on ONE dim summary row, the last row inside its box, never on the title: `● 2 done  ■ 1 failed  ◇ 1 queued`, and a hidden open row is
+ * named by its state (`⠧ 2 more running`). State 40: every hidden state is counted apart with its own glyph and colour, a failed row is never folded into `done`, and the order is done, failed, queued, then the other open states.
+ * Counts by state in, the parts out: each part is the glyph run and the text run that follow it (`''` parts when nothing is hidden). */
+const OVERFLOW_ORDER: readonly UiState[] = ['done', 'failed', 'queued', ...COUNT_ORDER.filter((x) => x !== 'done' && x !== 'failed' && x !== 'queued')];
+export function overflowParts(counts: Partial<Record<UiState, number>>, ui: Ui, spinFrame = 0): Run[][] {
+  return OVERFLOW_ORDER.flatMap((st): Run[][] => {
+    const n = counts[st] ?? 0;
+    if (n <= 0) return [];
+    const glyph = st === 'running' ? stateRun('running', ui, spinFrame, true) : stateRun(st, ui);
+    const word = st === 'done' || st === 'queued' || st === 'failed' ? `${n} ${st}` : `${n} more ${st}`;
+    return [[glyph, { t: ` ${word}`, tone: st === 'failed' && !ui.ascii ? 'bad' : 'sub' }]];
+  });
 }
-const tallyStates = (rows: readonly { state: UiState }[]): Partial<Record<UiState, number>> => rows.reduce<Partial<Record<UiState, number>>>((m, r) => ({ ...m, [r.state]: (m[r.state] ?? 0) + 1 }), {});
+export function overflowText(counts: Partial<Record<UiState, number>>, ui: Ui, spinFrame = 0): string {
+  return overflowParts(counts, ui, spinFrame).map((p) => p.map((x) => x.t).join('')).join('  ');
+}
+/** The summary row: two blank cells, then the parts apart, each glyph in its own colour; whole parts only, the last cell stays empty (a part that does not fit ends the row, so a count is never cut mid-figure). */
+export function overflowRow(counts: Partial<Record<UiState, number>>, ui: Ui, cols: number, spinFrame = 0): Run[] {
+  const out: Run[] = [dimRun('  ', ui)];
+  for (const part of overflowParts(counts, ui, spinFrame)) {
+    const sep: Run[] = out.length > 1 ? [dimRun('  ', ui)] : [];
+    if (runsCells(out) + runsCells(sep) + runsCells(part) > cols - 1) break;
+    out.push(...sep, ...part);
+  }
+  return out;
+}
+/** Counts per state for rows left out. A row closed over a failed worker (state `done` with the doubt word) is `failed` here, as in the title, the meter and its own row (state 40: `● 3 done` hid a failed item). */
+const tallyStates = (rows: readonly { state: UiState; word?: string }[]): Partial<Record<UiState, number>> => rows.reduce<Partial<Record<UiState, number>>>((m, r) => { const st: UiState = isFailedRow(r) ? 'failed' : r.state; return { ...m, [st]: (m[st] ?? 0) + 1 }; }, {});
 
 /** State 38/39: which plan rows to draw in `cap` slots, and the one summary row for the rest. Finished rows go first (a fresh one last), then queued rows from the bottom, behind ONE dim summary row that takes a slot:
  * `● 3 done  ◇ 2 queued`. A row that just finished (LINGER_MS) ranks with the open ones. A running, blocked, failed or waiting row is hidden only when nothing else is left to hide, from the bottom, and then the SAME summary row counts it
  * (`⠧ 2 more running`), never the title (`hiddenOpen` is the number of such rows). `fold`: the finished rows go regardless of `cap` (a short budget). */
-export function planWindow<T extends { state: UiState; doneAt?: number }>(rows: readonly T[], cap: number | undefined, now: number | undefined, fold: boolean, ui: Ui, spinFrame = 0): { shown: T[]; summary: string | null; hiddenOpen: number } {
+export function planWindow<T extends { state: UiState; word?: string; doneAt?: number }>(rows: readonly T[], cap: number | undefined, now: number | undefined, fold: boolean, ui: Ui, spinFrame = 0): { shown: T[]; summary: string | null; counts: Partial<Record<UiState, number>>; hiddenOpen: number } {
   let hide = new Set<number>();
   const idx = rows.map((r, i) => ({ r, i }));
-  const finished = idx.filter((x) => x.r.state === 'done');
+  const finished = idx.filter((x) => x.r.state === 'done' && !isFailedRow(x.r)); // state 40: a row closed over a failed worker is open work to hide last, never one of the finished rows that go first
   if (fold && finished.length > 0 && finished.length < rows.length) for (const x of finished) if (!isFresh(x.r, now)) hide.add(x.i);
-  const isSummed = (i: number): boolean => rows[i]!.state === 'done' || rows[i]!.state === 'queued';
+  const isSummed = (i: number): boolean => (rows[i]!.state === 'done' && !isFailedRow(rows[i]!)) || rows[i]!.state === 'queued';
   const slots = (): number => rows.length - hide.size + (hide.size > 0 ? 1 : 0);
   if (cap !== undefined && cap > 0 && slots() > cap) {
     const summed = [
@@ -201,9 +221,10 @@ export function planWindow<T extends { state: UiState; doneAt?: number }>(rows: 
       hide = new Set(idx.filter((x) => !w.shown.includes(x.r)).map((x) => x.i));
     }
   }
-  if (hide.size === 0) return { shown: [...rows], summary: null, hiddenOpen: 0 };
-  const text = overflowText(tallyStates([...hide].map((i) => rows[i]!)), ui, spinFrame);
-  return { shown: rows.filter((_, i) => !hide.has(i)), summary: text === '' ? null : text, hiddenOpen: [...hide].filter((i) => !isSummed(i)).length };
+  if (hide.size === 0) return { shown: [...rows], summary: null, counts: {}, hiddenOpen: 0 };
+  const counts = tallyStates([...hide].map((i) => rows[i]!));
+  const text = overflowText(counts, ui, spinFrame);
+  return { shown: rows.filter((_, i) => !hide.has(i)), summary: text === '' ? null : text, counts, hiddenOpen: [...hide].filter((i) => !isSummed(i)).length };
 }
 
 export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
@@ -225,7 +246,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   // Every slot holds a row, and what does not fit is counted on ONE summary row, the last row inside the box (state 39: never on the title).
   // A short budget folds the finished rows first (critique 17: the 110 slot lost its band row and its blank to rows already done).
   // State 38: a running (or blocked, failed, waiting) row is hidden only when nothing else is left to hide: finished rows go first, then queued ones, then open ones from the bottom, behind ONE dim summary row that takes the last slot (`● 3 done  ◇ 2 queued`).
-  const { shown, summary } = planWindow(rows, b.cap, o.now, b.foldDone === true, ui, brailleOf(o));
+  const { shown, summary, counts } = planWindow(rows, b.cap, o.now, b.foldDone === true, ui, brailleOf(o));
   const forms = figures;
   const out: Run[][] = [head(forms)];
   // One layout at every width: ribbon (the one count), (rail), then a row per item with its state column. No blank rows, no second count.
@@ -244,7 +265,7 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   drawn.forEach((r, i) => {
     out.push(grid ? todoGridRow(r, o, grid) : todoRow(r, o, tier, rich, stateAt, metaAt, details[i], right?.cells[i], right?.at, b.merged === true));
   });
-  if (summary) out.push([dimRun(clipEll(`  ${summary}`, cols - 1, ellOf(ui)), ui)]);
+  if (summary) out.push(overflowRow(counts, ui, cols, brailleOf(o)));
   if (b.close === true && out.length > bodyAt) out.push(b.merged && b.closer ? b.closer : bottomRule(cols, ui));
   return out;
 }
@@ -438,8 +459,8 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
   if (b.header ?? b.spacers) out.push(agentHeader(o, rich, stateAt, plan)); // the column names: `stack` always asks for them (k9s), so every drawn HUD prints them; only a budget that cannot hold them asks for `header: false`
   const { shown } = windowRows(rows, b.cap, undefined, false);
   for (const r of shown) out.push(agentRow(r, o, rich, stateAt, nameW, plan));
-  const left = windowed.hidden > 0 && b.quiet !== true ? overflowText(tallyStates(rows.filter((r) => !shown.includes(r))), ui, brailleOf(o)) : '';
-  if (left !== '') out.push([dimRun(clipEll(`  ${left}`, cols - 1, ellOf(ui)), ui)]);
+  const left = windowed.hidden > 0 && b.quiet !== true ? tallyStates(rows.filter((r) => !shown.includes(r))) : {};
+  if (Object.keys(left).length > 0) out.push(overflowRow(left, ui, cols, brailleOf(o)));
   if (b.close === true && shown.length > 0) out.push(bottomRule(cols, ui));
   return out;
 }
@@ -655,7 +676,7 @@ function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
  * block lives). STATE is a 141 braille spinner and `running` while the agent works, `■ failed` in 203, `● done` in 114. TIME and CALLS are right-aligned; FN shows only when an agent reported a real function count; LAST (the current or last
  * call, a finished agent's outcome) fills the rest and is left out when no agent has text for it. The columns give way from the right (LAST, FN, CALLS) as the row narrows. `cap`: the most agent rows to draw; the rest are counted on a
  * `+N more` row, never as bare times. Null when there is no agent to list (queued dispatches are child lines of the plan, not agents). */
-export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] | null {
+export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number, header = true): Run[][] | null {
   const { ui, cols } = o;
   const ell = ellOf(ui);
   const all = s.agents.filter((a) => a.state !== 'queued').map((a, i) => ({ a, i })).sort((x, y) => (x.a.seq ?? x.i) - (y.a.seq ?? y.i) || x.i - y.i).map((x) => x.a);
@@ -667,24 +688,27 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
   const lastOf = (a: AgentRow): string => {
     const x = flat(a.tool);
     const action = a.action && a.action !== 'preparing' ? a.action : '';
-    const outcome = x !== '' && x !== 'finished' && x !== KILLED && x !== 'preparing' ? x : ''; // the filler `finished`, a failed agent's own word and the setup filler say nothing LAST does not
+    const outcome = x !== '' && x !== 'finished' && x !== KILLED && x !== 'preparing' && x.toLowerCase() !== flat(a.task ?? '').toLowerCase() ? x : ''; // never the dispatch title (state 40) // the filler `finished`, a failed agent's own word and the setup filler say nothing LAST does not
     if (a.state === 'failed') return outcome || STOPPED;
     if (a.state === 'done') return (resultOf(a) !== NONE && fnOf(a) !== NONE && /^\d+\s+(?:function|functions|fn)\b/i.test(outcome) ? '' : outcome) || action || 'finished'; // an outcome that only restates the FN figure gives way to the last action
     return outcome || action || 'working';
   };
   // Wave 37: the schema is frozen. The same six columns in every state (running, done, blocked, idle) and at 150 and 110 columns: LAST only shrinks (to its 4-cell header) and a count nobody knows reads `-`.
-  const LEAD = 2, STATE = 9, TIME = 6, CALLS = 6, FN = 4, LAST_MIN = 4;
+  // State 40 (critique 39, stoprun-110-1 f0074: LAST cut to `read alp…`): under 80 cells (the 110-column transcript beside the docked pane) the numeric columns take their header's width (TIME 5, CALLS 5, FN 3) and the gaps one cell, so LAST keeps 14 cells or more
+  // with the AGENT column at 12; from 80 cells up the grid is the wave 37 one.
+  const narrow = cols < 80;
+  const LEAD = 2, STATE = 9, TIME = narrow ? 5 : 6, CALLS = narrow ? 5 : 6, FN = narrow ? 3 : 4, GAP = narrow ? 1 : 2, LAST_MIN = 4;
   // State 38: at 110 columns LAST takes the width that is left: the AGENT column gives up 2 cells first (16 -> 14, the width of `alpha-explorer`) when LAST would otherwise be narrower than the name column.
-  const lastRoom = (agent: number): number => cols - 1 - (LEAD + agent + 2 + STATE + 1 + TIME + 1 + CALLS + 1 + FN + 2);
+  const lastRoom = (agent: number): number => cols - 1 - (LEAD + agent + GAP + STATE + 1 + TIME + 1 + CALLS + 1 + FN + GAP);
   const AGENT = lastRoom(16) >= 16 ? 16 : lastRoom(14) >= 14 ? 14 : 12; // state 39: at 110 columns LAST keeps 14 cells, so AGENT gives up 2 cells, then 2 more, before LAST is narrower
-  const base = LEAD + AGENT + 2 + STATE + 1 + TIME; // AGENT STATE TIME
+  const base = LEAD + AGENT + GAP + STATE + 1 + TIME; // AGENT STATE TIME
   const withCalls = base + 1 + CALLS;
   const withFn = withCalls + 1 + FN;
-  const lastAt = withFn + 2;
+  const lastAt = withFn + GAP;
   const showCalls = cols >= withCalls + 1;
   const showFn = showCalls && cols >= withFn + 1;
   const showLast = showFn && cols - 1 - lastAt >= LAST_MIN;
-  const nameW = Math.max(6, Math.min(AGENT, cols - (LEAD + 2 + STATE + 1 + TIME) - 1)); // a very narrow row clips the name last
+  const nameW = Math.max(6, Math.min(AGENT, cols - (LEAD + GAP + STATE + 1 + TIME) - 1)); // a very narrow row clips the name last
   const cell = (text: string, w: number, tone: Run['tone'], bold = false): Run => ({ ...t(clipEll(text, w, ell).padEnd(w), tone), ...(bold ? { bold: true } : {}) });
   const right = (text: string, w: number, tone: Run['tone'], bold = false): Run => ({ ...t(' '.repeat(Math.max(0, w - cells(text))) + clipEll(text, w, ell), tone), ...(bold ? { bold: true } : {}) });
   const failedN = all.filter((a) => a.state === 'failed').length;
@@ -697,8 +721,8 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
   // State 39: the title keeps its tally at every width. The words give way to the short form (`⠧ 1 run · ■1 · ●1`) before the tally is dropped for the bare spinner (critique: `SUBAGENTS ⠧` at 110 columns).
   const short = shortTally(all.map((a) => a.state), ui, o);
   const head = [lead, short, lead.slice(0, 1)].map((mid) => titleRow(cols, 'SUBAGENTS', '', mid, ui, false, false)).find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'SUBAGENTS', '', [], ui, false, false);
-  const header: Run[] = [t(' '.repeat(LEAD)), cell('AGENT', nameW, 'muted', true), t('  '), cell('STATE', STATE, 'muted', true), t(' '), right('TIME', TIME, 'muted', true),
-    ...(showCalls ? [t(' '), right('CALLS', CALLS, 'muted', true)] : []), ...(showFn ? [t(' '), right('FN', FN, 'muted', true)] : []), ...(showLast ? [t('  '), cell('LAST', cols - 1 - lastAt, 'muted', true)] : [])];
+  const headerRow: Run[] = [t(' '.repeat(LEAD)), cell('AGENT', nameW, 'muted', true), t(' '.repeat(GAP)), cell('STATE', STATE, 'muted', true), t(' '), right('TIME', TIME, 'muted', true),
+    ...(showCalls ? [t(' '), right('CALLS', CALLS, 'muted', true)] : []), ...(showFn ? [t(' '), right('FN', FN, 'muted', true)] : []), ...(showLast ? [t(' '.repeat(GAP)), cell('LAST', cols - 1 - lastAt, 'muted', true)] : [])];
   const rows = shown.map((a): Run[] => {
     const failed = a.state === 'failed';
     const done = a.state === 'done';
@@ -710,23 +734,23 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
     noteWorkerFacts([flat(a.name), flat(a.id ?? '')], time, callsCell); // the worker cards print these two cells (data/live workerFacts)
     const tone: Run['tone'] = done ? 'muted' : 'sub';
     const row: Run[] = [
-      t(' '.repeat(LEAD)), cell(flat(a.name) || flat(a.id ?? '') || 'agent', nameW, failed ? (ui.ascii ? 'text' : 'bad') : done ? 'muted' : 'text'), t('  '), ...stateCell, t(' '), right(time, TIME, tone),
+      t(' '.repeat(LEAD)), cell(flat(a.name) || flat(a.id ?? '') || 'agent', nameW, failed ? (ui.ascii ? 'text' : 'bad') : done ? 'muted' : 'text'), t(' '.repeat(GAP)), ...stateCell, t(' '), right(time, TIME, tone),
       ...(showCalls ? [t(' '), right(callsCell, CALLS, tone)] : []),
       ...(showFn ? [t(' '), right(fnOf(a), FN, tone)] : []),
-      ...(showLast ? [t('  '), cell(lastOf(a), cols - 1 - lastAt, 'muted')] : []),
+      ...(showLast ? [t(' '.repeat(GAP)), cell(lastOf(a), cols - 1 - lastAt, 'muted')] : []),
     ];
     return row;
   });
   if (cap === 0) return [mergedCloser(s, o)]; // wave 38/39: folded to its one title row (the closing rule of the plan box, the tally in it), never an empty two-row box
-  const gone = hidden > 0 ? overflowText(tallyStates(all.filter((a) => !shown.includes(a))), ui, brailleOf(o)) : '';
-  return [head, header, ...rows, ...(gone !== '' ? [[dimRun(clipEll(`${' '.repeat(LEAD)}${gone}`, cols - 1, ell), ui)]] : []), bottomRule(cols, ui)]; // the one overflow idiom: a dim summary row inside the box
+  const gone = hidden > 0 ? tallyStates(all.filter((a) => !shown.includes(a))) : {};
+  return [head, ...(header ? [headerRow] : []), ...rows, ...(Object.keys(gone).length > 0 ? [overflowRow(gone, ui, cols, brailleOf(o))] : []), bottomRule(cols, ui)]; // the one overflow idiom: a dim summary row inside the box
 }
 
 /** Both blocks stacked. While an agent runs they are ONE block (merged); otherwise the TODO box and the SUBAGENTS box, with no blank row between: every row of the block is content or a rule. */
-export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean }): Run[][] {
+export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean; tableHeader?: boolean }): Run[][] {
   if (isMerged(s, o)) {
     const todos = mergedTodos(s);
-    const table = b.table === true && b.agentCap !== 0 ? agentTable(s, o, b.agentCap) : null; // state 39: SUBAGENTS folded (cap 0) is the plan box's closing rule carrying its title and tally, not a second box // wave 36: the squad is a table under the plan's closed box in every state, running or not
+    const table = b.table === true && b.agentCap !== 0 ? agentTable(s, o, b.agentCap, b.tableHeader !== false) : null; // state 39: SUBAGENTS folded (cap 0) is the plan box's closing rule carrying its title and tally, not a second box // wave 36: the squad is a table under the plan's closed box in every state, running or not
     if (table) return [...todoRows(todos, o, { spacers: false, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), close: true, merged: true, closer: bottomRule(o.cols, o.ui) }), ...table];
     return todoRows(todos, o, { spacers: false, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), close: true, merged: true, closer: mergedCloser(s, o) });
   }
@@ -751,7 +775,7 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
   const n = s.todos.length;
   const m = s.agents.length;
-  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean };
+  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean; tableHeader?: boolean };
   const flatBox = { spacers: false, extras: false, close: true } as const; // no rail: both bottom rules
   const tries: Try[] = [];
   if (isMerged(s, o)) {
@@ -767,6 +791,13 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
       const open = mergedTodos(s).filter((r) => r.state !== 'done' && r.state !== 'queued').length;
       const keep = Math.max(1, Math.min(open + (total > open ? 1 : 0), total));
       for (let cap = total - 1; cap >= keep; cap--) tries.push({ ...flatBox, table: true, todoCap: cap });
+      // State 40 (critique 39, live-150-1 f0040: three agents running and no table, only a title on the plan's rule): while any worker runs the table keeps its title with the tally and a row for EVERY running worker.
+      // What gives way first: the column names, then the finished agents (counted on the summary row inside the box); the SUBAGENTS box folds to its title only when not even that fits (the tries below).
+      const runningN = s.agents.filter((a) => a.state === 'running').length;
+      if (runningN > 0) {
+        for (let cap = total - 1; cap >= keep; cap--) tries.push({ ...flatBox, table: true, tableHeader: false, todoCap: cap });
+        for (let ac = k - 1; ac >= runningN; ac--) for (let cap = total - 1; cap >= keep; cap--) tries.push({ ...flatBox, table: true, tableHeader: false, todoCap: cap, agentCap: ac });
+      }
       if (keep > 1) for (let cap = total; cap >= keep; cap--) tries.push({ ...flatBox, table: true, todoCap: cap, agentCap: 0 });
       for (let cap = keep - 1; cap >= 1; cap--) tries.push({ ...flatBox, table: true, todoCap: cap });
       for (let cap = k - 1; cap >= 1; cap--) tries.push({ ...flatBox, table: true, todoCap: 1, agentCap: cap });

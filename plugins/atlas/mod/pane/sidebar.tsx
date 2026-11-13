@@ -90,9 +90,10 @@ function dispatchWorkerStates<T extends { owner?: string; ownerState?: UiState }
   return out;
 }
 
-/** Wave 38 (critique 37: the lead's bar was 179 with `▲` while the run was merely blocked): the lead's bar is 141 while the run works, 203 only when its own row failed, 114 otherwise (a refused Stop is the band's word, not a failed lead). */
+/** State 40 (critique 39: the lead lane was green `●` while the band read blocked): the lead's lane follows the run state, 141 while the run works, 203 while it is blocked (`▲`) or its own row failed (`■`), 114 when it is done. */
 export function leadBarState(run: string | undefined, lead: UiState): UiState {
   if (lead === 'failed') return 'failed';
+  if (run === 'blocked') return 'blocked';
   return run === 'working' || (run === undefined && lead === 'running') ? 'running' : 'done';
 }
 

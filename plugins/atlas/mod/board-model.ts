@@ -488,7 +488,7 @@ export type TimelineAgent = { name: string; state: UiState; secs?: number | unde
 const clock = (secs: number): string => elapsedClock(secs); // `0:14`, the HUD's LAST figure
 
 /** The bar's tone: running in the accent (141), done in ok (114), failed in error (203), blocked in warn (179). */
-const barTone = (s: UiState): Run['tone'] => (s === 'running' ? 'accent' : s === 'done' ? 'ok' : s === 'failed' ? 'bad' : s === 'blocked' || s === 'waiting' ? 'warn' : 'sub');
+const barTone = (s: UiState): Run['tone'] => (s === 'running' ? 'accent' : s === 'done' ? 'ok' : s === 'failed' || s === 'blocked' ? 'bad' : s === 'waiting' ? 'warn' : 'sub'); // state 40: blocked and failed share the error 203, as the palette says
 
 const BAR_GLYPH = '▇'; // wave 38: one row, seven eighths tall: a lane's bar sits on the same line as its tick marks
 const TICK_STEPS = [10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600]; // wave 38 (critique 37): ticks every 10 s while they fit, then the next round step
@@ -536,18 +536,25 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   // The axis: ticks at a round step, as many as the labels have room for (a label is at most 4 cells and a gap).
   const spanSecs = spanMs / 1000;
   // Wave 38 (critique 37: the 0:31 run sat on a 1:00 axis at 110, bars 1-6 cells): a tick every 10 s whatever the width (a label only where it fits), the next round step only when the ticks would be under two cells apart.
-  const axisFor = (t: number): number => (live0 ? Math.floor(spanSecs / t) + 1 : Math.max(1, Math.ceil(spanSecs / t))) * t; // the axis end: the run's length rounded up to a tick (a working run's one tick past the clock, so the leading edge has a cell)
+  // State 40 (critique 39: 0:30 under a 0:29 run at 110): a run that is over ends its axis on the run's own total, the clock the footer and the band print (`runSecs`, else the longest bar floored to the second); ticks stay at every 10 s inside it.
+  // A working run keeps the next tick past the clock, so the leading edge has a cell.
   const live0 = ran.some(live);
-  const step = TICK_STEPS.find((t) => (axisFor(t) / t) * 2 <= barW) ?? TICK_STEPS[TICK_STEPS.length - 1]!;
+  const exactSecs = Math.max(1, o.runSecs !== undefined && Number.isFinite(o.runSecs) ? Math.floor(o.runSecs) : Math.floor(spanSecs));
+  const axisFor = (t: number): number => (live0 ? Math.floor(spanSecs / t) + 1 : exactSecs / t) * t; // the axis end in seconds: whole for a working run, the run total otherwise
+  const step = TICK_STEPS.find((t) => Math.ceil(axisFor(t) / t) * 2 <= barW) ?? TICK_STEPS[TICK_STEPS.length - 1]!;
   const total = axisFor(step) * 1000;
   const totalSecs = total / 1000;
   // Wave 33 (critique 31: `┬────────┬─────────┬`, ticks 9 and 10 cells apart): the axis is an integer number of cells per step, so every tick sits the same distance from the one before it; the bars draw over the same `plotW` cells.
-  const pitch = Math.max(1, Math.floor((barW - 1) / (total / (step * 1000)))); // the last tick's cell stays inside the lane
-  const plotW = pitch * (total / (step * 1000));
+  // State 40: with no caption row the time sits at the bar's end, so the plot leaves the longest time its cells (the axis ends on the run total now, the longest bar reaches it).
+  const reserve = o.spark ? 0 : Math.max(0, ...ran.map((a, i) => cells(timeOf(a, i)) + 2));
+  const laneW = Math.max(4, barW - Math.min(reserve, Math.floor(barW / 3)));
+  const pitch = Math.max(1, Math.floor((laneW - 1) / (total / (step * 1000)))); // the last tick's cell stays inside the lane
+  const plotW = Math.min(laneW - 1, Math.floor((pitch * total) / (step * 1000)));
   const tickCols = new Set<number>();
   // Wave 32 (critique 30: `0:15 0:20` collided, dotted columns ran past the bars): a tick sits only where a bar has run (at or before the longest bar's end), never past it.
   // Wave 36 (critique 35: the 110 axis stopped at `0:15` under a 0:26 bar): the axis runs one tick past the longest bar and every tick up to that last one is drawn, so the labels cover the whole span.
-  for (let k = 0; k * step <= totalSecs; k++) tickCols.add(k * pitch);
+  for (let k = 0; k * step <= totalSecs; k++) tickCols.add(Math.min(k * pitch, plotW));
+  tickCols.add(plotW); // the axis end: the run's own total (a tick of its own when the run is not a whole number of steps)
   const lead = ' '.repeat(LABEL_W);
   const rows = Math.min(ran.length, Math.max(1, Math.floor((max - 2) / ((o.spark ? 2 : 1) + (o.spacers ? 1 : 0)))));
   if (o.all && rows < ran.length) return [];
@@ -570,7 +577,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     if (!o.spark && at + cells(when) <= barW) [...when].forEach((ch, j) => { grid[at + j] = { t: ch, tone: 'dim' }; });
     // One run per colour: adjacent cells of one tone join.
     const bar = grid.reduce<Run[]>((acc, x) => { const l = acc[acc.length - 1]; if (l && l.tone === x.tone && l.fg === x.fg) l.t += x.t; else acc.push({ ...x }); return acc; }, []);
-    const mark = a.state === 'failed' && o.quiet?.has(a.name) ? r(' ') : stateRun(a.state, o.ui, o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : frame, true);
+    const mark = stateRun(a.state, o.ui, o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : frame, true);
     const name = names[i]!;
     const runs: Run[] = [r(' '), mark, r(' '), r(name + ' '.repeat(Math.max(0, NAME_W - cells(name))), 'sub'), r(' '), ...bar];
     if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
@@ -586,8 +593,9 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   // Wave 38: the axis end's label is placed first (it says where the axis stops), then the start, then the ticks between in order, each only where a blank cell stays clear on both sides.
   const cols0 = [...tickCols].sort((x, y) => x - y);
   const placed: Array<[number, number]> = [];
+  const endText = clock(Math.round(totalSecs)); // the axis end reads the run total exactly
   for (const c of [cols0[cols0.length - 1]!, ...cols0.slice(0, -1)]) {
-    const text = clock(Math.round(c / pitch) * step);
+    const text = c === plotW ? endText : clock(Math.round(c / pitch) * step);
     const at = Math.max(0, Math.min(c, labelW2 - text.length)); // the axis end's label stops at the lane's last cell, a few cells left of its tick
     if (placed.some(([a, b]) => at < b + 2 && at + text.length + 2 > a)) continue;
     [...text].forEach((ch, j) => { labels[at + j] = ch; });
