@@ -28,6 +28,9 @@ const MAX_TRIES = 30
 let counter = 0
 let runNote: { secs: number; at: number } | undefined // the band's run clock (register.ts hands it to the pane, the pane notes it here): the run card prints the figure the band prints
 const RUN_NOTE_MS = 5_000 // a note older than this is from a pane that is no longer drawn (it may be another run's): the card keeps what it last said
+/** State 38 (live-150-1 f0076/f0080: the run card said 0:37 a beat before the band flipped, then rewrote itself to 0:39): the band's CLOSED run clock. undefined: no band speaks (the card places as before); null: the band's run is open,
+ * so the run card waits; a number: the band has flipped to done on that figure, the card is placed on it and prints it once, never rewritten. */
+let runFinal: number | null | undefined
 let runCarded = false // the clean run's finish card is placed once per run: set when placed, cleared when the run is no longer clean
 const callsNow = new Map<string, number>() // worker name -> its tool calls as the latest build counts them: a card is drawn with the figure the board shows, not the one known the instant the worker ended (critique 35: alpha's card had none, the board 3)
 
@@ -103,8 +106,9 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
     const clean = cleanRun(next)
     if (!clean) { runCarded = false; return }
     if (runCarded || !prev) return
+    if (runFinal === null) return // the band still works: the card flips on the band's own render (noteRunFinal)
     const id = `done-run-${++counter}`
-    const banded = runSecs() // the band's own run clock when the pane has said it: the card opens on the figure the band prints (critique 36: card 0:42, band 0:43)
+    const banded = typeof runFinal === 'number' ? runFinal : runSecs() // the band's own run clock when the pane has said it: the card opens on the figure the band prints (critique 36: card 0:42, band 0:43)
     rows.set(id, { name: 'run', role: '', text: textOf({ name: 'run', role: '', failed: false, durationMs: banded !== undefined ? banded * 1000 : clean.durationMs }), failed: false, fact: `${clean.done}/${clean.total} \u00b7 ${clean.workers} ${clean.workers === 1 ? 'worker' : 'workers'}` })
     capped(rows)
     const res = await $.ui.place({ id })
@@ -114,6 +118,8 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
 }
 
 /** Wave 35 (critique 34: the run card said 0:13, the band 0:33): the band's own run seconds, noted by the pane every frame; the run card reads them when it draws. Absent (no pane open): the card keeps the workers' span. */
+/** The band's render says its run clock: a number once it closed (the band reads done on that figure), null while the run is open. */
+export const noteRunFinal = (secs: number | null | undefined): number | null | undefined => { const was = runFinal; runFinal = secs; return was }
 export const noteRunSecs = (secs: number | undefined): void => { runNote = secs !== undefined && Number.isFinite(secs) && secs >= 0 ? { secs: Math.floor(secs), at: Date.now() } : undefined }
 /** The band's own run seconds while the pane keeps saying them (fresh within RUN_NOTE_MS), else undefined: every run-time figure the transcript prints (the run card, the `▸ run` footer) reads this one value. */
 export const runSecs = (): number | undefined => (runNote && Date.now() - runNote.at < RUN_NOTE_MS ? runNote.secs : undefined)
@@ -125,7 +131,7 @@ export function placedTree(id: string, ui: Ui, aged = false, opts: FinishOpts & 
   const r = rows.get(id)
   if (!r) return null
   if (opts.hidden && !r.failed) return { type: 'Text', props: {}, children: [] } as RenderElement // a finish card that two newer ones replaced draws nothing (critique 29: at most two stacked)
-  if (r.name === 'run' && runSecs() !== undefined) r.text = `finished \u00b7 ${elapsedClock(runSecs()!)}` // the run card's time is the band's run clock, kept once the pane stops saying it
+  if (r.name === 'run' && typeof runFinal !== 'number' && runSecs() !== undefined) r.text = `finished \u00b7 ${elapsedClock(runSecs()!)}` // the run card's time is the band's run clock, kept once the pane stops saying it
   const text = r.text
   if (r.name === 'run') return notificationTree('', '', text, false, ui, aged, { ...opts, run: true, ...(r.fact ? { fact: r.fact } : {}) }) // the card says `done` once: the state word, then `5/5 · 3 workers`, then the time
   return notificationTree(r.name, r.role, text, r.failed, ui, aged, { ...opts, ...(callsOf(r) !== undefined ? { calls: callsOf(r)! } : {}) })
@@ -188,5 +194,5 @@ export function hideNotification(requestId: string, name: string): boolean {
 
 /** Forget every placed card and decision (a new session, a test). */
 export function forgetPlaced(): void {
-  runCarded = false; runNote = undefined; callsNow.clear(); rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
+  runCarded = false; runNote = undefined; runFinal = undefined; callsNow.clear(); rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
 }

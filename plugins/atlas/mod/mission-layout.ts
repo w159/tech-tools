@@ -115,6 +115,8 @@ export type MissionModel = {
   still?: boolean;
   /** Wave 36 (debounce): the blocked verdict is computed but not confirmed (the host turn still runs, or it has been computed on one render only): the band does not read blocked. */
   holdBlocked?: boolean;
+  /** State 38: the last non-idle word the band showed, held for 1 s before `idle` may replace it (band-motion stepKind). */
+  heldKind?: BandKind;
   /** The Claude Code band bar (band.tsx only): the first row ends flush at the column's last cell (the host's `[-]` follows it), the label is `todo n/m` for the whole run and the gates segment is `gates 2/4`. The omp panel draws none of these. */
   bar?: boolean;
 };
@@ -271,7 +273,8 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   // The state the band leads with: blocked (the lead or Stop says so), working (a turn, a worker or a running plan row), done (the plan is full and nothing runs, for IDLE_AFTER_SECS), else idle.
   // A gate warning never leads (round 3): it rides the tail of a done, idle or working band (`warn`).
   const finished = m.phase === 'done' || (m.total > 0 && m.done >= m.total);
-  const kind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : finished && (m.restSecs ?? 0) < IDLE_AFTER_SECS ? 'done' : 'idle';
+  const computedKind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : finished && (m.restSecs ?? 0) < IDLE_AFTER_SECS ? 'done' : 'idle';
+  const kind: BandKind = computedKind === 'idle' && m.heldKind && m.heldKind !== 'idle' ? m.heldKind : computedKind;
   // State 38: two reasons only. The Stop hook refused (or the store holds a dispatch row Stop will refuse on): `stop refused`; otherwise the failed workers: `N failed` (a dead dispatch is a failure everywhere).
   const refused = blocked && (stopGates.length > 0 || held > 0);
   const why = blockedText({ refused, failed: failedCount(m) });

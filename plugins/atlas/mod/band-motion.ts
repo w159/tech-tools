@@ -88,3 +88,15 @@ export const finalSecsOf = (c: RunClock): number | undefined => (c.startMs !== n
 export const restSecsOf = (c: RunClock, now: number): number | undefined => (c.startMs === null && c.endedMs !== undefined ? Math.max(0, Math.floor((now - c.endedMs) / 1000)) : undefined);
 /** The frame loop is stale: Atlas is working, yet no beat landed for STALE_BEATS frames. */
 export const beatStale = (lastBeatMs: number, now: number): boolean => now - lastBeatMs > STALE_BEATS * FRAME_MS;
+
+/** State 38 (critique: `working` -> `idle` -> `blocked` inside one second, live-150-1 f0070-f0076): the band holds the last non-idle word for at least `KIND_HOLD_MS` before it may read `idle`, so a held `working`
+ * never drops to idle ahead of a `blocked` that arrives inside the window. `at` is when the last non-idle word was computed. Pure: the render keeps the returned hold. */
+export const KIND_HOLD_MS = 1000;
+export type KindWord = 'working' | 'done' | 'blocked' | 'idle';
+export type KindHold = { kind: KindWord | null; at: number };
+export const newKindHold = (): KindHold => ({ kind: null, at: 0 });
+export function stepKind(h: KindHold, computed: KindWord, now: number): { hold: KindHold; shown: KindWord } {
+	if (computed !== 'idle') return { hold: { kind: computed, at: now }, shown: computed };
+	if (h.kind !== null && h.kind !== 'idle' && now - h.at < KIND_HOLD_MS) return { hold: h, shown: h.kind };
+	return { hold: h.kind === 'idle' ? h : { kind: 'idle', at: now }, shown: 'idle' };
+}
