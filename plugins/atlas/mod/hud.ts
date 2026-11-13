@@ -8,7 +8,7 @@ import { isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
 import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
-import { fitStack, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
+import { fitStack, isFailedRow, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
 
@@ -78,7 +78,7 @@ const taskOf = (task: string | undefined): string => flat(task).replace(/^[a-z0-
 
 /** Band workers plus the squad's spawn model and task, in the HUD's shape; `queued` names dispatched workers the host does not list yet (data/live.ts queuedMembers). */
 export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[] = []): HudAgent[] {
-  const started = (w: LiveWorker): number => squad.findIndex((a) => a.name === w.name); // the squad lists workers in start order; liveWorkers sorts by urgency, which would move a row when a worker's state changes
+  const started = (w: LiveWorker): number => { const i = squad.findIndex((a) => a.name === w.name); return i < 0 ? Number.MAX_SAFE_INTEGER : i; }; // the squad lists workers in start order; liveWorkers sorts by urgency, which would move a row when a worker's state changes; wave 36: a worker the squad does not list yet comes after the listed ones, so its row never jumps to the top when the squad catches up
   const listed = [...live].sort((a, b) => started(a) - started(b)).map((w) => {
     const s = squad.find((a) => a.name === w.name);
     const name = displayName(w.name, w.role, s?.task);
@@ -145,7 +145,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
  * so the two can never disagree (wave 35; critique 34: `0/5` under a TODO title of `1/5`). `todos` are this session's rows (ownTodos). */
 export function planProgress(todos: readonly TodoItem[], live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[], now: number): { done: number; total: number } {
   const rows = todoModel(todos.filter(isPlanItem), now, ownerStatesOf(hudAgents(live, squad, queued)), true);
-  return { done: rows.filter((r) => r.state === 'done').length, total: rows.length };
+  return { done: rows.filter((r) => r.state === 'done' && !isFailedRow(r)).length, total: rows.length }; // wave 36: a row closed over a failed worker is counted apart (the TODO title reads `4/5 · ■1`), never as done
 }
 
 /** `opus`, `sonnet-5`: the model without its provider and the `claude-` prefix; nothing is guessed. */
@@ -266,7 +266,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
   const held = (n: string): boolean => agents.some((x) => flat(x.name) === n || flat(x.key) === n);
   const spare = [...new Set(todos.filter((t) => (t as { origin?: string }).origin === 'dispatch').map((t) => flat(t.owner)).filter((n) => n !== '' && n !== 'lead' && !held(n)))];
   let spareAt = 0;
-  const rows = agents.map((a): AgentRow => {
+  const rows = agents.map((a, seq): AgentRow => {
     const shown = flat(a.name) || flat(a.key) || descriptionName(a.task) || spare[spareAt++] || flat(a.role) || 'agent';
     // A retry (`beta-explorer #2`) takes over the item its first run owned: the plan row names `beta-explorer`, so TASK reads `T3` for the retry too (critique 19 B2).
     const first = shown.replace(/\s+#\d+$/, '');
@@ -277,7 +277,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { seq, name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');

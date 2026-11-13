@@ -29,7 +29,7 @@ describe('SUBAGENTS block at 61 transcript cells (110 columns with the pane dock
       test(`${n} running, ${budget} rows: the title and one row per agent show, every row fits 61 cells`, () => {
         const hud = hudAt(n, budget);
         expect(hud.some((r) => r.includes('▸ SUBAGENTS'))).toBe(true);
-        for (const name of NAMES.slice(0, n)) expect(hud.filter((r) => r.includes(name) && /running/.test(r))).toHaveLength(1);
+        for (const name of NAMES.slice(0, n)) expect(hud.filter((r) => r.trimStart().startsWith(name) && /running/.test(r))).toHaveLength(1); // wave 36: the table row (the plan row only names its owner at the end)
         for (const r of hud) expect(textWidth(r)).toBe(COLS);
       });
     }

@@ -138,24 +138,25 @@ describe('3. SUBAGENTS draws every running agent', () => {
       const f = frameOf({ running: 3, returned: 0, planned: true }, cols - 5, hostBudget(screen, 3), 0);
       const at = f.rows.findIndex((r) => r.includes('▸ SUBAGENTS'));
       expect(at).toBeGreaterThan(-1);
-      const agentRows = f.rows.filter((r) => /^[ ▸] [◐◓◑◒] .*-explorer/.test(r)); // wave 31: the agents ride their rows above the SUBAGENTS rule
-      expect(agentRows).toHaveLength(3);
+      const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[⠀-⣿] running/.test(r)); // wave 36: one table row per agent under the plan's closed box
+      const more = Number(f.rows.map((r) => /^ {2}\+(\d+) more/.exec(r)).find((m) => m)?.[1] ?? 0); // wave 36: a slot too short for the table counts the agents it cannot draw on a `+N more` row
+      expect(agentRows.length + more).toBe(3);
+      if (more === 0) expect(agentRows).toHaveLength(3);
       expect(f.rows[at]!).not.toMatch(/\+\d+ more/);
     });
   }
   test('56 columns (110 with the pane docked): all three rows, each with its clock', () => {
     const f = frameOf({ running: 3, returned: 0, planned: true }, 56, hostBudget(40, 3), 0);
-    const agentRows = f.rows.filter((r) => /^[ ▸] [◐◓◑◒] .*-explorer/.test(r));
+    const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[⠀-⣿] running/.test(r));
     expect(agentRows).toHaveLength(3);
-    for (const r of agentRows) expect(r.trimEnd(), r).toMatch(/\d+:\d\d$/); // the agent and its clock are right-aligned on the row
+    for (const r of agentRows) expect(r, r).toMatch(/\d+:\d\d/); // wave 36: each row carries its clock in the TIME column
   });
-  test('at rest the SUBAGENTS rule gives way to an AGENT TIME table at every width, never the old STATE column (wave 35)', () => {
+  test('at rest the SUBAGENTS block is an AGENT STATE TIME table at every width (wave 36)', () => {
     for (const cols of [56, 100, 145]) {
       // wave 35: nothing runs, so the table sits under the closed plan box
       const f = frameOf({ running: 0, returned: 3, planned: true, doneTodos: 5, working: false } as Stage, cols, 18, 0);
       expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS.*╮\s*$/.test(r)), `${cols}`).toBe(true);
-      expect(f.rows.some((r) => /^\s+AGENT\s+TIME\b/.test(r)), `${cols}`).toBe(true);
-      expect(f.rows.some((r) => /AGENT\s+STATE/.test(r)), `${cols}`).toBe(false);
+      expect(f.rows.some((r) => /^\s+AGENT\s+STATE\s+TIME\b/.test(r)), `${cols}`).toBe(true); // wave 36: AGENT STATE TIME (CALLS FN LAST as the width allows)
     }
   });
 });

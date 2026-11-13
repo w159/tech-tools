@@ -108,6 +108,8 @@ export type MissionModel = {
   closed?: number;
   /** No wordmark sweep (ATLAS_REDUCED_MOTION, NO_COLOR); the spinner frames still step. Absent: read from the environment. */
   still?: boolean;
+  /** Wave 36 (debounce): the blocked verdict is computed but not confirmed (the host turn still runs, or it has been computed on one render only): the band does not read blocked. */
+  holdBlocked?: boolean;
   /** The Claude Code band bar (band.tsx only): the first row ends flush at the column's last cell (the host's `[-]` follows it), the label is `todo n/m` for the whole run and the gates segment is `gates 2/4`. The omp panel draws none of these. */
   bar?: boolean;
 };
@@ -248,9 +250,10 @@ const gatesToCheck = (failing: readonly string[]): string => `${failing.length} 
 export const dispatchHeld = (m: MissionModel): number => (!isAlive(m) && !m.busy ? Math.max(0, m.openDispatch ?? 0) : 0);
 const dispatchOpenWords = (n: number): string => `${n} ${n === 1 ? 'dispatch' : 'dispatches'} open`;
 export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; kind: BandKind; reason: { long: string; short: string } } {
-  const stopGates = m.stopGates ?? [];
-  const held = dispatchHeld(m);
-  const blocked = !!m.blocked || stopGates.length > 0 || held > 0;
+  const hold = !!m.holdBlocked; // wave 36: a blocked verdict the band has not confirmed yet (register.ts stepBlocked) is not shown
+  const stopGates = hold ? [] : m.stopGates ?? [];
+  const held = hold ? 0 : dispatchHeld(m);
+  const blocked = !hold && (!!m.blocked || stopGates.length > 0 || held > 0);
   const quiet = !blocked && !isAlive(m) && !m.busy;
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber triangle).
@@ -269,8 +272,12 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
 const bandFrame = (m: MissionModel): number => (m.now === undefined ? m.tick : spinFrameOf(m.now));
 
 /** The wordmark ribbon `◖ ◆ ATLAS ◗`, once, at the left end of the band. A solid chip in every state (round 3: the inverted-letter shimmer read as a stray cursor); motion comes from the spinner alone. */
-function ribbonOf(_m: MissionModel, ui: Ui, _kind: BandKind): Run[] {
-  return wordmark(ui);
+function ribbonOf(m: MissionModel, ui: Ui, _kind: BandKind): Run[] {
+  const runs = wordmark(ui);
+  if (!segmentedOn(m, ui)) return runs;
+  // Wave 36: on the filled bar the pill is xterm 97 with bold white ink (the caps `◖ ◗` 97 on the panel), so it never merges with a 141 working slab.
+  const fill = PILL[ui.theme];
+  return runs.map((x): Run => { const { bg: _bg, ...rest } = x; return x.t === '◖' || x.t === '◗' ? { ...rest, tone: 'accent', fg: fill } : { ...rest, tone: 'white', bgHex: fill }; });
 }
 
 /** What a blocked band needs, in the lead's words: `dispatch T2 read ghost.py open` reads `needs: close dispatch T2` (`needs: close T2` short, `close T2` bare);
@@ -297,8 +304,8 @@ const gatesSeg = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>): R
   const checks = m.checks ?? [];
   if (st.blocked || !checks.some((c) => !c.ok)) return [];
   const green = checks.filter((c) => c.ok && !c.pending).length;
-  const tone: Tone = ui.ascii ? 'text' : st.kind === 'working' ? 'warn' : 'dim';
-  return [r(' · ', 'sub'), r(`gates ${green}/${checks.length}`, tone)];
+  // Wave 36: the one place the warning 179 appears on the bar, a separate chip in the last segment (`△ gates 2/4`), whatever the state: the state slab itself is never amber.
+  return [r(' · ', 'sub'), gateMark(ui), r(` gates ${green}/${checks.length}`, ui.ascii ? 'text' : 'warn')];
 };
 /** The gate tail the model's host draws: the Claude Code bar's `gates 2/4`, else the warn tail. */
 const gateTail = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => (m.bar ? gatesSeg(m, ui, st) : warnSeg(ui, st, form));
@@ -318,8 +325,9 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
   switch (st.kind) {
     // Wave 35: the Claude Code bar always carries the run clock while it works (one clock, never dropped); a model with no reading yet starts at 0:00.
     case 'working': { const secs = m.turnSecs ?? m.elapsedSecs ?? (m.bar ? 0 : undefined); return [spin(), r(' '), r('working', 'text', true), ...(o.clock && secs !== undefined ? [r(` ${elapsedClock(secs)}`, 'sub')] : [])]; }
-    case 'done': return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [r(` · ${elapsedClock(ran)}`, 'sub')] : [])];
-    case 'idle': return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])];
+    // Wave 36: on the filled bar a done state is `● done 0:32` in bold dark ink on the 114 slab (the clock bold too), an idle one `○ idle · 0:32` in 245 on the 236 slab; the dot-joined forms keep `done · 0:32` and `idle · last run 0:32`.
+    case 'done': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [f ? r(` ${elapsedClock(ran)}`, 'ok', true) : r(` · ${elapsedClock(ran)}`, 'sub')] : [])]; }
+    case 'idle': { const f = segmentedOn(m, ui); return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short || f ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])]; }
     case 'blocked': {
       const why = reason && o.reason !== 'none' ? needsOf(reason, o.reason) : '';
       const retrying = why === 'retrying';
@@ -338,16 +346,19 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
 // ` · ` joined text of the old bar.
 const SEG_PLAN = { mocha: xtermHex(237), latte: PALETTES.latte.queued_fill } as const;
 const SEG_WORK = { mocha: xtermHex(235), latte: PALETTES.latte.base } as const;
+/** The idle state slab: 236 with 245 text (wave 36). */
+const SEG_IDLE = { mocha: xtermHex(236), latte: PALETTES.latte.queued_fill } as const;
+/** The wordmark pill's fill: xterm 97 with white ink, darker than the 141 working slab beside it so the two never merge (wave 36). */
+const PILL = { mocha: xtermHex(97), latte: xtermHex(54) } as const;
 const EDGE = '▌';
 /** The bar draws filled segments: a colour terminal, not ASCII, and only the Claude Code bar (`bar`). */
 export const segmentedOn = (m: Pick<MissionModel, 'bar'>, ui: Ui): boolean => !!m.bar && !ui.ascii && ui.color !== 'none';
 /** The seam: `from` on the left half, `to` on the right. The painter (band.tsx) reads `fg` of an edge run as a fill colour, not a text tone. */
 const edge = (from: string, to: string): Run => ({ t: EDGE, tone: 'text', fg: from, bgHex: to });
-/** The state segment's fill token: the run state (working 141, done 114, blocked 203, idle 245), amber 179 when a done or idle band carries a gate warning. */
+/** The state segment's fill token: the run state (working 141, done 114, blocked 203). Idle has no token: it is the 236 slab (SEG_IDLE). Wave 36: never 179, a gate warning is its own chip. */
 function stateFillToken(st: ReturnType<typeof runStateOf>): Token {
   if (st.kind === 'blocked') return 'bad';
-  if (st.warn && (st.kind === 'idle' || st.kind === 'done')) return 'warn';
-  return st.kind === 'working' ? 'accent' : st.kind === 'done' ? 'ok' : 'muted';
+  return st.kind === 'working' ? 'accent' : 'ok';
 }
 /** Runs laid on a fill: the fill rides `bgHex`, a motion tint (`fg`) is dropped; `ink` the one text tone of the whole segment (the state fill's dark ink); absent, each run keeps its own tone. */
 const onFill = (runs: readonly Run[], bgHex: string, ink?: Tone): Run[] =>
@@ -356,11 +367,12 @@ const onFill = (runs: readonly Run[], bgHex: string, ink?: Tone): Run[] =>
 function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], plan: Run[], work: Run[]): Run[] {
   const pal = PALETTES[ui.theme];
   const token = stateFillToken(st);
-  const fill = pal[token];
+  const idle = st.kind === 'idle';
+  const fill = idle ? SEG_IDLE[ui.theme] : pal[token];
   const planBg = SEG_PLAN[ui.theme];
   const workBg = SEG_WORK[ui.theme];
   // The state fill starts at the cell after the wordmark's `◗` (its padding cell), so the row still reads `◖ ◆ ATLAS ◗ ⠸ working` for every reader of the text.
-  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, inkFor(token, ui.theme, ui.color))];
+  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, idle ? undefined : inkFor(token, ui.theme, ui.color))];
   let at = fill;
   if (plan.length) { out.push(edge(at, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg)); at = planBg; }
   if (work.length) { out.push(edge(at, workBg), ...onFill([r(' '), ...work, r(' ')], workBg)); }

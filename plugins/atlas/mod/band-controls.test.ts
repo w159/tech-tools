@@ -46,7 +46,7 @@ describe('band footer buttons', () => {
     expect(calls).toEqual(['open:route', 'open:team', 'open:channel', 'open:gates', 'open:core', 'board']);
   });
   test('the buttons are the side panel strip: route, team, channel, gates, core, board (change 9: the same set and order on both hosts)', () => {
-    expect(buttons(band()).map((b) => b.props.label)).toEqual(['route', 'team', 'channel', 'gates', 'core', 'board']);
+    expect(buttons(band()).map((b) => b.props.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']); // wave 36: the first tab reads status; its key and view stay r / route
   });
   test('keys show only while idle at 80+ columns: they survive 80, drop at 79 and with no handlers', () => {
     expect(buttons(band(80)).length).toBe(6);

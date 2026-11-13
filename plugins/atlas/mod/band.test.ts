@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandRows, bandTree, missionTree, planRows, railPhase, shortTool } from './band';
 import { worldModel } from '../contracts/band-world';
-import { PALETTE5, PALETTES, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
+import { PALETTE5, PALETTES, xtermHex, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { computeCounts, groupTodos } from './data/todos';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
@@ -72,14 +72,15 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const { rowNodes, all } = panel(160);
     const head = rowNodes[0]!;
     const mocha = PALETTES.mocha;
-    expect(cellOf(head, '◖').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
-    expect(cellOf(head, '◗').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
+    const pill = xtermHex(97); // wave 36: the pill is a darker accent (97) so the state slab after it is what reads brightest
+    expect(cellOf(head, '◖').props).toMatchObject({ color: pill, backgroundColor: mocha.panel });
+    expect(cellOf(head, '◗').props).toMatchObject({ color: pill, backgroundColor: mocha.panel });
     const cap = cells(head).slice(0, cells(head).findIndex((t) => String(t.props.children).includes('◗')) + 1); // the wordmark; the state segment after it is its own fill (wave 35)
     const filled = cap.filter((t) => t.props.backgroundColor !== mocha.panel);
     expect(filled.map((t) => String(t.props.children)).join('')).toMatch(/^ ◆ A?T?L?A?S? $/); // the pill, and only the pill (the sweep's lit letter is a hole in it, on the panel)
-    expect(filled.every((t) => t.props.backgroundColor === mocha.accent && t.props.bold === true)).toBe(true);
+    expect(filled.every((t) => t.props.backgroundColor === pill && t.props.bold === true)).toBe(true);
     expect(text(head)).toContain('◖ ◆ ATLAS ◗'); // the literal ribbon text, whatever the sweep lights
-    expect(filled.filter((t) => t.props.color === mocha.ink).length).toBeGreaterThan(0);
+    expect(filled.filter((t) => t.props.color !== undefined && t.props.color !== pill).length).toBeGreaterThan(0); // wave 36: light caps on the dark 97 pill, not ink on 141
     expect(all).not.toMatch(/\$/);
     expect(cells(rowNodes[1]!).every((t) => t.props.backgroundColor === mocha.panel)).toBe(true);
   });
@@ -96,7 +97,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('latte paints the latte panel; ASCII swaps the capsule; NO_COLOR keeps words and drops every colour', () => {
     const latte = panel(160, { ui: { theme: 'latte', ascii: false, color: 'truecolor' } });
     expect(cells(latte.rowNodes[0]!).filter((t) => t.props.backgroundColor === PALETTES.latte.panel).length).toBeGreaterThanOrEqual(2); // the capsule's two ends; the segments after it are their own fills (wave 35)
-    expect(cellOf(latte.rowNodes[0]!, '◖').props.color).toBe(PALETTES.latte.accent);
+    expect(cellOf(latte.rowNodes[0]!, '◖').props.color).toBe(xtermHex(54));
     const ascii = panel(160, { ui: { theme: 'mocha', ascii: true, color: 'truecolor' } });
     expect(ascii.rows[0]).toContain('[ATLAS]');
     expect(ascii.rows[0]).not.toMatch(/[◖◗◆]/);

@@ -187,7 +187,7 @@ describe('4. done on the host turn-end event, not a later poll', () => {
     const finished: Shape = { working: false, agents: NAMES.map((name) => ({ name, squad: 'finished', mood: 'done' })), plan: ['completed', 'completed', 'completed', 'completed', 'completed'], dispatch: NAMES.map((owner) => ({ owner, status: 'completed' })) };
     const f = frameOf({ ...finished }, 93, 45, { workSecs: 57 });
     expect(f.kind).toBe('done');
-    expect(f.band).toMatch(/● done · 0:58/);
+    expect(f.band).toMatch(/● done 0:58/);
     expect(f.band).not.toMatch(/working/);
     const g = frameOf({ ...finished, working: true }, 93, 45, { workSecs: 57 });
     expect(g.band).toMatch(/[⠀-⣿] working 0:57/);
@@ -305,7 +305,7 @@ describe('7. no plan: `○ idle` alone, never `todo 0/0`', () => {
       const f = frameOf(NOPLAN, body, screen, { ranSecs: undefined });
       expect(f.band.trim()).toBe('◖ ◆ ATLAS ◗ ○ idle');
       expect(f.band).not.toMatch(/0\/0|todo|phase/);
-      expect(frameOf(NOPLAN, body, screen).band.trim()).toBe('◖ ◆ ATLAS ◗ ○ idle · last run 0:58'); // a clock is no count
+      expect(frameOf(NOPLAN, body, screen).band.trim()).toBe('◖ ◆ ATLAS ◗ ○ idle · 0:58'); // a clock is no count
     });
   }
   test('a working turn with no plan says `working 0:12` alone', () => {

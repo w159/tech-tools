@@ -10,7 +10,7 @@ import type { ClientElements, EngineInterface, On, PluginOptions, RenderElement 
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
-import { bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
+import { bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
@@ -24,7 +24,7 @@ import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';
-import { asksUser, gateTally, leadBusy, planBusy, runElapsed, stopRefusal, withCoreTally } from './data/runstate';
+import { asksUser, gateTally, leadBusy, planBusy, runElapsed, stepBlocked, stopRefusal, withCoreTally } from './data/runstate';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -1023,6 +1023,13 @@ let idleFlipped = true;
 // in the meantime (BLOCKED_HOLD_MS, maskBlocked): that drew a phase the snapshot did not hold, and with a finished plan it drew `done` over a band that read `working` (critique 27, stoprun-150-46d4825c-1
 // f0109:6 to f0114:6). The panel now draws the snapshot as it is; this only asks for one more redraw when the blocked state changes, since the panel is not otherwise drawn again when nothing else moves.
 let blockedDrawn = false;
+// Wave 36 (critique 35: one false `blocked` frame while the host still worked): the band reads blocked on the host's Stop event (the completion gate refused: `stopRefused`, or a recorded Stop verdict) or after two consecutive
+// host-idle renders that both computed blocked (data/runstate.ts stepBlocked); never while the host works. The band render updates these; the pane's own band model reads `blockedAllow`.
+let stopRefused = false;
+let blockedStreak = 0;
+let blockedAllow: boolean | null = null;
+/** Test seam: forget the debounce. */
+export const resetBlockedDebounce = (): void => { stopRefused = false; blockedStreak = 0; blockedAllow = null; };
 /** Test seam: forget the last blocked state drawn. */
 export const resetBlockedMark = (): void => { blockedDrawn = false; };
 /** Look at the blocked state (the snapshot's phase, the Stop verdict) and redraw when it changed. Called on every beat, tick and poll. */
@@ -1220,6 +1227,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// The one prompt.submit hook (the host refuses a second unmatched one and drops the mod): the pane opens first, before any await.
 	on('prompt.submit', async ($, e, next) => {
 		stopSeen = false; // a new prompt (or a background task's notification) starts a new turn
+		stopRefused = false;
 		const opening = dockOnPrompt($);
 		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') armedAt = await $.clock.now().catch(() => null); // a background task's notification is not the person's prompt: it starts no run
 		await update($, headerPhaseState, () => null).catch(() => undefined); // a person's prompt starts new work: the last reply's header phase is not this run's (a turn.start also fires for subagents and Stop-hook continuations, which keep it)
@@ -1263,6 +1271,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (r && typeof (r as { block?: unknown }).block === 'string') {
 			const text = (r as { block: string }).block;
 			if (await read($, isModOn)) {
+				stopRefused = true; // the Stop event: the band may read blocked on this render
 				await update($, gatesState, (g) => stopRefusal(g, text));
 				noteStopVerdict(true); // the DONE chips drawn so far are struck on the update that carries the refusal, not on the next pane render (critique 29: an unstruck `done all finished` under the Stop error)
 				await update($, spinnerTickState, (n) => n + 1);
@@ -1358,7 +1367,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: turnOn || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(runElapsed(runClock, clockNow) !== undefined ? { workSecs: runElapsed(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: turnOn || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(runElapsed(runClock, clockNow) !== undefined ? { workSecs: runElapsed(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}) });
+		// The blocked debounce: ask the band what it computes with nothing held back, then tell it whether it may read blocked.
+		const probe = bandKindOf({ ...bandIn([], 1), blockedConfirmed: true, ...([...agents, ...namedAgents(hudIn.todos, agents)].some(isAlive) ? { agentsRunning: true } : {}) }) === 'blocked';
+		const step = stepBlocked(blockedStreak, probe, turnOn, stopRefused || gateTally(withCoreTally(gates, core)).stop?.blocked === true);
+		blockedStreak = step.streak;
+		blockedAllow = step.allow;
 		const agentsListed = agents.length > 0;
 		const want = hudWantRows(hudIn, columns, snapshot.now);
 		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
@@ -1412,7 +1426,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
 		const paneLive = liveWorkers(snapshot, snapshot.now);
 		const paneAgents = hudAgents(paneLive, snapshot.squad, queuedMembers(snapshot));
-		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking : runClock.startMs !== null, ...(runElapsed(runClock, paneNow) !== undefined ? { workSecs: runElapsed(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
+		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking : runClock.startMs !== null, ...(runElapsed(runClock, paneNow) !== undefined ? { workSecs: runElapsed(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined, ...(blockedAllow === false ? { blockedConfirmed: false } : {}) };
 		const elapsedMs = runClock.startMs !== null ? paneNow - runClock.startMs : runClock.ranMs !== undefined && runClock.endedMs !== undefined ? runClock.ranMs + (paneNow - runClock.endedMs) : undefined;
 		const runSecs = runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock);
 		return sidebarTree($.ui.resolve(e), {

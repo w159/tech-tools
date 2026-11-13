@@ -39,7 +39,7 @@ describe('change 9: one tab strip on both hosts', () => {
     expect(tabs.map((t) => `${t.key}:${t.label}`)).toEqual(['r:route', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
   });
   test('the band buttons are the same set in the same order', () => {
-    expect(BAND_BUTTONS.map((b) => `${b.key}:${b.label}`)).toEqual(['r:route', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
+    expect(BAND_BUTTONS.map((b) => `${b.key}:${b.label}`)).toEqual(['r:status', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
   });
   for (const cols of [120, 80, 60, 56, 40, 38, 30]) for (const tab of TABS) {
     test(`${tab} at ${cols}: the Claude Code strip and the omp strip print the same rows`, () => {

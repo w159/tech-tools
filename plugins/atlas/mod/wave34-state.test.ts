@@ -179,8 +179,8 @@ describe('3. dispatches fold into the plan: one row per plan item', () => {
     test(`${cols} columns: a closed plan keeps five rows and the band's denominator`, () => {
       const f = frameOf(SUFFIXED, body, screen);
       expect(todoRowsOf(f)).toHaveLength(5);
-      expect(titleOf(f)).toMatch(/5\/5/);
-      expect(f.band).toMatch(/todo 5\/5/);
+      expect(titleOf(f)).toMatch(/4\/5 · ■1/); // wave 36: one failed row is counted apart from the done rows
+      expect(f.band).toMatch(/todo 4\/5/); // wave 36: the failed row is not a done row
     });
   }
   test('done rows keep their agent and time columns', () => {
