@@ -69,7 +69,7 @@ describe('idle band', () => {
       expect(row).not.toContain('running');
       expect(row).not.toContain('implement');
     }
-    expect(rowsOf(160, { snapshot: idleSnap(), live: [] })[0]).toContain('idle   todo');
+    expect(rowsOf(160, { snapshot: idleSnap(), live: [] })[0]).toContain('idle ▌ todo'); // wave 35: the seam between the state and plan segments
   });
   test('rich idle also says idle; a running band does not', () => {
     expect(rowsOf(160, { snapshot: idleSnap(), live: [], rich: true, maxRows: 12 }).join('\n')).toContain('idle');
@@ -163,7 +163,7 @@ describe('band counts what the HUD counts (critique-3 change 4)', () => {
     expect(head).not.toContain('agents'); // wave 31: at most four segments, so no agents noun
     expect(head).not.toContain('blocked'); // and one warning: `killed` outranks the blocked count here
     expect(head).toMatch(/1 running/);
-    expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/working .* todo 1\/3 · /); // at 79 the state word leads
+    expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/working .* todo 1\/3 ▌ /); // at 79 the state word leads
   });
   test('the order is running, then the one failure word', () => {
     const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;

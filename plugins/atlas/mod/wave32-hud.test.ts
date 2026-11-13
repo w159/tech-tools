@@ -119,10 +119,11 @@ describe('1. the Atlas region holds one height and the band one screen row for t
     test(`${cols} cells: the TODO top rule is the next row and the SUBAGENTS rule closes the block, in every state`, () => {
       for (const { st, f } of scenario(screen, cols)) {
         expect(f.rows[1]!, st.name).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ TODO /);
-        const closer = f.rows.filter((r) => /^╰.*▸ SUBAGENTS/.test(r));
+        const settled = st.running === 0 && st.returned > 0; // wave 35: once every agent has stopped the squad rule gives way to the SUBAGENTS table under the closed plan box
+        const closer = f.rows.filter((r) => (settled ? /^╭.*▸ SUBAGENTS/ : /^╰.*▸ SUBAGENTS/).test(r));
         expect([st.name, closer.length]).toEqual([st.name, 1]);
-        expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS/.test(r)), `${st.name}: no separate box`).toBe(false);
-        expect(f.rows.indexOf(closer[0]!), st.name).toBe(2 + 5); // band, top rule, five plan rows, then the rule
+        expect(f.rows.some((r) => (settled ? /^╰.*▸ SUBAGENTS/ : /^╭.*▸ SUBAGENTS/).test(r)), `${st.name}: one form or the other`).toBe(false);
+        expect(f.rows.indexOf(closer[0]!), st.name).toBe(settled ? 2 + 5 + 1 : 2 + 5); // band, top rule, five plan rows, then the rule (or the plan box's own bottom rule, then the table)
       }
     });
     test(`${cols} cells: the label is always todo n/m (never phase n/m), from the first frame`, () => {
@@ -135,7 +136,7 @@ describe('1. the Atlas region holds one height and the band one screen row for t
 });
 
 describe('2. the rule row: a braille 141 spinner while they work, the squad line once they are done', () => {
-  const rule = (f: Frame): Segment[] => f.hud.find((r) => /^╰.*▸ SUBAGENTS/.test(txt(r)))!;
+  const rule = (f: Frame): Segment[] => f.hud.find((r) => /^[╰╭].*▸ SUBAGENTS/.test(txt(r)))!;
   test('working: `⠹ 3 running` with the spinner in the accent (141)', () => {
     const f = frameOf(stage('3 running'), 150, hostBudget(45, 3), 0);
     expect(txt(rule(f))).toMatch(/▸ SUBAGENTS [⠀-⣿] 3 running ─+╯$/);
@@ -145,7 +146,8 @@ describe('2. the rule row: a braille 141 spinner while they work, the squad line
   test('done and idle: `● 3 done · <per-agent times>` on the same rule, no spinner', () => {
     for (const name of ['done', 'idle']) {
       const f = frameOf(stage(name), 150, hostBudget(45, 0), 0);
-      expect(txt(rule(f)), name).toMatch(/▸ SUBAGENTS ● 3 done · 0:04 0:01 0:02 ─+╯$/);
+      expect(txt(rule(f)), name).toMatch(/▸ SUBAGENTS ● 3 done ─+╮$/); // wave 35: the times moved onto the table rows
+      expect(f.hud.map(txt).filter((r) => /^ ● \S+-explorer\s+0:0\d/.test(r)).length, name).toBe(3);
       expect(txt(rule(f)), name).not.toMatch(BRAILLE);
     }
   });

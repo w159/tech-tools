@@ -78,15 +78,15 @@ describe('A3: a retry reads as one row, in one voice on the HUD, the panel rule 
   test('todoState: the retried word is only for a completed row; a pending row whose worker failed says `worker failed` and keeps the queued glyph', () => {
     expect(todoState('completed', 'done', true)).toEqual({ state: 'done', word: 'retried · done' });
     expect(todoState('completed', 'failed', false)).toEqual({ state: 'done', word: 'closed' });
-    expect(todoState('pending', 'failed')).toEqual({ state: 'queued', word: 'worker failed' });
+    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' }); // wave 35
     expect(todoState('pending', 'running')).toEqual({ state: 'running' });
   });
-  test('HUD f0093: T2 whose worker failed reads `worker failed` on a queued glyph', () => {
+  test('HUD f0093 (wave 35): T2 whose worker failed reads `■ failed` from the first frame', () => {
     const input = f0104();
     input.todos[1] = item(2, 'pending', 'T2 read ghost.py (ghost-explorer)', names[1]);
     const t2 = rowOf(hud(input, 150, 14), 'T2 read ghost.py');
-    expect(t2).toContain('◇');
-    expect(t2).toContain('worker failed');
+    expect(t2).toContain('■');
+    expect(t2).not.toContain('worker failed');
   });
   test('board: the same rows through withOwnerStates read running, retried and worker failed', () => {
     const states = new Map<string, UiState>([['alpha-explorer', 'done'], ['ghost-explorer', 'failed'], ['beta-explorer', 'failed'], ['beta-explorer #2', 'running']]);

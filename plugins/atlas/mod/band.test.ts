@@ -47,7 +47,7 @@ const boardTodos = [
 describe('band: the brand capsule and the facts, and nowhere else the task count', () => {
   test('reads the phase, the todo gauge and the ctx gauge and the worker counts, tick 3', () => {
     const { rows } = panel(160, { gates: [gate] });
-    expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ⠸ working 0:42   todo `); // the state word and the clock lead, then the todo figure (round 3: the phase word is the rail's, not the band's)
+    expect(rows[0]).toContain(`◖ ◆ ATLAS ◗ ⠸ working 0:42 ▌ todo `); // the state word and the clock lead, then the todo figure (round 3: the phase word is the rail's, not the band's)
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
     expect(rows[0]).not.toContain('ctx'); // wave 31: the band keeps four segments at most; the context figure is the rich band's
@@ -74,7 +74,8 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     const mocha = PALETTES.mocha;
     expect(cellOf(head, '◖').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
     expect(cellOf(head, '◗').props).toMatchObject({ color: mocha.accent, backgroundColor: mocha.panel });
-    const filled = cells(head).filter((t) => t.props.backgroundColor !== mocha.panel);
+    const cap = cells(head).slice(0, cells(head).findIndex((t) => String(t.props.children).includes('◗')) + 1); // the wordmark; the state segment after it is its own fill (wave 35)
+    const filled = cap.filter((t) => t.props.backgroundColor !== mocha.panel);
     expect(filled.map((t) => String(t.props.children)).join('')).toMatch(/^ ◆ A?T?L?A?S? $/); // the pill, and only the pill (the sweep's lit letter is a hole in it, on the panel)
     expect(filled.every((t) => t.props.backgroundColor === mocha.accent && t.props.bold === true)).toBe(true);
     expect(text(head)).toContain('◖ ◆ ATLAS ◗'); // the literal ribbon text, whatever the sweep lights
@@ -94,7 +95,7 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   });
   test('latte paints the latte panel; ASCII swaps the capsule; NO_COLOR keeps words and drops every colour', () => {
     const latte = panel(160, { ui: { theme: 'latte', ascii: false, color: 'truecolor' } });
-    expect(cells(latte.rowNodes[0]!).filter((t) => t.props.backgroundColor === PALETTES.latte.panel).length).toBeGreaterThan(3);
+    expect(cells(latte.rowNodes[0]!).filter((t) => t.props.backgroundColor === PALETTES.latte.panel).length).toBeGreaterThanOrEqual(2); // the capsule's two ends; the segments after it are their own fills (wave 35)
     expect(cellOf(latte.rowNodes[0]!, '◖').props.color).toBe(PALETTES.latte.accent);
     const ascii = panel(160, { ui: { theme: 'mocha', ascii: true, color: 'truecolor' } });
     expect(ascii.rows[0]).toContain('[ATLAS]');
@@ -124,9 +125,9 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.replace(/ +\[-\] *$/, '').trim(); // wave 32: the bar's own `[-]` is not part of the figures
     expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
-    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed`); // words, as at 150 (critique 16 A5)
-    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4`); // 40 columns (wave 33: the bar holds no handle, so the clock stays): the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
+    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 ▌ todo 1/4 ▌ ${lspin(3)} 1 running · ■ 1 failed`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 ▌ todo 1/4 ▌ ${lspin(3)} 1 running · ■ 1 failed`); // words, as at 150 (critique 16 A5)
+    expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 ▌ todo 1/4`); // 40 columns (wave 33: the bar holds no handle, so the clock stays): the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
   });
   test('idle shows the last run under the band', () => {
     const snapshot = busySnap({ comms: [] });
@@ -396,7 +397,7 @@ describe('below 80 columns: only the band, one row', () => {
   test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running · ■ 1 failed` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.replace(/ +\[-\] *$/, '').trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed`); // wave 32: minus the bar's `[-]`
+    expect(rows[0]!.replace(/ +\[-\] *$/, '').trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 ▌ todo 1/4 ▌ ${lspin(3)} 1 running · ■ 1 failed`); // wave 32: minus the bar's `[-]`
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {

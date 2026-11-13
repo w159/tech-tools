@@ -9,7 +9,7 @@ import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, P
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What RESULT reads when the agent has no outcome or call to show (its last tool word): never the state word again. */ fallback?: string; /** The LAST column: the elapsed clock since the agent started (`0:13`), frozen at its end. */ elapsed?: string };
+export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What RESULT reads when the agent has no outcome or call to show (its last tool word): never the state word again. */ fallback?: string; /** The LAST column: the elapsed clock since the agent started (`0:13`), frozen at its end. */ elapsed?: string; /** Tool calls the host counted for the agent (wave 35, the finish card's own figure): the CALLS column of the done table; absent when none were seen, never guessed. */ calls?: number };
 /** The one spinner frame of the HUD: the shared clock's frame (spinFrameOf of spinClock) when the snapshot's `now` is known, else the caller's tick.
  * Rev 5: ONE phase for every row and title in a frame (no per-row id: out-of-phase spinners read as noise, critique 17.13.0 problem 1). */
 const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), '') : o.tick ?? 0);
@@ -553,10 +553,51 @@ function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
   return forms.map(titled).find((r) => runsCells(r) <= cols) ?? titled('');
 }
 
+/** The squad as a k9s-style table once nothing runs (wave 35): `AGENT  TIME  CALLS [FN]` in 245, a row per agent (`● alpha-explorer  0:13  5 calls`), a failed agent's row in the error 203.
+ * CALLS and FN show only when the data holds a real figure (an agent without one reads `-`); narrow rows drop FN, then CALLS, never the name or the time. Null when there is no agent to list. */
+export function agentTable(s: Surfaces, o: SurfaceOpts): Run[][] | null {
+  const { ui, cols } = o;
+  const agents = s.agents.filter((a) => a.state !== 'queued');
+  if (agents.length === 0 || agents.some(isLive)) return null;
+  const callsOf = (a: AgentRow): string => (a.calls !== undefined && a.calls > 0 ? `${a.calls} ${a.calls === 1 ? 'call' : 'calls'}` : NONE);
+  const fnOf = (a: AgentRow): string => resultOf(a);
+  const times = agents.map((a) => (a.elapsed && a.elapsed !== NONE ? a.elapsed : NONE));
+  const timeW = Math.max(4, maxLen(times));
+  const hasCalls = agents.some((a) => callsOf(a) !== NONE);
+  const hasFn = agents.some((a) => fnOf(a) !== NONE);
+  const callsW = Math.max(5, maxLen(agents.map(callsOf)));
+  const fnW = Math.max(2, maxLen(agents.map(fnOf)));
+  const NAME0 = 3; // ` ● name`: the glyph at 1, the name at 3
+  const nameFull = Math.max(5, maxLen(agents.map((a) => flat(a.name))));
+  const fits = (nameW: number, calls: boolean, fn: boolean): boolean => NAME0 + nameW + 2 + timeW + (calls ? 2 + callsW : 0) + (fn ? 2 + fnW : 0) < cols;
+  const form = ([[true, true], [true, false], [false, false]] as const).map(([c, f]) => [c && hasCalls, f && hasFn] as const).find(([c, f]) => fits(nameFull, c, f));
+  const [showCalls, showFn] = form ?? [false, false];
+  let nameW = nameFull;
+  if (!form) while (nameW > 5 && !fits(nameW, false, false)) nameW--; // a narrow row clips the name last, after FN, CALLS
+  const failedN = agents.filter((a) => a.state === 'failed').length;
+  const counts = stateCounts(agents.map((a) => a.state));
+  const lead = failedN > 0 ? [stateRun('failed', ui), t(' '), t(`${failedN} failed`, ui.ascii ? 'text' : 'bad'), ...(counts.split(' · ').filter((x) => !/ failed$/.test(x)).length ? [t(` · ${counts.split(' · ').filter((x) => !/ failed$/.test(x)).join(' · ')}`, 'sub')] : [])] : [stateRun('done', ui), t(' '), t(counts, 'sub')];
+  const head = [lead, lead.slice(0, 1)].map((mid) => titleRow(cols, 'SUBAGENTS', '', mid, ui, false, false)).find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'SUBAGENTS', '', [], ui, false, false);
+  const cell = (text: string, w: number, tone: Run['tone']): Run => t(clipEll(text, w, ellOf(ui)).padEnd(w), tone);
+  const cols4 = (name: string, time: string, calls: string, fn: string, tone: Run['tone'], nameTone: Run['tone']): Run[] => [
+    cell(name, nameW, nameTone), t('  ', tone), cell(time, timeW, tone),
+    ...(showCalls ? [t('  ', tone), cell(calls, callsW, tone)] : []), ...(showFn ? [t('  ', tone), cell(fn, fnW, tone)] : []),
+  ];
+  const header = [t(' '.repeat(NAME0)), ...cols4('AGENT', 'TIME', 'CALLS', 'FN', 'muted', 'muted')];
+  const rows = agents.map((a, i): Run[] => {
+    const failed = a.state === 'failed';
+    const tone: Run['tone'] = failed ? (ui.ascii ? 'text' : 'bad') : 'sub';
+    return [t(' '), stateRun(a.state, ui), t(' '), ...cols4(flat(a.name), times[i]!, callsOf(a), fnOf(a), tone, failed ? tone : 'text')];
+  });
+  return [head, header, ...rows, bottomRule(cols, ui)];
+}
+
 /** Both blocks stacked. While an agent runs they are ONE block (merged); otherwise the TODO box and the SUBAGENTS box, with no blank row between: every row of the block is content or a rule. */
-export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean }): Run[][] {
+export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean }): Run[][] {
   if (isMerged(s, o)) {
     const todos = mergedTodos(s);
+    const table = b.table === true ? agentTable(s, o) : null; // wave 35: nothing runs, so the squad's single rule gives way to the table under the plan's own closed box
+    if (table) return [...todoRows(todos, o, { spacers: false, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), close: true, merged: true, closer: bottomRule(o.cols, o.ui) }), ...table];
     return todoRows(todos, o, { spacers: false, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), close: true, merged: true, closer: mergedCloser(s, o) });
   }
   const todo = todoRows(s.todos, o, { spacers: b.spacers, extras: b.extras, cap: b.todoCap, ...(b.foldDone ? { foldDone: true } : {}), close: b.close !== false });
@@ -580,12 +621,13 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
   const n = s.todos.length;
   const m = s.agents.length;
-  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean };
+  type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean };
   const flatBox = { spacers: false, extras: false, close: true } as const; // no rail: both bottom rules
   const tries: Try[] = [];
   if (isMerged(s, o)) {
     // One block: every plan row and agent row, the ribbon and the closing rule. Only when they do not fit are the finished rows folded onto the ribbon (`3/5 · 2 done`), then the plan windowed (`0/5 · +2 more`).
     const total = mergedTodos(s).length;
+    if (agentTable(s, o)) tries.push({ spacers: false, extras: true, close: true, table: true }, { ...flatBox, table: true }); // the done table when it fits the budget; else the single rule below
     tries.push({ spacers: false, extras: true, close: true }, flatBox, { ...flatBox, foldDone: true });
     for (let cap = total - 1; cap >= 1; cap--) tries.push({ ...flatBox, todoCap: cap });
     tries.push({ ...flatBox, todoCap: 0 });

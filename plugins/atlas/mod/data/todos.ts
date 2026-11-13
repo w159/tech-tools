@@ -12,6 +12,9 @@ import { DONE_RETRIED, itemState, titleOwner, WORKER_DOWN } from '../board-model
  * plus `returned` (attention tone, so state `blocked`): the owner agent has ended but the store row is not completed, which never reads `queued`.
  * `word` is the state word as drawn when it differs from `state`. */
 export function todoState(status: string, ownerState?: UiState, retried = false): { state: UiState; word?: string } {
+  // Wave 35: one state for the item's whole life. A row whose worker died is `■ failed` from the first frame the death is known, whatever the store row reads meanwhile (pending: `◇ worker failed`, the lead's
+  // `blocked`: `▲ blocked`); only the lead closing the row (completed) leaves it, as the doubted done below. Critique 34: T2 changed glyph and word three times in one run.
+  if (ownerState === 'failed' && status !== 'completed') return { state: 'failed' };
   const state = itemState(status, ownerState);
   if (state === 'done') return ownerState === 'failed' ? { state, word: DONE_DOUBT } : retried ? { state, word: DONE_RETRIED } : { state }; // critique 17 A1: a completed row whose worker failed reads `done` in the amber tone, never the green one; critique 19 A3: its re-dispatch finished, `retried · done`
   if (ownerState === 'done' && (state === 'queued' || state === 'running' || status === 'ended')) return { state: 'blocked', word: 'returned' };

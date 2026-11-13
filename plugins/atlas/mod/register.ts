@@ -24,7 +24,7 @@ import { boardTree } from './todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';
-import { asksUser, gateTally, leadBusy, planBusy, stopRefusal, withCoreTally } from './data/runstate';
+import { asksUser, gateTally, leadBusy, planBusy, runElapsed, stopRefusal, withCoreTally } from './data/runstate';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
@@ -1358,7 +1358,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const glide = await read($, gaugeState);
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
-		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: turnOn || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(workSecsOf(runClock, clockNow) !== undefined ? { workSecs: workSecsOf(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
+		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ snapshot, live, gates, working: turnOn || (e.props.isWorking !== false && !stopSeen && runClock.startMs !== null), ...(runElapsed(runClock, clockNow) !== undefined ? { workSecs: runElapsed(runClock, clockNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, clockNow) !== undefined ? { restSecs: restSecsOf(runClock, clockNow)! } : {}), columns, tick: frame, ui: look.ui, rich: look.rich, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, lastPhase: lastRailPhase, core, motion: motionCtx, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined });
 		const agentsListed = agents.length > 0;
 		const want = hudWantRows(hudIn, columns, snapshot.now);
 		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
@@ -1412,7 +1412,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
 		const paneLive = liveWorkers(snapshot, snapshot.now);
 		const paneAgents = hudAgents(paneLive, snapshot.squad, queuedMembers(snapshot));
-		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking : runClock.startMs !== null, ...(workSecsOf(runClock, paneNow) !== undefined ? { workSecs: workSecsOf(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
+		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking : runClock.startMs !== null, ...(runElapsed(runClock, paneNow) !== undefined ? { workSecs: runElapsed(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
 		const elapsedMs = runClock.startMs !== null ? paneNow - runClock.startMs : runClock.ranMs !== undefined && runClock.endedMs !== undefined ? runClock.ranMs + (paneNow - runClock.endedMs) : undefined;
 		const runSecs = runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock);
 		return sidebarTree($.ui.resolve(e), {

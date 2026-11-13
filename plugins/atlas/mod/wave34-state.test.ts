@@ -105,14 +105,15 @@ describe('1. frozen working: an open dispatch with no live worker is blocked, ne
       expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · 1 dispatch open/);
       expect(f.band).not.toMatch(BRAILLE);
       expect(f.band).not.toMatch(/working|fixing/);
-      for (const run of bandRuns(f.model).filter((x) => /blocked|dispatch open/.test(x.t))) expect([run.t, run.tone]).toEqual([run.t, 'bad']);
+      for (const run of bandRuns(f.model).filter((x) => /blocked|dispatch open/.test(x.t))) expect([run.t, run.tone, run.bgHex]).toEqual([run.t, 'ink', '#ff5f5f']); // wave 35: dark ink on the error 203 state fill
     });
     test(`${cols} columns: with no dispatch open the same turn end reads \`● done\` in the ok green`, () => {
       const f = frameOf({ ...FROZEN, dispatch: FROZEN.dispatch!.slice(0, 3), members: [] }, body, screen, { workSecs: 57 });
       expect(f.kind).toBe('done');
       expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ● done/);
       expect(f.band).not.toMatch(BRAILLE);
-      expect(bandRuns(f.model).find((x) => x.t === 'done')!.tone).toBe('ok');
+      const done = bandRuns(f.model).find((x) => x.t === 'done')!;
+      expect([done.tone, done.bgHex]).toEqual(['ink', '#87d787']); // wave 35: dark ink on the ok 114 state fill
     });
   }
   test('a live worker still holds the band working after the turn flag fell', () => {

@@ -7,11 +7,12 @@ import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
 import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
-import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts, todoState } from './data/todos';
+import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from './data/todos';
+import { planProgress } from './hud';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
-import { hostEnv, LINGER_MS, RETURNED, spinClock, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
+import { fillHex, hostEnv, LINGER_MS, spinClock, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
@@ -127,9 +128,9 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const plan = planBasis(s.todos, s.sessionId);
   const owners = workerStates(s, b.live);
   const counted = todoCounts(s); // the one count basis: header, HUD, board and side panel all read the same plan rows
-  // Wave 32: a plan row whose agent has ended and that the lead has not closed yet is done in the HUD the moment the agent stops (hud.ts settled); the band counts it on the same event, never one beat behind.
-  const handedBack = withOwnerStates(plan, owners).filter((it) => it.status !== 'completed' && todoState(it.status, it.ownerState, it.retried).word === RETURNED).length;
-  const done = Math.min(counted.total, counted.done + handedBack);
+  // Wave 35: with plan rows the band reads the TODO title's own figure (hud.ts planProgress: the HUD's rows over the HUD's agents, a row whose agent ended settled to done), so `todo n/m` and the title can never disagree; a board of dispatch rows only keeps the plan count.
+  const progress = ownPlan(s.todos ?? [], s.sessionId).length ? planProgress(ownTodos(s.todos ?? [], s.sessionId), b.live, s.squad, queuedMembers(s), now) : counted;
+  const done = Math.min(counted.total, progress.done);
   const total = counted.total;
   const tally = gateTally(withCoreTally(b.gates, b.core)); // the one gates figure: the side panel's `green of total` reads the same groups, the header contract and the dispatch plan included
   const named = (n: string): string => (b.leadName && n === 'lead' ? b.leadName : n); // comms collapse the lead's name to `lead`
@@ -166,7 +167,10 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
 /** A run as a Segment: the live theme's tone colour on the run's own fill or the panel; with NO_COLOR only bold and strike remain. */
 const seg = (x: Run, ui: Ui): Segment => {
   const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
-  return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme, ui.color), bg: surfaceHex(x.bg ?? 'panel', ui), ...style };
+  if (ui.color === 'none') return { t: x.t, ...style };
+  // A seam of the segmented bar (`▌`, `fg` a fill colour): both halves are fills, so the left half maps like one (never fitted to the panel's text contrast).
+  const seam = x.t === '▌' && x.fg !== undefined;
+  return { t: x.t, color: seam ? fillHex({ bgHex: x.fg }, ui) : runHex(x, ui.theme, ui.color), bg: fillHex(x, ui), ...style };
 };
 const segs = (l: Line, ui: Ui): Segment[] => l.runs.map((x) => seg(x, ui));
 const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : surfaceHex('panel', ui));

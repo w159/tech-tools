@@ -31,16 +31,16 @@ const AGENTS: HudAgent[] = [
 describe('B1: blocked is its own state', () => {
   test('the store word `blocked` outranks a failed owner (the lead said blocked, the killed agent stays failed)', () => {
     expect(itemState('blocked', 'failed')).toBe('blocked');
-    expect(todoState('blocked', 'failed')).toEqual({ state: 'blocked' });
+    expect(todoState('blocked', 'failed')).toEqual({ state: 'failed' }); // wave 35: the HUD row over a killed worker is failed, whatever the lead wrote
     expect(itemState('pending', 'failed')).toBe('queued'); // a row the store still holds pending stays queued under a killed agent (critique 18 B3); the owner is named failed beside it
     expect(itemState('in_progress', 'failed')).toBe('failed'); // an unmarked row the lead started still fails
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
   });
-  test('the HUD row for T2 reads blocked with the blocked glyph, and the ghost agent row stays failed', () => {
+  test('the HUD row for T2 reads failed (wave 35), and so does the ghost agent row', () => {
     const rows = text(hudLines({ todos: PLAN, agents: AGENTS }, { merge: false, cols: 120, maxRows: 30, ui, now: NOW }));
     const t2 = rows.find((r) => r.includes('T2 read ghost.py'))!;
-    expect(t2).toMatch(/\(ghost-explorer\)\s+blocked/); // the state word; the detail may still say `owner failed`
-    expect(t2).toContain(STATE_GLYPHS.blocked);
+    expect(t2).toMatch(/\(ghost-explorer\)\s+failed/);
+    expect(t2).toContain(STATE_GLYPHS.failed);
     const ghost = rows.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer /.test(r))!;
     expect(ghost).toContain('failed'); // wave 33: one failure word
     expect(ghost).not.toContain('blocked');

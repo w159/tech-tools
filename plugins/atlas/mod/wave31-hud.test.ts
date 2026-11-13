@@ -125,11 +125,12 @@ describe('1. one block, no hidden rows, no spacers', () => {
 // `● 3 done · times · N fn` once they have stopped). The old at-rest box tests are replaced by the closing-rule form below.
 describe('2. agents ride their TODO rows in every state; SUBAGENTS is the lower rule of the block', () => {
   for (const [, screen, cols] of SIZES) {
-    test(`${cols} cells: agent and clock are right-aligned on the row, and there is no SUBAGENTS box in any state`, () => {
+    test(`${cols} cells: agent and clock are right-aligned on the row; the SUBAGENTS box exists only once every agent has stopped (wave 35: the table)`, () => {
       for (const { st, f } of scenario(screen, cols)) {
-        expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS/.test(r)), `${st.name}: no SUBAGENTS box`).toBe(false);
+        const settled = st.running === 0 && st.returned > 0;
+        expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS/.test(r)), `${st.name}: the table appears at rest only`).toBe(settled);
         if (st.running + st.returned === 0) continue;
-        expect(f.rows.some((r) => /^╰.*▸ SUBAGENTS.*╯\s*$/.test(r)), `${st.name}: the lower rule carries the title`).toBe(true);
+        expect(f.rows.some((r) => (settled ? /^╭.*▸ SUBAGENTS.*╮\s*$/ : /^╰.*▸ SUBAGENTS.*╯\s*$/).test(r)), `${st.name}: the title rule`).toBe(true);
       }
       for (const { st, f } of scenario(screen, cols)) {
         for (let i = st.returned; i < st.returned + st.running; i++) {
@@ -139,19 +140,20 @@ describe('2. agents ride their TODO rows in every state; SUBAGENTS is the lower 
         }
       }
     });
-    test(`${cols} cells: at rest the lower rule reads \`● N done\` with the times, and carries no column header`, () => {
+    test(`${cols} cells: at rest the title reads \`● N done\` over an AGENT TIME table, and never the old STATE TASK header`, () => {
       for (const { st, f } of scenario(screen, cols)) {
         if (st.running !== 0 || st.returned === 0) continue;
-        const rule = f.rows.find((r) => /^╰.*▸ SUBAGENTS/.test(r));
+        const rule = f.rows.find((r) => /^╭.*▸ SUBAGENTS/.test(r));
         expect(rule, st.name).toBeDefined();
-        expect(rule!, st.name).toMatch(/● \d+ done/);
+        expect(rule!, st.name).toMatch(st.blocked ? /■ \d+ failed|● \d+ done/ : /● \d+ done/);
+        expect(f.rows.some((r) => /^\s+AGENT\s+TIME\b/.test(r)), st.name).toBe(true);
         expect(f.rows.some((r) => /AGENT\s+STATE\s+TASK/.test(r)), st.name).toBe(false);
       }
     });
   }
   test('the SUBAGENTS rule is the same shape at 150 and 110 (docked and not)', () => {
-    const rule = (cols: number, screen: number): string => scenario(screen, cols).find((x) => x.st.name === 'idle')!.f.rows.find((r) => /^╰.*▸ SUBAGENTS/.test(r))!;
-    for (const [c, sc] of [[93, 45], [56, 40]] as const) expect(rule(c, sc)).toMatch(/^╰─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done.*╯\s*$/);
+    const rule = (cols: number, screen: number): string => scenario(screen, cols).find((x) => x.st.name === 'idle')!.f.rows.find((r) => /^╭.*▸ SUBAGENTS/.test(r))!;
+    for (const [c, sc] of [[93, 45], [56, 40]] as const) expect(rule(c, sc)).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done.*╮\s*$/);
   });
 });
 

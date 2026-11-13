@@ -35,6 +35,8 @@ export type HudAgent = {
   key?: string;
   /** When the worker last changed state (ms epoch; a finished worker's end time), so a done row can linger. */
   since?: number;
+  /** Tool calls the host counted for the worker (wave 35): the CALLS column of the done table. Absent when none were seen. */
+  calls?: number;
 };
 
 const GENERIC = new Set(['unknown', 'general-purpose', 'task', '']);
@@ -80,7 +82,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
   const listed = [...live].sort((a, b) => started(a) - started(b)).map((w) => {
     const s = squad.find((a) => a.name === w.name);
     const name = displayName(w.name, w.role, s?.task);
-    return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, startedAt: w.startedAt, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, startedAt: w.startedAt, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(w.calls?.length ? { calls: w.calls.length } : {}), ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
   return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
 }
@@ -137,6 +139,13 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
   const focus = at >= 0 ? at : rows.findIndex((r) => r.state !== 'done');
   if (focus >= 0) rows[focus] = { ...rows[focus]!, focus: true };
   return rows;
+}
+
+/** The TODO title's `done/total`, from the very rows the block draws (todoModel over the HUD's own agents, a row whose agent has ended settled to done as the live slot draws it): the band's `todo n/m` reads this,
+ * so the two can never disagree (wave 35; critique 34: `0/5` under a TODO title of `1/5`). `todos` are this session's rows (ownTodos). */
+export function planProgress(todos: readonly TodoItem[], live: readonly LiveWorker[], squad: readonly SquadAgent[], queued: readonly string[], now: number): { done: number; total: number } {
+  const rows = todoModel(todos.filter(isPlanItem), now, ownerStatesOf(hudAgents(live, squad, queued)), true);
+  return { done: rows.filter((r) => r.state === 'done').length, total: rows.length };
 }
 
 /** `opus`, `sonnet-5`: the model without its provider and the `claude-` prefix; nothing is guessed. */
@@ -268,7 +277,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
