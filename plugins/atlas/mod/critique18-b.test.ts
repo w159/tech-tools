@@ -50,11 +50,11 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect(open(11)).toHaveLength(3);
     expect(open(10)).toHaveLength(2);
     expect(hud(93, 10)[0]).not.toMatch(/\+\d+ more/); // done and queued rows ride the summary row, not the title
-    expect(open(9)).toHaveLength(1); // state 39: the summary row takes a slot whenever a row is left out, and it counts the hidden open row too (`■ 1 more failed`), never the title
-    expect(hud(93, 9).some((r) => /^ {2}● 1 done {2}◇ 2 queued {2}■ 1 more failed/.test(r))).toBe(true);
+    expect(open(9)).toHaveLength(1); // state 39: the summary row takes a slot whenever a row is left out, and it counts the hidden open row too (`■ 1 failed`), never the title
+    expect(hud(93, 9).some((r) => /^ {2}● 1 done {2}■ 1 failed {2}◇ 2 queued/.test(r))).toBe(true);
     expect(hud(93, 9)[0]).not.toMatch(/\+\d+ more/);
     expect(open(8)).toHaveLength(0);
-    expect(hud(93, 8).some((r) => /^ {2}● 1 done {2}◇ 2 queued {2}■ 2 more failed/.test(r))).toBe(true);
+    expect(hud(93, 8).some((r) => /^ {2}● 1 done {2}■ 2 failed {2}◇ 2 queued/.test(r))).toBe(true);
     expect(hud(93, 8)[0]).not.toMatch(/\+\d+ more/);
     for (const n of [14, 12, 11, 10, 9, 8]) {
       expect([n, agentRows(n)]).toEqual([n, 3]); // a running or listed agent keeps its row while a plan row can give way
