@@ -5,6 +5,7 @@ import { resetWorkerFacts } from './data/live';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
+import { forgetBandFrame } from './motion';
 import { type Ui } from './atlas-ui';
 import { bodyLines, lineText, type PanelLine } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
@@ -48,8 +49,8 @@ const snap = (o: { notes?: boolean; running?: boolean } = {}) => ({
 type Run = NonNullable<SidebarModel['run']>;
 const RUN: Run = { kind: 'working', secs: 57, startMs: NOW - 57000 };
 const model = (s: never, view: SidebarView, columns: number, rows: number, run: Run | null = RUN, look: Ui = ui): SidebarModel => ({ snapshot: s, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows, look, ...(run ? { run } : {}) } as SidebarModel);
-const render = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN, look: Ui = ui): string[] => { forgetRefusals(); return textOf(sidebarTree(els, model(s, view, columns, rows, run, look), on) as unknown as Node).split('\n'); };
-const bodyOf = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN): PanelLine[] => { forgetRefusals(); return bodyLines(panelModelOf(model(s, view, columns + 1, rows, run), ui, columns)); };
+const render = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN, look: Ui = ui): string[] => { forgetRefusals(); forgetBandFrame(); return textOf(sidebarTree(els, model(s, view, columns, rows, run, look), on) as unknown as Node).split('\n'); };
+const bodyOf = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN): PanelLine[] => { forgetRefusals(); forgetBandFrame(); return bodyLines(panelModelOf(model(s, view, columns + 1, rows, run), ui, columns)); };
 const body = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN): string[] => bodyOf(view, columns, rows, s, run).map((l) => lineText(l).trimEnd());
 const BRAILLE = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
 const CIRCLE = /[◐◓◑◒]/;

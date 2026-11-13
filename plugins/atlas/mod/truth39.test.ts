@@ -2,6 +2,10 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { newRunClock, runLive, stepRun } from './band-motion';
 import { runElapsed } from './data/runstate';
+import { panelWorld } from '../contracts/panel-world';
+import type { Ui } from './atlas-ui';
+import { bandFrame, forgetBandFrame, noteBandFrame } from './motion';
+import { lineText, panelLines, type PanelModel } from './panel-layout';
 
 describe('step 1: no `working` after done or idle without a new prompt, and the clock never passes the run total', () => {
   // live-150-2 f0105 `idle 0:39`, f0106 `working 3:11`: /atlas-cc ran as a host turn, no prompt armed a run, and runElapsed added the whole rest to the closed run.
@@ -27,5 +31,44 @@ describe('step 1: no `working` after done or idle without a new prompt, and the 
     const total = runElapsed(c, 44_100)!;
     expect(runElapsed(c, 195_000)).toBe(total);
     expect(runElapsed(c, 44_100 + 1_000)).toBeGreaterThanOrEqual(total); // a resume inside the grace still counts on
+  });
+});
+
+describe('step 2: the side panel phase row prints the band\'s glyph, word and clock', () => {
+  const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  const NOW = 2_000_000;
+  const rowOf = (over: Partial<PanelModel>): string => {
+    const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'working', secs: 37 }, phase: 'research', ...over });
+    return panelLines(m).map(lineText).find((l) => /^\s*phase\b/.test(l))!;
+  };
+  test('the band note carries the state word', () => {
+    noteBandFrame(2, 36, NOW, 'blocked');
+    expect(bandFrame()).toEqual({ frame: 2, secs: 36, kind: 'blocked' });
+    forgetBandFrame();
+  });
+  test('stoprun-150-3 f0074: the band reads blocked 0:36, the panel (own reading: working 0:37) reads `▲ blocked 0:36`', () => {
+    noteBandFrame(2, 36, NOW, 'blocked');
+    expect(rowOf({}).replace(/\s+/g, ' ').trim()).toBe('phase ▲ blocked 0:36');
+    forgetBandFrame();
+  });
+  test('live-150-2 f0106: the band reads idle 0:39, the panel does not say working', () => {
+    noteBandFrame(2, 39, NOW, 'idle');
+    const row = rowOf({ run: { kind: 'working', secs: 191 } });
+    expect(row.replace(/\s+/g, ' ').trim()).toBe('phase ○ idle 0:39');
+    forgetBandFrame();
+  });
+  test('a stale note is ignored: the panel keeps its own reading', () => {
+    noteBandFrame(2, 36, NOW - 5_000, 'blocked');
+    expect(rowOf({})).toContain('working');
+    forgetBandFrame();
+  });
+  test('the phase strip does not sit lit on `research` after the plan finished and the band rests', () => {
+    const todos = [1, 2, 3].map((i) => ({ id: `t${i}`, label: `T${i}`, state: 'done' as const }));
+    noteBandFrame(2, 39, NOW, 'idle');
+    const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'idle', secs: 39 }, phase: 'research', todos });
+    const chain = panelLines(m).map(lineText).find((l) => /research ›/.test(l))!;
+    expect(chain).toMatch(/● research/);
+    expect(chain).not.toMatch(/○ research/);
+    forgetBandFrame();
   });
 });

@@ -7,7 +7,7 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { brandMark, capsule, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
-import { animateRow, paneClockSecs, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
+import { animateRow, paneBandRun, paneClockSecs, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
@@ -255,13 +255,26 @@ const groupPending = (g: PanelGate): boolean => groupOk(g) && g.lines.some((l) =
 const groupMark = (g: PanelGate, ui: Ui): Run => (groupPending(g) ? stateRun('queued', ui) : groupOk(g) ? stateRun('done', ui) : gateMark(ui));
 const groupFailing = (g: PanelGate): number => g.lines.filter((l) => !l.ok).length;
 
+/** Truth 39: the run state the panel prints is the band's own word and clock while the band's note is fresh (live-150-2 f0106: `phase working 0:39` under a band that said idle; stoprun-150-3 f0074: `working 0:37` under `blocked 0:36`).
+ * Without a fresh note the model's own run state stands. */
+const runOf = (m: PanelModel): PanelModel['run'] => {
+  if (!m.run) return m.run;
+  const b = paneBandRun(m.now);
+  if (!b) return m.run;
+  const { secs: _own, ...rest } = m.run;
+  const secs = b.secs ?? m.run.secs;
+  return { ...rest, kind: b.kind, ...(secs !== undefined ? { secs } : {}) };
+};
+const withBandRun = (m: PanelModel): PanelModel => { const run = runOf(m); return run === m.run ? m : { ...m, run }; };
+
 /** `phase   research   2/4`: the lit phase and its place on the rail. While the Stop gate refused the stop (or the lead declared it) the phase is `blocked` with no rail
  * number: never `done 5/5` beside a blocked band (critique 16 A3, stoprun f0090). */
-function phaseRow(m: PanelModel): PanelLine {
+function phaseRow(m0: PanelModel): PanelLine {
+  const m = withBandRun(m0);
   // Wave 31 (critique 29: `phase ● done` under a working band, `◒ research` after done, `● done` under an idle band): the band's own state (data/runstate via band.tsx) is printed as the band prints it.
   if (m.run) {
     const ph = m.phase && m.phase !== 'blocked' && m.phase !== 'done' ? r(` ${dot(m.ui)} ${m.phase}`, 'dim') : null;
-    const tail = m.run.kind === 'working' || m.run.kind === 'idle' ? (ph ? [ph] : []) : [];
+    const tail = m.run.kind === 'working' ? (ph ? [ph] : []) : []; // idle reads as the band does: `○ idle 0:39`
     if (m.run.kind === 'blocked') return line([label('phase', m.cols), mark('blocked', m, 'phase'), r('blocked', 'bad', { bold: true })]);
     if (m.run.kind === 'done') return line([label('phase', m.cols), mark('done', m, 'phase'), r('done', 'ok', { bold: true })]);
     if (m.run.kind === 'working') return line([label('phase', m.cols), mark('running', m, 'phase'), r('working', 'accent', { bold: true }), ...tail]);
@@ -463,9 +476,11 @@ function phaseChain(m: PanelModel, compact: boolean | 'auto' = false): PanelLine
   if (compact === 'auto') { const full = phaseChainRuns(m, false, true); return full.length && rowWidth(full[0]!.runs) > m.cols ? phaseChain(m, true) : phaseChain(m); }
   return phaseChainRuns(m, compact, false);
 }
-function phaseChainRuns(m: PanelModel, compact: boolean, raw: boolean): PanelLine[] {
+function phaseChainRuns(m0: PanelModel, compact: boolean, raw: boolean): PanelLine[] {
+  const m = withBandRun(m0);
   if (!m.phases.length) return [];
-  const kind = m.run?.kind ?? 'working';
+  const finished = m.todos.length > 0 && m.todos.every((t) => t.state === 'done'); // a finished plan at rest is the end of the run: the strip shows where the run got to, not a lit `research`
+  const kind = m.run?.kind === 'idle' && finished ? 'done' : m.run?.kind ?? 'working';
   const seen = m.entered ? new Set(m.entered) : null;
   // The lit phase: the rail's own, or (a blocked reply names no phase) the last one the run entered.
   const litAt = m.phases.indexOf(m.phase);
@@ -561,10 +576,11 @@ const STATUS_SPARK = 12;
 const dimLine = (m: PanelModel, text: string): PanelLine => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(text, 'dim')], m.cols));
 
 /** `phase  ▲ blocked 0:33` and under it the true phases (`● research › ⠋ implement › · verify`): the word and the clock are the band's own. */
-function statusPhase(m: PanelModel): PanelLine[] {
+function statusPhase(m0: PanelModel): PanelLine[] {
+  const m = withBandRun(m0);
   const head = phaseRow(m);
   const secs = m.run?.secs;
-  return [secs !== undefined && m.run?.kind !== 'idle' ? { ...head, runs: [...head.runs, r(` ${shortAge(paneClockSecs(secs, m.now))}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
+  return [secs !== undefined ? { ...head, runs: [...head.runs, r(` ${shortAge(paneClockSecs(secs, m.now))}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
 }
 
 /** One row per agent: its mark, whole name, 12 braille cells of its calls over the run's window, and its time. */
