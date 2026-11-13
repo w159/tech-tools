@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.14.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.15.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -86,31 +86,41 @@ Terms used below: a "colony" is the set of named worker subagents a lead session
 ## What it looks like
 
 Every image below is a real capture of the installed plugin, taken from a tmux
-session or the browser.
-
-**Mission Control band.** The band is the first row above the prompt. It leads
-with one of four states (`⠋ working 0:42`, `● done · 1:08`,
-`○ idle · last run 1:08`, `▲ blocked · needs: close dispatch T2`), then
-`todo N/M`, the running agents and, when a gate fails, a `△ 2 gates to check`
-segment. The `⠋` is a braille spinner that steps every 100 ms. The run clock
-starts at your prompt and stops when Claude Code reports its turn idle. Set
-`ATLAS_BAND_RICH=1` for the tall form with the phase rail. The HUD under the band
-draws the TODO and SUBAGENTS boxes: closed rounded boxes, with SUBAGENTS as a
-table of `AGENT STATE MODEL TASK LAST RESULT` (MODEL from 120 columns). The two
-boxes keep or lose their rules together, so a top rule never stands without a
-bottom one. When the slot is short the boxes give up, in order, the blank row,
-the closing rules, finished TODO rows, agent rows and TODO rows; hidden rows are
-counted in the title as `+N more`. A run holds its HUD height from the first
-frame, so the band keeps its screen row. The side panel never says `done` while a
-dispatch is open or a worker runs. Every agent run time reads `m:ss`, a row whose
-agent returned is a neutral `◉`, and 256-colour terminals see only Atlas's palette
-indices. Detail and file:line references are in
+session or the browser. The terminal captures of the band, boxes and cards were taken from the 17.14.0
+build; the 17.15.0 layout of those surfaces is the one described here and in
 [plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
 
-![Band, TODO box and SUBAGENTS box with one worker running, side panel on the route tab](img/showcase/cc-band-running.png)
+**Mission Control band.** The band is the row above the prompt: the `◖ ◆ ATLAS ◗`
+pill, then three filled segments. The first is the run state with its clock
+(`⠋ working 0:42`, `● done 1:08`, `○ idle · 1:08`, `▲ blocked · stop refused
+0:37`), the second is `todo N/M` with a meter, and the third counts the agents
+(`⠋ 2 running · ● 1 done · ■1`, or `no agents`). A failing gate adds a
+`△ gates 2/3` chip. The band reads `working` whenever the host's turn is on, with a
+turning braille spinner that steps every 100 ms. The run clock starts at your
+prompt, never steps back, and stops when Claude Code reports its turn idle.
+`ATLAS_BAND_RICH=1` draws a tall form with the phase rail.
 
-When the run ends the band reads `done` for 30 seconds and then settles into
-`idle · last run`, with the gate warning still shown.
+The HUD under the band draws the TODO and SUBAGENTS boxes. TODO rows share fixed
+columns (title, state, owner, time); rows that do not fit are counted on one dim
+summary row (`● 2 done  ◇ 1 queued`) and a failed row is the last to hide.
+SUBAGENTS is a table of `AGENT STATE TIME CALLS FN LAST`, with `LAST` the worker's
+last tool action (`edit gamma.py`). A run holds its HUD height from the first
+frame, so the band keeps its screen row.
+
+The side panel has six tabs: `status`, `team`, `channel`, `gates`, `core` and
+`board` (keys `r t c g k o`). The board tab lists the plan items and draws a Gantt
+timeline, one lane per agent with the lead first. The panel never says `done`
+while a dispatch is open or a worker runs. The transcript gets one-row cards: a
+finish card per worker (`▌ ◆ ATLAS  ● done  beta-explorer  0:13 · 3 calls`), one
+run card per clean run, and one blocked card per blocked spell. 256-colour
+terminals see only Atlas's palette indices. The rendered text of each surface,
+with the code file each was checked against, is in
+[plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
+
+![Band, TODO box and SUBAGENTS box with one worker running, side panel on the status tab](img/showcase/cc-band-running.png)
+
+When the run ends the band reads `done` with the frozen run time for 30 seconds
+and then settles into `idle · 1:08`, with the gate chip still shown.
 
 ![Idle band after a wave, with the gate warning and the finished TODO and SUBAGENTS boxes](img/showcase/cc-band-idle.png)
 

@@ -183,6 +183,13 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.15.0 follow-ups (added 2026-11-13)
+
+The shipped change is in `plugins/atlas/CHANGELOG.md` (17.15.0).
+
+- [planned] Retake the `img/showcase/cc-band-*.png` and `cc-card-done.png` captures from the 17.15.0 build after reinstall; the root README says they come from 17.14.0.
+- [planned] `contracts/hud-golden.ts` holds the older `agentRows` form (`AGENT STATE TASK LAST RESULT`); the table `hudLines` draws (`agentTable`: `AGENT STATE TIME CALLS FN LAST`) has no golden file. Add one generated from `mod/hud-surface.ts`.
+
 ### Atlas 17.4.3 follow-ups (added 2026-11-10)
 
 The shipped change is in `plugins/atlas/CHANGELOG.md` (17.4.3, unreleased); plan: `docs/plans/2026-11-10_colony-routing-enforcement.md`.
