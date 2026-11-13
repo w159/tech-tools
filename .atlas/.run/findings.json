@@ -11845,5 +11845,22 @@
     "status": "needs-evidence",
     "verified_at": "2026-11-12T14:36:23+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "REL-17.14.0",
+    "surface": "claude CLI in tmux",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 17.14.0 released",
+    "evidence": [
+      "origin main and tag atlas-v17.14.0 at 4df72e1b (ls-remote); bun 3509 pass 0 fail x3 modes; tsc ok; contract 107 passed; doctor 0 failures; real CLI smoke shows ATLAS and SIDEPANEL markers"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-13T00:00:30+00:00",
+    "verified_by": "lead-104043"
   }
 ]

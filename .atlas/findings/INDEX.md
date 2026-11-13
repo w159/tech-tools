@@ -64,6 +64,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-13 | REL-17.14.0 | verified | atlas 17.14.0 released | [2026-11-13_rel-17-14-0.md](2026-11-13_rel-17-14-0.md) |
 | 2026-11-12 | w17-band-count | verified | band todo n/m equals TODO header n/m in all compared frames (150, 110, stoprun) - claim holds; 110 band missing in 25 frames | [2026-11-12_w17-band-count.md](2026-11-12_w17-band-count.md) |
 | 2026-11-12 | verifier-6678-L1 | verified | critique 18 L1: done TODO row folded out of HUD by foldDone, panel still shows it | [2026-11-12_verifier-6678-l1.md](2026-11-12_verifier-6678-l1.md) |
 | 2026-11-12 | tc3c328-taskstop-claim | verified | TaskStop-killed agent reads failed on every agent surface at e4a8186a (todo row T2 reads done only when lead completes it) | [2026-11-12_tc3c328-taskstop-claim.md](2026-11-12_tc3c328-taskstop-claim.md) |
