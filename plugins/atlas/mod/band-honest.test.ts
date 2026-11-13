@@ -40,7 +40,7 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
     expect(lead(STATES.working!)).toMatch(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:42 · todo 3\/5 · ⠋ 2 running/);
     expect(lead(STATES.done!)).toMatch(/^● done · 1:08 · todo 5\/5/);
     expect(lead(STATES.idle!)).toMatch(/^○ idle · last run 1:08 · todo 5\/5/);
-    expect(lead(STATES.blocked!)).toMatch(/^▲ blocked · needs: close dispatch T2 · fixing · todo 3\/5/);
+    expect(lead(STATES.blocked!)).toMatch(/^▲ blocked · needs: close dispatch T2 · todo 3\/5/);
   });
   test('the done count is said once, and a gate warning never leads', () => {
     const t = head(model({ cols: 110, ...STATES.done! }));

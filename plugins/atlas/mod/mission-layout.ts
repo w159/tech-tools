@@ -64,6 +64,8 @@ export type MissionModel = {
   openDispatchTitle?: string;
   /** The lead is mid-turn: its own tool runs or it is thinking (data/runstate leadBusy), or a plan row is running (planBusy, the HUD's TODO rule), though no worker is listed. The band never reads `idle` then. */
   busy?: boolean;
+  /** Claude Code band (wave 34): a queued worker is dispatched but not listed by the host; it does no work, so it never holds the band `working`. */
+  queuedIdle?: boolean;
   /** Workers to show: running, waiting, failed and recently finished (never parked). */
   workers: readonly MissionWorker[];
   /** The newest channel message. */
@@ -145,12 +147,14 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n =
 // ---- band ------------------------------------------------------------------------------
 
 const isRunning = (m: MissionModel): boolean => m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
+/** A worker that is genuinely alive (wave 34): running, thinking or waiting. A queued one (dispatched, the host never listed it) does no work: once the host turn is over nothing will start it, so it never holds the band `working`. */
+export const isAlive = (m: MissionModel): boolean => m.workers.some((w) => w.state === 'running' || w.state === 'thinking' || w.state === 'waiting' || (w.state === 'queued' && !m.queuedIdle)); // omp has no host turn: its queued member is starting; the Claude Code band sets `queuedIdle` (a queued dispatch the host never listed starts nothing once the turn is over)
 const uiOf = (m: MissionModel): Ui => m.ui ?? uiFromEnv();
 /** A mission worker's place in the six-word vocabulary. */
 export const uiStateOf = (s: WorkerState): UiState => (s === 'thinking' ? 'running' : s);
 
 /** Failed workers on the band: the listed workers, and on an idle band the last wave's failures too (idle never hides a failure). */
-const failedCount = (m: MissionModel): number => Math.max(m.workers.filter((w) => uiStateOf(w.state) === 'failed').length, isRunning(m) ? 0 : m.lastRun?.failed ?? 0);
+const failedCount = (m: MissionModel): number => Math.max(m.workers.filter((w) => uiStateOf(w.state) === 'failed').length, isAlive(m) ? 0 : m.lastRun?.failed ?? 0);
 /** Of those, the ones whose dispatch row was closed: no longer a failure to act on (round 3: `■ 1 failed` stayed red after the row closed). */
 const closedCount = (m: MissionModel): number => Math.min(Math.max(0, m.closed ?? 0), failedCount(m));
 
@@ -241,13 +245,13 @@ export type BandKind = 'working' | 'idle' | 'done' | 'blocked';
 /** `2 gates to check`, `1 gate to check`: a failing gate is something to look at, never a block and never the lead. */
 const gatesToCheck = (failing: readonly string[]): string => `${failing.length} ${failing.length === 1 ? 'gate' : 'gates'} to check`;
 /** Dispatch rows the store holds open while nothing runs: no listed worker, no host turn (wave 33). Stop refuses on them, so the band says so on the frame the turn ends, with or without the refusal. */
-export const dispatchHeld = (m: MissionModel): number => (!isRunning(m) && !m.busy ? Math.max(0, m.openDispatch ?? 0) : 0);
+export const dispatchHeld = (m: MissionModel): number => (!isAlive(m) && !m.busy ? Math.max(0, m.openDispatch ?? 0) : 0);
 const dispatchOpenWords = (n: number): string => `${n} ${n === 1 ? 'dispatch' : 'dispatches'} open`;
 export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; kind: BandKind; reason: { long: string; short: string } } {
   const stopGates = m.stopGates ?? [];
   const held = dispatchHeld(m);
   const blocked = !!m.blocked || stopGates.length > 0 || held > 0;
-  const quiet = !blocked && !isRunning(m) && !m.busy;
+  const quiet = !blocked && !isAlive(m) && !m.busy;
   const failing = (m.checks ?? []).filter((c) => !c.ok).map((c) => c.name ?? c.id);
   // Idle in every way but a failing check: a warning, not a block. A band that still says `done` with a check failing warns too (critique 14: `done` beside an amber triangle).
   const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? gatesToCheck(failing) : undefined;
@@ -321,7 +325,7 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
       return [
         mark(ui.ascii ? GLYPH5_ASCII.blocked : GLYPH5.blocked, 'bad', true), r(' blocked', 'bad', true),
         ...(why && !retrying ? [r(` · ${why}`, 'bad', true)] : []),
-        ...(retrying ? [r(' · retrying', 'bad')] : (m.busy || isRunning(m)) && o.fix ? [r(' · fixing', 'bad')] : []), // static words, no spinner: blocked is a stopped state (critique 28); `fixing` only while the host turn or a worker runs
+        ...(retrying ? [r(' · retrying', 'bad')] : []), // static words, no spinner: blocked is a stopped state (critique 28); wave 34: no `fixing`, a blocked band claims no work
       ];
     }
   }
@@ -342,7 +346,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const fig = figure(m);
   const glue: Run = r(' · ', 'sub'); // critique 18 A3: always a middle dot between segments
   const blockedWords = blockedRuns(m, ui, true);
-  const lead = (o: LeadOpts): Run[] => (st.kind === 'done' ? animateRow(leadRuns(m, ui, st, reason.long, o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, reason.long, o)); // wave 31: the done word fades 231, 151, 114
+  const lead = (o: LeadOpts): Run[] => (st.kind === 'done' && m.motion?.entry('band:lead')?.state === 'done' ? animateRow(leadRuns(m, ui, st, reason.long, o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, reason.long, o)); // wave 31: the done word fades 231, 151, 114; wave 34: only once the motion has seen `done` (an entry that still reads another state would mix a lead tint into the resting 114), so the fade steps down once and holds
   // `phase n/m` only when no plan carries the progress (the lead's reply header and the plan's done count are two clocks).
   // The bar's label is `todo n/m` for the whole run (it read `phase 1/5` until the plan arrived, then flipped). With no plan items the bar says no count at all (`○ idle`, never `todo 0/0`). `word` false: `0/5`, the narrow form that keeps the clock.
   const todoSeg = (open: boolean, word = true): Run[] => (m.total ? [glue, r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${open ? openMore(m) : ''}`, 'sub')] : m.bar ? [] : [glue, r(`phase ${phaseNo}`, 'sub')]);

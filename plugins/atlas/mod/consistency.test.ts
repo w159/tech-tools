@@ -220,7 +220,7 @@ function owed(name: string, f: Facts, o: { attention?: boolean } = {}): string[]
   if (f.channel) same('channel header', f.channel, expected.channel);
   if (f.tasks) same('task ids', f.tasks, expected.tasks);
   if (f.agents) {
-    for (const s of STATES) if (f.agents[s] !== undefined || (s !== 'done' && expected.agentCount(s) > 0 && !(o.attention && (s === 'queued' || s === 'blocked')) && (o.attention || name.includes('panel') || name.includes('hud')))) { // wave 31: the band states at most running and one failure word, so it owes no queued or blocked count
+    for (const s of STATES) if (!(s === 'queued' && name.includes('hud')) && (f.agents[s] !== undefined || (s !== 'done' && expected.agentCount(s) > 0 && !(o.attention && (s === 'queued' || s === 'blocked')) && (o.attention || name.includes('panel') || name.includes('hud')))) ) { // wave 34: the SUBAGENTS rule counts agents only (a queued dispatch is a child line of the plan); wave 31: the band states at most running and one failure word, so it owes no queued or blocked count
       // the band counts agents that are not finished; the HUD ribbon and the panel count every state
       if (s === 'done' && o.attention) continue;
       same(`agents ${s}`, f.agents[s] ?? 0, s === 'blocked' ? 0 : expected.agentCount(s));
@@ -269,7 +269,7 @@ describe('one world, every surface', () => {
     expect(ccBand(w).phase).toBeUndefined(); // a plan exists: the band states the plan count, not a second clock
     expect(Object.keys(ccBand(w).gates!).sort()).toEqual(['doctor', 'lint', 'test']);
     expect(Object.keys(ccBand(w).workers!)).toHaveLength(5);
-    expect(hudFacts(w, 'cc').agents).toEqual({ queued: 1, running: 1, done: 2, failed: 1 });
+    expect(hudFacts(w, 'cc').agents).toEqual({ running: 1, done: 2, failed: 1 }); // wave 34: the rule counts agents only, never the queued dispatch
     expect(Object.keys(hudFacts(w, 'cc').items!)).toHaveLength(7);
     expect(hudFacts(w, 'cc', true).rail).toEqual(expected.rail);
     expect(Object.keys(boardFacts(w, 'cc').items!)).toHaveLength(7);

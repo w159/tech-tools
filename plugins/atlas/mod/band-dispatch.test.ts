@@ -102,8 +102,8 @@ describe('step 3: while work runs the spinner stays at every width (a blocked ba
   const blocked = { stopGates: ['dispatch T2 read x open'], openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>;
   const cases: [string, Partial<MissionModel>, RegExp, boolean][] = [
     ['working', { busy: true, turnSecs: 42, workers: live, ctx: 0.4 }, /working/, true],
-    ['blocked with a fixing lead', { ...blocked, busy: true, workers: live.slice(0, 1) }, /fixing/, false],
-    ['blocked, stop refused, fixing', { stopGates: ['stop refused'], busy: true, ctx: 0.4, checks: [{ id: 'd', ok: false, name: 'doctor' }] } as Partial<MissionModel>, /fixing/, false],
+    ['blocked with a busy lead', { ...blocked, busy: true, workers: live.slice(0, 1) }, /blocked/, false],
+    ['blocked, stop refused, busy', { stopGates: ['stop refused'], busy: true, ctx: 0.4, checks: [{ id: 'd', ok: false, name: 'doctor' }] } as Partial<MissionModel>, /blocked/, false],
     ['retrying', { stopGates: ['retry stop'], busy: true } as Partial<MissionModel>, /retrying/, false],
   ];
   for (const [name, over, word, spins] of cases) {
@@ -130,7 +130,8 @@ describe('step 3: while work runs the spinner stays at every width (a blocked ba
     expect(last(/running/)).toBeLessThanOrEqual(last(/stop refused/));
     const gauge = WIDTHS.filter((c) => c >= 120).map(at); // where the meter shows, ctx and the counts have already gone before it does
     expect(gauge.every((t) => /▰/.test(t))).toBe(true);
-    for (const t of seen) expect(t).toMatch(/fixing/);
+    for (const t of seen) expect(t).toMatch(/blocked/);
+    for (const t of seen) expect(t).not.toMatch(/fixing/); // wave 34: a blocked band claims no work
   });
 });
 
@@ -144,9 +145,10 @@ describe('step 4d: blocked while the host waits on the person is `blocked · nee
       expect(t).not.toContain('fixing');
     });
   }
-  test('the same ask with the host working says `fixing` in words, with no spinner (critique 28)', () => {
+  test('the same ask with the host working still says only `needs you`, with no spinner and no `fixing` (wave 34)', () => {
     const t = head(model({ ...asks, busy: true }));
-    expect(t).toMatch(/needs you · fixing/);
+    expect(t).toContain('▲ blocked · needs you');
+    expect(t).not.toContain('fixing');
     expect(t.split(/\s+todo|\s·\stodo/)[0]).not.toMatch(BRAILLE);
   });
 });

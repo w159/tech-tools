@@ -7,7 +7,7 @@ import { clipWords, lastText } from './data/lasttext';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
-export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string };
+export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
 export type AgentRow = { name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What RESULT reads when the agent has no outcome or call to show (its last tool word): never the state word again. */ fallback?: string; /** The LAST column: the elapsed clock since the agent started (`0:13`), frozen at its end. */ elapsed?: string };
 /** The one spinner frame of the HUD: the shared clock's frame (spinFrameOf of spinClock) when the snapshot's `now` is known, else the caller's tick.
@@ -192,7 +192,10 @@ export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts)
   const stateAt = right ? Math.min(stateAt0, right.stateMax) : stateAt0;
   const metaAt = stateAt + Math.max(14, todoWordW(rows, rich) + 2);
   const details = b.merged ? drawn.map(() => undefined) : detailCells(drawn, o, metaAt, tier, rich);
-  drawn.forEach((r, i) => out.push(todoRow(r, o, tier, rich, stateAt, metaAt, details[i], right?.cells[i], right?.at, b.merged === true)));
+  drawn.forEach((r, i) => {
+    out.push(todoRow(r, o, tier, rich, stateAt, metaAt, details[i], right?.cells[i], right?.at, b.merged === true));
+    for (const c of r.children ?? []) out.push([dimRun(clipEll(`    ${ui.ascii ? '`-' : '└'} ${flat(c)}`, cols - 1, ellOf(ui)), ui)]); // wave 34: an open dispatch with no plan row of its own is one dim child line under its nearest T row
+  });
   if (b.close === true && out.length > bodyAt) out.push(b.merged && b.closer ? b.closer : bottomRule(cols, ui));
   return out;
 }
@@ -270,14 +273,17 @@ function todoRow(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt:
 function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, stateAt: number, metaAt: number, detail?: string, right?: string, rightAt?: number, merged = false): Run[] {
   const { ui } = o;
   const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), markRun(markOf(r.state, r.word), o), t(' ')]; // the cursor marks work in hand, never a queued row; one spinner phase for the whole frame
-  const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5;
+  // Wave 34: a merged row with no agent cell has free cells to its right: its title takes them (the state word follows it) instead of ending in `…` at the shared column (`T4 combine the three reports` at 110).
+  const wordCells = r.word ? cells(r.word) : cells(r.state);
+  const flex = merged && right === undefined && stateAt > 0 ? Math.max(0, Math.min(cells(flat(r.label)), o.cols - 4 - 1 - Math.max(7, wordCells)) - (stateAt - 5)) : 0;
+  const labelW = stateAt === 0 ? Math.max(1, o.cols - 4) : stateAt - 5 + flex;
   const text = clipEll(flat(r.label), labelW, ellOf(ui));
   const finished = r.state === 'done' && markOf(r.state, r.word) !== 'doubt';
   const quiet = merged && finished; // wave 32: a finished row of the merged block is dim 240 text, with no `done` word (the green mark says it)
   const label = quiet ? dimRun(text, ui) : t(text, finished ? 'muted' : r.state === 'queued' ? 'sub' : 'text', { bold: r.focus }); // a finished row is quiet 247 text beside its green `●`, never struck through (critique 21: a finished plan read as cancelled); bold marks the selected row only
   if (stateAt === 0) return [...head, label];
   if (quiet) return right !== undefined && rightAt !== undefined ? [...toCol([...head, label], rightAt), calmRun(t(right, 'sub'))] : [...head, label];
-  const row = [...toCol([...head, label], stateAt), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : wordRun(r, wordOf(r, rich))];
+  const row = [...toCol([...head, label], stateAt + flex), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : wordRun(r, wordOf(r, rich))];
   if (right !== undefined && rightAt !== undefined) return [...toCol(row, rightAt), calmRun(t(right, 'sub'))]; // merged: the agent and its clock, right-aligned
   if (tier !== 'full' || detail === undefined) return row;
   const meta = t(detail, finished ? 'muted' : 'sub');
@@ -468,16 +474,35 @@ function wordsEll(text: string, n: number, ell: string = ELL): string {
 export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] };
 
 /** An agent that works right now: the merged block draws it on its TODO row. */
-const isLive = (a: Pick<AgentRow, 'state'>): boolean => a.state === 'running' || a.state === 'queued';
+const isLive = (a: Pick<AgentRow, 'state'>): boolean => a.state === 'running'; // wave 34: only a running agent turns the spinner; queued ones are not counted at all
 /** Whether the block is merged: an agent runs, so the SUBAGENTS box gives way to the agent and clock on each TODO row (wave 31, critique 29). */
 export const isMerged = (s: Surfaces, o: Pick<SurfaceOpts, 'merge' | 'reserve'>): boolean => o.merge !== false && s.todos.length > 0 && (s.agents.length > 0 || o.reserve === true); // wave 32: one block in every state; no plan rows: the agents keep their own SUBAGENTS box
 
 const ownerBase = (name: string): string => name.replace(/\s+#\d+$/, '');
 /** A plan row's `(alpha-explorer)` title suffix: a kebab name with a hyphen, optionally a retry mark. The merged block shows the agent in its own column, so the title drops it. */
 const AGENT_SUFFIX = /\s*\(([a-z][a-z0-9]*(?:-[a-z0-9]+)+(?:\s#\d+)?)\)\s*$/i;
-/** The TODO rows of the merged block: each row names the agent that owns it with its clock (the title never repeats the name); an agent that owns no plan row gets a row of its own (so no agent is hidden). */
+/** The file-like words of a text (`alpha.py`, `README.md`), lowercased: what a dispatch prompt and a plan row title share when they speak of the same work. */
+const FILE_WORD = /[\w-]+\.[a-z]{1,5}\b/g;
+const fileWords = (text: string): string[] => text.toLowerCase().match(FILE_WORD) ?? [];
+/** The one plan row a dispatch's prompt is about (wave 34): the row whose title names a file the prompt names, else the row whose agent's first word the prompt names; none (-1) when no row or more than one fits. */
+function homeOf(task: string, rows: readonly TodoRow[]): number {
+  const text = flat(task).toLowerCase();
+  if (text === '') return -1;
+  const files = fileWords(text);
+  const stem = (r: TodoRow): string => ownerBase(r.agent ?? r.owner ?? '').split('-')[0]!.toLowerCase();
+  const byFile = rows.flatMap((r, i) => (files.some((f) => r.label.toLowerCase().includes(f)) ? [i] : []));
+  if (byFile.length === 1) return byFile[0]!;
+  if (byFile.length > 1) return -1;
+  const byName = rows.flatMap((r, i) => (stem(r).length >= 3 && new RegExp(`\\b${stem(r).replace(/[^a-z0-9]/g, '')}\\b`).test(text) ? [i] : []));
+  return byName.length === 1 ? byName[0]! : -1;
+}
+
+/** The TODO rows of the merged block (wave 34): exactly one row per plan item, each naming the agent that owns it with its clock (the title never repeats the name). An agent that owns no plan row has no row of its own:
+ * a queued one (a dispatch whose worker the host never listed) folds into the plan row its prompt is about while that row is open, otherwise (and for any other orphan agent that is not done) it is one child line under that row,
+ * the first open row when none fits, so the title count is the plan's own and the band's. */
 export function mergedTodos(s: Surfaces): TodoRow[] {
-  const agentOf = (r: TodoRow): AgentRow | undefined => (r.owner === undefined ? undefined : s.agents.find((a) => a.name === r.owner || a.id === r.owner || ownerBase(a.name) === ownerBase(r.owner!)));
+  const nameOf = (r: TodoRow): string | undefined => r.owner ?? AGENT_SUFFIX.exec(r.label)?.[1]; // a plan row names its worker in its `owner` or its `(alpha-explorer)` title suffix
+  const agentOf = (r: TodoRow): AgentRow | undefined => { const n = nameOf(r); return n === undefined ? undefined : s.agents.find((a) => a.name === n || a.id === n || ownerBase(a.name) === ownerBase(n)); };
   const used = new Set<AgentRow>();
   const rows = s.todos.map((r): TodoRow => {
     const a = agentOf(r);
@@ -488,8 +513,16 @@ export function mergedTodos(s: Surfaces): TodoRow[] {
     const named = flat(r.owner ?? '') || suffix; // an assignee with no listed agent yet: the name holds its column from the first frame, the clock stays blank
     return named ? { ...r, label, agent: named, agentTime: '' } : { ...r, label };
   });
-  const extra = s.agents.filter((a) => !used.has(a) && !s.todos.some((r) => agentOf(r) === a)).map((a): TodoRow => ({ label: flat(a.task ?? '') || flat(a.name), state: a.state, detail: '', focus: a.focus, owner: a.name, agent: flat(a.name), agentTime: a.elapsed ?? NONE, ...(a.key !== undefined ? { key: a.key } : {}) }));
-  return [...rows, ...extra];
+  const kids: string[][] = rows.map(() => []);
+  for (const a of s.agents) {
+    if (used.has(a) || a.state === 'done') continue;
+    const home = homeOf(a.task ?? '', rows);
+    if (a.state === 'queued' && home >= 0 && rows[home]!.state !== 'done') continue; // folded: the plan row carries the work
+    const at = home >= 0 ? home : rows.findIndex((r) => r.state !== 'done');
+    const to = at >= 0 ? at : rows.length - 1;
+    if (to >= 0) kids[to]!.push(`${flat(a.name)} ${a.state}${a.elapsed && a.elapsed !== NONE ? ` ${a.elapsed}` : ''}`);
+  }
+  return rows.map((r, i) => (kids[i]!.length ? { ...r, children: kids[i]! } : r));
 }
 
 /** The merged block's closing rule carries the SUBAGENTS title and the squad's one line, in every state: `╰─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ⠧ 3 running ───╯` while one runs (braille spinner, accent 141),
@@ -497,12 +530,14 @@ export function mergedTodos(s: Surfaces): TodoRow[] {
 function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
   const { ui, cols } = o;
   if (s.agents.length === 0) return titleRow(cols, 'SUBAGENTS', '', [t('none running yet', 'sub')], ui, false, true); // the run's block before its first agent: the same closing rule, nothing listed yet
-  const states = s.agents.map((r) => r.state);
+  const agents = s.agents.filter((a) => a.state !== 'queued'); // wave 34: the rule counts agents only; a queued dispatch is a child line of the plan, not an agent (`3 running · 3 queued` beside three agents)
+  if (agents.length === 0) return titleRow(cols, 'SUBAGENTS', '', [t('none running yet', 'sub')], ui, false, true);
+  const states = agents.map((r) => r.state);
   const counts = stateCounts(states);
-  const live = s.agents.some(isLive);
+  const live = agents.some(isLive);
   const lead: Run[] = live ? [{ ...stateRun('running', ui, spinOf(o), true), ...(ui.ascii ? {} : { tone: 'accent' as const }) }, t(' ')] : [stateRun(states.includes('failed') ? 'failed' : 'done', ui), t(' ')];
-  const times = s.agents.map((a) => a.elapsed ?? NONE).filter((x) => x !== NONE).join(' ');
-  const fn = s.agents.reduce((n, a) => n + Number(/^(\d+) fn$/.exec(resultOf(a))?.[1] ?? 0), 0);
+  const times = agents.map((a) => a.elapsed ?? NONE).filter((x) => x !== NONE).join(' ');
+  const fn = agents.reduce((n, a) => n + Number(/^(\d+) fn$/.exec(resultOf(a))?.[1] ?? 0), 0);
   const tail = live ? [] : [times, fn > 0 ? `${fn} fn` : ''].filter((x) => x !== '');
   // Nothing runs and some failed (wave 33): the rule leads with `■ 2 failed` in the error 203, static, then the rest of the squad (`· 1 done · 0:04 0:01 0:02`).
   const failedN = states.filter((x) => x === 'failed').length;

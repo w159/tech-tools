@@ -15,7 +15,7 @@ import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
 import { allSettled, ARM_MS, beatStale, easedNow, FRAME_MS, gaugeTargets, newRunClock, finalSecsOf, restSecsOf, retargetAll, stepRun, workSecsOf, type GaugeMoves, type RunClock } from './band-motion';
-import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isRunning, namedAgents, segmentOf } from './hud';
+import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -194,7 +194,15 @@ async function motionTick($: EngineInterface, snap: LiveSnapshot): Promise<void>
 		motion = new Motion(!reducedMotion({ ATLAS_REDUCED_MOTION: await $.env.get('ATLAS_REDUCED_MOTION').catch(() => undefined), NO_COLOR: await $.env.get('NO_COLOR').catch(() => undefined) }));
 		motionDriver = new MotionDriver(motion, (ms, fn) => $.clock.every(ms, fn), async () => void (await update($, easeTickState, (n) => n + 1)), () => $.clock.now());
 	}
-	await motionDriver.step(snap, async () => motionFeed(snap, await gateGroups($), await read($, coreState), (await lookOf($)).ui));
+	const now = await $.clock.now();
+	// Wave 34: the feed's band reads the run state the render reads (host turn, run clock, live agents), so the done fade steps 231, 151, 114 once and never restarts (114, 151, 114).
+	const agents = hudAgents(liveWorkers(snap, snap.now), snap.squad, queuedMembers(snap));
+	const run: Partial<BandModel> = {
+		...([...agents, ...namedAgents(ownTodos(snap.todos ?? [], snap.sessionId), agents)].some(isAlive) ? { agentsRunning: true } : {}),
+		working: hostKnown ? hostWorking : runClock.startMs !== null,
+		...(restSecsOf(runClock, now) !== undefined ? { restSecs: restSecsOf(runClock, now)! } : {}),
+	};
+	await motionDriver.step(snap, async () => motionFeed(snap, await gateGroups($), await read($, coreState), (await lookOf($)).ui, run));
 }
 /** A spawn-recorded agent the host list does not (yet) contain is only presumed gone after this long. */
 const SPAWN_GRACE_MS = 15_000;
@@ -1034,7 +1042,8 @@ async function observeBlocked($: EngineInterface): Promise<void> {
 export function isWorkingNow(snap: LiveSnapshot, host: boolean, hostIdle = false): boolean {
 	if (host) return true;
 	const live = liveWorkers(snap, snap.now);
-	if (hostIdle) return activeCount(live) > 0; // the host says its turn is over: a stale lead tool or plan row no longer holds the run open, only a worker still running does
+	// Wave 34: the band reads `working` exactly when this is true (a squad agent the host lists running counts: the band draws its spinner, so the loop must keep turning it); a queued dispatch never does.
+	if (hostIdle) return activeCount(live) > 0 || snap.squad.some((a) => a.name !== 'lead' && a.state === 'running'); // the host says its turn is over: a stale lead tool or plan row no longer holds the run open, only a worker still running does
 	return activeCount(live) > 0 || leadBusy(snap) || planBusy(planBasis(snap.todos ?? [], snap.sessionId), workerStates(snap, live));
 }
 
@@ -1403,7 +1412,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
 		const paneLive = liveWorkers(snapshot, snapshot.now);
 		const paneAgents = hudAgents(paneLive, snapshot.squad, queuedMembers(snapshot));
-		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isRunning) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking : runClock.startMs !== null, ...(workSecsOf(runClock, paneNow) !== undefined ? { workSecs: workSecsOf(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
+		const bandB: BandModel = { snapshot, live: paneLive, gates: paneGates, ...([...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive) ? { agentsRunning: true } : {}), working: hostKnown ? hostWorking : runClock.startMs !== null, ...(workSecsOf(runClock, paneNow) !== undefined ? { workSecs: workSecsOf(runClock, paneNow)! } : {}), ...(finalSecsOf(runClock) !== undefined ? { ranSecs: finalSecsOf(runClock)! } : {}), ...(restSecsOf(runClock, paneNow) !== undefined ? { restSecs: restSecsOf(runClock, paneNow)! } : {}), columns: 120, tick: paneFrame, ui: look.ui, rich: look.rich, lastPhase: lastRailPhase, core: paneCore, leadName: snapshot.sessionId ? leadChannelName(snapshot.sessionId, '', '')[0] : undefined };
 		const elapsedMs = runClock.startMs !== null ? paneNow - runClock.startMs : runClock.ranMs !== undefined && runClock.endedMs !== undefined ? runClock.ranMs + (paneNow - runClock.endedMs) : undefined;
 		const runSecs = runClock.startMs !== null ? workSecsOf(runClock, paneNow) : finalSecsOf(runClock);
 		return sidebarTree($.ui.resolve(e), {

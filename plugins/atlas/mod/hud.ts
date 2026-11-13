@@ -90,6 +90,8 @@ export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | 
 export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; /** False: never merge running agents into the TODO rows (row counters ask for the roomiest form). */ merge?: boolean; /** The live slot (slot.ts composeFixed, wave 32): a row whose agent has ended reads done on the event that ends it, not when the lead closes the store row. */ settled?: boolean; /** Atlas is at rest (the band reads idle): the block draws in 240 rules and 245 text. */ idle?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 
 export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running' || a.state === 'queued';
+/** An agent that does work right now (wave 34): running, working or blocked. A queued one (dispatched, the host never listed it) is drawn but is not work: it never holds the band `working` nor turns the SUBAGENTS spinner. */
+export const isAlive = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running';
 
 // ---- adapters ---------------------------------------------------------------------------------------
 
@@ -110,7 +112,7 @@ export function todoModel(todos: readonly TodoItem[], now: number, owners: Reado
   const inferred = (t: TodoItem): string | undefined => {
     if (t.owner) return undefined;
     const label = flat(t.content);
-    for (const [name, st] of owners) if (st === 'running' && label.includes(`(${name})`)) return name;
+    for (const [name] of owners) if (label.includes(`(${name})`)) return name; // wave 34: any state, so a closed row over a failed worker reads `■ failed` and a finished one keeps its agent and clock
     return undefined;
   };
   const rows = todos.map((raw): TodoRow => {

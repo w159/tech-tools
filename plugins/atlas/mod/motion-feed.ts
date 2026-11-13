@@ -19,12 +19,13 @@ import type { Ui } from './atlas-ui';
 /** The surfaces' observed names (the keys of the result). */
 export type MotionFeed = { 'hud-todo': MotionItem[]; 'hud-agents': MotionItem[]; board: MotionItem[]; panel: MotionItem[]; band: MotionItem[] };
 
-export function motionFeed(snapshot: LiveSnapshot, gates: GateGroup[], core: CoreModel | null, look: Ui): MotionFeed {
+/** `run`: the band's run inputs as the render holds them (the host turn, the run clock, the live agents). Without them the feed's band reads another state than the one drawn, and the done fade restarts (wave 34: 114, 151, 114). */
+export function motionFeed(snapshot: LiveSnapshot, gates: GateGroup[], core: CoreModel | null, look: Ui, run: Partial<BandModel> = {}): MotionFeed {
   const live = liveWorkers(snapshot, snapshot.now);
   const agents = hudAgents(live, snapshot.squad, queuedMembers(snapshot));
   const todos = ownTodos(snapshot.todos ?? [], snapshot.sessionId);
   const hud = hudMotionItems({ todos, agents, root: snapshot.root, phases: hudPhases(snapshot) }, { now: snapshot.now });
-  const band: BandModel = { snapshot, live, gates, columns: 120, tick: 0, ui: look };
+  const band: BandModel = { snapshot, live, gates, columns: 120, tick: 0, ui: look, ...run };
   return {
     'hud-todo': hud.todos,
     'hud-agents': hud.agents,
