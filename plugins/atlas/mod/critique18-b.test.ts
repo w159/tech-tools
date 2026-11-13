@@ -81,7 +81,7 @@ describe('B3: a row the store holds as pending never reads failed', () => {
     ];
     const rows = boardRowsOf(src);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ state: 'queued', ownerState: 'failed' });
+    expect(rows[0]).toMatchObject({ state: 'failed' });
   });
 });
 
@@ -144,8 +144,8 @@ describe('B5 / critique 19 C1: the 110 board keeps the owner with its row and sa
     expect(rows).toHaveLength(3);
     const under = (title: string): string => text[text.findIndex((r) => r.includes(title)) + 1]!;
     expect(under('T1 read alpha.py')).toMatch(/^\s+alpha-explorer$/);
-    expect(under('T2 read ghost.py')).toMatch(/^\s+ghost-explorer$/);
-    expect(text[text.findIndex((r) => r.includes('T2 read ghost.py')) + 2]).toMatch(/^\s+owner failed · open 05:00$/); // too long for the owner's line: the reason and age go on the next
+    expect(under('T2 read ghost.py')).toMatch(/^\s+ghost-explorer( |$)/);
+    expect(under('T2 read ghost.py')).toContain('open 05:00'); // wave 35: the row reads failed itself, so the owner's line carries the age
     expect(text.findIndex((r) => r.includes('T3 combine'))).toBeGreaterThan(text.findIndex((r) => r.includes('ghost-explorer'))); // no list after the last row
     for (const r of text) expect(cells(r)).toBeLessThanOrEqual(37);
   });

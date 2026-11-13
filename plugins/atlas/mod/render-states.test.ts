@@ -29,10 +29,10 @@ const AGENTS: HudAgent[] = [
 ];
 
 describe('B1: blocked is its own state', () => {
-  test('the store word `blocked` outranks a failed owner (the lead said blocked, the killed agent stays failed)', () => {
-    expect(itemState('blocked', 'failed')).toBe('blocked');
+  test('a failed owner outranks the store word `blocked` (wave 35: the board agrees with the TODO HUD)', () => {
+    expect(itemState('blocked', 'failed')).toBe('failed');
     expect(todoState('blocked', 'failed')).toEqual({ state: 'failed' }); // wave 35: the HUD row over a killed worker is failed, whatever the lead wrote
-    expect(itemState('pending', 'failed')).toBe('queued'); // a row the store still holds pending stays queued under a killed agent (critique 18 B3); the owner is named failed beside it
+    expect(itemState('pending', 'failed')).toBe('failed'); // wave 35: a pending row under a killed agent reads failed, as the HUD does
     expect(itemState('in_progress', 'failed')).toBe('failed'); // an unmarked row the lead started still fails
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
   });

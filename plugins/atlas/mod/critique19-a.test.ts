@@ -93,7 +93,7 @@ describe('A3: a retry reads as one row, in one voice on the HUD, the panel rule 
     const src = (status: string, owner: string): BoardSource => ({ content: `T read ${owner}`, status, owner });
     const rows = (items: BoardSource[]) => boardRowsOf(withOwnerStates(items, states));
     expect(rows([src('pending', 'beta-explorer')])[0]).toMatchObject({ state: 'running' });
-    expect(rows([src('pending', 'ghost-explorer')])[0]).toMatchObject({ state: 'queued', word: 'worker failed' });
+    expect(rows([src('pending', 'ghost-explorer')])[0]).toMatchObject({ state: 'failed' });
     const done = withOwnerStates([src('completed', 'beta-explorer')], new Map<string, UiState>([['beta-explorer', 'failed'], ['beta-explorer #2', 'done']]));
     const row = boardRowsOf(done)[0]!;
     expect(row).toMatchObject({ state: 'done', word: 'retried · done' });

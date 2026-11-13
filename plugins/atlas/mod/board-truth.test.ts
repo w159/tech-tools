@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { cells, runsString, type Ui } from './atlas-ui';
 import { boardBody, boardFolded, boardLines, boardRowsOf, boardText, itemState, planFigure } from './board-model';
-import { ownTodos } from './data/todos';
+import { ownTodos, todoState } from './data/todos';
 import { todoRows, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -46,8 +46,13 @@ describe('B3: a queued row whose owner runs reads running', () => {
     expect(itemState('pending', 'running')).toBe('running');
     expect(itemState('pending', undefined)).toBe('queued');
     expect(itemState('completed', 'running')).toBe('done');
-    expect(itemState('pending', 'failed')).toBe('queued'); // critique 18 B3: pending in the store never reads failed
+    expect(itemState('pending', 'failed')).toBe('failed'); // wave 35: the board agrees with the TODO HUD
     expect(itemState('in_progress', 'failed')).toBe('failed');
+  });
+  test('wave 35 follow-up: the board and the TODO HUD agree on a failed owner', () => {
+    for (const status of ['pending', 'in_progress', 'blocked', 'ended']) expect(itemState(status, 'failed')).toBe(todoState(status, 'failed').state);
+    expect(itemState('pending', 'failed')).toBe('failed');
+    expect(itemState('completed', 'failed')).toBe('done');
   });
   test('ownTodos names the title worker; the board fold keeps the title as before', () => {
     const own = ownTodos([...plan, ...dispatch].map((x) => ({ ...x })));

@@ -90,7 +90,7 @@ describe('board goldens', () => {
     expect(rows.length).toBe(5);
     expect(rows.map((x) => x.label)).toEqual(['T1 read a.py', 'T2 read b.py', 'T3 read c.py', 'T4 read d.py', 'T5 read e.py']);
     // the dispatch row's state is folded into the plan row: running, the failed worker named beside a still-pending row, and a finished worker leaves the open row `ended`
-    expect(rows.map((x) => x.state)).toEqual(['running', 'queued', 'blocked', 'queued', 'queued']); // a pending plan row stays queued under a failed dispatch row (critique 18 B3); its owner is named failed
+    expect(rows.map((x) => x.state)).toEqual(['running', 'failed', 'blocked', 'queued', 'queued']); // a pending plan row under a failed dispatch row reads failed, as the TODO HUD does (wave 35)
     expect(rows[2]!.word).toBe('returned');
     expect(rows.map((x) => x.owner)).toEqual(['w-a', 'w-b', 'w-c', '', '']);
     // a plan row already done stays done while its worker's row is closed; an open worker row is unfolded into its own row with its owner (critique 15 B5: the fold never hides an open row)
@@ -208,7 +208,7 @@ describe('data to rows', () => {
     expect(noEst).not.toContain(' of ');
     expect(noEst).not.toMatch(/[█░▏▎▍▌▋▊▉]/);
     // A failed owner fails its item; a waiting owner blocks it and is named.
-    expect(toBoardRow({ content: 'x', status: 'pending', owner: 'a', ownerState: 'failed' })).toMatchObject({ state: 'queued', detail: 'owner failed', ownerState: 'failed' }); // critique 18 B3: pending in the store never reads failed
+    expect(toBoardRow({ content: 'x', status: 'pending', owner: 'a', ownerState: 'failed' })).toMatchObject({ state: 'failed' }); // wave 35: pending in the store with a failed owner reads failed, as the TODO HUD does
     expect(toBoardRow({ content: 'x', status: 'in_progress', owner: 'a', ownerState: 'failed' })).toMatchObject({ state: 'failed', detail: '' });
     expect(toBoardRow({ content: 'x', status: 'pending', owner: 'a', ownerState: 'waiting' })).toMatchObject({ state: 'blocked', detail: 'owner waiting' });
     expect(toBoardRow({ content: 'x', status: 'blocked', evidence: '2) needs   review' }).detail).toBe('needs review');

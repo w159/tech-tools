@@ -287,11 +287,11 @@ describe('one world, every surface', () => {
     const cc = rowsOfTree(boardTree(els, withOwnerStates(w.todos, workerStates(w, liveWorkers(w, w.now))), { cols: 120, rows: 40, tick: 0, now, ui }));
     const omp = ompBoard(worldItems() as never, { width: 120, tick: 0, now, ui }).map(strip);
     expect(cc).toEqual(omp.map((r: string) => r.trimEnd()));
-    // T5 `Gate tests` is queued (the store holds it pending); hand it to the failed worker and both hosts show it queued, with the owner named failed (critique 18 B3).
+    // T5 `Gate tests` is queued (the store holds it pending); hand it to the failed worker and the board reads failed, as the TODO HUD does (wave 35).
     const handed = { ...w, todos: w.todos.map((t) => (t.id === 'T5' ? { ...t, owner: 'implementer-live' } : t)) };
     const ccF = rowsOfTree(boardTree(els, withOwnerStates(handed.todos, workerStates(handed, liveWorkers(handed, handed.now))), { cols: 120, rows: 40, tick: 0, now, ui }));
     const ompF = ompBoard(worldItems().map((t) => (t.id === 'T5' ? { ...t, owner: 'implementer-live', ownerState: 'failed' } : t)) as never, { width: 120, tick: 0, now, ui }).map(strip);
-    expect(ccF.find((r) => r.includes('Gate tests'))).toMatch(/◇ Gate tests +queued +implementer-live +owner failed/);
+    expect(ccF.find((r) => r.includes('Gate tests'))).toMatch(/■ Gate tests +failed +implementer-live/);
     expect(ompF.map((r: string) => r.trimEnd())).toEqual(ccF);
   });
 });

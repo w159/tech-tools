@@ -79,9 +79,8 @@ export function itemState(status: string, ownerState?: UiState): UiState {
   const own = stateOfStatus(status);
   if (own === 'done') return own;
   if (own === 'queued' && ownerState === 'running') return 'running'; // the owner is at work: a row still reading queued says running
-  // The lead's own `blocked` is its word for the row (critique 16: T2 blocked read failed); the killed agent keeps its own failed row. A row the store still holds
-  // `pending` stays queued (critique 18 B3: T3 read failed over a pending store row): the failed owner is named beside it (`owner failed`), the lead has not closed the row.
-  if (ownerState === 'failed') return status === 'blocked' ? 'blocked' : own === 'queued' ? 'queued' : 'failed';
+  // Wave 35: a non-completed item whose owner failed reads `failed` (the TODO HUD's word, data/todos.ts todoState): the board never shows queued/blocked over a dead worker.
+  if (ownerState === 'failed') return 'failed';
   if (ownerState === 'waiting' || ownerState === 'blocked') return 'blocked';
   return own;
 }
