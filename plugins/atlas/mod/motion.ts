@@ -10,7 +10,7 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, RETURNED, stable256, stateGlyph, surfaceHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
+import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, luminance, markToken, PALETTES, RETURNED, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
 
 /** A frame every 100 ms, the spinner's rate: the motion timer's period and the length of one beat of a transition. */
 export const MOTION_FRAME_MS = 100;
@@ -24,9 +24,9 @@ export const MOTION_STEP_MS = 200;
 /** A state change eases back to rest over this long: MAX_BEATS held steps, 800 ms. The frame sampled at 600 ms is still a beat of the ramp, so it differs from
  * the resting row (critique 14: with a 600 ms window the 600 ms frame equalled the final frame). */
 export const MOTION_MS = MAX_BEATS * MOTION_STEP_MS;
-/** The done mark holds its highlighted first state this long before the ease starts (critique 27: the 200 ms fade appeared in 0 of the live frames at a 500 ms capture period).
- * At most one redraw per MOTION_FRAME_MS (10 a second) is spent on it: the hold is a frozen first beat, not more frames. */
-export const DONE_HOLD_MS = 1000;
+/** The done mark holds its white first step this long (wave 31, critique 29: 231 for 200 ms, then 151 held to 800 ms, then the resting 114; the 600 ms hold of 151 is what a 0.5 s capture sees).
+ * At most one redraw per MOTION_FRAME_MS (10 a second) is spent on it. */
+export const DONE_HOLD_MS = MOTION_STEP_MS;
 /** How long an entry's window lasts: the ease, and for a done mark the hold in front of it. */
 export const windowOf = (e: { state: string }): number => (e.state === 'done' ? MOTION_MS + DONE_HOLD_MS - MOTION_STEP_MS : MOTION_MS);
 /** The real time since the change at which `ease` ms of the ease have passed: the inverse of easedMs, so a sampler can step the beats of a done mark (the hold sits in front of beat 1). */
@@ -279,6 +279,9 @@ const weighted = (r: Run, beat: number): Run => (beat >= MAX_BEATS - 1 ? r : lif
 const calm = new WeakSet<Run>();
 export const calmRun = (r: Run): Run => { calm.add(r); return r; };
 
+/** The done fade's two steps (xterm 231 and 151). */
+export const DONE_FADE = ['#ffffff', xtermHex(151)] as const; // xterm 231 then 151, named by index so no second hex literal is spelled
+
 const rampCache = new Map<string, readonly string[]>();
 /**
  * The colours a 256-colour run steps through, one per beat: white (the theme's emphasis colour) first when the palette has room for it, then
@@ -312,7 +315,12 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
   let out = runs;
   if (pc < 1) {
     const beat = Math.max(0, Math.floor(easedMs(e, ctx.now) / MOTION_STEP_MS)); // one beat per held step: the staircase and the pop both step on it
-    if (ui.color !== 'none') {
+    if (ui.color !== 'none' && accent === 'done' && e.state === 'done') {
+      // Wave 31: the done fade is 231 for one step, then 151 held to the end of the window, then the resting tone (critique 29: 0 fade frames showed live).
+      const fade = ctx.now - e.changed < MOTION_STEP_MS ? DONE_FADE[0] : DONE_FADE[1];
+      const wantsDone = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '' && !calm.has(r));
+      out = out.map((r, i) => (wantsDone(r, i) ? weighted({ ...r, fg: fade }, beat) : r)); // the weight falls on the last beat, the colour on the frame after it
+    } else if (ui.color !== 'none') {
       const palette = PALETTES[ui.theme];
       const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
       // The weight falls on the last beat (`weighted`): the colour holds the previous beat's mix then, so one frame never moves both (critique 18: bold dropped as the text stepped 151 to 146).

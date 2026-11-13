@@ -20,7 +20,7 @@ const stop: HudInput = { todos: ownTodos(plan(['completed', 'blocked', 'pending'
 /** What register.ts draws for a slot: the HUD at the slot cap, the gap row, the rows left for the band. */
 function slot(input: HudInput, cols: number, budget: number) {
   const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true);
-  const hud = hudLines(input, { cols, maxRows: cap, ui, rich: false, now: NOW }).map(runsString);
+  const hud = hudLines(input, { merge: false, cols, maxRows: cap, ui, rich: false, now: NOW }).map(runsString);
   const lists = hud.some((r) => r.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS');
   return { hud, band: budget - hud.length - hudGapRows(lists, hud.length, budget) };
 }
@@ -42,13 +42,13 @@ describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
   }
   test('MODEL and TASK keep two blank cells between them, also when the LAST text is long (`haiku T1` ran together)', () => {
     const long: HudInput = { ...stop, todos: ownTodos([...plan(['completed', 'blocked', 'pending']).map((t) => ({ ...t, evidence: null as never }))]), agents: stop.agents };
-    const rows = hudLines(long, { cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString);
+    const rows = hudLines(long, { merge: false, cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString);
     for (const r of rows.filter((x) => /haiku/.test(x))) expect(r).toMatch(/haiku {2,}T\d/);
   });
   test('MODEL is never blank: an agent the squad gave no model reads `-`', () => {
     const rows = agentModel(stop.agents, stop.todos);
     expect(rows.find((r) => r.name === 'ghost-explorer')!.model).toBe('-');
-    const drawn = hudLines(stop, { cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString); // 150: at 61 cells MODEL gives its cells to LAST (critique 23)
-    expect(drawn.find((r) => r.includes('ghost-explorer') && /failed\s+-/.test(r))).toMatch(/failed\s+-\s+T2/);
+    const drawn = hudLines(stop, { merge: false, cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString); // 150: at 61 cells MODEL gives its cells to LAST (critique 23)
+    expect(drawn.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer/.test(r))).toMatch(/ghost-explorer\s+(failed|killed)\s+T2/); // wave 31: no MODEL column to draw the dash in
   });
 });

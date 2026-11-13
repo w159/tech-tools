@@ -14,7 +14,7 @@ import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data
 import { hostEnv, LINGER_MS, spinClock, surfaceHex, uiFromEnv, type Ui, runHex } from './atlas-ui';
 import type { MotionCtx, MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
-import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
+import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
@@ -248,3 +248,6 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   });
   return panel(els, rows, cols, ui);
 }
+
+/** The band's run state word (`working`, `done`, `idle`, `blocked`) for a model: the one rule the HUD's idle dimming and the side panel's phase read. */
+export const bandKindOf = (b: BandModel) => runStateOf(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() })).kind;

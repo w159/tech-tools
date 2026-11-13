@@ -37,11 +37,11 @@ describe('B1: blocked is its own state', () => {
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
   });
   test('the HUD row for T2 reads blocked with the blocked glyph, and the ghost agent row stays failed', () => {
-    const rows = text(hudLines({ todos: PLAN, agents: AGENTS }, { cols: 120, maxRows: 30, ui, now: NOW }));
+    const rows = text(hudLines({ todos: PLAN, agents: AGENTS }, { merge: false, cols: 120, maxRows: 30, ui, now: NOW }));
     const t2 = rows.find((r) => r.includes('T2 read ghost.py'))!;
     expect(t2).toMatch(/\(ghost-explorer\)\s+blocked/); // the state word; the detail may still say `owner failed`
     expect(t2).toContain(STATE_GLYPHS.blocked);
-    const ghost = rows.find((r) => r.includes('ghost-explorer ') && !r.includes('T2 read'))!;
+    const ghost = rows.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer /.test(r))!;
     expect(ghost).toContain('killed'); // critique 28: one word for a killed worker
     expect(ghost).not.toContain('blocked');
   });
@@ -58,7 +58,7 @@ describe('B2: every row that fits is drawn, only the rest is folded', () => {
   // stoprun-150-e4a8186a-3/frames/f0085.ans:25-27: `3 more todos not shown` under 2 drawn rows; the fold row itself cost the third.
   const four: HudAgent[] = [...AGENTS, agent('beta-explorer-2', 'done', { model: 'haiku', lastTool: 'Read' })];
   test('11 rows: the four agents and as many plan rows as the slot holds, the rest counted on the title; both boxes closed (critique 23, 28)', () => {
-    const rows = text(hudLines({ todos: PLAN, agents: four }, { cols: 103, maxRows: 11, ui, now: NOW }));
+    const rows = text(hudLines({ todos: PLAN, agents: four }, { merge: false, cols: 103, maxRows: 11, ui, now: NOW }));
     expect(rows.length).toBeLessThanOrEqual(11);
     expect(rows.some((r) => /^\s+\d+ more todos? not shown\s*$/.test(r))).toBe(false); // no row of its own
     const shown = rows.filter((r) => /^[▸ ]\s*\S T\d /.test(r)).length;
@@ -70,35 +70,35 @@ describe('B2: every row that fits is drawn, only the rest is folded', () => {
     expect(rows.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(2);
   });
   test('a plan that fits in full carries no count', () => {
-    const rows = text(hudLines({ todos: PLAN, agents: four }, { cols: 103, maxRows: 15, ui, now: NOW }));
+    const rows = text(hudLines({ todos: PLAN, agents: four }, { merge: false, cols: 103, maxRows: 15, ui, now: NOW }));
     expect(rows[0]).not.toContain('more');
-    expect(rows.filter((r) => /\bT\d read|\bT\d (combine|write)/.test(r) && !r.includes('haiku'))).toHaveLength(5);
+    expect(rows.filter((r) => /\bT\d read|\bT\d (combine|write)/.test(r) && /^[▸ ] [◐◓◑◒◇●■▲◉] T\d/.test(r))).toHaveLength(5);
   });
 });
 
 describe('B4: LAST is an outcome for a finished row and the current action for a live one', () => {
   const dispatch = (owner: string, evidence: string): TodoItem => ({ id: `d-${owner}`, content: `Read ${owner}`, status: 'completed', owner, origin: 'dispatch', session_id: '', evidence }) as unknown as TodoItem;
-  const lastOf = (rows: string[], name: string): string => rows.find((r) => r.includes(` ${name} `))!;
+  const lastOf = (rows: string[], name: string): string => rows.find((r) => new RegExp(`^[▸ ] [◐◓◑◒◇●■▲◉] ${name} `).test(r))!;
   test('a done agent reads the evidence its dispatch row holds, not `finished`', () => {
     const todos = [...PLAN, dispatch('alpha-explorer', '1. Read `/tmp/p/alpha.py` -> alpha_one (line 1), alpha_two (line 5)')];
-    const rows = text(hudLines({ todos, agents: AGENTS }, { cols: 120, maxRows: 30, ui, now: NOW }));
-    expect(lastOf(rows, 'alpha-explorer')).toContain('alpha_one (line 1)');
+    const rows = text(hudLines({ todos, agents: AGENTS }, { merge: false, cols: 120, maxRows: 30, ui, now: NOW }));
+    expect(lastOf(rows, 'alpha-explorer')).toMatch(/\s-\s+-\s*$/); // wave 31: RESULT is a count or `-`, never the evidence text
     expect(lastOf(rows, 'alpha-explorer')).not.toContain('finished');
     expect(lastOf(rows, 'alpha-explorer')).not.toContain('/tmp/p'); // never a path
   });
   test('the dispatch row does not become a task id: T-numbers count plan rows only', () => {
     const todos = [dispatch('alpha-explorer', 'ok done'), ...PLAN];
-    const rows = text(hudLines({ todos, agents: AGENTS }, { cols: 120, maxRows: 30, ui, now: NOW }));
+    const rows = text(hudLines({ todos, agents: AGENTS }, { merge: false, cols: 120, maxRows: 30, ui, now: NOW }));
     expect(lastOf(rows, 'alpha-explorer')).toMatch(/\sT1\s/);
   });
   test('a narrow HUD (the 110-column transcript, 61 cells) never cuts a call to its bare verb', () => {
     const live: HudAgent[] = [...['alpha', 'beta'].map((n) => agent(`${n}-explorer`, 'working', { ui: 'running', model: 'haiku', task: `${n}-explorer: read ${n}.py`, tool: 'Read', target: `${n}.py` })), agent('gamma-explorer', 'done', { model: 'haiku', task: 'gamma-explorer: read gamma.py', lastTool: 'Read' })];
     const plan = PLAN.map((t, i) => ({ ...t, owner: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'][i], status: 'pending' }) as TodoItem);
     for (const cols of [61, 56, 52, 48]) {
-      const rows = text(hudLines({ todos: plan, agents: live }, { cols, maxRows: 30, ui, now: NOW }));
+      const rows = text(hudLines({ todos: plan, agents: live }, { merge: false, cols, maxRows: 30, ui, now: NOW }));
       for (const r of rows) expect(r).not.toMatch(/\b[a-z]{1,6}\.\.\./); // `read...`, `report...`
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
-      if (cols === 61) { expect(lastOf(rows, 'alpha-explorer')).toContain('read alpha.py'); expect(lastOf(rows, 'gamma-explorer')).toContain('finished'); } // critique 17: the name column is as wide as the names under 80 columns, so the whole outcome fits
+      if (cols === 61) { expect(lastOf(rows, 'alpha-explorer')).toMatch(/T1 read(…| alpha)/); expect(lastOf(rows, 'gamma-explorer')).toMatch(/done\s+T3/); } // critique 17: the name column is as wide as the names under 80 columns, so the whole outcome fits
     }
   });
 });
@@ -129,12 +129,12 @@ describe('B3: the final SUBAGENTS block keeps the agents that finished', () => {
   // stoprun-150-e4a8186a-1/tab-board.png: SUBAGENTS showed only ghost under `1 failed` while route listed `2 done ■ 1 failed`.
   const settled: HudAgent[] = [agent('alpha-explorer', 'done', { since: NOW - 3_600_000, lastTool: 'Read' }), agent('ghost-explorer', 'failed', { since: NOW - 3_600_000, lastTool: 'Read', target: 'util.py' }), agent('beta-explorer', 'done', { since: NOW - 3_600_000, lastTool: 'Read' })];
   test('a failed agent keeps its done siblings in the block, long after the wave lingered', () => {
-    const rows = text(hudLines({ todos: PLAN, agents: settled }, { cols: 120, maxRows: 30, ui, now: NOW }));
+    const rows = text(hudLines({ todos: PLAN, agents: settled }, { merge: false, cols: 120, maxRows: 30, ui, now: NOW }));
     expect(rows.some((r) => r.includes('SUBAGENTS') && r.includes('1 failed') && r.includes('2 done'))).toBe(true);
     for (const n of ['alpha-explorer', 'ghost-explorer', 'beta-explorer']) expect(rows.some((r) => r.includes(` ${n} `))).toBe(true);
   });
   test('with no failure the finished wave stays after it lingered (critique 17 B3)', () => {
-    const rows = text(hudLines({ todos: PLAN, agents: settled.filter((a) => a.state === 'done') }, { cols: 120, maxRows: 30, ui, now: NOW }));
+    const rows = text(hudLines({ todos: PLAN, agents: settled.filter((a) => a.state === 'done') }, { merge: false, cols: 120, maxRows: 30, ui, now: NOW }));
     expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);
   });
 });

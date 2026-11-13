@@ -58,12 +58,12 @@ export const todo_40 = [
 
 export const subagents_120 = [
   "╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS @SPIN@ 1 running · 1 failed · 1 queued · 2 done ─────────────────────────────────────────────────╮",
-  "    AGENT                STATE       MODEL   TASK    LAST    RESULT",
-  "  ● implementer-layout   done        opus    T1,T2   5:51    9 of 9 steps",
-  "  ● implementer-gates    done        sonnet  T3      1:58    golden tests written",
-  "▸ ◐ implementer-band     running     opus    T4      0:42    read runs.ts:17",
-  "  ◇ runner-land          queued      opus    T5      0:00    waits on implementer-live",
-  "  ■ implementer-live     failed      opus    T6      1:35    tests red 3",
+  "    AGENT                STATE    TASK                                                                  LAST    RESULT",
+  "  ● implementer-layout   done     T1,T2                                                                 5:51    -",
+  "  ● implementer-gates    done     T3                                                                    1:58    -",
+  "▸ ◐ implementer-band     running  T4                                                                    0:42    -",
+  "  ◇ runner-land          queued   T5                                                                    0:00    -",
+  "  ■ implementer-live     failed   T6                                                                    1:35    -",
   "╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯",
 ];
 
@@ -80,12 +80,12 @@ export const subagents_120_rich = [
 
 export const subagents_80 = [
   "╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS @SPIN@ 1 running · 1 failed · 1 queued · 2 done ─────────╮",
-  "    AGENT                STATE       TASK    LAST    RESULT",
-  "  ● implementer-layout   done        T1,T2   5:51    9 of 9 steps",
-  "  ● implementer-gates    done        T3      1:58    golden tests written",
-  "▸ ◐ implementer-band     running     T4      0:42    read runs.ts:17",
-  "  ◇ runner-land          queued      T5      0:00    waits on implementer-live",
-  "  ■ implementer-live     failed      T6      1:35    tests red 3",
+  "    AGENT                STATE    TASK                          LAST    RESULT",
+  "  ● implementer-layout   done     T1,T2                         5:51    -",
+  "  ● implementer-gates    done     T3                            1:58    -",
+  "▸ ◐ implementer-band     running  T4                            0:42    -",
+  "  ◇ runner-land          queued   T5                            0:00    -",
+  "  ■ implementer-live     failed   T6                            1:35    -",
   "╰──────────────────────────────────────────────────────────────────────────────╯",
 ];
 

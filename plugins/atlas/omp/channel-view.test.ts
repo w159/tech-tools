@@ -323,7 +323,7 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}agents ⠙ 2 running {3}◇ 1 queued +$/);
+	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] 2 running +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
 	expect(p[2]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +1:12 $/);
 	expect(p[3]).toMatch(/^ ◓ implementer-band running {2}thinking +0:48 $/);

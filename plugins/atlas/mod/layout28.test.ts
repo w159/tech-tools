@@ -20,7 +20,7 @@ const PLAN = [
 ];
 const agent = (name: string): HudAgent => ({ name, role: 'explorer', state: 'working', model: 'haiku', ui: 'running' });
 const input = (n: number): HudInput => ({ todos: ownTodos(PLAN), agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].slice(0, n).map(agent) });
-const draw = (n: number, cols: number, maxRows: number): string[] => hudLines(input(n), { cols, maxRows, ui, rich: false, now: 0 }).map((r) => runsString(r).trimEnd());
+const draw = (n: number, cols: number, maxRows: number): string[] => hudLines(input(n), { merge: false, cols, maxRows, ui, rich: false, now: 0 }).map((r) => runsString(r).trimEnd());
 const todoRowsOf = (rows: string[]): string[] => rows.filter((t) => /T\d\b/.test(t));
 
 describe('layout28 item 1: the TODO box shrinks first and every agent row stays (critique 28)', () => {

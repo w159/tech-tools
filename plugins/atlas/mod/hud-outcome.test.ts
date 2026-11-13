@@ -54,10 +54,10 @@ describe('C2: the narrow LAST column never shows a stub', () => {
   test('a done outcome is drawn as lastOf gives it, never swapped for `returned` (critique 19 B1)', () => {
     const out = draw([row({ name: 'alpha-explorer', tool: 'finished' }), row({ name: 'gamma-explorer', tool: '2 functions', tasks: [3] })], 61);
     expect(out.join('\n')).not.toMatch(/reported|returned|\.\.\./);
-    expect(out.join('\n')).toContain('finished');
+    expect(out.join('\n')).toMatch(/alpha-explorer\s+done\s+T1\s+-\s+-/); // wave 31: RESULT is a count or `-`, so a text outcome is a dash
   });
   test('a count outcome reads the same words at 110 (61 cells) and 150', () => {
-    for (const cols of [61, 150]) expect(draw([row({ name: 'alpha-explorer', tool: '12 functions' })], cols).join('\n')).toContain('12 functions');
+    for (const cols of [61, 150]) expect(draw([row({ name: 'alpha-explorer', tool: '12 functions' })], cols).join('\n')).toContain('12 fn');
   });
 });
 
@@ -70,9 +70,9 @@ describe('C2: through lastOf and the HUD rows', () => {
     expect(lastOf(none, 'done', [LIVE.beta110, LIVE.gamma110])).toBe('2 functions'); // the next evidence row that states one wins
   });
   test('at 150 the gamma row shows `2 functions`, not `1.`', () => {
-    const rows = hudLines({ todos: [dispatch('gamma-explorer', LIVE.gamma150)], agents: [agent('gamma-explorer')] }, { cols: 150, maxRows: 10, ui, now: 5_000_000 }).map(runsString);
-    const g = rows.find((r) => r.includes('gamma-explorer') && /haiku/.test(r))!;
-    expect(g).toContain('2 functions');
+    const rows = hudLines({ todos: [dispatch('gamma-explorer', LIVE.gamma150)], agents: [agent('gamma-explorer')] }, { merge: false, cols: 150, maxRows: 10, ui, now: 5_000_000 }).map(runsString);
+    const g = rows.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] gamma-explorer/.test(r))!;
+    expect(g).toContain('2 fn');
     expect(g).not.toMatch(/\s1\.\s/);
     expect(agentModel([agent('gamma-explorer')], [dispatch('gamma-explorer', LIVE.gamma150)])[0]!.tool).toBe('2 functions');
   });

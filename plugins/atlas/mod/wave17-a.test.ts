@@ -89,7 +89,7 @@ describe('A2: blocked is one red square, warnings keep the amber triangle, count
     for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[■▲▲◐◇◉]\d/);
     for (const cols of [50, 40]) expect(band({ ...m, cols })).not.toMatch(/[■▲▲]1/); // narrower than the word forms: the blocked count is dropped, never a bare glyph and number
     expect(band({ ...m, cols: 73 })).toContain('1 running');
-    expect(band({ ...m, cols: 110 })).toContain('2 failed');
+    expect(band({ ...m, cols: 110 })).toContain('2 killed');
   });
 });
 
@@ -167,8 +167,8 @@ describe('A5: the docked 110-column band (73 cells) uses the words of the 150-co
   test('the stop-run shape keeps both counts in words; the open-dispatch note is the first segment to go at 73 cells (the state word, spinner and todo come first)', () => {
     const w = [...run(1), { name: 'g', state: 'failed' as const, secs: 3 }];
     const t = at(73, { openWork: 7, openDispatch: 2, workers: w });
-    expect(t).toMatch(/working · todo 0\/5 · .* 1 running · .* 1 failed/);
+    expect(t).toMatch(/working · todo 0\/5 · .* 1 running · .* 1 killed/);
     expect(t).not.toMatch(/[■◐◓◑◒]1\b/);
-    expect(at(150, { openWork: 7, openDispatch: 2, workers: w })).toMatch(/todo .* 0\/5 · 2 dispatches open +agents .* 1 running +■ 1 failed/);
+    expect(at(150, { openWork: 7, openDispatch: 2, workers: w })).toMatch(/todo .* 0\/5 +.* 1 running · ■ 1 killed/);
   });
 });

@@ -123,10 +123,10 @@ describe('2. the TODO box is closed at every agent count, with no bare rows unde
         const at = f.rows.findIndex((r) => r.includes('▸ TODO'));
         expect(at, `${name}: a TODO box`).toBeGreaterThan(-1);
         expect(f.rows[at]!, `${name}: top rule`).toMatch(/^╭.*╮\s*$/);
-        const close = f.rows.findIndex((r, i) => i > at && /^╰─+╯\s*$/.test(r));
+        const close = f.rows.findIndex((r, i) => i > at && /^╰.*╯\s*$/.test(r)); // wave 31: a merged block closes on the SUBAGENTS rule
         expect(close, `${name}: bottom rule`).toBeGreaterThan(at);
         expect(text, name).not.toMatch(/^── ◖ ◆ ATLAS ◗ ▸/m); // no flat ribbon without corners
-        expect(f.rows.at(-1)!.trim(), `${name}: the last row is a rule, not a blank`).not.toBe('');
+        expect(f.rows.slice(0, f.rows.length - f.plan.pad).at(-1)!.trim(), `${name}: the last drawn row is a rule, not a blank (wave 31: unfilled slot rows are pad under the block)`).not.toBe('');
       }
     });
   }
@@ -134,30 +134,27 @@ describe('2. the TODO box is closed at every agent count, with no bare rows unde
 
 describe('3. SUBAGENTS draws every running agent', () => {
   for (const [cols, screen] of [[150, 70], [110, 60], [150, 45], [110, 40], [150, 36]] as const) {
-    test(`${cols} columns: 3 running agents are 3 rows under the title, and the title never promises a row that is not drawn`, () => {
+    test(`${cols} columns: 3 running agents are 3 rows in the block, and the title never promises a row that is not drawn`, () => {
       const f = frameOf({ running: 3, returned: 0, planned: true }, cols - 5, hostBudget(screen, 3), 0);
       const at = f.rows.findIndex((r) => r.includes('▸ SUBAGENTS'));
       expect(at).toBeGreaterThan(-1);
-      const agentRows = f.rows.slice(at + 1).filter((r) => /^[ ▸] [◐◓◑◒] \S+-explorer/.test(r));
+      const agentRows = f.rows.filter((r) => /^[ ▸] [◐◓◑◒] .*-explorer/.test(r)); // wave 31: the agents ride their rows above the SUBAGENTS rule
       expect(agentRows).toHaveLength(3);
       expect(f.rows[at]!).not.toMatch(/\+\d+ more/);
     });
   }
-  test('56 columns (110 with the pane docked): all three rows, each with its RESULT cell', () => {
+  test('56 columns (110 with the pane docked): all three rows, each with its clock', () => {
     const f = frameOf({ running: 3, returned: 0, planned: true }, 56, hostBudget(40, 3), 0);
-    const at = f.rows.findIndex((r) => r.includes('▸ SUBAGENTS'));
-    const agentRows = f.rows.slice(at + 1).filter((r) => /^[ ▸] [◐◓◑◒] \S+-explorer/.test(r));
+    const agentRows = f.rows.filter((r) => /^[ ▸] [◐◓◑◒] .*-explorer/.test(r));
     expect(agentRows).toHaveLength(3);
-    for (const r of agentRows) expect(r.trimEnd().length, r).toBeGreaterThan(46); // the RESULT cell (the last call) starts at 46 and is drawn on every row
+    for (const r of agentRows) expect(r.trimEnd(), r).toMatch(/\d+:\d\d$/); // the agent and its clock are right-aligned on the row
   });
-  test('the column names are the same while working and at idle (RESULT does not vanish and reappear)', () => {
+  test('at rest the SUBAGENTS box names the same columns at every width (RESULT does not vanish and reappear)', () => {
     for (const cols of [56, 100, 145]) {
-      const names = [{ running: 3, returned: 0, planned: true }, { running: 0, returned: 3, planned: true, doneTodos: 5, working: false }].map((st) => {
-        const f = frameOf(st as Stage, cols, 18, 0);
-        const at = f.rows.findIndex((r) => r.includes('▸ SUBAGENTS'));
-        return f.rows[at + 1]!.includes('RESULT');
-      });
-      expect(names[0], `${cols}`).toBe(names[1]!);
+      // wave 31: while agents run the SUBAGENTS rule closes the merged block; at rest the box names the same five columns at every width
+      const f = frameOf({ running: 0, returned: 3, planned: true, doneTodos: 5, working: false } as Stage, cols, 18, 0);
+      const at = f.rows.findIndex((r) => /^╭.*▸ SUBAGENTS/.test(r));
+      expect(f.rows[at + 1]!, `${cols}`).toMatch(/AGENT\s+STATE\s+TASK\s+LAST\s+RESULT/);
     }
   });
 });
@@ -202,11 +199,11 @@ describe('5. the band says each thing once', () => {
     expect(row).toMatch(/working/);
     expect(row).not.toContain('▲');
   });
-  test('ctx is printed once: not on the band of a run whose turn footer already says it', () => {
+  test('ctx is not on the one-row band (the turn footer says it)', () => {
     const snapshot = snapshotOf({ running: 0, returned: 3, planned: true, doneTodos: 5, working: false });
     const mk2 = (ranSecs: number | undefined) => rowsOf(bandTree(els, { snapshot, live: liveWorkers(snapshot, snapshot.now), gates: [], columns: 150, tick: 3, ui, maxRows: 1, working: false, ranSecs, restSecs: 40 } as never, undefined) as unknown as Node)[0]!;
     expect(mk2(66)).not.toMatch(/ctx/);
-    expect(mk2(undefined)).toMatch(/ctx .*7%/); // a session that has not run yet has no turn footer: the band keeps the figure
+    expect(mk2(undefined)).not.toMatch(/ctx/); // wave 31: the context figure is the rich band's, never the one-row band's
   });
 });
 

@@ -11,7 +11,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 export const worldTodos = (): TodoRow[] => world.todos.map((t) => ({ label: t.label, state: t.state, detail: t.detail, focus: t.state === 'running' }));
 export const worldAgents = (): AgentRow[] => // the adapter's order (hud.ts agentModel): by task, not by state
   sortAgents(world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running', elapsed: elapsedClock(w.age_s) })));
-const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
+const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, merge: false, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
 /** A golden title carries `@SPIN@` for the band's braille spinner glyph at frame 0 (the title turns the band frame; the rows keep the circle quarters). */
 const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(leadSpinnerGlyph(0), '@SPIN@') : r));
@@ -97,13 +97,13 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
       expect(spun(text(agentRows(worldAgents(), opts(cols, rich), full)))).toEqual([...golden]);
     });
   }
-  test('A4: 80 to 99 columns (a wide terminal with the pane docked) show model, task and last line, as 104 does', () => {
+  test('A4: 80 to 99 columns (a wide terminal with the pane docked) show task, clock and result, as 104 does', () => {
     for (const cols of [80, 88, 99]) {
       const rows = text(agentRows(worldAgents(), opts(cols), full));
       expect(rows[1]).toMatch(/AGENT +STATE +TASK +LAST/); // MODEL joins from 120 columns
       expect(rows[1]).not.toMatch(/MODEL/);
-      expect(rows[4]).toMatch(/implementer-band +running +T4 +\d+:\d\d +read runs\.ts:17/);
-      expect(rows[5]).toMatch(/runner-land +queued +T5 +0:00 +waits on implementer-live/);
+      expect(rows[4]).toMatch(/implementer-band +running +T4 +\d+:\d\d +-$/); // wave 31: RESULT is a count or a dash, never the tool
+      expect(rows[5]).toMatch(/runner-land +queued +T5 +0:00 +-$/);
       for (const r of agentRows(worldAgents(), opts(cols), full)) expect(runsString(r).length).toBeLessThanOrEqual(cols);
     }
     // nothing a narrow terminal shows is missing from a wide one: the 104 column row carries the same cells
@@ -190,8 +190,8 @@ describe('SUBAGENTS task column (critique-3 change 8)', () => {
     expect(out.find((r) => / a /.test(r))).toContain('T1,T2');
     expect(out.find((r) => / b /.test(r))).toContain('3 tasks');
   });
-  test('the full form names its columns in the spacer row: AGENT STATE MODEL TASK LAST (rich: CTX instead of TASK)', () => {
-    expect(text(agentRows([row('a', [1])], opts(120), full))[1]).toMatch(/^ {4}AGENT +STATE +MODEL +TASK +LAST +RESULT$/);
+  test('the full form names its columns in the spacer row: AGENT STATE TASK LAST RESULT (rich: CTX instead of TASK)', () => {
+    expect(text(agentRows([row('a', [1])], opts(120), full))[1]).toMatch(/^ {4}AGENT +STATE +TASK +LAST +RESULT$/); // wave 31: the same columns at every width
     expect(text(agentRows([row('a', [1])], opts(120, true), full))[1]).toMatch(/^ {4}AGENT +STATE +CTX +MODEL +LAST +RESULT$/);
     expect(text(agentRows([row('a', [1])], opts(80), full))[1]).toMatch(/^ {4}AGENT +STATE +TASK +LAST +RESULT$/); // A4: 80 columns names them too, without MODEL (120 columns and up)
   });
@@ -241,11 +241,11 @@ describe('mutation kills (round 2): order, slots, focus mark, name column cap, s
     expect(tight[1]).toContain('running');
     expect(tight[1]).toMatch(/x… {2}running/); // a one-cell `…` and the 2-cell gutter, never `...`
   });
-  test('stack puts a blank row between the blocks only when spacers is on and both blocks exist', () => {
+  test('stack puts no blank row between the blocks (wave 31)', () => {
     const s = { todos: [td('t')], agents: [ag('a')] };
     const blanks = (b: { spacers: boolean; extras: boolean }, x: { todos: TodoRow[]; agents: AgentRow[] }) => stack(x, opts(120), b).filter((r) => r.length === 0).length;
     const on = { spacers: true, extras: false };
-    expect(blanks(on, s)).toBe(1); // the separator between the blocks (the TODO block has no blank row) (the agents' spacer row holds the column words)
+    expect(blanks(on, s)).toBe(0); // wave 31: no spacer row between the blocks (the agents' spacer row holds the column words)
     expect(blanks({ spacers: false, extras: false }, s)).toBe(0);
     // One block alone never gets the separator row.
     expect(blanks(on, { todos: s.todos, agents: [] })).toBe(0); // no separator and no blank inside the block
@@ -267,8 +267,7 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
     const widths = [140, 100, 90, 80];
     const seen = widths.map((w) => lines([a], w)[0]!);
     for (const l of seen) { expect(l).toContain('board-auditor-open-items'); expect(l).toContain('running'); expect(l).not.toContain('...items'); }
-    expect(seen[0]).toContain('first lines');
-    expect(seen[3]).not.toContain('first');
+    for (const l of seen) expect(l).not.toContain('first lines'); // wave 31: the tool echo is not drawn, RESULT is a count or a dash
     const at = (l: string) => ({ task: l.includes('T1'), last: l.includes('read alpha') });
     // Whatever survives, a later column never shows without the earlier one (MODEL is 120 columns and up only).
     for (const l of seen) { const c = at(l); if (c.last) expect(c.task).toBe(true); }
@@ -321,10 +320,10 @@ describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
     const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const at = (n: number): string[] => text(fitStack({ todos, agents: rows }, opts(110), n));
-    const full = at(11); // title + 3 plan rows + rule + blank + title + column names + 2 agents + rule
-    expect(full).toHaveLength(11);
+    const full = at(11); // title + 3 plan rows + rule + title + column names + 2 agents + rule
+    expect(full).toHaveLength(10);
     expect(full[4]).toMatch(/^╰─+╯$/);
-    expect(full[5]).toBe('');
+    expect(full[5]).toContain('SUBAGENTS'); // wave 31: no blank between the boxes
     expect(full.at(-1)).toMatch(/^╰─+╯$/);
     const tops = (o: string[]): number => o.filter((l) => l.startsWith('╭─ ') && l.endsWith('╮')).length;
     const bottoms = (o: string[]): number => o.filter((l) => /^╰─+╯$/.test(l)).length;
@@ -351,23 +350,23 @@ describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
     expect(packed.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
     expect(packed.some((l) => l.includes('▸ TODO'))).toBe(false);
   });
-  test('B4: a doubled verb draws once in the LAST column', () => {
+  test('B4: a doubled verb never reaches the row (RESULT is a count or a dash)', () => {
     const out = text(agentRows([row({ name: 'alpha-explorer', tasks: [1], tool: 'read Read alpha.py' })], opts(110), full));
-    expect(out[2]).toContain('T1      -       read alpha.py'); // TASK is a fixed 7-cell column, LAST the elapsed clock (a dash with no start), then RESULT draws the verb once
+    expect(out[2]).toMatch(/T1 +-\s+-\s*$/); // wave 31: TASK, LAST (a dash with no start), RESULT (a dash): the tool echo is not drawn
     expect(out[2]).not.toContain('Read');
     expect(out[2]).not.toContain('read alpha.py read alpha.py');
   });
-  test('B4: a 53-cell LAST fits whole at 110 on the fixed grid (critique 19 B2: the model column no longer gives or takes slack)', () => {
+  test('B4: a 53-cell TASK fits whole at 110 on the fixed grid (TASK takes the free width)', () => {
     const last = 'one two three four five six seven eight nine tenth ab'; // 53 cells: LAST starts at 52 of 110
-    const out = text(agentRows([row({ name: 'alpha-explorer', task: 'read alpha.py', tool: last })], opts(110), full));
+    const out = text(agentRows([row({ name: 'alpha-explorer', task: last, tool: 'read alpha.py' })], opts(110), full));
     expect(out[2]).toContain(last);
     expect(out[2]).not.toContain('...');
     expect(textWidth(out[2]!)).toBeLessThanOrEqual(110);
   });
-  test('B4: a done agent keeps its LAST text (the row turning done does not blank it)', () => {
-    const out = text(agentRows([row({ name: 'alpha-explorer', state: 'done', task: 'read alpha.py', tool: 'read runs.ts:17' })], opts(110), full));
+  test('B4: a done agent keeps its RESULT count (the row turning done does not blank it)', () => {
+    const out = text(agentRows([row({ name: 'alpha-explorer', state: 'done', task: 'read alpha.py', tool: '2 functions' })], opts(110), full));
     expect(out[2]).toContain('done');
-    expect(out[2]).toContain('read runs.ts:17');
+    expect(out[2]).toMatch(/2 fn\s*$/);
   });
 });
 
@@ -405,6 +404,6 @@ describe('critique 11 C4: the TODO box', () => {
     expect(out.filter((l) => /^╰─+╯$/.test(l))).toHaveLength(2);
     expect(out.filter((l) => l.includes('queued')).length).toBe(5); // all five plan rows still show
     expect(out.filter((l) => /explorer +done/.test(l))).toHaveLength(3);
-    expect(text(fitStack({ todos, agents }, opts(110), 14))).toHaveLength(14); // one more row: the blank returns
+    expect(text(fitStack({ todos, agents }, opts(110), 14))).toHaveLength(13); // one more row: nothing returns, there is no blank to give back
   });
 });

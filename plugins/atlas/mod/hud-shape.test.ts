@@ -22,7 +22,7 @@ const done: HudInput = { todos: [1, 2, 3, 4, 5].map((i) => todo(i, 'completed', 
 const blocked: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'blocked', OWNERS[1]), todo(3, 'completed', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: [agent(OWNERS[0]!, 'done', 'done'), agent(OWNERS[1]!, 'failed', 'failed'), agent(OWNERS[2]!, 'done', 'done')] };
 const STATES = { working, done, blocked } as const;
 
-const draw = (input: HudInput, cols: number, maxRows = 40, over: { tick?: number; now?: number } = {}): Run[][] => hudLines(input, { cols, maxRows, ui, now: over.now ?? NOW, ...(over.tick !== undefined ? { tick: over.tick } : {}) });
+const draw = (input: HudInput, cols: number, maxRows = 40, over: { tick?: number; now?: number } = {}): Run[][] => hudLines(input, { cols, maxRows, ui, merge: false, now: over.now ?? NOW, ...(over.tick !== undefined ? { tick: over.tick } : {}) });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
 
 /** The scorer's rev 4 locators, ported: a block header is the ribbon then `▸ `; a TODO row, after an optional `▸ `, is `<glyph> T<n> `; a SUBAGENTS row is `<glyph> <name> <state word>`. */
@@ -92,8 +92,8 @@ describe('step 2: a rounded box that never changes shape', () => {
       expect(closes.map(([l]) => l)).toEqual([`╰${'─'.repeat(cols - 2)}╯`, `╰${'─'.repeat(cols - 2)}╯`]); // both blocks, every state
       expect(closes[1]![1]).toBe(out.length - 1); // SUBAGENTS closes the HUD; the host or the register adds the blank under it
       const subAt = heads[1]![1];
-      expect([out[subAt - 2], out[subAt - 1]]).toEqual([`╰${'─'.repeat(cols - 2)}╯`, '']); // exactly one blank between TODO and SUBAGENTS
-      expect(out.filter((l) => l === '')).toHaveLength(1);
+      expect(out[subAt - 1]).toBe(`╰${'─'.repeat(cols - 2)}╯`); // wave 31: the SUBAGENTS box starts on the row under the TODO box's rule, no blank between
+      expect(out.filter((l) => l === '')).toHaveLength(0);
       for (const l of out) expect(cells(l)).toBeLessThanOrEqual(cols);
       expect(out.slice(1).some((l) => /^[│┃]/.test(l.trim()) && !l.startsWith('╰'))).toBe(false); // rows carry no side border: the scorer reads the glyph first
       for (const [l] of closes) expect(/^\S\S/.test(l)).toBe(true); // a closing line with no space after its first character is skipped by the scorer
@@ -107,7 +107,7 @@ describe('step 2: a rounded box that never changes shape', () => {
     }
   });
   test('ASCII keeps the same shape: `+-` and `-+` on the header, `+---+` closing, `[ATLAS]` for the ribbon', () => {
-    const out = text(hudLines(working, { cols: 110, maxRows: 40, ui: { theme: 'mocha', ascii: true, color: 'none' }, now: NOW }));
+    const out = text(hudLines(working, { cols: 110, maxRows: 40, merge: false, ui: { theme: 'mocha', ascii: true, color: 'none' }, now: NOW }));
     expect(out[0]).toMatch(/^\+- \[ATLAS\] > TODO .*-\+$/); // the rule runs to the last cell and ends in `+`
     expect(out.filter((l) => /^\+-+\+$/.test(l))).toHaveLength(2);
     for (const l of out.filter((x) => x.trim() !== '')) expect(cells(l)).toBeLessThanOrEqual(110);
@@ -119,21 +119,20 @@ describe('step 2: a rounded box that never changes shape', () => {
       const plan = (out: string[]): string[] => out.filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(l));
       const corners = (out: string[]): [number, number, number] => [out.filter((l) => l.startsWith('╭─ ')).length, out.filter((l) => l.endsWith('╮')).length, out.filter((l) => l.startsWith('╰') && l.endsWith('╯')).length];
       const names = (out: string[]): boolean => out.some((l) => /AGENT\s+STATE/.test(l));
-      expect(at(40)).toHaveLength(14);
-      for (let n = 14; n >= 8; n--) {
+      expect(at(40)).toHaveLength(13); // wave 31: no blank row between the boxes
+      for (let n = 13; n >= 8; n--) {
         const out = at(n);
         expect([cols, n, out.length <= n]).toEqual([cols, n, true]);
         expect([cols, n, corners(out)]).toEqual([cols, n, [2, 2, 2]]); // a box is closed at every budget (critique 28)
-        expect([cols, n, names(out)]).toEqual([cols, n, n >= 13]); // the column names go first after the blank
+        expect([cols, n, names(out)]).toEqual([cols, n, n >= 13]); // the column names go first
       }
-      expect(at(14).filter((l) => l === '')).toHaveLength(1);
-      expect(at(13).filter((l) => l === '')).toHaveLength(0); // the blank goes first
+      for (let n = 13; n >= 8; n--) expect(at(n).filter((l) => l === '')).toHaveLength(0); // no spacer row at any budget
       expect(plan(at(13))).toHaveLength(5); // every plan row stays
-      expect(plan(at(12))).toHaveLength(5); // then the names; still every plan row
+      expect(plan(at(12))).toHaveLength(5); // then the names go; still every plan row
       expect(at(11)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
       expect(plan(at(11)).some((l) => /T[12] read/.test(l))).toBe(false);
       expect(plan(at(8)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place
-      for (let n = 14; n >= 8; n--) expect(at(n).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(l))).toHaveLength(3); // every agent keeps its row
+      for (let n = 13; n >= 8; n--) expect(at(n).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(l))).toHaveLength(3); // every agent keeps its row
     }
   });
 });
@@ -170,23 +169,24 @@ describe('step 3: honest rows', () => {
     for (const cols of WIDTHS) expect(text(agentRows(rows, { cols, ui }, { spacers: true, extras: false, close: true }))[2]).toContain('gamma-explorer');
   });
   test('truncation is all or none per column: a cell that does not fit ends in a one-cell `…`, never `...`, never a cut without a mark, never another word', () => {
-    const mk = (name: string, tool: string): AgentRow => ({ name, state: 'running', model: 'haiku', tasks: [1], tool, ctx: null, focus: false });
-    const rows = [mk('alpha-explorer', 'read a-very-long-file-name-that-cannot-fit.py'), mk('beta-explorer', 'read b.py'), mk('gamma-explorer', 'bash')];
-    for (const cols of [110, 80, 70]) { // RESULT is the column that ends in a mark; 57 cells leave no room for it
-      const lasts = text(agentRows(rows, { cols, ui }, { spacers: true, extras: false, close: true })).slice(2, -1).map((l) => l.split(/\s{2,}/).at(-1)!);
-      expect([cols, lasts[1]!.startsWith('read b') || lasts[1]!.endsWith('…')]).toEqual([cols, true]);
-      expect([cols, lasts[0]!.endsWith('…') || lasts[0] === 'read a-very-long-file-name-that-cannot-fit.py']).toEqual([cols, true]);
-      for (const l of lasts) expect([cols, l, /\S\.\.\.$/.test(l)]).toEqual([cols, l, false]);
+    const mk = (name: string, task: string): AgentRow => ({ name, state: 'running', model: 'haiku', tasks: [1], task, tool: '', ctx: null, focus: false });
+    const long = 'read a-very-long-file-name-that-cannot-fit-in-any-task-column-at-all-because-it-keeps-going-and-going.py';
+    const rows = [mk('alpha-explorer', long), mk('beta-explorer', 'read b.py'), mk('gamma-explorer', 'bash')];
+    for (const cols of [110, 80, 70]) { // wave 31: TASK takes the free width; the cell that does not fit ends in a one-cell mark
+      const lines = text(agentRows(rows, { cols, ui }, { spacers: true, extras: false, close: true })).slice(2, -1);
+      expect([cols, lines[0]!.includes('…')]).toEqual([cols, true]);
+      expect([cols, lines[1]!.includes('read b.py')]).toEqual([cols, true]);
+      for (const l of lines) expect([cols, l, /\S\.\.\./.test(l)]).toEqual([cols, l, false]);
     }
   });
-  test('MODEL and TASK are never `-` when known: the TASK falls back to the dispatch row text, MODEL keeps the squad model', () => {
+  test('TASK is never `-` when known: it falls back to the dispatch row text, MODEL keeps the squad model (no MODEL column since wave 31)', () => {
     const dispatch = { ...todo(3, 'in_progress'), id: 'd3', content: 'read gamma.py', owner: 'gamma-explorer', origin: 'dispatch' } as unknown as TodoItem;
     const lone = agentModel([agent('gamma-explorer', 'working', 'running')], [dispatch])[0]!;
     expect([lone.task, lone.model]).toEqual(['read gamma.py', 'haiku']);
     for (const cols of [150, 110]) {
       const line = text(agentRows([lone], { cols, ui }, { spacers: true, extras: false, close: true }))[2]!;
-      expect(line.includes('haiku')).toBe(cols >= 120); // MODEL shows from 120 columns
-      expect(line).toMatch(cols >= 120 ? /haiku {3}read g…/ : /running {5}read g…/); // the dispatch text, cut with a one-cell mark in the 7-cell TASK column, never `-`
+      expect(line.includes('haiku')).toBe(false); // wave 31: the plain grid is AGENT STATE TASK LAST RESULT at every width
+      expect(line).toMatch(/running +T?\d* ?read gamma\.py/); // the dispatch text takes the free width, never `-`
     }
     expect(agentModel([agent('gamma-explorer', 'working', 'running', { model: '' })], [])[0]!.model).toBe('-'); // unknown stays an honest dash
   });
@@ -207,12 +207,12 @@ describe('step 3: honest rows', () => {
       expect([cols, out[2]!.match(/running/g)!.length]).toEqual([cols, 1]); // the state column only
       expect([cols, /\s0:24(\s|$)/.test(out[2]!)]).toEqual([cols, true]);
     }
-    expect(text(agentRows([{ ...running, tool: 'read a.py' }], { cols: 110, ui }, { spacers: true, extras: false, close: true }))[2]).toMatch(/0:24 {4}read a\.py$/); // RESULT follows LAST, the clock stays the one type in its column
+    expect(text(agentRows([{ ...running, tool: 'read a.py' }], { cols: 110, ui }, { spacers: true, extras: false, close: true }))[2]).toMatch(/0:24 +-$/); // wave 31: RESULT follows LAST and holds a count or `-`, never the activity
   });
-  test('at 110 all five TODO rows show while running when the budget allows (the box and the agents take 14 rows)', () => {
+  test('at 110 all five TODO rows show while running when the budget allows (the box and the agents take 13 rows)', () => {
     for (const cols of [110, 57]) {
-      const out = text(draw(working, cols, 14));
-      expect(out).toHaveLength(14);
+      const out = text(draw(working, cols, 13));
+      expect(out).toHaveLength(13);
       expect(out.filter((l) => /^[▸ ]\s*\S T[1-5] /.test(l))).toHaveLength(5);
       expect(out[0]).not.toMatch(/more/);
     }
@@ -237,7 +237,7 @@ describe('step 4 (critique 27): `returned` is the neutral `◉` and the word in 
     });
   }
   test('ASCII: the neutral mark and the word', () => {
-    const out = text(hudLines(returnedInput, { cols: 110, maxRows: 40, ui: { theme: 'mocha', ascii: true, color: 'none' }, now: NOW }));
+    const out = text(hudLines(returnedInput, { cols: 110, maxRows: 40, merge: false, ui: { theme: 'mocha', ascii: true, color: 'none' }, now: NOW }));
     expect(out.find((l) => l.includes('T2 read beta.py'))).toMatch(/^ {2}\? T2 .* returned$/);
   });
 });

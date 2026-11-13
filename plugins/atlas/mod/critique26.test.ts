@@ -7,6 +7,7 @@
 //   6  an idle band's `△` and its words are dim, amber only while working or blocked
 import { describe, expect, test } from 'claude-code/testing';
 import { bandTree } from './band';
+import { bandLines } from './mission-layout';
 import { hudAgents, hudRows } from './hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
@@ -140,21 +141,14 @@ describe('5: one spinner frame per render', () => {
   });
 });
 
-describe('6: an idle band is not amber', () => {
-  test('`△` and its words are the dim grey (240) while the band is idle', () => {
-    const snap = worldIdleSnapshot();
-    const tree = bandTree(els, { snapshot: snap, live: liveWorkers(snap, snap.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12, ui: UI256 } as never);
-    const hits: { text: string; color: string }[] = [];
-    const walk = (n: unknown): void => {
-      if (Array.isArray(n)) return n.forEach(walk);
-      if (n === null || typeof n !== 'object') return;
-      const o = n as { props?: { children?: unknown; color?: string } };
-      const kids = o.props?.children;
-      if (typeof kids === 'string' && o.props?.color && /△|to check/.test(kids)) hits.push({ text: kids, color: o.props.color });
-      walk(kids);
-    };
-    walk((tree as unknown as { props: { children: unknown[] } }).props.children[0]); // the band's own row; the checks footer below it keeps its own colours
-    expect(hits.length).toBeGreaterThan(0);
-    for (const h of hits) expect([h.text, hostTo256(h.color)]).toEqual([h.text, 240]);
+describe('6: the gate warning is one colour in every state', () => {
+  test('wave 31: `△` and its words keep the warn tone in every quiet state (idle phases and done; a working band shows no warning)', () => {
+    const base = { cols: 150, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'plan', 'build', 'verify', 'done'] as const, total: 7, workers: [], checks: [{ id: 'routing', ok: false, name: 'routing' }], ui: { theme: 'mocha', ascii: false, color: '256' } as const };
+    for (const [phase, done, busy] of [['research', 3, false], ['plan', 3, false], ['done', 7, false]] as const) {
+      const runs = bandLines({ ...base, phase, done, busy } as never)[0]!.runs;
+      const hits = runs.filter((r) => /△|to check|gate/.test(r.t));
+      expect([phase, hits.length > 0]).toEqual([phase, true]);
+      for (const h of hits) expect([phase, h.t, h.tone]).toEqual([phase, h.t, 'warn']);
+    }
   });
 });

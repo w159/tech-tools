@@ -20,7 +20,7 @@ describe('motionFeed', () => {
     expect(f['hud-todo'].map((i) => i.key)).toEqual(['todo:wire the gate', 'todo:write the tests']);
     expect(f.board.map((i) => i.key)).toEqual(['board:wire the gate', 'board:write the tests']);
     expect(f.panel.some((i) => i.key === 'task:T1')).toBe(true);
-    expect(f.band.map((i) => i.key)).toEqual(['count:running', 'count:blocked', 'count:failed', 'count:waiting', 'count:queued', 'count:done']);
+    expect(f.band.map((i) => i.key)).toEqual(['count:running', 'count:blocked', 'count:failed', 'count:waiting', 'count:queued', 'count:done', 'band:lead']); // wave 31: the band's done word fades too
     expect(f['hud-agents'].length).toBeGreaterThan(0);
   });
   test('a status change moves the state the feed reports, and the HUD row for that key is drawn mid-transition', () => {

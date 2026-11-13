@@ -113,7 +113,7 @@ function ccBand(s: LiveSnapshot): Facts {
   const rows = rowsOfTree(bandTree(els, { snapshot: s, live: liveWorkers(s, s.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12, ui }));
   const head = rows[0]!;
   return {
-    todo: todoOf(head), blocked: Number(/(\d+) blocked/.exec(head)?.[1] ?? 0), phase: /phase (\d+\/\d+)/.exec(head)?.[1],
+    todo: todoOf(head), blocked: /(\d+) blocked/.test(head) ? Number(/(\d+) blocked/.exec(head)![1]) : undefined, phase: /phase (\d+\/\d+)/.exec(head)?.[1],
     agents: bandCounts(head), gates: gatePairs(rows.find((r) => r.includes('checks')) ?? ''),
     workers: stateRows(rows.slice(1), new RegExp(`^ (${G}) (\\S+)`)),
   };
@@ -122,7 +122,7 @@ function ompBand(): Facts {
   const rows = renderPanel(worldOmp(120)).map(strip);
   const head = rows[0]!;
   return {
-    todo: todoOf(head), blocked: Number(/(\d+) blocked/.exec(head)?.[1] ?? 0), phase: /phase (\d+\/\d+)/.exec(head)?.[1],
+    todo: todoOf(head), blocked: /(\d+) blocked/.test(head) ? Number(/(\d+) blocked/.exec(head)![1]) : undefined, phase: /phase (\d+\/\d+)/.exec(head)?.[1],
     agents: bandCounts(head), gates: gatePairs(rows.find((r: string) => r.includes('checks')) ?? ''),
     workers: stateRows(rows.slice(1), new RegExp(`^ (${G}) (\\S+)`)),
   };
@@ -134,13 +134,16 @@ function hudFacts(s: LiveSnapshot, host: 'cc' | 'omp', rich = false): Facts {
   const input = { todos: s.todos, agents: hudAgents(live, s.squad, queuedMembers(s)), root: s.root, phases: hudPhases(s) };
   const opts = { cols: 120, maxRows: 60, ui, now: s.now, rich };
   const rows = host === 'cc' ? hudLines(input, opts).map((r) => r.map((x) => x.t).join('').trimEnd()) : ompHudText(input, opts);
+  // wave 31: in the one-block shape the agents ride the TODO rows, so the per-worker facts (state, task ids) are read from the two-box shape of the same input
+  const two = host === 'cc' ? hudLines(input, { ...opts, merge: false }).map((r) => r.map((x) => x.t).join('').trimEnd()) : ompHudText(input, { ...opts, merge: false });
+  const at2 = two.findIndex((r: string) => r.includes('SUBAGENTS'));
   const at = rows.findIndex((r: string) => r.includes('SUBAGENTS'));
   const todoRows = rows.slice(0, at);
   return {
     todo: todoOf(rows[0]!), agents: counts(rows[at]!), rail: railOf(todoRows.join('\n')),
     items: stateRows(todoRows, new RegExp(`^[▸ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`)),
-    workers: stateRows(rows.slice(at + 1), new RegExp(`^[▸ ] (${G}) (\\S+)\\s+(queued|running|done|failed|killed|blocked|waiting)\\b`)),
-    ...(rich ? {} : { tasks: Object.fromEntries(rows.slice(at + 1).flatMap((r: string) => { const m = new RegExp(`^[▸ ] ${G} (\\S+)\\s+.*?\\s((?:T\\d+,?)+)(?:\\s|$)`).exec(r); return m ? [[m[1]!, m[2]!]] : []; })) }),
+    workers: stateRows(two.slice(at2 + 1), new RegExp(`^[▸ ] (${G}) (\\S+)\\s+(queued|running|done|failed|killed|blocked|waiting)\\b`)),
+    ...(rich ? {} : { tasks: Object.fromEntries(two.slice(at2 + 1).flatMap((r: string) => { const m = new RegExp(`^[▸ ] ${G} (\\S+)\\s+.*?\\s((?:T\\d+,?)+)(?:\\s|$)`).exec(r); return m ? [[m[1]!, m[2]!]] : []; })) }),
   };
 }
 
@@ -217,7 +220,7 @@ function owed(name: string, f: Facts, o: { attention?: boolean } = {}): string[]
   if (f.channel) same('channel header', f.channel, expected.channel);
   if (f.tasks) same('task ids', f.tasks, expected.tasks);
   if (f.agents) {
-    for (const s of STATES) if (f.agents[s] !== undefined || (s !== 'done' && expected.agentCount(s) > 0 && (o.attention || name.includes('panel') || name.includes('hud')))) {
+    for (const s of STATES) if (f.agents[s] !== undefined || (s !== 'done' && expected.agentCount(s) > 0 && !(o.attention && (s === 'queued' || s === 'blocked')) && (o.attention || name.includes('panel') || name.includes('hud')))) { // wave 31: the band states at most running and one failure word, so it owes no queued or blocked count
       // the band counts agents that are not finished; the HUD ribbon and the panel count every state
       if (s === 'done' && o.attention) continue;
       same(`agents ${s}`, f.agents[s] ?? 0, s === 'blocked' ? 0 : expected.agentCount(s));
@@ -262,7 +265,7 @@ describe('one world, every surface', () => {
 
   test('the surfaces state what the check reads: every parser found its facts', () => {
     const w = worldSnapshot();
-    expect(ccBand(w)).toMatchObject({ todo: [3, 7], blocked: 1, agents: { running: 1, failed: 1, queued: 1 } });
+    expect(ccBand(w)).toMatchObject({ todo: [3, 7], agents: { running: 1, failed: 1 } }); // wave 31: the band states todo n/m, running and one failure word
     expect(ccBand(w).phase).toBeUndefined(); // a plan exists: the band states the plan count, not a second clock
     expect(Object.keys(ccBand(w).gates!).sort()).toEqual(['doctor', 'lint', 'test']);
     expect(Object.keys(ccBand(w).workers!)).toHaveLength(5);
@@ -302,8 +305,8 @@ describe('no invented budget: a running item without an estimate reads `elapsed 
     const input = { todos: noEst.todos, agents: hudAgents(liveWorkers(noEst, noEst.now), noEst.squad, queuedMembers(noEst)), root: noEst.root, phases: hudPhases(noEst) };
     const opts = { cols: 120, maxRows: 60, ui, now: noEst.now, rich };
     return {
-      'cc hud': rowOfT4(hudLines(input, opts).map((r) => r.map((x) => x.t).join('').trimEnd())),
-      'omp hud': rowOfT4(ompHudText(input, opts)),
+      'cc hud': rowOfT4(hudLines(input, { ...opts, merge: false }).map((r) => r.map((x) => x.t).join('').trimEnd())),
+      'omp hud': rowOfT4(ompHudText(input, { ...opts, merge: false })),
       'cc board': rowOfT4(rowsOfTree(boardTree(els, withOwnerStates(noEst.todos, workerStates(noEst, liveWorkers(noEst, noEst.now))), { cols: 120, rows: 40, tick: 0, now, ui, rich }))),
       'omp board': rowOfT4(ompBoard(worldItems().map(({ estimate_s: _e, ...t }: any) => t) as never, { width: 120, tick: 0, now, ui, rich }).map(strip)),
     };

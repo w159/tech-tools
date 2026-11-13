@@ -14,7 +14,7 @@ const NOW = 1_794_458_960_000;
 const names = ['alpha-explorer', 'ghost-explorer', 'beta-explorer'];
 const item = (i: number, status: string, content: string, owner?: string, extra: object = {}): TodoItem => ({ id: `t${i}`, content, status, ...(owner ? { owner } : {}), ...extra }) as unknown as TodoItem;
 const agent = (name: string, state: string, ui_: UiState): HudAgent => ({ name, role: 'explorer', state, ui: ui_, model: 'haiku', since: NOW - 20_000, lastTool: 'Read', target: 'x.py' });
-const hud = (input: HudInput, cols: number, maxRows: number): string[] => hudLines(input, { cols, maxRows, ui, now: NOW }).map(runsString);
+const hud = (input: HudInput, cols: number, maxRows: number): string[] => hudLines(input, { merge: false, cols, maxRows, ui, now: NOW }).map(runsString);
 const rowOf = (rows: string[], key: string): string => rows.find((r) => r.includes(key)) ?? '';
 
 /** f0104: T1 completed 20 s ago (past the linger), T2 blocked, T3 pending; alpha done, ghost and beta killed, beta-explorer #2 running. */
@@ -32,7 +32,7 @@ const f0104 = (): HudInput => ({
 describe('A1: a completed row is drawn while ten rows hold it (f0104)', () => {
   test('150 columns, 15 rows (the column names and both closing rules take three), four agents: all five rows show, T1 included, with no `done` fold on the ribbon', () => {
     const rows = hud(f0104(), 150, 15);
-    expect(rows.filter((r) => /\bT[1-5] /.test(r) && !/haiku/.test(r))).toHaveLength(5);
+    expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(r))).toHaveLength(5);
     expect(rowOf(rows, 'T1 read alpha.py')).toMatch(/done/);
     expect(rows[0]).toContain('1/5');
     expect(rows[0]).not.toMatch(/· \d+ done/);
@@ -41,15 +41,15 @@ describe('A1: a completed row is drawn while ten rows hold it (f0104)', () => {
 });
 
 describe('A4: the gap row between TODO and SUBAGENTS stays while an agent runs (f0093, f0104)', () => {
-  test('f0093 shape: five plan rows and three agents in 14 rows keep both closing rules, the blank and the column names (round 3: the rules and the names outrank the blank in 13)', () => {
+  test('wave 31: f0093 shape: five plan rows and three agents keep both closing rules and the column names in 13 rows, with no blank row between the boxes', () => {
     const input: HudInput = { todos: [item(1, 'pending', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'pending', 'T2 read ghost.py (ghost-explorer)', names[1]), item(3, 'pending', 'T3 read beta.py (beta-explorer)', names[2]), item(4, 'pending', 'T4 combine the reports'), item(5, 'pending', 'T5 write the final summary')], agents: [agent(names[0]!, 'working', 'running'), agent(names[1]!, 'failed', 'failed'), agent(names[2]!, 'done', 'done')] };
     const rows = hud(input, 150, 14);
     const at = rows.findIndex((r) => r.includes('SUBAGENTS'));
-    expect(rows).toHaveLength(14);
+    expect(rows).toHaveLength(13);
     expect(rows[at + 1]).toMatch(/AGENT\s+STATE/);
-    expect(rows[at - 1]!.trim()).toBe('');
-    expect(rows.filter((r) => /\bT[1-5] /.test(r) && !/haiku/.test(r))).toHaveLength(5);
-    expect(rows.filter((r) => /-explorer/.test(r) && /haiku/.test(r))).toHaveLength(3);
+    expect(rows[at - 1]!.startsWith('╰')).toBe(true);
+    expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(r))).toHaveLength(5);
+    expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] \w+-explorer/.test(r))).toHaveLength(3);
   });
 });
 

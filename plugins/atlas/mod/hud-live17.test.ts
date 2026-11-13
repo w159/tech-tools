@@ -45,11 +45,11 @@ describe('B1: LAST is the outcome, never the raw tool echo', () => {
     const dispatch = (owner: string, evidence: string): TodoItem => ({ id: `d-${owner}`, content: `Read ${owner}`, status: 'completed', owner, origin: 'dispatch', session_id: '', evidence }) as unknown as TodoItem;
     const agent = (name: string, state: string, extra: Partial<HudAgent> = {}): HudAgent => ({ name, role: 'explorer', state, ui: state as never, model: 'haiku', since: NOW - 1000, ...extra });
     const agents = [agent('alpha-explorer', 'done', { lastTool: 'Read' }), agent('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), agent('beta-explorer', 'done', { lastTool: 'Read' })];
-    const rows = hudLines({ todos: [...plan, dispatch('alpha-explorer', ALPHA), dispatch('beta-explorer', BETA)], agents }, { cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
-    const of = (n: string): string => rows.find((r) => r.includes(` ${n} `) && /haiku/.test(r))!;
-    expect(of('alpha-explorer')).toContain('2 functions');
+    const rows = hudLines({ todos: [...plan, dispatch('alpha-explorer', ALPHA), dispatch('beta-explorer', BETA)], agents }, { merge: false, cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
+    const of = (n: string): string => rows.find((r) => new RegExp(`^[▸ ] \\S ${n} `).test(r))!;
+    expect(of('alpha-explorer')).toContain('2 fn'); // wave 31: RESULT is a count
     expect(of('ghost-explorer')).toContain('killed');
-    expect(of('beta-explorer')).toContain('1 function');
+    expect(of('beta-explorer')).toContain('1 fn');
     for (const r of rows) expect(r).not.toMatch(/first 3 lines|-> line 1/);
   });
 });
@@ -59,7 +59,7 @@ describe('B2: at narrow widths the SUBAGENTS rows keep TASK and LAST whole (MODE
   const plan: TodoItem[] = ['alpha', 'beta', 'gamma'].map((n, i) => ({ id: `t${i}`, content: `T${i + 1} read ${n}.py (${n}-explorer)`, status: 'pending', owner: `${n}-explorer` }) as unknown as TodoItem);
   const input: HudInput = { todos: plan, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map((n) => agent(n)) };
   test('the column names include LAST and every row shows what the agent is doing (61 cells: the transcript beside the docked pane)', () => {
-    const rows = hudLines(input, { cols: 61, maxRows: 30, ui, now: NOW }).map(runsString);
+    const rows = hudLines(input, { merge: false, cols: 61, maxRows: 30, ui, now: NOW }).map(runsString);
     const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
     expect(head).toContain('LAST');
     expect(head).not.toContain('MODEL');
@@ -72,10 +72,10 @@ describe('B2: at narrow widths the SUBAGENTS rows keep TASK and LAST whole (MODE
     mo.observe('hud-agents', hudMotionItems(fewer, { now: 1000 }).agents, 0);
     mo.observe('hud-agents', hudMotionItems(input, { now: 1000 }).agents, 1000);
     for (const dt of [0, 40, 100, 200]) {
-      const rows = hudLines(input, { cols: 61, maxRows: 30, ui, now: 1005, motion: mo.ctx(1000 + dt) }).map(runsString);
+      const rows = hudLines(input, { merge: false, cols: 61, maxRows: 30, ui, now: 1005, motion: mo.ctx(1000 + dt) }).map(runsString);
       const agentRows = rows.slice(rows.findIndex((r) => r.includes('SUBAGENTS')) + 2); // under the column names
       const gamma = agentRows[2]!; // the newest row, third in start order
-      expect([dt, gamma.includes('read gamma.py'), gamma.includes('T3')]).toEqual([dt, true, true]);
+      expect([dt, gamma.includes('gamma-explorer'), gamma.includes('T3')]).toEqual([dt, true, true]);
     }
   });
 });
@@ -84,9 +84,9 @@ describe('B3: the SUBAGENTS block stays after a clean finish', () => {
   test('three done agents, long after they ended: the block is still drawn (live-150-a4fad2f9-3/tab-team.png)', () => {
     const done = (n: string): HudAgent => ({ name: n, role: 'explorer', state: 'done', ui: 'done', model: 'haiku', since: NOW - 3_600_000, lastTool: 'Read' });
     const todos: TodoItem[] = [{ id: 'a', content: 'T1 read alpha.py (alpha-explorer)', status: 'completed', owner: 'alpha-explorer' } as unknown as TodoItem];
-    const rows = hudLines({ todos, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(done) }, { cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
+    const rows = hudLines({ todos, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(done) }, { merge: false, cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
     expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);
-    expect(rows.filter((r) => /haiku/.test(r))).toHaveLength(3);
+    expect(rows.filter((r) => /^[▸ ] [●◐◓◑◒] \w+-explorer\s+done/.test(r))).toHaveLength(3);
   });
 });
 
@@ -97,7 +97,7 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
   const slot = (todos: TodoItem[], cols: number, budget: number): { hud: string[]; gap: number; band: number } => {
     const input: HudInput = { todos, agents };
     const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
-    const hud = hudLines(input, { cols, maxRows: cap, ui, now: NOW }).map(runsString);
+    const hud = hudLines(input, { merge: false, cols, maxRows: cap, ui, now: NOW }).map(runsString);
     const gap = hudGapRows(hud.some((r) => r.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
     return { hud, gap, band: budget - hud.length - gap };
   };
@@ -107,8 +107,8 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     expect(hud.filter((r) => /\bT[1-5] step/.test(r))).toHaveLength(5);
     expect(hud.some((r) => /not shown|\+\d+ more/.test(r))).toBe(false);
     const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
-    expect(hud[at - 1]!.trim()).toBe('');
-    expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r) && /read \w+\.py/.test(r))).toHaveLength(3);
+    expect(hud[at - 1]!.startsWith('╰')).toBe(true); // wave 31: no blank slab row; the TODO box's closing rule sits right above the SUBAGENTS box
+    expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r) && /\bT\d\b/.test(r))).toHaveLength(3);
   });
   test('3 done, 2 open at 10 rows, where the five do not fit: the done rows fold into the ribbon count, never dropped silently', () => {
     const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 10);

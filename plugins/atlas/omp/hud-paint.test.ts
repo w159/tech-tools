@@ -10,7 +10,7 @@ import { hudRows } from "../mod/hud";
 import { hudText as rawHudText, paintHud } from "./hud-paint";
 
 const ui: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
-const opts = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
+const opts = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0, merge: false }); // the design goldens are the two-box shape at rest; the merged block (wave 31) is asserted in mod/wave31-hud.test.ts
 // The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
 const hudText = (...a: Parameters<typeof rawHudText>) => rawHudText(...a).map(l => l.replace(/(SUBAGENTS )[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/, "$1@SPIN@").replace(/[◐◓◑◒]/g, "◐")); // the title's spinner glyph is `@SPIN@` in the golden
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");

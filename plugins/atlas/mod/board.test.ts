@@ -179,7 +179,7 @@ describe('counts equal the band on the same world', () => {
   test('running, failed and queued: the same counts as the band words', () => {
     const c = boardCounts(worldBoardRows());
     const band = bandLines(model).map((l) => l.runs.map((x) => x.t).join('')).join('\n');
-    for (const s of ['running', 'failed', 'queued'] as const) expect(band).toContain(`${c[s]} ${s}`);
+    for (const s of ['running', 'failed'] as const) expect(band).toContain(`${c[s]} ${s === 'failed' ? 'killed' : s}`); // wave 31: one failure word on the band; queued is no band segment, the board counts it alone
     expect([c.running, c.failed, c.queued, c.blocked]).toEqual([1, 1, 1, 1]);
   });
   test('the rows the board draws are the world, one for one, in the world order', () => {

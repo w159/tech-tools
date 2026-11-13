@@ -24,7 +24,7 @@ const todo = (id: string, content: string, status: string, extra: Partial<TodoIt
 
 const worldPlan = worldPlanOf;
 const worldAgents = worldHudAgents;
-const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0 });
+const view = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0, merge: false });
 const phases = worldPhases();
 
 // Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) with the count and meter inside it, and a `╰───╯` rule closes the block, so the goldens are the rows as drawn.
@@ -49,9 +49,9 @@ describe('hud goldens through the Claude Code adapter (rev 4)', () => {
     for (const cols of [60, 40]) expect(trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))).join('\n')).toContain('▸ SUBAGENTS');
     expect(hudRows({ todos: [], agents: worldAgents() }, view(60))).not.toEqual([]);
   });
-  test('both blocks stack as the TODO golden, a blank row, then the SUBAGENTS golden', () => {
+  test('both blocks stack as the TODO golden then the SUBAGENTS golden, no blank row between', () => {
     const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)));
-    expect(rows).toEqual([...edge(todo_120), '', ...subagents_120]);
+    expect(rows).toEqual([...edge(todo_120), ...subagents_120]); // wave 31: no blank row between the boxes
   });
   test('every row is padded to the width and none is wider', () => {
     for (const cols of [120, 80, 60, 40]) for (const r of hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))) expect(textWidth(text(r))).toBe(cols);
@@ -169,17 +169,17 @@ describe('L11: agents are named', () => {
     expect(agent).toMatchObject({ name: 'band-explorer', model: 'claude-sonnet-5' });
     const out = trimmed(hudRows({ todos: [], agents: [agent!] }, view(120))).join('\n');
     expect(out).toContain('band-explorer');
-    expect(out).toContain('sonnet-5');
+    expect(agent!.model).toBe('claude-sonnet-5'); // wave 31: the model rides the agent, the plain grid has no MODEL column
   });
 });
 
 describe('the Subagents block is back on Claude Code', () => {
   const running: HudAgent = { name: 'impl-hud', role: 'implementer', state: 'working', model: 'claude-opus-5', tool: 'Read', target: 'mod/hud.ts:12' };
-  test('a running agent draws the SUBAGENTS ribbon with its name, state, model and last action', () => {
+  test('a running agent draws the SUBAGENTS ribbon with its name, state, task, clock and result', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [running] }, view(120)));
     expect(rows[0]).toContain('SUBAGENTS');
     expect(rows[0]).toContain('1 running');
-    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +opus-5 +- +- +read mod\/hud\.ts:12$/); // MODEL (120 columns), TASK, LAST (no start time: a dash), then RESULT);
+    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +- +- +-$/); // wave 31: AGENT STATE TASK LAST RESULT: no plan row (a dash), no start time (a dash), no count (a dash)
   });
   test('with nothing running the finished agents stay (critique 17 B3: the block outlives a clean finish)', () => {
     expect(trimmed(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120)))[0]).toContain('SUBAGENTS');
@@ -215,7 +215,7 @@ describe('the Subagents block is back on Claude Code', () => {
   });
   test('the T column is the position of the plan row the agent owns', () => {
     const plan = [todo('a', 'First', 'completed'), todo('b', 'Second', 'in_progress', { owner: 'impl-hud' })];
-    expect(trimmed(hudRows({ todos: plan, agents: [running] }, view(120))).join('\n')).toMatch(/impl-hud +running +opus-5 +T2 +- +read/);
+    expect(trimmed(hudRows({ todos: plan, agents: [running] }, view(120))).join('\n')).toMatch(/impl-hud +running +T2 .*-\s*$/m);
   });
   test('shortModel drops the provider and claude- prefix and guesses nothing', () => {
     expect(shortModel('anthropic/claude-sonnet-5')).toBe('sonnet-5');
@@ -310,7 +310,7 @@ describe('inline renderer budget (viewport less the rows below the AbovePrompt s
   const input = { todos: PLAN, agents: AGENTS };
   const hudAt = (viewportRows: number, statusRows: number | null = 4): string[] => {
     const eff = effectiveRows(viewportRows, { rows: viewportRows, isFullscreen: false }, statusRows, 2); // the slot is the whole terminal
-    return lines(hudRows(input, { cols: 138, maxRows: hudBudget(eff, hudCompactRows(input), 7, true), ui }));
+    return lines(hudRows(input, { merge: false, cols: 138, maxRows: hudBudget(eff, hudCompactRows(input), 7, true), ui }));
   };
   test('rows below the slot: prompt 3, status line, mode line and blank 2, the blank row above the prompt 1, agent list main + one per running agent', () => {
     expect(inlineBelowRows(4, 2)).toBe(3 + 4 + 2 + 3 + 1);
@@ -333,7 +333,7 @@ describe('inline renderer budget (viewport less the rows below the AbovePrompt s
     const rows = 30;
     const eff = effectiveRows(rows, { rows, isFullscreen: false }, 4, 1);
     expect(eff).toBe(rows - (3 + 4 + 2 + 1 + 2));
-    const shown = lines(hudRows({ todos: plan, agents: one }, { cols: 138, maxRows: hudBudget(eff, hudCompactRows({ todos: plan, agents: one }), 7, true), ui }));
+    const shown = lines(hudRows({ todos: plan, agents: one }, { merge: false, cols: 138, maxRows: hudBudget(eff, hudCompactRows({ todos: plan, agents: one }), 7, true), ui }));
     expect(shown.length).toBeLessThanOrEqual(eff);
     expect(shown.some((l) => l.includes('TODO'))).toBe(true);
     expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('1 running'))).toBe(true);
@@ -384,10 +384,9 @@ describe('hud fixes (round 3): canonical name, task text, finished wave', () => 
   test('the TASK column is the plan item id, never the agent description (critique 19 B2; was f0054, f0176)', () => {
     const agents = hudAgents([lw('alpha-explorer', 'working')], [sq('alpha-explorer', 'alpha-explorer: read alpha.py')]);
     const plan = [{ id: 'p1', content: 'T1 read alpha.py (alpha-explorer)', status: 'in_progress', owner: 'alpha-explorer' }] as never;
-    const rows = hudLines({ todos: plan, agents }, { cols: 120, maxRows: 10, ui, now: 0 }).map((r) => r.map((x) => x.t).join(''));
-    const row = rows.find((r) => r.includes('alpha-explorer') && r.includes('haiku') === false && /running/.test(r) && !r.includes('T1 read'))!;
-    expect(row).toMatch(/\sT1\s/);
-    expect(rows.filter((r) => /running\s+\S*\s+read alpha\.py/.test(r))).toHaveLength(0);
+    const rows = hudLines({ todos: plan, agents }, { merge: false, cols: 120, maxRows: 10, ui, now: 0 }).map((r) => r.map((x) => x.t).join(''));
+    const row = rows.find((r) => /^[▸ ] [◐◓◑◒] alpha-explorer/.test(r))!;
+    expect(row).toMatch(/\sT1\b/); // the plan item id leads the TASK cell (wave 31: the free width then carries its text)
   });
   test('a retry owns the item its first run owned: TASK reads T3 for `beta-explorer #2` (critique 19 B2: it read `read beta.py`)', () => {
     const plan = [1, 2, 3].map((n) => ({ id: `p${n}`, content: `T${n} step ${n}`, status: n === 3 ? 'in_progress' : 'completed', owner: n === 3 ? 'beta-explorer' : `x${n}-explorer` })) as never;
@@ -398,7 +397,7 @@ describe('hud fixes (round 3): canonical name, task text, finished wave', () => 
   });
   test('a finished wave lingers as one: the header count and the rows both list all three (110 f0086)', () => {
     const ags = ['alpha', 'beta', 'gamma'].map((n, i): HudAgent => ({ name: `${n}-explorer`, role: 'explorer', state: 'done', ui: 'done', since: 1000 + i * 9000 }));
-    const rows = hudLines({ todos: [], agents: ags }, { cols: 110, maxRows: 10, ui, now: 1000 + 18000 + 5000 }).map((r) => r.map((x) => x.t).join(''));
+    const rows = hudLines({ todos: [], agents: ags }, { merge: false, cols: 110, maxRows: 10, ui, now: 1000 + 18000 + 5000 }).map((r) => r.map((x) => x.t).join(''));
     expect(rows[0]).toContain('3 done');
     expect(rows.filter((r) => /explorer\s+done/.test(r))).toHaveLength(3);
   });

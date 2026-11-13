@@ -50,8 +50,9 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
     expect(rows[0]).toContain(`◖ ◆ ATLAS ◗  ⠸ working 0:42   todo `); // the state word and the clock lead, then the todo figure (round 3: the phase word is the rail's, not the band's)
     expect(rows[0]).not.toMatch(/phase \d\/\d/); // a plan exists: the todo count is the progress figure
     expect(rows[0]).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
-    expect(rows[0]).toContain('ctx ▰▱▱▱▱▱▱▱ 12%');
-    expect(rows[0]).toContain(`agents ${lspin(3)} 1 running   ■ 1 failed   ◉ 1 waiting`);
+    expect(rows[0]).not.toContain('ctx'); // wave 31: the band keeps four segments at most; the context figure is the rich band's
+    expect(rows[0]).toContain(`${lspin(3)} 1 running · ■ 1 killed`); // one failure word, and the waiting count rides the worker rows
+    expect(rows[0]).not.toContain('waiting');
     const withTodos = panel(160, { gates: [gate], snapshot: busySnap({ todos: boardTodos as any }) });
     expect(withTodos.rows).toHaveLength(panel(160, { gates: [gate] }).rows.length); // a folded board costs no row
   });
@@ -123,8 +124,8 @@ describe('band: the brand capsule and the facts, and nowhere else the task count
   test('the tiers: 160 and 120 wide, 100 mid, 79 and 60 short, 40 small', () => {
     const band = (columns: number) => panel(columns).rows[0]!.trim();
     expect(band(160)).toContain('todo ▰▰▰▱▱▱▱▱▱▱ 1/4');
-    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed · ◉ 1 waiting · ctx 12%`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
-    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`); // words, as at 150 (critique 16 A5)
+    expect(band(100)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // figures, no gauge track, below 120 (critique 9); one ` · ` separator (critique 12 A3); ctx is the first segment to give way
+    expect(band(79)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`); // words, as at 150 (critique 16 A5)
     expect(band(40)).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4`); // 40 columns: the state word, the clock and the todo figure; the lower segments (the counts) give way, never a word
   });
   test('idle shows the last run under the band', () => {
@@ -206,7 +207,7 @@ describe('workers: a row each, in words', () => {
     const snapshot = busySnap({ members: [{ name: 'runner-2' }] as never });
     const { rowNodes, rows } = panel(160, { snapshot, live: liveWorkers(snapshot, NOW) });
     expect(text(rowOf(rowNodes, 'runner-2'))).toMatch(/◇ runner-2 .*queued/);
-    expect(rows[0]).toContain('◇ 1 queued');
+    expect(rows[0]).not.toContain('queued'); // wave 31: the queued count rides the worker row, not the band
   });
   test('every width draws the same row: glyph, name, state word, last action (no role column)', () => {
     for (const columns of [99, 100, 160]) {
@@ -392,10 +393,10 @@ describe('degrade order and the row budget', () => {
 });
 
 describe('below 80 columns: only the band, one row', () => {
-  test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running · ■ 1 failed · ◉ 1 waiting` fills the columns', () => {
+  test('`◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running · ■ 1 killed` fills the columns', () => {
     const { rows } = panel(79, { gates: [gate] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 failed · ◉ 1 waiting`);
+    expect(rows[0]!.trim()).toBe(`◖ ◆ ATLAS ◗ ⠸ working 0:42 · todo 1/4 · ${lspin(3)} 1 running · ■ 1 killed`);
     expect(textWidth(rows[0]!)).toBe(79);
   });
   test('idle keeps the capsule and the todo count; 80 columns is the full layout', () => {
@@ -477,9 +478,9 @@ describe('D2 the band count is the snapshot count', () => {
 describe('mutation kills (round 2): ctx clamp, bandRows, the footer gap', () => {
   const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
   test('a lead context over 100% reads 100%, never the raw figure', () => {
-    const { rows } = panel(160, { snapshot: busySnap({ contextPct: 150 }) });
-    expect(rows[0]).toContain('100%');
-    expect(rows[0]).not.toContain('150%');
+    const { rows } = panel(160, { snapshot: busySnap({ contextPct: 150 }), rich: true });
+    expect(rows.join('\n')).toContain('100%');
+    expect(rows.join('\n')).not.toContain('150%');
   });
   test('bandRows is the band alone as plain text, one string per band row', () => {
     const rows = bandRows(worldModel(160, mocha));

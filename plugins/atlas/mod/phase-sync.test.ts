@@ -116,7 +116,7 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
     return { m, after };
   };
   for (const [name, ui] of UIS.filter(([, u]) => u.color !== 'none')) {
-    test(`${name}: every beat of a TODO row turning done differs from the one before, until it is at rest`, () => {
+    test(`${name}: a TODO row turning done steps 231, a held 151 and the weightless last beat before it is at rest`, () => {
       const { m, after } = observed(ui);
       const rest = shot(surfaces(after, ui, undefined).hud);
       const beats: string[] = [];
@@ -125,7 +125,8 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
       const ramp = beats.slice(0, at < 0 ? beats.length : at);
       // Critique 26: the 256-colour ease is the white lead-in held, then the resting row (the palette has no colour worth stepping through); a held beat repeats its neighbour there.
       expect(ramp.length).toBeGreaterThanOrEqual(ui.color === '256' ? 1 : 2);
-      if (ui.color !== '256') for (let i = 1; i < ramp.length; i++) expect([name, i, ramp[i] === ramp[i - 1]]).toEqual([name, i, false]);
+      // wave 31: 231 for one step, then 151 held (two identical beats by design), then the weightless last beat: the beats before it only ever move forward
+      if (ui.color !== '256') { expect(ramp[1]).not.toBe(ramp[0]); expect(ramp[2]).toBe(ramp[1]); expect(ramp[3]).not.toBe(ramp[2]); }
       for (let i = at + 1; at >= 0 && i < beats.length; i++) expect(beats[i]).toBe(rest); // once at rest, it stays there
     });
     test(`${name}: the state word of a HUD row is faded in the window, as in the side panel`, () => {

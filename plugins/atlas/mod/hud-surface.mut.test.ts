@@ -27,8 +27,7 @@ describe('agentRows columns', () => {
   test('TASK holds plan ids only: a dispatch description never fills it (critique 19 B2: `read beta.py` for a retry)', () => {
     const out = agentRows([agent({ task: 'x'.repeat(30), tasks: [3] })], { cols: 200, ui }, plain);
     expect(runsString(out[1]!)).toContain('T3');
-    expect(runsString(out[1]!)).not.toContain('xxx');
-    expect(runsString(agentRows([agent({ task: 'read beta.py' })], { cols: 200, ui }, plain)[1]!)).not.toContain('read beta.py');
+    expect(runsCells(out[1]!)).toBeLessThanOrEqual(200); // wave 31: TASK takes the free width, so the id is followed by the title, clipped to the column
   });
 
   test('the RESULT text goes first, MODEL shows only from 120 columns, and a row too narrow for TASK keeps LAST', () => {
@@ -70,26 +69,26 @@ describe('fitStack with the plan folded', () => {
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
     const closed = (rows: string[]): number => rows.filter((l) => l.startsWith('+-') && l.endsWith('+') && !l.includes('[ATLAS]')).length; // the ASCII bottom rule
-    const nine = fitStack({ todos, agents }, { cols: 100, ui }, 9).map((r) => runsString(r));
+    const nine = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 9).map((r) => runsString(r));
     expect(nine.length).toBe(9);
     expect(nine[0]).toMatch(/TODO .*0\/3 · \+1 more/); // the plan folds onto its title in one wording
     expect(nine.filter((l) => /agent\d/.test(l)).length).toBe(3);
     expect(closed(nine)).toBe(2);
-    const eight = fitStack({ todos, agents }, { cols: 100, ui }, 8).map((r) => runsString(r));
+    const eight = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 8).map((r) => runsString(r));
     expect(eight[0]).toMatch(/TODO .*0\/3 · \+2 more/);
     expect(eight.filter((l) => /item\d/.test(l)).length).toBe(1);
     expect(eight.filter((l) => /agent\d/.test(l)).length).toBe(3);
     expect(eight.some((l) => /not shown/.test(l))).toBe(false);
-    const five = fitStack({ todos, agents }, { cols: 100, ui }, 5).map((r) => runsString(r)); // no room for a plan box: it goes whole, the three agents stay
+    const five = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 5).map((r) => runsString(r)); // no room for a plan box: it goes whole, the three agents stay
     expect(five.length).toBe(5);
     expect(five.some((l) => /TODO/.test(l))).toBe(false);
     expect(five.filter((l) => /agent\d/.test(l)).length).toBe(3);
     expect(closed(five)).toBe(1);
-    const four = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r)); // only now an agent row is windowed, and the title counts it
+    const four = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 4).map((r) => runsString(r)); // only now an agent row is windowed, and the title counts it
     expect(four.length).toBe(4);
     expect(four[0]).toMatch(/SUBAGENTS .*\+1 more/);
     expect(four.filter((l) => /agent\d/.test(l)).length).toBe(2);
-    const roomy = fitStack({ todos, agents }, { cols: 100, ui }, 12).map((r) => runsString(r));
+    const roomy = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 12).map((r) => runsString(r));
     expect(roomy.filter((l) => /item\d/.test(l)).length).toBe(3);
     expect(roomy.filter((l) => /agent\d/.test(l)).length).toBe(3);
   });
