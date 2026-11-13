@@ -10,7 +10,7 @@ import { bodyLines, lineText } from './panel-layout';
 import { panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { FINISH_W, finishWidth, notificationTree } from './transcript/cards';
-import { cardFade, cardStackHidden, cardAged, forgetPlaced } from './transcript/placed';
+import { cardFade, cardAged, forgetPlaced } from './transcript/placed';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -107,9 +107,6 @@ describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: 
     expect(Math.abs(cardFade("done-a", 1_500) - 0.5) < 1e-9).toBe(true);
     expect(cardFade('done-a', 2_000)).toBe(1);
     expect(cardFade('done-a', 9_000)).toBe(1);
-    expect(cardStackHidden('done-a', 30_000)).toBe(true);
-    expect(cardStackHidden('done-b', 30_000)).toBe(false);
-    expect(cardStackHidden('done-c', 30_000)).toBe(false);
     forgetPlaced();
   });
 });

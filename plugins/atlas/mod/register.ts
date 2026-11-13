@@ -10,7 +10,7 @@ import type { ClientElements, EngineInterface, On, PluginOptions, RenderElement 
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
-import { bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
+import { bandBlockedOf, bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
@@ -32,7 +32,7 @@ import { registerRouting, registerCompletion } from './routing';
 import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDeps } from './discipline';
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
 import { isOlder, registerNotify } from './notify';
-import { forgetPlaced, noteRunFinal, placeFinished } from './transcript/placed';
+import { cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placeFinished } from './transcript/placed';
 import { EASE_FRAMES, EASE_MS, holdSpinFrame, sharedSpinFrame, type Ui } from './atlas-ui';
 import { IDLE_AFTER_SECS } from './mission-layout';
 import { clearLook, lookOf } from './look';
@@ -1090,6 +1090,7 @@ async function frameBeat($: EngineInterface): Promise<void> {
 	}
 	if (working || runClock.startMs !== null || ended || flip) await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; });
 	await observeBlocked($); // after the bump: the band's redraw is already asked for when the panel's clock starts
+	if (cardsDue()) await placeFinished($, snap as LiveSnapshot, snap as LiveSnapshot); // the run card and the blocked card, on the beat after the band drew the state they name
 }
 let verdictBusy = false;
 /** (Re)start the frame loop. `$.clock.every` ends when the host refuses a period, so the slow tick and the poll call this when the beat went stale. */
@@ -1391,7 +1392,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		heldKind = kStep.shown !== 'idle' ? kStep.shown : null;
 		// State 38: the run card and the band flip on the same render, on the band's final clock.
 		const finalNow = runClock.startMs === null && kStep.shown === 'done' ? finalSecsOf(runClock) ?? null : null;
-		if (noteRunFinal(finalNow) === null && finalNow !== null) await placeFinished($, snapshot, snapshot);
+		noteRunFinal(finalNow); // truth 39: the run card is placed on the next beat, never inside this render, so it cannot land a frame before the band that reads done
+		noteBlocked(kStep.shown === 'blocked' ? bandBlockedOf(bandIn([], 1)) : null);
 		const agentsListed = agents.length > 0;
 		const want = hudWantRows(hudIn, columns, snapshot.now);
 		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold

@@ -7,15 +7,15 @@
 import type { EngineInterface, RenderElement } from 'claude-code'
 import type { AtlasSnapshot } from '../contract'
 import type { LiveSnapshot } from '../orchestra-types'
-import { endedAt, liveWorkers } from '../data/live'
-import { notificationTree, type FinishOpts } from './cards'
+import { endedAt, liveWorkers, workerFacts, type WorkerFacts } from '../data/live'
+import { blockedTree, notificationTree, type FinishOpts } from './cards'
 import { forgetFailed, outcomeText } from './outcome'
 import { elapsedClock, type Ui } from '../atlas-ui'
 
 /** One finished worker, as the card needs it. */
 export interface FinishedWorker { name: string; role: string; failed: boolean; durationMs: number; /** Tool calls the worker made (the card's `· 3 calls`). */ calls?: number }
 /** A placed card's data, kept until the `Placed` site draws it. */
-export interface PlacedRow { name: string; role: string; text: string; failed: boolean; calls?: number; /** The run card's one fact after the name (`5/5 done · 3 workers`). */ fact?: string }
+export interface PlacedRow { name: string; role: string; text: string; failed: boolean; calls?: number; /** The run card's one fact after the name (`5/5 done · 3 workers`). */ fact?: string; /** The SUBAGENTS row's TIME and CALLS cells as they stood when the card was placed: a placed card is never rewritten (truth 39). */ facts?: WorkerFacts; /** A blocked card: the band's reason and clock, frozen at placement. */ blocked?: { reason: string; time: string } }
 
 const MAX_ROWS = 200
 
@@ -32,6 +32,8 @@ const RUN_NOTE_MS = 5_000 // a note older than this is from a pane that is no lo
  * so the run card waits; a number: the band has flipped to done on that figure, the card is placed on it and prints it once, never rewritten. */
 let runFinal: number | null | undefined
 let runCarded = false // the clean run's finish card is placed once per run: set when placed, cleared when the run is no longer clean
+let blockedNote: { reason: string; time: string } | null | undefined // the band reads blocked (its own reason and clock, noted by the render); null: it does not
+let blockedCarded = false // the blocked card is placed once per blocked spell: set when placed, cleared when the band leaves blocked
 const callsNow = new Map<string, number>() // worker name -> its tool calls as the latest build counts them: a card is drawn with the figure the board shows, not the one known the instant the worker ended (critique 35: alpha's card had none, the board 3)
 
 const bump = (m: Map<string, number>, k: string, by: number): void => { m.set(k, Math.max(0, (m.get(k) ?? 0) + by)) }
@@ -82,7 +84,9 @@ export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | nu
     try {
       if ((heard.get(w.name) ?? 0) > 0) { bump(heard, w.name, -1); continue } // the host row already drew this finish
       const id = `done-${w.name.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 50)}-${++counter}`
-      rows.set(id, { name: w.name, role: w.role, text: textOf(w), failed: w.failed, ...(w.calls ? { calls: w.calls } : {}) })
+      const calls = callsNow.get(w.name) ?? w.calls // frozen here: the card says what was true when it was placed, never a later count (truth 39: alpha's card read 0:12 then 0:13)
+      const facts = workerFacts(w.name)
+      rows.set(id, { name: w.name, role: w.role, text: textOf(w), failed: w.failed, ...(calls ? { calls } : {}), ...(facts ? { facts } : {}) })
       capped(rows)
       const res = await $.ui.place({ id })
       if (res.isPlaced) bump(unclaimed, w.name, 1)
@@ -93,6 +97,7 @@ export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | nu
     }
   }
   await placeRun($, prev, next)
+  await placeBlocked($)
 }
 
 /** Ask the host to draw the transcript's messages again (the chips read `runCardPlaced`). Never throws; `$` is only called here, never stored. */
@@ -117,6 +122,27 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
   } catch { /* a card is display only */ }
 }
 
+/** The blocked card (truth 39: no stop run printed one): `▌ ◆ ATLAS  ▲ blocked · stop refused  0:36`, placed once when the band first reads blocked, with the band's own reason and clock (data/runstate blockedText). The render notes what the band
+ * draws; this runs on the next beat or build, so the card never lands before the band's own blocked slab. */
+async function placeBlocked($: EngineInterface): Promise<void> {
+  try {
+    if (!blockedNote || blockedCarded) return
+    const id = `done-blocked-${++counter}`
+    rows.set(id, { name: 'blocked', role: '', text: '', failed: true, blocked: blockedNote })
+    capped(rows)
+    const res = await $.ui.place({ id })
+    if (res.isPlaced) blockedCarded = true
+    else rows.delete(id)
+  } catch { /* a card is display only */ }
+}
+/** The band's render says it reads blocked (its reason and clock, as it prints them) or that it does not (null). A new blocked spell prints one new card. */
+export function noteBlocked(b: { reason: string; secs?: number | undefined } | null): void {
+  if (b === null) { blockedNote = null; blockedCarded = false; return }
+  if (blockedNote == null) blockedNote = { reason: b.reason, time: b.secs !== undefined && Number.isFinite(b.secs) ? elapsedClock(Math.max(0, Math.floor(b.secs))) : '' }
+}
+/** A finish card (the run's, or the blocked one) waits for the next beat: the render notes it, the beat places it, so the card is never drawn before the band that says the same thing. */
+export const cardsDue = (): boolean => (typeof runFinal === 'number' && !runCarded) || (!!blockedNote && !blockedCarded)
+
 /** Wave 35 (critique 34: the run card said 0:13, the band 0:33): the band's own run seconds, noted by the pane every frame; the run card reads them when it draws. Absent (no pane open): the card keeps the workers' span. */
 /** The band's render says its run clock: a number once it closed (the band reads done on that figure), null while the run is open. */
 export const noteRunFinal = (secs: number | null | undefined): number | null | undefined => { const was = runFinal; runFinal = secs; return was }
@@ -130,17 +156,10 @@ export const runCardPlaced = (): boolean => runCarded
 export function placedTree(id: string, ui: Ui, aged = false, opts: FinishOpts & { hidden?: boolean } = {}): RenderElement | null {
   const r = rows.get(id)
   if (!r) return null
-  if (opts.hidden && !r.failed) return { type: 'Text', props: {}, children: [] } as RenderElement // a finish card that two newer ones replaced draws nothing (critique 29: at most two stacked)
-  if (r.name === 'run' && typeof runFinal !== 'number' && runSecs() !== undefined) r.text = `finished \u00b7 ${elapsedClock(runSecs()!)}` // the run card's time is the band's run clock, kept once the pane stops saying it
+  if (r.blocked) return blockedTree(r.blocked.reason, r.blocked.time, ui, { ...opts }) // truth 39: a placed card is never hidden, replaced or rewritten (`opts.hidden` is ignored)
   const text = r.text
   if (r.name === 'run') return notificationTree('', '', text, false, ui, aged, { ...opts, run: true, ...(r.fact ? { fact: r.fact } : {}) }) // the card says `done` once: the state word, then `5/5 · 3 workers`, then the time
-  return notificationTree(r.name, r.role, text, r.failed, ui, aged, { ...opts, ...(callsOf(r) !== undefined ? { calls: callsOf(r)! } : {}) })
-}
-
-/** A finish card's tool calls: the latest count the builds saw for its worker, else the one known when it was placed; undefined prints the card's `-`. Wave 37 (critique 36: beta's card with no count beside gamma's `3 calls`): each card
- * says its own worker's figure, the same list the SUBAGENTS CALLS column counts, and a worker with none seen says `-` in the same column. */
-function callsOf(r: PlacedRow): number | undefined {
-  return callsNow.get(r.name) ?? r.calls
+  return notificationTree(r.name, r.role, text, r.failed, ui, aged, { ...opts, ...(r.facts ? { facts: r.facts } : {}), ...(r.calls !== undefined ? { calls: r.calls } : {}) })
 }
 
 /** A card dims once the run has moved on (critique 17 C3): 20 s after it was first drawn, or 5 s after a later card was drawn. `now` is the snapshot's clock. */
@@ -171,15 +190,6 @@ export function cardFade(key: string, now: number): number {
   const first = drawn.get(key)
   return first && Number.isFinite(now) && now > 0 ? Math.max(0, Math.min(1, (now - first.at) / FADE_MS)) : 0
 }
-/** At most two finish cards stack, the newest replacing the oldest: a card with two newer ones drawn after it, and itself aged, is hidden. */
-export function cardStackHidden(key: string, now: number): boolean {
-  const mine = drawn.get(key)
-  if (!mine || !cardAged(key, now)) return false
-  let newer = 0
-  for (const [k, v] of drawn) if (k.startsWith('done-') && v.seq > mine.seq) newer++
-  return newer >= 2
-}
-
 /** Whether the host's notification row `requestId` for worker `name` is a repeat of a card already placed: true draws it empty. */
 export function hideNotification(requestId: string, name: string): boolean {
   const known = decided.get(requestId)
@@ -194,5 +204,5 @@ export function hideNotification(requestId: string, name: string): boolean {
 
 /** Forget every placed card and decision (a new session, a test). */
 export function forgetPlaced(): void {
-  runCarded = false; runNote = undefined; runFinal = undefined; callsNow.clear(); rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
+  runCarded = false; blockedNote = undefined; blockedCarded = false; runNote = undefined; runFinal = undefined; callsNow.clear(); rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
 }

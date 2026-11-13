@@ -197,9 +197,16 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
     await placeFinished(engine(ids), runningAt(NOW - 3000), cleanAt(NOW - 2000)); // the cards are placed before the calls are on the board
     const cards = (): string[] => ids.filter((i) => !i.startsWith('done-run')).map((i) => flat(placedTree(i, ui)));
     expect(cards()).toHaveLength(2);
+    const before = cards();
     await placeFinished(engine(ids), cleanAt(NOW - 2000), cleanAt(NOW - 1000, { 'alpha-explorer': [1, 2, 3], 'beta-explorer': [1, 2, 3, 4] }));
-    const [alpha, beta] = cards();
-    expect(alpha).toMatch(/alpha-explorer.*0:\d\d · 3 calls$/); // 28d53608: alpha without `· 3 calls`, beta with `· 4 calls`
+    expect(cards()).toEqual(before); // truth 39: a count that arrives later never rewrites a placed card
+    forgetPlaced();
+    resetWorkerFacts();
+    const ids2: string[] = [];
+    const known = { 'alpha-explorer': [1, 2, 3], 'beta-explorer': [1, 2, 3, 4] };
+    await placeFinished(engine(ids2), runningAt(NOW - 3000), cleanAt(NOW - 2000, known));
+    const [alpha, beta] = ids2.filter((i) => !i.startsWith('done-run')).map((i) => flat(placedTree(i, ui)));
+    expect(alpha).toMatch(/alpha-explorer.*0:\d\d · 3 calls$/); // 28d53608: alpha without `· 3 calls`, beta with `· 4 calls`: every card carries the count known when it was placed
     expect(beta).toMatch(/beta-explorer.*0:\d\d · 4 calls$/);
     forgetPlaced();
   });

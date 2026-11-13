@@ -120,8 +120,8 @@ describe('step 3: the run card clock (critique 36: card 0:42, band 0:43)', () =>
     const footer = flat(durationTree(rec({ counts: { done: 5, total: 5, byPhase: {} }, squad: [], activity: {} }), { durationMs: 8000 }, {}, NOW, ui, 43));
     expect(card).toMatch(/0:43$/);
     expect(footer).toMatch(/run 0:43\b/);
-    noteRunSecs(44); // the band moved on: the card follows it on the same render
-    expect(flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/0:44$/);
+    noteRunSecs(44); // the band moved on: a placed card keeps what it said (truth 39)
+    expect(flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/0:43$/);
     forgetPlaced();
   });
 });
