@@ -14,6 +14,9 @@ import { busySnap, NOW } from './live_fixture';
 import { bandLines } from './mission-layout';
 import type { LiveSnapshot } from './orchestra-types';
 import { bandKind } from './pane/band-kind';
+import { panelModelOf } from './pane/sidebar-model';
+import { bodyLines, lineText } from './panel-layout';
+import type { SidebarModel } from './pane/sidebar';
 import { hostTurnRunning, register, resetCore, STOP_SETTLE_MS, turnEnded } from './register';
 import type { Segment } from './runs';
 import { composeSlot } from './slot';
@@ -131,6 +134,13 @@ describe('2. working whenever an agent runs: a braille 141 spinner, never idle',
     const f = frameOf(RESUMED, 93, 45);
     expect(bandKind(f.model)).toBe('working');
     expect(bandKind(frameOf(STOP, 93, 45).model)).toBe('blocked');
+  });
+  test('band and side panel both say blocked for an open-dispatch Stop (cross-branch)', () => {
+    const f = frameOf(STOP, 93, 45);
+    expect(f.band).toMatch(/▲ blocked/);
+    const m = { snapshot: snapshotOf(STOP), gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'route' }, columns: 94, rows: 45, look: ui, run: { kind: bandKind(f.model), secs: 58 } } as unknown as SidebarModel;
+    const phase = bodyLines(panelModelOf(m, ui, 93)).map((l) => lineText(l).trimEnd()).find((l) => /^\s*phase/.test(l));
+    expect(phase).toMatch(/▲ blocked/);
   });
 });
 
