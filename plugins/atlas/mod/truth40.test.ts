@@ -7,6 +7,11 @@ import { leadSpinnerGlyph, type Ui } from './atlas-ui';
 import { forgetBandFrame, noteBandFrame } from './motion';
 import { lineText, panelLines, type PanelModel } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
+import { blockedText } from './data/runstate';
+import { noteWorkerFacts, resetWorkerFacts } from './data/live';
+import { busySnap } from './live_fixture';
+import type { AtlasSnapshot } from './contract';
+import { forgetPlaced, noteBlocked, placedTree, placeFinished } from './transcript/placed';
 
 // the run of stoprun-110-1: it began at 6 s and its clock closed at 35.2 s (host turn flag fell), with 0:29 on the clock
 const closed = (): RunClock => stepRun(stepRun(stepRun(newRunClock(), true, 6_000), true, 35_100), false, 35_200, { hostIdle: true });
@@ -105,5 +110,69 @@ describe('step 4: the panel phase row is the band\'s last frame', () => {
     expect(chain).toMatch(/▲ build/);
     expect(chain).not.toMatch(/▲ research/);
     forgetBandFrame();
+  });
+});
+
+describe('step 5: one blocked card per spell, and a worker card carries its final row', () => {
+  const NOW = 3_000_000;
+  const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  type El = { children?: unknown[] };
+  const flat = (n: unknown): string => (typeof n === 'string' ? n : n && typeof n === 'object' ? ((n as El).children ?? []).map(flat).join('') : '');
+  const act = (o: Record<string, unknown>) => ({ tool: null, since: NOW, toolCount: 0, tokens: null, mood: 'idle', lastLine: '', ...o });
+  const NAMES = ['alpha-explorer', 'beta-explorer'];
+  const snapAt = (now: number, finished: string[], calls: number[] = []): AtlasSnapshot => ({
+    ...(busySnap() as object), now, phase: 'research', sessionId: 's', counts: { done: 0, total: 5, byPhase: {} }, todos: [], todoGroups: [], comms: [],
+    squad: NAMES.map((name) => ({ name, persona: 'explorer', state: finished.includes(name) ? 'finished' : 'running', source: 'task' })),
+    activity: Object.fromEntries(NAMES.map((n, i) => [n, act({ startedAt: now - 12_000 - i * 1000, since: finished.includes(n) ? now : now - 1000, mood: finished.includes(n) ? 'done' : 'working', calls })])),
+  }) as unknown as AtlasSnapshot;
+  const slowEngine = (ids: string[]) => ({ ui: { place: async ({ id }: { id: string }) => { await Promise.resolve(); await Promise.resolve(); ids.push(id); return { isPlaced: true, requestId: id }; }, invalidate: () => undefined } }) as never;
+  const blockedIds = (ids: string[]): string[] => ids.filter((i) => i.startsWith('done-blocked'));
+
+  test('the tick and the beat reaching the place together print one blocked card (stoprun-150-1 f0111 printed two)', async () => {
+    forgetPlaced();
+    const ids: string[] = [];
+    const s = snapAt(NOW, []);
+    noteBlocked({ reason: blockedText({ refused: true, failed: 1 }), secs: 41 });
+    await Promise.all([placeFinished(slowEngine(ids), s, s), placeFinished(slowEngine(ids), s, s), placeFinished(slowEngine(ids), s, s)]);
+    await placeFinished(slowEngine(ids), s, s);
+    expect(blockedIds(ids)).toHaveLength(1);
+    forgetPlaced();
+  });
+  test('the band flickering off blocked for under 3 s (the idle hold) and back is the same spell: no second card', async () => {
+    forgetPlaced();
+    const ids: string[] = [];
+    const s = snapAt(NOW, []);
+    noteBlocked({ reason: 'stop refused', secs: 41 }, 1_000);
+    await placeFinished(slowEngine(ids), s, s);
+    noteBlocked(null, 2_000);
+    noteBlocked({ reason: 'stop refused', secs: 42 }, 2_500);
+    await placeFinished(slowEngine(ids), s, s);
+    expect(blockedIds(ids)).toHaveLength(1);
+    noteBlocked(null, 3_000); // really gone
+    noteBlocked({ reason: 'stop refused', secs: 60 }, 6_100);
+    await placeFinished(slowEngine(ids), s, s);
+    expect(blockedIds(ids)).toHaveLength(2);
+    forgetPlaced();
+  });
+  test('live-150-1 f0052: beta ends at 0:13 while the table last drew its running row at 0:10; the card waits and prints the row drawn after the end', async () => {
+    forgetPlaced(); resetWorkerFacts();
+    const ids: string[] = [];
+    noteWorkerFacts(['beta-explorer'], '0:10', '2'); // the running row
+    await placeFinished(slowEngine(ids), snapAt(NOW, []), snapAt(NOW + 1_000, ['beta-explorer'], [1, 2, 3]));
+    expect(ids.filter((i) => i.startsWith('done-beta'))).toHaveLength(0);
+    noteWorkerFacts(['beta-explorer'], '0:13', '3'); // the SUBAGENTS row once the worker is done
+    const next = snapAt(NOW + 1_100, ['beta-explorer'], [1, 2, 3]);
+    await placeFinished(slowEngine(ids), next, next);
+    const card = ids.filter((i) => i.startsWith('done-beta'));
+    expect(card).toHaveLength(1);
+    expect(flat(placedTree(card[0]!, ui))).toMatch(/beta-explorer\s+0:13 · 3 calls$/);
+    forgetPlaced(); resetWorkerFacts();
+  });
+  test('no table drawn at all: the card is placed at once, as before', async () => {
+    forgetPlaced(); resetWorkerFacts();
+    const ids: string[] = [];
+    await placeFinished(slowEngine(ids), snapAt(NOW, []), snapAt(NOW + 1_000, ['beta-explorer'], [1, 2, 3]));
+    expect(ids.filter((i) => i.startsWith('done-beta'))).toHaveLength(1);
+    forgetPlaced();
   });
 });
