@@ -128,7 +128,7 @@ describe('2. working whenever an agent runs (not a queued dispatch): a braille 1
   test('the spinner is the accent 141', () => {
     const f = frameOf(RESUMED, 93, 45);
     const run = bandRuns(f.model).find((x) => BRAILLE.test(x.t) && x.t.trim().length === 1)!;
-    expect(run.tone).toBe('accent');
+    expect([run.tone, run.bgHex]).toEqual(['ink', '#af87ff']); // wave 35: dark ink on the accent 141 state fill
   });
   test('the panel reads the same state through band-kind', () => {
     const f = frameOf(RESUMED, 93, 45);
@@ -154,7 +154,7 @@ describe('3. blocked on the frame the host stops, at every width', () => {
       expect(f.band).not.toMatch(/idle|fixing/);
       const lead = bandRuns(f.model).filter((x) => /blocked|dispatch open/.test(x.t));
       expect(lead.length).toBeGreaterThan(0);
-      for (const run of lead) expect([run.t, run.tone, run.bold]).toEqual([run.t, 'bad', true]);
+      for (const run of lead) expect([run.t, run.tone, run.bold, run.bgHex]).toEqual([run.t, 'ink', true, '#ff5f5f']);
     });
     test(`${cols} columns: a Stop refusal reads \`▲ blocked · needs you\``, () => {
       const f = frameOf({ ...STOP, dispatch: [], gates: REFUSAL() }, body, screen);
@@ -257,7 +257,7 @@ describe('5. one failure word: `■ N failed` in the error 203, in the band, the
     expect(ghost, f.hud.join('\n')).toBeDefined();
     expect(ghost!).toMatch(/failed/);
   });
-  test('the SUBAGENTS closing rule reads a static `■ 2 failed` with no spinner when nothing runs, in the error tone', () => {
+  test('the SUBAGENTS table title rule reads a static `■ 2 failed` with no spinner when nothing runs, in the error tone', () => {
     const two: Shape = { ...FAILED_STOP, agents: [{ name: NAMES[0]!, squad: 'failed', mood: 'failed' }, { name: NAMES[1]!, squad: 'failed', mood: 'failed' }, { name: NAMES[2]!, squad: 'finished', mood: 'done' }] };
     const snapshot = snapshotOf(two);
     const live = liveWorkers(snapshot, snapshot.now);
@@ -265,7 +265,7 @@ describe('5. one failure word: `■ N failed` in the error 203, in the band, the
     const input: HudInput = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, null) };
     for (const cols of [93, 56]) {
       const rows = hudRows(input, { cols, tick: 3, ui, rich: false, now: snapshot.now, maxRows: 14, settled: true } as never) as Segment[][];
-      const rule = rows.find((r) => /^╰.*▸ SUBAGENTS/.test(r.map((x) => x.t).join('')))!;
+      const rule = rows.find((r) => /^╭.*▸ SUBAGENTS/.test(r.map((x) => x.t).join('')))!; // wave 35: the table's title rule
       const t = rule.map((x) => x.t).join('');
       expect(t, `${cols}`).toMatch(/▸ SUBAGENTS ■ 2 failed/);
       expect(t, `${cols}`).not.toMatch(BRAILLE);
@@ -286,9 +286,9 @@ describe('6. the clock stays at every width; the word `todo` goes first below 90
     const wide = frameOf(DEFAULT, 93, 45).band;
     expect(wide).toMatch(SCORER);
     expect(wide).toMatch(/working 0:19/);
-    expect(frameOf(DEFAULT, 56, 40).band).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 · todo 0\/5 · [⠀-⣿] 3 running/); // 56 cells still hold the whole row
+    expect(frameOf(DEFAULT, 56, 40).band).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 ▌ todo 0\/5 ▌ [⠀-⣿] 3 running/); // 56 cells still hold the whole row
     const narrow = frameOf(DEFAULT, 42, 40).band;
-    expect(narrow).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 · 0\/5 · [⠀-⣿] 3/);
+    expect(narrow).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 ▌ 0\/5 ▌ [⠀-⣿] 3/);
     expect(narrow).not.toMatch(/todo/);
   });
   test('a long blocked lead still keeps the clock-bearing state at 56 cells', () => {

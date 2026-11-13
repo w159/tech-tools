@@ -62,17 +62,17 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
 });
 
 describe('B3: a row the store holds as pending never reads failed', () => {
-  test('todoState: pending + failed owner stays queued (the owner is named beside it); in_progress still fails', () => {
-    expect(todoState('pending', 'failed')).toEqual({ state: 'queued', word: 'worker failed' }); // critique 19 A3: the glyph stays the store's, the word says why
+  test('todoState (wave 35): a failed owner fails the row from the first frame, whatever the store row holds (pending, in_progress, blocked)', () => {
+    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' }); // wave 35: no `◇ worker failed` beat before the failure
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
-    expect(todoState('blocked', 'failed')).toEqual({ state: 'blocked' });
+    expect(todoState('blocked', 'failed')).toEqual({ state: 'failed' });
   });
-  test('HUD T3 (f0097.ans:27) keeps the queued glyph and reads `worker failed` (critique 19 A3) with `owner failed`, never the failed mark', () => {
+  test('HUD T3 (f0097.ans:27) reads `■ failed` the moment its worker fails (wave 35), never `◇ worker failed`', () => {
     const t3 = hud(150, 12).find((r) => r.includes('T3 read beta.py'))!;
-    expect(t3).toContain('◇');
-    expect(t3).toMatch(/worker failed/);
-    expect(t3).not.toContain('■');
-    expect(t3).toContain('owner failed');
+    expect(t3).toContain('■');
+    expect(t3).toMatch(/\bfailed\b/);
+    expect(t3).not.toContain('◇');
+    expect(t3).not.toContain('worker failed');
   });
   test('board row for the same plan (dispatch rows folded) reads queued as well', () => {
     const src: BoardSource[] = [
@@ -98,8 +98,8 @@ describe('B3 (round 3): blocked and failed share the one error colour; the glyph
     const rows = hudLines({ todos: plan(), agents }, { cols: 150, maxRows: 12, ui, now: NOW });
     const toneOf = (needle: string, word: string) => rows.find((r) => runsString(r).includes(needle))!.find((x) => x.t.trim() === word)!.tone;
     const glyphOf = (needle: string) => rows.find((r) => runsString(r).includes(needle))![2]!.tone;
-    expect(toneOf('T2 read ghost.py', 'blocked')).toBe(rowWordTone('blocked')); // the HUD word takes the shared table's blocked tone
-    expect(glyphOf('T2 read ghost.py')).not.toBe(glyphOf('T3 read beta.py'));
+    expect(toneOf('T2 read ghost.py', 'failed')).toBe(rowWordTone('failed')); // wave 35: a row over a failed worker reads failed, in the shared table's failed tone
+    expect(glyphOf('T2 read ghost.py')).not.toBe(glyphOf('T1 read alpha.py')); // wave 35: T2 is failed (error tone), T1 done
     expect(rows.some((r) => runsString(r).includes('T3 read beta.py'))).toBe(true);
   });
 });

@@ -176,3 +176,11 @@ export const warningText = (failing: readonly string[]): string => `${failing.le
 export function ranWorkers(listed: readonly string[], dispatchOwners: readonly string[]): string[] {
   return [...new Set([...listed, ...dispatchOwners])];
 }
+
+/** The run clock as ONE reading (wave 35): whole seconds since the run began, whether its clock is open (`startMs`) or closed a beat early (`ranMs` frozen at `endedMs`; work that resumes after it is the same run).
+ * The band's `working 0:31`, the run finish card and the toast read this one function, never a subtraction of their own. undefined before any run began. */
+export const runElapsed = (c: { startMs: number | null; ranMs?: number; endedMs?: number }, now: number): number | undefined => {
+  if (c.startMs !== null) return Math.max(0, Math.floor((now - c.startMs) / 1000));
+  if (c.ranMs !== undefined && c.endedMs !== undefined) return Math.max(0, Math.floor((c.ranMs + Math.max(0, now - c.endedMs)) / 1000));
+  return undefined;
+};

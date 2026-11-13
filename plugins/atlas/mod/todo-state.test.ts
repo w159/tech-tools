@@ -25,7 +25,7 @@ describe('todoState', () => {
     expect(todoState('pending', 'running')).toEqual({ state: 'running' });
     expect(todoState('pending', undefined)).toEqual({ state: 'queued' });
     expect(todoState('completed', 'done')).toEqual({ state: 'done' });
-    expect(todoState('pending', 'failed')).toEqual({ state: 'queued', word: 'worker failed' }); // critique 18 B3 (the queued glyph), critique 19 A3 (the word)
+    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' }); // wave 35: one state from the first frame the worker's death is known
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
     expect(todoState('pending', 'waiting')).toEqual({ state: 'blocked' });
     expect(todoState('abandoned', 'done')).toEqual({ state: 'failed' });

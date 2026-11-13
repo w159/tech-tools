@@ -21,7 +21,7 @@ import { paintAnsi } from './atlas-ui';
 export const UI256: Ui = { theme: 'mocha', ascii: false, color: '256' };
 
 /** The indices Atlas's palette may put on screen: accent 141, ok 114, warn 179, error 203, neutrals 236 / 240 / 245 / 252, the panel fills 234 / 235, 231 (white, a fade's first step) and 151 (the done fade's held step). */
-export const PALETTE_INDICES: ReadonlySet<number> = new Set([141, 114, 179, 203, 236, 240, 245, 252, 234, 235, 231, 151]);
+export const PALETTE_INDICES: ReadonlySet<number> = new Set([141, 114, 179, 203, 236, 237, 240, 245, 252, 234, 235, 231, 151]);
 
 type Node = { kind?: string; type?: string; props?: Record<string, unknown>; children?: unknown };
 const mk = (kind: string) => (props: Record<string, unknown>) => ({ kind, props });

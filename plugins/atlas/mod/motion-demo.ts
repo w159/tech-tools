@@ -30,6 +30,11 @@ const bare = (l: string): string => l.replace(/\x1b\[[0-9;]*m/g, '');
 const rowOf = (lines: readonly string[]): string => [...lines].reverse().find((l) => bare(l).trim() !== '' && !/^[└┌╰╭]/.test(bare(l))) ?? lines.at(-1) ?? '';
 /** The HUD input of a surface: `todo` shows the plan row, `agent` the Subagents row. */
 export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number): HudInput => (surface === 'todo' ? { todos: [TODO(state, now)], agents: [] } : { todos: [TODO(state, now, true)], agents: [AGENT(state, now)] }); // the agent owns the plan row: its done LAST column is the outcome that row carries
+/** The motion demo shows the plan row only: the SUBAGENTS table (wave 35) that closes a finished run is a separate box and carries no motion. */
+const planPart = (lines: readonly string[]): string[] => {
+  const at = lines.findIndex((l) => /^╭.*▸ SUBAGENTS/.test(bare(l)));
+  return at > 0 ? lines.slice(0, at) : [...lines];
+};
 const FEED = { 'todo': 'hud-todo', 'agent': 'hud-agents' } as const;
 
 /** File name -> text of every frame of both rows, for colour depth `color` (default truecolor). */
@@ -50,7 +55,7 @@ export function demoFrames(cols = 100, step = MOTION_STEP_MS, color: Ui['color']
     seen('done', 1000); // the change: the window opens at t=1000
     const strip: string[] = [];
     const frame = (label: string, file: string, state: Shown, now: number, motion: ReturnType<Motion['ctx']>): void => {
-      const lines = hudLines(demoInput(surface, state, now), { cols, maxRows: 20, ui, tick: 0, now, ...(motion ? { motion } : {}) }).map((r) => r.map((x) => paintAnsi(x, ui)).join(''));
+      const lines = planPart(hudLines(demoInput(surface, state, now), { cols, maxRows: 20, ui, tick: 0, now, ...(motion ? { motion } : {}) }).map((r) => r.map((x) => paintAnsi(x, ui)).join('')));
       put(file, lines);
       strip.push(`${label.padEnd(8)} ${rowOf(lines)}`);
     };

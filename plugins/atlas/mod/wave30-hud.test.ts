@@ -149,12 +149,13 @@ describe('3. SUBAGENTS draws every running agent', () => {
     expect(agentRows).toHaveLength(3);
     for (const r of agentRows) expect(r.trimEnd(), r).toMatch(/\d+:\d\d$/); // the agent and its clock are right-aligned on the row
   });
-  test('at rest the SUBAGENTS rule closes the TODO block at every width, with no separate box or column names (wave 32)', () => {
+  test('at rest the SUBAGENTS rule gives way to an AGENT TIME table at every width, never the old STATE column (wave 35)', () => {
     for (const cols of [56, 100, 145]) {
-      // wave 32: the SUBAGENTS rule closes the merged block in every state
+      // wave 35: nothing runs, so the table sits under the closed plan box
       const f = frameOf({ running: 0, returned: 3, planned: true, doneTodos: 5, working: false } as Stage, cols, 18, 0);
-      expect(f.rows.some((r) => /^╰.*▸ SUBAGENTS.*╯\s*$/.test(r)), `${cols}`).toBe(true);
-      expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS/.test(r) || /AGENT\s+STATE/.test(r)), `${cols}`).toBe(false);
+      expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS.*╮\s*$/.test(r)), `${cols}`).toBe(true);
+      expect(f.rows.some((r) => /^\s+AGENT\s+TIME\b/.test(r)), `${cols}`).toBe(true);
+      expect(f.rows.some((r) => /AGENT\s+STATE/.test(r)), `${cols}`).toBe(false);
     }
   });
 });

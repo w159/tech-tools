@@ -23,17 +23,20 @@ const text = (row: Node): string =>
 // Wave 32: the Claude band's first row ends in its own `[-]` (the omp panel draws none), so the shared golden is compared without it.
 const rowsOf = (tree: Node): string[] => trimRows((tree.props.children as Node[]).map((r) => text(r).replace(/ +\[-\] ?$/, '')));
 
+// Wave 35: the shared golden is the dot-joined text both harnesses print; a colour Claude band draws filled segments instead (wave35-band.test.ts), so the parity rows are drawn without colour.
+const PLAIN: Ui = { theme: "mocha", ascii: false, color: "none" };
+
 describe("band golden rows", () => {
   test("renders the shared world to the golden rows (plain text, 120 columns, tick 0)", () => {
     const snap = worldSnapshot();
-    const tree = bandTree(els, { snapshot: snap, live: liveWorkers(snap, snap.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12 }) as unknown as Node;
+    const tree = bandTree(els, { snapshot: snap, live: liveWorkers(snap, snap.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12, ui: PLAIN }) as unknown as Node;
     expect(rowsOf(tree)).toEqual(golden);
   });
 
   test("idle renders the shared idle golden, core row included, a failed worker still counted, no key buttons without handlers", () => {
     const snap = worldIdleSnapshot();
     const tree = bandTree(els, {
-      snapshot: snap, live: liveWorkers(snap, snap.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12,
+      snapshot: snap, live: liveWorkers(snap, snap.now), gates: worldGates(), columns: 120, tick: 0, maxRows: 12, ui: PLAIN,
       core: coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 }),
     }) as unknown as Node;
     expect(rowsOf(tree)).toEqual(idleGolden);

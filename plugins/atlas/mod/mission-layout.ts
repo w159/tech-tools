@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons, openWorkOnly } from './data/runstate';
 import { displayName } from './hud';
@@ -316,7 +316,8 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
   const spin = (): Run => mark(leadSpinnerGlyph(bandFrame(m), ui.ascii), 'accent');
   const ran = m.ranSecs ?? m.lastRun?.secs; // the run clock's own figure (the host's wall time of the run); the worker wave's span only where no clock ran (omp)
   switch (st.kind) {
-    case 'working': return [spin(), r(' '), r('working', 'text', true), ...(o.clock && (m.turnSecs ?? m.elapsedSecs) !== undefined ? [r(` ${elapsedClock((m.turnSecs ?? m.elapsedSecs)!)}`, 'sub')] : [])];
+    // Wave 35: the Claude Code bar always carries the run clock while it works (one clock, never dropped); a model with no reading yet starts at 0:00.
+    case 'working': { const secs = m.turnSecs ?? m.elapsedSecs ?? (m.bar ? 0 : undefined); return [spin(), r(' '), r('working', 'text', true), ...(o.clock && secs !== undefined ? [r(` ${elapsedClock(secs)}`, 'sub')] : [])]; }
     case 'done': return [mark(ui.ascii ? GLYPH5_ASCII.done : STATE_GLYPHS.done, 'ok', true), r(' '), r('done', 'ok', true), ...(o.clock && ran !== undefined ? [r(` · ${elapsedClock(ran)}`, 'sub')] : [])];
     case 'idle': return [mark(ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, 'muted'), r(' '), r('idle', 'muted'), ...(o.clock && ran !== undefined ? [r(` · ${o.short ? '' : 'last run '}${elapsedClock(ran)}`, 'muted')] : [])];
     case 'blocked': {
@@ -330,6 +331,43 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
     }
   }
 }
+
+// ---- the segmented bar (wave 35) ------------------------------------------------------------------------------------
+// The Claude Code bar is three segments after the wordmark: STATE (filled in the state colour, bold dark ink) | PLAN (237) | WORKERS (235). Each seam is the half block `▌` (left half the segment
+// before, right half the one after), which any monospace font draws; the last segment's fill runs to the last cell, up to the host's own `[-]`. No fill without colour: NO_COLOR and ASCII keep the
+// ` · ` joined text of the old bar.
+const SEG_PLAN = { mocha: xtermHex(237), latte: PALETTES.latte.queued_fill } as const;
+const SEG_WORK = { mocha: xtermHex(235), latte: PALETTES.latte.base } as const;
+const EDGE = '▌';
+/** The bar draws filled segments: a colour terminal, not ASCII, and only the Claude Code bar (`bar`). */
+export const segmentedOn = (m: Pick<MissionModel, 'bar'>, ui: Ui): boolean => !!m.bar && !ui.ascii && ui.color !== 'none';
+/** The seam: `from` on the left half, `to` on the right. The painter (band.tsx) reads `fg` of an edge run as a fill colour, not a text tone. */
+const edge = (from: string, to: string): Run => ({ t: EDGE, tone: 'text', fg: from, bgHex: to });
+/** The state segment's fill token: the run state (working 141, done 114, blocked 203, idle 245), amber 179 when a done or idle band carries a gate warning. */
+function stateFillToken(st: ReturnType<typeof runStateOf>): Token {
+  if (st.kind === 'blocked') return 'bad';
+  if (st.warn && (st.kind === 'idle' || st.kind === 'done')) return 'warn';
+  return st.kind === 'working' ? 'accent' : st.kind === 'done' ? 'ok' : 'muted';
+}
+/** Runs laid on a fill: the fill rides `bgHex`, a motion tint (`fg`) is dropped; `ink` the one text tone of the whole segment (the state fill's dark ink); absent, each run keeps its own tone. */
+const onFill = (runs: readonly Run[], bgHex: string, ink?: Tone): Run[] =>
+  runs.filter((x) => x.t !== '').map((x): Run => { const { fg: _fg, bg: _bg, ...rest } = x; return { ...rest, tone: ink ?? x.tone, bgHex }; });
+/** `lead | plan | work` as the three segments after the wordmark. Plan and work may be empty (the seam to a missing segment is not drawn). */
+function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], plan: Run[], work: Run[]): Run[] {
+  const pal = PALETTES[ui.theme];
+  const token = stateFillToken(st);
+  const fill = pal[token];
+  const planBg = SEG_PLAN[ui.theme];
+  const workBg = SEG_WORK[ui.theme];
+  // The state fill starts at the cell after the wordmark's `◗` (its padding cell), so the row still reads `◖ ◆ ATLAS ◗ ⠸ working` for every reader of the text.
+  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, inkFor(token, ui.theme, ui.color))];
+  let at = fill;
+  if (plan.length) { out.push(edge(at, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg)); at = planBg; }
+  if (work.length) { out.push(edge(at, workBg), ...onFill([r(' '), ...work, r(' ')], workBg)); }
+  return out; // the last fill runs on to the last cell (withHandle pads it), right up to the host's `[-]`
+}
+/** The workers segment: the groups joined by a middle dot, empty groups left out. */
+const joinWork = (...groups: Run[][]): Run[] => groups.filter((g) => g.length > 0).flatMap((g, i) => (i ? [r(' · ', 'sub'), ...g] : g));
 
 type Form = { runs: Run[]; min: number };
 
@@ -345,6 +383,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const cap = ribbonOf(m, ui, st.kind);
   const fig = figure(m);
   const glue: Run = r(' · ', 'sub'); // critique 18 A3: always a middle dot between segments
+  const seg = segmentedOn(m, ui); // wave 35: filled segments (state | plan | workers) instead of the dot-joined slab
   const blockedWords = blockedRuns(m, ui, true);
   const lead = (o: LeadOpts): Run[] => (st.kind === 'done' && m.motion?.entry('band:lead')?.state === 'done' ? animateRow(leadRuns(m, ui, st, reason.long, o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, reason.long, o)); // wave 31: the done word fades 231, 151, 114; wave 34: only once the motion has seen `done` (an entry that still reads another state would mix a lead tint into the resting 114), so the fade steps down once and holds
   // `phase n/m` only when no plan carries the progress (the lead's reply header and the plan's done count are two clocks).
@@ -367,6 +406,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const wide = (gw: number, gap: string): Run[] => {
     const warn = warning('words', 'long', true);
     const counts = runningRuns(m, ui, true);
+    if (seg) return segmented(ui, st, cap, lead(LEAD_FULL), m.total ? [r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`)] : [], joinWork(counts, warn.slice(1)));
     return [
       ...cap, r('  '), ...lead(LEAD_FULL),
       ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`, 'sub')] : m.bar ? [] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
@@ -378,6 +418,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const row = (v: Lv, word = true): Form => {
     const warn = warning(v.counts, v.warn, v.bw);
     const run = v.counts === 'words' || v.counts === 'noq' ? runningRuns(m, ui, true) : v.counts === 'tiny' ? runningRuns(m, ui, false) : [];
+    if (seg) return { min: 0, runs: segmented(ui, st, cap, lead(v.o), m.total ? [r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${v.open && warn.length === 0 ? openMore(m) : ''}`)] : [], joinWork(run, warn.slice(1))) };
     return { min: 0, runs: [...cap, r(' '), ...lead(v.o), ...todoSeg(v.open && warn.length === 0, word), ...(run.length ? [glue, ...run] : []), ...warn] };
   };
   const F = LEAD_FULL;
@@ -438,7 +479,13 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
 /** The bar ends flush at the column's last cell (`bodyColumns`): the host draws its own `[-]` in the five cells right of the tree and the mod cannot draw in or hide them (types: AbovePrompt `bodyColumns`),
  * so the band draws none of its own (wave 33: `[-]  [-] │` showed two handles). */
 const roomFor = (m: MissionModel): number => m.cols;
-const withHandle = (m: MissionModel, runs: readonly Run[]): Run[] => fitRuns(runs, m.cols);
+const withHandle = (m: MissionModel, runs: readonly Run[]): Run[] => {
+  const out = fitRuns(runs, m.cols);
+  const last = out[out.length - 1];
+  const fill = [...runs].reverse().find((x) => x.bgHex !== undefined && x.t !== EDGE)?.bgHex;
+  // Wave 35: a segmented bar's last fill runs on to the column's last cell (the pad fitRuns added takes that fill), so the host's `[-]` sits against the bar, not on the bare panel.
+  return fill !== undefined && last && last.t.trim() === '' && last.bgHex === undefined && segmentedOn(m, uiOf(m)) ? [...out.slice(0, -1), { ...last, bgHex: fill }] : out;
+};
 
 /** The band alone: one row in the widest standard form that fits `cols` (less the bar's handle), or the three rich rows when `m.rich`, the
  * rows allow (`maxRows` >= 3) and the width fits. Rows are padded to `cols`. */

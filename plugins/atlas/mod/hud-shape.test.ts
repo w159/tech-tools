@@ -143,7 +143,7 @@ describe('the scorer reads the rewritten blocks: states, rows and names at 150 a
       const v = scorerView(text(draw(input, cols)));
       expect(v.unknown).toEqual([]);
       expect([...v.todo.keys()].sort()).toEqual(['T1', 'T2', 'T3', 'T4', 'T5']);
-      const expected = name === 'working' ? { T1: 'running', T2: 'running', T3: 'running', T4: 'queued', T5: 'queued' } : name === 'done' ? { T1: 'done', T2: 'done', T3: 'done', T4: 'done', T5: 'done' } : { T1: 'done', T2: 'blocked', T3: 'done', T4: 'queued', T5: 'queued' };
+      const expected = name === 'working' ? { T1: 'running', T2: 'running', T3: 'running', T4: 'queued', T5: 'queued' } : name === 'done' ? { T1: 'done', T2: 'done', T3: 'done', T4: 'done', T5: 'done' } : { T1: 'done', T2: 'failed', T3: 'done', T4: 'queued', T5: 'queued' };
       for (const [k, st] of Object.entries(expected)) expect([k, '◐◓◑◒'.includes(v.todo.get(k)!) ? 'running' : { '◇': 'queued', '●': 'done', '■': 'failed', '▲': 'blocked', '◉': 'waiting' }[v.todo.get(k)!]]).toEqual([k, st]);
       expect(v.sub.map((r) => r.name)).toEqual(OWNERS);
       for (const r of v.sub) expect(r.word).toBe(name === 'working' ? 'running' : name === 'done' ? 'done' : r.name === OWNERS[1] ? 'failed' : 'done');

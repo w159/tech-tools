@@ -90,7 +90,13 @@ describe('motion-demo frames', () => {
 describe('the demo draws what the live HUD draws', () => {
   const files = demoFrames(100);
   const mocha: Ui = { ...uiFromEnv({}), color: 'truecolor' };
-  const live = (surface: 'todo' | 'agent', now: number): string => `${paintHud(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui: mocha, tick: 0, now }).join('\n')}\n`;
+  // wave 35: the demo shows the plan row; the SUBAGENTS table that closes a finished run is cut off
+  const live = (surface: 'todo' | 'agent', now: number): string => {
+    const rows = paintHud(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui: mocha, tick: 0, now });
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
+    const at = rows.findIndex((l) => /^╭.*▸ SUBAGENTS/.test(l.replace(/\x1b\[[0-9;]*m/g, '')));
+    return `${(at > 0 ? rows.slice(0, at) : rows).join('\n')}\n`;
+  };
   test('the resting done frame is the live builder output byte for byte, strike included', () => {
     for (const s of ['todo', 'agent'] as const) expect(files[`${s}-99-done.ans`]).toBe(live(s, 1000 + MOTION_MS));
   });
