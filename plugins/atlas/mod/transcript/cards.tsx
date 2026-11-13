@@ -165,8 +165,9 @@ const TIME_RE = /\b\d+:\d\d(?::\d\d)?\b/
 export interface FinishOpts { cols?: number; fade?: number; /** The worker's tool calls: `· 3 calls` after the time (wave 34, critique 33: `3 fn` counted tool calls, and the worker had reported 2 functions). Absent: the time alone. */ calls?: number; /** The functions the worker reported: `· 2 fn`. Only a count taken from what the worker reported may say `fn`; nothing in the mod's inputs carries one today. */ fns?: number; /** One more fact after the name (the run card's `5/5 done`). */ fact?: string; /** The run's own finish card: no name, the fact is what follows the state word. */ run?: boolean }
 
 function finishRow(state: 'done' | 'failed', name: string, fact: string, time: string, ui: Ui, o: FinishOpts): RenderElement {
- const count = o.fns !== undefined && o.fns > 0 ? `${o.fns} fn` : o.calls !== undefined && o.calls > 0 ? `${o.calls} ${o.calls === 1 ? 'call' : 'calls'}` : ''
- const figure = time && count ? `${time} ${ui.ascii ? '|' : '·'} ${count}` : time // `0:12 · 3 calls`: the run time, then what the figure counts
+ // Wave 37 (critique 36: beta's card with no count beside gamma's `3 calls`): every worker card ends in the same flush-right calls column, a dash where the count is unknown. The run's own card has no such column.
+ const count = o.run ? '' : o.fns !== undefined && o.fns > 0 ? `${o.fns} fn` : o.calls !== undefined && o.calls > 0 ? `${o.calls} ${o.calls === 1 ? 'call' : 'calls'}` : '-'
+ const figure = time && count ? `${time} ${ui.ascii ? '|' : '·'} ${count}` : time || count // `0:12 · 3 calls`, `0:12 · -`: the run time, then what the figure counts
  const w = finishWidth(o.cols ?? 0)
  const g = stateRun(state, ui)
  const bar: UiRun = { t: ui.ascii ? '|' : '▌', tone: ui.ascii ? 'text' : cardBarTone(o.fade ?? 0) } // wave 33: one bar for every card kind, 141 for the first second, 245 after (a failure too: the state glyph and word carry 203)

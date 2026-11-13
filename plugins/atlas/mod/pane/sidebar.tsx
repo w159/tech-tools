@@ -111,10 +111,15 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   if (items.length && room >= 5) {
     const foot1 = boardFootLine(agents, { ...topts, ...(pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {}) }); // failed workers count too (critique 34)
     totals = foot1 ? [foot1] : [];
+    // Wave 37 (critique 36: beta-explorer's bar missing at 110 while the footer counted its calls): the richest layout that draws EVERY agent wins; only when even the densest cannot, the chart is cut to the rows it has.
+    const runSecs = pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {};
     for (const lv of levels) {
-      const t = boardTimeline([...leadRow, ...agents], { ...topts, ...lv, quiet: quiet.quiet }, room - 2 - totals.length);
+      const t = boardTimeline([...leadRow, ...agents], { ...topts, ...lv, ...runSecs, quiet: quiet.quiet, all: true }, room - 2 - totals.length);
       if (t.length && 1 + t.length + 1 + totals.length <= room) { chart = t; break; }
-      if (!chart.length && t.length && lv === levels[levels.length - 1]) chart = t;
+    }
+    if (!chart.length) {
+      const t = boardTimeline([...leadRow, ...agents], { ...topts, ...levels[levels.length - 1]!, ...runSecs, quiet: quiet.quiet }, room - 2 - totals.length);
+      if (t.length) chart = t;
     }
   }
   // Wave 32 (critique 30: ~25% of the pane empty under the total, `o closes the board` alone on a row): the total and the close hint are ONE footer row, the pane's last; the sections above it spread over the rows between.
@@ -125,16 +130,12 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: pm.notes.filter((n) => !/^(T\d+|row) failed\b/.test(n.text) && !(n.kind === 'failed' && failedOwners.has(n.from))) }, bodyMax - used - 1) : []; // a failure the plan row says is not said again (critique 29: three times in one pane; critique 31: four)
   const withRecent = recent.length ? [...sections, recent.slice(1)] : sections; // recentRows opens with its own blank: the join below puts it back
   const parts = foot ? [...withRecent, [foot]] : withRecent; // the footer is the last section: it takes its share of the spacing
-  const rows = parts.reduce((n, x) => n + x.length, 0) + Math.max(0, parts.length - 1);
-  const rem = Math.max(0, max - rows);
-  const gaps = Math.max(0, parts.length - 1);
-  const extra = gaps ? Math.max(0, Math.min(2, Math.floor((rem - 2) / gaps))) : 0; // a second blank row between sections only when the pane has them to spare
-  const joined = parts.flatMap((x, i) => (i ? [...Array.from({ length: 1 + extra }, () => blankRow), ...x] : x));
+  // Wave 37 (critique 36: ~25% of the live board blank above the footer): one blank row between sections and no spacer rows beyond it; the footer sits directly under the content.
+  const joined = parts.flatMap((x, i) => (i ? [blankRow, ...x] : x));
   const keep = Math.max(0, max - (foot ? 2 : 1));
   const cut = joined.length <= max ? joined : [...joined.slice(0, keep), { runs: [{ t: `  +${joined.length - keep - (foot ? 1 : 0)} more`, tone: 'muted' as const }] }, ...(foot ? [foot] : [])];
   // On the Claude pane (`m.run`) the footer is the pane's last row and the surface is filled down to it (critique 29: the 234 stopped where the content ended).
-  const pad = m.run ? Array.from({ length: Math.max(0, max - cut.length) }, () => blankRow) : [];
-  const shown = foot && pad.length ? [...cut.slice(0, -1), ...pad, foot] : [...cut, ...pad];
+  const shown = cut; // the outer Box fills the pane's height with the panel surface, so no padding rows hold the footer down
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: shown.map((l) => lineEl(els, { runs: l.runs }, m, on, ui)) });
 }
 

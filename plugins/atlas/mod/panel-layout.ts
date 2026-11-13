@@ -103,6 +103,8 @@ export type PanelModel = {
   people: number;
   unread: number;
   notes: readonly PanelNote[];
+  /** Wave 37 (critique 36: `no events yet` after three agents finished): the workers that finished, one event each, stamped with the instant they ended. The status view's events list them with the notes; no other tab does. */
+  finishes?: readonly PanelNote[];
   /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
   /** The band's own run state and run clock (wave 31): `kind` is runStateOf(band).kind, `secs` the figure the band prints (`working 0:28`, `done . 0:58`), `startMs` the run's start on the snapshot clock.
@@ -592,7 +594,8 @@ function statusGateRows(m: PanelModel, gs: readonly PanelGate[]): PanelLine[] {
 /** The newest `n` posts of the run, oldest first, each `+0:23  who  what`: time on the run's clock, never the wall clock. Wave 36 (critique 35: `no events yet` over a board that listed `+0:19 ghost-explorer failed`): the posts are
  * the board's `recent` list (`m.notes`, the failure rows included); the status view holds no plan row that says a failure for it, so none is left out. */
 function statusEventRows(m: PanelModel, n: number): PanelLine[] {
-  const ordered = m.notes.every((x) => x.ms !== undefined) ? [...m.notes].sort((a, b) => a.ms! - b.ms!) : m.notes;
+  const all = statusEvents(m);
+  const ordered = all.every((x) => x.ms !== undefined) ? [...all].sort((a, b) => a.ms! - b.ms!) : all;
   const posts = ordered.slice(-n);
   const who = Math.min(14, Math.max(0, ...posts.map((x) => cells(x.from))));
   return posts.map((x): PanelLine => {
@@ -626,7 +629,9 @@ function statusBody(m: PanelModel): PanelLine[] {
     dimLine(m, `${m.notes.length} ${m.notes.length === 1 ? 'message' : 'messages'}`), // wave 36: the channel's own count, one dim footer row (an empty channel says `0 messages`)
   ];
 }
-const statusEventCount = (m: PanelModel): number => m.notes.length;
+/** Every event of the run: the channel's notes and the workers' finishes, a finish left out where the worker already posted its own done row. */
+const statusEvents = (m: PanelModel): readonly PanelNote[] => [...m.notes, ...(m.finishes ?? []).filter((f) => !m.notes.some((x) => x.from === f.from && (x.kind === 'done' || x.kind === 'handoff')))];
+const statusEventCount = (m: PanelModel): number => statusEvents(m).length;
 
 /** The route tab is the status view (wave 35): the dense status view on the Claude pane (it has the HUD), the full plan and agent list everywhere else. */
 const routeBody = (m: PanelModel): PanelLine[] => (m.run ? statusBody(m) : routeBodyFull(m));
@@ -723,7 +728,7 @@ function sparkAxis(m: PanelModel, g: TeamGrid): PanelLine[] {
   return [line(fitRuns([r(' '.repeat(lead)), r(text, 'dim')], m.cols))];
 }
 
-/** The team's totals under its rows: `workers  0 running · 2 done · 1 killed` and `total  0:27 · 9 tool calls` (the run from the first start to the last end). Running always reads; the other states only when not zero. */
+/** The team's totals under its rows: `workers  0 running · 2 done · 1 killed` and `total  0:27 · 9 worker calls` (the run from the first start to the last end). Running always reads; the other states only when not zero. */
 function leadSummary(m: PanelModel): PanelLine[] {
   const n = (s: UiState): number => m.workers.filter((w) => w.state === s).length;
   const tally = (all: boolean): string => UI_STATES.filter((s) => (all && s === 'running') || n(s)).map((s) => `${n(s)} ${wordOf(s)}`).join(` ${dot(m.ui)} `);
@@ -731,7 +736,7 @@ function leadSummary(m: PanelModel): PanelLine[] {
   const parts = cells(head) + cells(tally(true)) <= m.cols - 1 ? tally(true) : tally(false) || tally(true); // a narrow pane drops the `0 running` before it cuts a figure
   const t = totalsOf(m.workers, m.lead);
   if (m.run?.secs !== undefined && m.workers.length) t.secs = m.run.secs; // the band's run clock: one total on every surface (critique 29: board 0:14, team 0:24, band 1:00)
-  const total = `${shortAge(t.secs)}${t.calls ? ` ${dot(m.ui)} ${t.calls} tool calls` : ''}`;
+  const total = `${shortAge(t.secs)}${t.calls ? ` ${dot(m.ui)} ${t.calls} worker calls` : ''}`;
   const key = (k: string): Run => r(' '.repeat(GRID_LEAD) + pad(k, 9), 'text', { bold: true });
   return [
     line(fitRuns([r(' '.repeat(GRID_LEAD)), r('workers  ', 'text', { bold: true }), r(parts, 'muted')], m.cols)), // in the name column, under the lead's own row
@@ -832,10 +837,22 @@ const noteTone = (word: string): Tone => (word === KILLED ? rowWordTone('failed'
 
 /** A post's time as the run's own clock (wave 31, critique 29: `01:30:26` and a `0s` age column on every row): `+0:17`, seconds from the run's start (the band's run, else the first post). A post with no time of its own keeps its stamp. */
 const runStart = (m: PanelModel): number | undefined => m.run?.startMs ?? (m.notes.every((n) => n.ms !== undefined) && m.notes.length ? Math.min(...m.notes.map((n) => n.ms!)) : undefined);
+// Wave 37 (critique 36: one event read +0:20, then +0:19, then +0:18): the band's run start is the snapshot clock less the run's elapsed time, so it moves on once the run stops counting. An event is stamped once, when
+// first drawn, and the stamp is kept with it: the same event reads the same on every later frame.
+const stamps = new Map<string, string>();
+const STAMPS_MAX = 400;
+export const forgetStamps = (): void => { stamps.clear(); };
 const stampOf = (m: PanelModel, n: PanelNote, ageW = 0): string => {
   if (!m.run) return `${n.at}${ageW ? `  ${ageOfNote(m, n).padStart(ageW)}` : ''}`; // omp keeps the post's own clock time and its age
   const t0 = runStart(m);
-  return n.ms !== undefined && t0 !== undefined ? `+${elapsedClock(Math.max(0, (n.ms - t0) / 1000))}` : n.at;
+  if (n.ms === undefined || t0 === undefined) return n.at;
+  const key = `${m.channel}|${n.from}|${n.kind ?? ''}|${n.text}|${n.ms}`;
+  const kept = stamps.get(key);
+  if (kept !== undefined) return kept;
+  const fresh = `+${elapsedClock(Math.max(0, (n.ms - t0) / 1000))}`;
+  stamps.set(key, fresh);
+  if (stamps.size > STAMPS_MAX) stamps.delete(stamps.keys().next().value as string);
+  return fresh;
 };
 /** A post's age beside its time: `20s`. The Claude pane (`m.run`) draws the time relative to the run and no age column. */
 const ageOfNote = (m: PanelModel, n: PanelNote): string => (n.ms !== undefined && m.now !== undefined ? ageWord(m.now - n.ms) : '');

@@ -200,13 +200,14 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
     expect(beta).toMatch(/beta-explorer.*0:\d\d · 4 calls$/);
     forgetPlaced();
   });
-  test('a count nobody knows is left off every card, not off one', async () => {
+  test('a count nobody knows reads `-` on its card, in the same column as the others', async () => {
     forgetPlaced();
     const ids: string[] = [];
     await placeFinished(engine(ids), runningAt(NOW - 3000), cleanAt(NOW - 1000, { 'beta-explorer': [1, 2, 3, 4] }));
     const cards = ids.filter((i) => !i.startsWith('done-run')).map((i) => flat(placedTree(i, ui)));
     expect(cards).toHaveLength(2);
-    for (const c of cards) expect(c).not.toMatch(/calls/);
+    expect(cards[0]).toMatch(/alpha-explorer.*0:\d\d · -$/); // wave 37: alpha has no count; beta's own four stand
+    expect(cards[1]).toMatch(/beta-explorer.*0:\d\d · 4 calls$/);
     forgetPlaced();
   });
 });

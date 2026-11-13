@@ -25,7 +25,7 @@ describe('team rows from the live snapshot', () => {
     const out = team(s, 80);
     expect(out[0]).toMatch(/^ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] lead +running/);
     expect(out.at(-2)).toBe('    workers  1 running · 1 done');
-    expect(out.at(-1)).toMatch(/^ {4}total {4}0:\d\d · 2 tool calls$/); // wave 30: the team's total time and calls close the tab
+    expect(out.at(-1)).toMatch(/^ {4}total {4}0:\d\d · 2 worker calls$/); // wave 30: the team's total time and calls close the tab
     expect(out.some((l) => /^ ?[▸ ] ?[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] a +(runner +)?running/.test(l))).toBe(true);
     expect(out.some((l) => /● b +(runner +)?done/.test(l))).toBe(true);
   });

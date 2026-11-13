@@ -210,7 +210,7 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
     const t = rows(57, RUN, many);
     const ev = t.filter((l) => /^\s+\+\d:\d\d\s/.test(l));
     expect(ev).toHaveLength(5);
-    expect(ev.map((l) => /post number (\d)|ghost-explorer\s+failed/.exec(l)?.[1] ?? 'failed')).toEqual(['5', '6', 'failed', '7', '8']); // wave 36: the board's recent list, the failure row included; the newest five, oldest first
+    expect(ev.map((l) => /post number (\d)|(ghost-explorer\s+failed)|(\w+-explorer\s+done)/.exec(l)?.slice(1).find(Boolean) ?? '?')).toEqual(['ghost-explorer  failed', 'alpha-explorer  done', '7', '8', 'beta-explorer   done']); // wave 37: the finishes are events too (a worker's done row), the failure row included; the newest five, oldest first
     expect(ev[0]).toMatch(/^\s+\+0:\d\d\s/);
   });
   test('a section with no data is one dim line, never blank space', () => {
@@ -268,12 +268,12 @@ describe('item 4: the board (critique 34: `· total0:3 · 8 tool` at 110, `3 dis
 
   test('at 110 the footer is one clean row: `● 2 ■ 1 · 0:57 · 9 calls`, failed workers counted', () => {
     const f = foot(board(38));
-    expect(f).toMatch(/^\s*● 2 ■ 1 · 0:57 · 9 calls\b/);
+    expect(f).toMatch(/^\s*● 2 ■ 1 · 0:57 · 9 worker calls\b/);
     expect(f).not.toMatch(/total0|tool\b|·\S/); // 4fef5d66: `● 2   ■ 1   ·total0:3 · 8 tool`
   });
   test('at 150 the footer reads in words, once, and counts the failed worker', () => {
     const f = foot(board(57));
-    expect(f).toMatch(/^\s*● 2 done {2}■ 1 failed · total 0:57 · 9 tool calls/);
+    expect(f).toMatch(/^\s*● 2 done {2}■ 1 failed · total 0:57 · 9 worker calls/);
     expect(board(57).filter((l) => /\btotal\b/.test(l))).toHaveLength(1);
   });
   test('the footer fits every width from 30 to 100 and never garbles a word', () => {

@@ -4,7 +4,7 @@ import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from 
 import { isPlanItem, ownPlan, ownTodos, todoState } from '../data/todos';
 import { lastText } from '../data/lasttext';
 import { DONE_DOUBT, RETURNED, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
-import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
+import { forgetStamps, type PanelGate, type PanelModel, type PanelNote, type PanelTodo, type PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
 import { hudAgents, lastOf, ownerStatesOf } from '../hud';
@@ -93,7 +93,7 @@ function leadClock(s: LiveSnapshot, workers: readonly PanelWorker[], state: UiSt
 /** Wave 34 (critique 33: every phase green at done, and no phase green after research ran): the rail phases the run was actually in. Each build records the lit rail phase the first time it sees it; a phase nobody lit stays unentered. The record is per channel and starts over when a finished run starts again. */
 const entered = new Map<string, string[]>();
 const lastKind = new Map<string, string>();
-export const forgetPhases = (): void => { entered.clear(); lastKind.clear(); };
+export const forgetPhases = (): void => { entered.clear(); lastKind.clear(); forgetStamps(); };
 function enteredOf(channel: string, ids: readonly string[], phase: string, kind: string | undefined): { entered: string[] } {
   if (lastKind.get(channel) === 'done' && kind === 'working') entered.delete(channel);
   if (kind) lastKind.set(channel, kind);
@@ -130,6 +130,9 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     stop: null, // the refusal is a remembered row below, so it stays after Stop passes (data/channels.ts noteRefusal)
     channel: s.channel ?? '',
   });
+  // Wave 37 (critique 36: `events · no events yet · 0 messages` after three agents finished): a worker that finished is an event too, stamped with the instant it ended (never the clock), unless it already posted its own done row.
+  const posted = new Set(notes.filter((n) => n.kind === 'done' || n.kind === 'report' || n.kind === 'handoff').map((n) => n.owner));
+  const finishes: PanelNote[] = timed(workers.filter((w) => w.state === 'done' && !posted.has(w.name)).map((w) => ({ ts: w.endMs !== undefined ? isoTs(w.endMs) : '', seq: 0, owner: w.name, to: 'lead', text: 'done', channel: s.channel ?? '', kind: 'done' })), s.now, s.channel ?? '').map(noteOf);
   noteRefusal(gateTally(m.gates).stop, s.now, s.channel ?? '');
   // The closure is a post too (wave 24): a plan row the lead closed over a failed worker reads `T2 dispatch closed after Stop refusal · ghost-explorer`, whole names, from the lead.
   const stop = gateTally(m.gates).stop;
@@ -145,6 +148,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     ...(m.motion ? { motion: m.motion } : {}),
     ...(m.run ? { run: m.run } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
+    ...(finishes.length ? { finishes } : {}),
     channel: s.channel ?? 'channel', people, unread: notes.length - 1 - lastLead, notes: timed([...notes, ...failures, ...refusalNotes(s.channel ?? ''), ...closures], s.now, s.channel ?? '').map(noteOf),
   };
 }
