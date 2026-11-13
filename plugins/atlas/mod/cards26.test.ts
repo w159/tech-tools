@@ -27,7 +27,7 @@ describe('the board timeline is a Gantt', () => {
     const tone = (i: number) => lines[i]!.runs.find((r) => FILL.test(r.t))?.tone;
     expect([tone(0), tone(1), tone(2)]).toEqual(['ok', 'bad', 'accent']); // start order
     expect(text.at(-2)).toMatch(/^ +┬[─┬]+$/);
-    expect(text.at(-1)).toMatch(/0:00 +0:05 +0:10 +0:15 +0:20$/);
+    expect(text.at(-1)).toMatch(/0:00 +0:05 +0:10 +0:15 +0:20 +0:25$/); // wave 36: the labels cover the whole span, one tick past the longest bar (20 s)
   });
   test('critique 25: the axis scales to the longest bar end: no bar runs past the axis rule, and the rule ends where the longest bar does', () => {
     for (const cols of [60, 80, 120]) {

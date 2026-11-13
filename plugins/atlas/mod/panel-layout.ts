@@ -583,16 +583,16 @@ function statusGateRows(m: PanelModel, gs: readonly PanelGate[]): PanelLine[] {
     const bad = groupFailing(g);
     const word = bad || g.error ? 'warning' : groupPending(g) ? 'pending' : 'passing';
     const first = g.lines.find((l) => !l.ok);
-    const tail = bad && first ? oneLine(first.label) : '';
+    // Wave 36 (critique 35: `Tool routing  warning  Dispatches followed the plan`): a check's label names what it checks, so beside a `warning` it reads as the check that is not met (`not met: ...`), never as a passing sentence; a fix or detail the gate gave says more and is used first.
+    const tail = bad && first ? oneLine(first.fix ?? first.detail ?? `not met: ${first.label}`) : '';
     return line(fitRuns(gridRow({ cols: m.cols, ui: m.ui, mark: groupMark(g, m.ui), name: { t: oneLine(g.title), bold: true }, nameW, gap: 2, word: { t: word, tone: bad || g.error ? 'warn' : groupPending(g) ? 'muted' : 'ok' }, wordW: GATE_WORD_W, ...(tail ? { detail: { t: tail } } : {}) }), m.cols));
   });
 }
 
-/** The newest `n` posts of the run, oldest first, each `+0:23  who  what`: time on the run's clock, never the wall clock. */
+/** The newest `n` posts of the run, oldest first, each `+0:23  who  what`: time on the run's clock, never the wall clock. Wave 36 (critique 35: `no events yet` over a board that listed `+0:19 ghost-explorer failed`): the posts are
+ * the board's `recent` list (`m.notes`, the failure rows included); the status view holds no plan row that says a failure for it, so none is left out. */
 function statusEventRows(m: PanelModel, n: number): PanelLine[] {
-  const failedNames = new Set(m.workers.filter((w) => w.state === 'failed').map((w) => w.name));
-  const kept = m.notes.filter((x) => !(x.kind === 'failed' && failedNames.has(x.from)) && !/^(T\d+|row) failed\b/.test(x.text));
-  const ordered = kept.every((x) => x.ms !== undefined) ? [...kept].sort((a, b) => a.ms! - b.ms!) : kept;
+  const ordered = m.notes.every((x) => x.ms !== undefined) ? [...m.notes].sort((a, b) => a.ms! - b.ms!) : m.notes;
   const posts = ordered.slice(-n);
   const who = Math.min(14, Math.max(0, ...posts.map((x) => cells(x.from))));
   return posts.map((x): PanelLine => {
@@ -612,7 +612,7 @@ function statusBody(m: PanelModel): PanelLine[] {
   let nA = Math.min(ws.length, STATUS_AGENTS);
   let nE = Math.min(statusEventCount(m), STATUS_EVENTS);
   const nG = gs.length;
-  const total = (): number => phase.length + 1 + 1 + Math.max(1, nA) + (ws.length > nA ? 1 : 0) + 1 + 1 + Math.max(1, nG) + 1 + 1 + Math.max(1, nE);
+  const total = (): number => phase.length + 1 + 1 + Math.max(1, nA) + (ws.length > nA ? 1 : 0) + 1 + 1 + Math.max(1, nG) + 1 + 1 + Math.max(1, nE) + 1 + 1;
   while (total() > room && (nE > 0 || nA > 1)) { if (nE > 0) nE--; else nA--; }
   const t = tallyOf(gatesOf(m));
   const agents = ws.length ? statusAgentRows(m, ws.slice(0, nA)) : [dimLine(m, 'no agents yet')];
@@ -622,13 +622,11 @@ function statusBody(m: PanelModel): PanelLine[] {
     ...phase, BLANK,
     heading('agents', ws.length ? [r(`${ws.length}`, 'muted')] : [], m), ...agents, ...(ws.length > nA ? [dimLine(m, `+${ws.length - nA} more on the team tab`)] : []), BLANK,
     heading('gates', t.total ? [r(`${t.green}/${t.total} green`, tallyTone(t.green, t.total))] : [], m), ...gates, BLANK,
-    heading('events', [], m), ...events,
+    heading('events', [], m), ...events, BLANK,
+    dimLine(m, `${m.notes.length} ${m.notes.length === 1 ? 'message' : 'messages'}`), // wave 36: the channel's own count, one dim footer row (an empty channel says `0 messages`)
   ];
 }
-const statusEventCount = (m: PanelModel): number => {
-  const failedNames = new Set(m.workers.filter((w) => w.state === 'failed').map((w) => w.name));
-  return m.notes.filter((x) => !(x.kind === 'failed' && failedNames.has(x.from)) && !/^(T\d+|row) failed\b/.test(x.text)).length;
-};
+const statusEventCount = (m: PanelModel): number => m.notes.length;
 
 /** The route tab is the status view (wave 35): the dense status view on the Claude pane (it has the HUD), the full plan and agent list everywhere else. */
 const routeBody = (m: PanelModel): PanelLine[] => (m.run ? statusBody(m) : routeBodyFull(m));
@@ -669,7 +667,9 @@ function runWindow(m: PanelModel, ws: readonly PanelWorker[]): { win?: { from: n
   const ends = ws.map((w) => w.endMs).filter((x): x is number => typeof x === 'number');
   if (!starts.length) return {};
   const from = m.run?.startMs !== undefined ? Math.min(m.run.startMs, ...starts) : Math.min(...starts);
-  return { win: { from, to: Math.max(from + 1000, m.now !== undefined && m.run?.kind === 'working' ? m.now : 0, ...ends) } };
+  // Wave 36 (critique 35: the axis ended at 0:34 under a band at 0:31): where the band says its run clock, the window is exactly that long.
+  const band = m.run?.secs !== undefined && m.run.kind !== 'idle' ? from + m.run.secs * 1000 : 0;
+  return { win: { from, to: Math.max(from + 1000, band, ...(band ? [] : [m.now !== undefined && m.run?.kind === 'working' ? m.now : 0, ...ends])) } };
 }
 
 function teamGrid(m: PanelModel, ws: readonly PanelWorker[]): TeamGrid {
@@ -900,7 +900,7 @@ function channelLog(m: PanelModel): PanelLine[] {
   const title = channelLabel(m.channel);
   const head = line(fitRuns([r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted')], m.cols));
   // Wave 32 (critique 30: `no messages yet` floated mid-pane over 90% blank): an empty channel is one left-aligned row straight under the head, the pane fill carries the surface to the foot.
-  if (!m.notes.length) return [head, line(fitRuns([r(`${ind}${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} no messages`, 'muted')], m.cols))];
+  if (!m.notes.length) return [head, line(fitRuns([r(`${ind}${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} no messages`, 'dim')], m.cols))]; // wave 36 (critique 35: the channel tab about 95% empty): nothing said is one dim line under the head, never a block of blank rows; the status view's footer carries `0 messages`
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane
   const ageW = !m.run && m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(ageOfNote(m, n)))) : 0;

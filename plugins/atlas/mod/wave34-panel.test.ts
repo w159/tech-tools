@@ -232,13 +232,13 @@ describe('item 5: every card number is true (critique 33)', () => {
   const engine = (ids: string[]) => ({ ui: { place: async ({ id }: { id: string }) => { ids.push(id); return { isPlaced: true, requestId: id }; } } }) as never;
   const flat = (n: unknown): string => (typeof n === 'string' ? n : n && typeof n === 'object' ? ((n as { children?: unknown[] }).children ?? []).map(flat).join('') : '');
 
-  test('a clean run places an Atlas finish card: `▌ ◆ ATLAS  ● done  run  5/5 done · 2 workers  0:47`', async () => {
+  test('a clean run places an Atlas finish card: `▌ ◆ ATLAS  ● done  5/5 · 2 workers  0:47`', async () => {
     forgetPlaced();
     const ids: string[] = [];
     await placeFinished(engine(ids), running(NOW - 1000), clean(NOW));
     const runId = ids.find((i) => i.startsWith('done-run'))!;
     expect(runId).toBeDefined(); // 4d8d8eb1: only the host's `▌ verify 5/5 done`
-    expect(flat(placedTree(runId, ui))).toMatch(/^▌ ◆ ATLAS\s+● done\s+run\s+5\/5 done · 2 workers\s+0:47$/);
+    expect(flat(placedTree(runId, ui))).toMatch(/^▌ ◆ ATLAS\s+● done\s+5\/5 · 2 workers\s+0:47$/);
     await placeFinished(engine(ids), clean(NOW), clean(NOW + 1000));
     expect(ids.filter((i) => i.startsWith('done-run'))).toHaveLength(1); // once per run
     forgetPlaced();

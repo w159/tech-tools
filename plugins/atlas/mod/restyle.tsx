@@ -17,7 +17,7 @@ import type { LiveWorker } from './data/live'
 import { bubbleTree, waveTree, workerCard } from './transcript/cards'
 import type { CardExtra } from './transcript/cards'
 import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
-import { barFade, cardAged, cardFade, cardStackHidden, hideNotification, placedTree, runCardPlaced } from './transcript/placed'
+import { barFade, cardAged, cardFade, cardStackHidden, hideNotification, placedTree, runCardPlaced, runSecs } from './transcript/placed'
 import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
 import { elapsedClock, hexIn, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
@@ -243,6 +243,8 @@ function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): v
  if (drawnHeaders.size > DRAWN_MAX) drawnHeaders.delete(drawnHeaders.keys().next().value as string)
 }
 
+const BARE_DONE = /^(?:all )?(?:done|complete|completed|finished|all finished|all done)[.!]?$/i
+
 /** The lead's header as a chip drawn from either form of the line (contract or display, mod/transcript/leadheader.ts): no fill, a bar in the phase colour, the phase word, the state.
  * `quiet` (the previous header was this phase) drops the word; `superseded` is a done chip a Stop refusal overturned. A finished first line that is no header stays the host's own row. */
 export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0, superseded = false, ui: Ui = uiFromEnv(), quiet = false): RenderElement | null {
@@ -255,7 +257,8 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  const blocked = superseded || (h.open > 0 && h.idle)
  const verdict = lead.phase === 'done' ? verdictOf(h.failed, h.open, blocked) : null // wave 33: a done chip over a failed worker or an open dispatch row never reads `all finished`
  // Wave 35 (critique 34: `run 5/5 done` and then `done 5/5`): the run's finish card is placed, so the lead's bare `done 5/5` chip says nothing new and draws no row.
- const twin = lead.phase === 'done' && !verdict && !lead.sentence && !superseded && runCardPlaced()
+ // Wave 36 (critique 35: `▌ done complete` stacked under the run card): a sentence that only says the run is done (`complete`, `all finished`) is the same line again.
+ const twin = lead.phase === 'done' && !verdict && (!lead.sentence || BARE_DONE.test(lead.sentence)) && !superseded && runCardPlaced()
  const row = twin ? { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] } as RenderElement : leadRow(lead, { ui, columns, superseded, quiet, verdict })
  if (!rest.trim()) return row
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
@@ -263,7 +266,7 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
 
 // ---- TurnDuration: `▸ run 4:12 · +3 done · 2 workers · ctx 41%` (the band's clock format, frozen once drawn) ----
 
-export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null, ui: Ui = uiFromEnv()): RenderElement {
+export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null, ui: Ui = uiFromEnv(), band?: number): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
  const measured = tracker.turnStart != null && now != null ? Math.max(0, now - tracker.turnStart) : null
  const durationMs = measured === null ? props.durationMs : Math.min(props.durationMs, measured)
@@ -274,9 +277,10 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  if (active > 0) return { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] }
  const runMs = tracker.runStart != null && now != null ? Math.max(0, now - tracker.runStart) : null
  if (runMs !== null) tracker.settled = true
+ // Wave 36 (critique 35: `run 0:08 · +4 done` and `run 0:31` under a band at 0:39): where the pane says the band's run clock, the footer prints that value and no partial `+N done` beside it.
  const parts = [
-  runMs !== null ? `run ${elapsedClock(runMs / 1000)}` : `turn ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
-  delta > 0 ? `+${delta} done` : null,
+  band !== undefined ? `run ${elapsedClock(band)}` : runMs !== null ? `run ${elapsedClock(runMs / 1000)}` : `turn ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
+  delta > 0 && band === undefined ? `+${delta} done` : null,
   active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
  ].filter((part): part is string => part !== null)
@@ -376,7 +380,7 @@ export function registerRestyle(on: On): void {
    if (kept) return kept
    const snap = await ready($, cache)
    if (!snap) return next(e)
-   const tree = durationTree(snap, e.props, tracker, await nowMs($), (await lookOf($)).ui)
+   const tree = durationTree(snap, e.props, tracker, await nowMs($), (await lookOf($)).ui, runSecs())
    if (e.requestId) frozenFooters.set(e.requestId, tree)
    return tree
   } catch { return next(e) }

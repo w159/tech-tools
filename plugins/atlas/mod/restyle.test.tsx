@@ -20,6 +20,7 @@ import {
 import type { AtlasSnapshot } from './contract'
 import { formatDuration, textWidth } from './theme'
 import { memState } from './test_helpers'
+import { noteRunSecs } from './transcript/placed'
 
 // ---- fixtures ----
 
@@ -280,6 +281,7 @@ test('the receipt never prints dollars, even when the engine reports a session c
 })
 
 test('receipt duration is capped by the mod-owned turn timer when the host figure is larger', async () => {
+  noteRunSecs(undefined) // no pane is saying the band's clock in these receipts (a pane in another file would leak it)
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
   const ticks = [1_000_000, 1_077_000]
@@ -292,6 +294,7 @@ test('receipt duration is capped by the mod-owned turn timer when the host figur
 })
 
 test('critique 25: a turn footer freezes at the value it was first drawn with and prints the band clock format (0:56)', async () => {
+  noteRunSecs(undefined) // no pane is saying the band's clock in these receipts (a pane in another file would leak it)
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
   const first = fake$({ snapshot: snap() })
@@ -480,6 +483,7 @@ test('ToolGroup: two atlas dispatches draw as a numbered wave, anything else sta
 })
 
 test('a failing clock leaves the receipt on the host figure', async () => {
+  noteRunSecs(undefined) // no pane is saying the band's clock in these receipts (a pane in another file would leak it)
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
   const harness = fake$({ snapshot: snap({ contextPct: 0, counts: { done: 0, total: 0, byPhase: {} } }) })

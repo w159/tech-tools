@@ -4,11 +4,11 @@
 // Buttons on a clipped zero-width layer, the strip wraps only below 35 cells and never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { cells, markOf, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
+import { cells, markOf, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import { centred, HOTKEY_W, recentRows, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, type BoardLine } from '../board-model';
+import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../board-model';
 import { gateTally } from '../data/runstate';
 import { noteStopVerdict } from '../transcript/superseded';
 import { noteRunSecs } from '../transcript/placed';
@@ -54,7 +54,15 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
 /** The `o` tab: the board (mod/todo-panel.tsx) drawn inside the Atlas pane, which is the pane the host shows (a second pane opens behind it). */
 function boardItems(m: SidebarModel) {
   const s = m.snapshot;
-  return withOwnerStates(ownTodos(s.todos ?? [], s.sessionId), workerStates(s, liveWorkers(s, s.now)));
+  const states = workerStates(s, liveWorkers(s, s.now));
+  // Wave 36 (critique 35: T2 `● done` at 150 and `▲ blocked` at 110 over a failed worker): a plan row that names its worker only in its title (`T2 read ghost.py (ghost-explorer)`) while no dispatch row carries
+  // that name (ownTodos matches dispatch owners only) gets the listed worker as its owner, so its state is the one itemState gives at every width.
+  const rows = ownTodos(s.todos ?? [], s.sessionId).map((it) => {
+    const r = it as { origin?: string; owner?: string | null; content?: unknown };
+    const m2 = r.origin !== 'dispatch' && !r.owner && typeof r.content === 'string' ? titleOwner(r.content, states) : undefined;
+    return m2 ? { ...it, owner: m2.name } : it;
+  });
+  return withOwnerStates(rows, states);
 }
 
 /** The board view's ribbon words. Where the strip is the bare one-row form (no `r: route` keys on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
@@ -91,18 +99,20 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   // last posts of the channel; what is left over is spread as one blank row between sections, and a dim hint closes the pane, so no run of blank rows is longer than three.
   const blankRow = { runs: [{ t: ' ', tone: 'text' as const }] };
   const agents = pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs, startMs: w.startMs, endMs: w.endMs, calls: w.calls }));
+  // Wave 36 (critique 35: ~25% of the live board blank above the footer): the lead is a row of the chart too, its bar the whole run (its own start to its end, its calls under it); the totals count the workers alone.
+  const leadRow = pm.lead && pm.lead.startMs !== undefined && agents.length > 0 ? [{ name: 'lead', state: pm.run ? ((pm.run.kind === 'working' ? 'running' : pm.run.kind === 'blocked' ? 'blocked' : 'done') as UiState) : pm.lead.state, secs: pm.lead.secs, startMs: pm.lead.startMs, endMs: pm.lead.endMs, calls: pm.lead.calls }] : [];
   const clock = s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) };
   const topts = { cols, ui, tick: m.tick ?? 0, motion: m.motion, ...clock };
   const quiet = { quiet: failedOwners, hideFailed: failedOwners.size > 0 };
   const room = max - lines.length;
-  const levels = [{ spark: true, spacers: true }, { spark: true, spacers: false }, { spark: false, spacers: true }, { spark: false, spacers: false }];
+  const levels = [{ spark: true, spacers: true, tall: true }, { spark: true, spacers: true }, { spark: true, spacers: false }, { spark: false, spacers: true }, { spark: false, spacers: false }];
   let chart: BoardLine[] = [];
   let totals: BoardLine[] = [];
   if (items.length && room >= 5) {
     const foot1 = boardFootLine(agents, { ...topts, ...(pm.run?.secs !== undefined ? { runSecs: pm.run.secs } : {}) }); // failed workers count too (critique 34)
     totals = foot1 ? [foot1] : [];
     for (const lv of levels) {
-      const t = boardTimeline(agents, { ...topts, ...lv, quiet: quiet.quiet }, room - 2 - totals.length);
+      const t = boardTimeline([...leadRow, ...agents], { ...topts, ...lv, quiet: quiet.quiet }, room - 2 - totals.length);
       if (t.length && 1 + t.length + 1 + totals.length <= room) { chart = t; break; }
       if (!chart.length && t.length && lv === levels[levels.length - 1]) chart = t;
     }

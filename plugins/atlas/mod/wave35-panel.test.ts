@@ -136,7 +136,7 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
     await placeFinished(engine(ids), running(NOW - 1000), clean(NOW));
     expect(runCardPlaced()).toBe(true);
     expect(flatEl(chip(clean(NOW), 'done 5/5'))).toBe(''); // 4fef5d66: `run 5/5 done · 3 workers 0:13`, then `▌ done 5/5`
-    expect(flatEl(chip(clean(NOW), 'done 5/5 · all finished'))).toMatch(/all finished/); // a chip with a sentence of its own is still drawn
+    expect(flatEl(chip(clean(NOW), 'done 5/5 · three files changed'))).toMatch(/three files changed/); // a chip with a sentence of its own is still drawn (wave 36: a bare `complete` or `all finished` is not one)
     forgetPlaced();
   });
   test('the run card prints the band\'s run time, not the span of the workers', async () => {
@@ -210,7 +210,7 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
     const t = rows(57, RUN, many);
     const ev = t.filter((l) => /^\s+\+\d:\d\d\s/.test(l));
     expect(ev).toHaveLength(5);
-    expect(ev.map((l) => /post number (\d)/.exec(l)![1])).toEqual(['4', '5', '6', '7', '8']); // the newest five, oldest first
+    expect(ev.map((l) => /post number (\d)|ghost-explorer\s+failed/.exec(l)?.[1] ?? 'failed')).toEqual(['5', '6', 'failed', '7', '8']); // wave 36: the board's recent list, the failure row included; the newest five, oldest first
     expect(ev[0]).toMatch(/^\s+\+0:\d\d\s/);
   });
   test('a section with no data is one dim line, never blank space', () => {

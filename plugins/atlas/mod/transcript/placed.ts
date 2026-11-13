@@ -29,6 +29,8 @@ let counter = 0
 let runNote: { secs: number; at: number } | undefined // the band's run clock (register.ts hands it to the pane, the pane notes it here): the run card prints the figure the band prints
 const RUN_NOTE_MS = 5_000 // a note older than this is from a pane that is no longer drawn (it may be another run's): the card keeps what it last said
 let runCarded = false // the clean run's finish card is placed once per run: set when placed, cleared when the run is no longer clean
+const callsNow = new Map<string, number>() // worker name -> its tool calls as the latest build counts them: a card is drawn with the figure the board shows, not the one known the instant the worker ended (critique 35: alpha's card had none, the board 3)
+let roster = new Set<string>() // the workers of the latest build: the cards whose figures must agree with each other
 
 const bump = (m: Map<string, number>, k: string, by: number): void => { m.set(k, Math.max(0, (m.get(k) ?? 0) + by)) }
 const capped = <K, V>(m: Map<K, V>): void => { while (m.size > MAX_ROWS) m.delete(m.keys().next().value as K) }
@@ -69,6 +71,8 @@ const textOf = (w: FinishedWorker): string => outcomeText({ status: w.failed ? '
 /** Place a card for each worker that finished between `prev` and `next`, and for each finish whose place the host refused on an earlier build
  * (critique 15 A2: one refused place lost the failed card for good in 3 of 6 stop runs). Never throws: a card is display only. */
 export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | null, next: AtlasSnapshot): Promise<void> {
+  roster = new Set(workersOf(next).map((w) => w.name))
+  for (const w of workersOf(next)) if (w.calls?.length) callsNow.set(w.name, w.calls.length)
   const fresh = finishedWorkers(prev, next)
   const todo = [...fresh, ...[...owed.values()].map((o) => o.w).filter((o) => !fresh.some((f) => f.name === o.name))]
   for (const w of todo) {
@@ -97,7 +101,7 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
     if (!clean) { runCarded = false; return }
     if (runCarded || !prev) return
     const id = `done-run-${++counter}`
-    rows.set(id, { name: 'run', role: '', text: textOf({ name: 'run', role: '', failed: false, durationMs: clean.durationMs }), failed: false, fact: `${clean.done}/${clean.total} done \u00b7 ${clean.workers} ${clean.workers === 1 ? 'worker' : 'workers'}` })
+    rows.set(id, { name: 'run', role: '', text: textOf({ name: 'run', role: '', failed: false, durationMs: clean.durationMs }), failed: false, fact: `${clean.done}/${clean.total} \u00b7 ${clean.workers} ${clean.workers === 1 ? 'worker' : 'workers'}` })
     capped(rows)
     const res = await $.ui.place({ id })
     if (res.isPlaced) runCarded = true
@@ -107,6 +111,8 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
 
 /** Wave 35 (critique 34: the run card said 0:13, the band 0:33): the band's own run seconds, noted by the pane every frame; the run card reads them when it draws. Absent (no pane open): the card keeps the workers' span. */
 export const noteRunSecs = (secs: number | undefined): void => { runNote = secs !== undefined && Number.isFinite(secs) && secs >= 0 ? { secs: Math.floor(secs), at: Date.now() } : undefined }
+/** The band's own run seconds while the pane keeps saying them (fresh within RUN_NOTE_MS), else undefined: every run-time figure the transcript prints (the run card, the `▸ run` footer) reads this one value. */
+export const runSecs = (): number | undefined => (runNote && Date.now() - runNote.at < RUN_NOTE_MS ? runNote.secs : undefined)
 /** Whether the clean run's finish card was placed: the lead's own `done 5/5` chip then draws no second line. */
 export const runCardPlaced = (): boolean => runCarded
 
@@ -117,7 +123,16 @@ export function placedTree(id: string, ui: Ui, aged = false, opts: FinishOpts & 
   if (opts.hidden && !r.failed) return { type: 'Text', props: {}, children: [] } as RenderElement // a finish card that two newer ones replaced draws nothing (critique 29: at most two stacked)
   if (r.name === 'run' && runNote && Date.now() - runNote.at < RUN_NOTE_MS) r.text = `finished \u00b7 ${elapsedClock(runNote.secs)}` // the run card's time is the band's run clock, kept once the pane stops saying it
   const text = r.text
-  return notificationTree(r.name, r.role, text, r.failed, ui, aged, { ...opts, ...(r.calls ? { calls: r.calls } : {}), ...(r.fact ? { fact: r.fact } : {}) })
+  if (r.name === 'run') return notificationTree('', '', text, false, ui, aged, { ...opts, run: true, ...(r.fact ? { fact: r.fact } : {}) }) // the card says `done` once: the state word, then `5/5 · 3 workers`, then the time
+  return notificationTree(r.name, r.role, text, r.failed, ui, aged, { ...opts, ...(callsOf(r) !== undefined ? { calls: callsOf(r)! } : {}) })
+}
+
+/** A finish card's tool calls: the latest count the builds saw for its worker, else the one known when it was placed. Wave 36 (critique 35: one card without `· N calls` beside cards with it): when any card of the current roster has no
+ * count, no worker card prints one, so the cards never disagree among themselves. */
+function callsOf(r: PlacedRow): number | undefined {
+  const own = (x: PlacedRow): number | undefined => callsNow.get(x.name) ?? x.calls
+  const known = [...rows.values()].filter((x) => x.name !== 'run' && roster.has(x.name)).every((x) => own(x) !== undefined)
+  return known ? own(r) : undefined
 }
 
 /** A card dims once the run has moved on (critique 17 C3): 20 s after it was first drawn, or 5 s after a later card was drawn. `now` is the snapshot's clock. */
@@ -171,5 +186,5 @@ export function hideNotification(requestId: string, name: string): boolean {
 
 /** Forget every placed card and decision (a new session, a test). */
 export function forgetPlaced(): void {
-  runCarded = false; runNote = undefined; rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
+  runCarded = false; runNote = undefined; callsNow.clear(); roster = new Set(); rows.clear(); firstSeen.clear(); unclaimed.clear(); heard.clear(); decided.clear(); owed.clear(); drawn.clear(); drawSeq = 0; counter = 0; forgetFailed()
 }
