@@ -181,7 +181,7 @@ describe('step 6: the 110 board (critique 36: beta\'s bar missing, axis 0:30 und
   test('every agent has a bar', () => {
     for (const rows of [41, 30, 24]) {
       const t = board(38, rows);
-      for (const name of ['lead', 'alpha-explorer', 'ghost-explorer', 'beta-explorer']) expect([rows, name, t.some((l) => l.includes(name) && /[█▉▊▋▌▍▎▏]/.test(l))]).toEqual([rows, name, true]);
+      for (const name of ['lead', 'alpha-explorer', 'ghost-explorer', 'beta-explorer']) expect([rows, name, t.some((l) => l.includes(name) && /▇/.test(l))]).toEqual([rows, name, true]);
     }
   });
   test('the axis ends one tick past the run total', () => {
@@ -213,7 +213,7 @@ describe('step 7: the live board leaves no blank band above the footer (critique
     let run = 0; let worst = 0;
     for (const l of t) { run = l.trim() === '' ? run + 1 : 0; worst = Math.max(worst, run); }
     expect(worst).toBeLessThanOrEqual(2);
-    const foot = t.findLastIndex((l) => /worker calls/.test(l));
+    const foot = t.findLastIndex((l) => /\d+ done/.test(l));
     expect(foot).toBeGreaterThan(0);
     expect(t.slice(foot + 1).every((l) => l.trim() === '')).toBe(true);
   });

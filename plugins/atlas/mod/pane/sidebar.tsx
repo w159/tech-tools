@@ -65,6 +65,12 @@ function boardItems(m: SidebarModel) {
   return withOwnerStates(rows, states);
 }
 
+/** Wave 38 (critique 37: the lead's bar was 179 with `▲` while the run was merely blocked): the lead's bar is 141 while the run works, 203 only when its own row failed, 114 otherwise (a refused Stop is the band's word, not a failed lead). */
+export function leadBarState(run: string | undefined, lead: UiState): UiState {
+  if (lead === 'failed') return 'failed';
+  return run === 'working' || (run === undefined && lead === 'running') ? 'running' : 'done';
+}
+
 /** The board view's ribbon words. Where the strip is the bare one-row form (no `r: status` keys on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
  * tells the pane from a toast box by `r: status` or `▸ SIDEPANEL` and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
 export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { title: string; right: string } {
@@ -100,12 +106,12 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const blankRow = { runs: [{ t: ' ', tone: 'text' as const }] };
   const agents = pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs, startMs: w.startMs, endMs: w.endMs, calls: w.calls }));
   // Wave 36 (critique 35: ~25% of the live board blank above the footer): the lead is a row of the chart too, its bar the whole run (its own start to its end, its calls under it); the totals count the workers alone.
-  const leadRow = pm.lead && pm.lead.startMs !== undefined && agents.length > 0 ? [{ name: 'lead', state: pm.run ? ((pm.run.kind === 'working' ? 'running' : pm.run.kind === 'blocked' ? 'blocked' : 'done') as UiState) : pm.lead.state, secs: pm.lead.secs, startMs: pm.lead.startMs, endMs: pm.lead.endMs, calls: pm.lead.calls }] : [];
+  const leadRow = pm.lead && pm.lead.startMs !== undefined && agents.length > 0 ? [{ name: 'lead', state: leadBarState(pm.run?.kind, pm.lead.state), secs: pm.lead.secs, startMs: pm.lead.startMs, endMs: pm.lead.endMs, calls: pm.lead.calls }] : [];
   const clock = s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) };
   const topts = { cols, ui, tick: m.tick ?? 0, motion: m.motion, ...clock };
   const quiet = { quiet: failedOwners, hideFailed: failedOwners.size > 0 };
   const room = max - lines.length;
-  const levels = [{ spark: true, spacers: true, tall: true }, { spark: true, spacers: true }, { spark: true, spacers: false }, { spark: false, spacers: true }, { spark: false, spacers: false }];
+  const levels = [{ spark: true, spacers: true }, { spark: true, spacers: false }, { spark: false, spacers: true }, { spark: false, spacers: false }];
   let chart: BoardLine[] = [];
   let totals: BoardLine[] = [];
   if (items.length && room >= 5) {
@@ -127,7 +133,10 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const bodyMax = Math.max(1, max - 1);
   const sections = [lines, chart].filter((x) => x.length);
   const used = sections.reduce((n, x) => n + x.length, 0) + Math.max(0, sections.length - 1);
-  const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: pm.notes.filter((n) => !/^(T\d+|row) failed\b/.test(n.text) && !(n.kind === 'failed' && failedOwners.has(n.from))) }, bodyMax - used - 1) : []; // a failure the plan row says is not said again (critique 29: three times in one pane; critique 31: four)
+  // Wave 38 (critique 37: ~30% of the live board blank under the footer, the channel having posted nothing): the recent list is the run's events too, each worker's start and finish with the posts, so the pane has content from the first dispatch.
+  const posted = new Set(pm.notes.filter((n) => n.kind === 'done' || n.kind === 'handoff').map((n) => n.from));
+  const events = [...(pm.starts ?? []), ...(pm.finishes ?? []).filter((f) => !posted.has(f.from)), ...pm.notes];
+  const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: events.filter((n) => !/^(T\d+|row) failed\b/.test(n.text) && !(n.kind === 'failed' && failedOwners.has(n.from))) }, bodyMax - used - 1) : []; // a failure the plan row says is not said again (critique 29: three times in one pane; critique 31: four)
   const withRecent = recent.length ? [...sections, recent.slice(1)] : sections; // recentRows opens with its own blank: the join below puts it back
   const parts = foot ? [...withRecent, [foot]] : withRecent; // the footer is the last section: it takes its share of the spacing
   // Wave 37 (critique 36: ~25% of the live board blank above the footer): one blank row between sections and no spacer rows beyond it; the footer sits directly under the content.

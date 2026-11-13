@@ -97,7 +97,7 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     });
     test(`pane ${cols}x${rows}: the bars are solid fills and the axis has tick marks with labels`, () => {
       const text = out.join('\n');
-      expect(text).toMatch(/█{2,}/);
+      expect(text).toMatch(/▇{2,}/); // wave 38: one-row `▇` bars
       expect(text).not.toMatch(/alpha-explorer\s+━{3,}/);
       expect(text).toMatch(/[┬┼╷]/);
       expect(text).toMatch(/0:00/);
@@ -111,9 +111,9 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     });
   }
   test('a running bar grows with the clock and its leading edge moves between frames', () => {
-    const at = (ms: number) => render('board', 65, 45, snap({ running: true, now: NOW + ms })).find((l) => l.includes('alpha-explorer') && /[█▏▎▍▌▋▊▉]/.test(l))!;
+    const at = (ms: number) => render('board', 65, 45, snap({ running: true, now: NOW + ms })).find((l) => l.includes('alpha-explorer') && /▇/.test(l))!;
     const [a, b] = [at(0), at(2000)];
-    const fill = (l: string): number => [...l].filter((c) => /[█▏▎▍▌▋▊▉]/.test(c)).length;
+    const fill = (l: string): number => [...l].filter((c) => c === '▇').length;
     expect(fill(b)).toBeGreaterThan(fill(a));
     const edge = (ms: number): string => at(ms).slice(0, 60);
     expect(new Set([edge(0), edge(200), edge(400), edge(600)]).size).toBeGreaterThan(1);

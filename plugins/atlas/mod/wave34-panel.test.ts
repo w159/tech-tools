@@ -198,10 +198,10 @@ describe('item 4: the board says one word per worker, keeps dispatches apart and
     expect(out.slice(0, head).some((l) => /Read ghost\.py first/.test(l))).toBe(false);
   });
   test('no tick stems under the bars: no sparkline row, the calls are a caption', () => {
-    expect(text).not.toMatch(/[▁▂▃▄▅▆▇]{2}/); // 4d8d8eb1: `▁█▁▁█▁▁▁` under every bar
+    expect(text.replace(/▇+/g, '')).not.toMatch(/[▁▂▃▄▅▆]{2}/); // 4d8d8eb1: `▁█▁▁█▁▁▁` under every bar (wave 38: the lane bars are the one-row `▇`)
     const agents = [{ name: 'alpha-explorer', state: 'done' as const, secs: 11, startMs: 0, endMs: 11_000, calls: [1_000, 3_000, 7_000, 10_000] }];
     const lines = boardTimeline(agents, { cols: 65, ui, spark: true }).map((l) => l.runs.map((x) => x.t).join(''));
-    expect(lines.join('\n')).not.toMatch(/[▁▂▃▄▅▆▇]/);
+    expect(lines.slice(1, 2).join('\n')).not.toMatch(/[▁▂▃▄▅▆▇]/); // the caption row under the bar
     expect(lines.join('\n')).toMatch(/4 calls/);
   });
 });
