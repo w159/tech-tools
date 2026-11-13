@@ -46,34 +46,34 @@ describe('critique 16 C5: the checker sees the defect in the cited golden', () =
   });
 });
 
-describe('critique 16 C5: the ramp falls and never pops', () => {
+describe('wave 31: the done fade is 231, then 151 held to the end of the window, then the resting tone', () => {
+  // Critique 29: the old ramp (231, 193, 151, 146) left 0 fade frames in a capture. The staircase is now 231 for one 200 ms step, 151 held for 600 ms, then rest (114).
+  // The weight is held bold while the colour is lifted and falls on the LAST beat (600 ms) - one frame never moves both - so the rest frame changes colour only.
   for (const color of ['256', 'truecolor'] as const) {
     const all = demoFrames(100, MOTION_STEP_MS, color);
     for (const s of ['todo', 'agent']) {
-      const frames = ramp(all, s);
-      const rest = all[`${s}-99-done.ans`]!;
-      // Critique 17 C4: the weight falls on the LAST beat of the window, so the rest frame changes colour at most, never weight. In 24-bit colour that beat is
-      // still a step short of rest; in 256 colours the palette has no colour left between the last step and rest, so the last beat IS the resting row and
-      // the ramp is three distinct beats (0, 200, 400 ms) and the resting beat.
-      const last = frames.length - 1;
-      // Critique 26: the 256-colour ease is one white beat (231) then the resting row, so only that beat is held apart from rest.
-      const settled = color === '256' ? frames.slice(0, 1) : frames; // the white beat; the glyph's own colour and the rest follow
-      test(`${color}/${s}: spans at least 600 ms, no frame repeats its neighbour or the rest, the 600 ms frame is not the final one`, () => {
-        expect(frames.length * MOTION_STEP_MS).toBeGreaterThanOrEqual(600);
-        expect(MOTION_MS).toBeGreaterThan(600);
-        if (color === '256') expect(frames[600 / MOTION_STEP_MS]).toBe(rest);
-        else expect(frames[600 / MOTION_STEP_MS]).not.toBe(rest);
-        if (color === '256') expect(settled[0]).not.toBe(rest);
-        else expect(settled.length * MOTION_STEP_MS).toBeGreaterThanOrEqual(600 - MOTION_STEP_MS);
-        expect(rampFaults(settled, rest, [])).toEqual([]);
+      const strip = (f: string): string => (s === 'todo' ? f : f.trimEnd().split('\n').filter((l) => !plain(l).startsWith('╰')).at(-1)!); // the agent strip's own row, not the plan row above it
+      const frames = ramp(all, s).map(strip);
+      const rest = strip(all[`${s}-99-done.ans`]!);
+      const word = s === 'todo' ? 'wire the gate' : 'implementer-band';
+      const fgs = (w: string): string[] => frames.map((f) => runOf(f, w).fg).concat(runOf(rest, w).fg);
+      test(`${color}/${s}: 231 for one step, 151 for 600 ms, then the resting tone`, () => {
+        expect(MOTION_STEP_MS).toBe(200);
+        expect(MOTION_MS).toBe(800);
+        expect(frames.length).toBe(4); // t0000, t0200, t0400, t0600
+        const disc = fgs('●');
+        expect(disc[0]).toBe(xtermHex(231));
+        expect(disc.slice(1, 4)).toEqual([xtermHex(151), xtermHex(151), xtermHex(151)]);
+        expect(disc[4]).not.toBe(xtermHex(151));
+        expect(disc[4]).toBe(xtermHex(114));
       });
-      test(`${color}/${s}: bold only ever falls and the foreground only ever moves toward rest (no bold pop at 400-600 ms)`, () => {
-        expect(rampFaults(settled, rest, ['wire the gate', 'done'])).toEqual([]);
+      test(`${color}/${s}: the weight falls on the last beat, so the frame that reaches rest changes colour only`, () => {
+        expect(frames.map((f) => runOf(f, '●').bold)).toEqual([true, true, true, false]);
+        expect(runOf(rest, '●').bold).toBe(false);
       });
-      test(`${color}/${s}: the weight of the last frame of the window is the weight of the rest (no weight pop at rest)`, () => {
-        for (const word of ['wire the gate', 'done', '●'].filter((w) => s === 'todo' || w !== 'wire the gate')) {
-          expect([word, runOf(frames[last]!, word).bold]).toEqual([word, runOf(rest, word).bold]);
-        }
+      test(`${color}/${s}: the label takes the fade too (${word})`, () => {
+        if (s === 'todo') expect(fgs(word).slice(0, 3)).toEqual([xtermHex(231), xtermHex(151), xtermHex(151)]);
+        else expect(fgs('done').slice(0, 3)).toEqual([xtermHex(231), xtermHex(151), xtermHex(151)]);
       });
     }
   }

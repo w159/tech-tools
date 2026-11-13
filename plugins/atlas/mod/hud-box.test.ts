@@ -69,32 +69,29 @@ describe('LAST is never blank or raw (critique 21: `first 3` and an empty cell a
       }
     }
   });
-  test('a worker with nothing to say reads its last tool or `-`, never the state word again; a text of one unbreakable word that cannot fit is cut with `…`, not swapped (critique 22)', () => {
+  test('wave 31: a worker with nothing to say reads `-` in RESULT, never the state word again, and a long tool text never widens the row', () => {
     const rows = [agent({ name: 'alpha-explorer', state: 'done', tool: '' }), agent({ name: 'beta-explorer', state: 'running', tool: 'x'.repeat(60) }), agent({ name: 'gamma-explorer', state: 'done', tool: '', fallback: 'read' })];
     const [a, b, c] = lasts(80, rows);
-    expect(a!.endsWith(' -')).toBe(true);
-    expect(b!.endsWith('…')).toBe(true);
+    for (const l of [a!, b!, c!]) { expect(l.endsWith(' -')).toBe(true); expect(runsCells([{ t: l, tone: 'text' }])).toBeLessThanOrEqual(80); }
     expect(b!).not.toContain('running  running');
-    expect(c!.endsWith(' read')).toBe(true);
   });
 });
 
 describe('the boxes at 110: a closing rule and a blank between the blocks', () => {
   const todos: TodoRow[] = [1, 2, 3].map((i) => ({ label: `T${i} item`, state: i === 1 ? 'done' : 'queued', detail: '', focus: false }));
   const edge = `╰${'─'.repeat(108)}╯`;
-  test('with the rows to spare: TODO, its closing rule, one blank, SUBAGENTS, its closing rule', () => {
-    const out = text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui }, 20));
+  test('wave 31: with the rows to spare: TODO, its closing rule, SUBAGENTS, its closing rule, and no blank row between them', () => {
+    const out = text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui, merge: false }, 20));
     const at = out.findIndex((r) => r.includes('SUBAGENTS'));
-    expect(out[at - 1]).toBe('');
-    expect(out[at - 2]).toBe(edge);
+    expect(out[at - 1]).toBe(edge);
     expect(out.at(-1)).toBe(edge);
-    expect(out.filter((r) => r === '')).toHaveLength(1);
+    expect(out.filter((r) => r === '')).toHaveLength(0);
   });
   test('short of rows (critique 28) the blank goes first, then the column names, then the finished rows fold, then plan rows; every box stays closed and the agent keeps its row', () => {
-    const rows = (n: number): string[] => text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui }, n));
+    const rows = (n: number): string[] => text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui, merge: false }, n));
     const tops = (out: string[]): number => out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length;
     const names = (out: string[]): boolean => out.some((r) => /AGENT\s+STATE/.test(r));
-    expect(rows(20)).toHaveLength(10); // title, 3 rows, rule, blank, title, names, 1 agent, rule
+    expect(rows(20)).toHaveLength(9); // title, 3 rows, rule, title, names, 1 agent, rule (wave 31: no blank row)
     const nine = rows(9); // the blank goes; all three plan rows, the names and both rules stay
     expect(tops(nine)).toBe(2);
     expect(nine.filter((r) => r === edge)).toHaveLength(2);
@@ -123,7 +120,7 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
 
 describe('a SUBAGENTS row on the first snapshot that names a worker', () => {
   const dispatch = (owner: string, status = 'in_progress'): TodoItem => ({ id: `d-${owner}`, content: `Read ${owner}`, status, owner, origin: 'dispatch' }) as unknown as TodoItem;
-  const hud = (todos: TodoItem[], agents: HudAgent[] = []): string[] => hudLines({ todos, agents }, { cols: 110, maxRows: 30, ui, now: 0 }).map(runsString);
+  const hud = (todos: TodoItem[], agents: HudAgent[] = []): string[] => hudLines({ todos, agents }, { merge: false, cols: 110, maxRows: 30, ui, now: 0 }).map(runsString);
   test('an open dispatch row with no listed worker draws a queued row before the squad or an event lists it', () => {
     const rows = hud([dispatch('alpha-explorer')]);
     expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);

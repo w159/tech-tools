@@ -14,7 +14,7 @@ const todo = (n: number, state: (i: number) => string, owner: (i: number) => str
   Array.from({ length: n }, (_, i) => ({ id: `p${i}`, content: `T${i + 1} step ${i + 1}`, status: state(i), ...(owner(i) ? { owner: owner(i) } : {}) }) as unknown as TodoItem);
 const ag = (name: string, state: string, over: Partial<HudAgent> = {}): HudAgent => ({ name, role: 'explorer', state, ui: state === 'working' ? 'running' : (state as never), model: 'haiku', since: NOW - 1000, ...over });
 const rows = (todos: TodoItem[], agents: HudAgent[], o: { cols?: number; maxRows?: number; ui?: Ui; tick?: number } = {}): Run[][] =>
-  hudLines({ todos, agents }, { cols: o.cols ?? 150, maxRows: o.maxRows ?? 30, ui: o.ui ?? ui, now: NOW, ...(o.tick !== undefined ? { tick: o.tick } : {}) });
+  hudLines({ todos, agents }, { merge: false, cols: o.cols ?? 150, maxRows: o.maxRows ?? 30, ui: o.ui ?? ui, now: NOW, ...(o.tick !== undefined ? { tick: o.tick } : {}) });
 const text = (r: Run[]): string => runsString(r);
 
 describe('title rows: a plain title, the count and the meter inside a thin rule that runs to the edge', () => {
@@ -101,7 +101,7 @@ describe('rows: one phase, dim done rows, state words by weight', () => {
     const word = done.find((x) => x.t === 'done')!;
     expect(word.tone).toBe(rowWordTone('done'));
     expect(done.find((x) => x.t === '●')!.tone).toBe('ok');
-    const agent = out.find((r) => text(r).includes('alpha-explorer') && text(r).includes('haiku'))!;
+    const agent = out.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] alpha-explorer\s/.test(text(r)))!;
     expect(agent.filter((x) => x.t.trim() !== '' && x.t !== '●' && x.t !== 'done').every((x) => x.tone === 'muted')).toBe(true);
     expect(agent.find((x) => x.t === '●')!.tone).toBe('ok'); // the agent row's glyph keeps the done colour while its text goes quiet
     expect(out.flat().some((x) => x.strike)).toBe(false);
@@ -110,7 +110,7 @@ describe('rows: one phase, dim done rows, state words by weight', () => {
     const run = out.find((r) => text(r).includes('step 2'))!.find((x) => x.t === 'running')!;
     expect([run.tone, run.bold]).toEqual([rowWordTone('running'), true]);
     const dead = rows(todo(2, () => 'pending', (i) => (i === 0 ? 'ghost-explorer' : undefined)), [ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' })]);
-    const failed = dead.find((r) => text(r).includes('ghost-explorer') && text(r).includes('haiku'))!.find((x) => x.t === 'killed')!; // critique 28: a failed agent that was in a call reads killed
+    const failed = dead.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer\s/.test(text(r)))!.find((x) => x.t === 'killed')!; // critique 28: a failed agent that was in a call reads killed
     expect([failed.tone, failed.bold ?? false]).toEqual(['bad', false]);
     const warn = rows(todo(1, () => 'pending', () => 'ghost-explorer'), [ag('ghost-explorer', 'blocked')]).flatMap((r) => r).find((x) => x.t === 'blocked' || x.t === 'waiting')!;
     expect([warn.tone, warn.bold ?? false]).toEqual([rowWordTone(warn.t === 'blocked' ? 'blocked' : 'waiting'), false]);
@@ -121,13 +121,13 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
   const plan = todo(5, () => 'pending', (i) => (i < 3 ? ['alpha-explorer', 'ghost-explorer', 'beta-explorer'][i] : undefined));
   const agents = [ag('alpha-explorer', 'working', { tool: 'Read', target: 'alpha.py' }), ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), ag('beta-explorer', 'working', { tool: 'Read', target: 'beta.py' })];
   const planRows = (out: string[]): number => out.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(r)).length;
-  const agentLines = (out: string[]): number => out.filter((r) => /explorer\s+(running|failed|killed)\s+haiku/.test(r)).length;
+  const agentLines = (out: string[]): number => out.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] \w+-explorer\s+(running|failed|killed)/.test(r)).length;
   const corners = (out: string[]): [number, number] => [out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length, out.filter((r) => r.startsWith('╰') && r.endsWith('╯')).length];
-  test('14 rows for 5 todos and 3 agents keep every row, the blank, the AGENT/STATE header and both closed boxes', () => {
+  test('wave 31: 13 rows for 5 todos and 3 agents keep every row, the AGENT/STATE header and both closed boxes, with no blank row between them', () => {
     const out = rows(plan, agents, { maxRows: 14 }).map(text);
-    expect(out).toHaveLength(14);
-    expect(out.some((r) => /AGENT\s+STATE\s+MODEL\s+TASK\s+LAST\s+RESULT/.test(r))).toBe(true);
-    expect(out.filter((r) => r.trim() === '')).toHaveLength(1);
+    expect(out).toHaveLength(13);
+    expect(out.some((r) => /AGENT\s+STATE\s+TASK\s+LAST\s+RESULT/.test(r))).toBe(true);
+    expect(out.filter((r) => r.trim() === '')).toHaveLength(0);
     expect(agentLines(out)).toBe(3);
     expect(planRows(out)).toBe(5);
     expect(corners(out)).toEqual([2, 2]);
@@ -165,6 +165,6 @@ describe('SUBAGENTS grid: the header stays while the grid shows; LAST and TASK a
       expect([cols, row.trimEnd().endsWith('-')]).toEqual([cols, true]);
     }
     const wide = rows([], bare, { cols: 150 }).map(text).find((r) => r.includes('lone-explorer'))!;
-    expect(wide).toMatch(/queued\s+haiku\s+-\s+0:00\s+-\s*$/); // TASK `-`, LAST the clock (a queued agent has run for 0:00), RESULT `-`
+    expect(wide).toMatch(/queued\s+-\s+0:00\s+-\s*$/); // TASK `-`, LAST the clock (a queued agent has run for 0:00), RESULT `-` (wave 31: no MODEL column)
   });
 });

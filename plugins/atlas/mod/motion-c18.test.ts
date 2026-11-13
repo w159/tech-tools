@@ -37,18 +37,18 @@ describe('C4: the TODO owner column does not flash', () => {
   }
 });
 
-// Critique 19 B5 (motion-232567af/todo-strip.ans:4-5): the 256-colour ramp dropped the weight one frame AFTER the text reached 146. The weight now falls on the frame the colour lands.
-describe('B5: on 256 colours the weight falls on the frame the colour lands on rest', () => {
+// Critique 19 B5 (motion-232567af/todo-strip.ans:4-5): the ramp dropped the weight one frame AFTER the text reached 146. Wave 31: the weight holds while the colour is lifted
+// and falls on the LAST beat of the window (600 ms), where the colour is still 151; the frame after it (800 ms, the rest) changes colour only.
+describe('B5: the weight falls on the last beat of the fade, the colour lands on the frame after it', () => {
   for (const surface of ['todo', 'agent'] as const) {
-    test(`${surface}: bold stays while the colour moves; the frame that drops it is the first at the resting colour`, () => {
+    test(`${surface}: bold holds while the colour is lifted; the frame that drops it keeps the held colour`, () => {
       const { rest, beats } = frames(surface, '256');
-      const seq = [...beats, rest];
       for (const [k, r] of rest.entries()) {
-        if (r.t.trim() === '' || beats[0]![k]!.t !== r.t || beats[0]![k]!.fg === undefined || (r.bold ?? false)) continue; // a run that ramps and rests plain
-        const fgs = beats.map((b) => b[k]!.fg);
-        const landed = fgs.findIndex((f, i) => fgs.slice(i).every((g) => g === f)); // the first beat from which the colour no longer changes
+        if (r.t.trim() === '' || beats[0]![k]!.t !== r.t || beats[0]![k]!.fg === undefined || beats[0]![k]!.bold !== true || (r.bold ?? false)) continue; // a run that fades (lifted bold) and rests plain
         const dropped = beats.findIndex((b) => !(b[k]!.bold ?? false));
-        expect([surface, r.t, dropped]).toEqual([surface, r.t, landed]);
+        expect([surface, r.t, dropped]).toEqual([surface, r.t, beats.length - 1]);
+        expect([surface, r.t, beats.at(-1)![k]!.fg === beats[1]![k]!.fg]).toEqual([surface, r.t, true]); // the colour does not step with the weight
+        expect([surface, r.t, beats.at(-1)![k]!.fg === r.fg]).toEqual([surface, r.t, false]); // and the rest frame still has the colour to land on
       }
     });
   }

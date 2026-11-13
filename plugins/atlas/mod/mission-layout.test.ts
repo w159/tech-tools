@@ -3,7 +3,7 @@
 // key flag, the "+N more" slot rule, attention order, the board slot and the one-row threshold.
 import { describe, expect, test } from 'claude-code/testing';
 import type { Ui } from './atlas-ui';
-import { spinnerGlyph } from './atlas-ui';
+import { COUNT_ORDER, spinnerGlyph } from './atlas-ui';
 import { bandLines, missionLines, planRows, runsText, type MissionModel, type MissionWorker, type WorkerState } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -61,9 +61,8 @@ describe('mission-layout: A3 the count order is the shared COUNT_ORDER', () => {
   test('running, failed, waiting, queued: waiting reads before queued on every form', () => {
     const ws = [w('q', 'queued'), w('wt', 'waiting'), w('f', 'failed'), w('r', 'running')];
     const full = band(model({ workers: ws }));
-    expect(full.indexOf('running')).toBeLessThan(full.indexOf('failed'));
-    expect(full.indexOf('failed')).toBeLessThan(full.indexOf('waiting'));
-    expect(full.indexOf('waiting')).toBeLessThan(full.indexOf('queued'));
+    expect(full.indexOf('running')).toBeLessThan(full.indexOf('killed')); // wave 31: the band keeps the running count and the one failure word
+    expect(COUNT_ORDER.indexOf('waiting')).toBeLessThan(COUNT_ORDER.indexOf('queued')); // the worker rows and the HUD keep the shared order
   });
 });
 
@@ -120,10 +119,10 @@ describe('mission-layout: failure count on the band', () => {
     expect(band(model({ workers: [w('a', 'running')], lastRun: { workers: 2, failed: 3 } }))).not.toContain('failed');
     expect(band(model({ workers: [w('a', 'running')] }))).not.toContain('failed');
   });
-  test('idle with no last wave shows no failure; idle with a last wave of 2 failures counts them', () => {
+  test('idle with no last wave shows no failure; idle with a last wave of 2 failures counts them as killed', () => {
     expect(band(model())).not.toContain('failed');
-    expect(band(model({ lastRun: { workers: 2, failed: 2 } }))).toContain('2 failed');
-    expect(band(model({ workers: [w('a', 'failed')], lastRun: { workers: 1, failed: 0 } }))).toContain('1 failed');
+    expect(band(model({ lastRun: { workers: 2, failed: 2 } }))).toContain('2 killed');
+    expect(band(model({ workers: [w('a', 'failed')], lastRun: { workers: 1, failed: 0 } }))).toContain('1 killed');
   });
   test('a finished-only worker list is idle', () => {
     expect(band(model({ workers: [w('a', 'done'), w('b', 'failed')] }))).toContain('idle');

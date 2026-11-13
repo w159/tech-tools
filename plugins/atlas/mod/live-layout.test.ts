@@ -174,7 +174,7 @@ describe('5. the plan row budget and the overflow row', () => {
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
   });
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
-    const rows = hudLines(input, view(88, 8)).map(runsString);
+    const rows = hudLines(input, view(88, 5)).map(runsString); // wave 31: the merged block holds all five plan rows and the agents on them in 7 rows, so the cut needs a slot under that
     const more = rows.find((r) => /\+\d+ more/.test(r))!;
     expect(more).toMatch(/▸ TODO {2}0\/5 · \+\d+ more ▱+ ─+╮$/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
@@ -194,14 +194,14 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
   const hudIn: HudInput = { todos: planDone, agents };
   const budget = 18; // the live frame's 15 slot rows less the host's line (14), plus the Subagents column-header row and its blank, plus the two closing rules (round 3)
-  const cap = 10; // a slot that cuts the plan: the boxes stay closed (critique 28), so a slot below the five-row form (13 with the agents) cuts
+  const cap = 5; // a slot that cuts the plan: the boxes stay closed (critique 28); wave 31: the merged block (plan rows carry the agents) holds everything in 7 rows, so only a slot under that cuts
   const snapshot = busySnap();
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
   const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));
 
   test('the band at the live budget spends rows on blanks while the plan is cut', () => {
     const first = draw(cap);
-    expect(first.map(runsString).some((r) => /\+\d+ more/.test(r))).toBe(true); // the defect
+    expect(first.map(runsString).some((r) => /\+\d+ more|· \d+ done/.test(r))).toBe(true); // the defect: the plan is cut (windowed or folded onto the ribbon)
     expect(bandSpareRows(bandModel(budget - first.length))).toBeGreaterThan(0);
   });
   test('reclaimBlanks shows every plan row once the blanks are handed over, and the band loses only blanks', () => {

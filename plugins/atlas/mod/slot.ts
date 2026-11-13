@@ -1,6 +1,6 @@
 // slot.ts: the AbovePrompt slot as one pure plan. register.ts hands it the band builder, the HUD input and the row budget; it answers with the HUD rows, the band
 // model, the blank row between them and the rows the slot holds. Pure: nothing here reads the host or keeps state (the caller keeps `held`).
-import { bandRowCount, bandSpareRows, type BandModel } from './band';
+import { bandKindOf, bandRowCount, bandSpareRows, type BandModel } from './band';
 import { hudBudget, hudCompactRows, hudFloorRows, hudHoldRows, hudListsAgents, hudRows, hudWantRows, reclaimBlanks, type HudInput, type HudOpts } from './hud';
 import type { Segment } from './runs';
 
@@ -68,24 +68,20 @@ export type SlotInput = {
 /** `lead`: empty host-coloured rows above the band that make up the budget (never filled bars); `held` is the content height (band area, blank, boxes) the run has reached. */
 export type SlotPlan = { hud: Segment[][]; band: BandModel; gap: number; pad: number; held: number; lead: number };
 
-/** Rows the band's own area takes at most (the band, the checks or last-run row, the keys row and its blank). */
-const BAND_AREA_ROWS = 4;
-
-/** The fixed shape (critique 28): from the first working frame to idle the slot is one height and the band one screen row. The slot is bottom-anchored and the host gives it `budget` (half the screen less the rows
- * below it, the prompt and its own agent list), so the band's row is `screen - slot - below`; a slot that always fills the budget keeps `slot + below` where the host puts it. The height is the budget, or the full shape
- * (band area, the blank, both boxes with the plan and agents a run is expected to have) when that is smaller, and never falls while the run lasts. The HUD draws closed boxes in what the band leaves; rows
- * neither takes are blank rows between them, never a slab at the bottom. */
+/** The fixed shape (critique 31): from the first working frame to idle the slot is one height, the band is one row at its top and the HUD starts on the very next row in every state (the TODO box never moves under
+ * the band). The slot is bottom-anchored and the host gives it `budget` (half the screen less the rows below it, the prompt and its own agent list). The height is the budget, or the roomiest HUD (both boxes
+ * with the plan and agents a run is expected to have, the form every state fits in) and the band row when that is smaller, and never falls while the run lasts. Rows the HUD does not use are blank rows under it,
+ * unfilled, never a 234 slab between the blocks. */
 function composeFixed(i: SlotInput): SlotPlan {
 	const { budget, columns, hudIn, hudView } = i;
-	const reserve = BAND_AREA_ROWS + 1 + hudHoldRows(hudIn, columns, i.now, true);
+	const reserve = BAND_KEEP_ROWS + hudHoldRows(hudIn, columns, i.now, true);
 	const total = Math.max(1, Math.min(budget, Math.max(i.held, reserve))); // the content: never falls while the run lasts
-	const hudCap = Math.max(0, total - BAND_KEEP_ROWS); // the band keeps its row; the HUD takes every other row it can use (every running agent first), and a blank between them only where rows are left over
-	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true }) as Segment[][];
-	const rest = (rows: Segment[][]): number => total - rows.length - (rows.length > 0 && total - rows.length > BAND_KEEP_ROWS + 1 ? 1 : 0);
-	const band = i.bandIn(hud, Math.max(1, rest(hud)));
-	const bandRows = Math.min(bandRowCount(band, true), Math.max(1, rest(hud)));
-	const gap = Math.max(0, total - bandRows - hud.length);
-	return { hud, band, gap, pad: 0, held: total, lead: Math.max(0, budget - total) }; // the host puts the slot at `screen - budget - below`: the unused budget goes ABOVE the band as empty rows, so the band keeps its screen row whatever the host list below does
+	const hudCap = Math.max(0, total - BAND_KEEP_ROWS); // the band keeps its row; the HUD takes every other row it can use
+	const idle = bandKindOf(i.bandIn([], 1)) === 'idle';
+	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true, ...(idle ? { idle: true } : {}) }) as Segment[][];
+	const band = i.bandIn(hud, 1);
+	const pad = Math.max(0, total - BAND_KEEP_ROWS - hud.length);
+	return { hud, band, gap: 0, pad, held: total, lead: Math.max(0, budget - total) }; // the host puts the slot at `screen - budget - below`: the unused budget goes ABOVE the band as empty rows, so the band keeps its screen row whatever the host list below does
 }
 
 export function composeSlot(i: SlotInput): SlotPlan {

@@ -51,7 +51,7 @@ test("parity: omp's board frames are the shared board runs, painted", () => {
 		const mod = boardBody(rows, { cols: 120, ui, motion });
 		return { fg: mod.flatMap(l => l.runs.filter(x => x.t.trim()).map(x => runHex(x, "mocha"))).join(","), text: mod.map(l => l.runs.map(x => x.t).join("")) };
 	});
-	expect(new Set(frames.map(f => f.fg)).size).toBeGreaterThanOrEqual(3);
+	expect(new Set(frames.map(f => f.fg)).size).toBeGreaterThanOrEqual(2); // wave 31: 231 for one step, then 151 held (the weight falls on the last beat)
 	const items = rows.map(r => ({ content: r.label, status: r.state === "done" ? "completed" : r.state === "running" ? "in_progress" : "pending", owner: r.owner }));
 	const at = { width: 120, tick: 0, ui, now: 0, motion: m.ctx(T0 + 100) };
 	const painted = boardLines(items, at).map(strip);

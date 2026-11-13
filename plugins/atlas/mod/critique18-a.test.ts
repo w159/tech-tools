@@ -71,12 +71,12 @@ describe('A3: a middle dot between band segments, and a count never loses its wo
   const warn = (cols: number): string => row(m(cols, { phase: 'research', done: 1, total: 5, openWork: 2, openDispatch: 2, todoBlocked: 1, checks: [{ id: 'routing', ok: false, name: 'routing' }], workers: [{ ...failed, name: 'beta-explorer' }, failed] }));
   test('no `n ▲ 1 blocked` without a dot at any width', () => {
     for (let cols = 40; cols <= 150; cols++) expect([cols, /\d ▲ \d+ blocked/.test(warn(cols))]).toEqual([cols, false]);
-    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · 1 blocked');
+    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · ■ 1 killed'); // wave 31: blocked rides the state word; the band keeps four segments
+    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('▲ blocked');
   });
   test('82 columns (the tab open): the words stay, a lower-priority segment goes', () => {
     const t = warn(82);
-    expect(t).toMatch(/■ 2 failed/);
-    expect(t).toMatch(/▲ 1 blocked/);
+    expect(t).toMatch(/■ 2 killed/); // wave 31: one failure word, and blocked rides the state word
     expect(t).not.toMatch(/■2/);
     expect(t).not.toContain('dispatches open');
   });

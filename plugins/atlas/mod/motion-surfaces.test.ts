@@ -48,7 +48,7 @@ const hudInput = (todoStatus: string, agentState: string): HudInput => {
   const agents = worldHudAgents().map((a, i) => (i === 0 ? { ...a, state: agentState, ui: agentState === 'done' ? ('done' as UiState) : agentState === 'working' ? ('running' as UiState) : ('queued' as UiState) } : a));
   return { todos, agents, phases: worldPhases() };
 };
-const hudView = (m: MotionCtx | undefined) => ({ cols: 120, maxRows: 60, ui, now: T0 + 5, motion: m });
+const hudView = (m: MotionCtx | undefined) => ({ cols: 120, maxRows: 60, ui, now: T0 + 5, motion: m, merge: false }); // the SUBAGENTS rows are the ones animated here (a merged block draws the agent as a calm right-hand cell)
 describe('HUD rows', () => {
   check({
     name: 'TODO row', surface: 'hud-todo',
@@ -72,7 +72,7 @@ describe('HUD rows', () => {
     expect(done).toContain('●');
     expect(done).not.toMatch(/[◌◍]/); // critique 21: the dotted rings read empty
     // the cursor and the bold label hold from t=0 through the fade (critique 21: the ▸ vanished at t=0, the bold dropped a step late), and fall together on the last beat
-    for (const dt of [0, 200, 999, 1000, 1399]) {
+    for (const dt of [0, 200, 400, 599]) { // wave 31: the window is 800 ms (231, then 151 held), the weight holds to the last beat
       const row = hudLines(hudInput('completed', 'working'), hudView(mo.ctx(T0 + dt)))[moved[0]!]!;
       expect([dt, runsString(row).startsWith('▸ ●')]).toEqual([dt, true]);
       expect([dt, row.find((x) => x.t.includes('Subagents block'))!.bold]).toEqual([dt, true]);

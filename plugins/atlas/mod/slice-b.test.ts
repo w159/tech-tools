@@ -193,7 +193,7 @@ describe('B4: lastText and clipWords', () => {
       const line = text(cols, [row()]).find((l) => l.includes('beta-explorer'))!;
       expect(line).not.toMatch(/\b1\. /);
       expect(line).not.toContain('`');
-      expect(line.trimEnd()).toMatch(/(ctx_search|ToolSearch…|returned|done)$/); // the whole text, or cut on a word with a one-cell `…` (critique 21), or the state word where not even a word fits; never a raw cut
+      expect(line.trimEnd()).toMatch(/(ctx_search|ToolSearch…|returned|done|-)$/); // the whole text, or cut on a word with a one-cell `…` (critique 21), or the state word where not even a word fits; never a raw cut
     }
   });
   test('LAST then MODEL drop before a TASK id is cut or a name is cut (critique 19 B2: TASK is the plan id, 7 cells at every width)', () => {

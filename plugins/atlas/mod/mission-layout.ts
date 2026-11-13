@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clip, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, meter, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, type MotionCtx, type MotionItem } from './motion';
 import { blockReasons } from './data/runstate';
 import { displayName } from './hud';
@@ -154,9 +154,9 @@ const closedCount = (m: MissionModel): number => Math.min(Math.max(0, m.closed ?
 
 /** Agent counts by state, in the order the band shows them; zero counts are left out. `words`: `◐ 1 running`; otherwise glyph and
  * number (`◐1`), where queued gives way. `noun`: the basis, `agents`, in front (the todo count is tasks; the two are never mixed). */
-const countOf = (m: MissionModel, s: UiState): number => (s === 'failed' ? failedCount(m) - closedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
+const countOf = (m: MissionModel, s: UiState): number => (s === 'failed' ? failedCount(m) : m.workers.filter((w) => uiStateOf(w.state) === s).length);
 /** What the Motion observes of the band: each state's agent count, so a count that moves is drawn mid-transition. */
-export const bandMotionItems = (m: MissionModel): MotionItem[] => COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) }));
+export const bandMotionItems = (m: MissionModel): MotionItem[] => [...COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) })), { key: 'band:lead', state: runStateOf(m).kind }];
 
 /** The spinner frame of a state's count: the running count turns the frame of the worker listed first (the HUD and the panel turn spinFrameOf(clock, name) for that same row, critique 19: `◒` in the band against `◐` in the HUD); the local tick otherwise. */
 function countFrame(m: MissionModel, s: UiState): number {
@@ -164,14 +164,25 @@ function countFrame(m: MissionModel, s: UiState): number {
   return first && m.now !== undefined ? spinFrameOf(m.now, first.name) : m.tick;
 }
 
+/** The one failure word on every surface (critique 29): `■ 1 killed` in the error 203, whether the dispatch row is closed or not. */
+function killedRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
+  const n = failedCount(m);
+  if (n <= 0) return [];
+  const glyph = stateRun('failed', ui);
+  return words ? [{ ...glyph, t: `${glyph.t} ` }, r(`${n} killed`, ui.ascii || contrast(PALETTES[ui.theme].bad, PALETTES[ui.theme].panel) < NEED.text ? 'text' : 'bad')] : [glyph, r(`${n}`)];
+}
+/** The running count alone: `⠏ 3 running` (words) or `⠏3`. The band's third segment. */
+function runningRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
+  const n = countOf(m, 'running');
+  if (n <= 0) return [];
+  return animateRow(words ? countRuns('running', n, ui, countFrame(m, 'running'), true) : [stateRun('running', ui, countFrame(m, 'running'), true), r(`${n}`)], 'count:running', 'running', m.motion, ui, BAND_OPTS);
+}
+
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   ', queued = true): Run[] {
   const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
-  const closed = closedCount(m);
-  const closedRuns: Run[] = [r(`${closed} killed`, 'dim')]; // a closed failure is a dim record: a word, no glyph (the done disc means done, the red square means failed; critique 26: `● 1 closed`)
   const parts = order.flatMap((s): Run[][] => [
-    ...(n(s) > 0 ? [animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s), true) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
-    ...(s === 'failed' && words && closed > 0 ? [closedRuns] : []),
+    ...(n(s) > 0 ? [animateRow(words ? (s === 'failed' ? killedRuns(m, ui, true) : countRuns(s, n(s), ui, countFrame(m, s), true)) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
   ]);
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
@@ -265,8 +276,7 @@ export function needsOf(reason: string, form: 'long' | 'short' | 'bare' = 'long'
  * `○ idle . last run 0:56` (critique 26, live-150-a5fa582a-1 f0121:25). A working band keeps the mark and the words amber (179). */
 const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => {
   if (!st.warn) return [];
-  const quiet = st.kind === 'idle' || st.kind === 'done';
-  return [r(' · ', 'sub'), quiet ? { ...gateMark(ui), tone: 'dim' } : gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, quiet ? 'dim' : 'warn')];
+  return [r(' · ', 'sub'), gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, ui.ascii ? 'text' : 'warn')]; // wave 31: the same 179 in every state (it was 240 at rest)
 };
 
 /** How much of the lead a form keeps: the clock or last run, the blocked reason (`long`, `short`, `bare`, or none) and the moving `fixing`. */
@@ -312,58 +322,59 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const fig = figure(m);
   const glue: Run = r(' · ', 'sub'); // critique 18 A3: always a middle dot between segments
   const blockedWords = blockedRuns(m, ui, true);
-  const lead = (o: LeadOpts): Run[] => leadRuns(m, ui, st, reason.long, o);
+  const lead = (o: LeadOpts): Run[] => (st.kind === 'done' ? animateRow(leadRuns(m, ui, st, reason.long, o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, reason.long, o)); // wave 31: the done word fades 231, 151, 114
   // `phase n/m` only when no plan carries the progress (the lead's reply header and the plan's done count are two clocks).
   const todoSeg = (open: boolean): Run[] => (m.total ? [glue, r(`todo ${fig.done}/${fig.total}${open ? openMore(m) : ''}`, 'sub')] : [glue, r(`phase ${phaseNo}`, 'sub')]);
   const ctxSeg: Run[] = m.ctx !== undefined ? [glue, r('ctx '), r(percent(m.ctx), 'sub')] : [];
   type CtxMode = 'gauge' | 'text' | 'none';
   type CountMode = 'words' | 'tiny' | 'none';
-  // The gauge forms drop their segments in the one order: ctx, then the agent counts, and the meter last (it becomes the `todo n/m` text in the row forms below).
-  const wide = (noun: boolean, ctxMode: CtxMode, gap: string, gw = 10, countMode: CountMode = 'words'): Run[] => {
-    const counts = countMode === 'none' ? [] : countMode === 'tiny' ? bandCounts(m, ui, false) : bandCounts(m, ui, true, noun, gap);
+  // Wave 31 (critique 29): at most four segments - the state and its clock, `todo n/m`, the running count and ONE warning (killed workers, else the blocked tasks, else the gate check). `ctx` and the open-row note
+  // give way (the open-row note rides the todo figure only while no warning is drawn).
+  type Counts = 'words' | 'noq' | 'tiny' | 'none';
+  type Warn = 'long' | 'short' | 'none';
+  const failN = failedCount(m);
+  const warning = (counts: Counts, warn: Warn, bw: boolean): Run[] => {
+    if (failN > 0 && counts !== 'none') return [glue, ...killedRuns(m, ui, counts !== 'tiny')];
+    if (bw && blockedWords.length) return [glue, ...blockedWords];
+    if (st.warn && warn !== 'none') return warnSeg(ui, st, warn);
+    return [];
+  };
+  const wide = (gw: number, gap: string): Run[] => {
+    const warn = warning('words', 'long', true);
+    const counts = runningRuns(m, ui, true);
     return [
       ...cap, r('  '), ...lead(LEAD_FULL),
-      ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${openMore(m)}`, 'sub'), ...(blockedWords.length ? [glue, ...blockedWords] : [])] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
-      ...(m.ctx !== undefined && ctxMode !== 'none' ? [r(gap), r('ctx '), ...(ctxMode === 'gauge' ? [...ctxBar(m, ui, 8), r(' ')] : []), r(percent(m.ctx), 'sub')] : []),
+      ...(m.total ? [r(gap), r('todo '), ...todoGauge(m, ui, gw), r(` ${fig.done}/${fig.total}${warn.length ? '' : openMore(m)}`, 'sub')] : [r(gap), r(`phase ${phaseNo}`, 'sub')]),
       ...(counts.length ? [r(gap), ...counts] : []),
-      ...warnSeg(ui, st),
+      ...warn,
     ];
   };
-  const stdCounts = bandCounts(m, ui, true, false, ' · ');
-  const noQueued = bandCounts(m, ui, true, false, ' · ', false);
-  const tiny = bandCounts(m, ui, false);
-  const tail = (cs: Run[]): Run[] => (cs.length ? [glue, ...cs] : []);
-  type Lv = { o: LeadOpts; open: boolean; bw: boolean; counts: 'words' | 'noq' | 'tiny' | 'none'; warn: 'long' | 'short' | 'none'; ctx: boolean };
-  const row = (v: Lv): Form => ({
-    min: 0,
-    runs: [...cap, r(' '), ...lead(v.o), ...todoSeg(v.open), ...(v.bw && blockedWords.length ? [glue, ...blockedWords] : []), ...tail(v.counts === 'words' ? stdCounts : v.counts === 'noq' ? noQueued : v.counts === 'tiny' ? tiny : []), ...(v.warn === 'none' ? [] : warnSeg(ui, st, v.warn)), ...(v.ctx ? ctxSeg : [])],
-  });
+  type Lv = { o: LeadOpts; open: boolean; bw: boolean; counts: Counts; warn: Warn };
+  const row = (v: Lv): Form => {
+    const warn = warning(v.counts, v.warn, v.bw);
+    const run = v.counts === 'words' || v.counts === 'noq' ? runningRuns(m, ui, true) : v.counts === 'tiny' ? runningRuns(m, ui, false) : [];
+    return { min: 0, runs: [...cap, r(' '), ...lead(v.o), ...todoSeg(v.open && warn.length === 0), ...(run.length ? [glue, ...run] : []), ...warn] };
+  };
   const F = LEAD_FULL;
   const levels: Lv[] = [
-    { o: F, open: true, bw: true, counts: 'words', warn: 'long', ctx: true },
-    { o: F, open: true, bw: true, counts: 'words', warn: 'long', ctx: false },
-    { o: F, open: false, bw: true, counts: 'words', warn: 'long', ctx: false },
-    { o: F, open: false, bw: true, counts: 'noq', warn: 'long', ctx: false },
-    { o: F, open: false, bw: true, counts: 'noq', warn: 'short', ctx: false },
-    { o: F, open: false, bw: true, counts: 'words', warn: 'none', ctx: false },
-    { o: F, open: false, bw: true, counts: 'noq', warn: 'none', ctx: false },
-    { o: F, open: false, bw: false, counts: 'words', warn: 'none', ctx: false },
-    { o: F, open: false, bw: false, counts: 'tiny', warn: 'short', ctx: false },
-    { o: F, open: false, bw: false, counts: 'tiny', warn: 'none', ctx: false },
+    { o: F, open: true, bw: true, counts: 'words', warn: 'long' },
+    { o: F, open: true, bw: true, counts: 'words', warn: 'short' },
+    { o: F, open: false, bw: true, counts: 'words', warn: 'none' },
+    { o: F, open: false, bw: false, counts: 'words', warn: 'none' },
+    { o: F, open: false, bw: false, counts: 'tiny', warn: 'short' },
+    { o: F, open: false, bw: false, counts: 'tiny', warn: 'none' },
     // the lead gets shorter: the short reason, then the bare reason, then no `fixing`, no clock, no reason
-    { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'tiny', warn: 'none', ctx: false },
-    { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'none', warn: 'none', ctx: false },
-    { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'tiny', warn: 'none', ctx: false },
-    { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'none', warn: 'none', ctx: false },
+    { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'tiny', warn: 'none' },
+    { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'none', warn: 'none' },
+    { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'tiny', warn: 'none' },
+    { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'none', warn: 'none' },
     // the reason text goes before the spinner does: a band that is working, fixing or retrying keeps its spinner at every width the lead fits
-    { o: { clock: true, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none', ctx: false },
-    { o: { clock: false, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none', ctx: false },
-    { o: { clock: false, reason: 'none', fix: false }, open: false, bw: false, counts: 'none', warn: 'none', ctx: false },
+    { o: { clock: true, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none' },
+    { o: { clock: false, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none' },
+    { o: { clock: false, reason: 'none', fix: false }, open: false, bw: false, counts: 'none', warn: 'none' },
   ];
   const out: Form[] = [
-    { runs: wide(true, 'gauge', '   '), min: GAUGE_MIN }, { runs: wide(true, 'text', '  ', 8), min: GAUGE_MIN },
-    { runs: wide(false, 'gauge', '   '), min: GAUGE_MIN }, { runs: wide(false, 'text', '  ', 8), min: GAUGE_MIN },
-    { runs: wide(false, 'none', '  ', 8), min: GAUGE_MIN }, { runs: wide(false, 'none', '  ', 8, 'tiny'), min: GAUGE_MIN }, { runs: wide(false, 'none', '  ', 8, 'none'), min: GAUGE_MIN },
+    { runs: wide(10, '   '), min: GAUGE_MIN }, { runs: wide(8, '  '), min: GAUGE_MIN },
     ...levels.map(row),
     // the last resorts: the chip and the todo figure, then the chip alone
     { runs: [...cap, r(' '), ...(m.total ? [r(`todo ${fig.done}/${fig.total}`, 'sub')] : [])], min: 0 },

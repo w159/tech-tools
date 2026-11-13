@@ -23,15 +23,15 @@ const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd(
 const planRows = (rows: string[]): string[] => rows.filter((l) => /^[▸ ]\s*\S T[1-5] /.test(l));
 
 describe('every plan row the slot holds is drawn', () => {
-  test('hudWantRows is what a roomy draw takes: 14 rows for five todos and three agents', () => {
-    expect(hudWantRows(working, 150, NOW)).toBe(14);
-    expect(hudWantRows(working, 110, NOW)).toBe(14);
+  test('hudWantRows is what a roomy draw takes: 13 rows for five todos and three agents (wave 31: no blank between the boxes)', () => {
+    expect(hudWantRows(working, 150, NOW)).toBe(13);
+    expect(hudWantRows(working, 110, NOW)).toBe(13);
   });
   for (const cols of [150, 110]) for (const [name, input] of Object.entries(STATES)) {
     for (const budget of [14, 15, 16, 17]) {
       test(`${cols} columns, ${name}, a host slot of ${budget} rows: all five plan rows, no "not shown", the band keeps its rows`, () => {
         const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
-        const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
+        const hud = text(hudLines(input, { merge: false, cols, maxRows: cap, ui, now: NOW }));
         expect(planRows(hud)).toHaveLength(5);
         expect(hud.some((l) => /not shown|\+\d+ more/.test(l))).toBe(false);
         const gap = hudGapRows(hud.some((l) => l.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
@@ -43,7 +43,7 @@ describe('every plan row the slot holds is drawn', () => {
     for (const budget of [12, 13]) {
       test(`${cols} columns, ${name}, a host slot of ${budget} rows (critique 28): both boxes closed, every agent row drawn, the plan counted on its title, the band keeps its row`, () => {
         const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
-        const hud = text(hudLines(input, { cols, maxRows: cap, ui, now: NOW }));
+        const hud = text(hudLines(input, { merge: false, cols, maxRows: cap, ui, now: NOW }));
         expect(hud.filter((l) => /^╭─ .*╮$/.test(l))).toHaveLength(2);
         expect(hud.filter((l) => l.startsWith('╰') && l.endsWith('╯'))).toHaveLength(2); // a box is closed at every agent count
         expect(hud.filter((l) => /^[▸ ]\s*\S (alpha|beta|gamma)-explorer /.test(l))).toHaveLength(3); // every listed agent keeps its row
@@ -56,7 +56,7 @@ describe('every plan row the slot holds is drawn', () => {
     }
   }
   test('finished rows fold into the title count only when the rows truly do not fit, and never print "not shown" while a blank row remains', () => {
-    const at = (n: number): string[] => text(hudLines(blocked, { cols: 110, maxRows: n, ui, now: NOW }));
+    const at = (n: number): string[] => text(hudLines(blocked, { merge: false, cols: 110, maxRows: n, ui, now: NOW }));
     for (let n = 14; n >= 8; n--) {
       const out = at(n);
       expect([n, out.some((l) => /not shown/.test(l) && out.some((x) => x === ''))]).toEqual([n, false]);
@@ -65,14 +65,13 @@ describe('every plan row the slot holds is drawn', () => {
   });
 });
 
-describe('one blank row between TODO and SUBAGENTS in every state', () => {
+describe('no blank row between TODO and SUBAGENTS in every state (wave 31)', () => {
   for (const cols of [150, 110, 57]) for (const [name, input] of Object.entries(STATES)) {
     test(`${cols} columns, ${name}`, () => {
-      const out = text(hudLines(input, { cols, maxRows: 40, ui, now: NOW }));
+      const out = text(hudLines(input, { merge: false, cols, maxRows: 40, ui, now: NOW }));
       const sub = out.findIndex((l) => l.includes('▸ SUBAGENTS'));
-      expect(out[sub - 1]).toBe('');
-      expect(out[sub - 2]).not.toBe('');
-      expect(out.filter((l) => l === '')).toHaveLength(1);
+      expect(out[sub - 1]!.startsWith('╰')).toBe(true); // the SUBAGENTS box starts under the TODO box's rule
+      expect(out.filter((l) => l === '')).toHaveLength(0);
     });
   }
 });
@@ -80,7 +79,7 @@ describe('one blank row between TODO and SUBAGENTS in every state', () => {
 describe('the rule ends in a corner on the last cell, where the host `[-]` stands against it', () => {
   test('every title rule ends in `╮`, every closing rule in `╯`, and every rule reaches the last cell (host cells: AbovePrompt bodyColumns, index.d.ts:11262-11270)', () => {
     for (const cols of [150, 110, 57]) {
-      for (const l of text(hudLines(working, { cols, maxRows: 40, ui, now: NOW }))) {
+      for (const l of text(hudLines(working, { merge: false, cols, maxRows: 40, ui, now: NOW }))) {
         if (l.startsWith('╭')) expect([cols, l.endsWith('─╮'), cells(l)]).toEqual([cols, true, cols]);
         if (l.startsWith('╰')) expect([cols, l.endsWith('─╯'), cells(l)]).toEqual([cols, true, cols]);
         if (!l.startsWith('╭') && !l.startsWith('╰')) expect(l).not.toMatch(/[╮╯]/); // rows carry no wall
@@ -91,12 +90,16 @@ describe('the rule ends in a corner on the last cell, where the host `[-]` stand
 
 describe('SUBAGENTS columns and the selection', () => {
   const long: HudInput = { ...working, agents: OWNERS.map((n) => agent(n, 'working', 'running', { tool: 'Read', target: `${n.split('-')[0]}_long_module_name.py` })) };
-  test('LAST keeps the spare width at 110: the whole `read <file>`, never `2 funct…`', () => {
-    const rows = text(hudLines(long, { cols: 110, maxRows: 40, ui, now: NOW }));
-    for (const n of ['alpha', 'beta', 'gamma']) expect(rows.find((l) => l.includes(`${n}-explorer`) && /running\s+T\d/.test(l) && l.includes('read')) ?? '').toContain(`read ${n}_long_module_name.py`);
+  test('RESULT never carries the live tool (wave 31): a count or `-`, and TASK keeps the spare width', () => {
+    const rows = text(hudLines(long, { merge: false, cols: 110, maxRows: 40, ui, now: NOW }));
+    for (const n of ['alpha', 'beta', 'gamma']) {
+      const row = rows.find((l) => l.includes(`${n}-explorer`) && /running\s+T\d/.test(l))!;
+      expect(row).not.toContain('_long_module_name');
+      expect(row).toMatch(/(\d+ fn|-)\s*$/);
+    }
   });
   test('at the narrowest width MODEL goes first and LAST stays whole', () => {
-    const rows = text(hudLines(working, { cols: 57, maxRows: 40, ui, now: NOW }));
+    const rows = text(hudLines(working, { merge: false, cols: 57, maxRows: 40, ui, now: NOW }));
     const head = rows.find((l) => /AGENT\s+STATE/.test(l))!;
     expect(head).not.toContain('MODEL');
     expect(head).toContain('LAST');
@@ -109,7 +112,7 @@ describe('SUBAGENTS columns and the selection', () => {
       mo.observe('hud-agents', hudMotionItems(before, { now: 1000 }).agents, 0);
       mo.observe('hud-agents', hudMotionItems(working, { now: 1000 }).agents, 1000);
       for (const dt of [0, 40, 100, 200, 400, 800, 2000]) {
-        const rows = hudLines(working, { cols, maxRows: 40, ui, now: 1005, motion: mo.ctx(1000 + dt) });
+        const rows = hudLines(working, { merge: false, cols, maxRows: 40, ui, now: 1005, motion: mo.ctx(1000 + dt) });
         const cursors = rows.flatMap((r) => r.filter((x) => x.t === '▸'));
         const marks = cursors.filter((x) => x.bold && x.tone === 'accent');
         expect([dt, marks.length >= 2, marks.every((x) => x.fg === undefined)]).toEqual([dt, true, true]);
@@ -119,7 +122,7 @@ describe('SUBAGENTS columns and the selection', () => {
   }
   test('256-colour hosts map the cursor to index 141', () => {
     const c256: Ui = { theme: 'mocha', ascii: false, color: '256' };
-    const rows = hudLines(working, { cols: 150, maxRows: 40, ui: c256, now: NOW });
+    const rows = hudLines(working, { merge: false, cols: 150, maxRows: 40, ui: c256, now: NOW });
     const cursor = rows.flatMap((r) => r.filter((x) => x.t === '▸'))[0]!;
     expect(paintAnsi(cursor, c256)).toContain('38;5;141');
   });
@@ -128,8 +131,8 @@ describe('SUBAGENTS columns and the selection', () => {
 describe('a changed board shows on the next redraw', () => {
   test('flipping a todo or an agent changes the very next frame (the 500 ms stat poll is the only wait)', () => {
     const next: HudInput = { todos: working.todos.map((t, i) => (i === 3 ? ({ ...t, status: 'in_progress' } as TodoItem) : t)), agents: working.agents };
-    const a = text(hudLines(working, { cols: 150, maxRows: 40, ui, now: NOW }));
-    const b = text(hudLines(next, { cols: 150, maxRows: 40, ui, now: NOW }));
+    const a = text(hudLines(working, { merge: false, cols: 150, maxRows: 40, ui, now: NOW }));
+    const b = text(hudLines(next, { merge: false, cols: 150, maxRows: 40, ui, now: NOW }));
     expect(a.find((l) => l.includes('T4'))).toMatch(/queued/);
     expect(b.find((l) => l.includes('T4'))).toMatch(/running/);
   });

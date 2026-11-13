@@ -106,14 +106,16 @@ describe('truth29 item 4: the two boxes lose their rules together or keep them t
 describe('truth29 item 5: a hidden agent row is counted in the SUBAGENTS title', () => {
   // live-110-46d4825c-1 f0071: `SUBAGENTS 3 running` over one agent row and no overflow line.
   for (const cols of [150, 110]) {
-    test(`${cols} cols: 3 running and two rows hidden reads +2 more in the title`, () => {
+    test(`${cols} cols: 3 running and rows hidden: the merged block counts them once, on the TODO ribbon (wave 31)`, () => {
       const rows = rowsAt(three(), cols, 3); // title, one agent row, the closing rule (critique 28: boxes are closed)
       const title = rows.find((r) => r.includes('SUBAGENTS'))!;
       const shown = rows.filter((r) => /implementer-|runner-/.test(r)).length;
       expect(shown).toBe(1);
       expect(title).toContain('3 running');
-      expect(title).toContain('+2 more');
-      expect(rows.some((r) => /^\s*\+\d+ more/.test(r))).toBe(false); // one wording, in the title
+      const ribbon = rows.find((r) => r.includes('▸ TODO'))!; // agents ride the TODO rows, so the one `+N more` is on that ribbon and the SUBAGENTS rule keeps the running count
+      expect(Number(/\+(\d+) more/.exec(ribbon)?.[1])).toBeGreaterThanOrEqual(2);
+      expect(title).not.toContain('more');
+      expect(rows.some((r) => /^\s*\+\d+ more/.test(r))).toBe(false); // one wording, on the ribbon
     });
   }
   test('nothing hidden, nothing counted', () => {
@@ -166,13 +168,13 @@ describe('truth29 item 8: the done mark holds its highlighted first state', () =
   // The 200 ms fade appeared in 0 of the live frames (500 ms capture period). The first beat now stays DONE_HOLD_MS, redraws stay at 10 a second.
   const items = (state: string): MotionItem[] => [{ key: 'todo:a', state }];
   const row = [{ t: '●', tone: 'ok' as const }, { t: ' wire the gate', tone: 'sub' as const }];
-  test('a done mark shows its first state for at least one second and then moves', () => {
-    expect(DONE_HOLD_MS).toBeGreaterThanOrEqual(1000);
+  test('wave 31: a done mark shows its first (231) beat for one 200 ms step and then moves to the held 151', () => {
+    expect(DONE_HOLD_MS).toBe(MOTION_STEP_MS);
     const m = new Motion(true);
     m.observe('todo', items('running'), 0);
     m.observe('todo', items('done'), 5000);
     const shot = (dt: number): string => JSON.stringify(animateRow(row, 'todo:a', 'done', m.ctx(5000 + dt), ui));
-    for (const dt of [0, 100, 500, 900, DONE_HOLD_MS - 1]) expect([dt, shot(dt)]).toEqual([dt, shot(0)]);
+    for (const dt of [0, 100, DONE_HOLD_MS - 1]) expect([dt, shot(dt)]).toEqual([dt, shot(0)]);
     expect(shot(DONE_HOLD_MS)).not.toBe(shot(0));
     expect(runsString(animateRow(row, 'todo:a', 'done', m.ctx(5000), ui))).toContain('◌'); // the pop starts on its first glyph and holds it
   });

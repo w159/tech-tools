@@ -38,19 +38,17 @@ describe('motion-demo frames', () => {
       expect(plain(files[`${s}-00-running.ans`]!)).toMatch(/[◐◐]/);
     }
   });
-  test('critique 12: the ramp is visible for the whole 600 ms - every held step differs from its neighbour and from the resting row, in 24-bit and 256 colours', () => {
+  test('wave 31: the fade is a staircase - 231 for one step, 151 held for 600 ms (two identical beats by design), none equal to the rest, in 24-bit and 256 colours', () => {
     for (const color of ['truecolor', '256'] as const) {
       const all = demoFrames(100, MOTION_STEP_MS, color);
       for (const s of ['todo', 'agent']) {
         const steps = Object.keys(all).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => all[n]!);
         const rest = all[`${s}-99-done.ans`]!;
-        const ramp = steps; // t=0, 200, 400, 600: the beats; the rest is the file after them
-        expect(ramp).toHaveLength(MOTION_MS / MOTION_STEP_MS);
-        // Critique 17 C4: the weight falls on the last beat, so the 256-colour palette (no colour left between the last step and rest) ends the ramp ON the rest at 600 ms.
-        // Critique 26: the 256-colour ease is a white beat, the glyph's own colour and the resting row (a palette with no colour worth stepping through): the first beat differs from rest, the last is rest.
-        const held = color === '256' ? ramp.slice(0, 1) : ramp;
-        if (color === '256') expect(ramp.at(-1)).toBe(rest);
-        expect([color, s, new Set([...held, rest]).size]).toEqual([color, s, held.length + 1]); // no duplicate, and none equals the rest
+        expect(steps).toHaveLength(MOTION_MS / MOTION_STEP_MS);
+        expect([color, s, steps[1] === steps[0]]).toEqual([color, s, false]); // 231 then 151
+        expect([color, s, steps[2] === steps[1]]).toEqual([color, s, true]); // 151 is held (the 400 ms capture sees it)
+        expect([color, s, steps[3] === steps[2]]).toEqual([color, s, false]); // the last beat drops the weight, the colour stays
+        expect([color, s, steps.includes(rest)]).toEqual([color, s, false]);
       }
     }
   });
@@ -76,10 +74,12 @@ describe('motion-demo frames', () => {
       }
     }
   });
-  test('critique 7/14: the agent row keeps its LAST column through done (it never goes blank at the change): the call while it runs, the outcome of its plan row after', () => {
+  test('critique 7/14 (wave 31): the agent row keeps its name through done (it never goes blank at the change)', () => {
     const agentRow = (n: string): string => lastRow(files[n]!);
-    expect(agentRow('agent-00-running.ans')).toContain('runs.ts:17');
-    for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans') && !k.includes('running'))) expect([n, agentRow(n).includes('tests green'), agentRow(n).includes('runs.ts:17')]).toEqual([n, true, false]);
+    // wave 31: the running agent rides its TODO row (name and clock right-aligned); the tool echo is not drawn anywhere, and the row never goes blank at the change
+    expect(agentRow('agent-00-running.ans')).toContain('implementer-band');
+    expect(agentRow('agent-00-running.ans')).not.toContain('runs.ts:17');
+    for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans') && !k.includes('running'))) expect([n, agentRow(n).includes('implementer-band'), agentRow(n).includes('runs.ts:17')]).toEqual([n, true, false]);
   });
   test('every row is exactly the width', () => {
     for (const [n, t] of Object.entries(files)) if (!n.endsWith('strip.ans')) for (const l of t.trimEnd().split('\n')) expect([...plain(l)].length).toBe(100);
@@ -112,25 +112,23 @@ describe('the demo draws what the live HUD draws', () => {
       expect(new Set(frames).size).toBeGreaterThanOrEqual(2);
       // critique 10: no step of the ramp repeats the one before it, until the row is at rest (the resting frame is the last file)
       const rest = f256[`${s}-99-done.ans`]!;
-      const ramp = frames.slice(0, -1); // the ramp frames; the last beat of a 256-colour window is the rest itself (critique 17 C4: the weight falls on it); the rest is its own file
-      expect(frames.at(-1)).toBe(rest);
-      expect(ramp[0]).not.toBe(rest); // a white beat first, the resting row last (critique 26)
+      expect(frames.at(-1)).not.toBe(rest); // wave 31: the last beat still holds 151 (the weight falls on it); the resting 114 is its own file
+      expect(frames[0]).not.toBe(rest); // a white beat first
     }
     expect(f256['todo-99-done.ans']).not.toMatch(/\x1b\[(1;)?9[;m]/); // no strikethrough on a done row
   });
 });
 
 describe('critique 14: the 600 ms frame is still the ramp', () => {
-  test('the window outlasts 600 ms, and the frame sampled at 600 ms differs from the final frame and from the 400 ms frame, in truecolor and 256 colours', () => {
+  test('the window outlasts 600 ms, and the frame sampled at 600 ms is neither the 400 ms frame nor the final frame, in truecolor and 256 colours', () => {
     expect(MOTION_MS).toBeGreaterThan(600);
     for (const color of ['truecolor', '256'] as const) {
       const all = demoFrames(100, MOTION_STEP_MS, color);
       for (const s of ['todo', 'agent']) {
         const at = (ms: number): string => all[`${s}-${String(ms / MOTION_STEP_MS + 1).padStart(2, '0')}-t${String(ms).padStart(4, '0')}ms.ans`]!;
-        expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, color === '256']); // 256 colours: the last beat is the rest (the weight falls on it)
-        if (color === '256') { expect(at(0)).not.toBe(at(200)); continue; } // one white beat, then rest (critique 26)
-        expect([color, s, at(600) === at(400)]).toEqual([color, s, false]);
-        for (let ms = 200; ms < MOTION_MS; ms += MOTION_STEP_MS) expect([color, s, ms, at(ms) === at(ms - MOTION_STEP_MS)]).toEqual([color, s, ms, false]);
+        expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, false]); // wave 31: 151 is held to 800 ms, so a 0.6 s capture still sees the fade
+        expect([color, s, at(600) === at(400)]).toEqual([color, s, false]); // the weight falls on the last beat
+        expect([color, s, at(400) === at(200)]).toEqual([color, s, true]); // 151 is held
       }
     }
   });
@@ -142,17 +140,14 @@ describe('critique 11 C1: the ramp is held long enough to be seen', () => {
     expect(MOTION_MS).toBeGreaterThanOrEqual(600);
     expect(MOTION_MS / MOTION_STEP_MS).toBeGreaterThanOrEqual(3);
   });
-  test('the default demo (one frame per held step) has no duplicate adjacent frames until rest, in truecolor and 256 colours', () => {
+  test('the default demo (one frame per held step) is 231, a held 151 and the weightless last beat, none at rest, in truecolor and 256 colours', () => {
     for (const color of ['truecolor', '256'] as const) {
       const f = demoFrames(100, undefined, color);
       for (const s of ['todo', 'agent']) {
         const frames = Object.keys(f).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => f[n]!);
         const rest = f[`${s}-99-done.ans`]!;
-        if (color === '256') { expect([s, frames[0] === rest]).toEqual([s, false]); continue; } // one white beat, then rest (critique 26)
-        const ramp = frames;
-        expect([color, s, ramp.includes(rest)]).toEqual([color, s, false]);
-        expect([color, s, ramp.length]).toEqual([color, s, ramp.length >= 2 ? ramp.length : 'short']);
-        for (let i = 1; i < ramp.length; i++) expect([color, s, i, ramp[i] === ramp[i - 1]]).toEqual([color, s, i, false]);
+        expect([color, s, frames.includes(rest)]).toEqual([color, s, false]);
+        expect([color, s, new Set(frames).size]).toEqual([color, s, 3]);
       }
     }
   });

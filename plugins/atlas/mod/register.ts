@@ -55,6 +55,8 @@ const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: t
 // only flipped an inline fold that needed spare band rows and drew nothing in a short slot).
 export const BOARD_ID = 'atlas-board';
 const PANE_BOARD = { id: BOARD_ID, title: 'Board', rows: 14, closeOnEscape: true, focus: true } as const;
+/** How long the Stop hook waits after it wrote the refusal: one redraw frame and a margin. */
+export const STOP_SETTLE_MS = FRAME_MS + 40;
 const TICK_MS = 250; // the slow tick: gauges, motion and the Stop verdict (the spinner has its own beat, FRAME_MS in band-motion.ts, and waits for none of this)
 const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
 const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult); below that it waits undrawn
@@ -1237,6 +1239,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				await update($, gatesState, (g) => stopRefusal(g, text));
 				await update($, spinnerTickState, (n) => n + 1);
 				await update($, easeTickState, (n) => n + 1);
+				// The write redraws the band at the redraw rate (one frame, FRAME_MS); the host prints its Stop error the moment this hook returns. Hold the return one frame so the band reads blocked
+				// before the error is on screen, not a frame after it (critique 29: stoprun-150 f0102 error on rows 16-17, band `working`; blocked at f0103).
+				try { await $.clock.sleep(STOP_SETTLE_MS); } catch { /* a refused wait only skips the settle */ }
 			}
 		}
 		return r;
@@ -1347,7 +1352,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// One blank row between the band and the HUD (A3), in the HUD's own panel fill.
 		const blankRow = (): RenderElement => rowOf(els, [segmentOf({ t: ' '.repeat(columns), tone: 'text' }, look.ui)], columns);
 		const gapRow = Array.from({ length: plan.gap }, blankRow);
-		const pad = Array.from({ length: plan.pad }, blankRow);
+		const pad = plan.pad > 0 ? [els.Box({ height: plan.pad, flexShrink: 0, children: [] })] : []; // rows the HUD does not use: empty and unfilled, under the block (never a 234 slab)
 		return atlasSlot(els, { band, gapRow, hud: hud.map((r) => rowOf(els, r, columns)), pad, lead: plan.lead, below: await next(e) });
 		} finally {
 			release();

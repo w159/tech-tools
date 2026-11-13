@@ -11,7 +11,7 @@ import { band_120, band_120_rich, band_40, band_60, band_80 } from "./band-world
 
 /** Running: the band, workers (failed and waiting first, then running, queued, done), the newest message, the checks footer. */
 export const golden: string[] = [
-  "◖ ◆ ATLAS ◗  ⠋ working 0:42  todo ▰▰▰▱▱▱▱▱ 3/7 · 1 blocked  ctx 62%  agents ⠋ 1 running  ■ 1 failed  ◇ 1 queued",
+  "◖ ◆ ATLAS ◗  ⠋ working 0:42   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 killed",
   "",
   " ■ implementer-live   failed   killed                                                                              1:35",
   " ◐ implementer-band   running  read runs.ts:17                                                                     0:42",
@@ -26,7 +26,7 @@ export const golden: string[] = [
 /** Idle with a failing check (`△ doctor`): the run is closed, every plan row done, the band reads a warning (never idle beside a failing check, and never BLOCKED unless Stop refused) and keeps the failed worker, the last run follows (it counts the failure
  * too), then the core row (core-golden.ts) and the footer. The Claude band adds its key buttons to the footer only when handlers are wired. */
 export const idleGolden: string[] = [
-  "◖ ◆ ATLAS ◗  ● done · 0:42   todo ▰▰▰▰▰▰▰▰▰▰ 7/7   ctx ▰▰▰▰▰▱▱▱ 62%   agents ■ 1 failed · △ 1 gate to check",
+  "◖ ◆ ATLAS ◗  ● done · 0:42   todo ▰▰▰▰▰▰▰▰▰▰ 7/7 · ■ 1 killed",
   " last run  1 worker · 0:42 · 1 failed",
   " verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked",
   " checks  ● lint  ● test  △ doctor  2/3 green"

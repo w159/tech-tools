@@ -88,14 +88,14 @@ describe('round 3 A2: the band lead has four states', () => {
 
 describe('round 3 A2: a closed failure is a dim record, not a red mark', () => {
   const failed: MissionWorker[] = [{ name: 'a-explorer', state: 'failed', secs: 9 }];
-  test('while the dispatch row is open the count is `■ 1 failed`; once it closes it is the word `1 killed` with no glyph (critique 26: the done disc means done)', () => {
-    expect(head(model({ workers: failed }))).toContain('■ 1 failed');
+  test('wave 31: one failure word, `■ 1 killed`, whether the dispatch row is open or closed; never `failed`, never the done disc', () => {
+    expect(head(model({ workers: failed }))).toContain('■ 1 killed');
     const t = head(model({ workers: failed, closed: 1 }));
-    expect(t).toContain('1 killed');
+    expect(t).toContain('■ 1 killed');
     expect(t).not.toContain('● 1 killed');
-    expect(t).not.toContain('■ 1 failed');
-    const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => x.t === '1 killed')?.tone;
-    expect(tone).toBe('dim');
+    expect(t).not.toContain('failed');
+    const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => /1 killed/.test(x.t))?.tone;
+    expect(['bad', 'text']).toContain(tone); // 203; the latte panel falls back to text when 203 misses WCAG
   });
 });
 

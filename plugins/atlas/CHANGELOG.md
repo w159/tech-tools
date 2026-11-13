@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Wave 31 HUD: one fixed block. While agents run they ride their TODO row (name and clock right-aligned in 245) and the lower rule carries `SUBAGENTS n running`; no separate box, no `+N more` while the budget has room, no 234 spacer rows, no `r: route` key row (the band hotkeys are gone; the pane footer owns them). At rest SUBAGENTS is its own box headed `AGENT STATE TASK LAST RESULT` at every width (RESULT a count like `2 fn` or `-`, TASK takes the free width). A queued TODO row whose agent runs reads running.
+- Wave 31 motion: every running `◐◓◑◒` is accent 141; the done fade is 231 (200 ms), 151 held 600 ms, then 114, on HUD rows and the band done word.
+- Wave 31 band: at most four segments (state and clock, todo n/m, running count, one warning); one failure word `■ N killed` (203); `△ N gates to check` keeps the warn colour in every state; idle boxes dim to 240 rules and 245 text. The host draws `[-]` outside bodyColumns, so it is not moved.
+- Wave 31 blocked: the `classic.Stop` hook now sleeps one frame (`STOP_SETTLE_MS`) after its state writes so the band flips blocked on the same frame as the Stop error; `mod/wave31-hud.test.ts` replays the host event order.
 - Band: the slot is one height from the first working frame to idle (`mod/slot.ts` `composeFixed`); the budget the host gives is spent as the band area plus both boxes, and any budget left over becomes empty rows ABOVE the band, so the band keeps its screen row while the host's own agent list below grows and shrinks (critique 28: rows 38, 25, 24, 28).
 - HUD TODO: the box is closed at every agent count and every budget that shows it (`fitRows` has no open-box tries); an empty block draws a closed box with one quiet row, never bare grey rows below it.
 - HUD SUBAGENTS: every running agent keeps its row at 110 columns; the plan folds first (column names, then finished rows, then plan rows onto the title as `+N more`, then the plan box), and `+N more` on the SUBAGENTS title only counts a row that is really hidden.

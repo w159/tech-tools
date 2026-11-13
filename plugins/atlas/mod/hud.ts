@@ -85,7 +85,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
 
 /** `root` (the project root) makes paths in a tool preview project-relative. `phases` feeds the rich rail. */
 export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | null; phases?: { ids: readonly string[]; active: number } };
-export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; /** False: never merge running agents into the TODO rows (row counters ask for the roomiest form). */ merge?: boolean; /** Atlas is at rest (the band reads idle): the block draws in 240 rules and 245 text. */ idle?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 
 export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running' || a.state === 'queued';
 
@@ -104,7 +104,16 @@ export const ownerStatesOf = (agents: readonly HudAgent[]): Map<string, UiState>
 
 /** Plan rows in plan order. Every row is shown with its own state; the focus mark sits on the running row, else the first open one. */
 export function todoModel(todos: readonly TodoItem[], now: number, owners: ReadonlyMap<string, UiState> = new Map()): TodoRow[] {
-  const rows = todos.map((t): TodoRow => {
+  // A plan row whose text names a running agent (`T1 read alpha.py (alpha-explorer)`) before the lead has stamped an owner on it is that agent's row: it reads running, not queued (critique 29: T1 `queued` while alpha-explorer ran).
+  const inferred = (t: TodoItem): string | undefined => {
+    if (t.owner) return undefined;
+    const label = flat(t.content);
+    for (const [name, st] of owners) if (st === 'running' && label.includes(`(${name})`)) return name;
+    return undefined;
+  };
+  const rows = todos.map((raw): TodoRow => {
+    const guess = inferred(raw);
+    const t = guess ? { ...raw, owner: guess } : raw;
     const oc = t.owner ? ownerOutcome(owners, t.owner) : undefined; // the owner's latest instance (`beta-explorer #2` after a kill), critique 19 A3
     const own = oc?.state;
     const { state, word } = todoState(t.status, own, oc?.retried); // the one rule (data/todos todoState): a failed owner fails the item, a returned one reads `returned`
@@ -282,7 +291,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
     s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents)), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
-    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}), ...(opts.reserve ? { reserve: true } : {}) },
+    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}), ...(opts.reserve ? { reserve: true } : {}), ...(opts.merge === false ? { merge: false } : {}) },
   };
 }
 
@@ -298,8 +307,12 @@ export function hudMotionItems(input: HudInput, opts: { now: number }): { todos:
 export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
   const { s, o } = surfaces(input, opts);
   if (opts.maxRows <= 0 || (s.todos.length === 0 && s.agents.length === 0 && !opts.reserve)) return [];
-  return padRows(fitStack(s, o, opts.maxRows), o.cols);
+  const rows = padRows(fitStack(s, o, opts.maxRows), o.cols);
+  return opts.idle === true ? rows.map(idleRow) : rows;
 }
+
+/** At rest the block is quiet (critique 29: idle and done drew the same green boxes): every run but the 240 rules reads 245, no weight, no fill. */
+const idleRow = (row: Run[]): Run[] => row.map((x) => (x.tone === 'dim' ? x : { t: x.t, tone: 'sub' as const, ...(x.strike ? { strike: true } : {}) }));
 
 /** A run as a Segment: the theme's tone colour on the run's own fill or the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export function segmentOf(x: Run, ui: Ui): Segment {
@@ -315,7 +328,7 @@ export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
 
 /** Rows of the compact form: the plan's ribbon with up to five rows, the Subagents ribbon with up to two agents, the column names and both closing rules (the box keeps its shape). What the HUD keeps whatever the band is given. */
 export const hudCompactRows = (input: HudInput, cols = 120): number => {
-  const { s, o } = surfaces(input, { cols, maxRows: 0, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
+  const { s, o } = surfaces(input, { cols, maxRows: 0, merge: false, ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
   return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: false, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length; // critique 18: the column names are part of the floor, so the slot never drops them while the block shows (fitRows still drops them in a slot with no room)
 };
@@ -323,7 +336,7 @@ export const hudCompactRows = (input: HudInput, cols = 120): number => {
 /** Rows of the compact form WITH the blank between the blocks: what the register gives the HUD when the slot can hold it
  * and the band still keeps its title row (register.ts hudSlotCap). `now`: the draw's clock, so a lingering finished wave counts (hudCompactRows has none and leaves it out). */
 export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number => {
-  const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
+  const { s, o } = surfaces(input, { cols, maxRows: 0, merge: false, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   const m = s.agents.length;
   return stack({ todos: s.todos, agents: m > 0 ? s.agents : [] }, o, { spacers: true, extras: false, todoCap: s.todos.length > 5 ? 5 : undefined, agentCap: m > 3 ? 3 : undefined, header: true, close: true }).length;
 };
@@ -331,7 +344,7 @@ export const hudFloorRows = (input: HudInput, cols = 120, now?: number): number 
 /** Rows of the roomy form: every plan row and every agent row, the blank between the blocks, the column names and both closing rules (no rail). What the HUD asks of the slot: the register gives it
  * this many whenever the band can keep its title row, so a slot that fits the plan never prints `N more todos not shown` (critique 23: `live-150-1/f0060:24`). `now`: the draw's clock. */
 export const hudWantRows = (input: HudInput, cols = 120, now?: number): number => {
-  const { s, o } = surfaces(input, { cols, maxRows: 0, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
+  const { s, o } = surfaces(input, { cols, maxRows: 0, merge: false, ...(now !== undefined ? { now } : {}), ui: { theme: 'mocha', ascii: false, color: 'truecolor' } });
   return stack({ todos: s.todos, agents: s.agents }, o, { spacers: true, extras: false, header: true, close: true }).length;
 };
 
@@ -378,5 +391,7 @@ export function reclaimBlanks<R>(hud: readonly R[], cap: number, budget: number,
  * the counts only, and then the band must list the workers itself. */
 export const hudListsAgents = (rows: readonly (readonly Segment[])[]): boolean => {
   const at = rows.findIndex((r) => r.some((x) => x.t === 'SUBAGENTS'));
+  // wave 31: while agents run the SUBAGENTS title rides the merged block's lower rule; the agents are on the TODO rows above it
+  if (at >= 0 && rows[at]!.some((x) => x.t.includes('╰'))) return at >= 2;
   return at >= 0 && at < rows.length - 1;
 };
