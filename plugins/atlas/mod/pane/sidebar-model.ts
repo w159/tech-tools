@@ -3,7 +3,7 @@ import type { ChannelNote } from '../contract';
 import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
 import { isPlanItem, ownPlan, ownTodos, todoState } from '../data/todos';
 import { lastText } from '../data/lasttext';
-import { DONE_DOUBT, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
+import { DONE_DOUBT, RETURNED, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import type { PanelGate, PanelModel, PanelNote, PanelTodo, PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
@@ -47,7 +47,9 @@ function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] 
     const owner = it.owner ?? undefined;
     const w = owner ? workers.find((x) => x.name === owner) : undefined;
     const oc = owner ? ownerOutcome(owners, owner) : undefined; // the owner's latest instance (`beta-explorer #2`): the same state as the HUD and the board (critique 19 A3)
-    const { state, word } = todoState(it.status, oc?.state, oc?.retried); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it, a returned one reads `returned`
+    const ruled = todoState(it.status, oc?.state, oc?.retried); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it
+    // Wave 32: the same settled rule as the HUD's merged block (hud.ts todoModel handedBackDone): a handed-back agent's row reads done on the event that ends the agent, not `returned` until the lead closes the store row, so both surfaces agree.
+    const { state, word } = ruled.word === RETURNED ? { state: 'done' as UiState, word: undefined } : ruled;
     const detail = state === 'done' && word === DONE_DOUBT ? undefined : state === 'blocked' && w ? `blocked: ${w.detail}` : state === 'failed' && w ? w.detail : undefined;
     return { id: it.id, label: one(it.content), state, ...(word ? { word } : {}), owner: owner ? one(owner) : undefined, detail, evidence: it.evidence ?? null };
   });

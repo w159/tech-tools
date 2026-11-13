@@ -248,7 +248,7 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  const delta = snap.counts.done - (tracker.done ?? snap.counts.done)
  const active = activeCount(workersOf(snap))
  const parts = [
-  `run ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
+  `turn ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
   delta > 0 ? `+${delta} done` : null,
   active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,

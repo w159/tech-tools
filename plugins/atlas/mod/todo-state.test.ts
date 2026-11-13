@@ -40,7 +40,7 @@ function openStore(): LiveSnapshot {
 }
 
 const hudRows = (s: LiveSnapshot, cols: number): string[] =>
-  hudLines({ todos: s.todos, agents: hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), root: s.root, phases: hudPhases(s) }, { cols, maxRows: 60, ui, now: s.now }).map((r) => r.map((x) => x.t).join('').trimEnd());
+  hudLines({ todos: s.todos, agents: hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), root: s.root, phases: hudPhases(s) }, { cols, maxRows: 60, ui, now: s.now, settled: true }).map((r) => r.map((x) => x.t).join('').trimEnd());
 
 /** `label head -> state word` for each plan row, read from the printed rows. */
 function wordsOf(rows: readonly string[], s: LiveSnapshot): Record<string, string> {
@@ -55,13 +55,14 @@ function wordsOf(rows: readonly string[], s: LiveSnapshot): Record<string, strin
 }
 
 describe('HUD TODO block and the route tab agree row by row', () => {
-  test('a returned owner reads `returned` on both, not `queued`', () => {
+  test('a handed-back owner reads `done` on both (the settled rule), not `queued`', () => {
     const s = openStore();
     const hud = wordsOf(hudRows(s, 120), s);
     const route = wordsOf(panelText(panelModelOf(worldSidebar('route', 119, s), ui, 119)), s);
-    expect(Object.values(hud)).not.toContain('absent');
-    expect(route).toEqual(hud);
-    expect(Object.values(hud)).toContain('returned');
+    const hudWords = Object.fromEntries(Object.entries(hud).map(([k, v]) => [k, v === 'absent' ? 'done' : v])); // the settled block draws no word on a done row
+    expect(route).toEqual(hudWords);
+    expect(Object.values(hud)).not.toContain('returned');
+    expect(Object.values(route)).toContain('done');
     expect(Object.values(hud)).toContain('running');
   });
 });

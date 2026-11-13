@@ -30,7 +30,7 @@ const world = (squad: SquadAgent[], todos = plan()): LiveSnapshot =>
 const model = (s: LiveSnapshot, view: SidebarModel['ui']['view'], cols = 100): SidebarModel =>
   ({ snapshot: s, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns: cols + 1, rows: 40, tick: 0 }) as SidebarModel;
 const tab = (s: LiveSnapshot, view: SidebarModel['ui']['view'], cols = 100): string[] => bodyLines(panelModelOf(model(s, view, cols), ui, cols)).map((l) => lineText(l).trimEnd());
-const hud = (s: LiveSnapshot): string[] => hudLines({ todos: ownTodos(s.todos, s.sessionId), agents: hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), root: s.root }, { cols: 100, maxRows: 40, ui, now: s.now }).map((r) => r.map((x) => x.t).join('').trimEnd());
+const hud = (s: LiveSnapshot): string[] => hudLines({ todos: ownTodos(s.todos, s.sessionId), agents: hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), root: s.root }, { cols: 100, maxRows: 40, ui, now: s.now, settled: true }).map((r) => r.map((x) => x.t).join('').trimEnd());
 /** `T1 read alpha.py (alpha-explorer)` -> its state word on a route/HUD row. */
 const todoWord = (rows: string[], label: string): string | undefined => new RegExp(`${label}.*?\\s(queued|running|done|failed|blocked|waiting|returned)\\b`).exec(rows.join('\n'))?.[1];
 
@@ -40,10 +40,10 @@ describe('A1: the route tab and the HUD read the same state for a row whose work
     for (const t of ['T1', 'T2', 'T3']) { expect(todoWord(hud(s), t)).toBe('running'); expect(todoWord(tab(s, 'route'), t)).toBe('running'); }
     for (const t of ['T4', 'T5']) expect(todoWord(tab(s, 'route'), t)).toBe('queued');
   });
-  test('a returned worker: the row reads returned on both (f0063), never queued', () => {
+  test('a returned worker: the row reads done on both (settled rule, f0063), never queued', () => {
     const s = world([sq('alpha-explorer', 'finished'), sq('beta-explorer', 'finished'), sq('gamma-explorer', 'finished')], plan().map((t) => (t.origin === 'dispatch' ? { ...t, status: 'completed' } : t)));
-    for (const t of ['T1', 'T2', 'T3']) expect(todoWord(tab(s, 'route'), t)).toBe(todoWord(hud(s), t));
-    expect(todoWord(tab(s, 'route'), 'T1')).toBe('returned');
+    for (const t of ['T1', 'T2', 'T3']) { expect(todoWord(tab(s, 'route'), t)).toBe('done'); expect(todoWord(hud(s), t)).not.toBe('returned'); } // the settled HUD block draws no word on a done row; it never says `returned`
+    expect(todoWord(tab(s, 'route'), 'T1')).toBe('done');
   });
   test('A2: the panel agent summary and its own todo rows agree: three done agents leave no queued row of theirs', () => {
     const s = world([sq('alpha-explorer', 'finished'), sq('beta-explorer', 'finished'), sq('gamma-explorer', 'finished')]);

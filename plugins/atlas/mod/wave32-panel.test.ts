@@ -183,8 +183,8 @@ describe('item 6: the finish card (critique 30: `done ... explorer finished`, a 
     expect(row).toMatch(/^▌ ◆ ATLAS\s+● done\s+alpha-explorer\s+0:11 · 2 fn$/);
     expect(row).not.toContain('finished');
   });
-  test('the run footer is labelled: `run 0:17`', () => {
+  test('the turn footer is labelled: `turn 0:17` (the turn time, not the run total)', () => {
     const snapNow = { counts: { done: 0, total: 0 }, squad: [], contextPct: 0 } as never;
-    expect(flat(durationTree(snapNow, { durationMs: 17000 }, {} as never, null, ui))).toMatch(/run 0:17/);
+    expect(flat(durationTree(snapNow, { durationMs: 17000 }, {} as never, null, ui))).toMatch(/turn 0:17/);
   });
 });

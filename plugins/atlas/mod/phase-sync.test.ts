@@ -93,7 +93,7 @@ describe('A2: `returned` has a mark of its own', () => {
     expect(RETURNED_ASCII).not.toBe(STATE_ASCII.blocked);
     for (const [, ui] of UIS) {
       const s = surfaces(snapOf(['pending', 'pending', 'in_progress']), ui, undefined);
-      for (const rows of [s.hud, s.panel]) {
+      for (const rows of [s.hud]) { // wave 32: the panel settles a hand-back to done like the merged HUD block; the unsettled HUD still draws the neutral hand-back mark
         const row = rowWith(rows, 'edit auth middleware');
         const glyph = row.find((r) => [...r.t.trim()].length === 1 && ENDS.has(r.t.trim()))!;
         // the hand-back is the neutral `◉` (the scorer's waiting mark) on the HUD, the panel and the board alike, never the green done disc (critique 27)
@@ -101,6 +101,23 @@ describe('A2: `returned` has a mark of its own', () => {
         expect(row.find((r) => r.t.trim() === 'returned')!.tone).not.toBe('warn');
         if (!ui.ascii) expect(glyph.tone).not.toBe('warn');
       }
+    }
+  });
+});
+
+describe('wave 32: a handed-back agent reads done on the settled HUD block and the route tab alike', () => {
+  test('the settled HUD row and the panel row carry the same mark and word, never `returned`', () => {
+    for (const [, ui] of UIS) {
+      const snap = snapOf(['pending', 'pending', 'in_progress']);
+      const input: HudInput = { todos: ownTodos(snap.todos ?? [], snap.sessionId), agents: hudAgents(liveWorkers(snap, snap.now), snap.squad, queuedMembers(snap)), root: snap.root, phases: hudPhases(snap) };
+      const hud = hudLines(input, { cols: 120, maxRows: 60, ui, now: snap.now, tick: 0, settled: true });
+      const panel = surfaces(snap, ui, undefined).panel;
+      const [h, p] = [hud, panel].map((rows) => rowWith(rows, 'edit auth middleware'));
+      expect(h!.some((r) => r.t.trim() === 'returned')).toBe(false);
+      expect(p!.some((r) => r.t.trim() === 'returned')).toBe(false);
+      const glyph = (row: readonly Run[]): string => row.find((r) => [...r.t.trim()].length === 1 && ENDS.has(r.t.trim()))!.t.trim();
+      expect(glyph(p!)).toBe(glyph(h!));
+      expect(p!.some((r) => r.t.trim() === 'done')).toBe(true);
     }
   });
 });
