@@ -176,7 +176,7 @@ describe('5. the plan row budget and the overflow row', () => {
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
     const rows = hudLines(input, view(88, 8)).map(runsString);
     const more = rows.find((r) => /\+\d+ more/.test(r))!;
-    expect(more).toMatch(/▸ TODO {2}0\/5 · \+\d+ more ▱+ ─+$/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
+    expect(more).toMatch(/▸ TODO {2}0\/5 · \+\d+ more ▱+ ─+╮$/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
     expect(more).not.toContain('...');
     const planRows = rows.filter((r) => PLAN_ROW.test(r)).length;
     expect(planRows + Number(/(\d+) more/.exec(more)![1])).toBe(5); // every slot holds a row: shown plus counted is the whole plan
@@ -194,7 +194,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
   const agents: HudAgent[] = [agent('board-explorer'), ...['gamma-explorer', 'alpha-explorer', 'beta-explorer'].map(doneAgent)];
   const hudIn: HudInput = { todos: planDone, agents };
   const budget = 18; // the live frame's 15 slot rows less the host's line (14), plus the Subagents column-header row and its blank, plus the two closing rules (round 3)
-  const cap = 6; // a slot that cuts the plan: the rules and the blank go before a row (critique 26), so only a slot well below the five-row form cuts
+  const cap = 10; // a slot that cuts the plan: the boxes stay closed (critique 28), so a slot below the five-row form (13 with the agents) cuts
   const snapshot = busySnap();
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 88, tick: 0, maxRows, workersInHud: true, ui });
   const draw = (maxRows: number) => hudLines(hudIn, view(88, maxRows));

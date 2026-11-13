@@ -85,7 +85,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
 
 /** `root` (the project root) makes paths in a tool preview project-relative. `phases` feeds the rich rail. */
 export type HudInput = { todos: TodoItem[]; agents: HudAgent[]; root?: string | null; phases?: { ids: readonly string[]; active: number } };
-export type HudOpts = { cols: number; maxRows: number; ui?: Ui; rich?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type HudOpts = { cols: number; maxRows: number; /** The run's fixed shape (slot.ts): an empty TODO or SUBAGENTS block still draws its closed box. */ reserve?: boolean; ui?: Ui; rich?: boolean; tick?: number; now?: number; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 
 export const isRunning = (a: HudAgent): boolean => a.state === 'working' || a.state === 'blocked' || a.state === 'running' || a.state === 'queued';
 
@@ -282,7 +282,7 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
     s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents)), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
-    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}) },
+    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}), ...(opts.reserve ? { reserve: true } : {}) },
   };
 }
 
@@ -297,7 +297,7 @@ export function hudMotionItems(input: HudInput, opts: { now: number }): { todos:
 /** The HUD as design Runs, each row padded to the width: [] when there is nothing to show. */
 export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
   const { s, o } = surfaces(input, opts);
-  if (opts.maxRows <= 0 || (s.todos.length === 0 && s.agents.length === 0)) return [];
+  if (opts.maxRows <= 0 || (s.todos.length === 0 && s.agents.length === 0 && !opts.reserve)) return [];
   return padRows(fitStack(s, o, opts.maxRows), o.cols);
 }
 

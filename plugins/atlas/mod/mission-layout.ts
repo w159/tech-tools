@@ -168,7 +168,7 @@ function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap =
   const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
   const closed = closedCount(m);
-  const closedRuns: Run[] = [r(`${closed} closed`, 'dim')]; // a closed failure is a dim record: a word, no glyph (the done disc means done, the red square means failed; critique 26: `● 1 closed`)
+  const closedRuns: Run[] = [r(`${closed} killed`, 'dim')]; // a closed failure is a dim record: a word, no glyph (the done disc means done, the red square means failed; critique 26: `● 1 closed`)
   const parts = order.flatMap((s): Run[][] => [
     ...(n(s) > 0 ? [animateRow(words ? countRuns(s, n(s), ui, countFrame(m, s), true) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
     ...(s === 'failed' && words && closed > 0 ? [closedRuns] : []),
@@ -182,6 +182,7 @@ function blockedRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
   const n = m.todoBlocked ?? 0;
   if (n <= 0) return [];
   if (runStateOf(m).kind === 'blocked') return [r(words ? `${n} blocked` : `${n}`, 'bad')]; // the lead already shows `▲ blocked`: one state glyph per row (critique 26: `▲ blocked … ▲ 1 blocked`)
+  if (runStateOf(m).kind === 'working') return [r(words ? `${n} blocked` : `${n}`, 'text')]; // the `▲` glyph means the band is blocked: a working band says the count in words only (critique 28)
   return words ? countRuns('blocked', n, ui) : [stateRun('blocked', ui), r(`${n}`)];
 }
 
@@ -290,7 +291,7 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
       return [
         mark(ui.ascii ? GLYPH5_ASCII.blocked : GLYPH5.blocked, 'bad', true), r(' blocked', 'bad', true),
         ...(why && !retrying ? [r(` · ${why}`, 'bad', true)] : []),
-        ...(retrying ? [r(' · ', 'bad', true), spin(), r(' retrying', 'text')] : (m.busy || isRunning(m)) && o.fix ? [r(' · ', 'bad', true), spin(), r(' fixing', 'text')] : []), // `fixing` only while the host turn or a worker runs; a host waiting on the person reads `blocked · needs you` and nothing moves
+        ...(retrying ? [r(' · retrying', 'bad')] : (m.busy || isRunning(m)) && o.fix ? [r(' · fixing', 'bad')] : []), // static words, no spinner: blocked is a stopped state (critique 28); `fixing` only while the host turn or a worker runs
       ];
     }
   }

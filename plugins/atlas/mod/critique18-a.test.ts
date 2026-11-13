@@ -23,7 +23,7 @@ describe('A1: a reason never contradicts the todo figure beside it', () => {
     for (const cols of [62, 80, 110, 150]) {
       const t = closed(cols);
       expect([cols, /todo open/.test(t)]).toEqual([cols, false]);
-      expect(t).toMatch(/blocked · [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] retrying/);
+      expect(t).toMatch(/blocked · retrying/);
       expect(t).toMatch(/todo [^\d]*5\/5/);
     }
   });

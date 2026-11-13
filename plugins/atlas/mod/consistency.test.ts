@@ -85,7 +85,7 @@ function stateRows(rows: readonly string[], rowRe: RegExp): Record<string, UiSta
   for (const row of rows) {
     const m = rowRe.exec(row);
     if (!m) continue;
-    const word = m[3] as UiState | undefined;
+    const word = (m[3] === 'killed' ? 'failed' : m[3]) as UiState | undefined; // critique 28: the HUD's one word for a killed worker is the failed state
     const glyph = GLYPH.get(m[1]!)!;
     if (word) expect(glyph === 'blocked' && word === 'failed' ? word : glyph).toBe(word); // the glyph and the word of one row agree (failed and blocked share the red square, the word tells them apart)
     out[m[2]!.trim()] = word ?? (glyph === 'blocked' ? 'failed' : glyph); // a row with no word (the band's worker table): the red square is the failed worker (a worker is never blocked there)
@@ -138,8 +138,8 @@ function hudFacts(s: LiveSnapshot, host: 'cc' | 'omp', rich = false): Facts {
   const todoRows = rows.slice(0, at);
   return {
     todo: todoOf(rows[0]!), agents: counts(rows[at]!), rail: railOf(todoRows.join('\n')),
-    items: stateRows(todoRows, new RegExp(`^[▸ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|blocked|waiting)\\b`)),
-    workers: stateRows(rows.slice(at + 1), new RegExp(`^[▸ ] (${G}) (\\S+)\\s+(queued|running|done|failed|blocked|waiting)\\b`)),
+    items: stateRows(todoRows, new RegExp(`^[▸ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`)),
+    workers: stateRows(rows.slice(at + 1), new RegExp(`^[▸ ] (${G}) (\\S+)\\s+(queued|running|done|failed|killed|blocked|waiting)\\b`)),
     ...(rich ? {} : { tasks: Object.fromEntries(rows.slice(at + 1).flatMap((r: string) => { const m = new RegExp(`^[▸ ] ${G} (\\S+)\\s+.*?\\s((?:T\\d+,?)+)(?:\\s|$)`).exec(r); return m ? [[m[1]!, m[2]!]] : []; })) }),
   };
 }

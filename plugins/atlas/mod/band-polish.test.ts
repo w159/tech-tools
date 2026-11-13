@@ -137,7 +137,8 @@ describe('when the band may drop its worker rows', () => {
   const rows = (maxRows: number, cols = 160, list = agents) => hudRows({ todos: [], agents: list }, { cols, maxRows, ui: UI });
   test('true only while the Subagents block lists at least one agent', () => {
     expect(hudListsAgents(rows(20))).toBe(true);
-    expect(hudListsAgents(rows(2, 160, agents.slice(0, 1)))).toBe(true); // ribbon and its one row
+    expect(hudListsAgents(rows(3, 160, agents.slice(0, 1)))).toBe(true); // ribbon, its one row and the closing rule (a box is always closed, critique 28)
+    expect(hudListsAgents(rows(2, 160, agents.slice(0, 1)))).toBe(false);
     expect(hudListsAgents(rows(2))).toBe(false); // three agents do not fit two rows: the ribbon keeps the counts, the band lists
   });
   test('false with the ribbon alone (starved), and with nothing running', () => {
@@ -158,7 +159,7 @@ describe('band counts what the HUD counts (critique-3 change 4)', () => {
   test('a blocked task has its own glyph and count beside the todo count, with the agents noun in front of the agent counts', () => {
     const head = rowsOf(200, { snapshot: blockedSnap() })[0]!;
     expect(head).toContain('todo ');
-    expect(head).toMatch(/1\/3 · ▲ 1 blocked/);
+    expect(head).toMatch(/1\/3 · 1 blocked/); // critique 28: the `▲` glyph is the band's own blocked mark; a working band counts blocked tasks in words
     expect(head).toMatch(/agents .*1 running/);
     expect(rowsOf(79, { snapshot: blockedSnap() })[0]).toMatch(/working .* todo 1\/3 · /); // rev 5: at 79 the state word leads and the blocked count is the segment that gives way
   });

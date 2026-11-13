@@ -317,7 +317,7 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
 
 describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
   const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py', ctx: null, focus: false, ...o });
-  test('B5 (critique 26): a short slot gives up the blank, then the closing rules, then agent rows down to one, then plan rows; the column names stay while an agent row shows, and no plan row folds before decoration', () => {
+  test('B5 (critique 28): a short slot gives up the blank, then the column names, then plan rows (counted on the title), then the plan box; boxes stay closed and every agent keeps its row', () => {
     const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const at = (n: number): string[] => text(fitStack({ todos, agents: rows }, opts(110), n));
@@ -335,21 +335,21 @@ describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
     expect(blank.filter((l) => l === '')).toHaveLength(0);
     expect(names(blank)).toBe(true);
     expect(blank.filter((l) => l.includes('queued')).length).toBe(3);
-    const bare = at(9); // then the closing rules; every plan row, the names and both agents stay
+    const bare = at(9); // critique 28: the column names go next; the boxes stay closed, every plan row and both agents stay
     expect(bare.length).toBeLessThanOrEqual(9);
-    expect([tops(bare), bottoms(bare)]).toEqual([0, 0]); // the rules go from both boxes together, and the ribbons lose their corners with them
-    expect(bare.filter((l) => l.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(l))).toHaveLength(2);
-    expect(names(bare)).toBe(true);
+    expect([tops(bare), bottoms(bare)]).toEqual([2, 2]);
+    expect(bare.filter((l) => l.startsWith('── '))).toHaveLength(0);
+    expect(names(bare)).toBe(false);
     expect(bare.filter((l) => l.includes('queued')).length).toBe(3);
     expect(bare.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
-    const win = at(7); // then the agents are windowed (the count rides the ribbon) before a plan row folds
-    expect(names(win)).toBe(true);
-    expect(win.filter((l) => l.includes('queued')).length).toBe(3);
-    expect(win.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(1);
-    const packed = at(6); // then plan rows fold into the title count, one wording
-    expect(packed.filter((l) => l.includes('queued')).length).toBe(2);
-    expect(packed[0]).toMatch(/0\/3 · \+1 more/);
-    expect(names(packed)).toBe(true);
+    const win = at(7); // then plan rows fold into the title count (every agent keeps its row)
+    expect(win.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
+    expect(win.filter((l) => l.includes('queued')).length).toBe(1);
+    expect(win[0]).toMatch(/0\/3 · \+2 more/);
+    expect([tops(win), bottoms(win)]).toEqual([2, 2]);
+    const packed = at(5); // then the plan box goes whole before an agent row is windowed
+    expect(packed.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
+    expect(packed.some((l) => l.includes('▸ TODO'))).toBe(false);
   });
   test('B4: a doubled verb draws once in the LAST column', () => {
     const out = text(agentRows([row({ name: 'alpha-explorer', tasks: [1], tool: 'read Read alpha.py' })], opts(110), full));

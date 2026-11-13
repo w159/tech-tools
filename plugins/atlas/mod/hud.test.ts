@@ -338,15 +338,15 @@ describe('inline renderer budget (viewport less the rows below the AbovePrompt s
     expect(shown.some((l) => l.includes('TODO'))).toBe(true);
     expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('1 running'))).toBe(true);
   });
-  test('24 and 30 rows with 2 running agents and a long plan: the HUD fits and keeps the TODO, SUBAGENTS, the column names and an agent row (the count of the rest rides the ribbon)', () => {
+  test('24 and 30 rows with 2 running agents and a long plan: the HUD fits and keeps the TODO, SUBAGENTS and both agent rows in closed boxes (the count of the plan rows left out rides the ribbon)', () => {
     for (const rows of [24, 30]) {
       const eff = effectiveRows(rows, { rows, isFullscreen: false }, 4, 2);
       const shown = hudAt(rows);
       expect(shown.length).toBeLessThanOrEqual(eff);
       expect(shown.some((l) => l.includes('TODO'))).toBe(true);
       expect(shown.some((l) => l.includes('SUBAGENTS') && l.includes('2 running'))).toBe(true);
-      expect(shown.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
-      expect(shown.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate')).length).toBeGreaterThanOrEqual(1);
+      expect(shown.filter((l) => l.startsWith('╰') && l.endsWith('╯'))).toHaveLength(2);
+      expect(shown.filter((l) => l.includes('verifier-eval') || l.includes('docs-curator-gate')).length).toBe(2);
     }
   });
 });

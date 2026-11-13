@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Band: the slot is one height from the first working frame to idle (`mod/slot.ts` `composeFixed`); the budget the host gives is spent as the band area plus both boxes, and any budget left over becomes empty rows ABOVE the band, so the band keeps its screen row while the host's own agent list below grows and shrinks (critique 28: rows 38, 25, 24, 28).
+- HUD TODO: the box is closed at every agent count and every budget that shows it (`fitRows` has no open-box tries); an empty block draws a closed box with one quiet row, never bare grey rows below it.
+- HUD SUBAGENTS: every running agent keeps its row at 110 columns; the plan folds first (column names, then finished rows, then plan rows onto the title as `+N more`, then the plan box), and `+N more` on the SUBAGENTS title only counts a row that is really hidden.
+- Blocked: the `classic.Stop` hook writes the refusal into the gate groups in the same update as the host's Stop error, and a blocked band draws a static `▲` with no spinner (`blocked`, `retrying`, `fixing` are plain words).
+- Band: `▲ n blocked` no longer sits in a working band (the glyph means the band is blocked); `ctx N%` is printed once, not again after a run whose turn footer already says it.
+- One word per failure: a killed worker reads `■ killed` in TODO, SUBAGENTS and the band count (the board keeps `closed`).
+
 ## 17.14.0 - 2026-11-12
 
 Round 3 terminal UI for Claude Code and omp, as main a7bc7b0d ships it. One line per surface; each is checked against the code (file:line in the READMEs and `docs/architecture/atlas-mod.md`).

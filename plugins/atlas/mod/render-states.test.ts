@@ -42,7 +42,7 @@ describe('B1: blocked is its own state', () => {
     expect(t2).toMatch(/\(ghost-explorer\)\s+blocked/); // the state word; the detail may still say `owner failed`
     expect(t2).toContain(STATE_GLYPHS.blocked);
     const ghost = rows.find((r) => r.includes('ghost-explorer ') && !r.includes('T2 read'))!;
-    expect(ghost).toContain('failed');
+    expect(ghost).toContain('killed'); // critique 28: one word for a killed worker
     expect(ghost).not.toContain('blocked');
   });
   test('the board folds a failed dispatch row into a blocked plan row without turning it failed', () => {
@@ -57,15 +57,17 @@ describe('B1: blocked is its own state', () => {
 describe('B2: every row that fits is drawn, only the rest is folded', () => {
   // stoprun-150-e4a8186a-3/frames/f0085.ans:25-27: `3 more todos not shown` under 2 drawn rows; the fold row itself cost the third.
   const four: HudAgent[] = [...AGENTS, agent('beta-explorer-2', 'done', { model: 'haiku', lastTool: 'Read' })];
-  test('11 rows: the four agents with their column names and every plan row the slot holds; nothing is cut while a row fits (critique 23)', () => {
+  test('11 rows: the four agents and as many plan rows as the slot holds, the rest counted on the title; both boxes closed (critique 23, 28)', () => {
     const rows = text(hudLines({ todos: PLAN, agents: four }, { cols: 103, maxRows: 11, ui, now: NOW }));
     expect(rows.length).toBeLessThanOrEqual(11);
     expect(rows.some((r) => /^\s+\d+ more todos? not shown\s*$/.test(r))).toBe(false); // no row of its own
     const shown = rows.filter((r) => /^[▸ ]\s*\S T\d /.test(r)).length;
-    const counted = /(\d+) more todos? not shown/.exec(rows[0]!);
+    const counted = /\+(\d+) more/.exec(rows[0]!);
     const done = /· (\d+) done/.exec(rows[0]!);
     expect(shown + Number(counted?.[1] ?? 0) + Number(done?.[1] ?? 0)).toBe(5); // shown, counted on the title or folded as done: the whole plan
     expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);
+    expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] \S+-explorer/.test(r))).toHaveLength(4);
+    expect(rows.filter((r) => /^╰─+╯$/.test(r))).toHaveLength(2);
   });
   test('a plan that fits in full carries no count', () => {
     const rows = text(hudLines({ todos: PLAN, agents: four }, { cols: 103, maxRows: 15, ui, now: NOW }));

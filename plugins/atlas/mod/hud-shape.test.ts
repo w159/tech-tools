@@ -112,27 +112,28 @@ describe('step 2: a rounded box that never changes shape', () => {
     expect(out.filter((l) => /^\+-+\+$/.test(l))).toHaveLength(2);
     for (const l of out.filter((x) => x.trim() !== '')) expect(cells(l)).toBeLessThanOrEqual(110);
   });
-  test('a short budget drops the blank, then the closing rules, then folds the finished rows; both boxes lose their corners with their rules, and the column names stay while an agent row shows (critique 26)', () => {
+  test('a short budget drops the blank, then the column names, then folds the finished rows, then plan rows; both boxes keep their corners at every budget that shows them (critique 28)', () => {
     for (const cols of [150, 110]) {
       const input: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'completed', OWNERS[1]), todo(3, 'in_progress', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: OWNERS.map((n, i) => agent(n, i < 2 ? 'done' : 'working', i < 2 ? 'done' : 'running', { tool: 'Read', target: `${n.split('-')[0]}.py` })) };
       const at = (n: number): string[] => text(draw(input, cols, n));
       const plan = (out: string[]): string[] => out.filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /.test(l));
       const corners = (out: string[]): [number, number, number] => [out.filter((l) => l.startsWith('╭─ ')).length, out.filter((l) => l.endsWith('╮')).length, out.filter((l) => l.startsWith('╰') && l.endsWith('╯')).length];
+      const names = (out: string[]): boolean => out.some((l) => /AGENT\s+STATE/.test(l));
       expect(at(40)).toHaveLength(14);
       for (let n = 14; n >= 8; n--) {
         const out = at(n);
         expect([cols, n, out.length <= n]).toEqual([cols, n, true]);
-        expect([cols, n, corners(out)]).toEqual([cols, n, n >= 13 ? [2, 2, 2] : [0, 0, 0]]); // the bottoms are the first decoration after the blank, and they go with the tops and their `╮`: a box is closed on both blocks or drawn open on both (critique 27)
-        expect([cols, n, out.some((l) => /AGENT\s+STATE/.test(l))]).toEqual([cols, n, true]);
+        expect([cols, n, corners(out)]).toEqual([cols, n, [2, 2, 2]]); // a box is closed at every budget (critique 28)
+        expect([cols, n, names(out)]).toEqual([cols, n, n >= 13]); // the column names go first after the blank
       }
       expect(at(14).filter((l) => l === '')).toHaveLength(1);
       expect(at(13).filter((l) => l === '')).toHaveLength(0); // the blank goes first
       expect(plan(at(13))).toHaveLength(5); // every plan row stays
-      expect(plan(at(12))).toHaveLength(5); // then the rules; still every plan row
-      expect(plan(at(11))).toHaveLength(5);
-      expect(at(10)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
-      expect(plan(at(10)).some((l) => /T[12] read/.test(l))).toBe(false);
+      expect(plan(at(12))).toHaveLength(5); // then the names; still every plan row
+      expect(at(11)[0]).toMatch(/2 done/); // the finished rows fold into the count after that
+      expect(plan(at(11)).some((l) => /T[12] read/.test(l))).toBe(false);
       expect(plan(at(8)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place
+      for (let n = 14; n >= 8; n--) expect(at(n).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(l))).toHaveLength(3); // every agent keeps its row
     }
   });
 });

@@ -56,14 +56,14 @@ describe('A3: the SUBAGENTS column header and the blank before the band', () => 
       expect(band).toBeGreaterThanOrEqual(1);
     });
   }
-  test('a slot too small for the whole plan and the boxes leaves the band its row (no gap); every plan row and the column names stay, the rules go, agents are windowed to the rows that fit (critique 26)', () => {
+  test('a slot too small for the whole plan and the boxes leaves the band its row (no gap); the boxes stay closed, every agent row is drawn and the plan rows left out are counted on the title (critique 28)', () => {
     const want = hudWantRows(running, 104, Date.now());
     const cap = hudSlotCap(11, hudCompactRows(running, 104), hudFloorRows(running, 104, Date.now()), 7, true, true, want);
     expect(cap).toBe(Math.min(hudBudget(11, hudCompactRows(running, 104), 7, true), 10)); // the running clamp keeps the band row
     const hud = draw(running, 104, cap);
-    expect(hud.filter((r) => PLAN_ROW.test(r))).toHaveLength(5); // no plan row folds beside decoration
-    expect(hud.some((r) => /AGENT\s+STATE/.test(r))).toBe(true);
-    expect(hud.filter((r) => AGENT_ROW.test(r)).length).toBeGreaterThanOrEqual(1);
+    expect(closed(hud)).toBe(true);
+    expect(hud.filter((r) => AGENT_ROW.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => PLAN_ROW.test(r)).length + Number(/\+(\d+) more/.exec(hud[0]!)?.[1] ?? 0)).toBe(5);
     expect(hud.length).toBeLessThanOrEqual(10);
     expect(hudGapRows(true, 10, 11)).toBe(0);
   });

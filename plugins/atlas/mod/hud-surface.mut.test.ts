@@ -66,30 +66,44 @@ describe('agentRows columns', () => {
 });
 
 describe('fitStack with the plan folded', () => {
-  test('B5 (critique 26): a short slot folds plan rows onto the title and windows the agents to the rows that fit; the column names stay with an agent row, the count of the rest rides the ribbon', () => {
+  test('B5 (critique 28): a short slot folds plan rows onto the title and keeps every agent row; both boxes stay closed, the plan box goes whole before an agent row is windowed', () => {
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
-    const five = fitStack({ todos, agents }, { cols: 100, ui }, 5).map((r) => runsString(r));
+    const closed = (rows: string[]): number => rows.filter((l) => l.startsWith('+-') && l.endsWith('+') && !l.includes('[ATLAS]')).length; // the ASCII bottom rule
+    const nine = fitStack({ todos, agents }, { cols: 100, ui }, 9).map((r) => runsString(r));
+    expect(nine.length).toBe(9);
+    expect(nine[0]).toMatch(/TODO .*0\/3 · \+1 more/); // the plan folds onto its title in one wording
+    expect(nine.filter((l) => /agent\d/.test(l)).length).toBe(3);
+    expect(closed(nine)).toBe(2);
+    const eight = fitStack({ todos, agents }, { cols: 100, ui }, 8).map((r) => runsString(r));
+    expect(eight[0]).toMatch(/TODO .*0\/3 · \+2 more/);
+    expect(eight.filter((l) => /item\d/.test(l)).length).toBe(1);
+    expect(eight.filter((l) => /agent\d/.test(l)).length).toBe(3);
+    expect(eight.some((l) => /not shown/.test(l))).toBe(false);
+    const five = fitStack({ todos, agents }, { cols: 100, ui }, 5).map((r) => runsString(r)); // no room for a plan box: it goes whole, the three agents stay
     expect(five.length).toBe(5);
-    expect(five[0]).toMatch(/TODO .*0\/3 · \+2 more/); // the plan folds onto its title in one wording
-    expect(five.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
-    expect(five.filter((l) => /agent\d/.test(l)).length).toBe(1);
-    expect(five.some((l) => /not shown/.test(l))).toBe(false);
-    const four = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r)); // one row less: the plan is its title alone, counted
+    expect(five.some((l) => /TODO/.test(l))).toBe(false);
+    expect(five.filter((l) => /agent\d/.test(l)).length).toBe(3);
+    expect(closed(five)).toBe(1);
+    const four = fitStack({ todos, agents }, { cols: 100, ui }, 4).map((r) => runsString(r)); // only now an agent row is windowed, and the title counts it
     expect(four.length).toBe(4);
-    expect(four[0]).toMatch(/TODO .*0\/3 · \+3 more/);
-    expect(four.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
-    expect(four.filter((l) => /agent\d/.test(l)).length).toBe(1);
-    const eight = fitStack({ todos, agents }, { cols: 100, ui }, 8).map((r) => runsString(r)); // 8 rows hold the plan whole and two agents
-    expect(eight.filter((l) => /item\d/.test(l)).length).toBe(3);
-    expect(eight.filter((l) => /agent\d/.test(l)).length).toBe(2);
+    expect(four[0]).toMatch(/SUBAGENTS .*\+1 more/);
+    expect(four.filter((l) => /agent\d/.test(l)).length).toBe(2);
+    const roomy = fitStack({ todos, agents }, { cols: 100, ui }, 12).map((r) => runsString(r));
+    expect(roomy.filter((l) => /item\d/.test(l)).length).toBe(3);
+    expect(roomy.filter((l) => /agent\d/.test(l)).length).toBe(3);
   });
-  test('B5: only a budget with no room for the header and one agent drops the header, never the agent', () => {
+  test('B5: the column names go before an agent row does; only a budget with no room for the title, one agent and its rule drops to the ribbon', () => {
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
+    const six = fitStack({ todos: [], agents }, { cols: 100, ui }, 6).map((r) => runsString(r));
+    expect(six.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+    const five = fitStack({ todos: [], agents }, { cols: 100, ui }, 5).map((r) => runsString(r));
+    expect(five.some((l) => /AGENT\s+STATE/.test(l))).toBe(false);
+    expect(five.filter((l) => /agent\d/.test(l)).length).toBe(3);
     const three = fitStack({ todos: [], agents }, { cols: 100, ui }, 3).map((r) => runsString(r));
-    expect(three.some((l) => /AGENT\s+STATE/.test(l))).toBe(true); // title, names, one agent: the names stay while an agent row shows
     expect(three.filter((l) => /agent\d/.test(l)).length).toBe(1);
-    const two = fitStack({ todos: [], agents }, { cols: 100, ui }, 2).map((r) => runsString(r)); // below the title, the names and one agent: the agent's ribbon alone
+    expect(three[0]).toMatch(/\+2 more/);
+    const two = fitStack({ todos: [], agents }, { cols: 100, ui }, 2).map((r) => runsString(r)); // below the title, one agent and its rule: the agents' ribbon alone
     expect(two).toHaveLength(1);
     expect(two[0]).toMatch(/SUBAGENTS/);
   });

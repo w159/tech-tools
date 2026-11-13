@@ -23,18 +23,28 @@ const input = (n: number): HudInput => ({ todos: ownTodos(PLAN), agents: ['alpha
 const draw = (n: number, cols: number, maxRows: number): string[] => hudLines(input(n), { cols, maxRows, ui, rich: false, now: 0 }).map((r) => runsString(r).trimEnd());
 const todoRowsOf = (rows: string[]): string[] => rows.filter((t) => /T\d\b/.test(t));
 
-describe('layout28 item 1: no TODO row is folded while the slot has room', () => {
+describe('layout28 item 1: the TODO box shrinks first and every agent row stays (critique 28)', () => {
   // 150x45 gives a 12-row slot (11 for the HUD under the band row), 110x40 a 10-row slot (9 for the HUD).
   for (const [cols, rows] of [[150, 11], [110, 9]] as const) {
-    test(`all five TODO rows and the SUBAGENTS header show at ${cols} columns in ${rows} rows`, () => {
+    test(`all three agent rows and two closed boxes show at ${cols} columns in ${rows} rows; the plan rows left out are counted on the TODO title`, () => {
       const out = draw(3, cols, rows);
       const text = out.join('\n');
       expect(out.length).toBeLessThanOrEqual(rows);
-      for (const k of ['T1', 'T2', 'T3', 'T4', 'T5']) expect(text).toContain(k);
+      expect(out.filter((l) => /^╰─+╯$/.test(l))).toHaveLength(2);
+      expect(out.filter((l) => /-explorer\s+running/.test(l))).toHaveLength(3);
+      const shown = todoRowsOf(out).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] T\d/.test(l)).length;
+      expect(shown + Number(/\+(\d+) more/.exec(out[0]!)?.[1] ?? 0)).toBe(5);
       expect(text).not.toContain('not shown');
       expect(text).toContain('SUBAGENTS');
     });
   }
+  test('all five TODO rows and the SUBAGENTS header show where the slot has room (14 rows)', () => {
+    for (const cols of [150, 110]) {
+      const out = draw(3, cols, 14);
+      for (const k of ['T1', 'T2', 'T3', 'T4', 'T5']) expect(out.join('\n')).toContain(k);
+      expect(out.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+    }
+  });
   test('a fold reads `+N more` at every width, never `N more todo not shown`', () => {
     for (const cols of [150, 110, 80]) for (const rows of [3, 4, 5, 6]) {
       const text = draw(3, cols, rows).join('\n');
@@ -87,8 +97,8 @@ describe('layout28 item 5: glyphs', () => {
   test('the closed count in the band agents segment has no ● glyph', () => {
     for (const cols of [150, 110]) {
       const t = runsText(bandLines(model({ cols, workers: [{ name: 'a', state: 'failed', secs: 3 }, { name: 'b', state: 'done', secs: 3 }], closed: 1 }))[0]!.runs);
-      expect(t).toContain('1 closed');
-      expect(t).not.toMatch(/●\s*1 closed/);
+      expect(t).toContain('1 killed');
+      expect(t).not.toMatch(/●\s*1 killed/);
     }
   });
 });

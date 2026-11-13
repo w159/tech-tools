@@ -90,7 +90,7 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
     expect(out.at(-1)).toBe(edge);
     expect(out.filter((r) => r === '')).toHaveLength(1);
   });
-  test('short of rows the blank goes first, then the closing rules, then the finished rows fold, then plan rows; the column names stay while an agent row shows (critique 26)', () => {
+  test('short of rows (critique 28) the blank goes first, then the column names, then the finished rows fold, then plan rows; every box stays closed and the agent keeps its row', () => {
     const rows = (n: number): string[] => text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui }, n));
     const tops = (out: string[]): number => out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length;
     const names = (out: string[]): boolean => out.some((r) => /AGENT\s+STATE/.test(r));
@@ -102,22 +102,22 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
     expect(nine.filter((r) => r === '')).toEqual([]);
     expect(names(nine)).toBe(true);
     expect(nine[0]).not.toMatch(/done/);
-    const eight = rows(8); // the closing rules go, and the corners with them; every row and the names stay
-    expect(tops(eight)).toBe(0);
-    expect(eight.filter((r) => r.startsWith('── ') && /▸ (TODO|SUBAGENTS)/.test(r))).toHaveLength(2);
-    expect(eight.filter((r) => r === edge)).toHaveLength(0);
-    expect(names(eight)).toBe(true);
-    expect(eight.filter((r) => /^\s*[●◇◐] T\d item/.test(r))).toHaveLength(3);
-    const six = rows(6); // then the finished row folds into the count on the title
-    expect(names(six)).toBe(true);
-    expect(six[0]).toMatch(/1 done/);
-    expect(six.filter((r) => /T[23] item/.test(r))).toHaveLength(2);
-    const five = rows(5); // then plan rows are cut, and the title says so, in one wording at every width
-    expect(five[0]).toMatch(/\+\d+ more/);
-    expect(names(five)).toBe(true);
-    const four = rows(4); // the agent keeps its row and the names; the plan is its title alone
-    expect(four.filter((r) => /AGENT\s+STATE/.test(r))).toHaveLength(1);
+    const eight = rows(8); // the column names go before a plan row folds; the boxes stay closed
+    expect(tops(eight)).toBe(2);
+    expect(eight.filter((r) => r === edge)).toHaveLength(2);
+    expect(names(eight)).toBe(false);
+    expect(eight[0]).not.toMatch(/done/);
+    expect(eight.filter((r) => /T\d item/.test(r))).toHaveLength(3);
+    const seven = rows(7); // then the finished row folds into the count on the title
+    expect(seven[0]).toMatch(/1 done/);
+    expect(seven.filter((r) => /T[23] item/.test(r))).toHaveLength(2);
+    const six = rows(6); // then plan rows are cut, and the title says so, in one wording at every width
+    expect(six[0]).toMatch(/\+\d+ more/);
+    expect(tops(six)).toBe(2);
+    const four = rows(4); // the agent keeps its row and its closed box; the plan box goes whole
+    expect(tops(four)).toBe(1);
     expect(four.filter((r) => /alpha-explorer/.test(r))).toHaveLength(1);
+    expect(four.at(-1)).toBe(edge);
   });
 });
 
