@@ -45,16 +45,16 @@ describe('board (step 1)', () => {
       expect(out.join('\n')).not.toContain('...');
     }
   });
-  test('the footer records how the run closed: `T2 dispatch closed after Stop refusal · ghost-explorer`', () => {
+  test('the footer records how the run closed: `■ T2 killed after Stop refusal · ghost-explorer`', () => {
     const doubted = [item(1), item(2, { label: 'T2 read the ghost module', owner: 'ghost-explorer', word: DONE_DOUBT })];
     const after = pane(doubted, 80, { stopRefused: true });
-    expect(after.join('\n')).toContain('T2 dispatch closed after Stop refusal · ghost-explorer');
+    expect(after.join('\n')).toContain('■ T2 killed after Stop refusal · ghost-explorer');
     const without = pane(doubted, 80, { stopRefused: false });
-    expect(without.join('\n')).toContain('T2 dispatch closed · ghost-explorer');
+    expect(without.join('\n')).toContain('■ T2 killed · ghost-explorer');
     expect(without.join('\n')).not.toContain('Stop refusal');
     // narrow: wrapped on its words, nothing cut
     const narrow = pane(doubted, 37, { stopRefused: true }).join(' ').replace(/\s+/g, ' ');
-    expect(narrow).toContain('T2 dispatch closed after Stop refusal · ghost-explorer');
+    expect(narrow).toContain('■ T2 killed after Stop refusal · ghost-explorer');
   });
   test('a plan that is all done closes with `closed · 5 of 5 items done`', () => {
     expect(pane(five, 50).at(-1)).toBe('  closed · 5 of 5 items done');
@@ -82,10 +82,10 @@ describe('team tab (step 2)', () => {
     expect(out).toHaveLength(4);
     const col = (re: RegExp): number[] => out.map((l) => l.search(re));
     expect(new Set(col(/ (explorer|verifier|runner)  /)).size).toBe(1); // the role column
-    expect(new Set(col(/  (running|failed|done|queued)( |$)/)).size).toBe(1); // the state word column
-    expect(out[0]).toMatch(/alpha +explorer +running +0:42$/);
-    expect(out[1]).toMatch(/ghost-explorer +explorer +failed +2:15$/);
-    expect(out[2]).toMatch(/beta +verifier +done +1:01:40$/);
+    expect(new Set(col(/  (running|killed|done|queued)( |$)/)).size).toBe(1); // the state word column
+    expect(out[0]).toMatch(/alpha +explorer +running +0:42 +[▁-█ ]{12}/);
+    expect(out[1]).toMatch(/ghost-explorer +explorer +killed +2:15 +[▁-█ ]{12}/);
+    expect(out[2]).toMatch(/beta +verifier +done +1:01:40 +[▁-█ ]{12}/);
     expect(out[3]).toMatch(/gamma +runner +queued$/); // a queued agent has not started: no elapsed time
   });
   test('a tall pane does not stretch the team into four rows per agent: the detail opens on a press', () => {
@@ -111,13 +111,13 @@ describe('channel tab (step 3)', () => {
       expect(cells(head)).toBeLessThanOrEqual(cols - 1);
     }
   });
-  test('posts carry the full name, and `failed` sits next to the `■`', () => {
+  test('posts carry the full name, and `killed` sits next to the `■`', () => {
     const notes = [note({ from: 'ghost-explorer', kind: 'failed', text: 'worker killed' }), note({ from: 'implementer-layout', kind: 'handoff', text: 'T1 merged', at: '10:07' })];
     for (const cols of [80, 50, 37]) {
       const out = body('channel', cols, { notes, channel: 'lc-qksrlqem' }).join('\n');
       expect([cols, out]).toEqual([cols, expect.stringContaining('ghost-explorer')]);
       expect(out).toContain('implementer-layout');
-      expect(out).toMatch(/■ ghost-explorer +failed/);
+      expect(out).toMatch(/■ ghost-explorer +killed/);
       expect(out).not.toMatch(/ghost-exp\.\.\./);
       expect(out).not.toMatch(/ghost-exp…/);
     }

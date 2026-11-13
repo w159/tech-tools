@@ -65,7 +65,7 @@ type Facts = {
 
 const counts = (text: string): Partial<Record<UiState, number>> => {
   const out: Partial<Record<UiState, number>> = {};
-  for (const m of text.matchAll(/(\d+) (queued|running|done|failed|blocked|waiting)\b/g)) out[m[2] as UiState] = Number(m[1]);
+  for (const m of text.matchAll(/(\d+) (queued|running|done|failed|killed|blocked|waiting)\b/g)) out[(m[2] === 'killed' ? 'failed' : m[2]) as UiState] = Number(m[1]); // wave 30: the side panel says `killed` for the failed state
   return out;
 };
 const todoOf = (text: string): [number, number] | undefined => {
@@ -85,7 +85,7 @@ function stateRows(rows: readonly string[], rowRe: RegExp): Record<string, UiSta
   for (const row of rows) {
     const m = rowRe.exec(row);
     if (!m) continue;
-    const word = (m[3] === 'killed' ? 'failed' : m[3]) as UiState | undefined; // critique 28: the HUD's one word for a killed worker is the failed state
+    const word = (m[3] === 'killed' ? 'failed' : m[3]) as UiState | undefined; // critique 28 and wave 30: the one word for a killed worker is `killed`, the failed state
     const glyph = GLYPH.get(m[1]!)!;
     if (word) expect(glyph === 'blocked' && word === 'failed' ? word : glyph).toBe(word); // the glyph and the word of one row agree (failed and blocked share the red square, the word tells them apart)
     out[m[2]!.trim()] = word ?? (glyph === 'blocked' ? 'failed' : glyph); // a row with no word (the band's worker table): the red square is the failed worker (a worker is never blocked there)
@@ -162,15 +162,15 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
   const text = rows.join('\n');
   const f: Facts = {};
   if (tab === 'route') {
-    const word = /phase\s+(\S+)/.exec(text)?.[1]; // the route names the phase by its word alone (critique 17 A5); its place on the rail is read back from the world's rail
+    const word = /phase\s+(?:[◐●○▲]\s+)?(\S+)/.exec(text)?.[1]; // the route names the phase by its word alone (critique 17 A5); its place on the rail is read back from the world's rail
     f.phase = word !== undefined && expected.rail.ids.includes(word) ? `${expected.rail.ids.indexOf(word) + 1}/${expected.rail.ids.length}` : undefined;
     f.todo = todoOf(/^ todo .*$/m.exec(text)?.[0] ?? ''); // the labels sit one cell in (the tab indent)
     f.gates = gatePairs(/^ gates .*$/m.exec(text)?.[0] ?? '');
     f.gatesGreen = /(\d+)(?: of |\/)(\d+) green\s*$/m.exec(/^ gates .*$/m.exec(text)?.[0] ?? '')?.slice(1, 3).join('/');
     f.agents = counts(/^ agents .*$/m.exec(text)?.[0] ?? '');
-    f.items = stateRows(rows, new RegExp(`^ {2}(${G}) (.+?)\\s{2,}(queued|running|done|failed|blocked|waiting)\\b`));
+    f.items = stateRows(rows, new RegExp(`^ {2}(${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`));
   }
-  if (tab === 'team') f.workers = stateRows(rows.filter((r: string) => !/^ {2}◉ lead\b/.test(r)), new RegExp(`^[▸ ] ?(${G}) (\\S+)\\s+(?:\\S+\\s+)?(queued|running|done|failed|blocked|waiting)\\b`));
+  if (tab === 'team') f.workers = stateRows(rows.filter((r: string) => !/^ {2}◉ lead\b/.test(r)), new RegExp(`^[▸ ] ?(${G}) (\\S+)\\s+(?:\\S+\\s+)?(queued|running|done|failed|killed|blocked|waiting)\\b`));
   if (tab === 'channel') { const m = /^ #\S+\s+(\d+) people(?: · (\d+) unread)?/m.exec(text); if (m) f.channel = { people: Number(m[1]), unread: Number(m[2] ?? 0) }; }
   if (tab === 'gates') {
     f.gates = gatePairs(text);

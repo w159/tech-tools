@@ -31,13 +31,13 @@ describe('5d: the band and the panel flip to blocked on the same update', () => 
     const band = textOf(bandTree(els, { snapshot: blocked, live: liveWorkers(blocked, blocked.now), gates: worldGates(), columns: 150, tick: 0, maxRows: 1, ui } as never));
     const panel = bodyLines(panelModelOf(worldSidebar('route', 100, blocked), ui, 100)).map(lineText).join('\n');
     expect(band).toMatch(/blocked/);
-    expect(panel).toMatch(/phase\s+blocked/);
+    expect(panel).toMatch(/phase\s+▲ blocked/);
   });
   test('the same snapshot without the refusal: the band says working and the panel does not say `phase blocked`', () => {
     const band = textOf(bandTree(els, { snapshot: working, live: liveWorkers(working, working.now), gates: worldGates(), columns: 150, tick: 0, maxRows: 1, ui } as never));
     const panel = bodyLines(panelModelOf(worldSidebar('route', 100, working), ui, 100)).map(lineText).join('\n');
     expect(band).toMatch(/working/);
-    expect(/phase\s+blocked/.test(panel)).toBe(false);
+    expect(/phase\s+▲ blocked/.test(panel)).toBe(false);
   });
   test('register.ts frameBeat reads the Stop verdict before it bumps the spinner tick (the redraw that carries the band)', () => {
     const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');

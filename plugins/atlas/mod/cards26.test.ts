@@ -14,27 +14,29 @@ describe('the board timeline is a Gantt', () => {
   ];
   const lines = boardTimeline(agents, { cols: 60, ui: mocha });
   const text = boardText(lines);
-  const bars = (t: string): { from: number; len: number } => ({ from: t.indexOf('━'), len: [...t].filter((c) => c === '━').length });
+  const FILL = /[█▏▎▍▌▋▊▉]/;
+  // Wave 30: solid bars (a full block, the end exact to an eighth of a cell), one row per agent, the axis is two rows (ticks, labels).
+  const bars = (t: string): { from: number; len: number } => ({ from: [...t].findIndex((c) => FILL.test(c)), len: [...t].filter((c) => FILL.test(c)).length });
   test('each bar starts at its agent start offset within the run', () => {
-    const [a, b, g] = [text[0]!, text[2]!, text[4]!].map(bars);
+    const [a, b, g] = [text[0]!, text[1]!, text[2]!].map(bars);
     expect(a!.from).toBeLessThan(g!.from);
     expect(g!.from).toBeLessThan(b!.from);
     expect(g!.len).toBeLessThan(a!.len);
   });
-  test('bars take the state colour: running 141, done 114, failed 203; the time axis closes the chart', () => {
-    const tone = (i: number) => lines[i]!.runs.find((r) => r.t.includes('━'))?.tone;
-    expect([tone(0), tone(2), tone(4)]).toEqual(['ok', 'accent', 'bad']);
-    expect(text.at(-1)).toMatch(/0:00 ─+ 0:20$/);
+  test('bars take the state colour: running 141, done 114, failed 203; the time axis closes the chart with tick marks and labels', () => {
+    const tone = (i: number) => lines[i]!.runs.find((r) => FILL.test(r.t))?.tone;
+    expect([tone(0), tone(1), tone(2)]).toEqual(['ok', 'accent', 'bad']);
+    expect(text.at(-2)).toMatch(/^ +┬[─┬]+$/);
+    expect(text.at(-1)).toMatch(/0:00 +0:05 +0:10 +0:15 +0:20$/);
   });
-  test('critique 25: the axis scales to the longest bar end: no bar runs past the hairline, and the hairline ends where the longest bar does', () => {
+  test('critique 25: the axis scales to the longest bar end: no bar runs past the axis rule, and the rule ends where the longest bar does', () => {
     for (const cols of [60, 80, 120]) {
       const t = boardText(boardTimeline(agents, { cols, ui: mocha }));
-      const axis = t.at(-1)!;
-      const barEnds = t.slice(0, -1).filter((l) => l.includes('━')).map((l) => l.lastIndexOf('━'));
-      const hairlineEnd = axis.lastIndexOf('─');
-      expect([cols, Math.max(...barEnds) <= hairlineEnd]).toEqual([cols, true]);
-      expect([cols, hairlineEnd - Math.max(...barEnds) <= 1]).toEqual([cols, true]); // the hairline stops at the longest bar's end (the label follows it)
-      expect(axis).toMatch(/0:00 ─+ 0:20$/);
+      const rule = t.at(-2)!;
+      const barEnds = t.slice(0, -2).map((l) => [...l].reduce((e, c, i) => (FILL.test(c) ? i : e), -1));
+      expect([cols, Math.max(...barEnds) <= rule.length - 1]).toEqual([cols, true]);
+      expect([cols, rule.length - 1 - Math.max(...barEnds) <= 1]).toEqual([cols, true]); // the rule stops at the longest bar's end
+      expect(t.at(-1)).toMatch(/0:00 .*0:20$/);
     }
   });
   test('a pane with no room for a name and a bar draws no chart', () => {

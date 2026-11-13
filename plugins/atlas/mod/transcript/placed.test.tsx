@@ -66,7 +66,7 @@ test('a failed worker places a failed card; an id is letters, digits, _ and -', 
   const prev = snap(0, [worker('weird name/1', 'running')])
   await placeFinished(engine(ids), prev, snap(5000, [worker('weird name/1', 'failed')]))
   expect(ids[0]).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
-  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('failed')
+  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('killed')
 })
 
 test('one card per finish: the host notification that follows a placed card draws empty, however often it redraws', async () => {
@@ -111,7 +111,7 @@ test('A2: a place the host refused is retried on the next build, so the failed c
   expect(ids).toEqual(['done-ghost-explorer-1'])
   await placeFinished(engine(ids), failed, snap(5500, [worker('ghost-explorer', 'failed')])) // nothing moved, the card is still owed
   expect(ids).toHaveLength(2)
-  expect(flat(placedTree(ids[1]!, uiFromEnv()))).toContain('■ failed')
+  expect(flat(placedTree(ids[1]!, uiFromEnv()))).toContain('■ killed')
   await placeFinished(engine(ids), failed, snap(6000, [worker('ghost-explorer', 'failed')]))
   expect(ids).toHaveLength(2) // placed once: nothing owed any more
 })
@@ -125,7 +125,7 @@ test('C4: a worker first listed as failed (the killed ghost dropped out of the h
   expect(finishedWorkers(before, after)).toEqual([{ name: 'ghost-explorer', role: 'explorer', failed: true, durationMs: 6000 }])
   await placeFinished(engine(ids), before, after)
   expect(ids).toEqual(['done-ghost-explorer-1'])
-  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('■ failed')
+  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('■ killed')
   await placeFinished(engine(ids), after, live(20_500, [worker('alpha-explorer', 'running'), worker('ghost-explorer', 'failed')], { 'alpha-explorer': act({ startedAt: 9000 }), 'ghost-explorer': act({ startedAt: 12_000, since: 18_000, mood: 'failed' }) }))
   expect(ids).toHaveLength(1) // placed once
   expect(finishedWorkers(before, live(20_000, [worker('alpha-explorer', 'running'), worker('gamma-explorer', 'finished')], { 'gamma-explorer': act({}) }))).toEqual([]) // a worker first listed done is still no finish
@@ -216,7 +216,7 @@ function stopped(): EngineInterface {
   } as unknown as EngineInterface
 }
 
-test('C2: the card placed for a worker the lead stopped reads killed with its run time; one nobody stopped still reads failed', async () => {
+test('C2: the card placed for a worker the lead stopped reads killed with its run time; one nobody stopped reads killed too (wave 30: one word)', async () => {
   const before = snap(21_000, [worker('ghost-explorer', 'running'), worker('beta-explorer', 'running')])
   const after = live(30_000, [worker('ghost-explorer', 'failed'), worker('beta-explorer', 'failed')], {
     'ghost-explorer': act({ startedAt: 21_000, since: 30_000, mood: 'failed' }), 'beta-explorer': act({ startedAt: 21_000, since: 30_000, mood: 'failed' }),
@@ -225,13 +225,13 @@ test('C2: the card placed for a worker the lead stopped reads killed with its ru
   const $ = stopped()
   await placeFinished({ ...($ as object), ui: { place: async ({ id }: { id: string }) => { ids.push(id); return { isPlaced: true, requestId: id } } } } as unknown as EngineInterface, before, after)
   const cards = ids.map((id) => flat(placedTree(id, uiFromEnv())))
-  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('■ killed   ghost-explorer · 0:09')
-  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('■ failed   beta-explorer · 0:09')
+  expect(cards.find((c) => c.includes('ghost-explorer'))).toContain('■ killed   ghost-explorer  0:09')
+  expect(cards.find((c) => c.includes('beta-explorer'))).toContain('■ killed   beta-explorer  0:09')
 })
 
 test('C3: the host row of a stopped task with no duration_ms carries the run the HUD prints, like a done card', async () => {
   const row = flat(await sites().UserMessage!(stopped(), stoppedNoDuration('k1'), next))
-  expect(row).toContain('■ killed   ghost-explorer · 0:09')
+  expect(row).toContain('■ killed   ghost-explorer  0:09')
 })
 const stoppedNoDuration = (requestId: string) => ({ surface: 'terminal', component: 'UserMessage', requestId, props: { text: 'Agent stopped', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', status: 'killed' } } })
 

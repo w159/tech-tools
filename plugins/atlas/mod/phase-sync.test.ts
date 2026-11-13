@@ -80,7 +80,8 @@ describe('A1: the HUD and the route tab draw the same mark and colour for the sa
       const s = surfaces({ ...snapOf(['in_progress', 'pending', 'in_progress']), now: NOW + dt }, ui, undefined);
       // The HUD row turns the shared clock's one-phase frame in its scorer-readable mark (hud-surface SCORER_READS_CIRCLES); the panel turns the spinner's own. Colour and word match.
       const [h, p] = [markOf(rowWith(s.hud, 'wire the gate'), 'running'), markOf(rowWith(s.panel, 'wire the gate'), 'running')];
-      expect([dt, h.slice(1)]).toEqual([dt, p.slice(1)]);
+      const spin = (x: string): string => x.slice(1).replace(/^\/(accent|run) /, '/spin '); // wave 30: the panel's spinner is the accent (141), the HUD's tone is another worker's; the frame and the word must still match
+      expect([dt, spin(h)]).toEqual([dt, spin(p)]);
       expect([dt, h[0]]).toEqual([dt, rowSpinnerGlyph(spinFrameOf(spinClock(NOW + dt, 0), ''))]);
     }
   });

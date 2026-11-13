@@ -191,7 +191,7 @@ export function failureNotes(i: { workers: readonly { name: string; state: strin
 	const rows: ChannelNote[] = [];
 	for (const w of i.workers) {
 		if (w.state !== 'failed' && w.state !== 'blocked') continue;
-		const text = w.state === 'failed' ? `worker killed${w.detail && w.detail !== 'failed' ? ` · ${w.detail}` : ''}` : `blocked${w.detail ? `: ${w.detail}` : ''}`;
+		const text = w.state === 'failed' ? `killed${w.detail && w.detail !== 'failed' ? ` · ${w.detail}` : ''}` : `blocked${w.detail ? `: ${w.detail}` : ''}`;
 		rows.push({ ts: w.endedMs !== undefined ? isoTs(w.endedMs) : '', seq: 0, owner: w.name, to: 'lead', text, channel, kind: 'blocked' });
 	}
 	if (i.stop?.blocked) {
@@ -222,4 +222,17 @@ export function noteRefusal(stop: { blocked: boolean; gates: readonly string[] }
 /** The refusals this session saw, oldest first, as channel rows from the stop gate. */
 export const refusalNotes = (channel = ''): ChannelNote[] => refusals.filter((x) => x.channel === channel).map((x) => ({ ts: x.ts, seq: 0, owner: 'stop gate', to: 'lead', text: x.text, channel, kind: 'blocked' }));
 
-export const forgetRefusals = (): void => { refusals.length = 0; refusedBefore.clear(); };
+export const forgetRefusals = (): void => { refusals.length = 0; refusedBefore.clear(); seen.clear(); };
+
+/** Wave 30: a row the store gave no time (a closure, a note written without `ts`) is stamped once, with the snapshot clock of the first build that saw it, and keeps that stamp.
+ * It used to take the time of the row before it (or the clock of every redraw), so a kill, a refusal and a closure read as one instant (stoprun-150-a7bc7b0d-3: `23:41` on every row). */
+const seen = new Map<string, number>();
+const SEEN_MAX = 200;
+export function firstSeen(channel: string, key: string, nowMs: number): number {
+	const k = `${channel}\u0000${key}`;
+	const held = seen.get(k);
+	if (held !== undefined) return held;
+	seen.set(k, nowMs);
+	if (seen.size > SEEN_MAX) seen.delete(seen.keys().next().value as string);
+	return nowMs;
+}

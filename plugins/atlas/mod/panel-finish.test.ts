@@ -62,7 +62,7 @@ describe('3: one count format, `n/m`, inside the panel (critique 12 B3)', () => 
     });
   }
   test('the phase row is the phase word alone, never an `n/m` beside it (critique 17 A5: it shared the todo format and went stale beside the chip)', () => {
-    expect(body('route', 80).find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}[a-z]+$/);
+    expect(body('route', 80).find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}[◐●○▲] [a-z]+$/);
   });
 });
 

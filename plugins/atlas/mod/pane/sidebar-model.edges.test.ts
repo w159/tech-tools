@@ -93,11 +93,11 @@ describe('todos from the board groups', () => {
   test('a waiting owner blocks the item and the detail says why', () => {
     expect(t('b')).toMatchObject({ state: 'blocked', detail: 'blocked: waiting for lead reply', owner: 'bl' });
   });
-  test('a running owner or no owner carries no detail; a finished item whose worker failed reads `closed` red with `worker killed` (critique 17 A1)', () => {
+  test('a running owner or no owner carries no detail; a finished item whose worker failed reads `closed` red and carries no detail: the pane draws `killed` once (critique 17 A1, wave 30)', () => {
     expect(t('c').detail).toBeUndefined();
     expect(t('c').state).not.toBe('failed');
     expect(t('d')).toMatchObject({ detail: undefined, owner: undefined });
-    expect(t('e')).toMatchObject({ state: 'done', word: 'closed', detail: 'worker killed' });
+    expect(t('e')).toMatchObject({ state: 'done', word: 'closed', detail: undefined });
   });
   test('evidence passes through, and an item without evidence reads null', () => {
     expect(t('e').evidence).toBe('tests green');

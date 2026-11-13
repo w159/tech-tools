@@ -7,7 +7,13 @@
 - HUD SUBAGENTS: every running agent keeps its row at 110 columns; the plan folds first (column names, then finished rows, then plan rows onto the title as `+N more`, then the plan box), and `+N more` on the SUBAGENTS title only counts a row that is really hidden.
 - Blocked: the `classic.Stop` hook writes the refusal into the gate groups in the same update as the host's Stop error, and a blocked band draws a static `▲` with no spinner (`blocked`, `retrying`, `fixing` are plain words).
 - Band: `▲ n blocked` no longer sits in a working band (the glyph means the band is blocked); `ctx N%` is printed once, not again after a run whose turn footer already says it.
-- One word per failure: a killed worker reads `■ killed` in TODO, SUBAGENTS and the band count (the board keeps `closed`).
+- One word per failure: a killed worker reads `■ killed` in TODO, SUBAGENTS and the band count (the board, panel and cards say it too, see below).
+- Board: the timeline is a chart. Solid `█` bars (end exact to an eighth of a cell) in the state colour, an axis with `┬` ticks and time labels in the 236 rule grey, a sparkline of each agent's tool calls under its bar, a running bar that grows with the clock and a pulsing leading edge, and a totals line (`● 2 done  ■ 1 killed · total 0:20 · 9 tool calls`) plus the last posts, so the pane has no blank half (`mod/board-model.ts`, `mod/panel-layout.ts`).
+- Team tab: every seat has glyph, role, state word, elapsed time (the lead too) and a 12-cell activity sparkline, then a `workers` line, a `total` line and the `recent` posts (`mod/pane/activity.ts`, `mod/panel-layout.ts`, `mod/pane/sidebar-model.ts`).
+- Channel tab: each post shows its own time to the second and a dim relative age; a row the store gave no time keeps the clock of the first build that saw it instead of the row before it (`firstSeen` in `mod/data/channels.ts`); the generated `#lc-...` slug is no longer drawn.
+- Side panel: task titles keep the width the owner column no longer takes, the phase word wears its state glyph (`◐ working`, `● done`, `○ idle`, `▲ blocked`), panel spinners are the accent on the band's frame, the divider is 236.
+- Finish cards: a small framed block (half-block frame in 236/240, the `▌ ◆ ATLAS  ● done  name  role finished` title line, one content line only when there is a result), coloured by its true state; a `done 4/5` lead chip is a progress note in the accent, and a bare count prints no row (`mod/transcript/cards.tsx`, `mod/transcript/leadheader.ts`).
+- One word per failure: `■ killed` in error 203 on the board, route, team and channel tabs and the finish cards; `closed`, `worker killed` and `failed` are gone from those surfaces.
 
 ## 17.14.0 - 2026-11-12
 

@@ -116,16 +116,18 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
     expect(t2).toContain('killed');
     expect(cells(t2)).toBeLessThanOrEqual(61);
   });
-  test('board row: 120 cells says `worker killed` in the detail column, 60 cells spells `closed · worker killed` in the state cell', () => {
+  test('board row (wave 30, one word): a killed worker row reads `killed` once, at 120 and at 60 cells, with no `closed` and no `worker killed`', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const at = (cols: number): string => boardText(boardLines(boardRowsOf(src), { cols, ui, ribbon: false, title: false })).join('\n');
-    expect(at(120)).toMatch(/closed\s+ghost-explorer\s+worker killed/);
-    expect(at(60)).toContain('closed · worker killed');
+    expect(at(120)).toMatch(/killed\s+ghost-explorer\s*$/m);
+    expect(at(120)).not.toMatch(/closed|worker killed/);
+    expect(at(60)).toContain('killed');
+    expect(at(60)).not.toMatch(/closed|worker killed/);
   });
-  test('board row at 37 cells keeps `done` in the state cell and says `worker killed` on the sub-line under the row', () => {
+  test('board row at 37 cells keeps `killed` in the state cell and the owner on the sub-line under the row', () => {
     const src: BoardSource[] = [{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }];
     const text = boardText(boardLines(boardRowsOf(src), { cols: 37, ui, ribbon: false, title: false }));
-    expect(text.join('\n')).toMatch(/T2 read ghost\.py[^\n]*\n\s+ghost-explorer\s+worker killed/); // critique 19 C1: on the sub-line under its own row
+    expect(text.join('\n')).toMatch(/T2 read ghost\.py[^\n]* killed\n\s+ghost-explorer\s*$/m); // critique 19 C1: on the sub-line under its own row
     for (const r of text) expect(cells(r)).toBeLessThanOrEqual(37);
   });
 });

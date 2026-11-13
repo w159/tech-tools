@@ -5,10 +5,10 @@
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, spinClock, uiFromEnv, type Ui } from '../atlas-ui';
-import { centred, HOTKEY_W, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
+import { centred, HOTKEY_W, recentRows, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardTimeline } from '../board-model';
+import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, boardTotals, type BoardLine } from '../board-model';
 import { gateTally } from '../data/runstate';
 import { noteStopVerdict } from '../transcript/superseded';
 import { panelModelOf } from './sidebar-model';
@@ -73,11 +73,37 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const lines = items.length
     ? boardLines(boardRowsOf(items, Math.floor(s.now / 1000)), { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, dispatches: items.filter((i) => i.origin === 'dispatch').length, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
     : centred(pm, 'nothing on the board yet');
-  // Under the rows, what fills the pane: one timeline row per agent (`alpha-explorer ━━━━━━━━ 14s ●`), as many as the spare height holds.
-  const spare = max - lines.length - 2;
-  const timeline = items.length && spare >= 2 ? boardTimeline(pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs, startMs: w.startMs, endMs: w.endMs })), { cols, ui, tick: m.tick ?? 0, motion: m.motion, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }) }, spare - 1) : [];
-  const body = timeline.length ? [...lines, { runs: [{ t: ' ', tone: 'text' as const }] }, ...timeline] : lines;
-  const shown = body.length <= max ? body : [...body.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${body.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
+  // Wave 30 (critique 28): under the rows the pane is a chart, not a blank half. Sections, richest first, as many as the height holds: the timeline (a solid bar per agent, its activity row, the axis), the totals line, then the
+  // last posts of the channel; what is left over is spread as one blank row between sections, and a dim hint closes the pane, so no run of blank rows is longer than three.
+  const blankRow = { runs: [{ t: ' ', tone: 'text' as const }] };
+  const agents = pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs, startMs: w.startMs, endMs: w.endMs, calls: w.calls }));
+  const clock = s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) };
+  const topts = { cols, ui, tick: m.tick ?? 0, motion: m.motion, ...clock };
+  const room = max - lines.length;
+  const levels = [{ spark: true, spacers: true }, { spark: true, spacers: false }, { spark: false, spacers: true }, { spark: false, spacers: false }];
+  let chart: BoardLine[] = [];
+  let totals: BoardLine[] = [];
+  if (items.length && room >= 5) {
+    totals = boardTotals(agents, topts);
+    for (const lv of levels) {
+      const t = boardTimeline(agents, { ...topts, ...lv }, room - 2 - totals.length);
+      if (t.length && 1 + t.length + 1 + totals.length <= room) { chart = t; break; }
+      if (!chart.length && t.length && lv === levels[levels.length - 1]) chart = t;
+    }
+  }
+  const sections = [lines, chart, totals].filter((x) => x.length);
+  const used = sections.reduce((n, x) => n + x.length, 0) + Math.max(0, sections.length - 1);
+  const recent = items.length && sections.length > 1 ? recentRows(pm, max - used - 1) : [];
+  const withRecent = recent.length ? [...sections, recent.slice(1)] : sections; // recentRows opens with its own blank: the join below puts it back
+  const rows = withRecent.reduce((n, x) => n + x.length, 0) + Math.max(0, withRecent.length - 1);
+  const rem = Math.max(0, max - rows);
+  const gaps = Math.max(0, withRecent.length - 1);
+  const extra = gaps ? Math.max(0, Math.min(1, Math.floor((rem - 2) / gaps))) : 0; // a second blank row between sections only when the pane has them to spare
+  const left = rem - extra * gaps;
+  const body = withRecent.flatMap((x, i) => (i ? [...Array.from({ length: 1 + extra }, () => blankRow), ...x] : x));
+  const hint: BoardLine[] = left >= 2 && items.length ? [...Array.from({ length: Math.min(3, left - 1) }, () => blankRow), { runs: [{ t: '  o closes the board', tone: 'muted' as const }] }] : [];
+  const filled = [...body, ...hint];
+  const shown = filled.length <= max ? filled : [...filled.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${filled.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: shown.map((l) => lineEl(els, { runs: l.runs }, m, on, ui)) });
 }
 
