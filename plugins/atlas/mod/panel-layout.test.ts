@@ -42,21 +42,21 @@ describe('side panel design goldens', () => {
 });
 
 describe('tab strip', () => {
-  test('lists route team channel gates core board by name; the lit tab is ruled and bold', () => {
+  test('lists status team channel gates core board by name; the lit tab is ruled and bold', () => {
     for (const t of tabs) {
       const [strip, rule] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
-      expect(lineText(strip!).trim()).toBe('route  team  channel  gates  core  board');
+      expect(lineText(strip!).trim()).toBe('status  team  channel  gates  core  board');
       const lit = strip!.runs.find((x) => x.bold)!;
-      expect(lit.t).toBe(t);
-      expect(lineText(rule!).trim()).toBe('━'.repeat(t.length));
-      expect(lineText(rule!).indexOf('━')).toBe(lineText(strip!).indexOf(t));
+      expect(lit.t).toBe(t === 'route' ? 'status' : t);
+      expect(lineText(rule!).trim()).toBe('━'.repeat((t === 'route' ? 'status' : t).length));
+      expect(lineText(rule!).indexOf('━')).toBe(lineText(strip!).indexOf(t === 'route' ? 'status' : t));
     }
   });
   test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (it wraps)', () => {
     for (let cols = 29; cols <= 140; cols++) {
-      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => /^ (route|team|channel|gates|core|board)/.test(l));
+      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => /^ (status|team|channel|gates|core|board)/.test(l));
       for (const l of rowsOut) expect(cells(l)).toBeLessThanOrEqual(cols);
-      expect(rowsOut.join(' ').split(/\s+/).filter(Boolean).join(' ')).toBe('route team channel gates core board'); // C1: names only, in order, wrapped whole when the pane is narrower than the row
+      expect(rowsOut.join(' ').split(/\s+/).filter(Boolean).join(' ')).toBe('status team channel gates core board'); // C1: names only, in order, wrapped whole when the pane is narrower than the row
     }
   });
 });

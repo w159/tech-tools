@@ -52,12 +52,12 @@ describe('sidebar shell', () => {
     const tabs = TABS.map((v) => tab(t, v).props);
     expect(layerKeys(t)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
     expect(tabs.map((b) => b.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined]);
-    expect(tabs.map((b) => b.label)).toEqual(['route', 'team', 'channel', 'gates', 'core']);
+    expect(tabs.map((b) => b.label)).toEqual(['status', 'team', 'channel', 'gates', 'core']);
     expect(tabs.every((b) => b.plain === true)).toBe(true);
   });
 
   test('the board key o is always in the strip (the same six tabs as omp); it presses only when the board is wired', () => {
-    expect(strip(tree()).map((b) => b.props.label)).toEqual(['route', 'team', 'channel', 'gates', 'core', 'board']);
+    expect(strip(tree()).map((b) => b.props.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
     expect(layerKeys(tree())).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
     expect(() => tab(tree(), 'todos').props.onPress()).not.toThrow(); // unwired: a no-op
     expect(calls).not.toContain('board');
@@ -98,7 +98,7 @@ describe('sidebar shell', () => {
     const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
     expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs']); // one strip row, never `tabs:1`
     const visible = rowsOf.flatMap((r) => kids(r).filter((c) => c.kind === 'Button'));
-    expect(visible.map((b) => b.props.label)).toEqual(['route', 'team', 'channel', 'gates', 'core', 'board']);
+    expect(visible.map((b) => b.props.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
     expect(visible.map((b) => b.props.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]); // the host draws no `k: ` for a Button without a hotkey
     const layer = rowsOf.flatMap((r) => kids(r).filter(KEYS_W0));
     expect(layer).toHaveLength(1);

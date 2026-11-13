@@ -39,7 +39,7 @@ export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
 export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void };
 /** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
-export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = STRIP_TABS.map((b) => (b.id === 'route' ? { ...b, label: 'status' } : b)); // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
+export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
 /** How to give the band the keyboard; shown after the keys when it fits. */
 export const BAND_HINT = 'ctrl+x tab';
 const buttonWidth = (b: { label: string }): number => 3 + textWidth(b.label) + 2; // engine draws `k: label`, two cells between buttons

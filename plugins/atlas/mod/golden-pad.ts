@@ -3,7 +3,7 @@
 // that compare against it pad the strip row (the row of the six names) and the rule row under it by the same cells.
 import { STRIP_PAD } from './panel-layout';
 
-const STRIP = /^route {2}team {2}channel/;
+const STRIP = /^status {2}team {2}channel/;
 /** Rows with the strip row and the rule row under it moved right by STRIP_PAD cells. */
 export function padStrip(rows: readonly string[]): string[] {
   const pad = ' '.repeat(STRIP_PAD);

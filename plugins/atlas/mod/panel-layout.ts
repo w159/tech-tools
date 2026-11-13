@@ -20,7 +20,7 @@ import { ageWord, KILLED, sparkBraille, sparkOf, sparkOver, totalsOf, wordOf } f
 export type PanelTab = 'route' | 'team' | 'channel' | 'gates' | 'core';
 /** Tabs in strip order. Hotkeys: r t c g k (the board toggle `o` belongs to the band). */
 export const PANEL_TABS: readonly { id: PanelTab; key: string; label: string }[] = [
-  { id: 'route', key: 'r', label: 'route' }, { id: 'team', key: 't', label: 'team' }, { id: 'channel', key: 'c', label: 'channel' },
+  { id: 'route', key: 'r', label: 'status' }, { id: 'team', key: 't', label: 'team' }, { id: 'channel', key: 'c', label: 'channel' },
   { id: 'gates', key: 'g', label: 'gates' }, { id: 'core', key: 'k', label: 'core' },
 ];
 
@@ -56,7 +56,7 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
   return rows;
 }
 
-/** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding (design rev 5, C1): the names alone, two spaces between, on one row down to 35 cells (one space
+/** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding (design rev 5, C1): the names alone, two spaces between, on one row down to 36 cells (one space
  * between below that), else the whole names wrapped. The key letters are never drawn in the strip: they stay bound (mod/pane/sidebar.tsx's zero-width layer), the band footer names
  * them and a dim line at the pane foot repeats them where there is room. The form depends on the width only, never on the lit tab. `bare` is therefore always true. */
 export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number; /** Always true: the `k: ` prefix is never drawn. */ bare: boolean } {

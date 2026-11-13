@@ -98,7 +98,7 @@ describe('2. the tab strip fits the pane and the rule sits under the lit tab', (
         if (!bare) expect(strip.slice(at - 3, at)).toBe(`${entry.key}: `);
         else expect(rows.filter((r) => r !== rule)).toHaveLength(1);
         expect(strip.slice(at + lit.length, at + lit.length + 1)).toMatch(/^ ?$/); // a gap, or the end of the row
-        expect(['route', 'team', 'channel', 'gates', 'core']).toContain(lit);
+        expect(['status', 'team', 'channel', 'gates', 'core']).toContain(lit);
         if (cols >= 55) expect(lit).toBe(entry.label);
       });
     }

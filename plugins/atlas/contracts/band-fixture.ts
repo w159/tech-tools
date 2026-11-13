@@ -7,7 +7,7 @@
 // `checks` footer. Idle: the band reads `idle`, a `last run` row (failures kept), the core row (contracts/core-golden.ts), the footer.
 //
 // Excluded from the compared rows (shown in one harness only, see each test):
-//   - Claude key buttons (`r: route ...`): drawn only while idle and only when handlers are passed; the test passes none.
+//   - Claude key buttons (`r: status ...`): drawn only while idle and only when handlers are passed; the test passes none.
 //   - The board slot (the expanded todo list): both fixtures keep it folded.
 
 /** Colour stripped, trailing spaces trimmed: what both golden tests compare. */

@@ -7,7 +7,7 @@
 //
 // DEVIATIONS FROM THE MOCKS (critique-5 panel finish: `n of m` replaces the bare `2/4` and `2/3` of the phase and gates rows; the route tab
 // lists agents before the todo section; tabGolden was rewritten from the layout's rows for the new design: core headings, indent, whole tab words; critique-3 changes 9 and 10, round 3 panel polish; the mocks were not regenerated): the side panel strip is
-// `r: route  t: team  c: channel  g: gates  k: core  o: board` on both hosts (the mock strip has no keys and no board); the card title leads
+// `r: status  t: team  c: channel  g: gates  k: core  o: board` on both hosts (the mock strip has no keys and no board); the card title leads
 // with the ATLAS mark `◆`, the two gauges are one width and a blank row separates them; the toast leads with the left bar and `◆ ATLAS`.
 // Those lines of sidepanelDesign, cardDesign and toastDesign are written by hand from that decision, everything else in them is the mock's.
 //
@@ -28,16 +28,16 @@ export const sidepanelDesign: Record<number, string[]> = {
  "80": [
   "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────",
   "",
-  "route  team  channel  gates  core  board",
-  "━━━━━",
+  "status  team  channel  gates  core  board",
+  "━━━━━━",
   " phase  ◐ research",
   " gates  ● lint   ● test   △ doctor   2/3 green",
  ],
  "120": [
   "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────────────────────────",
   "",
-  "route  team  channel  gates  core  board",
-  "━━━━━",
+  "status  team  channel  gates  core  board",
+  "━━━━━━",
   "",
   " phase  ◐ research",
   " gates  ● lint   ● test   △ doctor   2/3 green",
@@ -86,8 +86,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────────────────────────",
       "",
-      "route  team  channel  gates  core  board",
-      "━━━━━",
+      "status  team  channel  gates  core  board",
+      "━━━━━━",
       "",
       " phase  ◐ research",
       " gates  ● lint   ● test   △ doctor   2/3 green",
@@ -110,8 +110,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────",
       "",
-      "route  team  channel  gates  core  board",
-      "━━━━━",
+      "status  team  channel  gates  core  board",
+      "━━━━━━",
       " phase  ◐ research",
       " gates  ● lint   ● test   △ doctor   2/3 green",
       " agents ◇ 1 queued  ⠋ 1 running  ● 2 done  ■ 1 failed",
@@ -133,8 +133,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────",
       "",
-      "route  team  channel  gates  core  board",
-      "━━━━━",
+      "status  team  channel  gates  core  board",
+      "━━━━━━",
       " phase  ◐ research",
       " gates  ● lint   ● test   △ doctor   2/3 green",
       " agents ◇ 1 queued  ⠋ 1 running  ● 2 done  ■ 1 failed",
@@ -158,8 +158,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────── 1 queued · 1 running · 2 done · 1 failed",
       "",
-      "route  team  channel  gates  core  board",
-      "       ━━━━",
+      "status  team  channel  gates  core  board",
+      "        ━━━━",
       "",
       "  ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  9 of 9 steps",
       "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  golden tests written",
@@ -175,8 +175,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── 1 queued · 1 running · 2 done · 1 failed",
       "",
-      "route  team  channel  gates  core  board",
-      "       ━━━━",
+      "status  team  channel  gates  core  board",
+      "        ━━━━",
       "  ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
@@ -191,8 +191,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────",
       "",
-      "route  team  channel  gates  core  board",
-      "       ━━━━",
+      "status  team  channel  gates  core  board",
+      "        ━━━━",
       "  ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "  ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▸ ⠋ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
@@ -209,8 +209,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────── #atlas-board-mod",
       "",
-      "route  team  channel  gates  core  board",
-      "             ━━━━━━━",
+      "status  team  channel  gates  core  board",
+      "              ━━━━━━━",
       "",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                        ▸ implementer-band take T4, then run the gate tests                                10:02",
@@ -220,8 +220,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────── #atlas-board-mod",
       "",
-      "route  team  channel  gates  core  board",
-      "             ━━━━━━━",
+      "status  team  channel  gates  core  board",
+      "              ━━━━━━━",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                                                   10:02",
       "    ▸ implementer-band take T4, then run the gate tests",
@@ -232,8 +232,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── #atlas-board-mod",
       "",
-      "route  team  channel  gates  core  board",
-      "             ━━━━━━━",
+      "status  team  channel  gates  core  board",
+      "              ━━━━━━━",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                           10:02",
       "    ▸ implementer-band take T4, then run the gate",
@@ -248,8 +248,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ────────────────────────────────────────────────────────────────────────────────────────── 2/3",
       "",
-      "route  team  channel  gates  core  board",
-      "                      ━━━━━",
+      "status  team  channel  gates  core  board",
+      "                       ━━━━━",
       "",
       "  ● lint    passing                                                                                                  1/1",
       "    ● lint",
@@ -261,8 +261,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ────────────────────────────────────────────────── 2/3",
       "",
-      "route  team  channel  gates  core  board",
-      "                      ━━━━━",
+      "status  team  channel  gates  core  board",
+      "                       ━━━━━",
       "  ● lint    passing                                                          1/1",
       "    ● lint",
       "  ● test    passing                                                          1/1",
@@ -273,8 +273,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ────────────────────────── 2/3",
       "",
-      "route  team  channel  gates  core  board",
-      "                      ━━━━━",
+      "status  team  channel  gates  core  board",
+      "                       ━━━━━",
       "  ● lint    passing                                  1/1",
       "    ● lint",
       "  ● test    passing                                  1/1",
@@ -287,8 +287,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     120: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────────────────────────",
       "",
-      "route  team  channel  gates  core  board",
-      "                             ━━━━",
+      "status  team  channel  gates  core  board",
+      "                              ━━━━",
       "",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
@@ -315,8 +315,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     80: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────",
       "",
-      "route  team  channel  gates  core  board",
-      "                             ━━━━",
+      "status  team  channel  gates  core  board",
+      "                              ━━━━",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",
@@ -343,8 +343,8 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
     56: [
       "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────",
       "",
-      "route  team  channel  gates  core  board",
-      "                             ━━━━",
+      "status  team  channel  gates  core  board",
+      "                              ━━━━",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",

@@ -156,7 +156,7 @@ describe('B5: route rows do not wrap at 110, and one strip form serves every tab
     for (const cols of [37, 44, 47, 52, 60, 80, 120]) {
       const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => JSON.stringify(stripLayout(cols, t)));
       expect([cols, new Set(forms).size]).toEqual([cols, 1]);
-      expect([cols, tabRows(panelWorld('route', cols, ui)).map(lineText).join('\n')]).toEqual([cols, expect.stringMatching(/^ route {1,2}team {1,2}channel {1,2}gates {1,2}core {1,2}board$/m)]);
+      expect([cols, tabRows(panelWorld('route', cols, ui)).map(lineText).join('\n')]).toEqual([cols, expect.stringMatching(/^ status {1,2}team {1,2}channel {1,2}gates {1,2}core {1,2}board$/m)]);
     }
   });
 });

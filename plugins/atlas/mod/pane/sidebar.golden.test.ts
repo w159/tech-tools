@@ -19,12 +19,12 @@ describe('sidebar golden text', () => {
       expect(r[0]).toContain('ATLAS');
       expect(r[0]).toContain('SIDEPANEL');
       expect(r[1]!.trim()).toBe('');
-      expect(r[2]).toBe(' route  team  channel  gates  core  board');
+      expect(r[2]).toBe(' status  team  channel  gates  core  board');
     }
   });
   test('the lit tab is ruled by a heavy line under its label only', () => {
-    expect(rows('route')[3]!.trimEnd()).toBe(' ━━━━━');
-    expect(rows('team')[3]!.trimEnd()).toBe('        ━━━━');
+    expect(rows('route')[3]!.trimEnd()).toBe(' ━━━━━━');
+    expect(rows('team')[3]!.trimEnd()).toBe('         ━━━━');
   });
   test('route: phase, gates, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
@@ -49,8 +49,8 @@ describe('sidebar golden text', () => {
   });
   test('team at 38 columns (the 110-column pane) draws the six whole words on one row (critique 18; one form on every tab), and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]!.trimEnd()).toBe(' route team channel gates core board');
-    expect(r[3]!.trimEnd()).toBe('       ━━━━'); // the rule under the lit team tab
+    expect(r[2]!.trimEnd()).toBe(' status team channel gates core board');
+    expect(r[3]!.trimEnd()).toBe('        ━━━━'); // the rule under the lit team tab
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
   });

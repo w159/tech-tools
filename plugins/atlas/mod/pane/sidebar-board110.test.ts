@@ -1,4 +1,4 @@
-// Live defect (round2 live-110 at e4a8186a, board 0.0): the board view in the 110-column pane drew the bare tab strip (`route team channel ...`)
+// Live defect (round2 live-110 at e4a8186a, board 0.0): the board view in the 110-column pane drew the bare tab strip (`status team channel ...`)
 // under a `▸ BOARD` ribbon, so nothing in the pane named a hotkey or the SIDEPANEL and the capture could not tell the pane from a toast box.
 // The board view keeps the keys on screen (`r: route`) at a narrow pane too: the strip wraps onto a second row, as it does where the words do not fit one.
 import { describe, expect, test } from 'claude-code/testing';
@@ -25,12 +25,12 @@ const rows = (view: SidebarView, columns: number): string[] =>
   } as SidebarModel, on) as unknown as Node).map(textOf);
 
 describe('the board view in a narrow pane draws the one-row word strip (critique 18)', () => {
-  for (const columns of [38, 37, 43]) {
+  for (const columns of [38, 39, 43]) {
     test(`pane ${columns}: the six words are one row, the ▸ BOARD ribbon names the pane, the rule sits under board, no row is wider than the pane`, () => {
       const r = rows('board', columns).join('\n').split('\n');
       expect(r[0]).toContain('▸ BOARD');
       expect(r[0]).toContain('▸ SIDEPANEL'); // the scorer's pane marker (live_capture.py: `r: route` or `▸ SIDEPANEL`)
-      expect(r[2]!.trim().replace(/ +/g, ' ')).toBe('route team channel gates core board');
+      expect(r[2]!.trim().replace(/ +/g, ' ')).toBe('status team channel gates core board');
       const rule = r.findIndex((l, i) => i > 1 && /^ *━+ *$/.test(l));
       expect(rule).toBe(3); // the strip is not wrapped: the rule follows the one strip row
       expect(r[2]!.indexOf('board')).toBe(r[rule]!.indexOf('━'));
@@ -39,7 +39,7 @@ describe('the board view in a narrow pane draws the one-row word strip (critique
   }
   test('every view draws the same strip row at 38 columns (critique 17 B5: one form on every tab)', () => {
     const first = (v: SidebarView): string => rows(v, 38)[2]!.trimEnd();
-    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ' route team channel gates core board']);
+    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ' status team channel gates core board']);
   });
 });
 

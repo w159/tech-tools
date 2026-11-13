@@ -65,8 +65,8 @@ function boardItems(m: SidebarModel) {
   return withOwnerStates(rows, states);
 }
 
-/** The board view's ribbon words. Where the strip is the bare one-row form (no `r: route` keys on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
- * tells the pane from a toast box by `r: route` or `▸ SIDEPANEL` and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
+/** The board view's ribbon words. Where the strip is the bare one-row form (no `r: status` keys on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
+ * tells the pane from a toast box by `r: status` or `▸ SIDEPANEL` and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
 export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { title: string; right: string } {
   // The count is said once, by the summary row in the body (`5 items · 3 dispatches`), not again in the ribbon (critique 22: `5 items` twice).
   const b = { title: 'BOARD', right: '' };

@@ -22,16 +22,16 @@ const calls: string[] = [];
 const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView: (v) => calls.push(`view:${v}`), toggleTodos: () => calls.push('board') };
 const pane = (columns: number, rows = 60, view: 'route' | 'team' | 'channel' | 'gates' = 'team'): Node =>
   sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows }, side) as unknown as Node;
-const hintNodes = (t: Node): Node[] => all(t).filter((x) => x.kind === 'Text' && typeof x.props.children === 'string' && /^r: route/.test(x.props.children.trim()));
+const hintNodes = (t: Node): Node[] => all(t).filter((x) => x.kind === 'Text' && typeof x.props.children === 'string' && /^r: status/.test(x.props.children.trim()));
 
 describe('c: the key hint is drawn once, at the foot of the side panel', () => {
-  test('one dim 240 row of `r: route  t: team ...`, no longer than the pane', () => {
+  test('one dim 240 row of `r: status  t: team ...`, no longer than the pane', () => {
     const t = pane(130);
     const rows = hintNodes(t);
     expect(rows).toHaveLength(1);
     const text = String(rows[0]!.props.children).trim();
     expect(KEY_HINT.startsWith(text)).toBe(true);
-    expect(KEY_HINT.startsWith('r: route  t: team  c: channel  g: gates  k: core  o: board  ctrl+x tab')).toBe(true);
+    expect(KEY_HINT.startsWith('r: status  t: team  c: channel  g: gates  k: core  o: board  ctrl+x tab')).toBe(true);
     expect(rows[0]!.props.color).toBe('#585858');
     expect([...String(rows[0]!.props.children)].length).toBeLessThanOrEqual(129);
   });
