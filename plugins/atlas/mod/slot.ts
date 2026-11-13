@@ -77,8 +77,9 @@ function composeFixed(i: SlotInput): SlotPlan {
 	const reserve = BAND_KEEP_ROWS + hudHoldRows(hudIn, columns, i.now, true);
 	// Wave 37 (110 columns: `1/5 · +3 more` with two rows drawn and blank rows under them): the HUD may use every row of the budget the band leaves, not only the rows the run has held so far, so a plan that fits is never folded.
 	const hudCap = Math.max(0, budget - BAND_KEEP_ROWS); // the band keeps its row; the HUD takes every other row it can use
-	const idle = bandKindOf(i.bandIn([], 1)) === 'idle';
-	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true, settled: true, ...(idle ? { idle: true } : {}) }) as Segment[][];
+	const kind = bandKindOf(i.bandIn([], 1));
+	const idle = kind === 'idle';
+	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true, settled: true, ...(idle ? { idle: true } : {}), ...(kind === 'working' ? { working: true } : {}) }) as Segment[][];
 	const band = i.bandIn(hud, 1);
 	// Wave 32: the slot is `budget` rows tall and the band is its FIRST row. The host's budget is half the screen less the rows below the slot (the prompt and its own agent list), so the slot's top is one screen row for the
 	// whole run; the rows the block does not use are empty rows UNDER it. (Empty rows above the band put the band at `screen - below - total`, which moves by the size of the host's list every time it comes or goes: the 27/24/25/24/27 of critique 32.)

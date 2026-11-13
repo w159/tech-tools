@@ -108,12 +108,14 @@ describe('4. SUBAGENTS cells', () => {
     }
   });
   test('at 110 columns AGENT is cut to 12 before LAST drops below 14 cells', () => {
-    const rows = text(hudLines(running3, view(61, 30, { merge: true })));
-    const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
-    expect(head.indexOf('STATE') - head.indexOf('AGENT')).toBe(12 + 2);
-    expect(head.length - head.indexOf('LAST')).toBeGreaterThanOrEqual(0);
-    const width = 61 - 1 - head.indexOf('LAST');
-    expect(width).toBeGreaterThanOrEqual(14);
+    // State 40: under 80 cells the numeric columns take their header's width and the gaps one cell, so at 56 cells AGENT is 12 and LAST keeps 14; at 61 AGENT keeps its 14 cells (a whole `alpha-explorer`) and LAST has 17.
+    for (const [cols, agentW] of [[56, 12], [61, 14]] as const) {
+      const rows = text(hudLines(running3, view(cols, 30, { merge: true })));
+      const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
+      expect([cols, head.indexOf('STATE') - head.indexOf('AGENT')]).toEqual([cols, agentW + 1]);
+      const width = cols - 1 - head.indexOf('LAST');
+      expect(width).toBeGreaterThanOrEqual(14);
+    }
   });
   test('the 110 SUBAGENTS title keeps its tally, not a bare spinner', () => {
     const input: HudInput = { todos: [item(1, 'completed', 'T1 a', 'a-explorer'), item(2, 'in_progress', 'T2 b', 'b-explorer'), item(3, 'blocked', 'T3 c', 'c-explorer')], agents: [agent('a-explorer', 'done', 'done'), agent('b-explorer', 'working', 'running'), agent('c-explorer', 'failed', 'failed')] };
