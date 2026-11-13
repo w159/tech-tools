@@ -184,7 +184,7 @@ describe('step 6: the 110 board (critique 36: beta\'s bar missing, axis 0:30 und
   test('every agent has a bar', () => {
     for (const rows of [41, 30, 24]) {
       const t = board(38, rows);
-      for (const name of ['lead', 'alpha-explorer', 'ghost-explorer', 'beta-explorer']) expect([rows, name, t.some((l) => l.includes(name) && /▇/.test(l))]).toEqual([rows, name, true]);
+      for (const name of ['lead', 'alpha', 'ghost', 'beta']) expect([rows, name, t.some((l) => new RegExp(`\\b${name}\\s.*▇`).test(l))]).toEqual([rows, name, true]);
     }
   });
   test('the axis ends one tick past the run total', () => {

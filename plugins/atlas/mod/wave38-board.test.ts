@@ -110,7 +110,7 @@ describe('step 2: the Gantt (critique 37: a 0:31 run on a 1:00 axis at 110, bars
       const at = [...rule].map((c, i) => (c === '┬' ? i : -1)).filter((i) => i >= 0);
       expect(at.every((c, i) => i === 0 || c - at[i - 1]! === cellsPerStep)).toBe(true);
     });
-    test(`${cols === 57 ? 150 : 110} cols: every bar is one row of \`▇\` and a 240 \`│\` tick stands every 10 s across its lane`, () => {
+    test(`${cols === 57 ? 150 : 110} cols: every bar is one row of \`▇\` and a 240 \`┊\` gridline stands at every 10 s tick of its lane`, () => {
       forgetPhases();
       const n = tree(stop(), 'board', cols, rows, { kind: 'done', secs: 31, startMs: NOW - 31000 });
       const t = textOf(n).split('\n');
@@ -118,7 +118,7 @@ describe('step 2: the Gantt (critique 37: a 0:31 run on a 1:00 axis at 110, bars
       expect(lanes).toHaveLength(4); // lead, alpha, ghost, beta: one row each
       t.forEach((l, i) => { if (/▇/.test(l)) expect(/▇/.test(t[i + 1] ?? '')).toBe(false); }); // no second row under a bar
       expect(t.some((l) => /[█▏▎▍▌▋▊▉]/.test(l))).toBe(false); // the flat two-row block is gone
-      const ticks = texts(n).filter((x) => /^│+$/.test(x.t));
+      const ticks = texts(n).filter((x) => /^┊+$/.test(x.t));
       expect(ticks.length).toBeGreaterThan(0);
       expect(ticks.every((x) => x.color === DIM)).toBe(true);
     });

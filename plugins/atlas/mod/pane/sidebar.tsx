@@ -54,7 +54,8 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
 /** The `o` tab: the board (mod/todo-panel.tsx) drawn inside the Atlas pane, which is the pane the host shows (a second pane opens behind it). */
 function boardItems(m: SidebarModel) {
   const s = m.snapshot;
-  const states = workerStates(s, liveWorkers(s, s.now));
+  const workers = liveWorkers(s, s.now);
+  const states = workerStates(s, workers);
   // Wave 36 (critique 35: T2 `● done` at 150 and `▲ blocked` at 110 over a failed worker): a plan row that names its worker only in its title (`T2 read ghost.py (ghost-explorer)`) while no dispatch row carries
   // that name (ownTodos matches dispatch owners only) gets the listed worker as its owner, so its state is the one itemState gives at every width.
   const rows = ownTodos(s.todos ?? [], s.sessionId).map((it) => {
@@ -62,7 +63,31 @@ function boardItems(m: SidebarModel) {
     const m2 = r.origin !== 'dispatch' && !r.owner && typeof r.content === 'string' ? titleOwner(r.content, states) : undefined;
     return m2 ? { ...it, owner: m2.name } : it;
   });
-  return withOwnerStates(rows, states);
+  return dispatchWorkerStates(withOwnerStates(rows, states), workers, states);
+}
+
+const DISPATCH_PAIR_MS = 5000; // a dispatch row is written within a moment of its worker's start
+
+/** Wave 39 (critique 38: a dispatch row read queued beside a failed ghost): the host names a dispatch row's owner by its member id (`explorer-9e60`) and lists the worker by its agent name (`ghost-explorer`),
+ * so the row's own owner never reads as that worker and the row stayed queued. A dispatch row whose owner is no listed worker takes the state of the worker whose start is nearest its creation time (one row to one worker,
+ * within a few seconds), so its word follows its worker's: failed, done, or running. A row with no such worker is still queued. */
+function dispatchWorkerStates<T extends { owner?: string; ownerState?: UiState }>(items: readonly T[], workers: readonly { name: string; startedAt: number }[], states: ReadonlyMap<string, UiState>): T[] {
+  const born = (it: T): number => { const c = Number((it as { created_at?: unknown }).created_at); return Number.isFinite(c) && c > 0 ? c * 1000 : 0; };
+  const isDispatch = (it: T): boolean => (it as { origin?: string }).origin === 'dispatch';
+  const named = new Set(items.filter(isDispatch).map((it) => it.owner).filter((n): n is string => !!n && workers.some((w) => w.name === n)));
+  const free = items.map((it, i) => ({ it, i })).filter((x) => isDispatch(x.it) && born(x.it) > 0 && (x.it.ownerState === undefined || x.it.ownerState === 'queued') && !(x.it.owner && named.has(x.it.owner)));
+  const pairs = free.flatMap((x) => workers.filter((w) => !named.has(w.name)).map((w) => ({ i: x.i, w: w.name, d: Math.abs(born(x.it) - w.startedAt) }))).filter((p) => p.d <= DISPATCH_PAIR_MS).sort((a, b) => a.d - b.d);
+  const out = items.slice();
+  const usedRow = new Set<number>();
+  const usedWorker = new Set<string>();
+  for (const p of pairs) {
+    const state = states.get(p.w);
+    if (usedRow.has(p.i) || usedWorker.has(p.w) || !state || state === 'queued') continue;
+    usedRow.add(p.i);
+    usedWorker.add(p.w);
+    out[p.i] = { ...out[p.i]!, ownerState: state };
+  }
+  return out;
 }
 
 /** Wave 38 (critique 37: the lead's bar was 179 with `▲` while the run was merely blocked): the lead's bar is 141 while the run works, 203 only when its own row failed, 114 otherwise (a refused Stop is the band's word, not a failed lead). */
@@ -106,7 +131,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const blankRow = { runs: [{ t: ' ', tone: 'text' as const }] };
   const agents = pm.workers.map((w) => ({ name: w.name, state: w.state, secs: w.secs, startMs: w.startMs, endMs: w.endMs, calls: w.calls }));
   // Wave 36 (critique 35: ~25% of the live board blank above the footer): the lead is a row of the chart too, its bar the whole run (its own start to its end, its calls under it); the totals count the workers alone.
-  const leadRow = pm.lead && pm.lead.startMs !== undefined && agents.length > 0 ? [{ name: 'lead', state: leadBarState(pm.run?.kind, pm.lead.state), secs: pm.lead.secs, startMs: pm.lead.startMs, endMs: pm.lead.endMs, calls: pm.lead.calls }] : [];
+  const leadRow = pm.lead && pm.lead.startMs !== undefined && agents.length > 0 ? [{ name: 'lead', state: leadBarState(pm.run?.kind, pm.lead.state), secs: pm.lead.secs, startMs: pm.lead.startMs, endMs: pm.lead.endMs, calls: pm.lead.calls, total: pm.run?.secs !== undefined }] : [];
   const clock = s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) };
   const topts = { cols, ui, tick: m.tick ?? 0, motion: m.motion, ...clock };
   const quiet = { quiet: failedOwners, hideFailed: failedOwners.size > 0 };

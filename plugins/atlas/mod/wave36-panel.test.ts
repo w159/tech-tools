@@ -126,7 +126,7 @@ describe('step 2: the 110 board (critique 35: titles cut to `(alpha…`, an axis
       const labels = [...t.at(-1)!.matchAll(/\d:\d\d/g)].map((m) => m[0]);
       const secs = labels.map((l) => Number(l.split(':')[0]) * 60 + Number(l.split(':')[1]));
       expect([cols, Math.max(...secs) >= 26]).toEqual([cols, true]); // 28d53608 at 110: `0:00  0:15`
-      expect(cells(t.at(-1)!)).toBeLessThanOrEqual(cols - 1);
+      expect(cells(t.at(-1)!)).toBeLessThanOrEqual(cols); // wave 39: the lane runs to the pane's last cell
     }
   });
   test('the live board holds no run of more than 4 blank rows at a 41-row pane', () => {

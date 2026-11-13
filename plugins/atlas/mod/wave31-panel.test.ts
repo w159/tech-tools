@@ -178,8 +178,8 @@ describe('wave 31 item 5: the board has a ticked axis, N calls labels and rows i
   const t = boardText(boardTimeline(agents, { cols: 65, ui }));
   test('rows come in start order, not completion order', () => {
     const at = (n: string): number => t.findIndex((l) => l.includes(n));
-    expect(at('alpha-explorer')).toBeLessThan(at('ghost-explorer'));
-    expect(at('ghost-explorer')).toBeLessThan(at('beta-explorer'));
+    expect(at('alpha ')).toBeLessThan(at('ghost ')); // wave 39: the lane's label is the short name (the role tail goes)
+    expect(at('ghost ')).toBeLessThan(at('beta '));
   });
   test('the axis ends at the run rounded up to 10 s, with a tick every 10 s', () => {
     const labels = (t.at(-1)!.match(/\d+:\d\d/g) ?? []).map((x) => Number(x.split(':')[0]) * 60 + Number(x.split(':')[1]));

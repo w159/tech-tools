@@ -74,10 +74,10 @@ describe('step 3: the board pane', () => {
   test('the timeline is one row per agent, `alpha-explorer ████ 0:14 ●`: the solid bar as long as the run, the glyph its state, queued agents left off', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
     expect(t).toHaveLength(4); // the two agents, the axis rule with its ticks, the tick labels
-    expect(t[0]).toMatch(/^ {2}alpha-explorer ▇+[ │]* +0:14 ●$/);
-    expect(t[1]).toMatch(/^ {2}gamma {10}[▇▓▒]+[ │]* +0:07 [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/); // wave 32: a working agent row wears the band's braille
-    expect(t[2]).toMatch(/^ {17}┬[─┬]+$/);
-    expect(t[3]).toMatch(/^ {17}0:00 .*0:20$/); // wave 38: 0:14 rounds up to 0:20
+    expect(t[0]).toMatch(/^ ● alpha {5}▇+ 0:14[ ┊]*$/); // wave 39: the mark leads, the name is short, the lane takes the rest and the time sits at the bar's end
+    expect(t[1]).toMatch(/^ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] gamma {5}[▇▓▒]+ 0:07[ ┊]*$/); // wave 32: a working agent row wears the band's braille
+    expect(t[2]).toMatch(/^ {13}┬[─┬]+$/);
+    expect(t[3]).toMatch(/^ {13}0:00 .*0:20$/); // wave 38: 0:14 rounds up to 0:20
     const bar = (l: string): number => [...l].filter((c) => /▇/.test(c)).length;
     expect(bar(t[0]!)).toBeGreaterThan(bar(t[1]!));
     expect(boardTimeline([{ name: 'a', state: 'done', secs: 3 }], { cols: 10, ui: mocha })).toEqual([]);
