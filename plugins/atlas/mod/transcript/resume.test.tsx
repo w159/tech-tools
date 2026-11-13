@@ -46,7 +46,7 @@ function lead(over: { squadState: SquadAgent['state']; killed: boolean; messages
 test('C3: a worker the lead stopped and then resumed reads `finished` on its own finish row, not the stale `failed` (150-3 tab-board.png)', async () => {
   noteFailed('a1') // the kill card (placed.ts, the host row) already saw it fail: failure is sticky by id
   const row = flat(await sites().UserMessage!(lead({ squadState: 'finished', killed: true, messages: [stop, resume] }), notice('completed'), next))
-  expect(row).toContain('explorer finished')
+  expect(row).toContain('● done')
   expect(row).not.toMatch(/■ (failed|killed)/)
 })
 

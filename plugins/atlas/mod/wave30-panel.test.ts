@@ -93,7 +93,7 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     const out = render('board', cols, rows);
     test(`pane ${cols}x${rows}: no run of more than 3 blank rows and the content reaches the foot`, () => {
       expect(blankRun(out)).toBeLessThanOrEqual(3);
-      expect(lastContent(out)).toBeGreaterThanOrEqual(rows - 6);
+      expect(lastContent(out)).toBeGreaterThanOrEqual(rows - 8); // wave 32: was rows - 6; the closing `closed · N of N` line and the tick-stub rows are gone, so a run-less pane ends two rows higher (a live pane pins the footer to the foot)
     });
     test(`pane ${cols}x${rows}: the bars are solid fills and the axis has tick marks with labels`, () => {
       const text = out.join('\n');
@@ -194,7 +194,7 @@ const rowsOfCard = (n: unknown): string[] => {
 const colorsOf = (n: unknown, out: string[] = []): string[] => { const e = n as El; if (Array.isArray(n)) n.forEach((c) => colorsOf(c, out)); else if (e && typeof e === 'object') { if (typeof e.props?.color === 'string') out.push(e.props.color); colorsOf(e.children, out); } return out; };
 
 describe('wave 30 item 5 (rewritten in wave 31): the finish card is one row (critique 29: a framed card wrapped at 110 columns)', () => {
-  const FINISH = /▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\w+ finished/;
+  const FINISH = /▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\d+:\d\d/; // wave 32: the tail is the time, not `<role> finished`
   const done = rowsOfCard(notificationTree('beta-explorer', 'explorer', 'finished · 0:15', false, ui));
   test('the card is a single row, no frame rules', () => {
     expect(done.length).toBe(1);

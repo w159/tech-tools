@@ -13,9 +13,9 @@ import { forgetFailed, killedNames, outcomeText } from './outcome'
 import type { Ui } from '../atlas-ui'
 
 /** One finished worker, as the card needs it. */
-export interface FinishedWorker { name: string; role: string; failed: boolean; durationMs: number }
+export interface FinishedWorker { name: string; role: string; failed: boolean; durationMs: number; /** Tool calls the worker made (the card's `· 2 fn`). */ calls?: number }
 /** A placed card's data, kept until the `Placed` site draws it. */
-export interface PlacedRow { name: string; role: string; text: string; failed: boolean }
+export interface PlacedRow { name: string; role: string; text: string; failed: boolean; calls?: number }
 
 const MAX_ROWS = 200
 
@@ -45,7 +45,7 @@ export function finishedWorkers(prev: AtlasSnapshot | null, next: AtlasSnapshot)
     // first that lists it (critique 16 C4: no failed card in stoprun-110-e4a8186a-3). A done worker first seen done is an old row, not a finish.
     if ((was === undefined && w.state !== 'failed') || was === w.state || (w.state !== 'done' && w.state !== 'failed')) continue
     if (was === 'failed') continue // failure is terminal: a failed worker read done later (critique 15: the killed ghost-explorer) gets no done card
-    out.push({ name: w.name, role: w.role, failed: w.state === 'failed', durationMs: Math.max(0, endedAt(w, next.now) - w.startedAt) })
+    out.push({ name: w.name, role: w.role, failed: w.state === 'failed', durationMs: Math.max(0, endedAt(w, next.now) - w.startedAt), ...(w.calls?.length ? { calls: w.calls.length } : {}) })
   }
   return out
 }
@@ -65,7 +65,7 @@ export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | nu
     try {
       if ((heard.get(w.name) ?? 0) > 0) { bump(heard, w.name, -1); continue } // the host row already drew this finish
       const id = `done-${w.name.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 50)}-${++counter}`
-      rows.set(id, { name: w.name, role: w.role, text: textOf(w, killed.has(w.name)), failed: w.failed })
+      rows.set(id, { name: w.name, role: w.role, text: textOf(w, killed.has(w.name)), failed: w.failed, ...(w.calls ? { calls: w.calls } : {}) })
       capped(rows)
       const res = await $.ui.place({ id })
       if (res.isPlaced) bump(unclaimed, w.name, 1)
@@ -82,7 +82,7 @@ export function placedTree(id: string, ui: Ui, aged = false, opts: FinishOpts & 
   const r = rows.get(id)
   if (!r) return null
   if (opts.hidden && !r.failed) return { type: 'Text', props: {}, children: [] } as RenderElement // a finish card that two newer ones replaced draws nothing (critique 29: at most two stacked)
-  return notificationTree(r.name, r.role, r.text, r.failed, ui, aged, opts)
+  return notificationTree(r.name, r.role, r.text, r.failed, ui, aged, r.calls ? { ...opts, calls: r.calls } : opts)
 }
 
 /** A card dims once the run has moved on (critique 17 C3): 20 s after it was first drawn, or 5 s after a later card was drawn. `now` is the snapshot's clock. */

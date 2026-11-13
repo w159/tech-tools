@@ -19,8 +19,8 @@ const live = (now: number, squad: SquadAgent[], activity: Record<string, unknown
 const act = (over: Record<string, unknown>) => ({ tool: null, since: 0, toolCount: 0, tokens: null, mood: 'working', lastLine: '', ...over })
 const strings = (n: unknown): string => JSON.stringify(n) ?? ''
 
-/** The scorer's card shape (round2/tools/live_capture.py:642): `▌ ◆ ATLAS  ● done  <name>  <role> finished`. */
-const CARD = /▌ ◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\w+ finished/
+/** The card shape (wave 32, critique 30: `<role> finished` is gone, `● done` says it once): `▌ ◆ ATLAS  ● done  <name>  <time> · <n> fn`. The external scorer (round2/tools/live_capture.py:642) still reads the old tail and needs the same change. */
+const CARD = /▌ ◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)/
 const flat = (tree: unknown): string => {
   const out: string[] = []
   const walk = (n: unknown): void => { if (typeof n === 'string') out.push(n); else if (n && typeof n === 'object') for (const k of (n as { children?: unknown[] }).children ?? []) walk(k) }
@@ -57,7 +57,8 @@ test('B3: the card is placed in the build that shows the worker done (the HUD ro
   const row = flat(placedTree(ids[0]!, uiFromEnv()))
   expect(row).toMatch(CARD)
   expect(row).toContain('alpha-explorer')
-  expect(row).toContain('explorer finished')
+  expect(row).toContain('● done')
+  expect(row).not.toContain('finished')
   expect(row).toContain('0:13')
   expect(placedTree('done-missing-9', uiFromEnv())).toBeNull()
 })
@@ -182,7 +183,7 @@ const stoppedNotice = (requestId: string, status?: string) => ({ surface: 'termi
 
 test('A1: the notification row of a killed task reads failed, never finished, whichever source says it', async () => {
   const h = sites().UserMessage!
-  const FINISHED = /explorer finished/
+  const FINISHED = /● done/
   for (const [label, eng, status] of [
     ['task status killed', killed(), 'killed'],
     ['task status stopped', killed(), 'stopped'],
@@ -201,7 +202,7 @@ test('A1: the notification row of a killed task reads failed, never finished, wh
 test('A1: a worker the host lists completed with no failure anywhere still reads finished', async () => {
   forgetPlaced()
   const row = flat(await sites().UserMessage!(killed({ squad: [worker('ghost-explorer', 'finished')] }), stoppedNotice('ok1', 'completed'), next))
-  expect(row).toMatch(/explorer finished/)
+  expect(row).toMatch(/● done/)
 })
 
 // critique 17 C2/C3: stoprun-150-a4fad2f9-1 f0057 drew the mod-placed `ghost-explorer explorer failed · 9s` where the lead had stopped the task (every other

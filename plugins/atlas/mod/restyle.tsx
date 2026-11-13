@@ -239,7 +239,7 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }
 
-// ---- TurnDuration: `▸ 4:12 · +3 done · 2 workers · ctx 41%` (the band's clock format, frozen once drawn) ----
+// ---- TurnDuration: `▸ run 4:12 · +3 done · 2 workers · ctx 41%` (the band's clock format, frozen once drawn) ----
 
 export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null, ui: Ui = uiFromEnv()): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
@@ -248,7 +248,7 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  const delta = snap.counts.done - (tracker.done ?? snap.counts.done)
  const active = activeCount(workersOf(snap))
  const parts = [
-  elapsedClock(durationMs / 1000),
+  `run ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
   delta > 0 ? `+${delta} done` : null,
   active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
   snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,

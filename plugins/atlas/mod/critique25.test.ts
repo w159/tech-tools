@@ -42,12 +42,12 @@ describe('the brand mark `◆ ATLAS` sits on the band, the block ribbons, the pa
     expect(flat(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false, ui))).toContain('◆ ATLAS');
     expect(flat(notificationTree('wave-b', 'explorer', 'boom', true, ui))).toContain('◆ ATLAS');
   });
-  test('the brand on a finish card is the one dim grey (240), new or aged', () => {
+  test('the brand on a finish card is the accent (141, wave 32: the 240 label was barely visible on 234), new or aged', () => {
     for (const state of ['done', 'failed'] as const) {
       const runs = toastRuns(state, 'name', 'fact', ui, true);
       const marks = runs.filter((x) => x.t.trim() === '◆' || x.t === 'ATLAS');
       expect(marks.map((x) => x.t.trim())).toEqual(['◆', 'ATLAS']);
-      for (const m of marks) expect(toneHex(m.tone, 'mocha')).toBe(PALETTE5.dim);
+      for (const m of marks) expect(toneHex(m.tone, 'mocha')).toBe(PALETTE5.accent);
     }
     expect(toastRuns('done', 'name', 'fact', ui).some((x) => x.t.includes('ATLAS'))).toBe(false); // the default has no brand
   });

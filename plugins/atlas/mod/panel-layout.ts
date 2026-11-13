@@ -15,7 +15,7 @@ import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runsta
 import { displayName } from './hud';
 import { sortAgents } from './hud-surface';
 import type { GateGroup } from './pane/sidebar-types';
-import { ageWord, KILLED, sparkOf, totalsOf, wordOf } from './pane/activity';
+import { ageWord, KILLED, sparkOf, sparkOver, totalsOf, wordOf } from './pane/activity';
 
 export type PanelTab = 'route' | 'team' | 'channel' | 'gates' | 'core';
 /** Tabs in strip order. Hotkeys: r t c g k (the board toggle `o` belongs to the band). */
@@ -166,8 +166,8 @@ const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ??
 const nameCap = (cols: number): number => Math.max(18, Math.min(40, cols - GRID_LEAD - 2 - 7 - 6));
 
 /** `◐ ` and friends: the state glyph run followed by a space. */
-const mark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick'>, id = ''): Run => {
-  const g = stateMark(s, m, id);
+const mark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick' | 'run'>, id = ''): Run => {
+  const g = stateMark(s, m, id, m.run !== undefined); // wave 32: on the Claude pane a working mark here is the band's braille in 141 (omp keeps the circles its goldens pin); circles stay on the per-task rows (todoRows)
   return { ...g, t: `${g.t} ` };
 };
 
@@ -443,9 +443,53 @@ function routeSummary(m: PanelModel): PanelLine[] {
   if (gates) rows.push(gates);
   rows.push(...agentsRows(m));
   rows.push(todoCount(m));
-  if (!m.todos.length && !m.workers.length) rows.push(BLANK, ...indentedHint(m, 'add one with /todo add')); // the `todo` row above already says `no tasks yet`
-  else rows.push(BLANK, ...indentedHint(m, `${m.todos.length ? 'the plan and ' : ''}the agents are on the HUD · team and board tabs hold the detail`));
+  if (!m.todos.length && !m.workers.length) { rows.push(BLANK, ...indentedHint(m, 'add one with /todo add')); return rows; } // the `todo` row above already says `no tasks yet`
+  rows.push(BLANK, line(fitRuns([r(`${' '.repeat(GRID_LEAD)}timeline`, 'muted', { bold: true })], m.cols)), ...phaseChain(m));
+  rows.push(...planTimeline(m, Math.max(1, m.rows - headerRows(m).length - rows.length - 2)));
   return rows;
+}
+
+/** Wave 32 (critique 30: the route tab was four stat lines and a sentence pointing at other tabs): the run as a timeline, from the data the panel already holds. The first row is the phase chain,
+ * `● research › ⠋ implement 0:28 › ◇ verify` (past phases done, the lit one wearing the band's mark and the run clock, the rest queued); under it one row per plan row, `◐ T1 read alpha.py   +0:00`,
+ * with the time its owner started, relative to the run's start. */
+function phaseChain(m: PanelModel): PanelLine[] {
+  if (!m.phases.length) return [];
+  const at = m.phases.indexOf(m.phase);
+  const kind = m.run?.kind ?? 'working';
+  const runs: Run[] = [r(' '.repeat(GRID_LEAD))];
+  m.phases.forEach((p, i) => {
+    if (i) runs.push(r(` ${m.ui.ascii ? '>' : '›'} `, 'dim'));
+    const past = kind === 'done' || (at >= 0 && i < at);
+    const cur = !past && at === i;
+    const g: Run = past ? stateRun('done', m.ui) : cur ? (kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase', true)) : stateRun('queued', m.ui);
+    runs.push({ ...g, t: `${g.t} ` }, r(p, cur ? 'text' : past ? 'sub' : 'muted', cur ? { bold: true } : {}));
+    if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(m.run.secs)}`, 'dim'));
+  });
+  return [line(fitRuns(runs, m.cols))];
+}
+
+/** When each plan row's owner started, in seconds from the run's start; undefined where nobody owns the row or the owner has not started. */
+function planStarts(m: PanelModel): (number | undefined)[] {
+  const starts = [...m.workers.map((w) => w.startMs), m.lead?.startMs].filter((x): x is number => typeof x === 'number');
+  const t0 = m.run?.startMs ?? (starts.length ? Math.min(...starts) : undefined);
+  return m.todos.map((t) => {
+    const at = t.owner ? m.workers.find((w) => w.name === t.owner)?.startMs : undefined;
+    return at !== undefined && t0 !== undefined ? Math.max(0, Math.floor((at - t0) / 1000)) : undefined;
+  });
+}
+
+function planTimeline(m: PanelModel, room: number): PanelLine[] {
+  if (!m.todos.length || room < 1) return [];
+  const stamps = planStarts(m).map((x) => (x === undefined ? '' : `+${shortAge(x)}`));
+  const valueW = Math.max(0, ...stamps.map((x) => cells(x)));
+  const shown = m.todos.length > room ? Math.max(1, room - 1) : m.todos.length;
+  const nameW = Math.max(6, Math.min(m.cols - GRID_LEAD - 1 - (valueW ? valueW + 2 : 0), ...[Math.max(...m.todos.map((x) => cells(oneLine(x.label))))]));
+  const rows = m.todos.slice(0, shown).map((t, i): PanelLine => {
+    const mk = markOf(t.state, t.word);
+    const runs = gridRow({ cols: m.cols, ui: m.ui, mark: stateMark(mk === 'doubt' ? 'failed' : mk, m, t.owner || t.id), name: { t: oneLine(t.label), tone: t.state === 'done' && mk !== 'doubt' ? 'sub' : 'text' }, nameW, nameCut: 'end', ...(stamps[i] ? { value: { t: stamps[i]!, tone: 'dim' as Tone } } : {}) });
+    return line(fitRuns(moving(runs, `task:${t.id}`, mk, m), m.cols));
+  });
+  return [...rows, ...(shown < m.todos.length ? [line([r(`    +${m.todos.length - shown} more on the board`, 'muted')])] : [])];
 }
 
 function routeBodyFull(m: PanelModel): PanelLine[] {
@@ -540,12 +584,21 @@ function workerDetail(m: PanelModel, w: PanelWorker): PanelLine[] {
 
 /** The Team tab's columns, one set for every row (wave 30): `glyph name  role  state word  elapsed  activity`. Columns give way in this order: the role, then the activity sparkline (12 cells, then 8, then none), then the elapsed time;
  * the name is cut last, with `…`. */
-type TeamGrid = { nameW: number; roleW: number; wordW: number; ageW: number; sparkW: number };
+type TeamGrid = { nameW: number; roleW: number; wordW: number; ageW: number; sparkW: number; /** The run's window on the snapshot clock: every sparkline is drawn over it, so a cell is the same moment on every row. */ win?: { from: number; to: number } };
 // The role column says what the name does not: `ghost-explorer` already starts with its role, so that row leaves the column blank rather than print the word twice.
 const roleOf = (w: PanelWorker): string => (w.role && w.role !== 'unknown' && w.role !== w.name && !nameOf(w).toLowerCase().startsWith(w.role.toLowerCase()) ? w.role : '');
 // A queued agent has not started: it has no elapsed time to show.
 const ageOf = (w: PanelWorker): string => (w.secs !== undefined && w.state !== 'queued' ? shortAge(w.secs) : '');
 const SPARK_W = 12;
+
+/** The run from its first start to its last end (or now, while it works): the one axis every team sparkline shares. */
+function runWindow(m: PanelModel, ws: readonly PanelWorker[]): { win?: { from: number; to: number } } {
+  const starts = ws.map((w) => w.startMs).filter((x): x is number => typeof x === 'number');
+  const ends = ws.map((w) => w.endMs).filter((x): x is number => typeof x === 'number');
+  if (!starts.length) return {};
+  const from = m.run?.startMs !== undefined ? Math.min(m.run.startMs, ...starts) : Math.min(...starts);
+  return { win: { from, to: Math.max(from + 1000, m.now !== undefined && m.run?.kind === 'working' ? m.now : 0, ...ends) } };
+}
 
 function teamGrid(m: PanelModel, ws: readonly PanelWorker[]): TeamGrid {
   const longest = Math.max(6, ...ws.map((w) => cells(nameOf(w))));
@@ -556,7 +609,7 @@ function teamGrid(m: PanelModel, ws: readonly PanelWorker[]): TeamGrid {
   const need = (c: { role: boolean; age: boolean; spark: number }): number => 2 + wordW + (c.role && roleW ? 2 + roleW : 0) + (c.age && ageW ? 2 + ageW : 0) + (c.spark ? 2 + c.spark : 0);
   const forms = [{ role: true, age: true, spark: SPARK_W }, { role: false, age: true, spark: SPARK_W }, { role: false, age: true, spark: 8 }, { role: false, age: true, spark: 0 }, { role: false, age: false, spark: 0 }];
   for (const c of forms) {
-    if (longest + need(c) <= room) return { nameW: longest, roleW: c.role ? roleW : 0, wordW, ageW: c.age ? ageW : 0, sparkW: c.spark };
+    if (longest + need(c) <= room) return { nameW: longest, roleW: c.role ? roleW : 0, wordW, ageW: c.age ? ageW : 0, sparkW: c.spark, ...(m.run ? runWindow(m, ws) : {}) };
   }
   return { nameW: Math.max(6, room - need(forms[forms.length - 1]!)), roleW: 0, wordW, ageW: 0, sparkW: 0 };
 }
@@ -568,12 +621,12 @@ function workerRows(m: PanelModel, w: PanelWorker, g: TeamGrid, focus: boolean):
   const wide = m.cols >= WIDE;
   const room = m.cols - 1 - used - 2;
   const last = wide && room >= 8 ? lastFit(w, room) : '';
-  const spark = g.sparkW && w.state !== 'queued' ? sparkOf(w.calls, w.startMs, w.endMs, g.sparkW, m.ui.ascii) : ' '.repeat(g.sparkW);
+  const spark = g.sparkW && w.state !== 'queued' ? (g.win ? sparkOver(w.calls, g.win.from, g.win.to, w.startMs, w.endMs, g.sparkW, m.ui.ascii) : sparkOf(w.calls, w.startMs, w.endMs, g.sparkW, m.ui.ascii)) : ' '.repeat(g.sparkW);
   const tail: Run[] = [
     ...(g.roleW ? [r('  '), r(pad(clipE(roleOf(w), g.roleW), g.roleW), 'sub')] : []),
     r('  '), r(pad(wordOf(w.state), g.wordW), rowWordTone(w.state)), // the one word tone of every surface (atlas-ui rowWordTone)
     ...(g.ageW ? [r('  '), r(pad(ageOf(w), g.ageW), 'muted')] : []),
-    ...(g.sparkW ? [r('  '), r(spark, w.state === 'running' ? 'accent' : w.state === 'failed' ? 'bad' : 'dim')] : []),
+    ...(g.sparkW ? [r('  '), r(spark, w.state === 'running' ? 'accent' : w.state === 'failed' ? 'bad' : 'sub')] : []),
     ...(last ? [r('  '), r(last, 'muted')] : []),
   ];
   const runs = gridRow({ cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW: g.nameW, tail });
@@ -596,11 +649,9 @@ function leadSummary(m: PanelModel): PanelLine[] {
   if (m.run?.secs !== undefined && m.workers.length) t.secs = m.run.secs; // the band's run clock: one total on every surface (critique 29: board 0:14, team 0:24, band 1:00)
   const total = `${shortAge(t.secs)}${t.calls ? ` ${dot(m.ui)} ${t.calls} tool calls` : ''}`;
   const key = (k: string): Run => r(' '.repeat(GRID_LEAD) + pad(k, 9), 'text', { bold: true });
-  const spark = m.run && m.cols >= 50 && m.workers.some((w) => (w.calls ?? []).length > 0) ? `${m.ui.ascii ? '_-~' : '▁▃█'} tool calls, from each agent's start to its end` : '';
   return [
     line(fitRuns([r(' '.repeat(GRID_LEAD)), r('workers  ', 'text', { bold: true }), r(parts, 'muted')], m.cols)), // in the name column, under the lead's own row
     ...(m.workers.length && t.secs > 0 ? [line(fitRuns([key('total'), r(total, 'muted')], m.cols))] : []),
-    ...(spark ? [line(fitRuns([key('scale'), r(spark, 'muted')], m.cols))] : []),
   ];
 }
 
@@ -662,7 +713,7 @@ function teamBody(m: PanelModel): PanelLine[] {
   const workers = workersByTask(m);
   // The lead's own activity is the whole team's: every worker's calls over the run, so its sparkline reads the pace of the run.
   const teamCalls = [...(m.lead?.calls ?? []), ...m.workers.flatMap((w) => w.calls ?? [])];
-  const leadRow = lead ? { ...lead, calls: teamCalls } : undefined;
+  const leadRow = lead ? { ...lead, calls: teamCalls, ...(m.run?.secs !== undefined ? { secs: m.run.secs } : {}), ...(m.run?.startMs !== undefined ? { startMs: m.run.startMs } : {}) } : undefined; // wave 32: the lead's time is the band's run clock (critique 30: lead 0:26, board 0:57)
   const everyone = [...(leadRow ? [leadRow] : []), ...workers, ...mates];
   if (!everyone.length) return emptyHint(m, 'nobody dispatched yet');
   const g = teamGrid(m, everyone);
@@ -755,7 +806,8 @@ function channelLog(m: PanelModel): PanelLine[] {
   const count = `${m.people} ${m.people === 1 ? 'person' : 'people'}${m.unread ? ` ${dot(m.ui)} ${m.unread} unread` : ''}`;
   const title = channelLabel(m.channel);
   const head = line(fitRuns([r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted')], m.cols));
-  if (!m.notes.length) return [head, ...centred(m, 'no messages yet')];
+  // Wave 32 (critique 30: `no messages yet` floated mid-pane over 90% blank): an empty channel is one left-aligned row straight under the head, the pane fill carries the surface to the foot.
+  if (!m.notes.length) return [head, line(fitRuns([r(`${ind}${m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle} no messages`, 'muted')], m.cols))];
   const wide = m.cols >= WIDE;
   const avail = tall(m) ? m.rows - headerRows(m).length - 2 : m.rows - 4; // a tall pane: the head, the log and the foot row make exactly the pane
   const ageW = !m.run && m.cols >= 50 ? Math.max(0, ...m.notes.map((n) => cells(ageOfNote(m, n)))) : 0;
@@ -1242,12 +1294,13 @@ export const CARD_WORD_W = 7;
 /** The head of a toast: a left bar in `tone` (`▌`, `|` in ASCII), then, only on a finish card (`brand`), the ATLAS mark. The mark is one grey (dim, 240) wherever it is drawn: the one solid chip belongs
  * to the band, the ribbons and the side panel title carry the brand, and a start card, a failure card, a toast and a note repeat only the name (critique 25: `◆ ATLAS` seven times on one screen, in two greys).
  * The finish card keeps it: the capture scorer locates a card by `▌ ◆ ATLAS  <glyph> done  name  role finished` (live_capture.py :676). */
-const toastHead = (tone: Tone, ui: Ui, brand = false): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...(!brand ? [] : ui.ascii ? brandMark(ui) : [r('◆ ', 'dim'), r('ATLAS', 'dim')]), ...(brand ? [r('  ')] : [])];
+const toastHead = (tone: Tone, ui: Ui, brand = false): Run[] => [r(ui.ascii ? '|' : '▌', ui.ascii ? 'text' : tone), r(' '), ...(!brand ? [] : ui.ascii ? brandMark(ui) : [r('◆ ', 'accent'), r('ATLAS', 'accent')]), ...(brand ? [r('  ')] : [])];
 
 /** `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps` (a finish card, `brand`) or `▌ ◐ running  implementer-layout  what it does`: the bar and the state word in the state's tone, the state, the
  * name, one fact. No full stop. */
-export function toastRuns(state: UiState, name: string, fact: string, ui: Ui, brand = false): Run[] {
-  const g = stateRun(state, ui);
+export function toastRuns(state: UiState, name: string, fact: string, ui: Ui, brand = false, frame = 0): Run[] {
+  // Wave 32 (critique 30: the start card's `◐` was a static half circle): a running card wears the band's braille spinner in 141, turning with `frame`.
+  const g = state === 'running' && !ui.ascii ? { ...stateRun('running', ui, frame, true), tone: 'accent' as const } : stateRun(state, ui, frame, true);
   // Design rev 5, C3: the state word sits in a fixed-width column (CARD_WORD_W), so the name starts at the same cell on every card; `failed` and `killed` are the same width.
   return [...toastHead(state === 'running' ? 'accent' : g.tone, ui, brand), { ...g, t: `${g.t} ` }, r(wordOf(state), stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
 }
