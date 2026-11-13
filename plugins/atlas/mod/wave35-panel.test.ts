@@ -146,9 +146,13 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
     const id = ids.find((i) => i.startsWith('done-run'))!;
     expect(flatEl(placedTree(id, ui))).toMatch(/\s0:47$/); // the pane has not said the band's clock: the workers' span
     noteRunSecs(33);
-    expect(flatEl(placedTree(id, ui))).toMatch(/\s0:33$/); // 4fef5d66: the card said 0:13 and the band 0:33
+    expect(flatEl(placedTree(id, ui))).toMatch(/\s0:47$/); // truth 39: a placed card is never rewritten by a later reading
+    forgetPlaced();
+    noteRunSecs(33);
+    const ids2: string[] = [];
+    await placeFinished(engine(ids2), running(NOW - 1000), clean(NOW));
+    expect(flatEl(placedTree(ids2.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/\s0:33$/); // 4fef5d66: the card said 0:13 and the band 0:33; the band's clock at placement wins
     noteRunSecs(undefined);
-    expect(flatEl(placedTree(id, ui))).toMatch(/\s0:33$/); // a pane that stops saying it leaves the card as it was
     forgetPlaced();
   });
   test('the pane hands the card the band\'s clock', () => {

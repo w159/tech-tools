@@ -40,7 +40,8 @@ describe('critique 19 C5: the channel tab under failure', () => {
   });
   test('a worker that finished cleanly and a Stop that passed add no failure row (the empty hint stays honest)', () => {
     const text = channel(world([sq('alpha-explorer', 'finished')]), [{ id: 'completion', title: 'Completion gate', lines: [{ id: STOP_LINE, label: 'Last Stop passed', ok: true }] }]).join('\n');
-    expect(text).toContain('no messages'); // wave 32: `○ no messages`
+    expect(text).toContain('0 messages'); // truth 39: a senders block is shown, so the count is `0 messages`, never `○ no messages` above it
+    expect(text).not.toContain('no messages');
   });
   test('the real notes stay, the failure rows follow them in time order', () => {
     const note: ChannelNote = { ts: '2026-11-12T10:00:00.000Z', seq: 1, owner: 'alpha-explorer', text: 'handed off alpha.py', channel: 'c', kind: 'handoff' };

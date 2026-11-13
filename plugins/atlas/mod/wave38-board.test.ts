@@ -224,7 +224,7 @@ describe('step 6: the channel tab at 0 messages (critique 37: `○ no messages` 
   test('the tab stays, and the senders block names each worker with the time and text of its last status', () => {
     forgetPhases();
     const t = render(live(), 'channel', 57, 41, { kind: 'working', secs: 20, startMs: NOW - 20000 });
-    expect(t.join('\n')).toMatch(/○ no messages/);
+    expect(t.join('\n')).toMatch(/ 0 messages/); expect(t.join('\n')).not.toMatch(/○ no messages/); // truth 39
     expect(t.some((l) => /^\s+senders\s*$/.test(l))).toBe(true);
     const row = (n: string): string => t.find((l) => new RegExp(`^\\s+${n}\\s+\\+\\d:\\d\\d\\s`).test(l)) ?? '';
     expect(row('alpha-explorer')).toMatch(/\+0:\d\d\s+read alpha\.py/);

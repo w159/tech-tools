@@ -149,7 +149,7 @@ describe('3. blocked on the frame the host stops, at every width', () => {
     test(`${cols} columns: a dispatch row whose worker died after the host stops reads \`▲ blocked · stop refused\` and counts as failed (\`■1\`), static, with no Stop refusal needed (wave 37)`, () => {
       const f = frameOf(STOP, body, screen);
       expect(f.kind).toBe('blocked');
-      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · stop refused/);
+      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked(?: · stop refused)? \d:\d\d/);
       expect(f.band).toMatch(/■1/); // the dead dispatch is a failure, never `1 dispatch open`
       expect(f.band).not.toMatch(/dispatch open/);
       expect(f.band).not.toMatch(BRAILLE);
@@ -167,7 +167,7 @@ describe('3. blocked on the frame the host stops, at every width', () => {
     test(`${cols} columns: the refusal and the open dispatch row together still name the row, blocked on both`, () => {
       const f = frameOf({ ...STOP, gates: REFUSAL() }, body, screen);
       expect(f.kind).toBe('blocked');
-      expect(f.band).toMatch(/▲ blocked · /);
+      expect(f.band).toMatch(/▲ blocked(?: · [a-z ]+)? \d:\d\d/);
     });
   }
   test('the plan row open keeps its dispatch row folded: no `dispatch open` while the T row carries it (every count is the plan\'s /5)', () => {

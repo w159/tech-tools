@@ -4,6 +4,7 @@ import { resetWorkerFacts } from './data/live';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
+import { forgetBandFrame } from './motion';
 import { cells, type Ui } from './atlas-ui';
 import { bodyLines, lineText } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
@@ -53,9 +54,9 @@ const snap = (phase = 'implement', channel = 'lc-w34') => ({
 type Run = NonNullable<SidebarModel['run']>;
 const RUN: Run = { kind: 'working', secs: 57, startMs: NOW - 57000 };
 const model = (s: never, view: SidebarView, columns: number, rows: number, run: Run | null = RUN, look: Ui = ui): SidebarModel => ({ snapshot: s, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows, look, ...(run ? { run } : {}) } as SidebarModel);
-const tree = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN, look: Ui = ui): Node => { forgetRefusals(); return sidebarTree(els, model(s, view, columns, rows, run, look), on) as unknown as Node; };
+const tree = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN, look: Ui = ui): Node => { forgetRefusals(); forgetBandFrame(); return sidebarTree(els, model(s, view, columns, rows, run, look), on) as unknown as Node; };
 const render = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN, look: Ui = ui): string[] => textOf(tree(view, columns, rows, s, run, look)).split('\n');
-const body = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN): string[] => { forgetRefusals(); return bodyLines(panelModelOf(model(s, view, columns + 1, rows, run), ui, columns)).map((l) => lineText(l).trimEnd()); };
+const body = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN): string[] => { forgetRefusals(); forgetBandFrame(); return bodyLines(panelModelOf(model(s, view, columns + 1, rows, run), ui, columns)).map((l) => lineText(l).trimEnd()); };
 /** Every Text of a tree with its colour. */
 const texts = (n: Node, out: Array<{ t: string; color?: string }> = []): Array<{ t: string; color?: string }> => { if (n.kind === 'Text') out.push({ t: String(n.props.children ?? ''), color: n.props.color }); for (const k of kids(n)) texts(k, out); return out; };
 
@@ -196,9 +197,16 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
     await placeFinished(engine(ids), runningAt(NOW - 3000), cleanAt(NOW - 2000)); // the cards are placed before the calls are on the board
     const cards = (): string[] => ids.filter((i) => !i.startsWith('done-run')).map((i) => flat(placedTree(i, ui)));
     expect(cards()).toHaveLength(2);
+    const before = cards();
     await placeFinished(engine(ids), cleanAt(NOW - 2000), cleanAt(NOW - 1000, { 'alpha-explorer': [1, 2, 3], 'beta-explorer': [1, 2, 3, 4] }));
-    const [alpha, beta] = cards();
-    expect(alpha).toMatch(/alpha-explorer.*0:\d\d · 3 calls$/); // 28d53608: alpha without `· 3 calls`, beta with `· 4 calls`
+    expect(cards()).toEqual(before); // truth 39: a count that arrives later never rewrites a placed card
+    forgetPlaced();
+    resetWorkerFacts();
+    const ids2: string[] = [];
+    const known = { 'alpha-explorer': [1, 2, 3], 'beta-explorer': [1, 2, 3, 4] };
+    await placeFinished(engine(ids2), runningAt(NOW - 3000), cleanAt(NOW - 2000, known));
+    const [alpha, beta] = ids2.filter((i) => !i.startsWith('done-run')).map((i) => flat(placedTree(i, ui)));
+    expect(alpha).toMatch(/alpha-explorer.*0:\d\d · 3 calls$/); // 28d53608: alpha without `· 3 calls`, beta with `· 4 calls`: every card carries the count known when it was placed
     expect(beta).toMatch(/beta-explorer.*0:\d\d · 4 calls$/);
     forgetPlaced();
   });

@@ -144,7 +144,7 @@ describe('3. one clock: the band always shows the elapsed time while working, re
     const fn = (runstate as unknown as Record<string, unknown>).runElapsed as ((c: unknown, now: number) => number | undefined) | undefined;
     expect(typeof fn).toBe('function');
     expect(fn!({ startMs: 1_000 }, 31_999)).toBe(30);
-    expect(fn!({ startMs: null, ranMs: 30_000, endedMs: 40_000 }, 100_000)).toBe(90);
+    expect(fn!({ startMs: null, ranMs: 30_000, endedMs: 40_000 }, 100_000)).toBe(30);
     expect(fn!({ startMs: null }, 100_000)).toBeUndefined();
   });
 });

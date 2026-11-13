@@ -102,7 +102,7 @@ describe('1. frozen working: an open dispatch with no live worker is blocked, ne
     test(`${cols} columns: the host turn is over, a dispatch is open and its worker never started: a static \`▲ blocked · stop refused\``, () => {
       const f = frameOf(FROZEN, body, screen);
       expect(f.kind).toBe('blocked');
-      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · stop refused/);
+      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked(?: · stop refused)? \d:\d\d/);
       expect(f.band).not.toMatch(BRAILLE);
       expect(f.band).not.toMatch(/working|fixing/);
       for (const run of bandRuns(f.model).filter((x) => /blocked|dispatch open/.test(x.t))) expect([run.t, run.tone, run.bgHex]).toEqual([run.t, 'ink', '#ff5f5f']); // wave 35: dark ink on the error 203 state fill

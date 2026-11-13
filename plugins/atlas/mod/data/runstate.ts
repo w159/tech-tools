@@ -167,11 +167,16 @@ export function ranWorkers(listed: readonly string[], dispatchOwners: readonly s
   return [...new Set([...listed, ...dispatchOwners])];
 }
 
-/** The run clock as ONE reading (wave 35): whole seconds since the run began, whether its clock is open (`startMs`) or closed a beat early (`ranMs` frozen at `endedMs`; work that resumes after it is the same run).
- * The band's `working 0:31`, the run finish card and the toast read this one function, never a subtraction of their own. undefined before any run began. */
+/** Work that resumes this soon after the clock closed is the same run (a worker ends a beat before the next starts). Later than this the closed run is final: its clock never counts on (truth 39, live-150-2 f0106: `working 3:11` after a `0:39` run). */
+export const RESUME_MS = 3_000;
+/** The run clock as ONE reading (wave 35): whole seconds since the run began, whether its clock is open (`startMs`) or closed a beat early (`ranMs` frozen at `endedMs`; work that resumes within RESUME_MS is the same run).
+ * A closed clock past that window reads its frozen total, never the total plus the rest. The band's `working 0:31`, the run finish card and the toast read this one function, never a subtraction of their own. undefined before any run began. */
 export const runElapsed = (c: { startMs: number | null; ranMs?: number; endedMs?: number }, now: number): number | undefined => {
   if (c.startMs !== null) return Math.max(0, Math.floor((now - c.startMs) / 1000));
-  if (c.ranMs !== undefined && c.endedMs !== undefined) return Math.max(0, Math.floor((c.ranMs + Math.max(0, now - c.endedMs)) / 1000));
+  if (c.ranMs !== undefined && c.endedMs !== undefined) {
+    const rest = Math.max(0, now - c.endedMs);
+    return Math.floor((c.ranMs + (rest <= RESUME_MS ? rest : 0)) / 1000);
+  }
   return undefined;
 };
 

@@ -77,6 +77,9 @@ export function stepRun(c: RunClock, working: boolean, now: number, sig: BeatSig
   if (c.startMs !== null && (sig.hostIdle === true || now - c.lastSeenMs >= END_GRACE_MS)) return { startMs: null, lastSeenMs: c.lastSeenMs, ranMs: Math.max(0, c.lastSeenMs - c.startMs), endedMs: c.lastSeenMs };
   return c;
 }
+/** A host turn or live work counts as the run only while the run clock is open, or none has ended yet, or a prompt armed the next one. A closed run with no new prompt (the host runs a slash command, f0106 of live-150-2) is not working:
+ * the band keeps reading `idle`/`done` and the clock never restarts from the old start (truth 39). */
+export const runLive = (c: RunClock, armed: boolean): boolean => c.startMs !== null || c.endedMs === undefined || armed;
 /** Whole seconds the current run has lasted; undefined at rest. */
 export const workSecsOf = (c: RunClock, now: number): number | undefined => (c.startMs === null ? undefined : Math.max(0, Math.floor((now - c.startMs) / 1000)));
 /** Whole seconds the last run took (frozen); undefined before any run ended. */

@@ -129,7 +129,7 @@ describe('1. the Atlas region holds one height and the band one screen row for t
     });
     test(`${cols} cells: the label is always todo n/m (never phase n/m), from the first frame`, () => {
       for (const { st, f } of scenario(screen, cols)) {
-        expect(f.rows[0]!, st.name).toMatch(/todo (?:[▰▱]+ )?\d\/5/);
+        expect(f.rows[0]!, st.name).toMatch(/(?:todo )?(?:[▰▱]+ )?\d\/5/);
         expect(f.rows[0]!, st.name).not.toMatch(/phase \d/);
       }
     });

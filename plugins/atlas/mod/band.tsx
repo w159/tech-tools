@@ -267,7 +267,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const { cols, ui, m, lines } = plan;
   // State 38: note the spinner frame and the clock the band is drawing right now (motion.ts bandFrame).
   const kind = runStateOf(m).kind;
-  noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? m.turnSecs ?? m.elapsedSecs ?? 0 : m.ranSecs ?? m.lastRun?.secs ?? null, m.now);
+  noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? m.turnSecs ?? m.elapsedSecs ?? 0 : kind === 'blocked' ? m.ranSecs ?? m.lastRun?.secs ?? m.turnSecs ?? null : m.ranSecs ?? m.lastRun?.secs ?? null, m.now, kind);
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
     if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
@@ -281,3 +281,12 @@ export const bandRuns = (b: BandModel): Run[] => bandLines(missionModel({ ...b, 
 
 /** The band's run state word (`working`, `done`, `idle`, `blocked`) for a model: the one rule the HUD's idle dimming and the side panel's phase read. */
 export const bandKindOf = (b: BandModel) => runStateOf(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() })).kind;
+
+/** The blocked band's own reason and clock, as it prints them (`stop refused`, `1 failed`; the clock the lead segment shows): the blocked card says the same words (transcript/placed.ts noteBlocked). null when the band does not read blocked. */
+export function bandBlockedOf(b: BandModel): { reason: string; secs?: number } | null {
+  const m = missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() });
+  const st = runStateOf(m);
+  if (st.kind !== 'blocked') return null;
+  const secs = m.ranSecs ?? m.lastRun?.secs ?? m.turnSecs;
+  return { reason: st.reason.long, ...(secs !== undefined ? { secs } : {}) };
+}
