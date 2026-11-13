@@ -44,6 +44,6 @@ export function viewRows(tab: PanelTab, els: ClientElements, m: SidebarModel, on
   const ui = m.look ?? uiFromEnv();
   const model = pm ?? panelModelOf({ ...m, ui: { ...m.ui, view: tab } }, ui, inner);
   const body = bodyLines(model);
-  const fill = fillRows(model, body.length).map(() => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, m, on, ui)); // the panel surface down to the foot row
+  const fill = fillRows(model, body.length).map((l) => lineEl(els, l.runs.length ? l : { runs: [{ t: ' ', tone: 'text' }] }, m, on, ui)); // the panel surface down to the foot row
   return [...body.map((l) => lineEl(els, l, m, on, ui)), ...fill, ...(tab === 'team' || tab === 'channel' ? [inputEl(els, m, on)] : [])];
 }

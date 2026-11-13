@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
 import { cells, uiFromEnv } from './atlas-ui';
-import { fillRows, headerRows, lineText, stripLayout, tabRows, type PanelTab } from './panel-layout';
+import { KEY_HINT, fillRows, headerRows, lineText, stripLayout, tabRows, type PanelTab } from './panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
@@ -42,9 +42,9 @@ describe('C1: the key hint is one dim line at the pane foot, only where there is
   test('a tall team pane ends its fill with the dim hint', () => {
     const m = panelWorld('team', 49, ui);
     const fill = fillRows({ ...m, rows: 40 }, 6);
-    expect(lineText(fill[fill.length - 1]!).trim()).toBe('keys  r t c g k o');
-    expect(fill[fill.length - 1]!.runs.every((x) => x.tone === 'muted' || !x.t.trim())).toBe(true);
-    expect(fill.filter((l) => lineText(l).includes('keys'))).toHaveLength(1);
+    { const t = lineText(fill[fill.length - 1]!).trim(); expect(KEY_HINT.startsWith(t.replace(/\u2026$/, ''))).toBe(true); expect([...t].length).toBeLessThanOrEqual(48); } // the hint is cut to the pane
+    expect(fill[fill.length - 1]!.runs.every((x) => x.tone === 'dim' || !x.t.trim())).toBe(true);
+    expect(fill.filter((l) => lineText(l).includes('r: route'))).toHaveLength(1);
   });
   test('a pane with no spare row draws no hint', () => {
     const m = panelWorld('team', 49, ui);

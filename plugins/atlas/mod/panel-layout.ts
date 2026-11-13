@@ -1164,14 +1164,16 @@ const FILLED_OLD: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 
 const FILLED: ReadonlySet<PanelTab> = new Set<PanelTab>(['route', 'team', 'channel', 'gates', 'core']);
 /** Tabs with a message field on the foot row; the others fill the pane to its last row (wave 31, critique 29: the 234 surface stopped where the content ended). */
 const FOOTED: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
+/** The key hint the pane foot prints once (the HUD's footer row is gone): every tab key, then the focus key. */
+export const KEY_HINT = `${STRIP_TABS.map((t) => `${t.key}: ${t.label}`).join('  ')}  ctrl+x tab`;
 /** Blank rows after a `bodyLen`-row body so header + body + fill is `rows - 1` lines, the one foot row staying free (on team and channel the
  * message field is that row). Only on a tab that has fewer rows than the pane; never negative, so a body taller than the pane is untouched. */
 export function fillRows(m: PanelModel, bodyLen: number): PanelLine[] {
   const n = (m.run ? FILLED : FILLED_OLD).has(m.tab) ? m.rows - (FOOTED.has(m.tab) ? 1 : 0) - headerRows(m).length - bodyLen : 0;
   if (n <= 0) return [];
   const fill = Array.from({ length: n }, () => BLANK);
-  // Design rev 5, C1: the strip names no keys, so the last spare row (above the message field) names them once, dim.
-  if (n >= 2) fill[n - 1] = line([r(' '.repeat(STRIP_PAD)), r(`keys  ${STRIP_TABS.map((t) => t.key).join(' ')}`, 'muted')]);
+  // Design rev 5, C1: the strip names no keys, so the last spare row (above the message field) names them once, dim 240, one row, cut to the pane (wave 31: the HUD no longer prints them).
+  if (n >= 2) fill[n - 1] = line([r(' '.repeat(STRIP_PAD)), r(clipE(KEY_HINT, Math.max(1, m.cols - STRIP_PAD)), 'dim')]);
   return fill;
 }
 /** Every row of the panel: ribbon, blank, tab strip, rule, blank, then the active tab. */

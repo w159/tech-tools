@@ -57,7 +57,7 @@ describe('A3: one stable agent order, by task', () => {
   const order = (rows: string[]): string[] => rows.flatMap((l) => /(alpha|beta|gamma)-explorer/.exec(l)?.[1] ?? []).filter((n, i, all) => all.indexOf(n) === i);
   test('the HUD keeps T1, T2, T3 whichever worker finishes first (f0060: alpha, gamma, beta before)', () => {
     const s = world([sq('gamma-explorer', 'running'), sq('beta-explorer', 'finished'), sq('alpha-explorer', 'running')]);
-    const agents = hud(s).filter((l) => /^[▸ ] .*(running|done)\s+\S+\s+T\d/.test(l) || /-explorer\s+(running|done)/.test(l));
+    const agents = hud(s).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] T\d/.test(l));
     expect(order(agents)).toEqual(['alpha', 'beta', 'gamma']);
   });
   test('the team tab lists T1, T2, T3 in reverse finish order too', () => {

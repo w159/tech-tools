@@ -5,7 +5,7 @@ import { coreFixture, coreMatrix } from '../contracts/core-fixture';
 import { panelWorld } from '../contracts/panel-world';
 import { GRID_LEAD, PALETTES, type Ui } from './atlas-ui';
 import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, fillRows, headerRows, lineText, panelLines, type PanelModel, type PanelTab } from './panel-layout';
+import { KEY_HINT, bodyLines, fillRows, headerRows, lineText, panelLines, type PanelModel, type PanelTab } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
@@ -20,7 +20,7 @@ describe('C5: content plus fill reaches the foot row', () => {
         const fill = fillRows(m, bodyLines(m).length);
         expect([tab, rows, used + fill.length]).toEqual([tab, rows, rows - 1]);
         for (const l of fill.slice(0, -1)) expect(l.runs.length === 0 || lineText(l).trim() === '').toBe(true); // blank rows: the panel surface, no ink
-        if (fill.length >= 2) expect(lineText(fill[fill.length - 1]!).trim()).toBe('keys  r t c g k o'); // C1: the one dim key hint on the last spare row
+        if (fill.length >= 2) { const t = lineText(fill[fill.length - 1]!).trim(); expect(KEY_HINT.startsWith(t.replace(/\u2026$/, ''))).toBe(true); expect([...t].length).toBeLessThanOrEqual(36); } // C1: the one dim key hint on the last spare row
       });
     }
   }

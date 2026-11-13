@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Wave 31 follow-ups: the key hint `r: route  t: team  c: channel  g: gates  k: core  o: board  ctrl+x tab` is drawn once, dim 240, on the side panel's last spare row (cut to the pane, `KEY_HINT` in `mod/panel-layout.ts`); the pane now paints that fill row instead of a blank; `mod/pane/band-kind.ts` calls `bandKindOf` directly; the A3 live-truth filter matches the merged HUD rows; `mod/wave31-merge.test.ts`.
 - Wave 31 HUD: one fixed block. While agents run they ride their TODO row (name and clock right-aligned in 245) and the lower rule carries `SUBAGENTS n running`; no separate box, no `+N more` while the budget has room, no 234 spacer rows, no `r: route` key row (the band hotkeys are gone; the pane footer owns them). At rest SUBAGENTS is its own box headed `AGENT STATE TASK LAST RESULT` at every width (RESULT a count like `2 fn` or `-`, TASK takes the free width). A queued TODO row whose agent runs reads running.
 - Wave 31 motion: every running `◐◓◑◒` is accent 141; the done fade is 231 (200 ms), 151 held 600 ms, then 114, on HUD rows and the band done word.
 - Wave 31 band: at most four segments (state and clock, todo n/m, running count, one warning); one failure word `■ N killed` (203); `△ N gates to check` keeps the warn colour in every state; idle boxes dim to 240 rules and 245 text. The host draws `[-]` outside bodyColumns, so it is not moved.
