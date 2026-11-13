@@ -112,7 +112,7 @@ describe('B4: one warning mark and one layout at every width', () => {
   test('the band head and the checks row mark a failing check with the same glyph', () => {
     const out = rows(done(), gates, 150, core(0));
     expect(gateTally(gates as never).green).toBe(2);
-    expect(out[0]).toContain('△');
+    expect(out[0]).toContain('gates '); // wave 32: the band head says `gates n/m` (no △); the checks row keeps its own mark
     const checks = glyphsOf(out, ' checks ');
     expect(checks).toContain('△ completion');
     expect(checks).not.toContain('■');

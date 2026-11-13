@@ -61,13 +61,13 @@ describe('A1: the HUD and the route tab draw the same mark and colour for the sa
         const s = surfaces({ ...after, now: NOW + 5000 + dt }, ui, m.ctx(NOW + 5000 + dt));
         for (const [label, word] of [['wire the gate', 'done'], ['map the auth flow', 'done'], ['edit auth middleware', 'returned']] as const) {
           const [h, p] = [markOf(rowWith(s.hud, label), word), markOf(rowWith(s.panel, label), word)];
-          expect([name, dt, label, h.includes('no-')]).toEqual([name, dt, label, false]); // both rows were found, with a mark and a word
+          expect([name, dt, label, h.includes('no-glyph') || (word !== 'done' && h.includes('no-word'))]).toEqual([name, dt, label, false]); // both rows were found, with a mark and a word (wave 32: a finished HUD row draws no `done` word, the mark says it)
           // Critique 21: the HUD flash is the `●` itself stepping from bright to ok, never the `◌`/`◍` pop (animateRow `pop: false`). The panel's pop is the side panel slice's to retire; until then its
           // pop glyph is read as the disc it lands on, so the colour and the word are still compared beat by beat.
           expect([name, dt, label, /^[◌◍@]/.test(h)]).toEqual([name, dt, label, false]);
           // Critique 22: the HUD draws a hand-back as the done disc and the dim word `returned` (the scorer counts `◃` as unknown); the panel and the board keep their own mark until their slices follow.
           if (word === 'returned') expect([name, dt, label, /^[◉?]/.test(h)]).toEqual([name, dt, label, true]); // critique 27: the neutral hand-back mark, never the green done disc
-          else expect([name, dt, label, h]).toEqual([name, dt, label, p.replace(/^◌|^◍/, '●').replace(/^@/, '*')]);
+          else expect([name, dt, label, h.split(' ')[0]]).toEqual([name, dt, label, p.replace(/^◌|^◍/, '●').replace(/^@/, '*').split(' ')[0]]); // the mark and its colour; the HUD has no `done` word to compare (wave 32)
           seen.add(h);
         }
       }
@@ -129,13 +129,14 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
       if (ui.color !== '256') { expect(ramp[1]).not.toBe(ramp[0]); expect(ramp[2]).toBe(ramp[1]); expect(ramp[3]).not.toBe(ramp[2]); }
       for (let i = at + 1; at >= 0 && i < beats.length; i++) expect(beats[i]).toBe(rest); // once at rest, it stays there
     });
-    test(`${name}: the state word of a HUD row is faded in the window, as in the side panel`, () => {
+    test(`${name}: the mark of a HUD row is faded in the window, as in the side panel (wave 32: the HUD row has no \`done\` word to fade)`, () => {
       const { m, after } = observed(ui);
-      const word = (rows: readonly (readonly Run[])[]): Run => rowWith(rows, 'wire the gate').find((r) => r.t.trim() === 'done')!;
+      const mark = (rows: readonly (readonly Run[])[]): Run => rowWith(rows, 'wire the gate').find((r) => ENDS.has(r.t.trim()) && [...r.t.trim()].length === 1)!;
       const s = surfaces({ ...after, now: NOW + 5000 }, ui, m.ctx(NOW + 5000));
-      expect(word(s.hud).fg).toBeDefined(); // faded in the HUD
-      expect(word(s.hud).fg).toBe(word(s.panel).fg); // to the colour the panel fades it to
-      expect(word(surfaces(after, ui, undefined).hud).fg).toBeUndefined(); // and at rest the plain tone
+      expect(rowWith(s.hud, 'wire the gate').some((r) => r.t.trim() === 'done')).toBe(false);
+      expect(mark(s.hud).fg).toBeDefined(); // faded in the HUD
+      expect(mark(s.hud).fg).toBe(mark(s.panel).fg); // to the colour the panel fades it to
+      expect(mark(surfaces(after, ui, undefined).hud).fg).toBeUndefined(); // and at rest the plain tone
     });
   }
 });

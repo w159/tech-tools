@@ -78,10 +78,12 @@ function composeFixed(i: SlotInput): SlotPlan {
 	const total = Math.max(1, Math.min(budget, Math.max(i.held, reserve))); // the content: never falls while the run lasts
 	const hudCap = Math.max(0, total - BAND_KEEP_ROWS); // the band keeps its row; the HUD takes every other row it can use
 	const idle = bandKindOf(i.bandIn([], 1)) === 'idle';
-	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true, ...(idle ? { idle: true } : {}) }) as Segment[][];
+	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true, settled: true, ...(idle ? { idle: true } : {}) }) as Segment[][];
 	const band = i.bandIn(hud, 1);
-	const pad = Math.max(0, total - BAND_KEEP_ROWS - hud.length);
-	return { hud, band, gap: 0, pad, held: total, lead: Math.max(0, budget - total) }; // the host puts the slot at `screen - budget - below`: the unused budget goes ABOVE the band as empty rows, so the band keeps its screen row whatever the host list below does
+	// Wave 32: the slot is `budget` rows tall and the band is its FIRST row. The host's budget is half the screen less the rows below the slot (the prompt and its own agent list), so the slot's top is one screen row for the
+	// whole run; the rows the block does not use are empty rows UNDER it. (Empty rows above the band put the band at `screen - below - total`, which moves by the size of the host's list every time it comes or goes: the 27/24/25/24/27 of critique 32.)
+	const pad = Math.max(0, budget - BAND_KEEP_ROWS - hud.length);
+	return { hud, band, gap: 0, pad, held: total, lead: 0 };
 }
 
 export function composeSlot(i: SlotInput): SlotPlan {

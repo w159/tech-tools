@@ -22,7 +22,7 @@ const plan = (): TodoItem[] => [
 ];
 const agent = (name: string, state: string, ui_: string): HudAgent => ({ name, role: 'explorer', state, ui: ui_ as never, model: 'haiku', since: NOW - 20_000, lastTool: 'Read', target: 'x.py' });
 const agents = [agent(names[0]!, 'done', 'done'), agent(names[1]!, 'failed', 'failed'), agent(names[2]!, 'failed', 'failed')];
-const hud = (cols: number, maxRows: number, input: HudInput = { todos: plan(), agents }): string[] => hudLines(input, { cols, maxRows, ui, now: NOW }).map(runsString);
+const hud = (cols: number, maxRows: number, input: HudInput = { todos: plan(), agents }): string[] => hudLines(input, { cols, maxRows, ui, now: NOW, merge: false }).map(runsString); // wave 32: the at-rest rows these tests pin are the two-box shape (merge: false); the default is the one merged block
 
 /** A plan row: its glyph starts the line (agent rows start with theirs too, but name a worker, not `T<n> <title>`). */
 const PLAN_ROW = /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] [a-z]/;

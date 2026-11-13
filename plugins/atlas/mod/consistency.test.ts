@@ -141,7 +141,7 @@ function hudFacts(s: LiveSnapshot, host: 'cc' | 'omp', rich = false): Facts {
   const todoRows = rows.slice(0, at);
   return {
     todo: todoOf(rows[0]!), agents: counts(rows[at]!), rail: railOf(todoRows.join('\n')),
-    items: stateRows(todoRows, new RegExp(`^[▸ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`)),
+    items: stateRows(two.slice(0, at2), new RegExp(`^[▸ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`)), // wave 32: a done row of the merged block carries no `done` word, so the per-row words are read from the two-box shape of the same input
     workers: stateRows(two.slice(at2 + 1), new RegExp(`^[▸ ] (${G}) (\\S+)\\s+(queued|running|done|failed|killed|blocked|waiting)\\b`)),
     ...(rich ? {} : { tasks: Object.fromEntries(two.slice(at2 + 1).flatMap((r: string) => { const m = new RegExp(`^[▸ ] ${G} (\\S+)\\s+.*?\\s((?:T\\d+,?)+)(?:\\s|$)`).exec(r); return m ? [[m[1]!, m[2]!]] : []; })) }),
   };

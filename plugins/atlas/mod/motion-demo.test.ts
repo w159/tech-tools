@@ -77,9 +77,10 @@ describe('motion-demo frames', () => {
   test('critique 7/14 (wave 31): the agent row keeps its name through done (it never goes blank at the change)', () => {
     const agentRow = (n: string): string => lastRow(files[n]!);
     // wave 31: the running agent rides its TODO row (name and clock right-aligned); the tool echo is not drawn anywhere, and the row never goes blank at the change
-    expect(agentRow('agent-00-running.ans')).toContain('implementer-band');
+    // wave 32: the agent column is 15 cells, so `implementer-band` ends in `…`
+    expect(agentRow('agent-00-running.ans')).toContain('implementer-ba…');
     expect(agentRow('agent-00-running.ans')).not.toContain('runs.ts:17');
-    for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans') && !k.includes('running'))) expect([n, agentRow(n).includes('implementer-band'), agentRow(n).includes('runs.ts:17')]).toEqual([n, true, false]);
+    for (const n of Object.keys(files).filter((k) => k.startsWith('agent-') && k.endsWith('.ans') && !k.endsWith('strip.ans') && !k.includes('running'))) expect([n, agentRow(n).includes('implementer-ba…'), agentRow(n).includes('runs.ts:17')]).toEqual([n, true, false]);
   });
   test('every row is exactly the width', () => {
     for (const [n, t] of Object.entries(files)) if (!n.endsWith('strip.ans')) for (const l of t.trimEnd().split('\n')) expect([...plain(l)].length).toBe(100);

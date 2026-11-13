@@ -164,7 +164,7 @@ describe('step 6: the motion demo strips show the rows, not the bottom border', 
   test('todo-strip and agent-strip carry the row text of every frame', () => {
     const all = demoFrames(100, MOTION_STEP_MS, 'truecolor');
     const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
-    for (const [file, text] of [['todo-strip.ans', 'wire the gate'], ['agent-strip.ans', 'implementer-band']] as const) {
+    for (const [file, text] of [['todo-strip.ans', 'wire the gate'], ['agent-strip.ans', 'implementer-ba…']] as const) {
       const lines = plain(all[file]!).split('\n').filter((l) => l.trim() !== '');
       expect(lines.length).toBeGreaterThan(1);
       for (const l of lines) {
