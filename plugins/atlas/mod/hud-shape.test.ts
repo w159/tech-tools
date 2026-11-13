@@ -132,7 +132,8 @@ describe('step 2: a rounded box that never changes shape', () => {
       expect(at(11)[0]).toMatch(/2\/5/); // the finished rows fold into the figure after that (wave 37: no second `2 done` count)
       expect(at(11)[0]).not.toMatch(/done/);
       expect(plan(at(11)).some((l) => /T[12] read/.test(l))).toBe(false);
-      expect(plan(at(8)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place
+      expect(plan(at(9)).filter((l) => /T[345] /.test(l)).length).toBeGreaterThanOrEqual(1); // an open plan row keeps its place while the summary row and it both fit
+      expect(at(8).some((l) => /^ {2}● 2 done {2}◇ 2 queued {2}\S 1 more running/.test(l))).toBe(true); // state 39: the one slot left holds the summary row, which counts the open row it hides
       for (let n = 13; n >= 8; n--) expect(at(n).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(l))).toHaveLength(3); // every agent keeps its row
     }
   });

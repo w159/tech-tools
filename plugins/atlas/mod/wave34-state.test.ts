@@ -212,10 +212,10 @@ describe('3. dispatches fold into the plan: one row per plan item', () => {
 });
 
 describe('4. geometry: the band keeps its row, the title takes the free cells', () => {
-  test('110 columns: `T4 combine the three reports` shows whole', () => {
+  test('110 columns: a title that does not fit the fixed grid ends in `…` on the cell (state 39: owner 12, then the title, shrink before a column drops)', () => {
     const titles = ['T1 read alpha.py (alpha-explorer)', 'T2 read beta.py (beta-explorer)', 'T3 read gamma.py (gamma-explorer)', 'T4 combine the three reports', 'T5 write the summary'];
     const f = frameOf({ ...DEFAULT, titles, noOwner: true }, 56, 40);
-    expect(todoRowsOf(f).find((r) => r.includes('T4'))).toContain('T4 combine the three reports');
+    expect(todoRowsOf(f).find((r) => r.includes('T4'))).toContain('T4 combine the three r…');
     for (const r of f.hud) expect([...r].length).toBeLessThanOrEqual(56);
   });
   test('the band is the first row of the slot in every state, within the width', () => {

@@ -225,6 +225,7 @@ describe('4. the TODO HUD: one state per failed row, one count, one anchored chi
 });
 
 describe('5. SUBAGENTS is a full-width table in every state', () => {
+  const nameAt = (n: string, body: number): string => (body < 80 && n.length > 12 ? `${n.slice(0, 11)}…` : n); // state 39: at 110 columns AGENT is 12 cells (LAST keeps 14)
   const tableOf = (f: Frame): string[] => { const at = f.hud.findIndex((r) => r.includes('▸ SUBAGENTS')); return f.hud.slice(at); };
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: running, done and failed all draw a title, bold 245 headers AGENT STATE TIME, one row per agent in dispatch order, a closing rule`, () => {
@@ -236,18 +237,18 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
         expect(t.at(-1)).toMatch(/^╰─+╯$/);
         const h = f.hudSegs[f.hud.indexOf(t[1]!)]!.find((x) => x.t.includes('AGENT'))!;
         expect([h.color, h.bold]).toEqual([sub, true]);
-        expect(t.slice(2, -1).map((r) => r.trim().split(/\s+/)[0]!)).toEqual(NAMES);
+        expect(t.slice(2, -1).map((r) => r.trim().split(/\s+/)[0]!)).toEqual(NAMES.map((n) => nameAt(n, body)));
       }
     });
     test(`${cols} columns: STATE is a 141 spinner and \`running\`, \`● done\` in 114, \`■ failed\` in 203; TIME is a clock; no row is a bare list of times`, () => {
       const run = frameOf(RUNNING, body, screen);
-      const rr = run.hud.findIndex((r) => /^ {2}alpha-explorer\s+[⠀-⣿] running\s+\d+:\d\d/.test(r));
+      const rr = run.hud.findIndex((r) => r.startsWith(`  ${nameAt('alpha-explorer', body)}`) && /\s[⠀-⣿] running\s+\d+:\d\d/.test(r));
       expect(rr).toBeGreaterThan(0);
       expect(run.hudSegs[rr]!.find((x) => BRAILLE.test(x.t) && x.t.trim().length === 1)?.color).toBe(PALETTES.mocha.accent);
       const stop = frameOf(STOP, body, screen);
-      const ds = stop.hud.findIndex((r) => /^ {2}alpha-explorer\s+● done/.test(r));
+      const ds = stop.hud.findIndex((r) => r.startsWith(`  ${nameAt('alpha-explorer', body)}`) && /\s● done/.test(r));
       expect(stop.hudSegs[ds]!.find((x) => x.t === '●')?.color).toBe(ok);
-      const fs = stop.hud.findIndex((r) => /^ {2}gamma-explorer\s+■ failed/.test(r));
+      const fs = stop.hud.findIndex((r) => r.startsWith(`  ${nameAt('gamma-explorer', body)}`) && /\s■ failed/.test(r));
       expect(stop.hudSegs[fs]!.find((x) => x.t === '■')?.color).toBe(bad);
       for (const f of [run, stop, frameOf(FINISHED, body, screen)]) for (const r of f.hud) expect(r, 'never a bare list of clocks').not.toMatch(/^[\s│]*(?:\d+:\d\d\s+)+\d+:\d\d\s*$/);
     });
@@ -261,13 +262,13 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
     const ends = rows.map((r) => /\d+:\d\d/.exec(r)!).map((m) => m.index + m[0].length);
     expect(new Set(ends).size, 'the TIME column ends on one cell').toBe(1);
   });
-  test('maxRows is respected: a short slot counts what it cannot draw on a `+N more` row', () => {
+  test('maxRows is respected: a short slot counts what it cannot draw on one summary row (`⠧ N more running`)', () => {
     const ags = ['a', 'b', 'c', 'd', 'e'].map((n, i) => ({ name: `${n}-explorer`, role: 'explorer', state: 'working', ui: 'running', model: 'haiku', startedAt: 5_000_000 - 9000 - i, since: 5_000_000 - 3000, tool: 'Read', target: 'x.py', lastTool: 'Read', calls: i + 1 }) as never);
     for (const maxRows of [9, 10, 12, 16]) {
       const rows = hud.hudLines({ todos: ownTodos(PLAN.map((c, i) => ({ id: `t${i + 1}`, content: c, status: 'pending' }) as unknown as TodoItem)), agents: ags }, { cols: 93, maxRows, ui, now: 5_000_000 }).map((r) => r.map((x) => x.t).join(''));
       expect(rows.length, `${maxRows}`).toBeLessThanOrEqual(maxRows);
       const shown = rows.filter((r) => /^ {2}\S+-explorer\s+[⠀-⣿] running/.test(r)).length;
-      const more = Number(rows.map((r) => /^ {2}\+(\d+) more/.exec(r)).find((m) => m)?.[1] ?? 0);
+      const more = Number(rows.map((r) => /^ {2}\S+ (\d+) more running/.exec(r)).find((m) => m)?.[1] ?? 0);
       expect(shown + more, `${maxRows}: every agent is a row or counted`).toBe(5);
     }
   });

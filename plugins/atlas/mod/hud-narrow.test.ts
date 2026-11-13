@@ -29,7 +29,15 @@ describe('SUBAGENTS block at 61 transcript cells (110 columns with the pane dock
       test(`${n} running, ${budget} rows: the title and one row per agent show, every row fits 61 cells`, () => {
         const hud = hudAt(n, budget);
         expect(hud.some((r) => r.includes('▸ SUBAGENTS'))).toBe(true);
-        for (const name of NAMES.slice(0, n)) expect(hud.filter((r) => r.trimStart().startsWith(name) && /running/.test(r))).toHaveLength(1); // wave 36: the table row (the plan row only names its owner at the end)
+        // State 39: the rows a box leaves out are counted on one summary row inside it, which costs a row; where the slot cannot hold the plan rows, that row and the table, SUBAGENTS folds to its one title row and its tally
+        // (`⠧ 3 run`) while every running plan row keeps its place (wave 38). At 61 cells AGENT is 12 cells wide, so a name ends in `…` and LAST keeps 14.
+        const table = hud.some((r) => /AGENT\s+STATE/.test(r));
+        for (const name of NAMES.slice(0, n)) {
+          const short = name.slice(0, 11);
+          if (table) expect(hud.filter((r) => r.trimStart().startsWith(short) && /running/.test(r))).toHaveLength(1); // wave 36: the table row (the plan row only names its owner at the end)
+          else expect(hud.filter((r) => r.includes(short) && /running/.test(r))).toHaveLength(1);
+        }
+        if (!table) expect(hud.find((r) => r.includes('▸ SUBAGENTS'))).toContain(`${n} run`);
         for (const r of hud) expect(textWidth(r)).toBe(COLS);
       });
     }

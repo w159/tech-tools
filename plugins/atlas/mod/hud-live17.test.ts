@@ -117,12 +117,15 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     expect(hud.some((r) => /^ {2}● 3 done {2}◇ 1 queued/.test(r)), hud.join('\n')).toBe(true);
     expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r))).toHaveLength(3);
   });
-  test('all open (the live frame, critique 28): the band still keeps a row, every agent row shows, both boxes close and the plan rows left out are counted on the TODO title', () => {
+  test('all open (the live frame, critique 28): the band still keeps a row, every agent row shows, both boxes close and the plan rows left out are counted on ONE summary row inside the TODO box (state 39), never on the title', () => {
     const { hud, band } = slot(plan(['in_progress', 'in_progress', 'in_progress', 'pending', 'pending']), 61, 10);
     expect(band).toBeGreaterThanOrEqual(1);
     const shown = hud.filter((r) => /\bT[1-5] step/.test(r)).length;
-    expect(shown).toBeGreaterThanOrEqual(2);
-    expect(shown + Number(/\+(\d+) more/.exec(hud[0]!)?.[1] ?? 0)).toBe(5);
+    expect(shown).toBeGreaterThanOrEqual(1);
+    const summary = hud.find((r) => /^ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
+    expect(summary, hud.join('\n')).toBeDefined();
+    expect(hud[0]!).not.toMatch(/\+\d+ more/);
+    expect(shown + [...summary.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5); // the hidden running rows are counted too (`⠋ 2 more running`)
     expect(hud.filter((r) => /-explorer\s+running/.test(r))).toHaveLength(3);
     expect(hud.filter((r) => r.startsWith('╰') && r.endsWith('╯'))).toHaveLength(2);
     expect(hud.length).toBeLessThanOrEqual(9);

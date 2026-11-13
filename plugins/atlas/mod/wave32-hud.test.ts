@@ -120,11 +120,12 @@ describe('1. the Atlas region holds one height and the band one screen row for t
       for (const { st, f } of scenario(screen, cols)) {
         expect(f.rows[1]!, st.name).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ TODO /);
         const listed = st.running + st.returned > 0; // wave 36: with any agent the squad is a table under the plan's closed box, running or not; before the first agent one closing rule says so
-        const title = f.rows.filter((r) => (listed ? /^╭.*▸ SUBAGENTS/ : /^╰.*▸ SUBAGENTS/).test(r));
+        const title = f.rows.filter((r) => (listed ? /^[╭╰].*▸ SUBAGENTS/ : /^╰.*▸ SUBAGENTS/).test(r)); // state 39: a folded SUBAGENTS is the plan box's closing rule carrying its title and tally (`╰─ ... ▸ SUBAGENTS ⠧ 5 running ──╯`)
         expect([st.name, title.length]).toEqual([st.name, 1]);
-        expect(f.rows.some((r) => (listed ? /^╰.*▸ SUBAGENTS/ : /^╭.*▸ SUBAGENTS/).test(r)), `${st.name}: one form or the other`).toBe(false);
+        const folded = listed && /^╰/.test(title[0] ?? ''); // state 39: SUBAGENTS folded to one row is the plan box's own closing rule
+        expect(f.rows.some((r) => (listed ? /^[╭╰].*▸ SUBAGENTS/ : /^╭.*▸ SUBAGENTS/).test(r) && r !== title[0]), `${st.name}: one form or the other`).toBe(false);
         const plans = f.rows.findIndex((r) => /^╰/.test(r)); // the plan box's own bottom rule
-        if (listed) expect(f.rows.indexOf(title[0]!), st.name).toBe(plans + 1);
+        if (listed) expect(f.rows.indexOf(title[0]!), st.name).toBe(folded ? plans : plans + 1);
       }
     });
     test(`${cols} cells: the label is always todo n/m (never phase n/m), from the first frame`, () => {
@@ -171,59 +172,65 @@ describe('3. the band bar draws no handle of its own (wave 33: the host draws th
   }
 });
 
-describe('4. the TODO rows are a 3-column grid: title, agent (15), time (5), one right edge', () => {
+describe('4. the TODO rows are one fixed grid: title, STATE (8), OWNER (16, 12 at 110), TIME (5, right-aligned)', () => {
   const GRID = [[93, 45], [56, 40]] as const;
+  // State 39: every row (running, queued, done, failed, lead) has the same cells: title 4..stateAt, STATE at stateAt, OWNER at ownerAt, TIME right-aligned in the 5 cells at timeAt.
+  const AT = { 93: { state: 45, owner: 54, ownerW: 16, time: 71 }, 56: { state: 28, owner: 37, ownerW: 12, time: 50 } } as const;
   for (const [cols, screen] of GRID) {
-    test(`${cols} cells: the agent column starts 22 cells from the right edge and the clock fills the 5 cells before the last, on every row`, () => {
+    test(`${cols} cells: the state, owner and time columns start at the same cell on every row`, () => {
+      const at = AT[cols];
       let seen = 0;
       for (const { st, f } of scenario(screen, cols)) {
-        for (const r of f.hud.map(txt).filter((x) => PLANROW.test(x) && /-explor/.test(x))) {
+        for (const r of f.hud.map(txt).filter((x) => PLANROW.test(x))) {
           seen++;
           expect([st.name, [...r].length]).toEqual([st.name, cols]);
-          expect([st.name, r, /^\S.{13}[^ ]? $/.test(r.slice(cols - 22, cols - 6)) || /^[a-z-]+ *$/.test(r.slice(cols - 22, cols - 6))]).toEqual([st.name, r, true]);
-          expect([st.name, r, /^ *\d+:\d\d$/.test(r.slice(cols - 6, cols - 1))]).toEqual([st.name, r, true]);
-          expect(r.endsWith(' '), r).toBe(true);
+          expect([st.name, r, /^(?:running|queued|done|failed|blocked|waiting|returned)\s*$/.test(r.slice(at.state, at.owner))]).toEqual([st.name, r, true]);
+          expect([st.name, r, r.slice(at.owner, at.time - 1).length]).toEqual([st.name, r, at.ownerW]);
+          expect([st.name, r, /^ *(?:\d+:\d\d|-)$/.test(r.slice(at.time, at.time + 5))]).toEqual([st.name, r, true]);
+          expect(r.slice(at.time + 5).trim(), r).toBe('');
         }
       }
-      expect(seen).toBeGreaterThan(10);
+      expect(seen).toBeGreaterThan(20);
     });
   }
-  test('a name past 15 cells ends in an ellipsis; the column never widens', () => {
+  test('a name past the owner column ends in an ellipsis; the column never widens', () => {
     for (const [cols, screen] of GRID) {
       const f = frameOf(stage('5 running'), cols, hostBudget(screen, 5) + 8, 0); // wave 36: five agents are a table under the plan, so the slot is roomier to hold both
+      const at = AT[cols];
       const r = f.hud.map(txt).find((x) => /T5 /.test(x))!;
-      expect(r.slice(cols - 22, cols - 6)).toBe('epsilon-explor… ');
+      expect(r.slice(at.owner, at.owner + at.ownerW)).toBe(cols === 93 ? 'epsilon-explorer' : 'epsilon-exp…');
       const r1 = f.hud.map(txt).find((x) => /T1 /.test(x))!;
-      expect(r1.slice(cols - 22, cols - 6)).toBe('alpha-explorer  ');
+      expect(r1.slice(at.owner, at.owner + at.ownerW)).toBe(cols === 93 ? 'alpha-explorer  ' : 'alpha-explo…');
     }
   });
   test('the title drops the (agent) suffix, so the name appears once per row', () => {
     const st: Stage = { name: '3 running', running: 3, returned: 0, suffix: true };
     for (const [cols, screen] of GRID) {
       const f = frameOf(st, cols, hostBudget(screen, 3) + 6, 0);
-      const rows = f.hud.map(txt).filter((x) => PLANROW.test(x) && /-explorer/.test(x));
+      const rows = f.hud.map(txt).filter((x) => PLANROW.test(x) && /-explo/.test(x));
       expect(rows.length).toBe(3);
       for (const r of rows) {
-        expect(r, r).not.toMatch(/\(\w+-explorer\)/);
-        expect((r.match(/-explorer/g) ?? []).length, r).toBe(1);
+        expect(r, r).not.toMatch(/\(\w+-explo\w*…?\)/);
+        expect((r.match(/-explo/g) ?? []).length, r).toBe(1);
       }
     }
   });
 });
 
-describe('5. a done row: dim title, no `done` word, the agent and its time kept, no `returned`', () => {
-  test('in done and idle the finished rows read `● title ... agent time`', () => {
+describe('5. a done row: dim title, the `done` word in its state cell, the agent and its time kept, no `returned`', () => {
+  test('in done and idle the finished rows read `● title ... done agent time`', () => {
     for (const name of ['done', 'idle']) {
       const f = frameOf(stage(name), 150, hostBudget(45, 0), 0);
       const rows = f.hud.filter((r) => /^[ ▸] ● T\d/.test(txt(r)));
       expect(rows.length, name).toBe(5);
       for (const r of rows) {
         const t = txt(r);
-        expect(t, name).not.toMatch(/\bdone\b|returned/);
+        expect(t, name).not.toMatch(/returned/);
+        expect(t, name).toMatch(/ done {5}\S/); // state 39: every row has a state word, the done one quiet beside its green mark
         const title = r.find((x) => /^T\d /.test(x.t))!;
         expect([name, t, title.color]).toEqual([name, t, PALETTE5.secondary]); // wave 37: 245
       }
-      expect(txt(rows[0]!), name).toMatch(/alpha-explorer\s+0:04 $/);
+      expect(txt(rows[0]!), name).toMatch(/alpha-explorer\s+0:04\s*$/);
     }
   });
   test('no frame of the run says `returned` or counts N returned', () => {
@@ -250,12 +257,13 @@ describe('6. gates: the one amber 179 on the bar is the separate `△ gates 2/4`
 
 describe('7. same-frame truth: the row flips to done on the event that ends the agent, and the band counts it then', () => {
   const returned: Stage = { name: 'handed back', running: 2, returned: 1, handBack: true };
-  test('the HUD row is done (no word) and not `returned`; the plan header and the band both say 1/5', () => {
+  test('the HUD row is done and not `returned`; the plan header and the band both say 1/5', () => {
     for (const [cols, screen] of [[93, 45], [56, 40]] as const) {
       const f = frameOf(returned, cols, hostBudget(screen, 2) + 4, 0); // wave 36: the table under the plan needs the rows the squad rule used to
       const row = f.hud.map(txt).find((r) => /T1 /.test(r))!;
       expect(row, `${cols}`).toMatch(/^[ ▸] ● T1/);
-      expect(row, `${cols}`).not.toMatch(/returned|done/);
+      expect(row, `${cols}`).not.toMatch(/returned/);
+      expect(row, `${cols}`).toMatch(/ done /);
       expect(f.hud.map(txt)[0]!, `${cols}`).toMatch(/TODO +1\/5/);
       expect(f.rows[0]!, `${cols}`).toMatch(/todo (?:[▰▱]+ )?1\/5/);
     }

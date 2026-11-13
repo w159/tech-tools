@@ -210,6 +210,21 @@ const LIST_NUMBER = /^\d{1,3}[.)]\s+/;
 /** What came back is a dump of the file's lines (`first 3 lines:`, `line 1 `def ...``, `full file is 7 lines`, `1 def f():`): content, not an outcome. */
 const DUMP = /^(?:first|last)\s+\d+\s+lines?\b|^lines?\s+\d|^(?:the\s+)?(?:full\s+)?file\s+is\s+\d+\s+lines?\b|^\d{1,4}\s+(?:(?:def|function|func|fn|class|import|from|const|let|var|return)\b|#|\/\/)/i;
 const FUNCTION = /\b(?:def|function|func|fn)\s+\w/g;
+/** State 39 (SUBAGENTS FN `-` in the stop runs: alpha's count lived in a row that did not state the outcome, so the first row to state one won and the figure was lost): the functions a worker reported, counted over EVERY
+ * row it owns and its closing line, never over the one row that happened to state the outcome. A tool echo counts its `def` lines (or the `[N functions]` tail a cut echo keeps), prose counts `N functions` or the names
+ * it gives with a line (`alpha_one (line 1), alpha_two (line 5)`); the largest figure any row holds wins. */
+const LINE_NAME = /\b([A-Za-z_]\w*)\s*\((?:at\s+)?lines?\s+\d+\)/g;
+const SAID_COUNT = /\b(\d+)\s+functions?\b/i;
+export function functionsIn(texts: readonly (string | null | undefined)[]): number {
+  let best = 0;
+  for (const raw of texts) {
+    const text = flat(raw).replace(LIST_NUMBER, '');
+    if (text === '') continue;
+    const names = new Set([...text.matchAll(LINE_NAME)].map((m) => m[1]!)).size;
+    best = Math.max(best, (text.match(FUNCTION) ?? []).length, Number(FN_TAIL.exec(text)?.[1] ?? 0), Number(SAID_COUNT.exec(text)?.[1] ?? 0), names);
+  }
+  return best;
+}
 /** The longest outcome LAST is given: a sentence past it is cut to a clause, else replaced by a plain phrase (critique 18: no `1.`, no cut sentence). */
 const OUTCOME_MAX = 40;
 
@@ -287,9 +302,10 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const tasks = plan.flatMap((t, i) => (mine(t) ? [i + 1] : []));
     const state = a.ui ?? workerUiState(a.state);
     const last = lastOf(a, state, owned.map((t) => t.evidence), root);
+    const fn = state === 'done' ? functionsIn([...owned.map((t) => t.evidence), a.lastLine]) : 0; // state 39: the whole report's count, whichever row states the outcome
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(fn > 0 ? { fn } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -345,8 +361,10 @@ export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
   return opts.idle === true ? rows.map(idleRow) : rows;
 }
 
-/** At rest the block is quiet (critique 29: idle and done drew the same green boxes): every run but the 240 rules reads 245, no weight, no fill. */
-const idleRow = (row: Run[]): Run[] => row.map((x) => (x.tone === 'dim' ? x : { t: x.t, tone: 'sub' as const, ...(x.strike ? { strike: true } : {}) }));
+/** At rest the block is quiet (critique 29: idle and done drew the same green boxes): every run but the 240 rules and the done and failed marks reads 245, no weight, no fill. */
+const idleRow = (row: Run[]): Run[] => row.map((x) => (x.tone === 'dim' || IDLE_MARK.has(x.t) ? x : { t: x.t, tone: 'sub' as const, ...(x.strike ? { strike: true } : {}) }));
+/** State 39 (idle turned all five done circles 245, hiding that the work finished): the done `●` (114) and the failed `■` (203) keep their colour at rest; only the titles and words go quiet. */
+const IDLE_MARK = new Set(['●', '■']);
 
 /** A run as a Segment: the theme's tone colour on the run's own fill or the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export function segmentOf(x: Run, ui: Ui): Segment {

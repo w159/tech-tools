@@ -222,7 +222,7 @@ describe('5. SUBAGENTS: one frozen schema', () => {
       const f = frameOf(sh, body, screen);
       const h = header(f);
       const timeEnd = h.indexOf('TIME') + 4, callsEnd = h.indexOf('CALLS') + 5;
-      const agents = f.hud.filter((r) => /^ {2}\S+-explorer/.test(r));
+      const agents = f.hud.filter((r) => /^ {2}(?:alpha|beta|gamma)-expl/.test(r)); // state 39: at 110 columns the name clips to 12 cells (`alpha-explo…`)
       expect(agents.length, name).toBe(3);
       for (const r of agents) {
         expect(r.slice(0, timeEnd).split(/\s+/).pop(), `${name} TIME`).toMatch(/^\d+:\d\d$/);

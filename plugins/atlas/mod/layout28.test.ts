@@ -24,7 +24,7 @@ const draw = (n: number, cols: number, maxRows: number): string[] => hudLines(in
 const todoRowsOf = (rows: string[]): string[] => rows.filter((t) => /T\d\b/.test(t));
 
 /** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
-const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { const m = /^ {2}[●o] (\d+) done(?: {2}[◇-] (\d+) queued)?\s*$|^ {2}[◇-] (\d+) queued\s*$/.exec(r); return n + (m ? Number(m[1] ?? 0) + Number(m[2] ?? 0) + Number(m[3] ?? 0) : 0); }, 0);
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { if (!/^ {2}\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)(?: {2}\S (\d+) (?:more )?\w+)*\s*$/.test(r)) return n; return n + [...r.matchAll(/\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)/g)].reduce((k, m) => k + Number(m[1]), 0); }, 0);
 
 describe('layout28 item 1: the TODO box shrinks first and every agent row stays (critique 28)', () => {
   // 150x45 gives a 12-row slot (11 for the HUD under the band row), 110x40 a 10-row slot (9 for the HUD).

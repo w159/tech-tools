@@ -87,7 +87,8 @@ describe('fitStack with the plan folded', () => {
     expect(closed(five)).toBe(1);
     const four = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 4).map((r) => runsString(r)); // only now an agent row is windowed, and the title counts it
     expect(four.length).toBe(4);
-    expect(four[0]).toMatch(/SUBAGENTS .*\+1 more/);
+    expect(four[0]).toMatch(/SUBAGENTS .*3 running/); // state 39: the title keeps the tally of every agent, never `+N more`
+    expect(four[0]).not.toMatch(/\+\d+ more/);
     expect(four.filter((l) => /agent\d/.test(l)).length).toBe(2);
     const roomy = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 12).map((r) => runsString(r));
     expect(roomy.filter((l) => /item\d/.test(l)).length).toBe(3);
@@ -102,7 +103,7 @@ describe('fitStack with the plan folded', () => {
     expect(five.filter((l) => /agent\d/.test(l)).length).toBe(3);
     const three = fitStack({ todos: [], agents }, { cols: 100, ui }, 3).map((r) => runsString(r));
     expect(three.filter((l) => /agent\d/.test(l)).length).toBe(1);
-    expect(three[0]).toMatch(/\+2 more/);
+    expect(three[0]).toMatch(/3 running/); // state 39: the tally on the title counts the two agents the window leaves out
     const two = fitStack({ todos: [], agents }, { cols: 100, ui }, 2).map((r) => runsString(r)); // below the title, one agent and its rule: the agents' ribbon alone
     expect(two).toHaveLength(1);
     expect(two[0]).toMatch(/SUBAGENTS/);

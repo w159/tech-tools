@@ -30,7 +30,7 @@ const phases = worldPhases();
 // Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) with the count and meter inside it, and a `╰───╯` rule closes the block, so the goldens are the rows as drawn.
 const edge = (rows: readonly string[]): string[] => [...rows];
 /** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
-const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { const m = /^ {2}[●o] (\d+) done(?: {2}[◇-] (\d+) queued)?\s*$|^ {2}[◇-] (\d+) queued\s*$/.exec(r); return n + (m ? Number(m[1] ?? 0) + Number(m[2] ?? 0) + Number(m[3] ?? 0) : 0); }, 0);
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { if (!/^ {2}\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)(?: {2}\S (\d+) (?:more )?\w+)*\s*$/.test(r)) return n; return n + [...r.matchAll(/\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)/g)].reduce((k, m) => k + Number(m[1]), 0); }, 0);
 
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
@@ -269,7 +269,7 @@ describe('hud row budget', () => {
     expect(hudLines({ todos: [], agents: [] }, view(120))).toEqual([]);
   });
   test('hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows', () => {
-    expect(hudCompactRows({ todos: plan, agents })).toBe(7 + 6); // round 5: both closing rules stay; TODO ribbon, 5 rows and its rule (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents, the overflow row and its rule
+    expect(hudCompactRows({ todos: plan, agents })).toBe(7 + 7); // state 39: the overflow row is one dim summary row; round 5: both closing rules stay; TODO ribbon, 5 rows and its rule (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents, the overflow row and its rule
     expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 7 + 6 + 1))).join('\n')).toContain('AGENT'); // one row beyond the floor: the blank returns beside the column names
     for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
     expect(hudBudget(1, 7, 7, true)).toBe(1);

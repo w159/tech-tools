@@ -177,16 +177,17 @@ describe('5. the plan row budget and the overflow row', () => {
   });
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
     const rows = hudLines(input, view(88, 5)).map(runsString); // wave 31: the merged block holds all five plan rows and the agents on them in 7 rows, so the cut needs a slot under that
-    const more = rows.find((r) => /\+\d+ more/.test(r))!;
-    expect(more).toMatch(/▸ TODO {2}0\/5 · \+\d+ more ▱+ ─+╮$/); // the count rides the TODO ribbon (critique 16: a row of its own cost a plan row)
+    expect(rows[0]).not.toMatch(/\+\d+ more/); // state 39: one overflow idiom, a dim summary row inside the box, never the title
+    const more = rows.find((r) => /^ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
+    expect(more, rows.join('\n')).toBeDefined();
     expect(more).not.toContain('...');
     const planRows = rows.filter((r) => PLAN_ROW.test(r)).length;
-    expect(planRows + Number(/(\d+) more/.exec(more)![1])).toBe(5); // every slot holds a row: shown plus counted is the whole plan
+    expect(planRows + [...more.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5); // shown plus counted is the whole plan, the hidden running row included (`⠋ 1 more running`)
   });
   test('a plan longer than five still keeps its window and counts the rest', () => {
     const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));
     const rows = hudLines({ todos: many, agents: [] }, view(88, hudCompactRows({ todos: many, agents: [] }, 88))).map(runsString);
-    expect(rows.some((r) => /\+\d+ more|◇ \d+ queued/.test(r))).toBe(true);
+    expect(rows.some((r) => /◇ \d+ queued/.test(r))).toBe(true); // state 39: the summary row, not `+N more`
   });
 });
 
@@ -259,10 +260,10 @@ describe('5d. a task that just completed stays in the folded plan', () => {
       { ...todo('t1', 'T1 read alpha.py', 'completed'), completed_at: at - 600 }, { ...todo('t2', 'T2 read beta.py', 'in_progress'), claimed_at: at - 60 },
       { ...todo('t3', 'T3 read gamma.py', 'completed'), completed_at: at }, todo('t4', 'T4 combine the reports', 'pending'), todo('t5', 'T5 write the summary', 'pending'),
     ];
-    const rows = hudLines({ todos: plan, agents: [] }, { cols: 104, maxRows: 4, ui, rich: false, now: NOW }).map(runsString);
+    const rows = hudLines({ todos: plan, agents: [] }, { cols: 104, maxRows: 5, ui, rich: false, now: NOW }).map(runsString); // state 39: the summary row takes a slot, so the two rows and the summary need 5
     expect(rows.some((r) => r.includes('T3 read gamma.py'))).toBe(true);
     expect(rows.some((r) => r.includes('T2 read beta.py'))).toBe(true);
-    expect(rows.some((r) => /\+\d+ more|◇ \d+ queued/.test(r))).toBe(true);
+    expect(rows.some((r) => /◇ \d+ queued/.test(r))).toBe(true);
   });
 });
 
