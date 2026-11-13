@@ -86,28 +86,26 @@ const hostBudget = (screenRows: number, running: number): number => Math.floor(s
 const isBandRow = (r: string): boolean => /^◖ ◆ ATLAS ◗(?! ▸)/.test(r.trimStart()) && !r.includes('▸ TODO') && !r.includes('▸ SUBAGENTS');
 const SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
 
-describe('1. one height for the run, the band on one screen row', () => {
+describe('1. the slot is the rows drawn: no pad under the HUD, no lead above the band', () => {
   for (const [cols, screen] of [[150, 70], [110, 60], [150, 45], [110, 40], [150, 36]] as const) {
-    test(`${cols} columns: at a constant budget the slot has the same height in every stage, first working frame to idle`, () => {
-      const budget = hostBudget(screen, 3); // the smallest the run gives it
+    test(`${cols} columns: the slot never passes the budget and carries no spacer rows in any stage (17.15.1: the gap under the mod)`, () => {
       let held = 0;
-      const heights = STAGES.map(({ name, st }) => {
+      for (const { name, st } of STAGES) {
+        const budget = hostBudget(screen, st.running);
         const f = frameOf(st, cols - 5, budget, held);
         held = f.plan.held;
-        return { name, h: f.rows.length };
-      });
-      expect(new Set(heights.map((x) => x.h)), JSON.stringify(heights)).toEqual(new Set([heights[0]!.h]));
+        expect([name, f.plan.pad, f.plan.lead], name).toEqual([name, 0, 0]);
+        expect(f.rows.length, name).toBeLessThanOrEqual(budget);
+      }
     });
-    test(`${cols} columns: the band stays on one screen row while the host list grows and shrinks (rows - slot - below is constant)`, () => {
+    test(`${cols} columns: the band is the first row and the last row is drawn content in every stage`, () => {
       let held = 0;
-      const rows = STAGES.map(({ name, st }) => {
+      for (const { name, st } of STAGES) {
         const f = frameOf(st, cols - 5, hostBudget(screen, st.running), held);
         held = f.plan.held;
-        const i = f.rows.findIndex(isBandRow);
-        expect(i, `${name}: the band follows the lead rows`).toBe(f.plan.lead);
-        return { name, bandRow: screen - hostBelow(st.running) - f.rows.length + 1 };
-      });
-      expect(new Set(rows.map((x) => x.bandRow)), JSON.stringify(rows)).toEqual(new Set([rows[0]!.bandRow]));
+        expect(f.rows.findIndex(isBandRow), `${name}: the band follows the lead rows`).toBe(f.plan.lead);
+        expect(f.rows.at(-1)!.trim(), `${name}: no blank row under the mod`).not.toBe('');
+      }
     });
   }
 });

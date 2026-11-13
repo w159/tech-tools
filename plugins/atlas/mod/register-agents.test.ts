@@ -4,8 +4,8 @@
 // (null until session.measure carries a value; a measured 0 stays a 0).
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { hudStarvedAtFullLine, publishHudState, readStatuslineRows, register, resetHudStateSig, syncAgentsFromList } from './register';
-import { hudAgents, hudBudget } from './hud';
+import { publishHudState, readStatuslineRows, register, resetHudStateSig, syncAgentsFromList } from './register';
+import { hudAgents } from './hud';
 import { liveWorkers } from './data/live';
 import { busySnap } from './live_fixture';
 import { memState } from './test_helpers';
@@ -318,19 +318,16 @@ describe('hud-state.json writer', () => {
     expect(cmds.length).toBe(2);
   });
 
-  test('rewrites at least every 5 s while shown < wanted so the reader stays fresh', async () => {
+  test('a short HUD is skipped when unchanged and never flagged starved', async () => {
     resetHudStateSig();
     const clock = { t: 1_760_000_000_000 };
     const { $, files, cmds } = writerEngine(clock);
-    const starved = { maxRows: 2, wanted: 9, shown: 2, fullscreen: true };
-    await publishHudState($, '/tmp/proj', starved);
-    clock.t += 4_000;
-    await publishHudState($, '/tmp/proj', starved);
+    const short = { maxRows: 2, wanted: 9, shown: 2, fullscreen: true };
+    await publishHudState($, '/tmp/proj', short);
+    clock.t += 6_000;
+    await publishHudState($, '/tmp/proj', short);
     expect(cmds.length).toBe(1);
-    clock.t += 1_000;
-    await publishHudState($, '/tmp/proj', starved);
-    expect(cmds.length).toBe(2);
-    expect(JSON.parse(files.get(path)!).ts).toBe(1_760_000_005_000);
+    expect(JSON.parse(files.get(path)!).starved).toBe(false);
   });
 
   test('never throws and does nothing without a root', async () => {
@@ -343,24 +340,7 @@ describe('hud-state.json writer', () => {
   });
 });
 
-describe('starved is judged against the rows the HUD gets with the FULL status line', () => {
-	const wanted = 6;
-	const shownAt = (cap: number): number => Math.min(wanted, hudBudget(cap, 2, 7, false));
-	const compactReport = { ts: 1, rows: 1, fullRows: 4 }; // the status line printed 1 row; its full grid is 4
-
-	test('loop: compact line frees 3 rows, the HUD then fits, yet starved stays true', () => {
-		expect(shownAt(10)).toBeLessThan(wanted); // full line: HUD short of rows
-		expect(shownAt(13)).toBe(wanted); // compact line: the same HUD fits (shown == wanted)
-		expect(hudStarvedAtFullLine(10, wanted, shownAt, null)).toBe(true); // no report: maxRows taken as is
-		expect(hudStarvedAtFullLine(13, wanted, shownAt, compactReport)).toBe(true); // old shown < wanted rule said false here
-	});
-
-	test('a genuinely roomy slot is not starved, with or without a compact report', () => {
-		expect(hudStarvedAtFullLine(20, wanted, shownAt, null)).toBe(false);
-		expect(hudStarvedAtFullLine(20, wanted, shownAt, compactReport)).toBe(false); // 20 - 3 = 17 still fits
-		expect(hudStarvedAtFullLine(20, wanted, shownAt, { ts: 1, rows: 4, fullRows: 4 })).toBe(false);
-	});
-
+describe('the mod never marks the status line starved (17.15.1)', () => {
 	test('readStatuslineRows takes a fresh report only', async () => {
 		const clock = { t: 1_760_000_000_000 };
 		const text = (ts: number) => JSON.stringify({ ts, rows: 1, fullRows: 4 });
@@ -372,12 +352,12 @@ describe('starved is judged against the rows the HUD gets with the FULL status l
 		expect(await readStatuslineRows(mk(text(clock.t)), null)).toBeNull();
 	});
 
-	test('publishHudState writes the supplied starved flag over shown < wanted', async () => {
+	test('publishHudState writes starved false even with the HUD short of rows (the status line prints in full whenever it is configured)', async () => {
 		resetHudStateSig();
 		const files = new Map<string, string>();
 		const $ = { clock: { now: async () => 5 }, fs: { write: async (p: string, t: string) => { files.set(p, t); } }, process: { run: async (a: string[]) => { files.set(a[3]!, files.get(a[2]!) ?? ''); return {}; } } } as unknown as EngineInterface;
-		await publishHudState($, '/tmp/p', { maxRows: 13, wanted: 6, shown: 6, fullscreen: true, starved: true });
-		expect(JSON.parse(files.get('/tmp/p/.atlas/.run/hud-state.json')!)).toMatchObject({ shown: 6, wanted: 6, starved: true });
+		await publishHudState($, '/tmp/p', { maxRows: 7, wanted: 15, shown: 6, fullscreen: true });
+		expect(JSON.parse(files.get('/tmp/p/.atlas/.run/hud-state.json')!)).toMatchObject({ maxRows: 7, wanted: 15, shown: 6, starved: false });
 	});
 });
 

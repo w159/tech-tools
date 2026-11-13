@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.15.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.15.1 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -638,9 +638,12 @@ text, from `contracts/band-golden.ts`:
 
 **TODO and SUBAGENTS.** `mod/hud.ts` and `mod/hud-surface.ts` draw the HUD under
 the band as closed rounded boxes with one blank row between them. The slot above
-the prompt keeps one height for the whole run (`slotHold` in `mod/slot.ts`,
-`hudHoldRows` in `mod/hud.ts`), so the band keeps its screen row when the plan
-and the agents arrive. A host clip therefore eats HUD rows and never the band.
+the prompt is exactly the rows drawn: the band row, then the HUD rows, with no
+spacer rows above or below (`composeFixed` in `mod/slot.ts`). The HUD takes every
+row of the slot's budget the band leaves and folds when the plan is longer, so a
+host clip eats HUD rows and never the band. 17.15.0 padded the slot to the whole
+budget with blank rows under the HUD; that left an empty gap between the mod and
+the prompt and is removed.
 `ATLAS_HUD=off` (exactly that value) hides both blocks.
 
 *TODO.* The title carries the done count and a `▰▱` meter (`3/7 ▰▰▰▱▱▱▱▱`, with
@@ -725,11 +728,14 @@ TaskUpdate and draws its own checklist above the prompt, re-expanding it on ever
 update, which squeezes the Atlas blocks to about 6 rows). Claude Code's fullscreen
 renderer gives everything under the transcript (prompt, status line, mode line,
 agent list) one slot capped at half the terminal, and a status line command is
-told no row budget. So the mod writes `.atlas/.run/hud-state.json`
+told no row budget. The mod writes `.atlas/.run/hud-state.json`
 (`{ts, maxRows, wanted, shown, fullscreen, starved}`, `wanted` being the rows the
-HUD would draw unrestricted); while it is fresher than 15 s and `starved` is set
-the status line prints one row only (folder, timer, model, `· ctx N%`) and
-otherwise the full grid. `atlas_statusline.py install` and
+HUD would draw unrestricted). Since 17.15.1 `starved` is always `false`: the mod
+never asks the status line to shrink, and a plan longer than the slot folds
+inside the HUD. The status line prints its full grid whenever it is configured;
+`atlas_statusline.py` still prints one row (folder, timer, model, `· ctx N%`)
+when it reads a fresh file with `starved` set, which only an older mod writes.
+`atlas_statusline.py install` and
 `atlas_doctor.py --fix` set `refreshInterval: 5` on the statusLine entry (other
 keys are kept) so the switch lands within seconds. `atlas_doctor.py` reports this
 and the other display settings as `display-` checks (`display-hud` flags
@@ -1075,7 +1081,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.15.0
+|-- .claude-plugin/plugin.json   manifest, version 17.15.1
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

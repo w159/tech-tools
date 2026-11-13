@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.15.1 - 2026-11-13
+
+- atlas 17.15.1: the mod slot is exactly the rows drawn (no blank rows between the mod and the prompt) and the mod no longer asks the status line to shrink to one row. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-13-gap-statusline.md](audits/2026-11-13-gap-statusline.md).
+
+## marketplace 5.20.1 - 2026-11-13
+
+- marketplace 5.20.1: atlas 17.15.1. armada and programmer are unchanged.
+
 ## atlas 17.15.0 - 2026-11-13
 
 - atlas 17.15.0: waves 30 to 41 of the terminal UI (band, TODO HUD, SUBAGENTS table, board, side panel, cards). plugins/atlas/README.md and the root README were rewritten against the code on main ef38fc50. The line list is in [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md).

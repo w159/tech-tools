@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { EMPTY_ORCH, onSpawn, onToolStart } from './data/orchestration';
 import { busySnap } from './live_fixture';
-import { coreTick, hudStarvedAtFullLine, inlineBelowRows, mapListed, register, resetCore, syncAgentsFromList } from './register';
+import { coreTick, inlineBelowRows, mapListed, register, resetCore, syncAgentsFromList } from './register';
 import type { SquadAgent } from './contract';
 import { memState } from './test_helpers';
 
@@ -56,16 +56,6 @@ describe('D5 duplicate labels read as ordinals, never a host id', () => {
 });
 
 describe('HUD row arithmetic', () => {
-  test('hudStarvedAtFullLine is true only when strictly fewer rows show than wanted', () => {
-    const shownAt = (cap: number): number => cap;
-    expect(hudStarvedAtFullLine(10, 11, shownAt, null)).toBe(true);
-    expect(hudStarvedAtFullLine(10, 10, shownAt, null)).toBe(false);
-    expect(hudStarvedAtFullLine(10, 9, shownAt, null)).toBe(false);
-    // the full status line takes 3 more rows: 10 - 3 = 7 shown against 8 wanted
-    expect(hudStarvedAtFullLine(10, 8, shownAt, { ts: 1, rows: 1, fullRows: 4 })).toBe(true);
-    expect(hudStarvedAtFullLine(10, 7, shownAt, { ts: 1, rows: 1, fullRows: 4 })).toBe(false);
-  });
-
   test('inlineBelowRows adds prompt 3, status line (5 unknown), mode+blank 2, blank 1, and the agent list', () => {
     expect(inlineBelowRows(null, 0)).toBe(11);
     expect(inlineBelowRows(2, 0)).toBe(8);

@@ -106,15 +106,14 @@ const PLANROW = /^[ ▸] [●◐◓◑◒◇] T\d/;
 
 describe('1. the Atlas region holds one height and the band one screen row for the whole run', () => {
   for (const [, screen, cols] of SIZES) {
-    test(`${cols} cells: the slot is the budget tall in every state, with no rows above the band`, () => {
+    test(`${cols} cells: the slot is the rows drawn, never past the budget, with no rows above the band and none under the HUD`, () => {
       for (const { st, f } of scenario(screen, cols)) {
-        expect([st.name, f.rows.length]).toEqual([st.name, hostBudget(screen, st.running)]);
-        expect([st.name, f.plan.lead, f.plan.gap]).toEqual([st.name, 0, 0]);
+        expect([st.name, f.rows.length <= hostBudget(screen, st.running)]).toEqual([st.name, true]);
+        expect([st.name, f.plan.lead, f.plan.gap, f.plan.pad]).toEqual([st.name, 0, 0, 0]);
       }
     });
-    test(`${cols} cells: the band stays on one screen row from working to done to idle (host list coming and going)`, () => {
-      const rowOf = scenario(screen, cols).map(({ st, f }) => [st.name, screen - hostBelow(st.running) - f.rows.length + bandIndex(f)] as const);
-      expect(new Set(rowOf.map(([, r]) => r)).size, JSON.stringify(rowOf)).toBe(1);
+    test(`${cols} cells: the last row of the slot is drawn content in every state (17.15.1: no blank rows between the mod and the prompt)`, () => {
+      for (const { st, f } of scenario(screen, cols)) expect([st.name, f.rows.at(-1)!.trim() !== '']).toEqual([st.name, true]);
     });
     test(`${cols} cells: the TODO top rule is the next row and the SUBAGENTS table follows the plan box, in every state`, () => {
       for (const { st, f } of scenario(screen, cols)) {

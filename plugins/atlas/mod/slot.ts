@@ -68,24 +68,19 @@ export type SlotInput = {
 /** `lead`: empty host-coloured rows above the band that make up the budget (never filled bars); `held` is the content height (band area, blank, boxes) the run has reached. */
 export type SlotPlan = { hud: Segment[][]; band: BandModel; gap: number; pad: number; held: number; lead: number };
 
-/** The fixed shape (critique 31): from the first working frame to idle the slot is one height, the band is one row at its top and the HUD starts on the very next row in every state (the TODO box never moves under
- * the band). The slot is bottom-anchored and the host gives it `budget` (half the screen less the rows below it, the prompt and its own agent list). The height is the budget, or the roomiest HUD (both boxes
- * with the plan and agents a run is expected to have, the form every state fits in) and the band row when that is smaller, and never falls while the run lasts. Rows the HUD does not use are blank rows under it,
- * unfilled, never a 234 slab between the blocks. */
+/** The fixed shape (critique 31, 17.15.1): from the first working frame to idle the band is one row at the top of the slot and the HUD starts on the very next row in every state (the TODO box never moves
+ * under the band). The slot is exactly the rows drawn: the band row and the HUD rows, with no spacer above or below. 17.15.0 padded the slot to the host's whole budget (half the screen less the rows
+ * below it) with blank rows UNDER the HUD, which left an empty gap between the mod and the prompt and pushed the host's status line down; the host anchors the slot above the prompt, so a shorter slot
+ * is a band that sits lower, never a hole. The HUD takes every row of the budget the band leaves and folds (hud-surface fitRows) when the plan is longer. */
 function composeFixed(i: SlotInput): SlotPlan {
-	const { budget, columns, hudIn, hudView } = i;
-	const reserve = BAND_KEEP_ROWS + hudHoldRows(hudIn, columns, i.now, true);
-	// Wave 37 (110 columns: `1/5 · +3 more` with two rows drawn and blank rows under them): the HUD may use every row of the budget the band leaves, not only the rows the run has held so far, so a plan that fits is never folded.
+	const { budget, hudIn, hudView } = i;
+	// Wave 37 (110 columns: `1/5 · +3 more` with two rows drawn and blank rows under them): the HUD may use every row of the budget the band leaves, so a plan that fits is never folded.
 	const hudCap = Math.max(0, budget - BAND_KEEP_ROWS); // the band keeps its row; the HUD takes every other row it can use
 	const kind = bandKindOf(i.bandIn([], 1));
 	const idle = kind === 'idle';
 	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true, settled: true, ...(idle ? { idle: true } : {}), ...(kind === 'working' ? { working: true } : {}) }) as Segment[][];
 	const band = i.bandIn(hud, 1);
-	// Wave 32: the slot is `budget` rows tall and the band is its FIRST row. The host's budget is half the screen less the rows below the slot (the prompt and its own agent list), so the slot's top is one screen row for the
-	// whole run; the rows the block does not use are empty rows UNDER it. (Empty rows above the band put the band at `screen - below - total`, which moves by the size of the host's list every time it comes or goes: the 27/24/25/24/27 of critique 32.)
-	const total = Math.max(1, Math.min(budget, Math.max(i.held, reserve, BAND_KEEP_ROWS + hud.length))); // the content: never falls while the run lasts
-	const pad = Math.max(0, budget - BAND_KEEP_ROWS - hud.length);
-	return { hud, band, gap: 0, pad, held: total, lead: 0 };
+	return { hud, band, gap: 0, pad: 0, held: BAND_KEEP_ROWS + hud.length, lead: 0 };
 }
 
 /** The band model with the HUD's own verdict on its agents: one the SUBAGENTS block draws running (listed, resumed or named by an open dispatch row) keeps the band working, so the band never reads `idle` beside a turning spinner (wave 33). */

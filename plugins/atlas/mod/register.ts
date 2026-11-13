@@ -13,9 +13,9 @@ import { intentToArgv } from './intents';
 import { bandBlockedOf, bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
-import { composeSlot, hudSlotCap, BAND_MIN_ROWS } from './slot';
+import { composeSlot } from './slot';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
-import { hudAgents, hudCompactRows, hudFloorRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
+import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
@@ -378,7 +378,7 @@ async function statSig($: EngineInterface, path: string): Promise<string> {
 	}
 }
 
-export type HudState = { maxRows: number; wanted: number; shown: number; fullscreen: boolean; starved?: boolean };
+export type HudState = { maxRows: number; wanted: number; shown: number; fullscreen: boolean };
 /** `.atlas/.run/statusline-rows.json`: the rows the status line printed last and the rows its full grid would take. */
 export type StatuslineRows = { ts: number; rows: number; fullRows: number };
 const STATUSLINE_ROWS_FRESH_MS = 15_000;
@@ -411,11 +411,6 @@ export { fitHudToBand, hudGapRows, hudSlotCap, slotHold } from './slot';
 let slotHeld = 0;
 export const resetSlotHold = (): void => { slotHeld = 0; };
 
-/** True when the HUD cannot get `wanted` rows even with the status line at its full height. The status line's rows come out of the same capped slot as the HUD, so the current `maxRows` is measured with the line compact; add back what the full grid would take before judging, or the answer flips as soon as the line shrinks. */
-export function hudStarvedAtFullLine(maxRows: number, wanted: number, shownAt: (maxRows: number) => number, report: StatuslineRows | null): boolean {
-	const extra = report === null ? 0 : Math.max(0, report.fullRows - report.rows);
-	return shownAt(Math.max(0, maxRows - extra)) < wanted;
-}
 /** Rows below the AbovePrompt slot in the inline renderer: prompt box (3), the status line (its reported rows, 5 when unknown), mode line and a blank (2), the blank row Claude Code draws between the content and the prompt's top rule (1), and Claude Code's own agent list ("main" plus one row per running agent). */
 export function inlineBelowRows(statusRows: number | null, running: number): number {
 	return 3 + (statusRows ?? 5) + 2 + 1 + (running > 0 ? 1 + running : 0);
@@ -426,24 +421,20 @@ export function effectiveRows(maxRows: number, viewport: { rows: number; isFulls
 	if (viewport === undefined || viewport.isFullscreen === true || !Number.isFinite(viewport.rows)) return maxRows;
 	return Math.max(0, Math.min(maxRows, viewport.rows - inlineBelowRows(statusRows, running)));
 }
-const HUD_STATE_REFRESH_MS = 5000; // while starved the file is rewritten at least this often so the status line's freshness check holds
 let lastHudSig: string | undefined;
-let lastHudWriteMs = 0;
 /** Test seam: forget the last written state. */
-export const resetHudStateSig = (): void => { lastHudSig = undefined; lastHudWriteMs = 0; };
+export const resetHudStateSig = (): void => { lastHudSig = undefined; };
 
-/** Writes `.atlas/.run/hud-state.json` ({ts, maxRows, wanted, shown, fullscreen, starved}) for the Claude Code status line: it shrinks to one row while `starved` (the HUD short of rows even with the full status line). Skips an unchanged state, except a starved one is rewritten every 5 s; temp file + mv, fail soft, never throws out of render. */
+/** Writes `.atlas/.run/hud-state.json` ({ts, maxRows, wanted, shown, fullscreen, starved}) for the Claude Code status line. 17.15.1: `starved` is always false. The mod never asks the status line to shrink to one row; the user's status line prints in full whenever it is configured, and a plan longer than the slot folds inside the HUD (hud-surface fitRows). The field stays in the file for status line scripts that read it. Skips an unchanged state; temp file + mv, fail soft, never throws out of render. */
 export async function publishHudState($: EngineInterface, root: string | null | undefined, state: HudState): Promise<void> {
 	try {
 		if (root === undefined || root === null || root === '') return;
 		const now = await $.clock.now();
-		const starved = state.starved ?? state.shown < state.wanted;
-		const sig = `${root}|${state.maxRows}|${state.wanted}|${state.shown}|${state.fullscreen}|${starved}`;
-		if (sig === lastHudSig && !(starved && now - lastHudWriteMs >= HUD_STATE_REFRESH_MS)) return;
+		const sig = `${root}|${state.maxRows}|${state.wanted}|${state.shown}|${state.fullscreen}`;
+		if (sig === lastHudSig) return;
 		lastHudSig = sig;
-		lastHudWriteMs = now;
 		const path = `${root.replace(/\/+$/, '')}/.atlas/.run/hud-state.json`;
-		await $.fs.write(`${path}.tmp`, JSON.stringify({ ts: now, ...state, starved }));
+		await $.fs.write(`${path}.tmp`, JSON.stringify({ ts: now, ...state, starved: false }));
 		await $.process.run(['mv', '-f', `${path}.tmp`, path]);
 	} catch {
 		lastHudSig = undefined;
@@ -1439,23 +1430,16 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		noteRunFinal(finalNow); // truth 39: the run card is placed on the next beat, never inside this render, so it cannot land a frame before the band that reads done
 		noteBlocked(kStep.shown === 'blocked' ? bandBlockedOf(bandIn([], 1)) : null);
 		const agentsListed = agents.length > 0;
-		const want = hudWantRows(hudIn, columns, snapshot.now);
 		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
 		const plan = composeSlot({ budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView, running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: slotHeld });
 		slotHeld = plan.held;
 		const hud = plan.hud;
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
-		const compact = hudCompactRows(hudIn, columns);
-		const floor = hudFloorRows(hudIn, columns, snapshot.now);
-		const shownAt = (cap: number): number => hudOn ? hudRows(hudIn, { ...hudView, maxRows: hudSlotCap(cap, compact, floor, BAND_MIN_ROWS, running, agentsListed, want) }).length : 0;
-		const inline = e.viewport !== undefined && e.viewport.isFullscreen !== true;
 		void publishHudState($, snapshot.root, {
 			maxRows: budget,
 			wanted,
 			shown: hud.length,
 			fullscreen: e.viewport?.isFullscreen === true,
-			// fullscreen: the status line shares the slot, so add back what its full grid would take; inline it sits below the slot, so judge with the full grid taken off the viewport
-			starved: inline ? shownAt(effectiveRows(slotRows, e.viewport, report?.fullRows ?? null, runningCount)) < wanted : hudStarvedAtFullLine(slotRows, wanted, shownAt, report),
 		});
 		const band = bandTree(els, plan.band, bandHandlers($));
 		// One blank row between the band and the HUD (A3), in the HUD's own panel fill.

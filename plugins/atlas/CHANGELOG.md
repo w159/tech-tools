@@ -1,5 +1,13 @@
 # Changelog
 
+## 17.15.1 - 2026-11-13
+
+Two regressions reported on 17.15.0, both from the wave 31 and 32 slot, fixed at the cause.
+
+- Empty rows between the mod and the prompt: `composeFixed` in `mod/slot.ts` padded the slot to the host's whole budget (half the screen less the rows below it) with blank rows under the HUD, from commit 0a2fba13 (wave 31), and made the slot the whole budget in wave 32. At 150x45 a three-row plan left 8 blank rows under the mod; in the inline renderer 29. The slot is now exactly the rows drawn: the band row, then the HUD rows, no pad and no lead (`pad` and `lead` stay 0). The host anchors the slot above the prompt, so a shorter slot is a band that sits lower, not a hole. Tests: `mod/gap-statusline.test.ts`; `wave30-hud.test.ts` and `wave32-hud.test.ts` no longer pin a budget-tall slot or a band that keeps one screen row.
+- Status line shrunk to one row: the mod published `starved` in `.atlas/.run/hud-state.json` whenever the HUD wanted more rows than the slot gave it, and `atlas_statusline.py` then printed one row instead of its grid. The 17.15.0 HUD (SUBAGENTS table, fixed TODO columns) wants 13 to 15 rows with three to five agents, so that happened in ordinary runs. `starved` is now always `false` (`publishHudState`, `mod/register.ts`); a plan longer than the slot folds inside the HUD. `hudStarvedAtFullLine` is removed. `atlas_statusline.py` is unchanged and still honours the flag if an older mod writes it.
+- Evidence: `docs/audits/2026-11-13-gap-statusline.md` (live captures before and after at 150x45 and 110x40, and the bisect).
+
 ## 17.15.0 - 2026-11-13
 
 Terminal UI waves 30 to 41 for Claude Code, as main ef38fc50 ships them, grouped by surface. Each line names the wave that made the change; none was dropped.
