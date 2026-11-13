@@ -3,7 +3,10 @@ import { describe, expect, test } from 'claude-code/testing';
 import { holdClock, newRunClock, resumeOk, runKey, runLive, stepRun, type RunClock } from './band-motion';
 import { runElapsed } from './data/runstate';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
-import type { Ui } from './atlas-ui';
+import { leadSpinnerGlyph, type Ui } from './atlas-ui';
+import { forgetBandFrame, noteBandFrame } from './motion';
+import { lineText, panelLines, type PanelModel } from './panel-layout';
+import { panelWorld } from '../contracts/panel-world';
 
 // the run of stoprun-110-1: it began at 6 s and its clock closed at 35.2 s (host turn flag fell), with 0:29 on the clock
 const closed = (): RunClock => stepRun(stepRun(stepRun(newRunClock(), true, 6_000), true, 35_100), false, 35_200, { hostIdle: true });
@@ -73,5 +76,34 @@ describe('step 3: every non-zero count keeps its glyph and figure, and the clock
       expect(t, String(cols)).toMatch(/●\s?1/);
       expect(t, String(cols)).not.toMatch(/[⠀-⣿] 2 ●1/);
     }
+  });
+});
+
+describe('step 4: the panel phase row is the band\'s last frame', () => {
+  const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+  const NOW = 2_000_000;
+  const rowOf = (now: number, over: Partial<PanelModel> = {}): string => {
+    const m = panelWorld('route', 150, ui, { rows: 40, now, run: { kind: 'working', secs: 24 }, phase: 'research', ...over });
+    return panelLines(m).map(lineText).find((l) => /^\s*phase\b/.test(l))!.replace(/\s+/g, ' ').trim();
+  };
+  test('band draws frame N / 0:25; the panel at the same now, one beat later and 1.9 s later has the same glyph, word and clock', () => {
+    for (const frame of [0, 3, 5, 9]) {
+      noteBandFrame(frame, 25, NOW, 'working');
+      for (const dt of [0, 100, 1_900]) expect(rowOf(NOW + dt), `${frame}+${dt}`).toMatch(new RegExp(`^phase ${leadSpinnerGlyph(frame)} working · research 0:25`));
+    }
+    forgetBandFrame();
+  });
+  test('a band frame older than 2 s is not used', () => {
+    noteBandFrame(5, 25, NOW, 'working');
+    expect(rowOf(NOW + 2_500)).not.toMatch(/0:25/);
+    forgetBandFrame();
+  });
+  test('a blocked strip puts the mark on the last phase the run entered, not on an earlier header phase', () => {
+    noteBandFrame(2, 41, NOW, 'blocked');
+    const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'blocked', secs: 41 }, phase: 'research', entered: ['plan', 'research', 'build'] });
+    const chain = panelLines(m).map(lineText).find((l) => /research ›/.test(l))!;
+    expect(chain).toMatch(/▲ build/);
+    expect(chain).not.toMatch(/▲ research/);
+    forgetBandFrame();
   });
 });
