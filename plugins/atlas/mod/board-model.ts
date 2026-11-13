@@ -303,7 +303,7 @@ export function boardHeader(): Run[] {
 export type BoardLine = { runs: Run[] };
 
 /** The HUD's title rule is the light `─` in the line tone; atlas-ui's ribbon() fills with the heavy `━`. Every ribbon the board and the side panel draw swaps its fill for the HUD's (critique 22: two rule weights on one screen). */
-export const lightRibbon = (runs: Run[], ui: Pick<Ui, 'ascii'>): Run[] => (ui.ascii ? runs : runs.map((x) => (/^━+$/.test(x.t) ? { ...x, t: '─'.repeat(x.t.length), tone: 'line' as Run['tone'] } : x)));
+export const lightRibbon = (runs: Run[], ui: Pick<Ui, 'ascii'>): Run[] => (ui.ascii ? runs : runs.map((x) => (/^━+$/.test(x.t) ? { ...x, t: '─'.repeat(x.t.length), tone: 'line' as Run['tone'], fg: '#303030' } : x))); // wave 32 (critique 30): the divider is the 236 grey in every run state
 
 /** Column geometry of the compact and narrow forms for `rows` at `o.cols`: the state column, the owner column beside the rows (0: it does not fit) and whether a doubted done spells its words in the state cell. */
 function geometry(rows: readonly BoardRow[], o: BoardOpts): { compact: boolean; ownerAll: number; ownerW: number; wordW: number; stateColC: number | undefined; labelW: number; doubtWord: boolean } {
@@ -447,16 +447,14 @@ function paneSummary(rows: readonly BoardRow[], o: BoardOpts): BoardLine {
   return { runs: [r(text, 'text', { bold: true }), ...bar] };
 }
 
-/** How the run closed, one line per closed dispatch (a plan row whose worker failed and whose row the lead closed): `T2 dispatch closed after Stop refusal · ghost-explorer`; a plan that is all done and nothing open says `closed · 5 of 5 items done`. Nothing while work is still open. */
+/** How the run closed, one line per closed dispatch (a plan row whose worker failed and whose row the lead closed): `T2 dispatch closed after Stop refusal · ghost-explorer`; a settled plan adds nothing (the summary row and its full meter say it). */
 function paneFooter(rows: readonly BoardRow[], o: BoardOpts): BoardLine[] {
   const dot = o.ui.ascii ? '|' : '·';
   // Whole on one row where it fits; else wrapped on its words (a continuation indented), never cut mid-word.
   const closed = rows.filter((x) => markOf(x.state, x.word) === 'doubt' && x.owner).flatMap((x): BoardLine[] =>
     wordRows(`${o.ui.ascii ? 'x' : '■'} ${rowId(x.label)} ${KILLED}${o.stopRefused ? ' after Stop refusal' : ''} ${dot} ${x.owner}`, o.cols - 1, '  ', '    ').map((t, i): BoardLine => ({ runs: [r(t, i === 0 ? 'bad' : 'sub')] })));
   if (closed.length) return closed;
-  const s = boardSummary(rows, o.dispatches ?? o.folded);
-  const settled = rows.length > 0 && rows.every((x) => x.state === 'done') && !(o.openFolded && o.openFolded > 0);
-  return settled ? [{ runs: [r(clipE(`  closed ${dot} ${s.done} of ${s.items} items done`, Math.max(1, o.cols - 1)), 'muted')] }] : [];
+  return []; // wave 32 (critique 30: `closed · 5 of 5 items done` repeated the summary row's `5 items` and its full meter): a settled plan says nothing more
 }
 
 /** One agent on the board's timeline: its name, state, how long it has run, and (for the Gantt) when it started and ended, in the snapshot clock's ms; `calls` are its tool-call times (the activity row under its bar). */
@@ -497,12 +495,14 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const frame = o.nowMs !== undefined ? spinFrameOf(o.nowMs) : o.tick ?? 0;
   // The axis: ticks at a round step, as many as the labels have room for (a label is at most 4 cells and a gap).
   const spanSecs = spanMs / 1000;
-  const step = TICK_STEPS.find((t) => t >= 5 && Math.floor(spanSecs / t) + 1 <= Math.max(2, Math.floor(barW / 6))) ?? TICK_STEPS[TICK_STEPS.length - 1]!; // a tick every 5 s while the labels fit
+  const labelW = cells(clock(Math.ceil(spanSecs) + 5));
+  const step = TICK_STEPS.find((t) => t >= 5 && Math.floor(spanSecs / t) + 1 <= Math.max(2, Math.floor(barW / (labelW + 2)))) ?? TICK_STEPS[TICK_STEPS.length - 1]!; // a tick every 5 s while a label and a two-cell gap fit
   // While a worker runs the axis ends at the next tick past the clock, so its bar grows inside a steady scale and the leading edge has a cell to pulse in; a finished run's axis is exactly its length.
   const total = (Math.floor(spanSecs / step) + 1) * step * 1000; // the axis always runs past the longest bar (critique 29: it stopped at 0:10 under bars to 0:13)
   const totalSecs = total / 1000;
   const tickCols = new Set<number>();
-  for (let k = 0; k * step <= totalSecs; k++) tickCols.add(Math.min(barW - 1, Math.round((k * step * 1000 * barW) / total)));
+  // Wave 32 (critique 30: `0:15 0:20` collided, dotted columns ran past the bars): a tick sits only where a bar has run (at or before the longest bar's end), never past it.
+  for (let k = 0; k * step <= Math.max(spanSecs, ...(ran.some(live) ? [totalSecs] : [])) && k * step <= totalSecs; k++) tickCols.add(Math.min(barW - 1, Math.round((k * step * 1000 * barW) / total)));
   const lead = ' '.repeat(2 + nameW + 1);
   const rows = Math.min(ran.length, Math.max(1, Math.floor((max - 2) / ((o.spark ? 2 : 1) + (o.spacers ? 1 : 0)))));
   const out: BoardLine[] = [];
@@ -518,14 +518,14 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
         const full = covered === 8;
         grid.push({ t: ascii ? '#' : full ? '█' : PARTIAL[covered]!, tone });
       } else if (live(a) && c === Math.ceil(endE / 8) && c >= startCell) grid.push({ t: ascii ? '+' : Math.floor(frame / 3) % 2 === 0 ? '▓' : '▒', tone }); // the leading edge: a pulsing shade just ahead of the fill
-      else grid.push(tickCols.has(c) ? { t: ascii ? ':' : '┊', tone: 'line', fg: RULE_FG } : { t: ' ', tone: 'text' });
+      else grid.push({ t: ' ', tone: 'text' }); // no dotted tick column: the axis row carries the ticks, each with its label
     }
     // One run per colour: adjacent cells of one tone join.
     const bar = grid.reduce<Run[]>((acc, x) => { const l = acc[acc.length - 1]; if (l && l.tone === x.tone && l.fg === x.fg) l.t += x.t; else acc.push({ ...x }); return acc; }, []);
     const name = clipE(a.name, nameW);
     const runs: Run[] = [
       r('  '), r(name + ' '.repeat(nameW - cells(name)), 'sub'), r(' '), ...bar, r(' '),
-      r(clock((to - from) / 1000).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, frame),
+      r(clock((to - from) / 1000).padStart(timeW), 'dim'), r(' '), stateRun(a.state, o.ui, frame, true),
     ];
     if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
     out.push({ runs: o.motion ? animateRow(runs, `worker:${a.name}`, a.state === 'done' ? 'done' : a.state === 'failed' ? 'failed' : 'running', o.motion, o.ui, { reveal: false }) : runs });
@@ -535,17 +535,19 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     }
   });
   // The axis: a rule with a tick (`┬`) at every labelled second, the labels under it.
-  const rule = Array.from({ length: barW }, (_, c) => (tickCols.has(c) ? (ascii ? '+' : '┬') : ascii ? '-' : '─')).join('');
+  // Every tick has its label and every label two clear cells after the one before it; a tick whose label would not fit is not drawn (a stub with no legend is left off).
   const labels = new Array<string>(barW).fill(' ');
+  const labelled = new Set<number>();
   let free = 0;
   for (const c of [...tickCols].sort((x, y) => x - y)) {
     const k = Math.round((c / barW) * totalSecs / step);
     const text = clock(k * step);
-    const at = Math.min(c, barW - text.length);
-    if (at < free) continue; // a label that would touch the one before it is left off
-    [...text].forEach((ch, j) => { labels[at + j] = ch; });
-    free = at + text.length + 1;
+    if (c < free || c + text.length > barW) continue;
+    [...text].forEach((ch, j) => { labels[c + j] = ch; });
+    labelled.add(c);
+    free = c + text.length + 2;
   }
+  const rule = Array.from({ length: barW }, (_, c) => (labelled.has(c) ? (ascii ? '+' : '┬') : ascii ? '-' : '─')).join('');
   out.push({ runs: [r(lead), { t: rule, tone: 'line', fg: RULE_FG }] });
   out.push({ runs: [r(lead), r(labels.join('').trimEnd(), 'dim')] });
   return out;
@@ -560,7 +562,7 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
   const parts: Run[] = [];
   for (const s of ['running', 'done', 'failed', 'blocked', 'waiting'] as const) {
     if (!n(s)) continue;
-    const g = stateRun(s, o.ui, frame);
+    const g = stateRun(s, o.ui, frame, true); // a working mark is the band's braille (wave 32)
     parts.push(...(parts.length ? [r('  ')] : []), { ...g, tone: s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(` ${n(s)} ${s === 'failed' ? 'killed' : s}`, n(s) ? 'text' : 'muted'));
   }
   const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');

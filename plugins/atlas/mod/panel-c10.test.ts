@@ -80,7 +80,7 @@ describe('C2: the channel tab with nothing said yet fills the pane with a plain 
     test(`${rows} rows: head, a plain empty line and the fill make exactly rows - 1`, () => {
       const m = panelWorld('channel', 38, mocha, { rows, notes: [], people: 1, unread: 0 });
       const body = text(m);
-      expect(body.some((l) => l.includes('no messages yet'))).toBe(true);
+      expect(body.some((l) => l.includes('○ no messages'))).toBe(true); // wave 32: `○ no messages`, left-aligned under the head (was a centred `no messages yet`)
       expect(panelLines(m).length + fillRows(m, bodyLines(m).length).length).toBe(rows - 1);
     });
   }

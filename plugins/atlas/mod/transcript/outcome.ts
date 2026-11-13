@@ -191,7 +191,7 @@ export async function cardExtra($: EngineInterface, output: unknown, agents: rea
  // The host row can say running for seconds after the worker's own turn ended; the HUD row reads the mod's record of that turn (data/orchestration
  // onComplete), so the card does too and the two agree in the same tick (critique 14 B3).
  const who = ENDED.has(found.status) ? found : { ...found, status: MOD_ENDED[(await read($, orchRef)).activity[id]?.mood ?? ''] ?? found.status }
- if (!ENDED.has(who.status)) return { mark: spin(await read($, spinnerTick), 'implement') }
+ if (!ENDED.has(who.status)) { const frame = await read($, spinnerTick); return { mark: spin(frame, 'implement'), frame } }
  const o = await workerOutcome($, who, memo)
  return { ended: endedWord(o), outcome: outcomeDetail(o) }
 }

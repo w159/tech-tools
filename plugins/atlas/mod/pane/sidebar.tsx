@@ -64,6 +64,15 @@ export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { ti
   return stripLayout(cols).bare ? { ...b, title: ui.ascii ? 'SIDEPANEL > BOARD' : 'SIDEPANEL ▸ BOARD' } : b;
 }
 
+/** The board's one footer row: the totals line (`● 2 done  ■ 1 killed · total 0:57`) with the close hint flush right; the longest form of the hint the row has room for. Nothing to total: the hint alone. */
+function footerRow(totals: readonly BoardLine[], cols: number, ui: Ui): BoardLine | null {
+  const base = totals[0]?.runs ?? [{ t: '  ', tone: 'text' as const }];
+  const used = base.reduce((n, x) => n + cells(x.t), 0);
+  const hint = ['o closes the board', 'o closes'].find((h) => used + 2 + cells(h) <= cols - 1);
+  if (!hint) return totals[0] ?? null;
+  return { runs: [...base, { t: ' '.repeat(Math.max(2, cols - 1 - used - cells(hint))), tone: 'text' as const }, { t: hint, tone: 'muted' as const }] };
+}
+
 /** The board view's rows (design wave 24): a summary row, every item with its owner in one right column, and the record of how the run closed. Nothing on the board: one dim line. */
 function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number, ui: Ui, pm: PanelModel): RenderElement {
   const s = m.snapshot;
@@ -91,19 +100,24 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
       if (!chart.length && t.length && lv === levels[levels.length - 1]) chart = t;
     }
   }
-  const sections = [lines, chart, totals].filter((x) => x.length);
+  // Wave 32 (critique 30: ~25% of the pane empty under the total, `o closes the board` alone on a row): the total and the close hint are ONE footer row, the pane's last; the sections above it spread over the rows between.
+  const foot = totals.length || (items.length && lines.length + 2 <= max) ? footerRow(totals, cols, ui) : null; // no room for a total: the hint alone, and only where two rows are spare
+  const bodyMax = Math.max(1, max - 1);
+  const sections = [lines, chart].filter((x) => x.length);
   const used = sections.reduce((n, x) => n + x.length, 0) + Math.max(0, sections.length - 1);
-  const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: pm.notes.filter((n) => !/^(T\d+|row) killed\b/.test(n.text)) }, max - used - 1) : []; // the closed row is said once, by the footer (critique 29: three times in one pane)
+  const recent = items.length && sections.length > 1 ? recentRows({ ...pm, notes: pm.notes.filter((n) => !/^(T\d+|row) killed\b/.test(n.text)) }, bodyMax - used - 1) : []; // the closed row is said once, by the footer (critique 29: three times in one pane)
   const withRecent = recent.length ? [...sections, recent.slice(1)] : sections; // recentRows opens with its own blank: the join below puts it back
-  const rows = withRecent.reduce((n, x) => n + x.length, 0) + Math.max(0, withRecent.length - 1);
+  const parts = foot ? [...withRecent, [foot]] : withRecent; // the footer is the last section: it takes its share of the spacing
+  const rows = parts.reduce((n, x) => n + x.length, 0) + Math.max(0, parts.length - 1);
   const rem = Math.max(0, max - rows);
-  const gaps = Math.max(0, withRecent.length - 1);
+  const gaps = Math.max(0, parts.length - 1);
   const extra = gaps ? Math.max(0, Math.min(2, Math.floor((rem - 2) / gaps))) : 0; // a second blank row between sections only when the pane has them to spare
-  const left = rem - extra * gaps;
-  const body = withRecent.flatMap((x, i) => (i ? [...Array.from({ length: 1 + extra }, () => blankRow), ...x] : x));
-  const hint: BoardLine[] = left >= 2 && items.length ? [...Array.from({ length: Math.min(3, left - 1) }, () => blankRow), { runs: [{ t: '  o closes the board', tone: 'muted' as const }] }] : [];
-  const filled = [...body, ...hint, ...(m.run ? Array.from({ length: Math.max(0, max - body.length - hint.length) }, () => blankRow) : [])]; // the 234 surface runs to the pane's foot (critique 29)
-  const shown = filled.length <= max ? filled : [...filled.slice(0, Math.max(0, max - 1)), { runs: [{ t: `  +${filled.length - Math.max(0, max - 1)} more`, tone: 'muted' as const }] }];
+  const joined = parts.flatMap((x, i) => (i ? [...Array.from({ length: 1 + extra }, () => blankRow), ...x] : x));
+  const keep = Math.max(0, max - (foot ? 2 : 1));
+  const cut = joined.length <= max ? joined : [...joined.slice(0, keep), { runs: [{ t: `  +${joined.length - keep - (foot ? 1 : 0)} more`, tone: 'muted' as const }] }, ...(foot ? [foot] : [])];
+  // On the Claude pane (`m.run`) the footer is the pane's last row and the surface is filled down to it (critique 29: the 234 stopped where the content ended).
+  const pad = m.run ? Array.from({ length: Math.max(0, max - cut.length) }, () => blankRow) : [];
+  const shown = foot && pad.length ? [...cut.slice(0, -1), ...pad, foot] : [...cut, ...pad];
   return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: shown.map((l) => lineEl(els, { runs: l.runs }, m, on, ui)) });
 }
 
@@ -117,6 +131,7 @@ export function sidebarTree(els: ClientElements, model: SidebarModel, on: Sideba
     flexDirection: 'column',
     flexShrink: 0,
     width: cols,
+    ...(model.rows > 0 ? { minHeight: model.rows } : {}), // wave 32 (critique 30: the 234 stopped short of the pane bottom): the panel surface is the pane's whole height on every tab, whatever the body holds
     backgroundColor: panelBg(ui),
     children: [lineEl(els, ribbonRow(pm, model.ui.view === 'board' ? boardViewRibbon(model, cols, ui) : undefined), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, on, cols, ui, pm)] : viewRows(model.ui.view, els, model, on, cols, pm))],
   });

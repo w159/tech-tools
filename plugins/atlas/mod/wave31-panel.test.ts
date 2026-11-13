@@ -75,9 +75,9 @@ describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: 
     const w = (name: string): number => cells(rowsOfCard(notificationTree(name, 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!);
     expect(new Set([w('a'), w('beta-explorer'), w('a-very-long-worker-name-that-needs-cutting-down-to-size')]).size).toBe(1);
   });
-  test('the row reads `▌ ◆ ATLAS  ● done  beta-explorer ... 0:13` and still matches the capture scorer', () => {
+  test('the row reads `▌ ◆ ATLAS  ● done  beta-explorer ... 0:13` (wave 32: `explorer finished` is gone, so the scorer regex no longer applies)', () => {
     const t = rowsOfCard(notificationTree('beta-explorer', 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!;
-    expect(t).toMatch(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\w+ finished/);
+    expect(t).toMatch(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\d+:\d\d/);
     expect(t.trimEnd()).toMatch(/0:13$/);
     expect(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)/.exec(t)!.slice(1, 4)).toEqual(['●', 'done', 'beta-explorer']);
   });
@@ -160,9 +160,9 @@ describe('wave 31 item 3: the channel tab times are the run clock and the pane i
   });
 });
 
-describe('wave 31 item 4: the team tab histogram carries a scale label and the band total', () => {
-  test('a `scale` row names the sparkline axis', () => {
-    expect(body('team', 65, 45, { kind: 'working', secs: 28 }).join('\n')).toMatch(/\bscale\b/);
+describe('wave 31 item 4: the team tab histogram carries the band total (wave 32 dropped its `scale` legend)', () => {
+  test('there is no `scale` legend row', () => {
+    expect(body('team', 65, 45, { kind: 'working', secs: 28 }).join('\n')).not.toMatch(/\bscale\b/);
   });
   test('the total is the band run clock', () => {
     expect(body('team', 65, 45, { kind: 'working', secs: 61 }).join('\n')).toMatch(/total\s+1:01/);

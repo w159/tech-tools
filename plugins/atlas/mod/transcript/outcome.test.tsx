@@ -101,7 +101,7 @@ test("critique 14 B3: a worker the mod saw end (the HUD's signal) reads done on 
   expect(strings(await sites().ToolUse!(failed, e, next))).toContain('killed')
   forgetFailed() // an id that failed stays failed (critique 15 A1): the next case is a fresh worker
   const working = { ...eng, state: memState({ 'atlas/snapshot': SNAP, 'atlas/spinnerTick': 3, 'atlas/orch': { activity: { a1: { mood: 'working', startedAt: 1000, since: 15600 } }, comms: [], stage: {}, meta: {} } }) } as unknown as EngineInterface
-  expect(await cardExtra(working, e.props.output, [e.agent], new Map())).toEqual({ mark: spin(3, 'implement') })
+  expect(await cardExtra(working, e.props.output, [e.agent], new Map())).toEqual({ mark: spin(3, 'implement'), frame: 3 })
 })
 
 test('a call still being written reads pending, not completed', async () => {
@@ -116,8 +116,8 @@ test('task-notification of an atlas worker that left the host list draws its res
   const e = { surface: 'terminal', component: 'UserMessage', requestId: 'u1', props: { text: 'Agent "wave-a" finished', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', status: 'completed', durationMs: 29046 } } }
   const text = strings(await sites().UserMessage!(engine([], { a1: { name: 'wave-a', type: 'atlas:explorer' } }), e, next))
   expect(text).toContain('wave-a')
-  expect(text).toContain('explorer')
-  expect(text).toContain('explorer finished')
+  expect(text).toContain('"done"')
+  expect(text).not.toContain('finished')
   expect(text).toContain('0:29')
   expect(text).not.toContain('STATUS')
 })
@@ -156,7 +156,7 @@ test('cardExtra is empty for a call that launched nothing and for a non-atlas wo
 test('cardExtra spins from tick 0 when the spinner atom was never written', async () => {
   const e = launched('running');
   const extra = await cardExtra(engine([e.agent], {}, null), e.props.output, [e.agent], new Map());
-  expect(extra).toEqual({ mark: spin(0, 'implement') });
+  expect(extra).toEqual({ mark: spin(0, 'implement'), frame: 0 });
   expect(spin(0, 'implement')).not.toBe(spin(1, 'implement'));
 });
 

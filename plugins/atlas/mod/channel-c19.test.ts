@@ -35,12 +35,12 @@ describe('critique 19 C5: the channel tab under failure', () => {
   });
   test('a Stop refusal is a channel row that names what Stop said', () => {
     const text = channel(world([sq('alpha-explorer', 'finished')]), refused).join('\n');
-    expect(text).not.toContain('no messages yet');
+    expect(text).not.toContain('no messages');
     expect(text).toMatch(/Stop refused: team gate, todos drained/);
   });
   test('a worker that finished cleanly and a Stop that passed add no failure row (the empty hint stays honest)', () => {
     const text = channel(world([sq('alpha-explorer', 'finished')]), [{ id: 'completion', title: 'Completion gate', lines: [{ id: STOP_LINE, label: 'Last Stop passed', ok: true }] }]).join('\n');
-    expect(text).toContain('no messages yet');
+    expect(text).toContain('no messages'); // wave 32: `○ no messages`
   });
   test('the real notes stay, the failure rows follow them in time order', () => {
     const note: ChannelNote = { ts: '2026-11-12T10:00:00.000Z', seq: 1, owner: 'alpha-explorer', text: 'handed off alpha.py', channel: 'c', kind: 'handoff' };

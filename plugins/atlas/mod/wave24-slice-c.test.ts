@@ -56,8 +56,9 @@ describe('board (step 1)', () => {
     const narrow = pane(doubted, 37, { stopRefused: true }).join(' ').replace(/\s+/g, ' ');
     expect(narrow).toContain('■ T2 killed after Stop refusal · ghost-explorer');
   });
-  test('a plan that is all done closes with `closed · 5 of 5 items done`', () => {
-    expect(pane(five, 50).at(-1)).toBe('  closed · 5 of 5 items done');
+  test('a plan that is all done adds no closing line (wave 32, critique 30: `closed · 5 of 5 items done` repeated the summary row)', () => {
+    expect(pane(five, 50).join('\n')).not.toMatch(/closed|of 5 items done/);
+    expect(pane(five, 50).at(-1)).toMatch(/T5/);
   });
   test('the counts match the tab everywhere: a dispatch row is never an item (5, not 8)', () => {
     const rows = [...five, ...dispatchRows];

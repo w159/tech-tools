@@ -75,7 +75,7 @@ describe('step 3: the board pane', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
     expect(t).toHaveLength(4); // the two agents, the axis rule with its ticks, the tick labels
     expect(t[0]).toMatch(/^ {2}alpha-explorer [█▏▎▍▌▋▊▉]+[ ┊]* +0:14 ●$/);
-    expect(t[1]).toMatch(/^ {2}gamma {10}[█▏▎▍▌▋▊▉]+[ ┊]* +0:07 [◐◓◑◒]$/);
+    expect(t[1]).toMatch(/^ {2}gamma {10}[█▏▎▍▌▋▊▉]+[ ┊]* +0:07 [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/); // wave 32: a working agent row wears the band's braille
     expect(t[2]).toMatch(/^ {17}┬[─┬]+$/);
     expect(t[3]).toMatch(/^ {17}0:00 .*0:1\d$/);
     const bar = (l: string): number => [...l].filter((c) => /[█▏▎▍▌▋▊▉]/.test(c)).length;
@@ -106,14 +106,13 @@ describe('step 4: the channel', () => {
     for (const who of ['ghost-explorer', 'stop gate', 'lead']) expect(t.some((l) => l.includes(who))).toBe(true);
     expect(t.filter((l) => /\d\d:\d\d$/.test(l)).length).toBe(3);
   });
-  test('with nothing to say the pane holds one dim centred line under the head', () => {
+  test('with nothing to say the pane holds one dim line under the head (left-aligned since wave 32)', () => {
     const t = text('channel', 80, { notes: [] });
-    const say = t.filter((l) => l.includes('no messages yet'));
+    const say = t.filter((l) => l.includes('○ no messages'));
     expect(say).toHaveLength(1);
-    const left = say[0]!.length - say[0]!.trimStart().length;
-    expect(Math.abs(left - (80 - left - 'no messages yet'.length))).toBeLessThanOrEqual(1);
-    const runs = panelLines(world('channel', 80, { notes: [] })).flatMap((l) => l.runs).filter((x) => x.t.includes('no messages yet'));
-    expect(runs.map((x) => x.tone)).toEqual(['dim']);
+    expect(say[0]!.length - say[0]!.trimStart().length).toBe(4); // wave 32: left-aligned under the head, not centred
+    const runs = panelLines(world('channel', 80, { notes: [] })).flatMap((l) => l.runs).filter((x) => x.t.includes('no messages'));
+    expect(runs.map((x) => x.tone)).toEqual(['muted']); // wave 32: the muted grey (240) of the other quiet rows
   });
   test('the live model stamps a refusal and a closure with the time of the log before them, so all three rows carry a time', () => {
     const m = baseSidebar();

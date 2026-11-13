@@ -32,6 +32,24 @@ export function sparkOf(calls: readonly number[] | undefined, startMs: number | 
   return buckets.map((v) => (v === 0 ? chars[0]! : chars[Math.max(1, Math.min(top, Math.round((v / peak) * top)))]!)).join('');
 }
 
+/** Wave 32 (critique 30: each team sparkline was stretched over its own agent's span, so the shapes lined up with nothing): `n` cells over the RUN's window (`from` to `to`), one axis for every row. A cell outside the agent's own
+ * run (`startMs` to `endMs`) is blank; inside it an empty bucket is the lowest bar. */
+export function sparkOver(calls: readonly number[] | undefined, from: number, to: number, startMs: number | undefined, endMs: number | undefined, n: number, ascii = false): string {
+  const chars = ascii ? BLOCKS_ASCII : BLOCKS;
+  const top = chars.length - 1;
+  const cells = Math.max(1, n);
+  const span = Math.max(1000, to - from);
+  const buckets = new Array<number>(cells).fill(0);
+  for (const t of calls ?? []) {
+    if (t < from || t > to + 1) continue;
+    buckets[Math.min(cells - 1, Math.floor(((t - from) / span) * cells))]! += 1;
+  }
+  const peak = Math.max(1, ...buckets);
+  const first = startMs === undefined ? 0 : Math.max(0, Math.min(cells - 1, Math.floor(((startMs - from) / span) * cells)));
+  const last = endMs === undefined ? cells - 1 : Math.max(first, Math.min(cells - 1, Math.floor(((endMs - from) / span) * cells)));
+  return buckets.map((v, i) => (i < first || i > last ? ' ' : v === 0 ? chars[0]! : chars[Math.max(1, Math.min(top, Math.round((v / peak) * top)))]!)).join('');
+}
+
 /** What the team did: a count per state and the run's length from the first start to the last end. */
 export type Totals = { running: number; done: number; killed: number; waiting: number; queued: number; blocked: number; secs: number; calls: number };
 export function totalsOf(workers: readonly { state: UiState; startMs?: number | undefined; endMs?: number | undefined; tools?: number | undefined }[], lead?: { startMs?: number | undefined; endMs?: number | undefined } | undefined): Totals {

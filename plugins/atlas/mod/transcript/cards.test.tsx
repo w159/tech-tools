@@ -39,7 +39,7 @@ test('running card: the rail card, the state word and name, what it is doing, th
   const c = workerCard(call(), 'running', 60, undefined, '', { now: 'Grep auth/ 12s', wave: 2 })!
   const rows = rowsOf(c)
   expect(rows).toHaveLength(1)
-  expect(rows[0]).toMatch(/^▌ ◐ running {2}impl-a {2}Grep auth\/ 12s {2}sonnet$/u)
+  expect(rows[0]).toMatch(/^▌ ⠋ running {2}impl-a {2}Grep auth\/ 12s {2}sonnet$/u) // wave 32: the start card is the band's braille (frame 0 here), not a static `◐`
   expect(textWidth(rows[0]!)).toBeLessThanOrEqual(60)
   expect(text(c)).not.toMatch(/[┌┐└┘│]/u) // no box anywhere
   expect(props(c).borderStyle).toBeUndefined()
@@ -128,7 +128,7 @@ test('phaseOf maps a finished call by its worker state, not the idle fallback', 
 test('the card row is fixed-size; a returned worker reads done, never finished-as-done twice', () => {
   const running = workerCard(call(), 'running', 60, undefined, '', { now: 'x' })!
   for (const row of (running as El).children) expect(row.props.flexShrink).toBe(0)
-  expect(rowsOf(running)[0]).toMatch(/^▌ ◐ running {2}impl-a/u)
+  expect(rowsOf(running)[0]).toMatch(/^▌ ⠋ running {2}impl-a/u)
   const done = workerCard(call({ isRunning: false, output: 'STATUS: DONE' }), 'finished', 60)!
   expect(rowsOf(done)[0]).toContain('done     impl-a')
 })
@@ -201,7 +201,7 @@ test('a killed or failed background worker reads killed on the rail; a finished 
 test('the notification row is state, name, role and outcome', () => {
   // Wave 31: a finish card is one row, the one-line shape the capture scorer reads.
   const title = (n: unknown): string => text((n as El).children[0])
-  expect(title(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a {2}explorer finished$/)
+  expect(title(notificationTree('wave-a', 'explorer', 'STATUS: DONE', false))).toMatch(/^▌ ◆ ATLAS {2}● done {2}wave-a$/) // wave 32: no `explorer finished` after the name
   expect(title(notificationTree('wave-a', 'explorer', 'boom', true))).toMatch(/^▌ ◆ ATLAS {2}■ killed {2}wave-a/)
 })
 

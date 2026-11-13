@@ -95,7 +95,7 @@ const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : r
  * `failed`, `killed`), `now` what a running worker is doing (tool, target, age), `wave` the strip number it was
  * dispatched in, `steps` and `ctx` the worker's plan progress and context held (rows appear only when known).
  * `mark` is accepted for older callers and ignored: the border's state word replaces the spinner chip. */
-export interface CardExtra { ui?: Ui; mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
+export interface CardExtra { ui?: Ui; /** The shared spinner frame (the beat counter): the start card's braille turns with it. */ frame?: number; mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
 
 /** First sentence of a PreToolUse hook's DENY text, null when the call was not denied: a denied dispatch never ran. */
 function denyReason(c: CallLike): string | null {
@@ -124,7 +124,7 @@ export function workerCard(c: CallLike, state: AgentState, width = 0, name?: str
  const w = Math.max(20, Math.min(RAIL_W, width > 0 ? width : RAIL_W))
  // One card style (critique 16 C3: the boxed `┌─ ◆ done beta-explorer-2 ─┐` card sat beside the rail card for the same worker in 61 frames): the dispatch card is the
  // rail card the finish uses, `▌ ◐ running  name  what it is doing` (no brand: only the finish card carries `◆ ATLAS`). The name is never cut: the fact is clipped to the room left, the model tag goes first.
- const head = toastRuns(phase.ui, cardName, '', ui)
+ const head = toastRuns(phase.ui, cardName, '', ui, false, extra.frame ?? 0)
  const used = head.reduce((n, x) => n + cells(x.t), 0)
  const last = lastOf(c, phase.ui === 'running', extra, word, w - used - 2)
  const fact = last === 'running' ? '' : last // the state word already says it; a host label such as `pending` still shows
@@ -162,24 +162,25 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
 export const FINISH_W = 56
 export const finishWidth = (cols: number): number => Math.max(24, Math.min(FINISH_W, cols > 0 ? cols - 4 : FINISH_W))
 const TIME_RE = /\b\d+:\d\d(?::\d\d)?\b/
-export interface FinishOpts { cols?: number; fade?: number }
+export interface FinishOpts { cols?: number; fade?: number; /** The worker's tool calls: `· 2 fn` after the time. Absent: the time alone. */ calls?: number }
 
 function finishRow(state: 'done' | 'failed', name: string, fact: string, time: string, ui: Ui, o: FinishOpts): RenderElement {
+ const figure = time && o.calls !== undefined && o.calls > 0 ? `${time} ${ui.ascii ? '|' : '·'} ${o.calls} fn` : time // `0:12 · 2 fn`: the run time, then its tool calls
  const w = finishWidth(o.cols ?? 0)
  const g = stateRun(state, ui)
  const faded = state === 'done' && (o.fade ?? 0) >= 0.5
  const bar: UiRun = { t: ui.ascii ? '|' : '▌', tone: ui.ascii ? 'text' : state === 'failed' ? g.tone : faded ? 'sub' : 'accent' }
- const headOf = (sep: string): UiRun[] => [bar, { t: ' ', tone: 'text' }, ...(ui.ascii ? brandMark(ui) : [{ t: '◆ ', tone: 'dim' } as UiRun, { t: 'ATLAS', tone: 'dim' } as UiRun]), { t: '  ', tone: 'text' }, { ...g, t: `${g.t} ` }, { t: wordOf(state), tone: stateWordTone(state, ui), bold: true }, { t: sep, tone: 'text' }]
+ const headOf = (sep: string): UiRun[] => [bar, { t: ' ', tone: 'text' }, ...(ui.ascii ? brandMark(ui) : [{ t: '◆ ', tone: 'accent' } as UiRun, { t: 'ATLAS', tone: 'accent' } as UiRun]), { t: '  ', tone: 'text' }, { ...g, t: `${g.t} ` }, { t: wordOf(state), tone: stateWordTone(state, ui), bold: true }, { t: sep, tone: 'text' }]
  let head = headOf('  ')
  const tail: UiRun[] = fact ? [{ t: `  ${fact}`, tone: 'sub' }] : []
  const used = (xs: UiRun[]): number => xs.reduce((n, x) => n + cells(x.t), 0)
- let timeW = time ? cells(time) + 1 : 0
+ let timeW = figure ? cells(figure) + 1 : 0
  let room = w - used(head) - used(tail) - timeW
- if (room < 6 && time) { timeW = 0; room = w - used(head) - used(tail) } // no room for the time beside a name: the name wins
+ if (room < 6 && figure) { timeW = 0; room = w - used(head) - used(tail) } // no room for the time beside a name: the name wins
  if (cells(name) === room + 1) { head = headOf(' '); room += 1 } // one cell short of the whole name: the gap after the state word gives it up before the name is cut
  const label = clip(name, Math.max(1, room)).replace(ELLIPSIS, ui.ascii ? '~' : ELLIPSIS)
- const gap = Math.max(timeW ? 1 : 0, w - used(head) - cells(label) - used(tail) - (timeW ? cells(time) : 0))
- const runs: UiRun[] = [...head, { t: label, tone: 'text' }, ...tail, ...(timeW ? [{ t: ' '.repeat(gap), tone: 'text' } as UiRun, { t: time, tone: 'muted' } as UiRun] : [])]
+ const gap = Math.max(timeW ? 1 : 0, w - used(head) - cells(label) - used(tail) - (timeW ? cells(figure) : 0))
+ const runs: UiRun[] = [...head, { t: label, tone: 'text' }, ...tail, ...(timeW ? [{ t: ' '.repeat(gap), tone: 'text' } as UiRun, { t: figure, tone: 'muted' } as UiRun] : [])]
  return el('Box', { flexDirection: 'column', flexShrink: 0 }, rowEl(runs, ui))
 }
 
@@ -195,7 +196,7 @@ const timeOf = (text: string): string => {
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false, o: FinishOpts = {}): RenderElement {
  const text = stripStatus(outcome)
  if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, o)
- return finishRow('done', displayName(name, role), `${role || 'agent'} finished`, timeOf(text), ui, o)
+ return finishRow('done', displayName(name, role), '', timeOf(text), ui, o) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */
