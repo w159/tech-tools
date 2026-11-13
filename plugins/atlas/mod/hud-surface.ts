@@ -588,9 +588,12 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
     const x = flat(a.tool);
     if (x === '' || x === 'finished' || a.state === 'queued' || (a.state === 'failed' && x === KILLED)) return '';
     return a.state === 'done' && resultOf(a) !== NONE && fnOf(a) !== NONE ? (a.action && a.action !== 'preparing' ? a.action : '') : x;
-  };; // the filler `finished` and a failed agent's own word say nothing LAST does not
+  }; // the filler `finished` and a failed agent's own word say nothing LAST does not
   // Wave 37: the schema is frozen. The same six columns in every state (running, done, blocked, idle) and at 150 and 110 columns: LAST only shrinks (to its 4-cell header) and a count nobody knows reads `-`.
-  const LEAD = 2, AGENT = 16, STATE = 9, TIME = 6, CALLS = 6, FN = 4, LAST_MIN = 4;
+  const LEAD = 2, STATE = 9, TIME = 6, CALLS = 6, FN = 4, LAST_MIN = 4;
+  // State 38: at 110 columns LAST takes the width that is left: the AGENT column gives up 2 cells first (16 -> 14, the width of `alpha-explorer`) when LAST would otherwise be narrower than the name column.
+  const lastRoom = (agent: number): number => cols - 1 - (LEAD + agent + 2 + STATE + 1 + TIME + 1 + CALLS + 1 + FN + 2);
+  const AGENT = lastRoom(16) >= 16 ? 16 : 14;
   const base = LEAD + AGENT + 2 + STATE + 1 + TIME; // AGENT STATE TIME
   const withCalls = base + 1 + CALLS;
   const withFn = withCalls + 1 + FN;
@@ -598,7 +601,6 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
   const showCalls = cols >= withCalls + 1;
   const showFn = showCalls && cols >= withFn + 1;
   const showLast = showFn && cols - 1 - lastAt >= LAST_MIN;
-  const newest = all.reduce<AgentRow | undefined>((b, a) => (a.state === 'running' && (b === undefined || (a.seq ?? 0) >= (b.seq ?? 0)) ? a : b), undefined); // the newest running row wears the 236 band
   const nameW = Math.max(6, Math.min(AGENT, cols - (LEAD + 2 + STATE + 1 + TIME) - 1)); // a very narrow row clips the name last
   const cell = (text: string, w: number, tone: Run['tone'], bold = false): Run => ({ ...t(clipEll(text, w, ell).padEnd(w), tone), ...(bold ? { bold: true } : {}) });
   const right = (text: string, w: number, tone: Run['tone'], bold = false): Run => ({ ...t(' '.repeat(Math.max(0, w - cells(text))) + clipEll(text, w, ell), tone), ...(bold ? { bold: true } : {}) });
@@ -628,9 +630,7 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number): Run[][] |
       ...(showFn ? [t(' '), right(fnOf(a), FN, tone)] : []),
       ...(showLast ? [t('  '), cell(lastOf(a), cols - 1 - lastAt, 'muted')] : []),
     ];
-    if (a !== newest) return row;
-    const band = xtermHex(236);
-    return [...row, t(' '.repeat(Math.max(0, cols - runsCells(row))))].map((x) => ({ ...x, bgHex: band })); // padded to the last cell: a band, not a coloured word
+    return row;
   });
   return [head, header, ...rows, ...(hidden > 0 ? [[t(' '.repeat(LEAD)), t(`+${hidden} more`, 'sub')]] : []), bottomRule(cols, ui)];
 }

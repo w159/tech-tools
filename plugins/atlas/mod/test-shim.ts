@@ -15,6 +15,8 @@
 import * as bunTest from "bun:test";
 import { plugin } from "bun";
 
+declare const require: (id: string) => unknown;
+
 type TestBody = (...args: unknown[]) => unknown;
 
 function hostAwareTest(name: string, a: unknown, b?: unknown) {

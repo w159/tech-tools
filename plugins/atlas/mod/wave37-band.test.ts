@@ -248,11 +248,11 @@ describe('5. SUBAGENTS: one frozen schema', () => {
     expect(order(rows([ag('gamma-explorer', 'done', 'done'), ag('beta-explorer', 'failed', 'failed'), ag('alpha-explorer', 'done', 'done')]).text)).toEqual(['alpha-explorer', 'beta-explorer', 'gamma-explorer']);
     hud.resetAgentSeq();
   });
-  test('the newest running row has a 236 background band; no other row does', () => {
+  test('state 38: no SUBAGENTS row wears a 236 background band (it read as a stray highlight)', () => {
     hud.resetAgentSeq();
     const { text, segs } = rows([ag('alpha-explorer', 'working', 'running'), ag('beta-explorer', 'working', 'running'), ag('gamma-explorer', 'working', 'running')]);
     const banded = (name: string): boolean => segs[text.findIndex((r) => r.startsWith(`  ${name}-explorer`))]!.some((x) => (x as { bgHex?: string }).bgHex === xtermHex(236));
-    expect([banded('alpha'), banded('beta'), banded('gamma')]).toEqual([false, false, true]);
+    expect([banded('alpha'), banded('beta'), banded('gamma')]).toEqual([false, false, false]);
     hud.resetAgentSeq();
   });
 });
