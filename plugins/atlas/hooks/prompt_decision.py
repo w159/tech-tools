@@ -20,9 +20,12 @@ Criteria values are strings. Local nimble rejects the object form
 
 from __future__ import annotations
 
+import http.client
 import json
+import math
 import os
 import re
+import time
 
 
 class _LazyUrllib:
@@ -115,14 +118,73 @@ def decision_url() -> str | None:
     return DEFAULT_URL
 
 
+NEG_TTL_S = 60.0
+_NEG_MEM: dict = {}  # base url -> time.monotonic() deadline after a refused connection
+
+
+def _neg_path() -> str:
+    base = os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas")
+    return os.path.join(base, "decision-down.json")
+
+
+def _neg_active(base: str) -> bool:
+    """True while `base` refused a connection within the last NEG_TTL_S seconds (this process, or any
+    other through the small file under ATLAS_HOME). A machine without Ollama then pays the refused
+    connection at most once a minute."""
+    if _NEG_MEM.get(base, 0.0) > time.monotonic():
+        return True
+    try:
+        with open(_neg_path(), encoding="utf-8") as fh:
+            rec = json.load(fh)
+        until = float(rec["until"])
+        if rec.get("base") == base and until > time.time():
+            _NEG_MEM[base] = time.monotonic() + (until - time.time())
+            return True
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return False
+
+
+def _neg_arm(base: str) -> None:
+    _NEG_MEM[base] = time.monotonic() + NEG_TTL_S
+    path = _neg_path()
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump({"base": base, "until": time.time() + NEG_TTL_S}, fh)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _refused(exc: BaseException) -> bool:
+    reason = getattr(exc, "reason", exc)
+    return isinstance(reason, ConnectionRefusedError)
+
+
+def _urlopen(req, timeout: float):
+    """Open `req` with NO proxies: the endpoint is loopback, so http_proxy/all_proxy must never carry a
+    prompt or a final reply off the machine (urllib would honour them by default)."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return opener.open(req, timeout=timeout)
+
+
 def ask(state: str, questions: dict, timeout: float = TIMEOUT_S) -> dict | None:
     """POST one request carrying `questions` about `state` and return the `answers` dict, or None.
 
-    The shared transport for every decision call: loopback guard (decision_url), lazy urllib, and
-    fail-open (a refused connection, a timeout, a non-JSON or malformed body all return None, never
-    raise). Several questions belong in ONE call so a hook pays one round trip."""
+    The shared transport for every decision call: loopback guard (decision_url), lazy urllib with proxies
+    disabled, a 60 s negative cache after a refused connection, and fail-open (a refused connection, a
+    timeout, a non-JSON, truncated or malformed HTTP body all return None, never raise). Several questions
+    belong in ONE call so a hook pays one round trip."""
     base = decision_url()
     if not base or not questions:
+        return None
+    if _neg_active(base):
         return None
     model = os.environ.get("ATLAS_DECISION_MODEL", "nimble").strip() or "nimble"
     try:
@@ -135,9 +197,11 @@ def ask(state: str, questions: dict, timeout: float = TIMEOUT_S) -> dict | None:
             method="POST",
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _urlopen(req, timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException) as exc:
+        if _refused(exc):
+            _neg_arm(base)
         return None
     if not isinstance(payload, dict):
         return None
@@ -145,24 +209,29 @@ def ask(state: str, questions: dict, timeout: float = TIMEOUT_S) -> dict | None:
     return answers if isinstance(answers, dict) else None
 
 
+def _unit(value) -> float | None:
+    """A number clamped into [0, 1]; None for bools, non-numbers and NaN."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or math.isnan(value):
+        return None
+    return min(1.0, max(0.0, float(value)))
+
+
 def choice_of(answers: dict | None, qid: str) -> tuple[str, float] | None:
-    """(choice, confidence) of choice question `qid`, or None when absent or malformed."""
+    """(choice, confidence) of choice question `qid`, or None when absent or malformed. A confidence
+    outside [0, 1] is clamped, a bool or NaN is rejected (same rules as noul_of)."""
     answer = (answers or {}).get(qid)
     if not isinstance(answer, dict):
         return None
-    choice, confidence = answer.get("choice"), answer.get("confidence")
-    if not isinstance(choice, str) or not isinstance(confidence, (int, float)):
+    choice, confidence = answer.get("choice"), _unit(answer.get("confidence"))
+    if not isinstance(choice, str) or confidence is None:
         return None
-    return choice, float(confidence)
+    return choice, confidence
 
 
 def noul_of(answers: dict | None, qid: str) -> float | None:
     """Probability of noul question `qid` (0..1), or None when absent or malformed."""
     answer = (answers or {}).get(qid)
-    value = answer.get("noul") if isinstance(answer, dict) else None
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return min(1.0, max(0.0, float(value)))
+    return _unit(answer.get("noul")) if isinstance(answer, dict) else None
 
 
 # One-line class descriptions for the routing question. The class NAMES come from
@@ -219,6 +288,11 @@ _PROMPT_CACHE_TTL_S = 10.0
 
 def reset_cache() -> None:
     _PROMPT_CACHE.update(key=None, at=0.0, answers=None)
+    _NEG_MEM.clear()
+    try:
+        os.unlink(_neg_path())
+    except OSError:
+        pass
 
 
 def prompt_answers(prompt: str) -> dict | None:
@@ -227,8 +301,6 @@ def prompt_answers(prompt: str) -> dict | None:
     Cached for a few seconds per (prompt, endpoint, model), failures included, so the arming band and
     the routing step of the same hook run share a single round trip (and a dead endpoint costs one
     attempt, not two)."""
-    import time
-
     base = decision_url()
     if not base:
         return None

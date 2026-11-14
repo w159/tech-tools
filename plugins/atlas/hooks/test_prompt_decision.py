@@ -35,7 +35,7 @@ class DecisionTests(unittest.TestCase):
     def test_off_skips_http(self):
         with mock.patch.dict(os.environ, {"ATLAS_DECISION": "off"}, clear=False):
             os.environ.pop("ATLAS_DECISION_URL", None)
-            with mock.patch.object(prompt_decision.urllib.request, "urlopen") as op:
+            with mock.patch.object(prompt_decision, "_urlopen") as op:
                 self.assertIsNone(prompt_decision.local_decision("explain the gate"))
         op.assert_not_called()
 
@@ -61,7 +61,7 @@ class DecisionTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ATLAS_DECISION": "on"}, clear=False):
             os.environ.pop("ATLAS_DECISION_URL", None)
             os.environ.pop("ATLAS_DECISION_MODEL", None)
-            with mock.patch.object(prompt_decision.urllib.request, "urlopen", fake):
+            with mock.patch.object(prompt_decision, "_urlopen", fake):
                 verdict = prompt_decision.local_decision("add a bow to the table")
         self.assertEqual(verdict, ("conversation", 0.84))
         req = captured["req"]
@@ -82,7 +82,7 @@ class DecisionTests(unittest.TestCase):
         env = {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": "https://example.com:8443"}
         with mock.patch.dict(os.environ, env, clear=False):
             os.environ.pop("ATLAS_DECISION_ALLOW_REMOTE", None)
-            with mock.patch.object(prompt_decision.urllib.request, "urlopen") as op:
+            with mock.patch.object(prompt_decision, "_urlopen") as op:
                 self.assertIsNone(prompt_decision.local_decision("explain the gate"))
             op.assert_not_called()
             self.assertIsNone(prompt_decision.decision_url())
@@ -103,7 +103,7 @@ class DecisionTests(unittest.TestCase):
             raise urllib.error.URLError("refused")
 
         with mock.patch.dict(os.environ, {"ATLAS_DECISION": "on"}, clear=False):
-            with mock.patch.object(prompt_decision.urllib.request, "urlopen", fake):
+            with mock.patch.object(prompt_decision, "_urlopen", fake):
                 self.assertIsNone(
                     prompt_decision.local_decision("explain the gate please")
                 )
@@ -159,7 +159,7 @@ class AskTests(unittest.TestCase):
     def test_ask_refuses_remote_unless_allowed(self):
         with _env("https://example.com:8443"):
             os.environ.pop("ATLAS_DECISION_ALLOW_REMOTE", None)
-            with mock.patch.object(prompt_decision.urllib.request, "urlopen") as op:
+            with mock.patch.object(prompt_decision, "_urlopen") as op:
                 self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
             op.assert_not_called()
 
@@ -175,7 +175,7 @@ class AskTests(unittest.TestCase):
                 return False
 
         with _env("http://127.0.0.1:9"):
-            with mock.patch.object(prompt_decision.urllib.request, "urlopen", lambda *a, **k: Bad()):
+            with mock.patch.object(prompt_decision, "_urlopen", lambda *a, **k: Bad()):
                 self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
 
     def test_prompt_questions_ride_one_request_with_string_criteria(self):
@@ -236,6 +236,145 @@ class AskTests(unittest.TestCase):
                 self.assertIsNone(prompt_decision.verify_reply("All fixed."))
                 took = time.monotonic() - t0
         self.assertLess(took, prompt_decision.VERIFY_TIMEOUT_S + 0.6)
+
+
+class _RawServer:
+    """A raw-socket loopback server that answers every connection with fixed bytes, then closes."""
+
+    def __init__(self, reply: bytes):
+        import socket
+        import threading
+
+        self._reply = reply
+        self._sock = socket.socket()
+        self._sock.bind(("127.0.0.1", 0))
+        self._sock.listen(5)
+        self.url = "http://127.0.0.1:%d" % self._sock.getsockname()[1]
+        self.accepted = 0
+        self._stop = False
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+
+    def _serve(self):
+        while not self._stop:
+            try:
+                conn, _ = self._sock.accept()
+            except OSError:
+                return
+            self.accepted += 1
+            try:
+                conn.settimeout(1.0)
+                try:
+                    conn.recv(65536)
+                except OSError:
+                    pass
+                conn.sendall(self._reply)
+            except OSError:
+                pass
+            finally:
+                conn.close()
+
+    def __enter__(self):
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop = True
+        self._sock.close()
+        return False
+
+
+class ProxyAndMalformedTests(unittest.TestCase):
+    def setUp(self):
+        prompt_decision.reset_cache()
+
+    def test_ask_ignores_http_proxy_env(self):
+        """D1: http_proxy must not carry prompts off the loopback endpoint."""
+        with _RawServer(b"") as proxy, StubDecisionServer(lambda b: {"a": noul(0.5)}) as srv:
+            proxy_env = {
+                "http_proxy": proxy.url,
+                "HTTP_PROXY": proxy.url,
+                "all_proxy": proxy.url,
+                "ALL_PROXY": proxy.url,
+                "no_proxy": "",
+                "NO_PROXY": "",
+            }
+            with mock.patch.dict(os.environ, proxy_env, clear=False), _env(srv.url):
+                answers = prompt_decision.ask("secret prompt", {"a": {"type": "noul"}}, 2.0)
+        self.assertEqual(proxy.accepted, 0, "the proxy listener must receive nothing")
+        self.assertEqual(len(srv.requests), 1, "the stub endpoint must receive the call")
+        self.assertEqual(set(answers), {"a"})
+
+    def test_ask_never_raises_on_malformed_http(self):
+        """D2: BadStatusLine, IncompleteRead and bad UTF-8 all fail open."""
+        bad_utf8 = b"\xff\xfe{"
+        cases = {
+            "bad status line": b"garbage\r\n\r\n",
+            "truncated body": b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n{",
+            "bad utf-8": b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % len(bad_utf8) + bad_utf8,
+            "empty reply": b"",
+        }
+        for name, reply in cases.items():
+            prompt_decision.reset_cache()
+            with _RawServer(reply) as srv, _env(srv.url):
+                self.assertIsNone(
+                    prompt_decision.ask("s", {"a": {"type": "noul"}}, 1.5), name
+                )
+
+    def test_choice_of_rejects_bool_and_clamps_confidence(self):
+        """D8."""
+        co = prompt_decision.choice_of
+        self.assertIsNone(co({"q": {"choice": "x", "confidence": True}}, "q"))
+        self.assertIsNone(co({"q": {"choice": "x", "confidence": float("nan")}}, "q"))
+        self.assertEqual(co({"q": {"choice": "x", "confidence": 1.5}}, "q"), ("x", 1.0))
+        self.assertEqual(co({"q": {"choice": "x", "confidence": -2}}, "q"), ("x", 0.0))
+        self.assertEqual(co({"q": {"choice": "x", "confidence": 0.8}}, "q"), ("x", 0.8))
+        self.assertIsNone(prompt_decision.noul_of({"q": {"noul": float("nan")}}, "q"))
+
+
+class NegativeCacheTests(unittest.TestCase):
+    def setUp(self):
+        prompt_decision.reset_cache()
+
+    def test_refused_connection_is_skipped_for_60s_in_process_and_via_file(self):
+        import stat
+
+        with _env("http://127.0.0.1:%d" % free_port()):
+            real = prompt_decision._urlopen
+            calls = []
+
+            def counting(req, timeout):
+                calls.append(1)
+                return real(req, timeout)
+
+            with mock.patch.object(prompt_decision, "_urlopen", counting):
+                self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
+                self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
+                self.assertEqual(len(calls), 1, "second call inside 60 s must not connect")
+                # A new process has no in-process memory: the file alone must suppress the call.
+                prompt_decision._NEG_MEM.clear()
+                self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
+                self.assertEqual(len(calls), 1, "file cache must suppress the call")
+                path = prompt_decision._neg_path()
+                self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o600)
+                # After the window passes the endpoint is tried again.
+                import time as _t
+
+                real_time, real_mono = _t.time, _t.monotonic
+                with mock.patch.object(_t, "time", lambda: real_time() + 61), \
+                     mock.patch.object(_t, "monotonic", lambda: real_mono() + 61):
+                    self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
+                self.assertEqual(len(calls), 2)
+
+    def test_timeout_does_not_arm_the_negative_cache(self):
+        with StubDecisionServer(lambda b: {}, delay=1.0) as srv, _env(srv.url):
+            self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}, 0.2))
+            self.assertFalse(prompt_decision._neg_active(srv.url))
+
+    def test_cache_is_per_endpoint(self):
+        with _env("http://127.0.0.1:%d" % free_port()):
+            prompt_decision.ask("s", {"a": {"type": "noul"}})
+        with StubDecisionServer(lambda b: {"a": noul(0.5)}) as srv, _env(srv.url):
+            self.assertIsNotNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
 
 
 if __name__ == "__main__":

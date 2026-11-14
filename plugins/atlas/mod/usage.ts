@@ -35,9 +35,25 @@ let dirMade = false;
 let seq = 0;
 let chain: Promise<unknown> = Promise.resolve();
 
-async function envGet($: EngineInterface, name: string): Promise<string | undefined> {
-	// $.env.get takes a literal name (the engine lists the variables a module reads), so callers pass each name spelled out.
-	return $.env.get(name).catch(() => undefined);
+type EnvName = 'ATLAS_HOME' | 'HOME' | 'DO_NOT_TRACK' | 'ATLAS_ANALYTICS' | 'CI' | 'GITHUB_ACTIONS' | 'GITLAB_CI' | 'BUILDKITE' | 'CIRCLECI' | 'TRAVIS' | 'JENKINS_URL' | 'TF_BUILD' | 'PYTEST_CURRENT_TEST';
+
+async function envGet($: EngineInterface, name: EnvName): Promise<string | undefined> {
+	// The host needs a quoted literal at every $.env.get call site (it lists the variables a module reads), so each name is spelled out here.
+	switch (name) {
+		case 'ATLAS_HOME': return $.env.get('ATLAS_HOME').catch(() => undefined);
+		case 'HOME': return $.env.get('HOME').catch(() => undefined);
+		case 'DO_NOT_TRACK': return $.env.get('DO_NOT_TRACK').catch(() => undefined);
+		case 'ATLAS_ANALYTICS': return $.env.get('ATLAS_ANALYTICS').catch(() => undefined);
+		case 'CI': return $.env.get('CI').catch(() => undefined);
+		case 'GITHUB_ACTIONS': return $.env.get('GITHUB_ACTIONS').catch(() => undefined);
+		case 'GITLAB_CI': return $.env.get('GITLAB_CI').catch(() => undefined);
+		case 'BUILDKITE': return $.env.get('BUILDKITE').catch(() => undefined);
+		case 'CIRCLECI': return $.env.get('CIRCLECI').catch(() => undefined);
+		case 'TRAVIS': return $.env.get('TRAVIS').catch(() => undefined);
+		case 'JENKINS_URL': return $.env.get('JENKINS_URL').catch(() => undefined);
+		case 'TF_BUILD': return $.env.get('TF_BUILD').catch(() => undefined);
+		case 'PYTEST_CURRENT_TEST': return $.env.get('PYTEST_CURRENT_TEST').catch(() => undefined);
+	}
 }
 
 /** $ATLAS_HOME, else $HOME/.atlas (the Python client's home()); '' when neither is known. */
@@ -132,12 +148,6 @@ export async function noteUsage($: EngineInterface, key: UsageKey): Promise<void
 		}
 		if (trailing) return; // one trailing write covers every count that lands inside the window
 		// clock.after is one-shot, and it keeps this timer out of the mod's repeating-tick bookkeeping (clock.every).
-		// A host without clock.after gets an unthrottled write instead of losing the count.
-		if (typeof $.clock.after !== 'function') {
-			lastWriteMs = now;
-			await flush($);
-			return;
-		}
 		trailing = $.clock.after(Math.max(1, lastWriteMs + WRITE_MIN_MS - now), () => {
 			trailing = null;
 			void (async () => {

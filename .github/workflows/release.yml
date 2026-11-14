@@ -15,28 +15,46 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
+  # The gate installs a third-party CLI (npm lifecycle scripts run), so it lives in its own job: read-only token,
+  # no secrets, no checkout credentials. The release job below holds the write token and only runs if this passes.
+  mod-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+
+      # No --ignore-scripts: the CLI's postinstall fetches its native binary and the CLI does not run without it
+      # (checked locally on 2.1.325: "claude native binary not installed").
+      - name: Release gate - the atlas mod's hooks module loads in the real host and the band renders
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.325
+          claude --version
+          python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live
+
+  release:
+    needs: mod-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.4
-
-      - name: Release gate - the atlas mod's hooks module loads and the band renders
-        run: |
-          npm install -g @anthropic-ai/claude-code@2.1.325
-          python3 plugins/atlas/scripts/atlas_mod_gate.py --live
 
       - name: Release each plugin whose tag is missing
         run: |

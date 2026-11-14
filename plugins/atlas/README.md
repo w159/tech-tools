@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.21.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.21.1 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -1318,7 +1318,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.21.0
+|-- .claude-plugin/plugin.json   manifest, version 17.21.1
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1337,11 +1337,17 @@ atlas/
 
 ### Release gate: mod load
 
-`scripts/atlas_mod_gate.py` loads the mod's hooks module (every `hooks.json` `"modules"` entry) the way a session does and fails unless the band renders. It checks that the entries exist, bundles each with bun, imports the bundle against a `claude-code` stub, calls `register(on, options)` on a recording host (it must register handlers), and renders the band for a fixture snapshot (no empty output). `--live` adds the authoritative check: the module booted in the real host through `claude plugin test`, on a trimmed temp copy under an isolated `HOME` and `CLAUDE_CONFIG_DIR`, because the host refuses code the offline load accepts (for example `$.env.get(<variable>)`). `--live` reports SKIP with the reason when the CLI is missing or cannot run headless. `--root` points the gate at another plugin copy. Run it from the repo root: `python3 plugins/atlas/scripts/atlas_mod_gate.py --live`. CI runs it as the `atlas-mod-gate` job in `tests.yml` and again before packaging in `release.yml`.
+`scripts/atlas_mod_gate.py` loads the mod's hooks module (every `hooks.json` `"modules"` entry) the way a session does and fails unless the band renders. A malformed `hooks.json` is a `FAIL hooks-json` with the parse error.
+
+- **Smoke checks (offline, labelled `smoke` in the output).** It checks that the entries exist, bundles each with bun, imports the bundle against a hand-written `claude-code` stub, calls `register(on, options)` on a recording host (it must register handlers), and renders the band for a fixture snapshot (no empty output). The stub is not the host and has accepted code the host rejects, so a smoke PASS is not a load proof.
+- **Live check (authoritative).** `--live` boots the modules in the real host through `claude plugin test`, on a trimmed temp copy under an isolated `HOME` and `CLAUDE_CONFIG_DIR`, with one probe beside every module in `hooks.json`. The host refuses code the offline load accepts (for example `$.env.get(<variable>)`). It passes only when the CLI exits 0, prints no `HooksError` or `(fail)`, and reports at least one pass per probe.
+- **`--require-live`** (implies `--live`) makes a live check that could not run (CLI missing, cannot spawn, timeout) a FAIL. Without it that case is a SKIP and exits 0. CI and the release job always pass it. `claude plugin test` needs no login and no network, so a failed run is never read as "not runnable here".
+
+`--root` points the gate at another plugin copy. Run it from the repo root: `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live`. CI runs it as the `atlas-mod-gate` job in `tests.yml` (CLI pinned to 2.1.325, blocking), as the non-blocking `atlas-mod-gate-latest` job against `@anthropic-ai/claude-code@latest`, and as the `mod-gate` job in `release.yml`, which the `release` job needs. That job has a read-only token and no secrets because it installs the CLI from npm.
 
 ## Release notes and license
 
-Changes by version: [CHANGELOG.md](CHANGELOG.md). Before and after measurements
+Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
 for 16.0.0:
 [docs/audits/2026-10-27_atlas-16.0.0-evidence.md](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md).
 

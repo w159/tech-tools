@@ -7,12 +7,20 @@ ANTHROPIC_API_KEY. Ollama serves POST /v1/messages (streaming, tools, system, th
 which provider launches it, checks the endpoint is healthy, and returns the env to apply. It never fails a run:
 an unhealthy or unconfigured Ollama falls back to Claude with a reason, unless ATLAS_OLLAMA_STRICT=1.
 
+Health (cached 30 s per url, model and minimum context): /api/version, /api/tags, POST /api/show (the model must list
+the "tools" capability and a context of at least ATLAS_OLLAMA_MIN_CTX when it reports either), then a real one-token
+POST /v1/messages with one tool that must return an Anthropic message. A model that cannot serve Claude Code falls
+back to Claude with a reason; nothing here makes Ollama raise its own context (OLLAMA_CONTEXT_LENGTH, see the README).
+
 Knobs (all environment variables):
   ATLAS_WORKER_PROVIDER      claude (default) | ollama | auto
   ATLAS_OLLAMA_MODEL         default Ollama model for every role
   ATLAS_OLLAMA_ROLE_MODELS   "explorer=qwen3:8b,runner=qwen3:8b" per-role models
+  ATLAS_OLLAMA_AUTO_ROLES    roles `auto` may move (default explorer,docs-auditor); a role with an ATLAS_OLLAMA_ROLE_MODELS entry also moves
   ATLAS_OLLAMA_URL           default http://127.0.0.1:11434 (loopback only unless ATLAS_OLLAMA_ALLOW_REMOTE=1)
   ATLAS_OLLAMA_ALLOW_REMOTE  1 allows a non-loopback URL
+  ATLAS_OLLAMA_MIN_CTX       smallest context window a model may report (default 32768)
+  ATLAS_OLLAMA_PROBE_TIMEOUT seconds for the one-token probe (default 30: the first request loads the model)
   ATLAS_OLLAMA_STRICT        1 refuses (exit 2) instead of falling back to Claude
   ATLAS_ADVERSARIAL_PAIRING  on (default) | off: cross-family verifier pairing in teams
 
@@ -24,7 +32,6 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
-import ipaddress
 import json
 import os
 import re
@@ -42,20 +49,61 @@ from pathlib import Path
 DEFAULT_URL = "http://127.0.0.1:11434"
 HEALTH_TTL_S = 30
 HEALTH_TIMEOUT_S = 1.5
+MIN_CTX_DEFAULT = 32768
+PROBE_TIMEOUT_DEFAULT = 30.0
+# read-only, haiku-tier roles (agents/explorer.md, agents/docs-auditor.md: Write/Edit disallowed). runner is also
+# haiku-tier but executes commands and writes, so it moves only through an explicit ATLAS_OLLAMA_ROLE_MODELS entry
+AUTO_ROLES_DEFAULT = ("explorer", "docs-auditor")
 MODEL_RE = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$"
 )  # same rule as atlas_ollama.NAME_RE
 ROLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 PROVIDERS = ("claude", "ollama", "auto")
-# env a worker on Ollama gets; CLAUDE_CODE_OAUTH_TOKEN is removed so the CLI cannot silently use the account
+# Model-name env a worker on Ollama gets, all set to the Ollama tag so background calls (haiku-class titles and
+# summaries), subagents and alias lookups never ask Ollama for a Claude model name. Source: Claude Code docs
+# model-config (ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL, CLAUDE_CODE_SUBAGENT_MODEL; ANTHROPIC_SMALL_FAST_MODEL deprecated).
+MODEL_ENV_KEYS = (
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "ANTHROPIC_SMALL_FAST_MODEL",
+    "CLAUDE_CODE_SUBAGENT_MODEL",
+)
+# env a worker on Ollama gets
 PROVIDER_ENV_KEYS = (
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_AUTH_TOKEN",
     "ANTHROPIC_API_KEY",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
     "ATLAS_PROVIDER_ACTIVE",
+    *MODEL_ENV_KEYS,
 )
-UNSET_ENV = ("CLAUDE_CODE_OAUTH_TOKEN",)
+# Cloud routing and credentials removed from an Ollama worker so the CLI cannot run on a cloud or the account.
+# Sources (code.claude.com/docs): amazon-bedrock, google-vertex-ai, azure-ai-foundry, llm-gateway-connect, env-vars,
+# authentication. Variables the docs do not name (for example Claude Platform on AWS) are not listed: not guessed.
+CLOUD_ENV_KEYS = (
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX",
+    "CLAUDE_CODE_USE_FOUNDRY",
+    "ANTHROPIC_BEDROCK_BASE_URL",
+    "ANTHROPIC_VERTEX_BASE_URL",
+    "ANTHROPIC_VERTEX_PROJECT_ID",
+    "ANTHROPIC_FOUNDRY_BASE_URL",
+    "ANTHROPIC_FOUNDRY_RESOURCE",
+    "ANTHROPIC_FOUNDRY_API_KEY",
+    "CLAUDE_CODE_SKIP_BEDROCK_AUTH",
+    "AWS_BEARER_TOKEN_BEDROCK",
+)
+CREDENTIAL_ENV_KEYS = (
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "ANTHROPIC_PROFILE",
+    "ANTHROPIC_CUSTOM_HEADERS",
+)
+UNSET_ENV = (*CREDENTIAL_ENV_KEYS, *CLOUD_ENV_KEYS)
+CLAUDE_ALIASES = frozenset(
+    {"sonnet", "opus", "haiku", "fable", "opusplan", "default", "best", "inherit"}
+)
 VERIFIER_ROLES = ("verifier", "completeness-critic")
 IMPLEMENTER_ROLES = ("implementer", "runner", "test-engineer", "docs-curator")
 FALLBACK_REASONS = (
@@ -65,6 +113,12 @@ FALLBACK_REASONS = (
     "timeout",
     "no_model",
     "remote_refused",
+    "no_tools",
+    "ctx_too_small",
+    "probe_failed",
+    "runtime_down",
+    "runtime_5xx",
+    "runtime_model_missing",
 )
 
 
@@ -77,16 +131,20 @@ def _home() -> Path:
 
 
 def is_loopback(url: str) -> bool:
+    """True only for http(s)://127.0.0.1, localhost or [::1] with no userinfo and no backslash.
+
+    Python's urlparse treats `http://evil.com\\@127.0.0.1:11434` as host 127.0.0.1 while a WHATWG parser (Node, so
+    Claude Code) reads host evil.com; userinfo, other schemes and `//host` forms are refused for the same reason."""
+    if not isinstance(url, str) or "\\" in url or any(c.isspace() or ord(c) < 32 for c in url):
+        return False
     try:
-        host = urllib.parse.urlparse(url).hostname or ""
+        u = urllib.parse.urlparse(url)
+        u.port  # noqa: B018 -- raises ValueError on a bad port
     except ValueError:
         return False
-    if host == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
+    if u.scheme not in ("http", "https") or "@" in u.netloc:
         return False
+    return (u.hostname or "") in ("127.0.0.1", "localhost", "::1")
 
 
 def ollama_url(env=None) -> str:
@@ -118,6 +176,13 @@ def model_for_role(role, env=None):
 # ---------------------------------------------------------------- health
 
 
+def _opener(url: str):
+    """Loopback calls bypass http_proxy/https_proxy: a proxy cannot reach the local daemon and must not see its traffic."""
+    if is_loopback(url):
+        return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener()
+
+
 def _http(method: str, url: str, body: bytes | None, timeout: float):
     """(status, text). Raises on connect failure or timeout; an HTTP error status is returned, not raised."""
     req = urllib.request.Request(
@@ -127,7 +192,7 @@ def _http(method: str, url: str, body: bytes | None, timeout: float):
         headers={"content-type": "application/json", "x-api-key": "ollama"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 -- loopback unless opted in
+        with _opener(url).open(req, timeout=timeout) as r:  # noqa: S310 -- loopback unless opted in
             return r.status, r.read(1 << 20).decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         try:
@@ -143,6 +208,70 @@ def _is_timeout(exc: BaseException) -> bool:
         return True
     reason = getattr(exc, "reason", None)
     return isinstance(reason, (socket.timeout, TimeoutError))
+
+
+def _float_env(name: str, default: float) -> float:
+    try:
+        v = float((os.environ.get(name) or "").strip())
+    except ValueError:
+        return default
+    return v if v > 0 else default
+
+
+def min_ctx() -> int:
+    try:
+        v = int((os.environ.get("ATLAS_OLLAMA_MIN_CTX") or "").strip())
+    except ValueError:
+        return MIN_CTX_DEFAULT
+    return v if v > 0 else MIN_CTX_DEFAULT
+
+
+def probe_timeout() -> float:
+    return _float_env("ATLAS_OLLAMA_PROBE_TIMEOUT", PROBE_TIMEOUT_DEFAULT)
+
+
+def _show_reason(text: str, need_ctx: int):
+    """Reason string when POST /api/show says the model cannot serve Claude Code, else None. A field the daemon
+    does not report is not a failure: older daemons omit `capabilities`, some models omit the context length."""
+    try:
+        d = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(d, dict):
+        return None
+    caps = d.get("capabilities")
+    if isinstance(caps, list) and "tools" not in caps:
+        return "no_tools"
+    ctxs = []
+    info = d.get("model_info")
+    if isinstance(info, dict):
+        # "<arch>.context_length" is the trained maximum, not what the daemon allocates
+        ctxs += [
+            v
+            for k, v in info.items()
+            if isinstance(k, str) and k.endswith(".context_length") and type(v) is int
+        ]
+    params = d.get("parameters")
+    if isinstance(params, str):  # a Modelfile `PARAMETER num_ctx N` is the window the daemon will really use
+        m = re.search(r"(?m)^\s*num_ctx\s+(\d+)", params)
+        if m:
+            ctxs.append(int(m.group(1)))
+    if ctxs and min(ctxs) < need_ctx:
+        return "ctx_too_small"
+    return None
+
+
+PROBE_BODY = {
+    "max_tokens": 1,
+    "messages": [{"role": "user", "content": "hi"}],
+    "tools": [
+        {
+            "name": "ping",
+            "description": "Does nothing.",
+            "input_schema": {"type": "object", "properties": {}},
+        }
+    ],
+}
 
 
 def _probe(url: str, model: str, timeout: float) -> dict:
@@ -164,10 +293,25 @@ def _probe(url: str, model: str, timeout: float) -> dict:
         }
         if model not in have and f"{model}:latest" not in names:
             return {"ok": False, "reason": "model_missing"}
-        # an invalid body must reach the handler (any non-404 answer) -- a 404 means no Anthropic API
-        st, _ = _http("POST", url + "/v1/messages", b"{}", timeout)
+        st, text = _http("POST", url + "/api/show", json.dumps({"model": model}).encode(), timeout)
+        if st == 200:
+            why = _show_reason(text, min_ctx())
+            if why:
+                return {"ok": False, "reason": why}
+        # a real one-token request with a tool: the model loads, the Anthropic endpoint answers, a message comes back
+        body = json.dumps({"model": model, **PROBE_BODY}).encode()
+        st, text = _http("POST", url + "/v1/messages", body, probe_timeout())
         if st == 404:
-            return {"ok": False, "reason": "no_anthropic_api"}
+            gone = "model" in text.lower() and "not found" in text.lower()
+            return {"ok": False, "reason": "model_missing" if gone else "no_anthropic_api"}
+        try:
+            msg = json.loads(text)
+        except ValueError:
+            msg = None
+        if st != 200 or not (
+            isinstance(msg, dict) and msg.get("type") == "message" and isinstance(msg.get("content"), list)
+        ):
+            return {"ok": False, "reason": "probe_failed"}
         return {"ok": True, "reason": None}
     except (urllib.error.URLError, OSError, ValueError) as exc:
         return {"ok": False, "reason": "timeout" if _is_timeout(exc) else "down"}
@@ -202,8 +346,9 @@ def _write_cache(d: dict) -> None:
 def health(
     url: str, model: str, timeout: float = HEALTH_TIMEOUT_S, use_cache: bool = True
 ) -> dict:
-    """{ok, reason, checked, cached}. Cached 30 s per (url, model) in $ATLAS_HOME/provider-health.json."""
-    key = f"{url}|{model}"
+    """{ok, reason, checked, cached}. Cached 30 s per (url, model, min ctx) in $ATLAS_HOME/provider-health.json. `timeout`
+    bounds the cheap calls; the one-token probe uses ATLAS_OLLAMA_PROBE_TIMEOUT (a cold model loads on it)."""
+    key = f"{url}|{model}|{min_ctx()}"
     now = time.time()
     cache = _read_cache() if use_cache else {}
     hit = cache.get(key)
@@ -224,23 +369,48 @@ def health(
 # ---------------------------------------------------------------- resolve
 
 
-def provider_env(url: str) -> dict:
-    return {
+def provider_env(url: str, model: str | None = None) -> dict:
+    env = {
         "ANTHROPIC_BASE_URL": url,
         "ANTHROPIC_AUTH_TOKEN": "ollama",
         "ANTHROPIC_API_KEY": "",
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         "ATLAS_PROVIDER_ACTIVE": "ollama",
     }
+    if model:
+        env.update({k: model for k in MODEL_ENV_KEYS})
+    return env
 
 
 def apply_env(base: dict, res: dict) -> dict:
-    """base with the resolution's env set and the account token removed (a copy)."""
+    """base with the resolution's env set and the account token and every cloud-routing variable removed (a copy)."""
     out = dict(base)
     for k in res.get("unset") or ():
         out.pop(k, None)
     out.update(res.get("env") or {})
     return out
+
+
+def is_claude_model(model) -> bool:
+    """True for a Claude alias or id (sonnet, opus, haiku, claude-*, anthropic.* / us.anthropic.* cloud ids,
+    with an optional [1m] suffix): never a valid Ollama tag for a worker."""
+    m = (model or "").strip().lower()
+    return m.split("[")[0] in CLAUDE_ALIASES or m.startswith("claude") or "anthropic." in m
+
+
+def auto_roles(env=None) -> tuple:
+    """Roles `auto` may move onto Ollama: ATLAS_OLLAMA_AUTO_ROLES (set but empty means none), else the read-only
+    defaults. A role with an explicit ATLAS_OLLAMA_ROLE_MODELS entry is eligible too (see auto_eligible)."""
+    e = os.environ if env is None else env
+    raw = e.get("ATLAS_OLLAMA_AUTO_ROLES")
+    if raw is None:
+        return AUTO_ROLES_DEFAULT
+    return tuple(r for r in (x.strip() for x in raw.split(",")) if ROLE_RE.match(r))
+
+
+def auto_eligible(role, env=None) -> bool:
+    e = os.environ if env is None else env
+    return bool(role) and (role in auto_roles(e) or role in role_models(e))
 
 
 def _claude(requested, why, model, extra=None):
@@ -256,12 +426,15 @@ def _claude(requested, why, model, extra=None):
 
 
 def resolve(role=None, model=None, provider=None, env=None) -> dict:
-    """{provider, model, env, unset, fallback, requested, url?}.
+    """{provider, model, env, unset, fallback, requested, model_source, url?}.
 
     `provider` ("claude"|"ollama"|"auto") and `model` are an explicit per-worker request; `model` is an Ollama
-    model only when provider is "ollama" (otherwise it is the Claude model and passes through untouched).
-    Without them ATLAS_WORKER_PROVIDER decides and the Ollama model comes from ATLAS_OLLAMA_ROLE_MODELS /
-    ATLAS_OLLAMA_MODEL. Raises ProviderRefused only under ATLAS_OLLAMA_STRICT=1."""
+    model only when provider is "ollama" and it is not a Claude alias or id (sonnet, opus, haiku, claude-*): such a
+    name is ignored (`ignored_model`) and the model comes from ATLAS_OLLAMA_ROLE_MODELS / ATLAS_OLLAMA_MODEL.
+    Otherwise `model` is the Claude model and passes through untouched. `model_source` says where the Ollama
+    model came from: explicit | role_models | default_env. Without a request ATLAS_WORKER_PROVIDER decides, and
+    `auto` moves only the roles in auto_roles() (or with an explicit role model): other roles stay on Claude.
+    Raises ProviderRefused only under ATLAS_OLLAMA_STRICT=1."""
     e = os.environ if env is None else env
     req = (provider or e.get("ATLAS_WORKER_PROVIDER") or "claude").strip().lower()
     if req not in PROVIDERS:
@@ -269,20 +442,28 @@ def resolve(role=None, model=None, provider=None, env=None) -> dict:
     if req == "claude":
         return _claude("claude", None, model if provider != "ollama" else None)
     claude_model = None if provider == "ollama" else model
-    chosen = (
-        (model or "").strip()
-        if provider == "ollama" and model
-        else model_for_role(role, e)
-    )
+    if req == "auto" and not auto_eligible(role, e):
+        return _claude("auto", None, claude_model)
+    chosen, source, ignored = None, None, None
+    explicit = (model or "").strip() if provider == "ollama" else ""
+    if explicit and is_claude_model(explicit):
+        ignored = explicit
+        explicit = ""
+    if explicit:
+        chosen, source = explicit, "explicit"
+    else:
+        chosen = model_for_role(role, e)
+        source = "role_models" if role_models(e).get(role or "") else "default_env"
     if chosen is not None and not MODEL_RE.match(chosen):
         chosen = None
+    extra = {"model_source": source if chosen else None, **({"ignored_model": ignored} if ignored else {})}
 
     def fall(reason: str) -> dict:
         if (e.get("ATLAS_OLLAMA_STRICT") or "").strip() == "1":
             raise ProviderRefused(
                 f"ollama requested but unavailable: {reason} (ATLAS_OLLAMA_STRICT=1)"
             )
-        return _claude(req, reason, claude_model)
+        return _claude(req, reason, claude_model, extra)
 
     if not chosen:
         return fall("no_model")
@@ -298,11 +479,12 @@ def resolve(role=None, model=None, provider=None, env=None) -> dict:
     return {
         "provider": "ollama",
         "model": chosen,
-        "env": provider_env(url),
+        "env": provider_env(url, chosen),
         "unset": list(UNSET_ENV),
         "fallback": None,
         "requested": req,
         "url": url,
+        **extra,
     }
 
 
@@ -320,11 +502,9 @@ def record_launch(res: dict) -> None:
 
 def public(res: dict) -> dict:
     """The resolution without env (what a worker record or report shows)."""
-    return {
-        k: res.get(k)
-        for k in ("provider", "model", "fallback", "requested")
-        if k in res
-    }
+    out = {k: res.get(k) for k in ("provider", "model", "fallback", "requested") if k in res}
+    out.update({k: res[k] for k in ("model_source", "ignored_model") if res.get(k)})
+    return out
 
 
 # ---------------------------------------------------------------- cross-family pairing
@@ -399,9 +579,7 @@ def team_options(roles, env=None) -> dict:
 
 BENCH_TASK = "Implement slugify(text) in slug.py so that every test in test_slug.py passes. Do not edit the tests."
 BENCH_CHECK = "python3 -m unittest -q test_slug"
-BENCH_STUB = (
-    '"""URL slugs."""\n\n\ndef slugify(text):\n    """Return the URL slug of text."""\n    raise NotImplementedError\n'
-)
+BENCH_STUB = '"""URL slugs."""\n\n\ndef slugify(text):\n    """Return the URL slug of text."""\n    raise NotImplementedError\n'
 BENCH_TESTS = """import unittest
 
 from slug import slugify
@@ -450,7 +628,9 @@ def parse_models(text: str) -> list:
         prov, _, model = part.partition(":")
         prov, model = prov.strip().lower(), model.strip()
         if prov not in ("claude", "ollama") or not MODEL_RE.match(model):
-            raise ValueError(f"bad --models entry {part!r}: use claude:<model> or ollama:<model>")
+            raise ValueError(
+                f"bad --models entry {part!r}: use claude:<model> or ollama:<model>"
+            )
         out.append((prov, model))
     if not out:
         raise ValueError("--models needs at least one claude:<model> or ollama:<model>")
@@ -465,7 +645,15 @@ def make_fixture(parent: str, task: str, check: str) -> tuple:
     plan = {
         "goal": task,
         "check": check,
-        "workers": [{"name": "slug", "owns": ["slug.py"], "task": task, "check": check, "tests": ["test_slug.py"]}],
+        "workers": [
+            {
+                "name": "slug",
+                "owns": ["slug.py"],
+                "task": task,
+                "check": check,
+                "tests": ["test_slug.py"],
+            }
+        ],
     }
     plan_path = str(Path(root, "bench-plan.json"))
     Path(plan_path).write_text(json.dumps(plan, indent=1), encoding="utf-8")
@@ -476,7 +664,9 @@ def make_fixture(parent: str, task: str, check: str) -> tuple:
         ["add", "-A"],
         ["commit", "-q", "-m", "bench fixture"],
     ):
-        subprocess.run(["git", *argv], cwd=root, check=True, capture_output=True, timeout=60)
+        subprocess.run(
+            ["git", *argv], cwd=root, check=True, capture_output=True, timeout=60
+        )
     return root, plan_path
 
 
@@ -488,7 +678,12 @@ def crew_runner(spec: dict, root: str, plan_path: str, timeout: float) -> dict:
     env = {
         k: v
         for k, v in os.environ.items()
-        if k not in ("ATLAS_CREW_WORKER_MODEL", "ATLAS_OLLAMA_STRICT", "ATLAS_WORKER_PROVIDER")
+        if k
+        not in (
+            "ATLAS_CREW_WORKER_MODEL",
+            "ATLAS_OLLAMA_STRICT",
+            "ATLAS_WORKER_PROVIDER",
+        )
     }
     argv = [
         sys.executable, str(scripts / "atlas_crew.py"), "run", "--plan", plan_path, "--root", root,
@@ -496,14 +691,24 @@ def crew_runner(spec: dict, root: str, plan_path: str, timeout: float) -> dict:
         "--wait", str(timeout), "--timeout", str(timeout), "--run-id", run_id,
     ]  # fmt: skip
     try:
-        p = subprocess.run(argv, capture_output=True, text=True, timeout=timeout + 60, cwd=root, env=env)
+        p = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=timeout + 60,
+            cwd=root,
+            env=env,
+        )
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "timeout"}
     lines = [ln for ln in p.stdout.splitlines() if ln.strip().startswith("{")]
     try:
         lead = json.loads(lines[-1])
     except (IndexError, ValueError):
-        return {"ok": False, "error": f"no crew JSON (exit {p.returncode}): {(p.stderr or p.stdout)[-300:]}"}
+        return {
+            "ok": False,
+            "error": f"no crew JSON (exit {p.returncode}): {(p.stderr or p.stdout)[-300:]}",
+        }
     try:
         summ = json.loads(Path(lead.get("summary")).read_text(encoding="utf-8"))
     except (OSError, ValueError, TypeError):
@@ -513,7 +718,9 @@ def crew_runner(spec: dict, root: str, plan_path: str, timeout: float) -> dict:
         import atlas_crew
 
         for w in summ.get("workers") or []:
-            for log in sorted(Path(summ.get("transcripts") or "").glob(f"{w['name']}*.log")):
+            for log in sorted(
+                Path(summ.get("transcripts") or "").glob(f"{w['name']}*.log")
+            ):
                 u = atlas_crew.usage_of(log)
                 for k in usage:
                     usage[k] += u.get(k, 0)
@@ -529,23 +736,40 @@ def crew_runner(spec: dict, root: str, plan_path: str, timeout: float) -> dict:
         "tokens_total": tw.get("total"),
         "cost_usd": tw.get("cost_usd") or 0.0,
         "workers": [
-            {"provider": w.get("provider"), "model": w.get("model"), "fallback": w.get("fallback")}
+            {
+                "provider": w.get("provider"),
+                "model": w.get("model"),
+                "fallback": w.get("fallback"),
+            }
             for w in summ.get("workers") or []
         ],
-        "error": None if summ.get("ok") is True else (summ.get("check_tail") or "crew not ok")[-200:],
+        "error": None
+        if summ.get("ok") is True
+        else (summ.get("check_tail") or "crew not ok")[-200:],
     }
 
 
 def fixture_check(root: str, check: str) -> bool:
     """The harness runs the fixture's own test after the crew; it, not the crew's verdict, decides pass."""
     try:
-        r = subprocess.run(check, shell=True, cwd=root, capture_output=True, timeout=120)  # noqa: S602
+        r = subprocess.run(
+            check, shell=True, cwd=root, capture_output=True, timeout=120
+        )  # noqa: S602
         return r.returncode == 0
     except (subprocess.TimeoutExpired, OSError):
         return False
 
 
-def bench_one(spec: dict, idx: int, task: str, check: str, timeout: float, runner, checker, parent: str) -> dict:
+def bench_one(
+    spec: dict,
+    idx: int,
+    task: str,
+    check: str,
+    timeout: float,
+    runner,
+    checker,
+    parent: str,
+) -> dict:
     """One run in a fresh repo. A run is a fallback when a worker ran on another provider than requested."""
     root, plan_path = make_fixture(parent, task, check)
     t0 = time.time()
@@ -572,7 +796,9 @@ def bench_one(spec: dict, idx: int, task: str, check: str, timeout: float, runne
         "tokens_in": out.get("tokens_in"),
         "tokens_out": out.get("tokens_out"),
         "tokens_cache_read": out.get("tokens_cache_read"),
-        "cost_usd": 0.0 if spec["provider"] == "ollama" else (out.get("cost_usd") or 0.0),
+        "cost_usd": 0.0
+        if spec["provider"] == "ollama"
+        else (out.get("cost_usd") or 0.0),
         "crew_ok": bool(out.get("ok")),
         "pass": passed,
         "fallback": fb,
@@ -595,7 +821,11 @@ def aggregate(runs: list) -> list:
             keys.append(k)
     rows = []
     for prov, model, phase in keys:
-        mine = [r for r in runs if (r["provider"], r["model"], r["phase"]) == (prov, model, phase)]
+        mine = [
+            r
+            for r in runs
+            if (r["provider"], r["model"], r["phase"]) == (prov, model, phase)
+        ]
         used = [r for r in mine if not r.get("fallback")]
         walls = [r["wall_s"] for r in used if isinstance(r.get("wall_s"), (int, float))]
         rows.append(
@@ -627,7 +857,11 @@ def render_table(rows: list) -> str:
             "cache read", "Claude USD", "pass"]  # fmt: skip
     out = ["| " + " | ".join(head) + " |", "|" + "|".join("---" for _ in head) + "|"]
     for r in rows:
-        span = "-" if r["wall_min_s"] is None else f"{_cell(r['wall_min_s'])}-{_cell(r['wall_max_s'])}"
+        span = (
+            "-"
+            if r["wall_min_s"] is None
+            else f"{_cell(r['wall_min_s'])}-{_cell(r['wall_max_s'])}"
+        )
         cost = "0.0000" if r["provider"] == "ollama" else _cell(r["cost_usd"], 4)
         cells = [f"{r['provider']}:{r['model']}", r["phase"], str(r["n"]), str(r["excluded"]), _cell(r["wall_mean_s"]),
                  span, _cell(r["tokens_in"], 0), _cell(r["tokens_out"], 0), _cell(r["tokens_cache_read"], 0), cost,
@@ -650,7 +884,10 @@ def cmd_bench(args, runner=None, checker=None) -> int:
         return 2
     url = ollama_url()
     for s in (x for x in specs if x["provider"] == "ollama"):
-        if not is_loopback(url) and (os.environ.get("ATLAS_OLLAMA_ALLOW_REMOTE") or "").strip() != "1":
+        if (
+            not is_loopback(url)
+            and (os.environ.get("ATLAS_OLLAMA_ALLOW_REMOTE") or "").strip() != "1"
+        ):
             why = "remote_refused"
         else:
             h = health(url, s["model"], use_cache=False)
@@ -674,7 +911,16 @@ def cmd_bench(args, runner=None, checker=None) -> int:
     try:
         for s in specs:
             for i in range(args.runs):
-                r = bench_one(s, i, task, check, args.timeout, runner or crew_runner, checker or fixture_check, parent)
+                r = bench_one(
+                    s,
+                    i,
+                    task,
+                    check,
+                    args.timeout,
+                    runner or crew_runner,
+                    checker or fixture_check,
+                    parent,
+                )
                 runs.append(r)
                 tail = f", FALLBACK {r['fallback']} (excluded)" if r["fallback"] else ""
                 print(
@@ -688,7 +934,14 @@ def cmd_bench(args, runner=None, checker=None) -> int:
     print(render_table(rows))
     print("\n" + BENCH_NOTE)
     if args.out:
-        report = {"task": task, "check": check, "runs_per_model": args.runs, "note": BENCH_NOTE, "summary": rows, "runs": runs}
+        report = {
+            "task": task,
+            "check": check,
+            "runs_per_model": args.runs,
+            "note": BENCH_NOTE,
+            "summary": rows,
+            "runs": runs,
+        }
         Path(args.out).write_text(json.dumps(report, indent=1), encoding="utf-8")
     return 0
 
@@ -722,7 +975,7 @@ def _cmd(args) -> int:
                 **show,
                 "url": url,
                 "health": h,
-                "ok": res["provider"] == "ollama" or res["requested"] == "claude",
+                "ok": res["fallback"] is None,
             }
         )
     )
@@ -737,11 +990,23 @@ def main(argv=None) -> int:
         sp.add_argument("--role")
         sp.add_argument("--model")
         sp.add_argument("--provider", choices=PROVIDERS)
-    b = sub.add_parser("bench", help="same one-worker crew task on Claude and Ollama, side by side")
+    b = sub.add_parser(
+        "bench", help="same one-worker crew task on Claude and Ollama, side by side"
+    )
     b.add_argument("--models", required=True, help="claude:<model>,ollama:<model>")
-    b.add_argument("--runs", type=int, default=3, help="runs per model; the first is cold, the rest warm")
-    b.add_argument("--task", help="worker task text (default: the bundled slugify fixture task)")
-    b.add_argument("--check", help="pass/fail command run in the repo (default: the fixture unittest)")
+    b.add_argument(
+        "--runs",
+        type=int,
+        default=3,
+        help="runs per model; the first is cold, the rest warm",
+    )
+    b.add_argument(
+        "--task", help="worker task text (default: the bundled slugify fixture task)"
+    )
+    b.add_argument(
+        "--check",
+        help="pass/fail command run in the repo (default: the fixture unittest)",
+    )
     b.add_argument("--timeout", type=float, default=900, help="seconds per run")
     b.add_argument("--out", help="write the JSON report here")
     a = p.parse_args(argv)

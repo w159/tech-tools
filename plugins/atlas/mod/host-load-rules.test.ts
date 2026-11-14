@@ -177,6 +177,33 @@ function reachable(entry: string): string[] {
   return [...seen];
 }
 
+/** Rule 5: `$.env.get` / `$.env.set` take a quoted literal name as the first argument (the host lists the variables a module reads and writes). */
+export function hostEnvViolations(file: string, source: string): string[] {
+  const code = codeOnly(source);
+  const found: string[] = [];
+  for (const m of code.matchAll(/\$\.env\.(get|set)\s*\(\s*/g)) {
+    const at = m.index! + m[0].length;
+    const arg = source.slice(at);
+    if (/^(?:'[^'\\\n]*'|"[^"\\\n]*"|`[^`$\\]*`)\s*[,)]/.test(arg)) continue;
+    found.push(`${relative(ROOT, file)}:${code.slice(0, at).split('\n').length}  $.env.${m[1]}(${arg.split('\n')[0]!.slice(0, 40)}  first argument is not a string literal`);
+  }
+  return found;
+}
+
+/** Rule 6: a `$.noun.event` member is only ever called right where it is spelled (no typeof, no passing it, no binding, no `?.()`); `$.plugin.root` is the one value member. */
+export function hostMemberViolations(file: string, source: string): string[] {
+  const code = codeOnly(source);
+  const found: string[] = [];
+  for (const m of code.matchAll(/(?<![\w$.])\$\s*\.\s*([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)/g)) {
+    if (m[1] === 'plugin' && m[2] === 'root') continue;
+    let after = m.index! + m[0].length;
+    while (/\s/.test(code[after] ?? '')) after++;
+    if (code[after] === '(') continue;
+    found.push(`${relative(ROOT, file)}:${code.slice(0, m.index!).split('\n').length}  $.${m[1]}.${m[2]} is read as a value, not called at the call site`);
+  }
+  return found;
+}
+
 function sources(dir: string, deep: boolean): string[] {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
@@ -234,6 +261,15 @@ describe('host load rule 2: $ is passed only to a top-level function of the same
     expect(files.length).toBeGreaterThan(30);
     expect(files.flatMap((f) => hostImportViolations(f, readFileSync(f, 'utf8')))).toEqual([]);
   });
+  test('rule 5: every $.env.get / $.env.set first argument is a quoted literal', () => {
+    const files = [...sources(join(ROOT, 'mod'), true), ...sources(join(ROOT, 'omp'), false)];
+    expect(files.flatMap((f) => hostEnvViolations(f, readFileSync(f, 'utf8')))).toEqual([]);
+    const file = join(ROOT, 'mod', 'seed.ts');
+    const bad = ['return $.env.get(name).catch(() => undefined);', 'await $.env.get(names[0]);', 'await $.env.set(`K_${n}`, v);', 'await $.env.get(  key )'];
+    for (const stmt of bad) expect([stmt, hostEnvViolations(file, stmt).length]).toEqual([stmt, 1]);
+    const good = ["await $.env.get('A').catch(() => undefined)", 'await $.env.get("A")', "await $.env.set('A', v)", "const s = '$.env.get(name)'; // $.env.get(name)"];
+    for (const stmt of good) expect([stmt, hostEnvViolations(file, stmt)]).toEqual([stmt, []]);
+  });
   test('rule 3 and 4: the 09a0dd86 shape and its siblings are caught, the call-site shapes pass', () => {
     const file = join(ROOT, 'mod', 'seed.ts');
     const wrap = (stmt: string): string => `export function reg(on: any) {\n  let engine: any = null;\n  on('x', async ($: any, e: any) => {\n    ${stmt}\n  });\n}\n`;
@@ -243,5 +279,14 @@ describe('host load rule 2: $ is passed only to a top-level function of the same
     for (const stmt of good) expect([stmt, hostBindViolations(file, wrap(stmt).replace('export function', "import { lookOf } from './look';\nexport function"))]).toEqual([stmt, []]);
     expect(hostImportViolations(file, "import c from '../contracts/operating-contract.json';\n").length).toBe(1);
     expect(hostImportViolations(file, "import type c from '../contracts/operating-contract.json';\nconst m = await import('./x');\n").length).toBe(1);
+  });
+  test('rule 6: every $.noun.event member is called where it is spelled', () => {
+    const files = [...sources(join(ROOT, 'mod'), true), ...sources(join(ROOT, 'omp'), false)];
+    expect(files.flatMap((f) => hostMemberViolations(f, readFileSync(f, 'utf8')))).toEqual([]);
+    const file = join(ROOT, 'mod', 'seed.ts');
+    const bad = ["if (typeof $.clock.after !== 'function') {", 'const f = $.clock.after;', 'run($.clock.after);', 'await $.clock.after?.(1, cb);', 'const { after } = $.clock; const g = $.clock.after ;'];
+    for (const stmt of bad) expect([stmt, hostMemberViolations(file, stmt).length > 0]).toEqual([stmt, true]);
+    const good = ['await $.clock.now()', 'trailing = $.clock.after(5, () => {})', 'const r = $.plugin.root;', "const s = 'typeof $.clock.after'; // typeof $.clock.after"];
+    for (const stmt of good) expect([stmt, hostMemberViolations(file, stmt)]).toEqual([stmt, []]);
   });
 });

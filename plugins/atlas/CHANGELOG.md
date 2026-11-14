@@ -17,6 +17,18 @@
 
 - `classify_scope` ignores a class word after a negation: "do not audit, just implement x" is now implement and "don't refactor, just fix the crash in a.py" is fix (before: audit and implement).
 - Crew stop and process-group lookup now match the run exactly, so they never signal an unrelated process whose command line merely contains the run id.
+- Mod-load release gate (`atlas_mod_gate.py`): `--require-live` (implies `--live`) turns a skipped live check into a FAIL, and both workflows use it. The old auth/network word list ("login", "401", "network", "proxy") turned a failed live run into a SKIP that exited 0; `claude plugin test` needs no login and no network (verified with an empty HOME, no credentials and an unreachable proxy), so those hints are gone. Only a spawn failure or timeout can SKIP, and output with `HooksError` or `(fail)` never does. A live run passes only when it exits 0 and reports at least one pass per probe.
+- Gate: `--live` now probes every module in `hooks.json`, not just the first; the offline bundle and render checks are labelled "smoke" (they run against a hand-written host stub that accepted the usage.ts bug); a malformed `hooks.json` is a `FAIL hooks-json` with the parse error instead of a traceback; an unspawnable CLI is a FAIL/SKIP instead of a traceback.
+- CI: the release gate runs in its own `mod-gate` job (`contents: read`, no secrets, no persisted checkout credentials) that the `release` job `needs`, so release credentials are never in the job that installs the CLI from npm. `oven-sh/setup-bun` is pinned to the v2 commit SHA. `--ignore-scripts` was tried and does not work (the CLI's postinstall fetches its native binary), so the install keeps scripts. New non-blocking `atlas-mod-gate-latest` job in `tests.yml` runs the same gate against `@anthropic-ai/claude-code@latest` and prints the version.
+
+## 17.21.1 - 2026-11-14
+
+Fix: the Atlas hooks module did not load in 17.19.0, 17.20.0 and 17.21.0, so no mod surface drew (no band, TODO, SUBAGENTS or side panel). Startup printed `atlas: hooks module did not load: .../mod/usage.ts ...`. Evidence: `docs/audits/2026-11-14-mod-load.md`.
+
+- Cause: `mod/usage.ts` (added in 17.19.0) broke two host loader rules. `$.env.get(name)` passed a variable name where the host needs a quoted literal at each call site, and `typeof $.clock.after` read a `$` member as a value instead of calling it.
+- Fix: `envGet` now spells every variable out as a literal `$.env.get('NAME')` call, and the `typeof $.clock.after` guard is gone, so `$.clock.after(...)` is only called. No other behavior changed.
+- Two new static checks in `mod/host-load-rules.test.ts` (rules 5 and 6) scan every mod and omp source file: rule 5 requires a literal first argument on `$.env.get`, rule 6 requires every `$.noun.event` member to be called where it is spelled.
+- `bunx tsc -p mod/tsconfig.json --noEmit` is clean again: test-only typing fixes for `Bun`, `setTimeout` and the `ThemeName` literal. No product code changed.
 
 ## 17.21.0 - 2026-11-14
 

@@ -97,7 +97,7 @@ test('a phase-first header (`ATLAS | done 🏁 | ...`) parses like the glyph-fir
   expect(leadOf('ATLAS | done 🏁 | all finished', pattern)?.phase).toBe('done')
   expect(leadOf('ATLAS | implement 🔧 3/5 | working', pattern)?.count).toBe('3/5')
   expect(displayDelta('ATLAS | done 🏁 | all finished\nbody', pattern)).toBe('done · all finished\nbody')
-  const ui = { theme: 'dark', ascii: false, color: 'none' } as const
+  const ui = { theme: 'mocha', ascii: false, color: 'none' } as const
   expect(flat(partialLead('ATLAS | done 🏁', ui)!)).toBe(flat(partialLead('ATLAS | 🏁 done', ui)!))
   expect(flat(partialLead('ATLAS | done 🏁', ui)!)).toContain('done')
 })

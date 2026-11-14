@@ -8,6 +8,8 @@ import { noteUsage, resetUsageForTest, USAGE_KEYS } from './usage';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;
+// The mod tsconfig carries no DOM or node timer types; the host runtime has the global.
+const later = (fn: (v?: unknown) => void): void => { (globalThis as unknown as { setTimeout: (f: () => void, ms: number) => unknown }).setTimeout(() => fn(), 0); };
 const noopNext: AnyNext = async (input) => input;
 
 interface Opts { env?: Record<string, string>; sid?: string; failWrite?: boolean; files?: Record<string, string> }
@@ -74,7 +76,7 @@ describe('usage counters', () => {
     expect(s.writes).toHaveLength(2);
     s.clock.t += 6000;
     s.timers.filter((t) => !t.cancelled).forEach((t) => t.fn());
-    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await new Promise((r) => setTimeout(r, 0));
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await new Promise((r) => later(r));
     expect(Object.keys(parsed(s)).sort()).toEqual(['counts', 'v']);
     expect(parsed(s)).toEqual({ v: 2, counts: { 'mod.error.boot': 1 } });
   });
@@ -166,7 +168,7 @@ describe('usage counters', () => {
     await dockTick(s.$);
     await pick('prompt.submit')(s.$, { text: 'go' }, noopNext);
     expect(s.opens).toHaveLength(1);
-    await new Promise((r) => setTimeout(r, 0)); // noteUsage is fire-and-forget on this path
+    await new Promise((r) => later(r)); // noteUsage is fire-and-forget on this path
     const usage = s.writes.filter((w) => /\/real-path-\d+-[a-z0-9]{6}\.json\.tmp$/.test(w.path));
     expect(usage.length).toBeGreaterThan(0);
     expect(sum(usage)).toEqual({ 'mod.open.dock': 1 });
@@ -234,7 +236,7 @@ describe('usage delta files', () => {
     await noteUsage(s.$, 'mod.error.boot');
     s.clock.t += 6000;
     s.timers.filter((t) => !t.cancelled).forEach((t) => t.fn());
-    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => later(r));
     expect(s.writes).toHaveLength(3);
     expect(s.writes.map((w) => JSON.parse(w.text).counts)).toEqual([{ 'mod.open.dock': 1 }, { 'mod.open.dock': 1 }, { 'mod.error.boot': 1 }]);
     expect(sum(s.writes)).toEqual({ 'mod.open.dock': 2, 'mod.error.boot': 1 });
