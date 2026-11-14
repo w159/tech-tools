@@ -54,7 +54,7 @@ must not be in the future or older than 9 weeks.
 | `GET /api/health` | none | Storage kind, accepted schemas, allowlist key count and sha256, whether the dashboard secret is configured, submission counts for the last 2 weeks. No secrets. |
 | `GET /api/admin?weeks=N` | secret | JSON summary for the last N weeks (default 10, max 26): totals, weekly trend, top keys, per-family features and never-used features for skill, command, agent, hook and mod, failures (hook fault and slow, `fault.*`, gate blocks, team and crew failures, crew check fail, `mod.error.*`, `delivery.fail.*`), versions (atlas, OS, python, harness), all keys and a reading guide. |
 | `DELETE /api/admin?purge=test` | secret | Removes test submissions in the window. |
-| `GET /dashboard` (and `/`) | secret, typed in the page | HTML dashboard: totals, weekly trend chart, top and unused features, failures, versions, a per-week table, Download and Copy JSON. |
+| `GET /dashboard` (and `/`) | secret, typed in the page | HTML dashboard: totals, weekly trend chart, top and unused features, failures, versions, a per-week table, Download and Copy JSON, and Delete test data (shown with "Include test submissions" ticked). |
 
 The secret goes in `Authorization: Bearer <secret>` only; a `?token=` query parameter is not accepted. The dashboard asks for it and
 keeps it only in the browser's localStorage. Test data is hidden everywhere unless the admin call

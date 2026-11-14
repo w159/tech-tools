@@ -112,7 +112,8 @@ The telemetry server also serves a private view for the project owner: `/dashboa
 answers 503 when it is unset or shorter, 401 on a wrong secret). `GET /api/health` is open and shows storage kind,
 accepted schemas, allowlist key count and sha256, whether the secret is configured and recent submission counts. The
 dashboard shows totals, the weekly trend, top and never-used features, failures, versions and a per-week table, and can
-download or copy the JSON. Test data is hidden unless `include_test=1`. Setup, rotation and routes:
+download or copy the JSON. Test data is hidden unless `include_test=1`; with "Include test submissions" ticked, a
+Delete test data button removes it (`DELETE /api/admin?purge=test`). Setup, rotation and routes:
 [telemetry/server/README.md](../../../telemetry/server/README.md). The allowlist only grows: `allowed-keys --merge` keeps
 every key an earlier release shipped (2126 keys in 17.19.0).
 

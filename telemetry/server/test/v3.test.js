@@ -202,6 +202,10 @@ test("dashboard page is HTML, never embeds the token, and talks to the admin API
     assert.match(html, /\/api\/admin/);
     assert.doesNotMatch(html, new RegExp(TOKEN));
     assert.match(res.headers.get("content-security-policy") ?? "", /default-src 'none'/);
+    // The owner can delete test submissions from the page: a DELETE to purge=test with the Bearer header.
+    assert.match(html, /Delete test data/);
+    assert.match(html, /purge=test/);
+    assert.match(html, /method: "DELETE"/);
   } finally {
     await done();
   }

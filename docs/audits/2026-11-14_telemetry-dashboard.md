@@ -57,9 +57,40 @@ anonymous ingest.
 
 ## Tests
 
-See the release commit for the final gate output: full pytest on hooks, scripts and repo scripts; the
-server node suite (61 pass); the mod bun suite (3164 pass / 31 skip / 0 fail); the contract test.
+Final gate before release: pytest on hooks, scripts and repo scripts 8764 pass / 5 skip / 0 fail; the
+server node suite 61/61; the mod bun suite 3164 pass / 31 skip / 0 fail.
 
 ## After (production)
 
-Filled in from the deployed service; see the section below.
+Evidence from the deployed service.
+
+### Deploy
+
+- Commit `c35b588` deployed to production as `dpl_Bd71PWpbBiNPkG1d2CbM5GKhxmTy` (build completed, no errors).
+- `GET https://atlas-telemetry.vercel.app/api/health` after deploy:
+  `{"ok":true,"storage":"ok","schemas":[2,3],"allowlist":{"keys":2126,"sha256":"f3d5e9a2...a0a4"},"dashboard_configured":true,"weeks":{"2026-W45":{"submissions":2,"test":0},"2026-W46":{"submissions":0,"test":0}}}`.
+  The sha256 matches `telemetry/allowed-keys.json` at that commit (2126 keys); before, production held 1525.
+- `ATLAS_DASHBOARD_TOKEN` created as an ordinary (encrypted, readable) production variable.
+
+### Real client against production
+
+GitHub Actions run 43621231362 (`telemetry-e2e`, success). The shipped client recorded three counters and sent them
+with `--test`:
+
+```
+test submissions held before send: 0
+{"atlas_version":"17.19.0","counts":{"agent.planner":1,"delivery.ok.urllib":1,"skill.atlas-plan":1},"nonce":"...","os":"linux","partial":true,"python":"3.14","schema":3,"test":true,"week":"2026-W46"}
+sent week-to-date snapshot 2026-W46 (3 counters); counts kept until the week ends.
+last send:  ok (HTTP 201, snapshot 2026-W46 via urllib)
+test submissions held after send: 1 (before: 0)
+```
+
+That row is stored with `test: true`, so it stays out of the public aggregate and the default dashboard view.
+
+### Not verified here
+
+- The dashboard was not opened with the secret from this environment: a safety check stops an agent typing a
+  credential into a web page. The login page was rendered and confirmed live; the data view is covered by the
+  node tests and by `GET /api/admin` answering 4xx without a secret.
+- The test row was not purged from here for the same reason. The dashboard now has a Delete test data button
+  (tick "Include test submissions"); locally it answered `{"ok":true,"deleted":1}` with the secret and 401 without.

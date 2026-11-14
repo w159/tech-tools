@@ -226,6 +226,32 @@ const SCRIPT = String.raw`
     setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
   }
 
+  // Deletes every test submission (test: true) in the selected window. Real submissions are never touched:
+  // the server re-reads each row and removes it only if it is still marked test.
+  function purgeTest(button) {
+    if (!window.confirm("Delete every test submission in the last " + state.weeks + " weeks? Real data is not touched.")) return;
+    button.disabled = true;
+    fetch("/api/admin?purge=test&weeks=" + state.weeks, {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + state.token },
+      cache: "no-store",
+    })
+      .then(function (r) {
+        if (r.status === 401) { showGate("That secret was not accepted."); return null; }
+        if (!r.ok) throw new Error("Server answered " + r.status + ".");
+        return r.json();
+      })
+      .then(function (j) {
+        if (!j) return;
+        button.textContent = "Deleted " + j.deleted;
+        setTimeout(fetchData, 800);
+      })
+      .catch(function (e) {
+        button.disabled = false;
+        showMessage("Could not delete test data", (e && e.message) || "Network error.", true, true);
+      });
+  }
+
   function copyJson(button) {
     var done = function (ok) {
       var old = button.textContent;
@@ -376,7 +402,13 @@ const SCRIPT = String.raw`
     add(lab, cb, document.createTextNode("Include test submissions"));
     var copy = el("button", "", "Copy JSON for Claude", { type: "button" });
     copy.addEventListener("click", function () { copyJson(copy); });
-    add(tools, sel, lab, btn("Refresh", fetchData), btn("Download JSON", download), copy, btn("Forget secret", forget));
+    add(tools, sel, lab, btn("Refresh", fetchData), btn("Download JSON", download), copy);
+    if (state.test) {
+      var purge = el("button", "", "Delete test data", { type: "button" });
+      purge.addEventListener("click", function () { purgeTest(purge); });
+      add(tools, purge);
+    }
+    add(tools, btn("Forget secret", forget));
     add(head, left, tools);
     add(app, head);
 
