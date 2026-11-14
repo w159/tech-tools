@@ -66,6 +66,41 @@ Install atlas and armada together. MCP tools are named
 `skills/armada/references/connector-provisioning.md`. Armada never accepts a
 credential typed into chat and never writes one into `.atlas/`.
 
+## Connector network behavior
+
+A connector tool call against an unreachable or hung vendor returns a
+`NETWORK_ERROR` result instead of hanging: `cannot reach <host>: connection
+refused` for a refused connection, `request to <host> timed out after Nms
+(ETIMEDOUT)` for a vendor that accepts the connection and never answers. The
+message names the host only, never the URL, query or credentials.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MCP_HTTP_TIMEOUT_MS` | `20000` | Timeout of each HTTP attempt, in milliseconds. Per attempt, not per tool call. `panos` and `sonicwall` keep their own 60 s timeout and ignore it. |
+
+Network error codes, as shown in the message: `ECONNREFUSED`, `ENOTFOUND`,
+`EAI_AGAIN`, `ECONNRESET`, `ETIMEDOUT`, `EHOSTUNREACH`, `ENETUNREACH`, a TLS certificate failure
+(untrusted or invalid certificate), `BAD_PORT` (port blocked by fetch) and
+`FETCH_FAILED` (any other network failure). Retries are bounded and apply only
+to idempotent requests: 429, 5xx and `ECONNRESET`, with `Retry-After` honored
+up to 10 s. A POST is never retried.
+
+## Rebuilding the MCP bundles
+
+The shipped connector bundles (`plugins/armada/mcp/<svc>/server.mjs`) are built
+from `mcp_servers/<svc>-mcp` with a pinned toolchain (tsup 8.5.1, esbuild
+0.28.2, Node 22) and are byte-reproducible. After changing a connector source,
+rebuild from the repo root and commit the result:
+
+```
+node scripts/rebuild_armada_bundles.mjs
+```
+
+The script rewrites the bundles and `plugins/armada/mcp/bundles.lock.json`,
+which records the source and bundle hashes. The `armada-bundles` CI workflow
+runs the same command and fails when the committed bundles differ from source.
+`plugins/armada/tests/test_armada_bundles.py` is the local provenance guard.
+
 ## Upgrading: connectors moved from atlas to armada
 
 atlas 16.0.0 and armada 2.0.0 move the 13 vendor MCP connectors out of atlas. A plain atlas install no longer starts any connector process.

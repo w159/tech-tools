@@ -34,7 +34,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const handlers = { openView: () => undefined, toggleTodos: () => undefined };
 const NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
 const PLAN = ['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 combine the reports', 'T5 write the summary'];
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const PUA = /[\uE000-\uF8FF]/;
 const SIZES = [[150, 45, 93], [110, 40, 56]] as const;
 
@@ -74,7 +74,7 @@ const IDLE: Shape = { ...FINISHED, rest: 60 };
 const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents[1]!, { name: NAMES[2]!, squad: 'failed', mood: 'failed' }], gates: runstate.stopRefusal([], 'Done claimed too early: 1 open dispatch row.') as unknown[] };
 // Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 240, blocked 203.
 const STATES: [string, Shape, string, string, boolean][] = [
-  ['working', RUNNING, 'accent', '[⠀-⣿] working 0:42', true],
+  ['working', RUNNING, 'accent', '[◐◓◑◒] working 0:42', true],
   ['done', FINISHED, 'ok', '● done 1:12', false],
   ['idle', IDLE, 'muted', '○ idle · 1:12', false],
   ['blocked', STOP, 'bad', '▲ blocked', true],
@@ -242,9 +242,9 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
     });
     test(`${cols} columns: STATE is a 141 spinner and \`running\`, \`● done\` in 114, \`■ failed\` in 203; TIME is a clock; no row is a bare list of times`, () => {
       const run = frameOf(RUNNING, body, screen);
-      const rr = run.hud.findIndex((r) => r.startsWith(`  ${nameAt('alpha-explorer', body)}`) && /\s[⠀-⣿] running\s+\d+:\d\d/.test(r));
+      const rr = run.hud.findIndex((r) => r.startsWith(`  ${nameAt('alpha-explorer', body)}`) && /\s[◐◓◑◒] running\s+\d+:\d\d/.test(r));
       expect(rr).toBeGreaterThan(0);
-      expect(run.hudSegs[rr]!.find((x) => BRAILLE.test(x.t) && x.t.trim().length === 1)?.color).toBe(PALETTES.mocha.accent);
+      expect(run.hudSegs[rr]!.find((x) => SPIN_MARK.test(x.t) && x.t.trim().length === 1)?.color).toBe(PALETTES.mocha.accent);
       const stop = frameOf(STOP, body, screen);
       const ds = stop.hud.findIndex((r) => r.startsWith(`  ${nameAt('alpha-explorer', body)}`) && /\s● done/.test(r));
       expect(stop.hudSegs[ds]!.find((x) => x.t === '●')?.color).toBe(ok);
@@ -257,17 +257,17 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
     const f = frameOf(RUNNING, 93, 45);
     const head = f.hud.find((r) => /^ {2}AGENT\s+STATE\s+TIME/.test(r))!;
     expect(head).toMatch(/AGENT {2,}STATE {2,}TIME {2,}CALLS {2,}FN {2,}LAST/); // wave 37: one header in every state and width
-    const rows = f.hud.filter((r) => /^ {2}\S+-explorer\s+[⠀-⣿] running/.test(r));
+    const rows = f.hud.filter((r) => /^ {2}\S+-explorer\s+[◐◓◑◒] running/.test(r));
     expect(rows).toHaveLength(3);
     const ends = rows.map((r) => /\d+:\d\d/.exec(r)!).map((m) => m.index + m[0].length);
     expect(new Set(ends).size, 'the TIME column ends on one cell').toBe(1);
   });
-  test('maxRows is respected: a short slot counts what it cannot draw on one summary row (`⠧ N more running`)', () => {
+  test('maxRows is respected: a short slot counts what it cannot draw on one summary row (`◒ N more running`)', () => {
     const ags = ['a', 'b', 'c', 'd', 'e'].map((n, i) => ({ name: `${n}-explorer`, role: 'explorer', state: 'working', ui: 'running', model: 'haiku', startedAt: 5_000_000 - 9000 - i, since: 5_000_000 - 3000, tool: 'Read', target: 'x.py', lastTool: 'Read', calls: i + 1 }) as never);
     for (const maxRows of [9, 10, 12, 16]) {
       const rows = hud.hudLines({ todos: ownTodos(PLAN.map((c, i) => ({ id: `t${i + 1}`, content: c, status: 'pending' }) as unknown as TodoItem)), agents: ags }, { cols: 93, maxRows, ui, now: 5_000_000 }).map((r) => r.map((x) => x.t).join(''));
       expect(rows.length, `${maxRows}`).toBeLessThanOrEqual(maxRows);
-      const shown = rows.filter((r) => /^ {2}\S+-explorer\s+[⠀-⣿] running/.test(r)).length;
+      const shown = rows.filter((r) => /^ {2}\S+-explorer\s+[◐◓◑◒] running/.test(r)).length;
       const more = Number(rows.map((r) => /^ {2}\S+ (\d+) more running/.exec(r)).find((m) => m)?.[1] ?? 0);
       expect(shown + more, `${maxRows}: every agent is a row or counted`).toBe(5);
     }

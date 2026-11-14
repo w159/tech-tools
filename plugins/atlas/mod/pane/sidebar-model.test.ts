@@ -23,10 +23,10 @@ describe('team rows from the live snapshot', () => {
   test('the lead row comes first, the workers follow, the lead tally closes', () => {
     const s = world({ squad: [sq('a', 'running'), sq('b', 'finished')], activity: { a: act({ mood: 'working', tool: 'Grep', toolCount: 2 }) } as never });
     const out = team(s, 80);
-    expect(out[0]).toMatch(/^ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] lead +running/);
+    expect(out[0]).toMatch(/^ {2}[◐◓◑◒] lead +running/);
     expect(out.at(-2)).toBe('    workers  1 running · 1 done');
     expect(out.at(-1)).toMatch(/^ {4}total {4}0:\d\d · 2 worker calls$/); // wave 30: the team's total time and calls close the tab
-    expect(out.some((l) => /^ ?[▸ ] ?[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] a +(runner +)?running/.test(l))).toBe(true);
+    expect(out.some((l) => /^ ?[▸ ] ?[◐◓◑◒] a +(runner +)?running/.test(l))).toBe(true);
     expect(out.some((l) => /● b +(runner +)?done/.test(l))).toBe(true);
   });
   test('an idle lead reads waiting and a roster member the squad does not know reads queued', () => {

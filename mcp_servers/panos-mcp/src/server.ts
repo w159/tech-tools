@@ -1,3 +1,4 @@
+import pkg from '../package.json' with { type: 'json' };
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult as SdkCallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -94,7 +95,7 @@ async function registerKeygenIfBootstrappable(register: ToolRegistrar, onError: 
 
 export async function createMcpServer(): Promise<McpServer> {
   const server = new McpServer(
-    { name: 'panos-mcp', version: '0.1.0' },
+    { name: 'panos-mcp', version: pkg.version },
     { capabilities: { logging: {} }, instructions: SERVER_INSTRUCTIONS },
   );
 

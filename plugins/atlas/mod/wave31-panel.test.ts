@@ -114,7 +114,7 @@ describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: 
 describe('wave 31 item 2: the panel phase row is the band (critique 29: `phase ● done` under a working band)', () => {
   const phase = (run: Run): string => body('route', 65, 45, run).find((l) => l.trimStart().startsWith('phase'))!;
   test('working: a spinner and `working`', () => {
-    expect(phase({ kind: 'working' })).toMatch(/phase\s+[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◐◓◑◒]\s+working/);
+    expect(phase({ kind: 'working' })).toMatch(/phase\s+[◐◓◑◒]\s+working/);
   });
   test('done: `● done`', () => {
     expect(phase({ kind: 'done' })).toMatch(/phase\s+●\s+done/);

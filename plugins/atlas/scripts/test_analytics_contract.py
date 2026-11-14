@@ -177,6 +177,7 @@ def test_hot_module_constants_match_the_client():
     assert H.OFF_VALUES == A.OFF_VALUES
     assert H.ON_VALUES == A.ON_VALUES
     assert H.AUTOMATION_VARS == A.AUTOMATION_VARS
+    assert H.SEND_RETRY_S == A.SEND_RETRY_S
 
 
 def test_hot_enabled_agrees_with_client_state_on_every_opt_out_combination(tmp_path, monkeypatch):

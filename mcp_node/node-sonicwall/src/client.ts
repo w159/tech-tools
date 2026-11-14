@@ -1,6 +1,7 @@
 import * as https from 'node:https';
 import type { IncomingMessage } from 'node:http';
 import { SonicwallApiError } from './errors.js';
+import { resilientFetch } from './net.js';
 import type { Method, SonicwallConfig, SonicwallInfo, SonicwallStatus } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -35,13 +36,21 @@ interface TransportInit {
 function insecureFetch(url: string, init: TransportInit): Promise<TransportResponse> {
   return new Promise((resolve, reject) => {
     const agent = new https.Agent({ rejectUnauthorized: false });
+    const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    // One hard deadline for the whole request (connect, TLS handshake, headers and body).
+    // The socket `timeout` option alone is an idle timer that a stalled handshake can outlast.
+    const deadline = setTimeout(
+      () => req.destroy(new Error(`SonicOS request to ${new URL(url).host} timed out after ${timeoutMs}ms (ETIMEDOUT)`)),
+      timeoutMs,
+    );
     const req = https.request(
       url,
-      { method: init.method ?? 'GET', headers: init.headers, agent, timeout: init.timeoutMs ?? DEFAULT_TIMEOUT_MS },
+      { method: init.method ?? 'GET', headers: init.headers, agent },
       (res: IncomingMessage) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
+          clearTimeout(deadline);
           const buf = Buffer.concat(chunks);
           resolve({
             status: res.statusCode ?? 0,
@@ -57,8 +66,7 @@ function insecureFetch(url: string, init: TransportInit): Promise<TransportRespo
         });
       },
     );
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('SonicOS request timed out')));
+    req.on('error', (err) => { clearTimeout(deadline); reject(err); });
     if (typeof init.body === 'string') req.write(init.body);
     req.end();
   });
@@ -131,13 +139,9 @@ export class SonicwallClient {
       }
     }
     if (!this.verifyTls) return insecureFetch(url, { ...init, timeoutMs: this.timeoutMs });
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      return (await fetch(url, { ...init, signal: controller.signal })) as unknown as TransportResponse;
-    } finally {
-      clearTimeout(t);
-    }
+    // Per-request deadline and clear network errors ("cannot reach host: reason"); no retries here,
+    // SonicOS writes are not idempotent and a login must not be repeated blindly.
+    return (await resilientFetch(url, { ...init }, { timeoutMs: this.timeoutMs, maxRetries: 0 })) as unknown as TransportResponse;
   }
 
   // Strips the Basic header value, its base64, the password and the bearer from any string.

@@ -285,11 +285,30 @@ def check_err001(mod: Module, opts: dict) -> list[Finding]:
 # --- DEM001 ------------------------------------------------------------------
 
 
+# calls that transform a value (str, bytes, dict) rather than reach into another object
+VALUE_METHODS = {
+    "strip", "lstrip", "rstrip", "split", "rsplit", "splitlines", "lower", "upper", "title", "capitalize",
+    "casefold", "swapcase", "replace", "startswith", "endswith", "find", "rfind", "index", "rindex", "count",
+    "join", "format", "format_map", "encode", "decode", "partition", "rpartition", "center", "ljust", "rjust",
+    "zfill", "expandtabs", "removeprefix", "removesuffix", "translate", "isdigit", "isalpha", "isalnum",
+    "isspace", "isupper", "islower", "isnumeric", "isdecimal", "isidentifier", "get", "items", "keys", "values",
+    "copy",
+}
+# unittest.mock configuration and introspection attributes
+MOCK_ATTRS = {
+    "return_value", "side_effect", "call_args", "call_args_list", "call_count", "mock_calls", "method_calls",
+    "kwargs", "args", "__enter__", "__exit__", "__aenter__", "__aexit__",
+}
+
+
 def _chain(mod: Module, node: ast.AST) -> tuple[int, ast.AST]:
     links = 0
     while True:
         if isinstance(node, ast.Attribute):
-            links += 1
+            parent = mod.parents.get(node)
+            called = isinstance(parent, ast.Call) and parent.func is node
+            if not ((called and node.attr in VALUE_METHODS) or node.attr in MOCK_ATTRS):
+                links += 1
             node = node.value
         elif isinstance(node, ast.Call):
             node = node.func
@@ -540,9 +559,47 @@ def _assignments(scope_nodes, name: str, before: int):
     return out
 
 
+def _const_item(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, (str, int)) and not isinstance(node.value, bool)
+
+
+def _literal_collection(node: ast.AST) -> bool:
+    """A tuple/list/set literal of str/int constants, or of tuples of them: table names, (column, type) pairs."""
+    return isinstance(node, (ast.Tuple, ast.List, ast.Set)) and bool(node.elts) and all(
+        _const_item(e) or (isinstance(e, (ast.Tuple, ast.List)) and e.elts and all(_const_item(x) for x in e.elts))
+        for e in node.elts)
+
+
+def _safe_iterable(mod: Module, node: ast.AST, scope_nodes) -> bool:
+    if _literal_collection(node):
+        return True
+    if isinstance(node, ast.Name):
+        found = _assignments(scope_nodes, node.id, node.lineno) or _assignments(mod.tree.body, node.id, ANY_LINE)
+        return bool(found) and all(_literal_collection(a.value) for a in found)
+    return False
+
+
+def _loop_bound_safe(mod: Module, name: ast.Name, scope_nodes) -> bool | None:
+    """For a loop variable: whether every value it takes is a constant. None when no enclosing loop binds it."""
+    cur = mod.parents.get(name)
+    while cur is not None and not isinstance(cur, FUNC):
+        if isinstance(cur, (ast.For, ast.AsyncFor)) and any(
+                isinstance(n, ast.Name) and n.id == name.id for n in ast.walk(cur.target)):
+            if any(a.lineno > cur.lineno for a in _assignments(scope_nodes, name.id, name.lineno)):
+                return None  # rebound inside the loop: judge the assignment instead
+            return _safe_iterable(mod, cur.iter, scope_nodes)
+        cur = mod.parents.get(cur)
+    return None
+
+
 def _safe_name(mod: Module, name: ast.Name) -> bool:
-    """A Name that is provably an int or a '?'-placeholder list: a local/module assignment, or an `int` parameter."""
+    """A Name that is provably an int, a constant string or a '?'-placeholder list: a local/module assignment,
+    a loop over a literal collection, or an `int` parameter."""
     func = mod.enclosing(name, FUNC)
+    scope_nodes = list(_own_nodes(func)) if func is not None else mod.tree.body
+    looped = _loop_bound_safe(mod, name, scope_nodes)
+    if looped is not None:
+        return looped
     if func is not None:
         local = _assignments(list(_own_nodes(func)), name.id, name.lineno)
         if local:
@@ -552,15 +609,27 @@ def _safe_name(mod: Module, name: ast.Name) -> bool:
             if arg.arg == name.id:
                 return isinstance(arg.annotation, ast.Name) and arg.annotation.id == "int"
     top = _assignments(mod.tree.body, name.id, ANY_LINE)
-    return bool(top) and all(t.value is not None and _is_int_const(t.value) for t in top)
+    return bool(top) and all(t.value is not None and (_is_int_const(t.value) or _is_str_const(t.value)) for t in top)
+
+
+def _is_str_const(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
 
 
 def _safe_value(mod: Module, node: ast.AST) -> bool:
-    """Interpolating this value cannot inject SQL: an int, or a string made only of '?' and commas."""
-    if _is_int_const(node) or _is_placeholder_join(node):
+    """Interpolating this value cannot inject SQL: an int, a string constant, or a string of '?' and commas."""
+    if _is_int_const(node) or _is_str_const(node) or _is_placeholder_join(node):
         return True
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("int", "len") and not mod.imports.get(node.func.id):
         return True
+    if isinstance(node, ast.IfExp):  # "a" if flag else "b"
+        return _safe_value(mod, node.body) and _safe_value(mod, node.orelse)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):  # "(" + ",".join(COLUMNS) + ")"
+        return _safe_value(mod, node.left) and _safe_value(mod, node.right)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "join" \
+            and _is_str_const(node.func.value) and len(node.args) == 1:  # ",".join(COLUMNS)
+        func = mod.enclosing(node, FUNC)
+        return _safe_iterable(mod, node.args[0], list(_own_nodes(func)) if func is not None else mod.tree.body)
     if isinstance(node, ast.Name):
         return _safe_name(mod, node)
     return False
@@ -760,6 +829,53 @@ def check_sec002(mod: Module, opts: dict) -> list[Finding]:
 # --- CFG001 ------------------------------------------------------------------
 
 URL_RE = re.compile(r"(?:https?|wss?|ftp)://[^\s'\"<>]+")
+# loopback, unspecified and the RFC 6761 test-only TLDs: never a deployment-specific endpoint. example.com is
+# not here: docs and fixtures use it to stand for a real host
+RESERVED_HOST = re.compile(r"(?i)^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|::1|(?:[\w-]+\.)+(?:localhost|test|invalid))$")
+# a name that holds documentation or a hint for a person, not an address the program calls
+DOC_NAME = re.compile(r"(?i)(?:^|_)(?:docs?|documentation|homepage|home_page|website|help|hint|readme|changelog|license|"
+                      r"issues?|repo|repository|source_url|install(?:_cmd|_url|_hint)?|learn_more|more_info|epilog|description)(?:_|$)")
+CONFIG_GETTERS = ("get", "getenv")
+
+
+def _reserved_host(url: str) -> bool:
+    from urllib.parse import urlsplit
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        return False
+    return bool(host) and bool(RESERVED_HOST.match(host))
+
+
+def _is_getter_call(node: ast.AST) -> bool:
+    if not isinstance(node, ast.Call):
+        return False
+    f = node.func
+    return (f.attr if isinstance(f, ast.Attribute) else f.id if isinstance(f, ast.Name) else "") in CONFIG_GETTERS
+
+
+def _config_fallback(node: ast.AST, parent: ast.AST) -> bool:
+    """The literal is the default of a config read: os.getenv(k, URL), cfg.get(k, URL), os.environ.get(k) or URL."""
+    if _is_getter_call(parent) and (node in parent.args[1:] or any(k.value is node for k in parent.keywords)):
+        return True
+    if isinstance(parent, ast.BoolOp) and isinstance(parent.op, ast.Or) and parent.values[0] is not node:
+        earlier = parent.values[:parent.values.index(node)]
+        return any(_is_getter_call(n) or (isinstance(n, ast.Subscript) and "environ" in ast.dump(n.value))
+                   for v in earlier for n in ast.walk(v))
+    return False
+
+
+def _doc_context(node: ast.AST, parent: ast.AST) -> bool:
+    if isinstance(parent, ast.keyword):
+        return bool(parent.arg) and bool(DOC_NAME.search(parent.arg))
+    if isinstance(parent, ast.Dict):
+        keys = [k for k, v in zip(parent.keys, parent.values) if v is node]
+        return any(isinstance(k, ast.Constant) and isinstance(k.value, str) and DOC_NAME.search(k.value) for k in keys)
+    if isinstance(parent, (ast.Assign, ast.AnnAssign)):
+        targets = parent.targets if isinstance(parent, ast.Assign) else [parent.target]
+        names = [t.id if isinstance(t, ast.Name) else t.attr if isinstance(t, ast.Attribute) else "" for t in targets]
+        return any(n and DOC_NAME.search(n) for n in names)
+    return False
 
 
 def check_cfg001(mod: Module, opts: dict) -> list[Finding]:
@@ -771,10 +887,15 @@ def check_cfg001(mod: Module, opts: dict) -> list[Finding]:
             continue
         if id(node) in mod.docstrings or not URL_RE.fullmatch(node.value.strip()):
             continue
+        if _reserved_host(node.value.strip()):
+            continue  # loopback or reserved test host
+        owner = node
         parent = mod.parents.get(node)
+        if isinstance(parent, ast.JoinedStr):  # f"http://host:{port}": judge the whole f-string by where it goes
+            owner, parent = parent, mod.parents.get(parent)
         if isinstance(parent, ast.Assign) and any(isinstance(t, ast.Name) and t.id.startswith("__") for t in parent.targets):
             continue  # __url__ metadata
-        if isinstance(parent, ast.keyword) and parent.arg in ("help", "description", "epilog", "homepage"):
+        if _doc_context(owner, parent) or _config_fallback(owner, parent):
             continue
         out.append(mod.finding("CFG001", node, f"Hardcoded endpoint '{node.value[:60]}'; read it from configuration or the environment.", end_line=node.lineno))
     return out
@@ -902,14 +1023,22 @@ def _const_expr(node: ast.AST) -> bool:
     return True
 
 
+def _is_octal_literal(lines: list[bytes], node: ast.Constant) -> bool:
+    """The literal's source text starts with 0o. col_offset counts UTF-8 bytes, so index the encoded line."""
+    row = node.lineno - 1
+    return 0 <= row < len(lines) and lines[row][node.col_offset:node.col_offset + 2].lower() == b"0o"
+
+
 def check_lit001(mod: Module, opts: dict) -> list[Finding]:
     allowed = set(opts["allowed"])
     out, seen = [], set()
+    # split once on the parser's line breaks: ast.get_source_segment re-splits the whole file per call
+    raw_lines = [ln.encode("utf-8") for ln in re.split(r"\r\n|\r|\n", mod.source)]
     for node in ast.walk(mod.tree):
         if not (isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool)):
             continue
         value = node.value
-        if isinstance(value, int) and (ast.get_source_segment(mod.source, node) or "")[:2].lower() == "0o":
+        if isinstance(value, int) and _is_octal_literal(raw_lines, node):
             continue  # file-mode masks and permissions are written in octal on purpose
         parent = mod.parents.get(node)
         if isinstance(parent, ast.UnaryOp) and isinstance(parent.op, ast.USub):
@@ -946,7 +1075,9 @@ def check_lit001(mod: Module, opts: dict) -> list[Finding]:
 
 # --- WIN001 ------------------------------------------------------------------
 
-TODO_RE = re.compile(r"#.*\b(TODO|FIXME|HACK|XXX)\b")
+# A marker opens the comment ("# TODO fix") or is tagged ("TODO:", "FIXME(name)");
+# prose that merely mentions the word ("the TODO tree") is not a broken window.
+TODO_RE = re.compile(r"#[\s#]*(TODO|FIXME|HACK|XXX)\b|\b(TODO|FIXME|HACK|XXX)(?=[:(])")
 
 
 def _to_stderr(call: ast.Call) -> bool:
@@ -959,8 +1090,8 @@ def check_win001(mod: Module, opts: dict) -> list[Finding]:
     for line_no, text in mod.comments:
         m = TODO_RE.search(text)
         if m:
-            out.append(mod.finding("WIN001", line_no, f"{m.group(1)} comment left in source; fix it or track it in an issue."))
-    library = not (mod.has_main_guard or mod.path.name in ("__main__.py", "cli.py", "manage.py"))
+            out.append(mod.finding("WIN001", line_no, f"{m.group(1) or m.group(2)} comment left in source; fix it or track it in an issue."))
+    library = not (mod.has_main_guard or mod.source.startswith("#!") or mod.path.name in ("__main__.py", "cli.py", "manage.py"))
     for node in ast.walk(mod.tree):
         if not isinstance(node, ast.Call):
             continue

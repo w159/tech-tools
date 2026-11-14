@@ -56,6 +56,9 @@ import atlas_irc  # noqa: E402
 
 CREW_REL = Path(".atlas") / ".run" / "crew"
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
+# a run id names the run directory and the tmux session `atlas-<id>`: tmux turns `.` and `:` into `_`, so a
+# session made as atlas-v1.2 is atlas-v1_2 and every later `-t atlas-v1.2` (worker windows, kill) misses it
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 # Write creates each owned file (staged, then installed by `irc check`); Bash runs the check; Edit patches.
 # Shell heredoc writes are not used: Claude Code's Bash safety check refuses some of them ("Contains brace
 # with quote character (expansion obfuscation)"); 4 workers per 30-module run lost a whole file generation
@@ -220,6 +223,11 @@ def load_plan(path) -> dict:
             )
         if not (w.get("task") or "").strip():
             raise ValueError(f"worker {name} has no task")
+        for p in w["owns"]:
+            if not isinstance(p, str) or not p.strip() or os.path.isabs(p) or ".." in Path(p).parts:
+                raise ValueError(
+                    f"worker {name} owns {p!r}: an owned path is relative to the project root and stays inside it"
+                )
     seen = {}
     for w in workers:
         for p in w["owns"]:
@@ -1197,10 +1205,10 @@ def _guard_codes(units: list, root, timeout) -> dict:
 
     def run_group(argv, files):
         try:
-            r = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=timeout)
-            line = next((l for l in reversed(r.stdout.splitlines()) if l.startswith("ATLAS_GUARD ")), None)
+            _, o, timed_out = atlas_irc.run_shell(shlex.join(argv), root, timeout)
+            line = None if timed_out else next((l for l in reversed(o.splitlines()) if l.startswith("ATLAS_GUARD ")), None)
             res = json.loads(line[len("ATLAS_GUARD "):]) if line else {}
-        except (subprocess.TimeoutExpired, OSError, ValueError):
+        except (OSError, ValueError):
             res = {}
         for f, idxs in files:
             for i in idxs:  # no verdict (driver died): run the worker's own command, as before
@@ -1251,6 +1259,9 @@ def cmd_run(a) -> int:
         print(json.dumps({"ok": False, "error": str(exc)}))
         return 2
     run_id = a.run_id or "crew-" + time.strftime("%H%M%S") + uuid.uuid4().hex[:4]
+    if not RUN_ID_RE.match(run_id):
+        print(json.dumps({"ok": False, "error": f"run id {run_id!r} must match {RUN_ID_RE.pattern} (it names a directory and a tmux session)"}))
+        return 2
     rundir = _run_dir(root, run_id)
     try:  # a run id is used once: a reused dir would carry over killed, exit/, pid/ and summary.json
         rundir.parent.mkdir(parents=True, exist_ok=True)
@@ -1357,7 +1368,7 @@ def cmd_run(a) -> int:
             launch_errors[item["name"]] = err
     # the supervisor owns the run from here: global check, fix rounds, summary
     sup = _self_cmd("supervise", "--rundir", str(rundir))
-    subprocess.Popen(
+    sup_proc = subprocess.Popen(
         shlex.split(sup),
         stdout=open(rundir / "supervisor.log", "w"),
         stderr=subprocess.STDOUT,
@@ -1374,6 +1385,10 @@ def cmd_run(a) -> int:
                     return 1
                 print(json.dumps(lead_view(obj, rundir)))
                 return 0 if obj.get("ok") is True else 1
+            gone = _supervisor_gone(rundir, sup_proc.poll if isinstance(getattr(sup_proc, "pid", None), int) else None)
+            if gone:
+                print(json.dumps(gone))
+                return 1
             time.sleep(POLL_S)
     print(
         json.dumps(
@@ -1510,13 +1525,12 @@ def _owned_hashes(root, plan) -> dict:
 
 
 def _run_check(cmd, root, timeout=900):
-    try:
-        r = subprocess.run(
-            cmd, shell=True, cwd=root, capture_output=True, text=True, timeout=timeout
-        )
-        return r.returncode, (r.stdout or "") + (r.stderr or "")
-    except subprocess.TimeoutExpired:
-        return 124, f"timed out after {timeout}s"
+    """(exit code, stdout + stderr) of shell `cmd` in root. A timeout kills the check's whole process group and
+    is 124 with the output so far after the budget line (it shows where the check hung)."""
+    code, out, timed_out = atlas_irc.run_shell(cmd, root, timeout)
+    if timed_out:
+        return 124, f"timed out after {timeout}s" + (f"\n{out}" if out else "")
+    return code, out
 
 
 SHARD_TAIL_CHARS = 6000  # per failing shard; a passing shard keeps 200 (summarize reads check_tail from the end)
@@ -1648,20 +1662,22 @@ def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=(), skip_passed
         return _run_check(cmd, root, timeout)
     if jobs[-1][2] and _rest_is_empty(cmd, root, [*(test_files or []), *skip]):
         jobs = jobs[:-1]  # nothing outside the known files: the rest shard would only report "no tests ran"
-    procs = [
-        (subprocess.Popen(c, shell=True, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True), label, rest)
-        for c, label, rest in jobs
-    ]
-    t_end = time.time() + timeout
+    # each shard in its own process group (atlas_irc.run_shell): a hung shard is killed with every process it
+    # started at the budget; killing the shell alone left pytest running and held this loop for the whole hang
+    runs: list = [None] * len(jobs)
+
+    def shard(i, c):
+        runs[i] = atlas_irc.run_shell(c, root, timeout, merge=True)
+
+    threads = [threading.Thread(target=shard, args=(i, c), daemon=True) for i, (c, _, _) in enumerate(jobs)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
     results = []
-    for pr, label, rest in procs:
-        try:
-            o, _ = pr.communicate(timeout=max(1.0, t_end - time.time()))
-            code = pr.returncode
-        except subprocess.TimeoutExpired:
-            pr.kill()
-            o, _ = pr.communicate()
-            code, o = 124, f"timed out after {timeout}s\n{o or ''}"
+    for (_, label, rest), (code, o, timed_out) in zip(jobs, runs):
+        if timed_out:
+            o = f"timed out after {timeout}s\n{o}"
         if rest and code == 5:  # nothing left outside the known files
             code = 0
         results.append((code, label, o or ""))
@@ -1959,6 +1975,41 @@ def _group_of(pid: int, needle: str) -> int | None:
     except OSError:
         return None
     return pid
+
+
+def _read_argv(pid: int) -> list[str]:
+    """pid's argv from /proc/<pid>/cmdline (NUL separated); OSError when it cannot be read."""
+    raw = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace")
+    return [a for a in raw.split("\0") if a]
+
+
+def _argv_is_ours(argv: list[str], needle: str) -> bool:
+    """True when an argv element ties the process to run `needle`: a path holding it as a whole component (the run
+    directory or a file under it), or a claude worker name `<run_id>-<w>` (after --name, or as --name=...)."""
+    for i, arg in enumerate(argv):
+        if arg.startswith("--name="):
+            arg = arg[len("--name="):]
+            if arg.startswith(needle + "-"):
+                return True
+            continue
+        if i and argv[i - 1] == "--name" and arg.startswith(needle + "-"):
+            return True  # claude worker: --name <run_id>-<w>
+        parts = [x for x in arg.split("/") if x]
+        if "/" in arg and needle in parts:
+            return True  # the run directory (or a path under it) as a whole path component
+    return False
+
+
+def _is_ours(pid: int, needle: str) -> bool:
+    """False when pid's argv is readable and does not match `needle` (the run id) exactly: the pid file outlived its
+    process and the system gave the pid to another one. True without /proc (the file is trusted)."""
+    try:
+        argv = _read_argv(pid)
+    except FileNotFoundError:
+        return not Path("/proc/self").exists()  # /proc mounted and no entry: the pid is gone
+    except OSError:
+        return True
+    return _argv_is_ours(argv, needle)
 
 
 def _stop_pidfile(path: Path, needle: str, wait_s: float = 3.0) -> int | None:
@@ -2424,7 +2475,7 @@ def write_changelog(root, text: str) -> str | None:
 def _known_run(a) -> Path | None:
     """The run's directory, or None after printing an unknown-run error (a run exists once `run` wrote run.json)."""
     rundir = _run_dir(a.root or os.getcwd(), a.run)
-    if (rundir / "run.json").is_file():
+    if RUN_ID_RE.match(a.run or "") and (rundir / "run.json").is_file():
         return rundir
     print(json.dumps({"ok": False, "error": f"unknown run {a.run!r}: no {rundir / 'run.json'}"}))
     return None
@@ -2491,11 +2542,59 @@ def _summary_rc(path: Path) -> int:
         return 1
 
 
+SUPERVISOR_GRACE_S = 60  # a run whose supervisor wrote no pid this long after the start has none
+
+
+def _supervisor_gone(rundir: Path, poll=None) -> dict | None:
+    """The error `wait` prints when the run's supervisor is dead and left no summary (a crash, an OOM kill, a
+    reboot), else None. Without it `wait` said "still running; call wait again" for ever. `poll` is the
+    supervisor's Popen.poll when this process started it (its zombie still answers signals). A run being
+    killed is not dead: `kill` stops the supervisor first and then writes the summary itself."""
+    if (rundir / "summary.json").exists() or _killed(rundir):
+        return None
+    pidf = rundir / "supervisor.pid"
+    pid = _pid_from(pidf)
+    if pid is None:
+        try:
+            started = float(json.loads((rundir / "run.json").read_text(encoding="utf-8")).get("started") or 0)
+        except (OSError, ValueError, TypeError, AttributeError):
+            return None
+        if poll is not None and poll() is not None:
+            why = f"the supervisor exited with {poll()} before it started"
+        elif time.time() - started > SUPERVISOR_GRACE_S and not pidf.exists():
+            why = f"no supervisor started within {SUPERVISOR_GRACE_S}s"
+        else:
+            return None
+    else:
+        dead = (poll() is not None) if poll is not None else not _pid_alive(pid)
+        if not dead:
+            try:  # a recycled pid is not our supervisor
+                dead = rundir.name not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace")
+            except OSError:
+                pass
+        if not dead:
+            return None
+        why = f"the supervisor (pid {pid}) exited"
+    if (rundir / "summary.json").exists():  # it published just before it went
+        return None
+    try:
+        tail = (rundir / "supervisor.log").read_text(encoding="utf-8", errors="replace")[-1500:]
+    except OSError:
+        tail = ""
+    return {
+        "ok": False,
+        "run": rundir.name,
+        "error": f"{why} without writing a summary: the run is over and red; see {rundir / 'supervisor.log'}",
+        "supervisor_log_tail": tail,
+    }
+
+
 def cmd_wait(a) -> int:
     rundir = _known_run(a)
     if rundir is None:
         return 1
     end = time.time() + a.timeout
+    next_probe = 0.0
     while time.time() < end:
         s = rundir / "summary.json"
         if s.exists():
@@ -2510,6 +2609,12 @@ def cmd_wait(a) -> int:
                 return 1
             print(json.dumps(lead_view(obj, rundir)))
             return 0 if obj.get("ok") is True else 1
+        if time.time() >= next_probe:  # a pid probe every half second, the summary every poll
+            next_probe = time.time() + 0.5
+            gone = _supervisor_gone(rundir)
+            if gone:
+                print(json.dumps(gone))
+                return 1
         time.sleep(POLL_S)
     print(
         json.dumps(
@@ -2554,6 +2659,8 @@ def cmd_kill(a) -> int:
     for p in (rundir / "pid").glob("*"):
         try:
             pid = int(p.read_text())
+            if not _is_ours(pid, rundir.name):  # a finished run's pid, reused by an unrelated process
+                continue
             group = _group_of(pid, rundir.name)
             os.kill(pid, signal.SIGTERM)
             killed.append(p.name)
@@ -2564,7 +2671,7 @@ def cmd_kill(a) -> int:
     for p in (rundir / "wpid").glob("*"):  # worker wrappers (a wrapper still in its --delay holds no claude pid)
         try:
             pid = int(p.read_text())
-            if pid != os.getpid():
+            if pid != os.getpid() and _is_ours(pid, rundir.name):
                 os.kill(pid, signal.SIGTERM)
         except (OSError, ValueError):
             pass
@@ -2643,4 +2750,5 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    atlas_irc.stop_checks_on_signal()  # checks run in their own process groups: a stop of this process stops them too
     sys.exit(main())

@@ -22,6 +22,10 @@ none
 
 brand-discover-brand, brand-guideline-generation, brand-voice-enforcement, memory-management, pdf-view, search-knowledge-synthesis, search-source-management, search-strategy, task-management
 
+These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/productivity/skills/<name>/SKILL.md`;
+open the one that matches the task before you start, and follow any reference it names.
+
 ## Standing constraints
 
 1. **Follow org branding.** When the org config has branding configured, all

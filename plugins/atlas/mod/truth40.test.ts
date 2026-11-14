@@ -79,7 +79,7 @@ describe('step 3: every non-zero count keeps its glyph and figure, and the clock
       const t = runsText(bandLines({ ...m, cols })[0]!.runs).trimEnd();
       expect(t, String(cols)).toContain('0:25');
       expect(t, String(cols)).toMatch(/●\s?1/);
-      expect(t, String(cols)).not.toMatch(/[⠀-⣿] 2 ●1/);
+      expect(t, String(cols)).not.toMatch(/[◐◓◑◒] 2 ●1/);
     }
   });
 });

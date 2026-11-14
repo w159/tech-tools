@@ -75,7 +75,7 @@ describe('step 3: the board pane', () => {
     const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
     expect(t).toHaveLength(4); // the two agents, the axis rule with its ticks, the tick labels
     expect(t[0]).toMatch(/^ ● alpha {5}▇+ 0:14[ ┊]*$/); // wave 39: the mark leads, the name is short, the lane takes the rest and the time sits at the bar's end
-    expect(t[1]).toMatch(/^ [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] gamma {5}[▇▓▒]+ 0:07[ ┊]*$/); // wave 32: a working agent row wears the band's braille
+    expect(t[1]).toMatch(/^ [◐◓◑◒] gamma {5}[▇▓▒]+ 0:07[ ┊]*$/); // wave 32: a working agent row wears the band's spinner
     expect(t[2]).toMatch(/^ {13}┬[─┬]+$/);
     expect(t[3]).toMatch(/^ {13}0:00 .*0:14$/); // state 40: the axis ends on the run total, 0:14
     const bar = (l: string): number => [...l].filter((c) => /▇/.test(c)).length;
@@ -154,9 +154,9 @@ describe('step 6: one spinner clock', () => {
       const rows = panelText(m).filter((l) => /alpha/.test(l));
       expect(rows.length).toBeGreaterThan(0);
       const lead = leadSpinnerGlyph(spinFrameOf(spinClock(now, tick), 'alpha-explorer'));
-      for (const l of rows) expect([tick, l.match(/[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0]]).toEqual([tick, /T1 read/.test(l) ? glyph : lead]); // the plan row turns a circle quarter, the agent row the band's braille frame
+      for (const l of rows) expect([tick, l.match(/[◐◓◑◒]/)?.[0]]).toEqual([tick, /T1 read/.test(l) ? glyph : lead]); // the plan row turns a circle quarter, the agent row the band's spinner frame
       const board = boardText(boardLines([{ label: 'T1 read alpha.py', state: 'running', owner: 'alpha-explorer', detail: '' }], { cols: 80, ui: mocha, pane: true, ribbon: false, title: false, tick, nowMs: spinClock(now, tick) }));
-      expect([tick, board.find((l) => /alpha/.test(l))?.match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0]]).toEqual([tick, lead]); // wave 34: the side panel's board turns the band's braille
+      expect([tick, board.find((l) => /alpha/.test(l))?.match(/[◐◓◑◒]/)?.[0]]).toEqual([tick, lead]); // wave 34: the side panel's board turns the band's spinner
     }
   });
 });

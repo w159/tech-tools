@@ -10,12 +10,12 @@
 
 </div>
 
-Current versions: atlas 17.20.0, armada 2.3.1, programmer 1.0.4 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.21.0, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
 - **A fixed work loop.** Hooks enforce research, test, implement, verify. A lead session hands work to named role subagents (explorer, implementer, verifier and others) that share one todo board.
-- **A gate on "done".** A Stop hook refuses to let a session finish until there is evidence, a verified finding, current docs and no open todos. Each of its 19 conditions, (a) to (s), has an off switch.
+- **A gate on "done".** A Stop hook refuses to let a session finish until there is evidence, a verified finding, current docs and no open todos. It checks 19 conditions, (a) to (s); `ATLAS_GATE=off` turns the whole gate off, and a few conditions also have their own switch.
 - **Memory and self-tuning.** Each session starts with a claude-mem recall, a local dashboard shows runs and gates, and a doctor mines session telemetry into rule changes that you approve.
 
 | What | Count | Source |
@@ -23,7 +23,7 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 | Skills | 40 (3 manual) | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 11 | `plugins/atlas/agents/` |
 | Hooks | 19 programs, 24 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
-| Scripts | 77 non-test Python files | `plugins/atlas/scripts/` |
+| Scripts | 78 non-test Python files | `plugins/atlas/scripts/` |
 | MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
 | omp agents | 11, generated | `plugins/atlas/omp/agents/` |
 
@@ -92,11 +92,11 @@ build (main ef38fc50); the rendered text of each surface is in
 
 **Mission Control band.** The band is the row above the prompt: the `◖ ◆ ATLAS ◗`
 pill, then three filled segments. The first is the run state with its clock
-(`⠋ working 0:42`, `● done 1:08`, `○ idle · 1:08`, `▲ blocked · stop refused
+(`◐ working 0:42`, `● done 1:08`, `○ idle · 1:08`, `▲ blocked · stop refused
 0:37`), the second is `todo N/M` with a meter, and the third counts the agents
-(`⠋ 2 running · ● 1 done · ■1`, or `no agents`). A failing gate adds a
+(`◐ 2 running · ● 1 done · ■1`, or `no agents`). A failing gate adds a
 `△ gates 2/3` chip. The band reads `working` whenever the host's turn is on, with a
-turning braille spinner that steps every 100 ms. The run clock starts at your
+turning circle-quarter spinner (`◐◓◑◒`) that steps every 100 ms, the same one the panel, board and dispatch cards use. The run clock starts at your
 prompt, never steps back, and stops when Claude Code reports its turn idle; a
 closed run has one total, so the band, run card, side panel and board print the
 same figure and `done` does not count on. A run that ends with a failed worker or
@@ -268,7 +268,7 @@ If the memory server comes from the plugin, or its recall tool is missing, the g
 denies once and then releases. A mounted server is denied on every call until the
 recall happens.
 
-### 6. Self-improvement with `/atlas-doctor`
+### 6. Self-improvement with `/atlas:atlas-doctor`
 
 The doctor reads the telemetry in `~/.atlas/atlas.db`, mines recurring friction
 into findings, asks you to apply, skip or modify each one, applies what you

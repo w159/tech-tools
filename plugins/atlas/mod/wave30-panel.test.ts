@@ -51,7 +51,7 @@ const snap = (o: { running?: boolean; now?: number } = {}) => {
 const model = (s: never, view: SidebarView, columns: number, rows: number): SidebarModel => ({ snapshot: s, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows, look: ui } as SidebarModel);
 const render = (view: SidebarView, columns: number, rows: number, s = snap()): string[] => { forgetRefusals(); return textOf(sidebarTree(els, model(s, view, columns, rows), on) as unknown as Node).split('\n'); };
 const body = (view: SidebarView, columns: number, rows: number, s = snap()): string[] => { forgetRefusals(); return bodyLines(panelModelOf(model(s, view, columns + 1, rows), ui, columns)).map((l) => lineText(l).trimEnd()); };
-const SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const SPIN = /[◐◓◑◒]/;
 
 const blankRun = (rows: readonly string[]): number => { let max = 0; let run = 0; for (const l of rows) { run = l.trim() === '' ? run + 1 : 0; max = Math.max(max, run); } return max; };
 // A post is its sender row (name, word, time, age) and, under it, its text: the row that heads a text.

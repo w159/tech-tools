@@ -22,6 +22,10 @@ NinjaOne, ConnectWise Manage, Auvik, Kaseya Spanning
 
 change-management, compliance-tracking, process-optimization, resource-planning, risk-assessment, vendor-management, auvik-alerts, auvik-api-patterns, auvik-devices, auvik-networks, ninjaone-alerts, ninjaone-api-patterns, ninjaone-devices, ninjaone-organizations, ninjaone-tickets, psa-api-patterns, psa-companies, psa-contacts, psa-product-catalog, psa-projects, psa-tickets, psa-time-entries, spanning-api-patterns, spanning-audit-forensics, spanning-backup-health-sweep, spanning-license-utilization, spanning-restore-orchestrator
 
+These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/it-operations/skills/<name>/SKILL.md`;
+open the one that matches the task before you start, and follow any reference it names.
+
 ## Standing constraints
 
 1. **Follow org branding.** When the org config has branding configured, all

@@ -41,7 +41,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const handlers = { openView: () => undefined, toggleTodos: () => undefined };
 const NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
 const PLAN = ['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 read delta.py', 'T5 write the summary'];
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const SIZES = [[150, 45, 93], [110, 40, 56]] as const;
 
 type Agent = { name: string; squad: SquadAgent['state']; mood: string; tool?: string | null };
@@ -108,26 +108,26 @@ describe('1. one handle: the band bar ends flush and the host draws the only `[-
   });
 });
 
-describe('2. working whenever an agent runs (not a queued dispatch): a braille 141 spinner, never idle', () => {
+describe('2. working whenever an agent runs (not a queued dispatch): a 141 spinner, never idle', () => {
   const RESUMED: Shape = { ...STOP, working: false, rest: 60, dispatch: [], agents: [{ name: NAMES[0]!, squad: 'running', mood: 'done', tool: 'Read' }, STOP.agents[1]!, STOP.agents[2]!] };
   const REOPENED: Shape = { ...STOP, working: false, rest: 60, agents: [STOP.agents[0]!, STOP.agents[1]!], dispatch: [{ owner: 'ghost-explorer', status: 'in_progress' }] };
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: a resumed native agent the host lists running (activity record still done) after the turn flag fell reads working`, () => {
       const f = frameOf(RESUMED, body, screen);
       expect(f.kind).toBe('working');
-      expect(f.band).toMatch(/[⠀-⣿] working/);
+      expect(f.band).toMatch(/[◐◓◑◒] working/);
       expect(f.band).not.toMatch(/idle/);
     });
     test(`${cols} columns: a dispatch the host never listed (queued) does not hold the band working once the turn is over (wave 34): static blocked, no spinner`, () => {
       const f = frameOf(REOPENED, body, screen);
-      expect(f.hud.join('\n')).not.toMatch(/SUBAGENTS [⠀-⣿]/);
+      expect(f.hud.join('\n')).not.toMatch(/SUBAGENTS [◐◓◑◒]/);
       expect(f.kind).toBe('blocked');
-      expect(f.band).not.toMatch(BRAILLE);
+      expect(f.band).not.toMatch(SPIN_MARK);
     });
   }
   test('the spinner is the accent 141', () => {
     const f = frameOf(RESUMED, 93, 45);
-    const run = bandRuns(f.model).find((x) => BRAILLE.test(x.t) && x.t.trim().length === 1)!;
+    const run = bandRuns(f.model).find((x) => SPIN_MARK.test(x.t) && x.t.trim().length === 1)!;
     expect([run.tone, run.bgHex]).toEqual(['ink', '#af87ff']); // wave 35: dark ink on the accent 141 state fill
   });
   test('the panel reads the same state through band-kind', () => {
@@ -152,7 +152,7 @@ describe('3. blocked on the frame the host stops, at every width', () => {
       expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked(?: · stop refused)? \d:\d\d/);
       expect(f.band).toMatch(/■1/); // the dead dispatch is a failure, never `1 dispatch open`
       expect(f.band).not.toMatch(/dispatch open/);
-      expect(f.band).not.toMatch(BRAILLE);
+      expect(f.band).not.toMatch(SPIN_MARK);
       expect(f.band).not.toMatch(/idle|fixing/);
       const lead = bandRuns(f.model).filter((x) => /blocked|stop refused/.test(x.t));
       expect(lead.length).toBeGreaterThan(0);
@@ -162,7 +162,7 @@ describe('3. blocked on the frame the host stops, at every width', () => {
       const f = frameOf({ ...STOP, dispatch: [], gates: REFUSAL() }, body, screen);
       expect(f.kind).toBe('blocked');
       expect(f.band).toMatch(/▲ blocked/);
-      expect(f.band).not.toMatch(BRAILLE);
+      expect(f.band).not.toMatch(SPIN_MARK);
     });
     test(`${cols} columns: the refusal and the open dispatch row together still name the row, blocked on both`, () => {
       const f = frameOf({ ...STOP, gates: REFUSAL() }, body, screen);
@@ -192,7 +192,7 @@ describe('4. done on the host turn-end event, not a later poll', () => {
     expect(f.band).toMatch(/● done 0:58/);
     expect(f.band).not.toMatch(/working/);
     const g = frameOf({ ...finished, working: true }, 93, 45, { workSecs: 57 });
-    expect(g.band).toMatch(/[⠀-⣿] working 0:57/);
+    expect(g.band).toMatch(/[◐◓◑◒] working 0:57/);
   });
   test('classic.Stop: an allowed Stop marks the turn ended, writes the redraw and holds the return one frame', async () => {
     let now = 1_800_000_000_000;
@@ -270,7 +270,7 @@ describe('5. one failure word: `■ N failed` in the error 203, in the band, the
       const rule = rows.find((r) => /^╭.*▸ SUBAGENTS/.test(r.map((x) => x.t).join('')))!; // wave 35: the table's title rule
       const t = rule.map((x) => x.t).join('');
       expect(t, `${cols}`).toMatch(/▸ SUBAGENTS ■ 2 failed/);
-      expect(t, `${cols}`).not.toMatch(BRAILLE);
+      expect(t, `${cols}`).not.toMatch(SPIN_MARK);
       expect(rule.find((x) => x.t === '2 failed')?.color, `${cols}`).toBe(PALETTES.mocha.bad);
     }
   });
@@ -280,7 +280,7 @@ describe('6. the clock stays at every width; the word `todo` goes first below 90
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: the working row keeps its clock (\`${body}\` cells)`, () => {
       const f = frameOf(DEFAULT, body, screen);
-      expect(f.band).toMatch(/[⠀-⣿] working 0:19/);
+      expect(f.band).toMatch(/[◐◓◑◒] working 0:19/);
     });
   }
   test('93 cells keep `todo n/m` for the scorer\'s count regex; a narrower bar drops the word and keeps the clock and the counts', () => {
@@ -288,9 +288,9 @@ describe('6. the clock stays at every width; the word `todo` goes first below 90
     const wide = frameOf(DEFAULT, 93, 45).band;
     expect(wide).toMatch(SCORER);
     expect(wide).toMatch(/working 0:19/);
-    expect(frameOf(DEFAULT, 56, 40).band).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 ▌ todo 0\/5 ▌ [⠀-⣿] 3 running/); // 56 cells still hold the whole row
+    expect(frameOf(DEFAULT, 56, 40).band).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] working 0:19 ▌ todo 0\/5 ▌ [◐◓◑◒] 3 running/); // 56 cells still hold the whole row
     const narrow = frameOf(DEFAULT, 42, 40).band;
-    expect(narrow).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:19 ▌ 0\/5 ▌ [⠀-⣿]3/);
+    expect(narrow).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] working 0:19 ▌ 0\/5 ▌ [◐◓◑◒]3/);
     expect(narrow).not.toMatch(/todo/);
   });
   test('a long blocked lead still keeps the clock-bearing state at 56 cells', () => {
@@ -312,7 +312,7 @@ describe('7. no plan: `todo -` and `no agents`, never `todo 0/0` (wave 37: the t
   }
   test('a working turn with no plan says `working 0:12`, `todo -` and `no agents`', () => {
     const f = frameOf({ working: true, agents: [], plan: [] }, 93, 45, { workSecs: 12 });
-    expect(f.band.trim()).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:12 ▌ todo - ▌ no agents$/);
+    expect(f.band.trim()).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] working 0:12 ▌ todo - ▌ no agents$/);
   });
   test('bandLines with total 0 never prints a count in any state or width', () => {
     const base = { maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'research', done: 0, total: 0, openWork: 0, openDispatch: 0, todoBlocked: 0, checks: [], ui, bar: true, workers: [] } as const;

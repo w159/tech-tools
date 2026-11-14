@@ -101,7 +101,7 @@ function scenario(screen: number, cols: number): { st: Stage; f: Frame }[] {
 
 const stage = (name: string): Stage => STAGES.find((x) => x.name === name)!;
 const txt = (row: Segment[]): string => row.map((x) => x.t).join('');
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const PLANROW = /^[ ▸] [●◐◓◑◒◇] T\d/;
 
 describe('1. the Atlas region holds one height and the band one screen row for the whole run', () => {
@@ -119,7 +119,7 @@ describe('1. the Atlas region holds one height and the band one screen row for t
       for (const { st, f } of scenario(screen, cols)) {
         expect(f.rows[1]!, st.name).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ TODO /);
         const listed = st.running + st.returned > 0; // wave 36: with any agent the squad is a table under the plan's closed box, running or not; before the first agent one closing rule says so
-        const title = f.rows.filter((r) => (listed ? /^[╭╰].*▸ SUBAGENTS/ : /^╰.*▸ SUBAGENTS/).test(r)); // state 39: a folded SUBAGENTS is the plan box's closing rule carrying its title and tally (`╰─ ... ▸ SUBAGENTS ⠧ 5 running ──╯`)
+        const title = f.rows.filter((r) => (listed ? /^[╭╰].*▸ SUBAGENTS/ : /^╰.*▸ SUBAGENTS/).test(r)); // state 39: a folded SUBAGENTS is the plan box's closing rule carrying its title and tally (`╰─ ... ▸ SUBAGENTS ◒ 5 running ──╯`)
         expect([st.name, title.length]).toEqual([st.name, 1]);
         const folded = listed && /^╰/.test(title[0] ?? ''); // state 39: SUBAGENTS folded to one row is the plan box's own closing rule
         expect(f.rows.some((r) => (listed ? /^[╭╰].*▸ SUBAGENTS/ : /^╭.*▸ SUBAGENTS/).test(r) && r !== title[0]), `${st.name}: one form or the other`).toBe(false);
@@ -136,27 +136,27 @@ describe('1. the Atlas region holds one height and the band one screen row for t
   }
 });
 
-describe('2. the SUBAGENTS title: a braille 141 spinner while they work, the squad line once they are done', () => {
+describe('2. the SUBAGENTS title: a 141 spinner while they work, the squad line once they are done', () => {
   const rule = (f: Frame): Segment[] => f.hud.find((r) => /^[╰╭].*▸ SUBAGENTS/.test(txt(r)))!;
-  test('working: `⠹ 3 running` with the spinner in the accent (141), over a table row per agent', () => {
+  test('working: `◑ 3 running` with the spinner in the accent (141), over a table row per agent', () => {
     const f = frameOf(stage('3 running'), 150, hostBudget(45, 3) + 8, 0);
-    expect(txt(rule(f))).toMatch(/▸ SUBAGENTS [⠀-⣿] 3 running ─+╮$/);
-    const spin = rule(f).find((x) => BRAILLE.test(x.t) && x.t.trim().length === 1)!;
+    expect(txt(rule(f))).toMatch(/▸ SUBAGENTS [◐◓◑◒] 3 running ─+╮$/);
+    const spin = rule(f).find((x) => SPIN_MARK.test(x.t) && x.t.trim().length === 1)!;
     expect(spin.color).toBe(PALETTES.mocha.accent); // 141
-    expect(f.hud.map(txt).filter((r) => /^ {2}\S+-explorer\s+[⠀-⣿] running\s+0:/.test(r)).length).toBe(3);
+    expect(f.hud.map(txt).filter((r) => /^ {2}\S+-explorer\s+[◐◓◑◒] running\s+0:/.test(r)).length).toBe(3);
   });
   test('done and idle: `● 3 done` on the title, a table row per agent with its clock, no spinner', () => {
     for (const name of ['done', 'idle']) {
       const f = frameOf(stage(name), 150, hostBudget(45, 0), 0);
       expect(txt(rule(f)), name).toMatch(/▸ SUBAGENTS ● 3 done ─+╮$/); // wave 35: the times moved onto the table rows
       expect(f.hud.map(txt).filter((r) => /^ {2}\S+-explorer\s+● done\s+0:0\d/.test(r)).length, name).toBe(3);
-      expect(txt(rule(f)), name).not.toMatch(BRAILLE);
+      expect(txt(rule(f)), name).not.toMatch(SPIN_MARK);
     }
   });
-  test('every working indicator in the band is a braille frame too', () => {
+  test('every working indicator in the band is a spinner frame too', () => {
     const f = frameOf(stage('3 running'), 150, hostBudget(45, 3), 0);
-    expect(f.rows[0]!).toMatch(/[⠀-⣿] working/);
-    expect(f.rows[0]!).toMatch(/[⠀-⣿] 3 running/);
+    expect(f.rows[0]!).toMatch(/[◐◓◑◒] working/);
+    expect(f.rows[0]!).toMatch(/[◐◓◑◒] 3 running/);
   });
 });
 

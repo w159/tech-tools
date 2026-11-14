@@ -60,7 +60,7 @@ const body = (view: SidebarView, columns: number, rows: number, s = snap(), run:
 /** Every Text of a tree with its colour. */
 const texts = (n: Node, out: Array<{ t: string; color?: string }> = []): Array<{ t: string; color?: string }> => { if (n.kind === 'Text') out.push({ t: String(n.props.children ?? ''), color: n.props.color }); for (const k of kids(n)) texts(k, out); return out; };
 
-const BRAILLE_SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const CIRCLES = /[◐◓◑◒]/;
 const DIM = '#585858'; // 240
 const RED = '#ff5f5f'; // 203
@@ -81,7 +81,7 @@ const tailed = (s: never): never => ({ ...(s as object), todos: (s as { todos: {
 const withStatus = (s: never, id: string, status: string): never => ({ ...(s as object), todos: (s as { todos: { id: string }[] }).todos.map((t) => (t.id === id ? { ...t, status, completed_at: status === 'completed' ? (NOW - 30000) / 1000 + 12 : null } : t)) }) as never;
 const board = (cols: number, s: never): string[] => { forgetPhases(); return withGates(s, 'board', cols, 41); };
 const rowOf = (t: string[], re: RegExp): string => t.find((l) => re.test(l)) ?? '';
-const glyphWord = (l: string): string => `${/[●■▲◇⠋-⠿]/.exec(l)?.[0] ?? ''} ${/\b(done|failed|blocked|killed|queued|running)\b/.exec(l)?.[1] ?? ''}`;
+const glyphWord = (l: string): string => `${/[●■▲◇◐◓◑◒]/.exec(l)?.[0] ?? ''} ${/\b(done|failed|blocked|killed|queued|running)\b/.exec(l)?.[1] ?? ''}`;
 
 describe('step 1: one state per item at every width (critique 35: T2 `● done` at 150 and `▲ blocked` at 110 over a failed worker)', () => {
   test('a blocked row whose worker failed is `■ failed` at 150 and at 110', () => {

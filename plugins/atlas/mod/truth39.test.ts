@@ -175,7 +175,7 @@ describe('step 4: the narrow band keeps the state glyph, the clock and every non
     for (const cols of [62, 46]) {
       const narrow = band({ ...m, cols });
       expect(narrow, String(cols)).toMatch(/0:39/);
-      expect(narrow, String(cols)).toMatch(/[⠀-⣿]1 ●1 ■1$/);
+      expect(narrow, String(cols)).toMatch(/[◐◓◑◒]1 ●1 ■1$/);
     }
   });
 });

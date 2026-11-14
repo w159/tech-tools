@@ -14,7 +14,7 @@ type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
 const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button') } as unknown as ClientElements;
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const idleSnap = () => busySnap({ squad: [], comms: [], sessionId: 's', activity: { lead: { tool: null, since: NOW, toolCount: 1, tokens: null, mood: 'idle', lastLine: '' } } } as never);
 const band = (over: Partial<BandModel>, columns = 150): BandModel => ({ snapshot: idleSnap(), live: [], gates: [], columns, tick: 3, maxRows: 12, ui, ...over });
 const text = (b: BandModel): string => runsText(bandRuns(b));
@@ -42,7 +42,7 @@ describe('B: host turn on, run closed, no resume mark: working, no clock, run to
     test(`${cols} columns: working glyph and word, no clock`, () => {
       const t = text(band({ hostOnly: true, working: false, ranSecs: 191, columns: cols })).trimEnd();
       expect(bandKindOf(band({ hostOnly: true, ranSecs: 191, columns: cols }))).toBe('working');
-      expect(t).toMatch(/[⠀-⣿] working/);
+      expect(t).toMatch(/[◐◓◑◒] working/);
       expect(t).not.toMatch(/\d:\d\d/);
       expect(t).not.toContain('3:11');
       expect(t).not.toContain('idle');
@@ -50,8 +50,8 @@ describe('B: host turn on, run closed, no resume mark: working, no clock, run to
     });
   }
   test('the spinner moves between frames', () => {
-    const a = text(band({ hostOnly: true, tick: 0 })).match(BRAILLE)?.[0];
-    const b = text(band({ hostOnly: true, tick: 1 })).match(BRAILLE)?.[0];
+    const a = text(band({ hostOnly: true, tick: 0 })).match(SPIN_MARK)?.[0];
+    const b = text(band({ hostOnly: true, tick: 1 })).match(SPIN_MARK)?.[0];
     expect(a).toBeTruthy();
     expect(a).not.toBe(b);
   });

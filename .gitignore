@@ -161,6 +161,7 @@ firebase-adminsdk*.json
 !scripts/test_*.py
 !scripts/telemetry_report.py
 !scripts/gen_codex_hooks.py
+!scripts/rebuild_armada_bundles.mjs
 
 # ---- Atlas telemetry (receiver, allowed keys, published reports) ----
 !telemetry/

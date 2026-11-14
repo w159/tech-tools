@@ -1,0 +1,16 @@
+{
+  "name": "armada-bundle-toolchain",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned bundler toolchain for plugins/armada/mcp/*/server.mjs. Used only by scripts/rebuild_armada_bundles.mjs.",
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "tsup": "8.5.1"
+  },
+  "overrides": {
+    "esbuild": "0.28.2"
+  },
+  "engines": {
+    "node": ">=22 <23"
+  }
+}

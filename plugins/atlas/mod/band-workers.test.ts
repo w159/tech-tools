@@ -135,7 +135,7 @@ describe('band count glyph (critique 19 Band 3: ◒ in the band against ◐ in t
       const rowGlyph = parsed(rows)[0]![1]!;
       const countGlyph = /(\S) 1 running/.exec(rows[0]!)![1]!;
       const frame = spinFrameOf(spinClock(bare().now, tick), '');
-      expect(countGlyph).toBe(leadSpinnerGlyph(frame)); // the count turns the band braille frame; the worker row stays a circle quarter (the scorer parses it by glyph)
+      expect(countGlyph).toBe(leadSpinnerGlyph(frame)); // the count turns the band spinner frame; the worker row stays a circle quarter (the scorer parses it by glyph)
       expect(rowGlyph).toBe(SPIN_FRAMES[((frame % 4) + 4) % 4]);
     }
   });

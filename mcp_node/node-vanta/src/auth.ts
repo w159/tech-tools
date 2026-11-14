@@ -1,4 +1,5 @@
 import { AuthenticationError, ServiceError } from './errors.js';
+import { resilientFetch } from './net.js';
 import type { VantaToken } from './types/common.js';
 
 export interface VantaAuthConfig {
@@ -57,23 +58,15 @@ export class VantaAuthManager {
       grant_type: 'client_credentials',
     };
 
-    let response: Response;
-    try {
-      response = await fetch(this.config.tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-    } catch (err) {
-      throw new ServiceError(
-        `Vanta token endpoint network error: ${(err as Error).message}`,
-        0,
-        null
-      );
-    }
+    // Throws NetworkError ("cannot reach <host>: ...") when the token endpoint is down or hung.
+    const response = await resilientFetch(this.config.tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    }, { idempotent: true }); // client_credentials grant is safe to repeat
 
     const rawText = await response.text();
     let parsed: unknown;

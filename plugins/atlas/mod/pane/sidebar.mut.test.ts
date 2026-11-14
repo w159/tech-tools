@@ -51,7 +51,7 @@ describe('sidebar board tab', () => {
     const glyphRow = (tick?: number) => board(run, tick === undefined ? {} : { tick }).join('\n');
     for (const tick of [undefined, 0, 2]) expect(glyphRow(tick)).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, tick ?? 0), 'item-0'))} item-0`);
     expect(glyphRow(1)).not.toContain(`${leadSpinnerGlyph(spinFrameOf(NOW, 'item-0'))} item-0`); // the tick moves the clock, as in the HUD and the team tab
-    expect(leadSpinnerGlyph(0)).not.toBe(leadSpinnerGlyph(1)); // wave 34: the panel's spinner is the braille family
+    expect(leadSpinnerGlyph(0)).not.toBe(leadSpinnerGlyph(1)); // wave 34: the panel's spinner is the band's own
   });
   test('a snapshot without a clock falls back to the pane tick for the spinner (0 when the pane has none)', () => {
     // LiveSnapshot.now is required, so a real snapshot always takes the shared clock above; this pins the documented fallback (BoardOpts.nowMs absent: `tick`).

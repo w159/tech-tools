@@ -242,7 +242,8 @@ class Host:
                 self.result_seen.clear()
                 if self.recycle and not self.stopping.is_set():
                     self.close_lead()
-                    self.spawn()
+                    if not self.stopping.is_set():  # a stop that came while the old lead closed: start no new one
+                        self.spawn()
             elif self.proc.poll() is not None:
                 reason = f"lead exited with {self.proc.returncode}"
                 break
@@ -358,12 +359,13 @@ def stop_lead(root, name: str) -> dict:
             time.sleep(0.05)
         if pid_alive(host):
             os.kill(int(host), signal.SIGKILL)
-    lead = st.get("lead_pid")
-    if pid_alive(lead):  # the host died before it could close the lead
-        try:
-            os.killpg(int(lead), signal.SIGKILL)
-        except OSError:
-            pass
+    # the host died before it could close its lead; it may have started a new one since `st` was read
+    for lead in {st.get("lead_pid"), (read_state(rd) or {}).get("lead_pid")}:
+        if pid_alive(lead):
+            try:
+                os.killpg(int(lead), signal.SIGKILL)
+            except OSError:
+                pass
     if st.get("launcher") == "tmux" and use_tmux():
         _tmux("kill-session", "-t", st.get("tmux_session") or tmux_name(name))
     (rd / "inbox").unlink(missing_ok=True)

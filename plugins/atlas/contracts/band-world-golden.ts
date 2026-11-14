@@ -3,10 +3,10 @@
 // rendered from the code and read against the design line by line (round2/after/truth.md, item 4).
 // Mocha and Latte render the same text; only colours differ. Asserted on both hosts (mod/band-golden.test.ts, omp/mission-panel-golden.test.ts).
 
-export const band_120: string[] = ["◖ ◆ ATLAS ◗  ⠋ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 failed"];
-export const band_120_rich: string[] = ["◖ ◆ ATLAS ◗  ⠋ working   ● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify", "", "todo ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱ 3/7 · 43% · 1 blocked   ctx ▰▰▰▰▰▰▱▱▱▱ 62%    agents ⠋ 1 running   ■ 1 failed   ◇ 1 queued"];
-export const band_80: string[] = ["◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 failed"];
+export const band_120: string[] = ["◖ ◆ ATLAS ◗  ◐ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ◐ 1 running · ■ 1 failed"];
+export const band_120_rich: string[] = ["◖ ◆ ATLAS ◗  ◐ working   ● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify", "", "todo ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱ 3/7 · 43% · 1 blocked   ctx ▰▰▰▰▰▰▱▱▱▱ 62%    agents ◐ 1 running   ■ 1 failed   ◇ 1 queued"];
+export const band_80: string[] = ["◖ ◆ ATLAS ◗ ◐ working · todo 3/7 · ◐ 1 running · ■ 1 failed"];
 // Wave 31: at most four segments (state+clock, todo n/m, running count, one warning); the failure word is `failed`, and the one warning beats the blocked count.
-export const band_60: string[] = ["◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 failed"];
-export const band_40: string[] = ["◖ ◆ ATLAS ◗ ⠋ working · todo 3/7"];
+export const band_60: string[] = ["◖ ◆ ATLAS ◗ ◐ working · todo 3/7 · ◐ 1 running · ■ 1 failed"];
+export const band_40: string[] = ["◖ ◆ ATLAS ◗ ◐ working · todo 3/7"];
 export const brand_120: string[] = ["◖ ◆ ATLAS ◗   ATLAS brand capsule, 120 columns", "", "ASCII fallback  [ATLAS]", "ASCII ribbon    [ATLAS] > TODO  -----"];

@@ -176,6 +176,34 @@ def _gates(home, root, session, now):
     return n if isinstance(n, int) else None
 
 
+CACHE_TTL_S = 7 * 86400
+_CACHE_RE = re.compile(r"^status-(?:gates|segment)-[0-9a-f]{12}\.json$")
+
+
+def _prune_caches(home, keep, now=None):
+    """Delete per-session status caches in ~/.atlas untouched for 7 days.
+
+    Only status-gates-<key>.json / status-segment-<key>.json match; `keep` (the
+    file just written) is skipped. Called from the detached refresh, never the
+    statusline hot path. Races and permission errors are ignored.
+    """
+    cutoff = (time.time() if now is None else now) - CACHE_TTL_S
+    try:
+        entries = list(os.scandir(os.path.join(home, ".atlas")))
+    except OSError:
+        return
+    for e in entries:
+        try:
+            if (
+                _CACHE_RE.match(e.name)
+                and os.path.abspath(e.path) != os.path.abspath(keep)
+                and e.stat(follow_symlinks=False).st_mtime < cutoff
+            ):
+                os.remove(e.path)
+        except OSError:
+            pass
+
+
 def refresh_gates(root, session, home):
     out = subprocess.run(
         [
@@ -201,6 +229,7 @@ def refresh_gates(root, session, home):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"at": time.time(), "failing": n}, f)
+    _prune_caches(home, path)
 
 
 def segment(root, now=None, session=None, home=None):

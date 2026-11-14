@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -226,23 +225,20 @@ def test_run_unit_check_timeout(bus, monkeypatch, capsys):
 def test_run_unit_check_runs_in_root_and_converts_pytest(bus, proj, monkeypatch):
     seen = {}
 
-    class R:
-        returncode, stdout, stderr = 0, "", ""
+    def run(cmd, cwd, timeout, **kw):
+        seen["cmd"], seen["cwd"], seen["timeout"], seen["kw"] = cmd, cwd, timeout, kw
+        return 0, "", False
 
-    def run(cmd, **kw):
-        seen["cmd"], seen["kw"] = cmd, kw
-        return R()
-
-    monkeypatch.setattr(irc.subprocess, "run", run)
+    monkeypatch.setattr(irc, "run_shell", run)
     monkeypatch.setenv("ATLAS_CREW_UNIT_CHECK", "echo hi")
     monkeypatch.setenv("ATLAS_CREW_ROOT", str(proj))
     irc._run_unit_check(bus, "a")
     assert seen["cmd"] == "echo hi"
-    assert seen["kw"] == {"shell": True, "cwd": str(proj), "capture_output": True, "text": True, "timeout": 600}
+    assert (seen["cwd"], seen["timeout"], seen["kw"]) == (str(proj), 600, {})
     monkeypatch.delenv("ATLAS_CREW_ROOT")
     monkeypatch.chdir(proj)
     irc._run_unit_check(bus, "a")
-    assert seen["kw"]["cwd"] == str(proj)
+    assert seen["cwd"] == str(proj)
 
 
 # --- docstring restore ------------------------------------------------------
@@ -732,18 +728,14 @@ def test_own_failures_message_truncated_and_bad_files(tmp_path):
 
 
 def _fake_pytest(monkeypatch, xml_text, record):
-    def run(cmd, **kw):
-        record.append((cmd, kw))
-        path = kw["env"]["PYTEST_ADDOPTS"].split("--junitxml=")[1].split()[0]
+    def run(cmd, cwd, timeout, env=None):
+        record.append((cmd, {"cwd": cwd, "timeout": timeout, "env": env}))
+        path = env["PYTEST_ADDOPTS"].split("--junitxml=")[1].split()[0]
         if xml_text is not None:
             Path(path).write_text(xml_text)
+        return 1, "", False
 
-        class R:
-            returncode, stdout, stderr = 1, "", ""
-
-        return R()
-
-    monkeypatch.setattr(irc.subprocess, "run", run)
+    monkeypatch.setattr(irc, "run_shell", run)
 
 
 def test_early_check_disabled_cases(bus, proj, monkeypatch):
@@ -776,8 +768,8 @@ def test_early_check_reports_own_failures_once_per_digest(bus, proj, monkeypatch
         "`irc check` again waits for the peers.\n"
     )
     cmd, kw = rec[0]
-    assert "-m pytest -q x" in cmd and kw["shell"] is True and kw["cwd"] == str(proj)
-    assert kw["timeout"] == 20 and kw["capture_output"] is True and kw["text"] is True
+    assert "-m pytest -q x" in cmd and kw["cwd"] == str(proj)
+    assert kw["timeout"] == 20
     assert kw["env"]["PYTEST_ADDOPTS"].startswith("-v --junitxml=") and kw["env"]["PYTEST_ADDOPTS"].endswith("-p no:cacheprovider")
     marker = bus / "earlycheck-a.digest"
     assert marker.read_text() == irc._owned_digest(proj, ["a.py"])
@@ -794,10 +786,10 @@ def test_early_check_no_own_failures_or_timeout(bus, proj, monkeypatch):
     assert irc._early_check(bus, "a", ["b"]) is None
     (bus / "earlycheck-a.digest").unlink()
 
-    def timeout(cmd, **kw):
-        raise subprocess.TimeoutExpired(cmd, 20)
+    def timeout(cmd, cwd, timeout, env=None):
+        return 124, "", True
 
-    monkeypatch.setattr(irc.subprocess, "run", timeout)
+    monkeypatch.setattr(irc, "run_shell", timeout)
     assert irc._early_check(bus, "a", ["b"]) is None
 
 

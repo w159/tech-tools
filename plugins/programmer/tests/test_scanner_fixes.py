@@ -213,6 +213,25 @@ class Rules(Base):
         self.assertEqual(self.rules(src, "WIN001"), [])
         self.assertEqual(self.rules('def f():\n    print("x", file=out)\n', "WIN001"), ["WIN001"])
 
+    def test_win001_todo_prose_not_a_marker(self):
+        for c in ("# why the TODO tree is missing", "# the XXX column holds ids", "# a FIXME-free build"):
+            self.assertEqual(self.rules(f"{c}\nX = 1\n", "WIN001"), [], c)
+
+    def test_win001_todo_marker_forms_still_flagged(self):
+        for c in ("# TODO", "# TODO fix", "#TODO: fix", "# FIXME(jerry): fix", "x = 1  # HACK: temp", "x = 1  # see note, XXX: bad", "## XXX later"):
+            self.assertEqual(self.rules(f"{c}\n", "WIN001"), ["WIN001"], c)
+
+    def test_win001_shebang_script_print_is_program_output(self):
+        src = '#!/usr/bin/env python3\nimport json\ndef emit(d):\n    print(json.dumps(d))\n'
+        self.assertEqual(self.rules(src, "WIN001"), [])
+
+    def test_win001_library_print_still_flagged(self):
+        self.assertEqual(self.rules('def emit(d):\n    print(d)\n', "WIN001"), ["WIN001"])
+        self.assertEqual(self.rules('# !/usr/bin/env python3\ndef emit(d):\n    print(d)\n', "WIN001"), ["WIN001"])
+
+    def test_win001_shebang_script_still_flags_debugger(self):
+        self.assertEqual(self.rules('#!/usr/bin/env python3\ndef f():\n    breakpoint()\n', "WIN001"), ["WIN001"])
+
     def test_p13_constant_arithmetic_in_named_constant(self):
         self.assertEqual(self.rules("TIMEOUT_SECS = 60 * 60\n", "LIT001"), [])
 

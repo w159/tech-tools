@@ -43,7 +43,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const handlers = { openView: () => undefined, toggleTodos: () => undefined };
 const NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
 const PLAN = ['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 read delta.py', 'T5 write the summary'];
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const SIZES = [[150, 45, 93], [110, 40, 56]] as const;
 
 type Agent = { name: string; squad: SquadAgent['state']; mood: string; tool?: string | null };
@@ -97,13 +97,13 @@ const FROZEN: Shape = {
   members: ['explorer-4e2d'],
 };
 
-describe('1. frozen working: an open dispatch with no live worker is blocked, never a braille `working`', () => {
+describe('1. frozen working: an open dispatch with no live worker is blocked, never a spinning `working`', () => {
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: the host turn is over, a dispatch is open and its worker never started: a static \`▲ blocked · stop refused\``, () => {
       const f = frameOf(FROZEN, body, screen);
       expect(f.kind).toBe('blocked');
       expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked(?: · stop refused)? \d:\d\d/);
-      expect(f.band).not.toMatch(BRAILLE);
+      expect(f.band).not.toMatch(SPIN_MARK);
       expect(f.band).not.toMatch(/working|fixing/);
       for (const run of bandRuns(f.model).filter((x) => /blocked|dispatch open/.test(x.t))) expect([run.t, run.tone, run.bgHex]).toEqual([run.t, 'ink', '#ff5f5f']); // wave 35: dark ink on the error 203 state fill
     });
@@ -111,7 +111,7 @@ describe('1. frozen working: an open dispatch with no live worker is blocked, ne
       const f = frameOf({ ...FROZEN, dispatch: FROZEN.dispatch!.slice(0, 3), members: [] }, body, screen, { workSecs: 57 });
       expect(f.kind).toBe('done');
       expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ● done/);
-      expect(f.band).not.toMatch(BRAILLE);
+      expect(f.band).not.toMatch(SPIN_MARK);
       const done = bandRuns(f.model).find((x) => x.t === 'done')!;
       expect([done.tone, done.bgHex]).toEqual(['ink', '#87d787']); // wave 35: dark ink on the ok 114 state fill
     });
@@ -120,7 +120,7 @@ describe('1. frozen working: an open dispatch with no live worker is blocked, ne
     const live: Shape = { ...FROZEN, agents: [...FROZEN.agents.slice(0, 2), { name: 'ghost-explorer', squad: 'running', mood: 'working', tool: 'Read' }] };
     const f = frameOf(live, 93, 45);
     expect(f.kind).toBe('working');
-    expect(f.band).toMatch(/[⠀-⣿] working/);
+    expect(f.band).toMatch(/[◐◓◑◒] working/);
   });
   test('blocked never reads `fixing`, whatever runs', () => {
     for (const sh of [FROZEN, { ...FROZEN, gates: REFUSAL() }, { ...STOP, working: true, gates: REFUSAL() }]) expect(frameOf(sh, 93, 45).band).not.toMatch(/fixing/);
@@ -149,13 +149,13 @@ describe('2. the SUBAGENTS rule counts agents only; no spinner unless one runs',
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: three agents and three queued dispatches read \`3 running\`, never \`queued\``, () => {
       const f = frameOf(HASHED, body, screen);
-      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+[⠀-⣿] 3 running/);
+      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+[◐◓◑◒] 3 running/);
       expect(ruleOf(f)).not.toMatch(/queued/);
     });
-    test(`${cols} columns: nothing runs: a static \`■ 1 failed · 2 done\`, no braille`, () => {
+    test(`${cols} columns: nothing runs: a static \`■ 1 failed · 2 done\`, no spinner`, () => {
       const f = frameOf(SUFFIXED, body, screen);
       expect(ruleOf(f)).toMatch(/SUBAGENTS\s+■ 1 failed · 2 done/);
-      expect(ruleOf(f)).not.toMatch(BRAILLE);
+      expect(ruleOf(f)).not.toMatch(SPIN_MARK);
     });
   }
   test('the failed count is drawn in the error colour', () => {

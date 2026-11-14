@@ -8,6 +8,7 @@
  * - X-Ninja-Region (optional, defaults to "us"; valid: us, eu, oc, ca, us2, fed)
  */
 
+import pkg from '../package.json' with { type: 'json' };
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -31,7 +32,7 @@ function createMcpServer(): Server {
   const server = new Server(
     {
       name: "ninjaone-mcp",
-      version: "1.8.0",
+      version: pkg.version,
     },
     {
       capabilities: {

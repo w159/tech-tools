@@ -244,6 +244,60 @@ class RefreshGates(TmpCase):
         self.assertFalse(Path(m._gates_path(str(self.tmp), "/proj", "sess")).exists())
 
 
+class PruneStaleCaches(TmpCase):
+    DAY = 86400
+
+    def touch(self, name, age_days):
+        d = self.tmp / ".atlas"
+        d.mkdir(exist_ok=True)
+        f = d / name
+        f.write_text("{}")
+        t = m.time.time() - age_days * self.DAY
+        m.os.utime(f, (t, t))
+        return f
+
+    def refresh(self):
+        out = json.dumps({"groups": []})
+        with mock.patch.object(m.subprocess, "run", return_value=mock.Mock(stdout=out)):
+            m.refresh_gates("/proj", "sess", str(self.tmp))
+
+    def test_old_caches_pruned_fresh_and_unrelated_kept(self):
+        old_g = self.touch("status-gates-aaaaaaaaaaaa.json", 30)
+        old_s = self.touch("status-segment-bbbbbbbbbbbb.json", 30)
+        new_g = self.touch("status-gates-cccccccccccc.json", 1)
+        new_s = self.touch("status-segment-dddddddddddd.json", 1)
+        db = self.touch("atlas.db", 30)
+        other = self.touch("status-other.json", 30)
+        note = self.touch("status-gates-notes.txt", 30)
+        self.refresh()
+        self.assertFalse(old_g.exists())
+        self.assertFalse(old_s.exists())
+        for keep in (new_g, new_s, db, other, note):
+            self.assertTrue(keep.exists(), keep.name)
+
+    def test_file_being_written_survives_even_if_old_mtime_race(self):
+        mine = Path(m._gates_path(str(self.tmp), "/proj", "sess"))
+        self.touch(mine.name, 30)
+        self.refresh()
+        self.assertTrue(mine.exists())
+        self.assertEqual(json.loads(mine.read_text())["failing"], 0)
+
+    def test_races_and_errors_tolerated(self):
+        self.touch("status-gates-aaaaaaaaaaaa.json", 30)
+        with mock.patch.object(m.os, "remove", side_effect=PermissionError):
+            self.refresh()
+        with mock.patch.object(m.os, "scandir", side_effect=OSError):
+            self.refresh()
+        self.assertTrue(Path(m._gates_path(str(self.tmp), "/proj", "sess")).exists())
+
+    def test_hot_path_never_prunes(self):
+        old = self.touch("status-gates-aaaaaaaaaaaa.json", 30)
+        with mock.patch.object(m.subprocess, "Popen"):
+            m.segment(str(self.tmp), 1e9, session="s", home=str(self.tmp))
+            m._gates(str(self.tmp), "/proj", "s", 1e9)
+        self.assertTrue(old.exists())
+
+
 class GatesPath(unittest.TestCase):
     def test_key_is_sha_of_root_and_session(self):
         k = hashlib.sha256(b"/r|s").hexdigest()[:12]

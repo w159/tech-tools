@@ -156,10 +156,10 @@ test("admin summary: totals, trend, top, unused, failures, versions, no nonces",
     const wk = s.weeks.find((/** @type {any} */ w) => w.week === PAST_WEEK);
     assert.equal(wk.submissions, 2);
     assert.equal(wk.partial, 1);
-    assert.deepEqual(s.features.skill.find((/** @type {any} */ f) => f.name === "atlas-plan"), { name: "atlas-plan", installs: 2, total: 4 });
+    assert.deepEqual(s.features.skill.find((/** @type {any} */ f) => f.name === "atlas-plan"), { name: "atlas-plan", installs: 2, total: 4, pct: 100 });
     assert.ok(s.unused.skill.includes("atlas-review"), "test data must not count as use");
     assert.ok(!s.unused.skill.includes("atlas-plan"));
-    assert.deepEqual(s.failures.find((/** @type {any} */ f) => f.key === "gate.a.block"), { key: "gate.a.block", installs: 1, total: 2 });
+    assert.deepEqual(s.failures.find((/** @type {any} */ f) => f.key === "gate.a.block"), { key: "gate.a.block", installs: 1, total: 2, pct: 50, per_100_sessions: null });
     assert.deepEqual(s.versions.atlas_version, { "16.12.0": 2 });
     assert.equal(s.keys["skill.atlas-plan"].total, 4);
     assert.doesNotMatch(JSON.stringify(s), /[0-9a-f]{8}-[0-9a-f]{4}-4/);

@@ -19,28 +19,28 @@ describe('standardForms: the wide forms, by the column that selects it', () => {
     // critique 12 A3: one form, one ` · ` separator from 90 to 119 columns (110 undocked and 150 docked read alike)
     // round 3: the lead is `◐ working` and `todo n/m` follows it at every width; ctx is the first segment to give way, then the queued count
     // wave 31: four segments at most (state+clock, todo n/m, running count, one warning); the context figure and the blocked and queued counts are not the band's
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 failed');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ◐ working · todo 3/7 · ◐ 1 running · ■ 1 failed');
     expect(at(93)).toBe(at(100));
     expect(at(108)).toBe(at(100));
     expect(at(119)).toBe(at(108));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 failed');
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ◐ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ◐ 1 running · ■ 1 failed');
     expect(at(150)).toBe(at(120));
   });
   test('critique 12 A3: the live-run snapshot reads the same at the 110 body (105, undocked) and the 150 body (93, docked): one separator set', () => {
-    // live-110-8271cfc8-1 f0067 read `research   todo 0/5 · 1 dispatch open   ctx 7%   agents ⠋ 1 running`; live-150 f0061 read `todo 0/5 · 1 dispatch open · ⠋ 1 running` (merge: two open dispatch rows against one running worker, so B4 does not fold the count away)
+    // live-110-8271cfc8-1 f0067 read `research   todo 0/5 · 1 dispatch open   ctx 7%   agents ◐ 1 running`; live-150 f0061 read `todo 0/5 · 1 dispatch open · ◐ 1 running` (merge: two open dispatch rows against one running worker, so B4 does not fold the count away)
     const live = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, total: 5, done: 0, openWork: 7, openDispatch: 2, todoBlocked: 0, ctx: 0.07, workers: [{ name: 'gamma-explorer', state: 'running', secs: 0 }] }));
     expect(live(105)).toBe(live(93));
     expect(live(105)).not.toMatch(/ {2}/); // no multi-space separator
-    expect(live(105)).toContain('todo 0/5 · ⠋ 1 running'); // state 38: a running band says nothing of its workers' open dispatch rows
+    expect(live(105)).toContain('todo 0/5 · ◐ 1 running'); // state 38: a running band says nothing of its workers' open dispatch rows
   });
   test('critique 9: no gauge track below 120 columns, the same facts as figures', () => {
     for (const cols of [100, 110, 119]) expect(band(worldModel(cols, ui, { maxRows: 1 }))).not.toMatch(/[░█▌▏▎▍▋▊▉]/);
   });
   test('without a context figure: the ` · ` figure form from 90, the gauge form from 120', () => {
     const at = (cols: number) => band(worldModel(cols, ui, { maxRows: 1, ctx: undefined }));
-    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ⠋ working · todo 3/7 · ⠋ 1 running · ■ 1 failed');
+    expect(at(100)).toBe('◖ ◆ ATLAS ◗ ◐ working · todo 3/7 · ◐ 1 running · ■ 1 failed');
     expect(at(119)).toBe(at(100));
-    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ⠋ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ⠋ 1 running · ■ 1 failed');
+    expect(at(120)).toBe('◖ ◆ ATLAS ◗  ◐ working   todo ▰▰▰▰▱▱▱▱▱▱ 3/7   ◐ 1 running · ■ 1 failed');
   });
 });
 

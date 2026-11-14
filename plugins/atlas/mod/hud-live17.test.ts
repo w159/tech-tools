@@ -125,7 +125,7 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     const summary = hud.find((r) => /^ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
     expect(summary, hud.join('\n')).toBeDefined();
     expect(hud[0]!).not.toMatch(/\+\d+ more/);
-    expect(shown + [...summary.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5); // the hidden running rows are counted too (`⠋ 2 more running`)
+    expect(shown + [...summary.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5); // the hidden running rows are counted too (`◐ 2 more running`)
     expect(hud.filter((r) => /-explorer\s+running/.test(r))).toHaveLength(3);
     expect(hud.filter((r) => r.startsWith('╰') && r.endsWith('╯'))).toHaveLength(2);
     expect(hud.length).toBeLessThanOrEqual(9);

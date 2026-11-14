@@ -1,7 +1,7 @@
 ---
 name: atlas-doctor
 description: "Atlas self-improvement loop: mines cross-session findings from atlas.db, applies accepted changes to atlas itself, records a baseline. Use when atlas telemetry has accumulated or before changing a skill, hook or agent."
-when_to_use: "atlas self-improve, remeasure baseline, apply atlas findings, stale lesson citations"
+when_to_use: "atlas doctor, atlas health check, is atlas working, atlas band or HUD missing, atlas self-improve, remeasure baseline, apply atlas findings, stale lesson citations"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, AskUserQuestion
 argument-hint: (no args; run periodically or after a heavy session)
 ---

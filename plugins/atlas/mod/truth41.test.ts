@@ -126,7 +126,7 @@ describe('step 2: one run total on the band, the panel, the board and the axis (
   });
 });
 
-describe('step 3: the panel phase row is the band for one now, in every state (live-150-1 f0063 `⠴` against `⠦`; f0092 `⠸ working` under `● done`)', () => {
+describe('step 3: the panel phase row is the band for one now, in every state (live-150-1 f0063 `◓` against `◑`; f0092 `◒ working` under `● done`)', () => {
   const base: MissionModel = { cols: 150, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'implement', 'done'], phase: 'implement', done: 3, total: 5, workers: [], checks: null, ui };
   const cases: Array<{ name: string; m: Partial<MissionModel>; word: string }> = [
     { name: 'working', m: { busy: true, turnSecs: 42 }, word: 'working' },
@@ -136,7 +136,7 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
   ];
   const lead = (t: string) => { const x = t.match(/ATLAS ◗ +(\S) (working|done|idle|blocked)\b[^\d]*(\d+:\d\d)?/); return x ? { glyph: x[1], word: x[2], clock: x[3] } : null; };
   const phase = (t: string) => { const x = t.replace(/\s+/g, ' ').match(/phase (\S) (working|done|idle|blocked)\b[^\d]*(\d+:\d\d)?/); return x ? { glyph: x[1], word: x[2], clock: x[3] } : null; };
-  for (const tick of [0, 3, 7, 9]) {
+  for (const tick of [0, 3, 7, 9, 10, 13]) { // 10 and 13: the frame is the unwrapped beat count, which the band and the panel both wrap to the same four marks
     for (const c of cases) {
       test(`${c.name} at frame ${tick}: same glyph, word and clock`, () => {
         const mm: MissionModel = { ...base, ...c.m, tick };
@@ -161,7 +161,7 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
   test('register.ts builds the band\'s model and the panel\'s from one function', () => {
     expect(src).toContain('...runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look })');
     expect(src).toContain('...runBandModel({ snapshot, live: paneLive,');
-    expect(src).toContain('frame: paneFrame % 10');
+    expect(src).toContain('frame: paneFrame,'); // the unwrapped beat: a modulo ten here (the retired ten-frame set) would put the phase mark out of step with the band from the tenth beat on
   });
 });
 

@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.20.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.21.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -68,7 +68,7 @@ it Atlas falls back to `claude --bg` workers.
    a pointer to setup:
 
    ```
-   Atlas ready (ask the user to run `/atlas:atlas-setup` to complete setup)
+   Atlas ready (run /atlas:atlas-setup to complete setup)
    ```
 
 3. Run `/atlas:atlas-setup` once per project. It is invoked by name, not
@@ -105,10 +105,11 @@ it Atlas falls back to `claude --bg` workers.
      --class build --effort medium --paths src/a.py --task "demo" --dry-run
    ```
 
-   Output (trimmed): two `implementer` members with `tools_profile: edit`, one
-   `verifier` with `tools_profile: exec`, `max_parallel: 3`,
-   `isolation: shared`: every member works in the one tree, with no worktree or
-   branch.
+   Output: `dry-run team <id> build/medium: 3 members, max_parallel 3, isolation
+   shared, scope src/a.py`, then two `implementer` lines and one `verifier` line.
+   Every member works in the one tree, with no worktree or branch. Add `--json` to
+   see each member's `tools_profile` (`edit` for implementers, `exec` for the
+   verifier).
 
 To update to a new release, refresh the catalog first and then update the
 plugin, and restart the session so the hooks resolve again:
@@ -382,12 +383,8 @@ about 11 s of lead time. Crew time stayed flat from 8 to 16 modules while plain 
 two sizes, not a measured 1/4. Method and trials that did not help:
 [2026-11-14_atlas-17.18.0-crew-time.md](../../docs/audits/2026-11-14_atlas-17.18.0-crew-time.md).
 
-Atlas 17.20.0 (n=3 per cell, same model and harness, 4 CPUs). 8 modules (434 tests): cold mean 27.5 s (52% of
-plain), warm mean 23.0 s (47%), about 148k tokens (45% of plain cold). 16 modules (869 tests): cold mean 31.2 s
-(26%), warm mean 28.8 s (24%), about 215k tokens (33-36%). Plain one prompt on that box: 53.0 s and 118.5 s cold.
-1/4 of the wall time is met warm at 16 modules and not at 8. 17.18.0 on the same box is within noise of these
-numbers, so the gain over the earlier 29% comes from the slower plain run here, not a faster crew. Tables:
-[2026-11-14_atlas-17.20.0-expert-audit.md](../../docs/audits/2026-11-14_atlas-17.20.0-expert-audit.md).
+Atlas 17.21.0 (n=3 per cell, same model and harness, 4 CPUs, all runs green). 8 modules (434 tests): cold mean 28.1 s (53% of plain), warm mean 25.1 s (49%), tokens 57% cold and 46% warm. 16 modules (869 tests): cold mean 34.8 s (31%), warm mean 31.1 s (26%), tokens 38% cold and 36% warm. An interleaved A/B against the 17.20.0 tree showed no speed change from this release. Tables:
+[2026-11-14_atlas-round2-expert-audit.md](../../docs/audits/2026-11-14_atlas-round2-expert-audit.md).
 
 A cold crew costs more dollars than one prompt (about $0.26 against $0.19 on 17.16.0): each worker pays its own
 cache creation.
@@ -603,7 +600,7 @@ fail-open when the CLI is absent).
 | `completion_gate.py`            | Stop                                                               | Blocks a premature "done" (conditions a to s above)                                                                                                                                                                                                                                                                                                                                                                                          |
 | `stop_tail.py`                  | Stop                                                               | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter                                                                                                                                                                                                                                                                                                                                        |
 | `ingest_session.py`             | SubagentStop, SessionEnd, PreCompact (and Stop via `stop_tail.py`) | Mirrors the transcript into the observability DB (`ATLAS_INGEST=off`)                                                                                                                                                                                                                                                                                                                                                                        |
-| `worker_report_gate.py`         | SubagentStop                                                       | Blocks an `atlas:*` subagent whose final message is not the fixed report (once per agent)                                                                                                                                                                                                                                                                                                                                                    |
+| `worker_report_gate.py`         | SubagentStop, PostToolUse (SubagentHandback)                       | Blocks an `atlas:*` subagent whose final message is not the fixed report (once per agent)                                                                                                                                                                                                                                                                                                                                                    |
 
 `chronicle_facet.py` writes one facets row per session, `memory_capture.py`
 saves lessons to `<project>/.atlas/memory/MEMORY.md` (`ATLAS_MEMORY_CAPTURE=off`), and `nudge.py` prompts a lesson capture when
@@ -655,20 +652,20 @@ show.
 `mod/band-motion.ts`, armed in `mod/register.ts`) advances one spinner index: at
 most 10 redraws a second, the host's cap. The band, the HUD and the side panel
 all read that index (`sharedSpinFrame`, `withSpinFrame`), so every spinner on
-screen shows the same frame. Two glyph sets turn on it. The band, the SUBAGENTS
-title and the panel's agent rows draw the ten braille frames `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`
-(`LEAD_FRAMES` in `mod/atlas-ui.ts`). The TODO rows keep the four circle quarters
-`◐◓◑◒` (`SPIN_FRAMES`), because the capture scorer reads a row's state from them.
+screen shows the same frame. One glyph set turns on it: the band, the TODO and
+SUBAGENTS rows and titles, the side panel, the board and the dispatch cards all
+draw the four circle quarters `◐◓◑◒` (`SPIN_FRAMES` in `mod/atlas-ui.ts`); ASCII
+mode draws `|/-\`. The capture scorer reads a row's state from these marks.
 `ATLAS_REDUCED_MOTION` and `NO_COLOR` stop the row transitions; the spinner still
 steps.
 
 | Glyph | Meaning | Glyph | Meaning |
 | ----- | ------- | ----- | ------- |
-| `◐ ◓ ◑ ◒` | running, on a TODO or board row | `■` | failed (killed workers read the same) |
-| `⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏` | running, on the band, SUBAGENTS and panel agent rows | `▲` | blocked, it needs you |
-| `◇` | queued | `◉` | waiting |
-| `●` | done | `○` | idle |
-| `△` | a gate warning | `▰▱` | a meter, filled and empty cells |
+| `◐ ◓ ◑ ◒` | running, on every surface (`\| / - \` in ASCII mode) | `■` | failed (killed workers read the same) |
+| `▲` | blocked, it needs you | `◇` | queued |
+| `◉` | waiting | `●` | done |
+| `○` | idle | `△` | a gate warning |
+| `▰▱` | a meter, filled and empty cells | | |
 
 The row marks are `STATE_GLYPHS` in `mod/atlas-ui.ts`. No row is struck through:
 a done row is dim and keeps its green `●`.
@@ -686,7 +683,7 @@ The STATE segment reads one of four words (`runStateOf` in
 text). The pill is a fixed 97. The PLAN segment is `todo n/m` with a `▰▱` meter
 when the row is 120 columns or wider, and a `■1` beside it when a worker failed.
 The WORKERS segment prints the same counts as the SUBAGENTS title: running first,
-then waiting, done and failed (`⠋ 2 running · ● 1 done · ■1`), or `no agents`
+then waiting, done and failed (`◐ 2 running · ● 1 done · ■1`), or `no agents`
 when there are none. A gate that fails while Stop has not refused shows as a
 `△ gates 2/3` chip at the end of that segment.
 
@@ -698,7 +695,7 @@ Rules the band follows:
   `mod/band-motion.ts`). A closed run has one total, set when it closed and
   never raised after (`closedTotal`): the band, the run card, the side panel's
   phase row, the board footer and axis all print that same figure. A host turn with no live run, such as a slash command
-  typed after a run finished, reads `⠋ working` with no clock and opens no run
+  typed after a run finished, reads `◐ working` with no clock and opens no run
   (`hostOnly` in `mod/band.tsx`).
 - **Done** shows the run total, frozen (`● done 1:08` stays 1:08 and does not count on), for 30 seconds
   (`IDLE_AFTER_SECS`), then the segment turns idle (`○ idle · 1:08`).
@@ -717,11 +714,11 @@ Rules the band follows:
 At 150 columns (`mod/mission-layout.ts` `standardForms`, via `bandLines`):
 
 ```
-◖ ◆ ATLAS ◗ ⠋ working 0:42 ▌ todo ▰▰▰▰▱▱▱▱▱▱ 3/7 ■1 ▌ ⠋ 2 running · ● 1 done · ■1
+◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo ▰▰▰▰▱▱▱▱▱▱ 3/7 ■1 ▌ ◐ 2 running · ● 1 done · ■1
 ◖ ◆ ATLAS ◗ ● done 1:08 ▌ todo ▰▰▰▰▰▰▰▰▰▰ 7/7 ▌ no agents · △ gates 2/3
 ◖ ◆ ATLAS ◗ ○ idle · 1:08 ▌ todo ▰▰▰▰▰▰▰▰▰▰ 7/7 ▌ no agents
 ◖ ◆ ATLAS ◗ ▲ blocked · stop refused 0:37 ▌ todo ▰▰▰▰▰▰▰▱▱▱ 5/7 ▌ no agents
-◖ ◆ ATLAS ◗ ⠋ working ▌ todo ▰▰▰▰▰▰▰▰▰▰ 7/7 ▌ no agents
+◖ ◆ ATLAS ◗ ◐ working ▌ todo ▰▰▰▰▰▰▰▰▰▰ 7/7 ▌ no agents
 ```
 
 The lines are working, done with a failing gate, idle, blocked by a Stop refusal,
@@ -729,9 +726,9 @@ and a host turn with no live run. At 110 columns the meter is gone, at 60 the
 counts are bare figures, and at 40 the state word and `todo` go:
 
 ```
-◖ ◆ ATLAS ◗ ⠋ working 0:42 ▌ todo 3/7 ■1 ▌ ⠋ 2 running · ● 1 done · ■1
-◖ ◆ ATLAS ◗ ⠋ working 0:42 ▌ todo 3/7 ■1 ▌ ⠋2 ●1 ■1
-◖ ◆ ATLAS ◗ ⠋ 0:42 ▌ 3/7 ■1 ▌ ⠋2 ●1 ■1
+◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 3/7 ■1 ▌ ◐ 2 running · ● 1 done · ■1
+◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 3/7 ■1 ▌ ◐2 ●1 ■1
+◖ ◆ ATLAS ◗ ◐ 0:42 ▌ 3/7 ■1 ▌ ◐2 ●1 ■1
 ```
 
 With no colour (`NO_COLOR`) or in ASCII mode there are no fills, and the band
@@ -740,9 +737,9 @@ the slot has at least three rows, with a phase rail and a todo meter
 (`richBand`):
 
 ```
-◖ ◆ ATLAS ◗  ⠋ working 0:42   ● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify
+◖ ◆ ATLAS ◗  ◐ working 0:42   ● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify
 
-todo ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱ 3/7 · 43%         ctx ▰▰▰▰▰▰▱▱▱▱ 62%    agents ⠋ 2 running   ◇ 1 queued
+todo ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱ 3/7 · 43%         ctx ▰▰▰▰▰▰▱▱▱▱ 62%    agents ◐ 2 running   ◇ 1 queued
 ```
 
 At rest, at 80 columns or wider and with room in the slot, rows under the bar show the last run, the
@@ -793,7 +790,7 @@ block lives):
   `finished` for a done row with nothing else to say, and `stopped` for a failed
   one. It is never the dispatch title.
 
-The title carries the same tally as the band (`⠋ 1 running · 1 failed · 2 done`).
+The title carries the same tally as the band (`◐ 1 running · 1 failed · 2 done`).
 Below 80 cells the numeric columns shrink to their header widths so `LAST` keeps
 at least 14 cells. From the first running worker, the table always shows its title
 and one row per running worker; finished workers fold first and the column header
@@ -812,11 +809,11 @@ implementer running and a runner failed:
   ◇ T4 combine the reports                   queued   -                    -
   ◇ T5 run the gates                         queued   -                    -
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ⠋ 1 running · 1 failed · 2 done ──────────────────────────────────────────────────────────────────────────────────────────╮
+╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ◐ 1 running · 1 failed · 2 done ──────────────────────────────────────────────────────────────────────────────────────────╮
   AGENT             STATE       TIME  CALLS   FN  LAST
   alpha-explorer    ● done      0:22      -    -  finished
   beta-explorer     ● done      0:22      -    -  finished
-  gamma-implement…  ⠋ running   0:42      -    -  edit gamma.py
+  gamma-implement…  ◐ running   0:42      -    -  edit gamma.py
   delta-runner      ■ failed    0:22      -    -  stopped
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -830,11 +827,11 @@ summary row, and the table keeps every agent:
   ◇ T4 combine the reports                   queued   -                    -
   ● 2 done  ◇ 1 queued
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ⠋ 1 running · 1 failed · 2 done ──────────────────────────────────────────────────╮
+╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ◐ 1 running · 1 failed · 2 done ──────────────────────────────────────────────────╮
   AGENT             STATE       TIME  CALLS   FN  LAST
   alpha-explorer    ● done      0:22      -    -  finished
   beta-explorer     ● done      0:22      -    -  finished
-  gamma-implement…  ⠋ running   0:42      -    -  edit gamma.py
+  gamma-implement…  ◐ running   0:42      -    -  edit gamma.py
   delta-runner      ■ failed    0:22      -    -  stopped
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
@@ -883,7 +880,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
  ━━━━━━
  phase  ◐ research
  gates  ● lint   ● test   △ doctor   2/3 green
- agents ◇ 1 queued  ⠋ 1 running  ● 2 done  ■ 1 failed
+ agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed
 
  todo   ▰▰▰▱▱▱▱▱ 3/7
   ● Wire band to host     done            implementer-layout
@@ -1217,7 +1214,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.20.0
+|-- .claude-plugin/plugin.json   manifest, version 17.21.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

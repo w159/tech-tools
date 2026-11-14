@@ -182,7 +182,7 @@ describe('5. the plan row budget and the overflow row', () => {
     expect(more, rows.join('\n')).toBeDefined();
     expect(more).not.toContain('...');
     const planRows = rows.filter((r) => PLAN_ROW.test(r)).length;
-    expect(planRows + [...more.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5); // shown plus counted is the whole plan, the hidden running row included (`⠋ 1 more running`)
+    expect(planRows + [...more.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5); // shown plus counted is the whole plan, the hidden running row included (`◐ 1 more running`)
   });
   test('a plan longer than five still keeps its window and counts the rest', () => {
     const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));

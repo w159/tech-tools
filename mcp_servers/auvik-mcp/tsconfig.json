@@ -27,7 +27,8 @@
     "../_shared/response-shaper.ts",
     "../_shared/error-envelope.ts",
     "../_shared/base-url.ts",
-    "../_shared/zod-shape.ts"
+    "../_shared/zod-shape.ts",
+    "../_shared/resilient-fetch.ts"
   ],
   "exclude": [
     "node_modules",

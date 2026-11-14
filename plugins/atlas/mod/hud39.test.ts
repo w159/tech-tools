@@ -29,7 +29,7 @@ describe('1. one overflow idiom: no `+N more` on any HUD title', () => {
       }
     });
   }
-  test('a short budget counts the rows it leaves out on ONE dim summary row inside the box, running rows included (`⠋ 2 more running`)', () => {
+  test('a short budget counts the rows it leaves out on ONE dim summary row inside the box, running rows included (`◐ 2 more running`)', () => {
     const rows = text(hudLines(running3, view(93, 3, { merge: true })));
     expect(rows.some((r) => /more running/.test(r)), rows.join('\n')).toBe(true);
     const summary = rows.find((r) => /more running/.test(r))!;

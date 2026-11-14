@@ -11879,5 +11879,209 @@
     "status": "verified",
     "verified_at": "2026-11-13T17:25:02+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "tele-1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "analytics pytest suites 256 passed",
+    "evidence": [
+      "pytest output 256 passed in 3.65s"
+    ],
+    "doc_refs": [],
+    "reproduction": "/home/user/.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_atlas_analytics.py ...hot.py test_analytics_contract.py test_atlas_faults.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T18:58:30+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "tele-2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "telemetry server node --test 69 pass 0 fail",
+    "evidence": [
+      "node --test: tests 69 pass 69 fail 0"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd telemetry/server && node --test",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T18:58:30+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "tele-3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "_flush stamps before spawn, hourly, no spawn under pytest/off; status does not claim a send",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_analytics_hot.py _flush; atlas_analytics.py:988-993 status prints only when result set"
+    ],
+    "doc_refs": [],
+    "reproduction": "temp ATLAS_HOME runs, endpoint 127.0.0.1:9, see report",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T18:58:30+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "tele-4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "record() adds one os.stat; test_hook_perf 20 passed",
+    "evidence": [
+      "plugins/atlas/hooks/test_hook_perf.py 20 passed in 8.71s; os.stat spy shows 3 stats, 2 from makedirs"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest plugins/atlas/hooks/test_hook_perf.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T18:58:30+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "tele-5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "_notice_shown True with ATLAS_ANALYTICS=on; send --auto exits 2 w/o notice",
+    "evidence": [
+      "atlas_analytics.py:855-862"
+    ],
+    "doc_refs": [],
+    "reproduction": "temp HOME runs, exit=2",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T18:58:30+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "tele-6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker sessions record no session/active.day keys",
+    "evidence": [
+      "atlas_analytics.py is_worker_session/on_session_start"
+    ],
+    "doc_refs": [],
+    "reproduction": "ATLAS_WORKER_NAME / ATLAS_CREW_WORKER on_session_start in temp HOME: no events.jsonl",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T18:58:30+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "crew-c1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "835 passed crew/irc/mux/warm_lead suites",
+    "evidence": [
+      "pytest tail: 835 passed, 48 subtests passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest -q -p no:cacheprovider test_atlas_crew*.py irc mux warm_lead",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T19:14:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "crew-c2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "kill's _is_ours: real fake-claude run, supervisor/wpid/pid cmdlines carry run id, all die",
+    "evidence": [
+      "atlas_crew.py:1980,2625; live run kt1 pids dead after kill"
+    ],
+    "doc_refs": [],
+    "reproduction": "atlas_crew.py run (fake claude on PATH, tmux) then kill --run kt1",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T19:14:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "crew-c3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "run_shell kills group on timeout, replaces bad bytes",
+    "evidence": [
+      "atlas_irc.py:845; (124,'',True) 1.0s, pgrep none"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 run_shell('sleep 20; true',timeout=1)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T19:14:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "crew-c4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_irc diff: AST changes only run_shell/_kill_group/stop_checks_on_signal/handler + _early_check/_run_unit_check",
+    "evidence": [
+      "AST compare HEAD vs tree"
+    ],
+    "doc_refs": [],
+    "reproduction": "python ast per-def dump compare",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T19:14:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "crew-c5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "abs/.. owns and bad run ids exit 2 with message; normal run works",
+    "evidence": [
+      "atlas_crew.py:226,1262"
+    ],
+    "doc_refs": [],
+    "reproduction": "atlas_crew.py run with bad plans/run ids",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T19:14:50+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "crew-c6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "warm lead stop-during-recycle fix; stop_lead re-reads latest lead_pid; test passes",
+    "evidence": [
+      "atlas_warm_lead.py:243,360; test_atlas_warm_lead_stop 1 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest test_atlas_warm_lead_stop.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T19:14:50+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

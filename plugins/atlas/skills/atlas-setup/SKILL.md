@@ -36,7 +36,7 @@ It has five modes plus a menu. Pick by argument, or infer from the ask:
 
 Mode routing rules:
 
-- No args -> always run `python3 scripts/scaffold_docs.py <repo-root>` first.
+- No args -> always run `python3 "${CLAUDE_SKILL_DIR}/scripts/scaffold_docs.py" <repo-root>` first.
   It is idempotent: create-if-missing on a fresh project, gap-repair on a
   partial or drifted one, no-op on an already-correct one. This is the
   mechanism that fixes a partial, missing, or drifted `.atlas/` or `docs/`
@@ -92,7 +92,7 @@ When `docs/` does not exist:
    codebase roots (subdirectories with their own manifest), and whether the
    project exposes an API (OpenAPI file, routes/controllers dir, web
    framework) so the project-adaptive `docs/api/` scaffolds only when it fits.
-2. **Scaffold the SSOT** - run `scripts/scaffold_docs.py`. It creates the
+2. **Scaffold the SSOT** - run `python3 "${CLAUDE_SKILL_DIR}/scripts/scaffold_docs.py" <repo-root>`. It creates the
    root entry files, the full `docs/` base tree, and the full `.atlas/` tree
    shown above (project-adaptive `docs/api/` only when Step 1 detected an
    API). It is idempotent: re-running it against a partial or drifted

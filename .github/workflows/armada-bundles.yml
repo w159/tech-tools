@@ -1,0 +1,54 @@
+name: armada-bundles
+
+# Rebuilds every shipped armada MCP bundle (plugins/armada/mcp/<svc>/server.mjs) from
+# mcp_servers/<svc>-mcp with the pinned toolchain (mcp_servers/_toolchain: tsup 8.5.1,
+# esbuild 0.28.2, Node 22) and fails if the result differs from what is committed.
+# Needs the npm registry (npm ci per connector). Fix a failure locally with:
+#   node scripts/rebuild_armada_bundles.mjs
+on:
+  pull_request:
+    paths:
+      - "mcp_servers/**"
+      - "mcp_node/**"
+      - "plugins/armada/mcp/**"
+      - "scripts/rebuild_armada_bundles.mjs"
+      - "plugins/armada/tests/test_armada_bundles.py"
+      - ".github/workflows/armada-bundles.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mcp_servers/**"
+      - "mcp_node/**"
+      - "plugins/armada/mcp/**"
+      - "scripts/rebuild_armada_bundles.mjs"
+      - ".github/workflows/armada-bundles.yml"
+  schedule:
+    # weekly: catches registry-side drift (a lockfile-pinned tarball changing is not expected, but cheap to watch)
+    - cron: "43 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild-and-diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --version && npm --version
+      - name: Rebuild all shipped bundles from source
+        run: node scripts/rebuild_armada_bundles.mjs
+      - name: Fail if shipped bundles differ from source
+        run: |
+          git status --porcelain -- 'plugins/armada/mcp/*/server.mjs' plugins/armada/mcp/bundles.lock.json
+          git diff --stat -- 'plugins/armada/mcp/*/server.mjs' plugins/armada/mcp/bundles.lock.json
+          git diff --exit-code --quiet -- 'plugins/armada/mcp/*/server.mjs' plugins/armada/mcp/bundles.lock.json \
+            || { echo "::error::shipped armada bundles are stale; run 'node scripts/rebuild_armada_bundles.mjs' and commit the result"; exit 1; }
+          test -z "$(git ls-files --others --exclude-standard -- 'plugins/armada/mcp/*/server.mjs' plugins/armada/mcp/bundles.lock.json)" \
+            || { echo "::error::rebuild produced files that are not committed"; exit 1; }
+      - name: Provenance guard
+        run: python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest && .venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests/test_armada_bundles.py

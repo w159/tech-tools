@@ -34,6 +34,7 @@
     "../_shared/error-envelope.ts",
     "../_shared/base-url.ts",
     "../_shared/zod-shape.ts",
+    "../_shared/resilient-fetch.ts",
     "../_shared/mcp-server-kit.ts",
     "../_shared/server-entry.ts"
   ],

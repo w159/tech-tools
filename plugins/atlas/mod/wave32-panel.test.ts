@@ -52,8 +52,8 @@ const model = (s: never, view: SidebarView, columns: number, rows: number, run: 
 const render = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN, look: Ui = ui): string[] => { forgetRefusals(); forgetBandFrame(); return textOf(sidebarTree(els, model(s, view, columns, rows, run, look), on) as unknown as Node).split('\n'); };
 const bodyOf = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN): PanelLine[] => { forgetRefusals(); forgetBandFrame(); return bodyLines(panelModelOf(model(s, view, columns + 1, rows, run), ui, columns)); };
 const body = (view: SidebarView, columns: number, rows: number, s = snap(), run: Run | null = RUN): string[] => bodyOf(view, columns, rows, s, run).map((l) => lineText(l).trimEnd());
-const BRAILLE = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
-const CIRCLE = /[◐◓◑◒]/;
+const SPIN_MARK = /[◐◓◑◒]/;
+const NO_BRAILLE = /[\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f]/; // the retired ten-frame lead set (the sparkline's cells are other code points)
 
 
 const flat = (tree: unknown): string => {
@@ -65,11 +65,11 @@ const flat = (tree: unknown): string => {
 const width = (l: string): number => [...l].length;
 
 describe('item 1: the route tab carries the phase timeline (critique 30: the tab had no content under the todo gauge)', () => {
-  test('a `timeline` head and one chain of the phases, the current one braille with its elapsed time', () => {
+  test('a `timeline` head and one chain of the phases, the current one on the spinner with its elapsed time', () => {
     forgetPhases();
     const t = render('route', 66, 45).join('\n');
     expect(t).toMatch(/phase /);
-    expect(t).toMatch(/· research › · theory › · test › [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] implement 0:57 › · verify/); // wave 34: a phase is green only once the run was in it
+    expect(t).toMatch(/· research › · theory › · test › [◐◓◑◒] implement 0:57 › · verify/); // wave 34: a phase is green only once the run was in it
   });
   test('the plan is not drawn here (wave 34: the HUD above the prompt and the board tab list it)', () => {
     const t = render('route', 66, 45).join('\n');
@@ -141,23 +141,23 @@ describe('item 4: the board (critique 30: colliding axis labels, ticks past the 
   }
 });
 
-describe('item 5: one spinner vocabulary (critique 30: circles in the panel, braille in the band)', () => {
-  test('the route phase row and the team lead row wear braille, never a circle', () => {
+describe('item 5: one spinner vocabulary (critique 30: circles in the panel, braille in the band; now the circle quarters on both)', () => {
+  test('the route phase row and the team lead row wear the one spinner, never braille', () => {
     const route = render('route', 66, 45);
-    expect(route.find((l) => l.includes('phase'))).toMatch(BRAILLE);
-    expect(route.find((l) => l.includes('phase'))).not.toMatch(CIRCLE);
+    expect(route.find((l) => l.includes('phase'))).toMatch(SPIN_MARK);
+    expect(route.find((l) => l.includes('phase'))).not.toMatch(NO_BRAILLE);
     const team = render('team', 66, 45, snap({ running: true }));
     const lead = team.find((l) => l.includes('lead') && l.includes('running'))!;
-    expect(lead).toMatch(BRAILLE);
-    expect(lead).not.toMatch(CIRCLE);
-    expect(team.find((l) => l.includes('alpha-explorer'))).toMatch(BRAILLE);
+    expect(lead).toMatch(SPIN_MARK);
+    expect(lead).not.toMatch(NO_BRAILLE);
+    expect(team.find((l) => l.includes('alpha-explorer'))).toMatch(SPIN_MARK);
   });
-  test('no circle spinner anywhere on the Claude pane (wave 34: one family, braille)', () => {
-    for (const v of ['route', 'team', 'channel', 'board'] as const) expect(render(v, 66, 45, snap({ running: true })).join('\n')).not.toMatch(CIRCLE);
+  test('no braille spinner anywhere on the Claude pane (one family, the circle quarters)', () => {
+    for (const v of ['route', 'team', 'channel', 'board'] as const) expect(render(v, 66, 45, snap({ running: true })).join('\n')).not.toMatch(NO_BRAILLE);
   });
-  test('the start card animates: the dispatch card takes the braille frame, frames differ', () => {
+  test('the start card animates: the dispatch card takes the spinner frame, frames differ', () => {
     const a = flat(toastWith(0)), b = flat(toastWith(3));
-    expect(a).toMatch(BRAILLE);
+    expect(a).toMatch(SPIN_MARK);
     expect(a).not.toBe(b);
   });
 });

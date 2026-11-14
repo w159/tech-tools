@@ -23,8 +23,8 @@ test("band: the todo gauge reads `N/M`, no ctx on the one-row band, no board mea
 
 test("band names the capsule, the phase and the worker count; no project, scope or clock", () => {
 	const h = head(model({ team: "fix/low", elapsedSecs: 59, workers: Array.from({ length: 8 }, (_, i) => worker(`implementer-000${i}`)) }));
-	expect(h).toContain("◖ ◆ ATLAS ◗  ⠋ working 0:59   phase 4/5");
-	expect(h).toContain("⠋ 8 running");
+	expect(h).toContain("◖ ◆ ATLAS ◗  ◐ working 0:59   phase 4/5");
+	expect(h).toContain("◐ 8 running");
 	expect(h).not.toMatch(/demo@master|fix\/low|00:59/);
 });
 
@@ -137,7 +137,7 @@ test("idle panel: the band reads idle, the last run follows, a failed count is b
 	expect(rows(idle(2))[1]).toContain("2 failed");
 	expect(renderPanel(idle(2))[1]).toMatch(/\x1b\[1;38;2;208;208;208;48;2;24;24;37m2 failed/);
 	expect(rows(model({ idle: { workers: 1, failed: 0 }, workers: [] }))[1]).toContain("last run  1 worker · all ok");
-	expect(renderPanel(idle(0))[1]).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/); // idle panels do not move
+	expect(renderPanel(idle(0))[1]).not.toMatch(/[◐◓◑◒]/); // idle panels do not move
 });
 
 test("idle panel puts the board under the band and the last run, within maxLines minus those two rows", () => {
@@ -161,11 +161,11 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ⠋ 1 running`", () => {
+test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ◐ 1 running`", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ⠋ working · todo 1/4 · ⠋ 1 running");
+	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ◐ working · todo 1/4 · ◐ 1 running");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 

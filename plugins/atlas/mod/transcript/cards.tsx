@@ -96,7 +96,7 @@ const callResult = (c: CallLike): string => (c.isInterrupted ? 'interrupted' : r
  * `failed`, `killed`), `now` what a running worker is doing (tool, target, age), `wave` the strip number it was
  * dispatched in, `steps` and `ctx` the worker's plan progress and context held (rows appear only when known).
  * `mark` is accepted for older callers and ignored: the border's state word replaces the spinner chip. */
-export interface CardExtra { ui?: Ui; /** 0..1: how far the card's bar has faded 141 -> 245 (placed.ts barFade). */ fade?: number; /** The shared spinner frame (the beat counter): the start card's braille turns with it. */ frame?: number; mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
+export interface CardExtra { ui?: Ui; /** 0..1: how far the card's bar has faded 141 -> 245 (placed.ts barFade). */ fade?: number; /** The shared spinner frame (the beat counter): the start card's spinner turns with it. */ frame?: number; mark?: string; outcome?: string; ended?: string; now?: string; wave?: number; steps?: { done: number; total: number }; ctx?: number }
 
 /** First sentence of a PreToolUse hook's DENY text, null when the call was not denied: a denied dispatch never ran. */
 function denyReason(c: CallLike): string | null {

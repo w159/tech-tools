@@ -6,11 +6,44 @@ This module provides common utility functions for the Falcon MCP server.
 
 import re
 from typing import Any, Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from .errors import _format_error_response, is_success_response
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
+
+_SENSITIVE_QUERY_KEY = re.compile(
+    r"token|key|secret|passw|pwd|sig|auth|credential|session|bearer|code",
+    re.IGNORECASE,
+)
+
+
+def redact_url(url: Optional[str]) -> Optional[str]:
+    """Return url safe to display: userinfo becomes ``***@`` and sensitive query values ``***``.
+
+    Scheme, host, port and path stay readable. Display only; never use the result
+    to build a request.
+    """
+    if not isinstance(url, str) or "://" not in url:
+        return url
+    try:
+        parts = urlsplit(url)
+        netloc = parts.netloc
+        if "@" in netloc:
+            netloc = "***@" + netloc.rsplit("@", 1)[1]
+        query = parts.query
+        if query:
+            pairs = parse_qsl(query, keep_blank_values=True)
+            query = urlencode(
+                [(k, "***" if _SENSITIVE_QUERY_KEY.search(k) else v) for k, v in pairs],
+                safe="*",
+            )
+        return urlunsplit((parts.scheme, netloc, parts.path, query, ""))
+    except ValueError:
+        # Unparseable: drop everything after the scheme rather than risk leaking it.
+        return url.split("://", 1)[0] + "://***"
 
 
 def unwrap_field_default(value: Any) -> Any:

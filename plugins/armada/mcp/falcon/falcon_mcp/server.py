@@ -23,6 +23,7 @@ from falcon_mcp.common.auth import (
 )
 from falcon_mcp.common.fql import FQL_FILTER_HINT_SUFFIX
 from falcon_mcp.common.logging import configure_logging, get_logger
+from falcon_mcp.common.utils import redact_url
 from falcon_mcp.modules.base import READ_ONLY_ANNOTATIONS, offload_to_thread
 from falcon_mcp.tool_filter import Resolution, ToolPolicy, ToolRecord
 
@@ -163,8 +164,8 @@ class FalconMCPServer:
             self.mode = "inert"
             self.auth_error = (
                 "MISSING_CREDENTIALS: Set falcon_client_id and falcon_client_secret "
-                "(FALCON_CLIENT_ID / FALCON_CLIENT_SECRET) via atlas dashboard, "
-                "/plugin config, or the plugin .env, then reload Claude Code."
+                "(FALCON_CLIENT_ID / FALCON_CLIENT_SECRET) in the armada plugin config "
+                "(/plugin) or the armada plugin .env, then reload Claude Code."
             )
             logger.warning("%s", self.auth_error)
             self._bootstrap_inert_server()
@@ -274,7 +275,7 @@ class FalconMCPServer:
                 f"{BASE_INSTRUCTIONS}\n\n"
                 "This server is running in inert mode: Falcon credentials are missing "
                 "or authentication failed. Call falcon_status for details, configure "
-                "credentials on the atlas plugin, then reload. Domain tools are not "
+                "credentials on the armada plugin, then reload. Domain tools are not "
                 "registered until authentication succeeds."
             ),
             debug=self.debug,
@@ -302,7 +303,7 @@ class FalconMCPServer:
         )
 
     def _register_inert_tools(self) -> int:
-        """Register the atlas-required status surface without domain modules."""
+        """Register the status surface the connector contract requires, without domain modules."""
         self.server.add_tool(
             offload_to_thread(self.falcon_status),
             name="falcon_status",
@@ -363,7 +364,7 @@ class FalconMCPServer:
             "mode": self.mode,
             "configured": self.credentials_present,
             "authenticated": authenticated,
-            "base_url": self.resolved_base_url,
+            "base_url": redact_url(self.resolved_base_url),
             "member_cid_set": bool(self.member_cid),
             "modules_loaded": sorted(self.modules.keys()),
             "tool_count": len(getattr(self.server._tool_manager, "_tools", {})),

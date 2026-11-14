@@ -31,8 +31,8 @@ const { renderPanel } = await ompLoad('mission-panel');
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
-const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['◐', '◓', '◑', '◒', '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'].map((g): [string, UiState] => [g, 'running'])]);
-const G = '[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◇●■▲▲◉]';
+const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['◐', '◓', '◑', '◒'].map((g): [string, UiState] => [g, 'running'])]);
+const G = '[◐◓◑◒◇●■▲▲◉]';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

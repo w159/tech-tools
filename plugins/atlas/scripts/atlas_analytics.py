@@ -758,7 +758,14 @@ def check_payload(
         masked = masked.replace(f'"{nonce}"', '""')
     for k in set(_ENVELOPE) | _ENVELOPE_OPTIONAL | {k for k in counts if valid_key(k)}:
         masked = masked.replace(f'"{k}"', '""')
-    low = masked.lower()
+    # The envelope values that passed the closed-set check above are public by construction. A user, host or
+    # directory called "linux" (or "true", "3.13", "2026") would otherwise match the payload's own os, flag or
+    # version text and get every send refused for good.
+    scrubbed = masked
+    if not env_bad:
+        for fld in ("os", "python", "atlas_version", "week"):
+            scrubbed = scrubbed.replace(f'"{payload[fld]}"', '""')
+    low = re.sub(r"(?<=:)(?:true|false)", "", scrubbed).lower()
     public: list[str] | None = None
     hits = []
     for lab, v in ident:
@@ -846,7 +853,13 @@ def boot_notice() -> str | None:
 
 
 def _notice_shown() -> bool:
-    return is_decided() or _read_json(adir() / "notice.json").get("schema") == SCHEMA_VERSION
+    """The send gate: the person has decided (enable/disable), has been shown the first-run notice for this
+    schema, or opted in explicitly with ATLAS_ANALYTICS=on. boot_notice stays silent for that last case (it
+    only speaks while analytics is on by default), so without it an explicit opt-in counted locally forever
+    and never sent."""
+    if is_decided() or state()[1] == "ATLAS_ANALYTICS=on":
+        return True
+    return _read_json(adir() / "notice.json").get("schema") == SCHEMA_VERSION
 
 
 def maybe_send_in_background() -> bool:
@@ -926,12 +939,19 @@ def fold_mod_usage() -> int:
     return folded
 
 
+def is_worker_session() -> bool:
+    """A colony or crew worker (atlas_mux pins ATLAS_WORKER_NAME, a crew pins ATLAS_CREW_WORKER): a full
+    Claude session the person never started, so it is not a user session."""
+    return any((os.environ.get(v) or "").strip() for v in ("ATLAS_WORKER_NAME", "ATLAS_CREW_WORKER"))
+
+
 def on_session_start(payload: dict | None = None) -> None:
-    """Session boot hook point: count the session by harness and weekday, fold mod usage, compact the event
-    log, kick a background send."""
+    """Session boot hook point: count the session by harness and weekday (a team worker is not a session),
+    fold mod usage, compact the event log, kick a background send."""
     try:
-        record("session." + detect_harness(payload))
-        record("active.day." + WEEKDAYS[_now().weekday()])
+        if not is_worker_session():
+            record("session." + detect_harness(payload))
+            record("active.day." + WEEKDAYS[_now().weekday()])
         if is_enabled():
             fold_mod_usage()
             compact()
@@ -957,6 +977,14 @@ def cmd_status(args) -> int:
     _p(f"events:     {len(ev)} lines, {sum(e['n'] for e in ev)} counts")
     _p(f"weeks:      {weeks[0] + ' .. ' + weeks[-1] if weeks else 'none'}")
     _p(f"sendable:   {', '.join(finished_weeks(ev)) or 'none finished'}; current week goes as a week-to-date snapshot")
+    if on:
+        ep = endpoint()
+        if not ep or valid_endpoint(ep):
+            _p("send:       blocked, no endpoint (counts stay on this machine)")
+        elif not _notice_shown():
+            _p("send:       waiting for the first-run notice (shown at the next session start)")
+        else:
+            _p("send:       ready (a snapshot goes out at most once an hour, while Atlas runs)")
     last = _read_json(adir() / "last_send.json")
     if last.get("result"):
         import time
@@ -1258,6 +1286,8 @@ def cmd_send(args) -> int:
         if not quiet:
             _p(f"refused: analytics is off ({why}).")
         return 2
+    if quiet and not _notice_shown():
+        return 2  # a background send never goes out before the first-run notice has been shown
     ep = endpoint()
     if not ep:
         if not quiet:

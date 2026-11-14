@@ -91,11 +91,13 @@ and counts them (`dropped`) instead of rejecting the payload; a malformed key st
 
 ## Where the data goes
 
-The client posts in the background at session start, at most once an hour, only after the notice has been shown and only when an
+The client posts in the background at session start and again from the counting hooks (`atlas_analytics_hot.record` checks one
+stamp file), at most once an hour, so what a session did leaves the machine even when no later session starts. It sends only after
+the notice has been shown (or you decided, or set `ATLAS_ANALYTICS=on`) and only when an
 endpoint is configured (`endpoint` in the schema, or `ATLAS_ANALYTICS_ENDPOINT`; https only, plain http only for
 localhost). It sends the current week as a week-to-date snapshot and each finished week once as final. A failed send keeps
 the week and counts `delivery.fail.<kind>`; a success counts `delivery.ok.<urllib|curl>`. On a TLS failure the client
-retries with curl, which fixes macOS Python without a CA bundle. `status` shows the last send result. Payloads marked
+retries with curl, which fixes macOS Python without a CA bundle. `status` shows the last send result and, in a `send:` line, whether sending is ready, waiting for the first-run notice or blocked by a missing endpoint. Crew and colony worker sessions (`ATLAS_WORKER_NAME`, `ATLAS_CREW_WORKER`) are not counted as sessions. Payloads marked
 `--test` (or `ATLAS_ANALYTICS_TEST=1`) carry `test: true` and are left out of the public aggregate. Installs send to
 `https://atlas-telemetry.vercel.app/api/ingest`, the endpoint shipped in the schema.
 To stop sending, turn telemetry off (see "Turn it off" above: `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off`, or
@@ -111,7 +113,7 @@ The telemetry server also serves a private view for the project owner: `/dashboa
 (JSON), both behind the secret in the Vercel project env var `ATLAS_DASHBOARD_TOKEN` (at least 24 characters; admin
 answers 503 when it is unset or shorter, 401 on a wrong secret). `GET /api/health` is open and shows storage kind,
 accepted schemas, allowlist key count and sha256, whether the secret is configured and recent submission counts. The
-dashboard shows totals, the weekly trend, top and never-used features, failures, versions and a per-week table, and can
+dashboard shows totals, a Fix or build next list (signals with their evidence), the weekly trend, top and never-used features with the share of install-weeks that used each, failures with their share and rate per 100 sessions, versions and a per-week table, and can
 download or copy the JSON. Test data is hidden unless `include_test=1`; with "Include test submissions" ticked, a
 Delete test data button removes it (`DELETE /api/admin?purge=test`). Setup, rotation and routes:
 [telemetry/server/README.md](../../../telemetry/server/README.md). The allowlist only grows: `allowed-keys --merge` keeps

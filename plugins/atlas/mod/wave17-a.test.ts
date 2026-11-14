@@ -160,7 +160,7 @@ describe('A5: the docked 110-column band (73 cells) uses the words of the 150-co
   const run = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `w${i}`, state: 'running' as const, secs: 3 }));
   test('running agents read `2 running`, never the bare glyph and number', () => {
     for (const cols of [73, 93, 150]) expect(at(cols, { workers: run(2) })).toMatch(/2 running/);
-    expect(at(73, { workers: run(2) })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]2/);
+    expect(at(73, { workers: run(2) })).not.toMatch(/[◐◓◑◒]2/);
   });
   test('the stop-run shape keeps both counts in words; the open-dispatch note is the first segment to go at 73 cells (the state word, spinner and todo come first)', () => {
     const w = [...run(1), { name: 'g', state: 'failed' as const, secs: 3 }];

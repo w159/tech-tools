@@ -39,6 +39,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -64,7 +65,12 @@ def _dir(d) -> Path:
 def _bus_channel(d) -> str | None:
     """The channel a bus's members.json names, or None when it has none (members() would invent "#team")."""
     try:
-        return json.loads((Path(d) / "members.json").read_text(encoding="utf-8")).get("channel") or None
+        return (
+            json.loads((Path(d) / "members.json").read_text(encoding="utf-8")).get(
+                "channel"
+            )
+            or None
+        )
     except (OSError, ValueError, AttributeError):
         return None
 
@@ -87,7 +93,15 @@ def init_bus(d, channel: str, nicks: list, lead: str = "lead") -> Path:
     return p
 
 
-def post(d, sender: str, to: str, text: str, kind: str | None = None, via: str | None = None, extra: dict | None = None) -> dict:
+def post(
+    d,
+    sender: str,
+    to: str,
+    text: str,
+    kind: str | None = None,
+    via: str | None = None,
+    extra: dict | None = None,
+) -> dict:
     """Append one message under an exclusive lock and return it (with its seq). `extra` adds fields (e.g. a DONE's digest)."""
     text = (text or "").strip()
     truncated = len(text) > MAX_TEXT
@@ -209,7 +223,9 @@ def cursor(d, nick) -> int:
 def set_cursor(d, nick, seq: int) -> None:
     p = _cursor_path(d, nick)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(f".{p.name}.{os.getpid()}.{threading.get_ident()}.{os.urandom(4).hex()}.tmp")
+    tmp = p.with_name(
+        f".{p.name}.{os.getpid()}.{threading.get_ident()}.{os.urandom(4).hex()}.tmp"
+    )
     try:
         tmp.write_text(json.dumps({"seq": seq}), encoding="utf-8")
         os.replace(tmp, p)
@@ -499,12 +515,7 @@ def _env_nick(a) -> str:
 def cmd_say(a) -> int:
     d = _dir(a.dir)
     nick = _env_nick(a)
-    to = (
-        a.to
-        or _bus_channel(d)
-        or os.environ.get("ATLAS_IRC_CHANNEL")
-        or "#team"
-    )
+    to = a.to or _bus_channel(d) or os.environ.get("ATLAS_IRC_CHANNEL") or "#team"
     text = " ".join(a.text)
     if text == "-":
         text = sys.stdin.read()
@@ -560,7 +571,16 @@ def _owned_digest(root, owns) -> str:
 
 
 _SHARED_PYTEST_INPUTS = ("pytest.ini", "pyproject.toml", "setup.cfg", "tox.ini")
-_SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".tox", ".mypy_cache", ".pytest_cache"}
+_SKIP_DIRS = {
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+}
 
 
 def test_inputs_digest(root, unit_check) -> str:
@@ -687,7 +707,9 @@ def cmd_give(a) -> int:
     _install_from_env()  # the newest staged copy lands first, so the peer takes over the current file
     peers = set(members(d).get("members") or [])
     if a.peer not in peers or a.peer == nick:
-        print(f"give refused: {a.peer!r} is not a peer on this crew ({', '.join(sorted(peers))})")
+        print(
+            f"give refused: {a.peer!r} is not a peer on this crew ({', '.join(sorted(peers))})"
+        )
         return 2
 
     def check(table):
@@ -700,7 +722,14 @@ def cmd_give(a) -> int:
         print(why)
         return 2
     note = (" " + " ".join(a.note)) if a.note else ""
-    post(d, nick, a.peer, f"LEASE {rel} -> {a.peer}: it is yours now.{note}", kind="lease", extra={"path": rel, "to": a.peer})
+    post(
+        d,
+        nick,
+        a.peer,
+        f"LEASE {rel} -> {a.peer}: it is yours now.{note}",
+        kind="lease",
+        extra={"path": rel, "to": a.peer},
+    )
     print(f"{rel} is now leased to {a.peer}")
     return 0
 
@@ -721,7 +750,14 @@ def cmd_claim(a) -> int:
     if why:
         print(why)
         return 2
-    post(d, nick, _bus_channel(d) or "#team", f"LEASE {rel} -> {nick} (claimed)", kind="lease", extra={"path": rel, "to": nick})
+    post(
+        d,
+        nick,
+        _bus_channel(d) or "#team",
+        f"LEASE {rel} -> {nick} (claimed)",
+        kind="lease",
+        extra={"path": rel, "to": nick},
+    )
     print(f"{rel} is now leased to {nick}")
     return 0
 
@@ -739,7 +775,14 @@ def done_current(d, nick: str, root=None, owns=None) -> bool:
     test files). A DONE without a digest is never current."""
     if not has_done(d, nick):
         return False
-    rec = next((r for r in reversed(history(d)) if r.get("from") == nick and r.get("kind") == "done"), None)
+    rec = next(
+        (
+            r
+            for r in reversed(history(d))
+            if r.get("from") == nick and r.get("kind") == "done"
+        ),
+        None,
+    )
     if not rec or not rec.get("digest"):
         return False
     root = root or os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
@@ -751,7 +794,14 @@ def latest_done_record(d, nick: str):
     """The latest kind-done record of `nick` while it still stands (has_done), else None."""
     if not has_done(d, nick):
         return None
-    return next((r for r in reversed(history(d)) if r.get("from") == nick and r.get("kind") == "done"), None)
+    return next(
+        (
+            r
+            for r in reversed(history(d))
+            if r.get("from") == nick and r.get("kind") == "done"
+        ),
+        None,
+    )
 
 
 def _check_cmd(cmd: str) -> str:
@@ -767,11 +817,104 @@ def _check_cmd(cmd: str) -> str:
         runner = "pytest"
     else:
         return cmd
-    return runner + cmd[m.end():]
+    return runner + cmd[m.end() :]
 
 
 CHECK_TIMEOUT_S = 600
 TAIL_CHARS = 6000
+
+# A check runs as the leader of its own process group, so a timeout or a stop reaches everything it started:
+# killing only the shell left `pytest` and its children running, and a child holding the output pipe kept a
+# caller blocked for as long as the child lived (a 3 s budget took 49 s). Same session as the caller.
+_CHECK_GROUP = (
+    {"process_group": 0} if sys.version_info >= (3, 11) else {"preexec_fn": os.setpgrp}
+)
+_LIVE_CHECKS: set = (
+    set()
+)  # process groups of checks running now (stop_checks_on_signal kills them)
+DRAIN_S = 5.0  # after a timeout kill: how long the output of the killed group may still take to arrive
+
+
+def _kill_group(pgid: int) -> None:
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except OSError:
+        pass
+
+
+def run_shell(
+    cmd: str, cwd, timeout: float, env: dict | None = None, merge: bool = False
+):
+    """Run shell `cmd` in cwd; (exit code, output, timed_out). Output is stdout then stderr (merge: one interleaved
+    stream), decoded as UTF-8 with replacement: a check that prints a latin-1 byte is a verdict, not a crash. On
+    timeout the check's whole process group is killed and the code is 124; the output so far is kept, so the
+    caller can show where it hung."""
+    proc = subprocess.Popen(
+        cmd,
+        shell=True,
+        cwd=cwd,
+        env=env,
+        stdin=subprocess.DEVNULL,  # a background group reading a terminal would stop on SIGTTIN, not fail
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT if merge else subprocess.PIPE,
+        **_CHECK_GROUP,
+    )
+    _LIVE_CHECKS.add(proc.pid)
+    timed_out = False
+    try:
+        try:
+            o, e = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _kill_group(proc.pid)
+            try:
+                o, e = proc.communicate(timeout=DRAIN_S)
+            except (
+                subprocess.TimeoutExpired
+            ) as exc:  # a process that left the group still holds the pipe
+                o, e = exc.stdout, exc.stderr
+    finally:
+        if (
+            proc.poll() is None
+        ):  # interrupted (KeyboardInterrupt, an exception): nothing of the check survives
+            _kill_group(proc.pid)
+            proc.kill()
+            proc.wait()
+        _LIVE_CHECKS.discard(proc.pid)
+    text = (o or b"").decode("utf-8", "replace") + (e or b"").decode("utf-8", "replace")
+    return (124 if timed_out else proc.returncode), text, timed_out
+
+
+def stop_checks_on_signal() -> None:
+    """Make SIGTERM, SIGHUP and SIGINT kill the checks this process runs before it acts on the signal as before:
+    checks run in their own process groups, so the signal that stops this process (`atlas_crew kill`, a closing
+    pane, Ctrl-C) no longer reaches them by itself. Main thread only; elsewhere a no-op."""
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        try:
+            prev = signal.getsignal(sig)
+        except (ValueError, OSError):
+            continue
+        if getattr(prev, "_atlas_stops_checks", False):
+            continue
+
+        def handler(signum, frame, _prev=prev):
+            for pgid in list(_LIVE_CHECKS):
+                _kill_group(pgid)
+            if callable(_prev):
+                return _prev(signum, frame)
+            if _prev == signal.SIG_IGN:
+                return None
+            signal.signal(signum, signal.SIG_DFL)
+            os.kill(os.getpid(), signum)
+            return None
+
+        handler._atlas_stops_checks = True
+        try:
+            signal.signal(sig, handler)
+        except (ValueError, OSError):
+            pass
 
 
 _LAST_UNIT: dict = {}  # the last unit check's exit and output tail, so DONE can carry its pass count
@@ -793,11 +936,9 @@ def _run_unit_check(d, nick: str, quiet: bool = False, capture: list | None = No
     if not cmd:
         return None
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
-    try:
-        res = subprocess.run(_check_cmd(cmd), shell=True, cwd=root, capture_output=True, text=True, timeout=CHECK_TIMEOUT_S)
-        code, out = res.returncode, (res.stdout or "") + (res.stderr or "")
-    except subprocess.TimeoutExpired:
-        code, out = 124, f"check timed out after {CHECK_TIMEOUT_S}s\n"
+    code, out, timed_out = run_shell(_check_cmd(cmd), root, CHECK_TIMEOUT_S)
+    if timed_out:
+        out = f"check timed out after {CHECK_TIMEOUT_S}s\n" + out
     tail = out[-TAIL_CHARS:]
     tail += "" if tail.endswith("\n") or not tail else "\n"
     _LAST_UNIT.clear()
@@ -808,7 +949,13 @@ def _run_unit_check(d, nick: str, quiet: bool = False, capture: list | None = No
         return code
     print(tail, end="")
     if code:
-        post(d, nick, nick, f"unverified {nick}: `{cmd}` exited {code}", kind="unverified")
+        post(
+            d,
+            nick,
+            nick,
+            f"unverified {nick}: `{cmd}` exited {code}",
+            kind="unverified",
+        )
     return code
 
 
@@ -842,8 +989,10 @@ def _doc_literal(text: str, indent: str, stub_indent: int) -> list:
     out = [lines[0]]
     for i, ln in enumerate(lines[1:], 1):
         lead = len(ln) - len(ln.lstrip(" "))
-        keep = ln.strip() or (ln and i == len(lines) - 1)  # the closing quote's own line keeps its indentation
-        out.append(indent + ln[min(lead, stub_indent):] if keep else "")
+        keep = ln.strip() or (
+            ln and i == len(lines) - 1
+        )  # the closing quote's own line keeps its indentation
+        out.append(indent + ln[min(lead, stub_indent) :] if keep else "")
     out[0] = '"""' + out[0]
     out[-1] += '"""'
     return [indent + out[0]] + out[1:]
@@ -866,8 +1015,12 @@ def restore_docstrings(stub_src: str, work_src: str):
         if w is None or sn is None or not _has_doc(sn) or _has_doc(w) or not w.body:
             continue
         first = w.body[0]
-        start = min([first.lineno] + [x.lineno for x in getattr(first, "decorator_list", [])])
-        if q and start == w.lineno:  # one-liner `def f(): ...`: no body line to insert before
+        start = min(
+            [first.lineno] + [x.lineno for x in getattr(first, "decorator_list", [])]
+        )
+        if (
+            q and start == w.lineno
+        ):  # one-liner `def f(): ...`: no body line to insert before
             continue
         text = ast.get_docstring(sn, clean=False)
         sbody = sn.body[0]
@@ -877,7 +1030,7 @@ def restore_docstrings(stub_src: str, work_src: str):
     for start, text, sindent in sorted(edits, reverse=True):
         indent = re.match(r"[ \t]*", lines[start - 1]).group(0)
         new = [ln + "\n" for ln in _doc_literal(text, indent, sindent)]
-        lines[start - 1:start - 1] = new
+        lines[start - 1 : start - 1] = new
     out = "".join(lines)
     try:
         ast.parse(out)
@@ -926,12 +1079,15 @@ def _revert_restored(changed, root=None) -> None:
             pass
 
 
-def _check_with_docstrings(d, nick: str, quiet: bool = False, capture: list | None = None) -> int:
+def _check_with_docstrings(
+    d, nick: str, quiet: bool = False, capture: list | None = None
+) -> int:
     """One unit check per pass (a second run cost the store worker's DONE hop 3.3-4.8 s on the critical chain):
     restore the stub docstrings first, run the check once. Pass keeps them; fail puts the pre-restore bytes
     back, and the printed failure is from the run with the docstrings. Returns the check's code (None: no
     unit check set). `quiet` (the speculative run) prints and records nothing; `capture` collects the lines
     that would have been printed, in order."""
+
     def say(line: str) -> None:
         if quiet:
             if capture is not None:
@@ -979,7 +1135,9 @@ def _install_from_env() -> list:
     stage = os.environ.get("ATLAS_CREW_STAGE")
     if not stage:
         return []
-    owns = _env_owns()  # a file given away is no longer installed from this worker's stage
+    owns = (
+        _env_owns()
+    )  # a file given away is no longer installed from this worker's stage
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
     got = install_staged(stage, root, owns)
     for p in got:
@@ -989,7 +1147,12 @@ def _install_from_env() -> list:
 
 def _fix_after(d, nick: str, seq: int) -> bool:
     """True when a fix message addressed to `nick` (or broadcast) is newer than the DONE at `seq`: that DONE no longer answers it."""
-    return any(r.get("kind") == "fix" and r.get("to") in (nick, "*") and int(r.get("seq") or 0) > seq for r in history(d))
+    return any(
+        r.get("kind") == "fix"
+        and r.get("to") in (nick, "*")
+        and int(r.get("seq") or 0) > seq
+        for r in history(d)
+    )
 
 
 def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) -> None:
@@ -998,17 +1161,38 @@ def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) ->
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
     digest = _owned_digest(root, _env_owns())
     prev = latest_done_record(d, nick)
-    if prev is not None and prev.get("digest") == digest and not _fix_after(d, nick, int(prev.get("seq") or 0)):
+    if (
+        prev is not None
+        and prev.get("digest") == digest
+        and not _fix_after(d, nick, int(prev.get("seq") or 0))
+    ):
         print(f"already announced DONE for {nick}")
         return
-    extra = {"digest": digest, "test_digest": test_inputs_digest(root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or "")}
+    extra = {
+        "digest": digest,
+        "test_digest": test_inputs_digest(
+            root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or ""
+        ),
+    }
     if peer_digests is not None:
         extra["peer_digests"] = peer_digests
-    n = passed_count(_LAST_UNIT.get("tail", "")) if _LAST_UNIT.get("code") == 0 else None
+    n = (
+        passed_count(_LAST_UNIT.get("tail", ""))
+        if _LAST_UNIT.get("code") == 0
+        else None
+    )
     if n is not None:
-        extra["passed"] = n  # the supervisor reports it for the test files it skips as verified
-    post(d, nick, _bus_channel(d) or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done",
-         extra=extra)
+        extra["passed"] = (
+            n  # the supervisor reports it for the test files it skips as verified
+        )
+    post(
+        d,
+        nick,
+        _bus_channel(d) or os.environ.get("ATLAS_IRC_CHANNEL") or "#team",
+        f"DONE {nick}: {text}",
+        kind="done",
+        extra=extra,
+    )
     print(f"posted DONE for {nick}")
 
 
@@ -1038,7 +1222,9 @@ def _peer_owns_env():
         peer_owns = json.loads(os.environ.get("ATLAS_CREW_PEER_OWNS") or "")
     except ValueError:
         return None
-    ok = isinstance(peer_owns, dict) and all(isinstance(v, list) for v in peer_owns.values())
+    ok = isinstance(peer_owns, dict) and all(
+        isinstance(v, list) for v in peer_owns.values()
+    )
     return peer_owns if ok else None
 
 
@@ -1070,7 +1256,14 @@ def _peer_gave_up(d, peer: str) -> bool:
 
 def _latest_done_digest(d, peer: str):
     """The digest on `peer`'s latest DONE record (None: no DONE, or one without a digest)."""
-    rec = next((r for r in reversed(history(d)) if r.get("from") == peer and r.get("kind") == "done"), None)
+    rec = next(
+        (
+            r
+            for r in reversed(history(d))
+            if r.get("from") == peer and r.get("kind") == "done"
+        ),
+        None,
+    )
     return rec.get("digest") if rec else None
 
 
@@ -1081,7 +1274,13 @@ def _peer_digests(root, peers, peer_owns) -> dict:
 
 def _closure_snapshot(root, nick: str):
     """{peer: digest} over ATLAS_CREW_NEEDS_ALL now, or None when ATLAS_CREW_PEER_OWNS is missing or lacks a peer."""
-    peers = [p for p in dict.fromkeys((os.environ.get("ATLAS_CREW_NEEDS_ALL") or "").replace(",", " ").split()) if p != nick]
+    peers = [
+        p
+        for p in dict.fromkeys(
+            (os.environ.get("ATLAS_CREW_NEEDS_ALL") or "").replace(",", " ").split()
+        )
+        if p != nick
+    ]
     peer_owns = _peer_owns_env()
     if peer_owns is None or any(p not in peer_owns for p in peers):
         return None
@@ -1106,7 +1305,15 @@ def _speculate(d, nick: str, a, deadline):
     DONEs. Returns None to fall through to the normal path (nothing printed), else the exit code. A valid pass
     (peer files unchanged across the run, every peer then DONE for exactly those bytes) prints the captured
     output and posts DONE with no second run."""
-    closure = (os.environ.get("ATLAS_CREW_NEEDS_ALL") or os.environ.get("ATLAS_CREW_NEEDS") or "").replace(",", " ").split()
+    closure = (
+        (
+            os.environ.get("ATLAS_CREW_NEEDS_ALL")
+            or os.environ.get("ATLAS_CREW_NEEDS")
+            or ""
+        )
+        .replace(",", " ")
+        .split()
+    )
     closure = [p for p in dict.fromkeys(closure) if p != nick]
     peer_owns = _peer_owns_env()
     if not closure or peer_owns is None or any(p not in peer_owns for p in closure):
@@ -1119,7 +1326,15 @@ def _speculate(d, nick: str, a, deadline):
     code = _check_with_docstrings(d, nick, quiet=True, capture=out)
     if code or _peer_digests(root, closure, peer_owns) != before:
         return None
-    rc = cmd_need(argparse.Namespace(dir=a.dir, as_=a.as_, done=True, timeout=max(deadline - time.time(), 0), peers=closure))
+    rc = cmd_need(
+        argparse.Namespace(
+            dir=a.dir,
+            as_=a.as_,
+            done=True,
+            timeout=max(deadline - time.time(), 0),
+            peers=closure,
+        )
+    )
     if rc:
         return rc
     if any(_latest_done_digest(d, p) != before[p] for p in closure):
@@ -1140,6 +1355,7 @@ def _own_failures(xml_path) -> list:
     import error: those come from an unfinished peer, not from the worker's own code. <error> elements
     (collection and import errors) are never own."""
     import xml.etree.ElementTree as ET
+
     try:
         root = ET.parse(xml_path).getroot()
     except (OSError, ET.ParseError):
@@ -1150,8 +1366,19 @@ def _own_failures(xml_path) -> list:
             text = (f.get("message") or "") + "\n" + (f.text or "")
             if STUB_MARKER in text or any(m in text for m in PEER_IMPORT_MARKERS):
                 continue
-            tid = f"{(tc.get('classname') or '').replace('.', '/')}.py::{tc.get('name')}" if tc.get("classname") else tc.get("name")
-            found.append((tid, (f.get("message") or "").strip().splitlines()[0][:300] if (f.get("message") or "").strip() else ""))
+            tid = (
+                f"{(tc.get('classname') or '').replace('.', '/')}.py::{tc.get('name')}"
+                if tc.get("classname")
+                else tc.get("name")
+            )
+            found.append(
+                (
+                    tid,
+                    (f.get("message") or "").strip().splitlines()[0][:300]
+                    if (f.get("message") or "").strip()
+                    else "",
+                )
+            )
     return found
 
 
@@ -1175,7 +1402,9 @@ def _early_check(d, nick: str, needs) -> int | None:
     PYTEST_ADDOPTS, EARLY_CHECK_TIMEOUT_S) and return 1 after printing the failures that do not depend on
     unfinished peers; None to carry on to the normal wait. ATLAS_CREW_EARLY_CHECK=off disables it."""
     cmd = os.environ.get("ATLAS_CREW_UNIT_CHECK") or ""
-    if (os.environ.get("ATLAS_CREW_EARLY_CHECK") or "").lower() == "off" or not _is_pytest_cmd(cmd):
+    if (
+        os.environ.get("ATLAS_CREW_EARLY_CHECK") or ""
+    ).lower() == "off" or not _is_pytest_cmd(cmd):
         return None
     if all(has_done(d, p) for p in needs if p != nick):
         return None
@@ -1192,19 +1421,23 @@ def _early_check(d, nick: str, needs) -> int | None:
     except OSError:
         pass
     import tempfile
+
     with tempfile.TemporaryDirectory() as tmp:
         xml = os.path.join(tmp, "early.xml")
         env = dict(os.environ)
-        env["PYTEST_ADDOPTS"] = (env.get("PYTEST_ADDOPTS", "") + f" --junitxml={xml} -p no:cacheprovider").strip()
-        try:
-            subprocess.run(_check_cmd(cmd), shell=True, cwd=root, capture_output=True, text=True, env=env, timeout=EARLY_CHECK_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
+        env["PYTEST_ADDOPTS"] = (
+            env.get("PYTEST_ADDOPTS", "") + f" --junitxml={xml} -p no:cacheprovider"
+        ).strip()
+        if run_shell(_check_cmd(cmd), root, EARLY_CHECK_TIMEOUT_S, env=env)[2]:
             return None
         own = _own_failures(xml)
     if not own:
         return None
     body = "".join(f"FAILED {t}: {m}\n" for t, m in own)[:EARLY_TAIL_CHARS]
-    print(body + "These failures do not depend on unfinished peers (no NotImplementedError or import error); fix them now. `irc check` again waits for the peers.")
+    print(
+        body
+        + "These failures do not depend on unfinished peers (no NotImplementedError or import error); fix them now. `irc check` again waits for the peers."
+    )
     return 1
 
 
@@ -1229,7 +1462,15 @@ def cmd_check(a) -> int:
         if rc is not None:
             return rc
     if needs:
-        rc = cmd_need(argparse.Namespace(dir=a.dir, as_=a.as_, done=True, timeout=max(deadline - time.time(), 0), peers=needs))
+        rc = cmd_need(
+            argparse.Namespace(
+                dir=a.dir,
+                as_=a.as_,
+                done=True,
+                timeout=max(deadline - time.time(), 0),
+                peers=needs,
+            )
+        )
         if rc:
             return rc
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
@@ -1238,7 +1479,12 @@ def cmd_check(a) -> int:
     if code:
         return code
     # peer_digests only when the closure bytes were the same before and after the passing run
-    _announce_done(d, nick, "check passes", snap if snap is not None and _closure_snapshot(root, nick) == snap else None)
+    _announce_done(
+        d,
+        nick,
+        "check passes",
+        snap if snap is not None and _closure_snapshot(root, nick) == snap else None,
+    )
     return 0
 
 
@@ -1270,7 +1516,9 @@ def cmd_wait(a) -> int:
     froms = set(a.from_.split(",")) if a.from_ else None
     bad = _unknown_peers(d, [f for f in froms or () if f != members(d).get("lead")])
     if bad:
-        print(f"not on the team: {', '.join(bad)}; peers are {', '.join(members(d).get('members') or [])}")
+        print(
+            f"not on the team: {', '.join(bad)}; peers are {', '.join(members(d).get('members') or [])}"
+        )
         return 2
     deadline = time.time() + a.timeout
     chan = members(d).get("channel", "#team")
@@ -1314,7 +1562,9 @@ def cmd_need(a) -> int:
     peers = [p for p in ",".join(a.peers).replace(",", " ").split() if p and p != nick]
     bad = _unknown_peers(d, peers)
     if bad:
-        print(f"not on the team: {', '.join(bad)}; peers are {', '.join(members(d).get('members') or [])}")
+        print(
+            f"not on the team: {', '.join(bad)}; peers are {', '.join(members(d).get('members') or [])}"
+        )
         return 2
     ok_re = r"DONE\b" if a.done else r"(READY|DONE)\b"
     deadline = time.time() + a.timeout
@@ -1344,7 +1594,9 @@ def cmd_need(a) -> int:
                     print(fmt(x, width=1000))
             return 0
         if time.time() >= deadline:
-            print(f"(timeout after {a.timeout}s; still waiting for: {', '.join(missing)})")
+            print(
+                f"(timeout after {a.timeout}s; still waiting for: {', '.join(missing)})"
+            )
             return 3
         time.sleep(0.3)
 
@@ -1390,7 +1642,9 @@ def cmd_who(a) -> int:
         print(json.dumps(team))
         return 0
     names = [str(n) for n in team.get("members") or []]
-    print(f"{team.get('channel', '?')} lead {team.get('lead', '?')}, {len(names)} members")
+    print(
+        f"{team.get('channel', '?')} lead {team.get('lead', '?')}, {len(names)} members"
+    )
     for n in names[:WHO_CAP]:
         print(n)
     if len(names) > WHO_CAP:
@@ -1409,7 +1663,10 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--to")
     s.add_argument("text", nargs="+")
     s.set_defaults(fn=cmd_say)
-    dn = sub.add_parser("done", help="announce DONE for yourself, once (idempotent; re-runs ATLAS_CREW_UNIT_CHECK when set)")
+    dn = sub.add_parser(
+        "done",
+        help="announce DONE for yourself, once (idempotent; re-runs ATLAS_CREW_UNIT_CHECK when set)",
+    )
     dn.add_argument("--as", dest="as_")
     dn.add_argument("text", nargs="*")
     dn.set_defaults(fn=cmd_done)
@@ -1420,7 +1677,10 @@ def parser() -> argparse.ArgumentParser:
     ck.add_argument("--as", dest="as_")
     ck.add_argument("--timeout", type=float, default=100)
     ck.set_defaults(fn=cmd_check)
-    gv = sub.add_parser("give", help="hand a file you own to a peer (live lease move; fixes follow the file)")
+    gv = sub.add_parser(
+        "give",
+        help="hand a file you own to a peer (live lease move; fixes follow the file)",
+    )
     gv.add_argument("--as", dest="as_")
     gv.add_argument("path")
     gv.add_argument("peer")
@@ -1444,8 +1704,16 @@ def parser() -> argparse.ArgumentParser:
     w.add_argument("--from", dest="from_")
     w.add_argument("--match")
     w.add_argument("--timeout", type=float, default=100)
-    w.add_argument("--all", action="store_true", help="also match messages already delivered to you (scan the whole log)")
-    w.add_argument("--new-only", action="store_true", help="accepted for compatibility; new messages only is the default")
+    w.add_argument(
+        "--all",
+        action="store_true",
+        help="also match messages already delivered to you (scan the whole log)",
+    )
+    w.add_argument(
+        "--new-only",
+        action="store_true",
+        help="accepted for compatibility; new messages only is the default",
+    )
     w.set_defaults(fn=cmd_wait)
     n = sub.add_parser(
         "need",
@@ -1465,7 +1733,9 @@ def parser() -> argparse.ArgumentParser:
     v.add_argument("--port", type=int, default=0)
     v.set_defaults(fn=cmd_serve)
     o = sub.add_parser("who", help="team members, one per line")
-    o.add_argument("--json", action="store_true", help="the full {channel, members, lead} object")
+    o.add_argument(
+        "--json", action="store_true", help="the full {channel, members, lead} object"
+    )
     o.set_defaults(fn=cmd_who)
     return ap
 
@@ -1476,4 +1746,5 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    stop_checks_on_signal()  # checks run in their own process groups: a stop of this process stops them too
     sys.exit(main())

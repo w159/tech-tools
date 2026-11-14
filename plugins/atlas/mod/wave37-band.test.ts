@@ -35,7 +35,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const handlers = { openView: () => undefined, toggleTodos: () => undefined };
 const NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
 const PLAN = ['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 combine the reports', 'T5 write the summary'];
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const PUA = /[\uE000-\uF8FF]/;
 const SIZES = [[150, 45, 93], [110, 40, 56]] as const;
 
@@ -264,7 +264,7 @@ describe('6. the card and the HUD row flip on the same completion signal', () =>
       expect(notifiedEnds('<task-notification><task-id>gamma-explorer</task-id><status>completed</status></task-notification>')).toEqual([{ id: 'gamma-explorer', outcome: 'done' }]);
       expect(notifiedEnds('<task-id>x</task-id><status>killed</status>')).toEqual([{ id: 'x', outcome: 'failed' }]);
       const before = frameOf(RUNNING, 93, 45);
-      expect(before.hud.some((r) => /^ {2}gamma-explorer\s+[⠀-⣿] running/.test(r))).toBe(true);
+      expect(before.hud.some((r) => /^ {2}gamma-explorer\s+[◐◓◑◒] running/.test(r))).toBe(true);
       noteEnded('gamma-explorer', 'done', NOW);
       const after = frameOf(RUNNING, 93, 45);
       expect(after.hud.some((r) => /^ {2}gamma-explorer\s+● done/.test(r)), after.hud.join('\n')).toBe(true);
@@ -287,20 +287,21 @@ describe('6. the card and the HUD row flip on the same completion signal', () =>
 });
 
 describe('7. one spinner clock', () => {
-  test('sharedSpinFrame(now) is a 100 ms beat over the ten braille frames, wrapping, never negative', () => {
+  test('sharedSpinFrame(now) is a 100 ms beat over the four spinner frames, wrapping, never negative', () => {
     expect(SPINNER_MS).toBe(100);
     expect(sharedSpinFrame(0)).toBe(0);
     expect(sharedSpinFrame(99)).toBe(0);
     expect(sharedSpinFrame(100)).toBe(1);
-    expect(sharedSpinFrame(1000)).toBe(0);
-    expect(sharedSpinFrame(1_800_000_000_000 + 350)).toBe(Math.floor((1_800_000_000_000 + 350) / 100) % 10);
+    expect(sharedSpinFrame(400)).toBe(0);
+    expect(sharedSpinFrame(1000)).toBe(2);
+    expect(sharedSpinFrame(1_800_000_000_000 + 350)).toBe(Math.floor((1_800_000_000_000 + 350) / 100) % 4);
     for (let t = -500; t < 2500; t += 37) {
       expect(sharedSpinFrame(t)).toBeGreaterThanOrEqual(0);
-      expect(sharedSpinFrame(t)).toBeLessThan(10);
+      expect(sharedSpinFrame(t)).toBeLessThan(4);
     }
   });
-  test('the band lead and its running count turn the same braille frame', () => {
-    const glyphs = [...frameOf(RUNNING, 150, 45).band.matchAll(/[⠀-⣿]/g)].map((m) => m[0]);
+  test('the band lead and its running count turn the same spinner frame', () => {
+    const glyphs = [...frameOf(RUNNING, 150, 45).band.matchAll(/[◐◓◑◒]/g)].map((m) => m[0]);
     expect(glyphs.length).toBeGreaterThanOrEqual(2);
     expect(new Set(glyphs).size).toBe(1);
     expect(LEAD_FRAMES).toContain(glyphs[0]);

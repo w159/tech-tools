@@ -1,3 +1,4 @@
+import pkg from '../package.json' with { type: 'json' };
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult as SdkCallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -99,7 +100,7 @@ async function statusTool(): Promise<SdkCallToolResult> {
 
 export async function createMcpServer(): Promise<McpServer> {
   const server = new McpServer(
-    { name: 'threatlocker-mcp', version: '1.5.0' },
+    { name: 'threatlocker-mcp', version: pkg.version },
     { capabilities: { logging: {} }, instructions: SERVER_INSTRUCTIONS },
   );
 

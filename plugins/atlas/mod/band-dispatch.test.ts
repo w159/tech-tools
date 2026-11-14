@@ -1,4 +1,4 @@
-// Critique 23, the band at dispatch time: the host's `n more` clip never takes the band (it is the first row of the slot), the lead spinner is braille and
+// Critique 23, the band at dispatch time: the host's `n more` clip never takes the band (it is the first row of the slot), the lead spinner is the one four-frame spinner and
 // never leaves a working, fixing or retrying band at any width, and the run clock reads the host's wall time without resetting, reverting or lagging.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
@@ -73,24 +73,24 @@ const PHASES = ['research', 'plan', 'build', 'verify', 'done'] as const;
 const live: MissionWorker[] = [{ name: 'impl-a', state: 'running', secs: 4, tool: 'Read', target: 'a.ts' }, { name: 'impl-b', state: 'running', secs: 9 }];
 const model = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150, maxRows: 1, tick: 0, project: 'p', phases: PHASES, phase: 'build', done: 3, total: 5, workers: [], checks: null, ui, ...over });
 const head = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs).trimEnd();
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const WIDTHS = [150, 120, 110, 100, 93, 80, 70, 62];
 
-describe('step 2: the lead spinner is braille on the shared frame, rows keep the circle quarters', () => {
-  test('MiniDot in ten frames, and the ASCII spinner in ASCII mode', () => {
-    expect(LEAD_FRAMES.join('')).toBe('⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏');
-    expect([0, 1, 2, 3, 10, -1].map((f) => leadSpinnerGlyph(f))).toEqual(['⠋', '⠙', '⠹', '⠸', '⠋', '⠏']);
+describe('step 2: the lead spinner is the circle quarters of the rows, on the shared frame', () => {
+  test('four frames, wrapping, and the ASCII spinner in ASCII mode', () => {
+    expect(LEAD_FRAMES.join('')).toBe('◐◓◑◒');
+    expect([0, 1, 2, 3, 10, -1].map((f) => leadSpinnerGlyph(f))).toEqual(['◐', '◓', '◑', '◒', '◑', '◒']);
     expect([0, 1, 2, 3].map((f) => leadSpinnerGlyph(f, true))).toEqual(['|', '/', '-', '\\']);
     expect(SPIN_FRAMES.join('')).toBe('◐◓◑◒');
     expect(spinnerGlyph(1)).toBe('◓');
   });
   test('the lead steps once per frame of the shared clock', () => {
-    const seen = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((tick) => head(model({ tick, busy: true, turnSecs: 3 })).match(BRAILLE)![0]);
-    expect(seen.join('')).toBe(LEAD_FRAMES.join(''));
+    const seen = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((tick) => head(model({ tick, busy: true, turnSecs: 3 })).match(SPIN_MARK)![0]);
+    expect(seen.join('')).toBe([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((tick) => spinnerGlyph(tick)).join(''));
   });
   test('ASCII mode keeps the ASCII spinner', () => {
     const t = head(model({ busy: true, turnSecs: 3, ui: { theme: 'mocha', ascii: true, color: 'none' } }));
-    expect(t).not.toMatch(BRAILLE);
+    expect(t).not.toMatch(SPIN_MARK);
     expect(t).toMatch(/[|/\\-] working/);
   });
   test('the frame period is the fastest the host does not fold: ten redraws a second', () => {
@@ -108,10 +108,10 @@ describe('step 3: while work runs the spinner stays at every width (a blocked ba
   ];
   for (const [name, over, word, spins] of cases) {
     for (const cols of WIDTHS) {
-      test(`${name} at ${cols} columns ${spins ? 'keeps a braille spinner' : 'draws no spinner'}, its word and todo n/m`, () => {
+      test(`${name} at ${cols} columns ${spins ? 'keeps a spinner' : 'draws no spinner'}, its word and todo n/m`, () => {
         const t = head(model({ cols, ...over }));
-        if (spins) expect(t).toMatch(BRAILLE);
-        else expect(t.split(/\s+todo|\s·\stodo/)[0]).not.toMatch(BRAILLE); // the lead is static; a running worker's count spinner beside the todo figure is the worker's
+        if (spins) expect(t).toMatch(SPIN_MARK);
+        else expect(t.split(/\s+todo|\s·\stodo/)[0]).not.toMatch(SPIN_MARK); // the lead is static; a running worker's count spinner beside the todo figure is the worker's
         expect(t).toMatch(word);
         expect(t).toMatch(/\btodo\b\D*?\d+\/\d+/);
         expect([...t].length).toBeLessThanOrEqual(cols);
@@ -142,7 +142,7 @@ describe('step 4d: blocked while the host waits on the person is a bare `blocked
       const t = head(model({ cols, ...asks }));
       expect(t).toContain('▲ blocked');
       expect(t).not.toContain('needs you');
-      expect(t).not.toMatch(BRAILLE);
+      expect(t).not.toMatch(SPIN_MARK);
       expect(t).not.toContain('fixing');
     });
   }
@@ -151,7 +151,7 @@ describe('step 4d: blocked while the host waits on the person is a bare `blocked
     expect(t).toContain('▲ blocked');
     expect(t).not.toContain('needs you');
     expect(t).not.toContain('fixing');
-    expect(t.split(/\s+todo|\s·\stodo/)[0]).not.toMatch(BRAILLE);
+    expect(t.split(/\s+todo|\s·\stodo/)[0]).not.toMatch(SPIN_MARK);
   });
 });
 

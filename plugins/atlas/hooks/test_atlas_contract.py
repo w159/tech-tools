@@ -2024,3 +2024,111 @@ class SkillTriggerPhrasing(unittest.TestCase):
         for skill in self.PHRASES:
             fm = _frontmatter(PLUGIN_ROOT / "skills" / skill / "SKILL.md")
             self.assertLessEqual(len(fm.get("description", "")) + len(fm.get("when_to_use", "")), 1536, skill)
+
+
+class DocsTellTheTruthContract(unittest.TestCase):
+    """What a skill, agent prompt or reference doc tells the model or the user must exist in the code.
+
+    Each test here pins one class of false statement found in the 17.20.0 truth review: a skill command that
+    errors because its script path is relative to the user's project, a documented env knob no code reads, a
+    doc link that leads nowhere, and a reference whose counts and tables drifted from disk."""
+
+    REFERENCE = REPO_ROOT / "docs" / "reference" / "atlas-reference.md"
+    # Placeholders that look like a knob but name none.
+    ENV_PLACEHOLDERS = {"ATLAS_KEY"}
+    CODE_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".mjs", ".json", ".sh", ".yml", ".yaml", ".toml"}
+
+    def _prompt_docs(self):
+        out = []
+        for sub in ("skills", "agents", "references", "output-styles"):
+            out += sorted((PLUGIN_ROOT / sub).rglob("*.md"))
+        return out
+
+    def _code_text(self) -> str:
+        chunks = []
+        for base in (PLUGIN_ROOT, REPO_ROOT / "telemetry", REPO_ROOT / "scripts"):
+            if not base.is_dir():
+                continue
+            for dirpath, dirnames, filenames in os.walk(base):
+                dirnames[:] = [d for d in dirnames if d not in ("node_modules", "__pycache__", ".git")]
+                for name in filenames:
+                    if os.path.splitext(name)[1] in self.CODE_SUFFIXES:
+                        with contextlib.suppress(OSError):
+                            chunks.append(Path(dirpath, name).read_text(encoding="utf-8", errors="ignore"))
+        return "\n".join(chunks)
+
+    def test_skill_commands_anchor_their_bundled_scripts(self):
+        """`python3 scripts/x.py` in a skill runs in the user's project, where no such file exists (exit 2). A
+        bundled script is named through ${CLAUDE_SKILL_DIR} or ${CLAUDE_PLUGIN_ROOT}."""
+        bad = []
+        pat = re.compile(r"(?:python3?|bash|sh)\s+[\"']?(scripts/[\w.-]+\.(?:py|sh))")
+        for md in sorted((PLUGIN_ROOT / "skills").rglob("*.md")):
+            skill_dir = PLUGIN_ROOT / "skills" / md.relative_to(PLUGIN_ROOT / "skills").parts[0]
+            for n, line in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):
+                for m in pat.finditer(line):
+                    rel = m.group(1)
+                    if (skill_dir / rel).is_file() or (PLUGIN_ROOT / rel).is_file():
+                        bad.append("%s:%d: %s" % (md.relative_to(PLUGIN_ROOT), n, m.group(0)))
+        self.assertEqual(bad, [], "bundled script run by a project-relative path")
+
+    def test_every_documented_env_knob_is_read_by_code(self):
+        code = self._code_text()
+        docs = self._prompt_docs() + [PLUGIN_ROOT / "README.md", REPO_ROOT / "README.md", self.REFERENCE]
+        dead = set()
+        for md in docs:
+            for knob in set(re.findall(r"\bATLAS_[A-Z0-9_]{2,}\b", md.read_text(encoding="utf-8"))):
+                if knob not in self.ENV_PLACEHOLDERS and knob.rstrip("_") not in code:
+                    dead.add("%s: %s" % (md.relative_to(REPO_ROOT), knob))
+        self.assertEqual(sorted(dead), [], "documented env knob that no code reads")
+
+    def test_relative_doc_links_resolve(self):
+        dead = []
+        docs = [PLUGIN_ROOT / "README.md", REPO_ROOT / "README.md", self.REFERENCE]
+        docs += sorted((PLUGIN_ROOT / "agents").glob("*.md")) + sorted((PLUGIN_ROOT / "references").glob("*.md"))
+        for md in docs:
+            for n, line in enumerate(md.read_text(encoding="utf-8").splitlines(), 1):
+                for target in re.findall(r"\]\(([^)#\s]+)(?:#[^)]*)?\)", line):
+                    if re.match(r"[a-z][a-z0-9+.-]*:", target) or target.startswith(("<", "$")):
+                        continue
+                    if not (md.parent / target).exists():
+                        dead.append("%s:%d: %s" % (md.relative_to(REPO_ROOT), n, target))
+        self.assertEqual(dead, [], "relative link to a file that does not exist")
+
+    def test_reference_counts_and_tables_match_disk(self):
+        ref = self.REFERENCE.read_text(encoding="utf-8")
+        inv = DocsMatchCodeContract()._inventory()
+        self.assertIn("%d hook programs / %d bindings" % (inv["programs"], inv["bindings"]), ref)
+        self.assertIn("%d skills" % inv["skills"], ref)
+        self.assertIn("%d agents" % inv["agents"], ref)
+        for stale in re.findall(r"\b(\d+) (?:hook )?programs\b", ref):
+            self.assertEqual(int(stale), inv["programs"], "stale hook program count in atlas-reference.md")
+        missing_hooks = sorted({p.name for p in _script_paths() if p.name not in ref})
+        self.assertEqual(missing_hooks, [], "wired hook missing from atlas-reference.md")
+        skills = sorted(p.name for p in (PLUGIN_ROOT / "skills").iterdir() if p.is_dir())
+        self.assertEqual([s for s in skills if "`%s`" % s not in ref], [], "skill missing from atlas-reference.md")
+        scripts = [p for p in SCRIPTS_DIR.glob("*.py") if not p.name.startswith(("test_", "_test_"))]
+        self.assertIn("%d non-test Python scripts" % len(scripts), ref)
+
+    def test_skill_flags_exist_in_the_script_they_are_passed_to(self):
+        """A flag written after an atlas script in a skill, agent or reference must be one that script parses."""
+        bad = []
+        pat = re.compile(r"\b(atlas_\w+\.py)[\"'`]?((?:[ \t]+[^`\n|;&)]*)?)")
+        for md in self._prompt_docs():
+            text = md.read_text(encoding="utf-8").replace("\\\n", " ")
+            for n, line in enumerate(text.splitlines(), 1):
+                for m in pat.finditer(line):
+                    script = next((d / m.group(1) for d in (SCRIPTS_DIR, HOOKS_DIR) if (d / m.group(1)).is_file()), None)
+                    if script is None:
+                        continue
+                    src = script.read_text(encoding="utf-8")
+                    own = re.split(r'\s--\s|"/atlas', m.group(2))[0]  # flags after `--` or inside a slash command are not this script's
+                    for flag in re.findall(r"(?<![\w-])(--[a-z][a-z0-9-]+)", own):
+                        if flag != "--help" and flag not in src:
+                            bad.append("%s:%d: %s %s" % (md.relative_to(PLUGIN_ROOT), n, m.group(1), flag))
+        self.assertEqual(bad, [], "flag the script does not define")
+
+    def test_health_check_phrasings_route_to_the_doctor_skill(self):
+        """atlas-setup (repair) is manual, so the only skill a model can load for 'is atlas healthy' is atlas-doctor."""
+        when = _frontmatter(PLUGIN_ROOT / "skills" / "atlas-doctor" / "SKILL.md").get("when_to_use", "").lower()
+        for phrase in ("atlas doctor", "atlas health check"):
+            self.assertIn(phrase, when)

@@ -298,8 +298,8 @@ export const rowWordTone = (state: UiState, word?: string): Tone => (word === RE
 
 export const stateGlyph = (s: MarkState, ui: Pick<Ui, 'ascii'>): string => (s === RETURNED ? (ui.ascii ? STATE_ASCII.waiting : STATE_GLYPHS.waiting) : ui.ascii ? STATE_ASCII[s === 'doubt' ? 'done' : s] : STATE_GLYPHS[s === 'doubt' ? 'done' : s]);
 /** Glyph run for a state: its token, or `text` where the token is under 3:1 (and always `text` in ASCII, where the mark is a letter). */
-export function stateRun(s: MarkState, ui: Ui, spinFrame = 0, braille = false): Run {
-  const g = s === 'running' ? (braille ? leadSpinnerGlyph(spinFrame, ui.ascii) : spinnerGlyph(spinFrame, ui.ascii)) : stateGlyph(s, ui);
+export function stateRun(s: MarkState, ui: Ui, spinFrame = 0): Run {
+  const g = s === 'running' ? spinnerGlyph(spinFrame, ui.ascii) : stateGlyph(s, ui);
   return { t: g, tone: ui.ascii ? 'text' : glyphTone(markToken(s), ui.theme) };
 }
 /** THE mark of a `warning` (a failing check while Stop did not refuse): the amber attention triangle on the band head, the checks row and the gates tab alike.
@@ -318,9 +318,8 @@ export function stateWordTone(s: UiState, ui: Pick<Ui, 'ascii' | 'theme'>): Toke
   return contrast(PALETTES[ui.theme][tok], PALETTES[ui.theme].panel) >= NEED.text ? tok : 'text';
 }
 /** `◐ 1 running`: glyph run, then the count and word in text. */
-/** `◐ 2 running`: a state's glyph and count. `braille` draws a running count with the band lead's braille frame (the same shared frame index) so a row that already carries the lead spinner
- * never mixes braille and circles: the band's agents segment, a title count and a panel's agents line pass it; rows the capture scorer reads by glyph (TODO, SUBAGENTS, band worker rows) do not. */
-export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0, braille = false): Run[] => [{ ...stateRun(s, ui, spinFrame, braille), t: `${stateRun(s, ui, spinFrame, braille).t} ` }, { t: `${n} ${s}`, tone: 'text' }];
+/** `◐ 2 running`: a state's glyph and count. A running count turns the one spinner at `spinFrame`, the glyph the band lead and every row turn on that frame. */
+export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0): Run[] => [{ ...stateRun(s, ui, spinFrame), t: `${stateRun(s, ui, spinFrame).t} ` }, { t: `${n} ${s}`, tone: 'text' }];
 
 // ---- width and clipping -------------------------------------------------------------------------
 
@@ -616,23 +615,20 @@ export function sparkline(values: readonly number[], peak: number, ascii = false
 // ---- motion (pure functions of time) -------------------------------------------------------------------------------
 
 export const SPINNER_MS = 100;
-/** The row working signal (round 3): the circle quarters, one frame per beat of the shared clock, on every row surface (TODO, SUBAGENTS, panel, board, band worker rows).
- * The capture scorer maps only these four marks on rows. The band's own lead spinner is the braille set below. */
+/** The ONE working signal: the circle quarters, one frame per beat of the shared clock, on every surface (band lead and counts, TODO, SUBAGENTS title and rows, side panel, board, cards).
+ * The capture scorer maps only these four marks on the rows it reads by glyph (TODO, SUBAGENTS, plan rows); it reads the band lead and the team rows by their word, so one set serves both. */
 export const SPIN_FRAMES = ['◐', '◓', '◑', '◒'] as const;
-/** The band lead's spinner (MiniDot): ten braille frames, one per beat of the same shared clock. Rows never use it. */
-export const LEAD_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const;
+/** The band lead's spinner frames: the SAME four marks (it was a ten-frame braille set, so the band and the panel never matched the rows). Kept as a name for its readers. */
+export const LEAD_FRAMES = SPIN_FRAMES;
 const SPIN_ASCII = ['|', '/', '-', '\\'] as const;
 /** Spinner frame by frame number (any integer). */
 export function spinnerGlyph(frame: number, ascii = false): string {
   const f = ascii ? SPIN_ASCII : SPIN_FRAMES;
   return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
 }
-/** The band lead's spinner at frame `frame` (braille; the ASCII set in ASCII mode). */
-export function leadSpinnerGlyph(frame: number, ascii = false): string {
-  const f = ascii ? SPIN_ASCII : LEAD_FRAMES;
-  return f[((Math.floor(frame) % f.length) + f.length) % f.length]!;
-}
-/** Truth 41: the ONE glyph of a run state word, by frame index: the band's lead and the side panel's phase row both draw this and nothing else (`⠴ working`, `● done`, `○ idle`, `▲ blocked`). A working run turns the braille frame; the others do not move. */
+/** The band lead's spinner at frame `frame`: the one spinner (spinnerGlyph), under the name the band's readers use. */
+export const leadSpinnerGlyph = spinnerGlyph;
+/** Truth 41: the ONE glyph of a run state word, by frame index: the band's lead and the side panel's phase row both draw this and nothing else (`◓ working`, `● done`, `○ idle`, `▲ blocked`). A working run turns the spinner frame; the others do not move. */
 export function phaseGlyph(kind: 'working' | 'done' | 'blocked' | 'idle', frame: number, ascii = false): string {
   if (kind === 'working') return leadSpinnerGlyph(frame, ascii);
   return ascii ? GLYPH5_ASCII[kind] : kind === 'done' ? STATE_GLYPHS.done : GLYPH5[kind];

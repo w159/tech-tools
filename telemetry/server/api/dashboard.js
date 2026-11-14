@@ -289,7 +289,7 @@ const SCRIPT = String.raw`
     shown.forEach(function (it) {
       var row = el("div", "brow");
       add(row, el("span", "name", it.name !== undefined ? it.name : it.key, { title: it.name !== undefined ? it.name : it.key }));
-      add(row, el("span", "val num", fmt(it.installs) + " / " + fmt(it.total)));
+      add(row, el("span", "val num", fmt(it.installs) + " / " + fmt(it.total) + (it.pct != null ? " \u00B7 " + it.pct + "%" : "")));
       var track = el("div", "track");
       var fill = el("div", "fill");
       fill.style.width = Math.max(2, Math.round((it.installs / top) * 100)) + "%";
@@ -430,6 +430,21 @@ const SCRIPT = String.raw`
       t.dropped_keys > 0 ? "Clients send keys this server does not know: redeploy the server." : "", t.dropped_keys > 0));
     add(app, k);
 
+    add(app, el("h2", "", "Fix or build next"));
+    var sg = el("div", "card");
+    var sigs = d.signals || [];
+    if (!sigs.length) add(sg, el("p", "ok", "Nothing stands out in this window."));
+    sigs.forEach(function (x) {
+      var row = el("div");
+      row.style.marginTop = "8px";
+      add(row, el("div", "", x.title), el("div", "muted", x.evidence));
+      add(sg, row);
+    });
+    var rt = d.rates;
+    if (rt) {
+      add(sg, el("p", "muted num", "gate blocks " + rt.gate.block_pct + "% of finishes \u00B7 send failures " + rt.delivery.fail_pct + "% \u00B7 team runs failed " + rt.team.fail_pct + "% \u00B7 slow dispatch " + rt.dispatch.slow_pct + "%"));
+    }
+    add(app, sg);
     add(app, el("h2", "", "Trend"));
     add(app, trend(d.weeks || []));
 
@@ -478,12 +493,12 @@ const SCRIPT = String.raw`
       var tw = el("div", "tablewrap");
       var tb = el("table");
       var th = el("thead"), hr = el("tr");
-      add(hr, el("th", "", "Key"), el("th", "r", "Installs"), el("th", "r", "Total"));
+      add(hr, el("th", "", "Key"), el("th", "r", "Installs"), el("th", "r", "% of install-weeks"), el("th", "r", "Per 100 sessions"), el("th", "r", "Total"));
       add(th, hr); add(tb, th);
       var body = el("tbody");
       fl.forEach(function (f) {
         var tr = el("tr");
-        add(tr, el("td", "key", f.key), el("td", "r num", fmt(f.installs)), el("td", "r num" + (f.total > 0 ? " bad" : ""), fmt(f.total)));
+        add(tr, el("td", "key", f.key), el("td", "r num", fmt(f.installs)), el("td", "r num", f.pct == null ? "" : f.pct + "%"), el("td", "r num", f.per_100_sessions == null ? "" : fmt(f.per_100_sessions)), el("td", "r num" + (f.total > 0 ? " bad" : ""), fmt(f.total)));
         add(body, tr);
       });
       add(tb, body); add(tw, tb); add(fc, tw);

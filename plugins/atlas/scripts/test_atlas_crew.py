@@ -2270,11 +2270,9 @@ class RunDirHelpers(unittest.TestCase):
 
     def test_run_check_timeout_is_124_with_the_budget_in_the_message(self):
         self.assertEqual(atlas_crew._run_check("sleep 5", self.root, timeout=0.2), (124, "timed out after 0.2s"))
-        with mock.patch.object(atlas_crew.subprocess, "run") as run:
-            run.return_value = types.SimpleNamespace(returncode=0, stdout=None, stderr=None)
+        with mock.patch.object(atlas_crew.atlas_irc, "run_shell", return_value=(0, "", False)) as run:
             self.assertEqual(atlas_crew._run_check("x", self.root), (0, ""))
-        self.assertEqual(run.call_args.kwargs["timeout"], 900)
-        self.assertTrue(run.call_args.kwargs["shell"])
+        self.assertEqual(run.call_args.args, ("x", self.root, 900))
 
     def test_known_run_returns_the_directory_or_prints_the_error(self):
         rundir, _ = self._run()
@@ -2550,7 +2548,7 @@ class RunDirHelpers(unittest.TestCase):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew.os, "kill", fake_kill), mock.patch.object(
             atlas_crew, "_tmux"
-        ) as tm:
+        ) as tm, mock.patch.object(atlas_crew, "_is_ours", return_value=True):  # the fake pids stand for this run's
             code = atlas_crew.cmd_kill(types.SimpleNamespace(root=str(self.root), run="r1"))
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(buf.getvalue()), {"ok": True, "killed": ["a"]})

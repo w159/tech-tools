@@ -269,8 +269,8 @@ const isSpelled = (row: BoardRow): boolean => markOf(row.state, row.word) === 'd
 /** A row's state mark: the `■` in error 203 for a killed worker's row (wave 30: it was the done disc, and read `closed`), the state's own glyph otherwise; a working mark is the accent. */
 function markRun(row: BoardRow, o: BoardOpts): Run {
   const doubt = markOf(row.state, row.word) === 'doubt' || (!!o.pane && ownerDown(row));
-  const frame = o.nowMs !== undefined ? (o.pane ? sharedSpinFrame(o.nowMs) : spinFrameOf(o.nowMs, row.owner || row.label)) : o.tick ?? 0; // the pane's braille is the band's frame (motion.sharedSpinFrame)
-  const g = stateRun(doubt ? 'failed' : markOf(row.state, row.word), o.ui, frame, !!o.pane); // the side panel's spinner is the braille family
+  const frame = o.nowMs !== undefined ? (o.pane ? sharedSpinFrame(o.nowMs) : spinFrameOf(o.nowMs, row.owner || row.label)) : o.tick ?? 0; // the pane's spinner is the band's frame (motion.sharedSpinFrame)
+  const g = stateRun(doubt ? 'failed' : markOf(row.state, row.word), o.ui, frame); // one spinner on every surface
   return row.state === 'running' && !o.ui.ascii ? { ...g, tone: 'accent' } : g;
 }
 
@@ -577,7 +577,7 @@ export function boardTimeline(agents: readonly TimelineAgent[], o: Pick<BoardOpt
     if (!o.spark && at + cells(when) <= barW) [...when].forEach((ch, j) => { grid[at + j] = { t: ch, tone: 'dim' }; });
     // One run per colour: adjacent cells of one tone join.
     const bar = grid.reduce<Run[]>((acc, x) => { const l = acc[acc.length - 1]; if (l && l.tone === x.tone && l.fg === x.fg) l.t += x.t; else acc.push({ ...x }); return acc; }, []);
-    const mark = stateRun(a.state, o.ui, o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : frame, true);
+    const mark = stateRun(a.state, o.ui, o.nowMs !== undefined ? sharedSpinFrame(o.nowMs) : frame);
     const name = names[i]!;
     const runs: Run[] = [r(' '), mark, r(' '), r(name + ' '.repeat(Math.max(0, NAME_W - cells(name))), 'sub'), r(' '), ...bar];
     if (o.spacers && i > 0) out.push({ runs: [r(' ')] });
@@ -616,7 +616,7 @@ export function boardTotals(agents: readonly TimelineAgent[], o: Pick<BoardOpts,
   const parts: Run[] = [];
   for (const s of ['running', 'done', 'failed', 'blocked', 'waiting'] as const) {
     if (!n(s) || (s === 'failed' && o.hideFailed)) continue;
-    const g = stateRun(s, o.ui, frame, true); // a working mark is the band's braille (wave 32)
+    const g = stateRun(s, o.ui, frame); // a working mark is the band's spinner (wave 32)
     parts.push(...(parts.length ? [r('  ')] : []), { ...g, tone: s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(` ${n(s)} ${s}`, n(s) ? 'text' : 'muted'));
   }
   const starts = ran.map((a) => a.startMs).filter((x): x is number => typeof x === 'number');
@@ -645,7 +645,7 @@ export function boardFootLine(agents: readonly TimelineAgent[], o: Pick<BoardOpt
   const calls = ran.reduce((k, a) => k + (a.calls?.length ?? 0), 0);
   const make = (words: boolean, time: 'total' | 'bare' | 'none', callWord: 'worker calls' | 'calls' | ''): Run[] => {
     const parts = counts.flatMap((x, i): Run[] => {
-      const g = stateRun(x.s, o.ui, frame, true);
+      const g = stateRun(x.s, o.ui, frame);
       return [...(i ? [r(words ? '  ' : ' ')] : []), { ...g, tone: x.s === 'running' && !o.ui.ascii ? 'accent' : g.tone }, r(words ? ` ${x.n} ${x.s}` : ` ${x.n}`, 'text')];
     });
     const tail: Run[] = secs > 0 && time !== 'none'

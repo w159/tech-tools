@@ -5,6 +5,7 @@
 import type { ResolvedConfig } from './config.js';
 import type { AuthManager } from './auth.js';
 import type { RateLimiter } from './rate-limiter.js';
+import { DEFAULT_MAX_RETRY_AFTER_MS, resilientFetch } from './net.js';
 import {
   NinjaOneError,
   NinjaOneAuthenticationError,
@@ -102,12 +103,13 @@ export class HttpClient {
     // Record the request
     this.rateLimiter.recordRequest();
 
-    // Make the request
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    // Per-attempt timeout and clear network errors (see net.ts). Retries for
+    // 429 / 5xx stay in handleResponse, which also feeds the rate limiter.
+    const response = await resilientFetch(
+      url,
+      { method, headers, body: body ? JSON.stringify(body) : undefined },
+      { maxRetries: 0 },
+    );
 
     // Handle the response
     return this.handleResponse<T>(response, url, method, body, skipAuth, retryCount, isRetryAfter401);
@@ -191,8 +193,9 @@ export class HttpClient {
         throw new NinjaOneNotFoundError('Resource not found', responseBody);
 
       case 429:
-        // Rate limited - retry with backoff
-        if (this.rateLimiter.shouldRetry(retryCount)) {
+        // Rate limited - retry idempotent requests with backoff, but never sit through a long Retry-After
+        if (method !== 'POST' && method !== 'PATCH' && this.rateLimiter.shouldRetry(retryCount)
+          && this.rateLimiter.parseRetryAfter(response.headers.get('Retry-After')) <= DEFAULT_MAX_RETRY_AFTER_MS) {
           const retryAfterHeader = response.headers.get('Retry-After');
           const delay = this.rateLimiter.parseRetryAfter(retryAfterHeader);
           this.rateLimiter.handleRateLimitError(retryCount);
@@ -207,8 +210,8 @@ export class HttpClient {
 
       default:
         if (response.status >= 500) {
-          // Server error - retry once
-          if (retryCount === 0) {
+          // Server error - retry once, idempotent requests only
+          if (retryCount === 0 && method !== 'POST' && method !== 'PATCH') {
             await this.sleep(1000);
             return this.executeRequest<T>(url, method, body, skipAuth, 1, isRetryAfter401);
           }

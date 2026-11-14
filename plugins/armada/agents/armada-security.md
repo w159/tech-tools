@@ -22,6 +22,10 @@ Vanta, KnowBe4, ThreatLocker, Blumira
 
 approval-queue-triage, audit-forensics, blumira-agents, blumira-api-patterns, blumira-findings, blumira-msp, blumira-resolutions, blumira-users, evidence-gap-hunter, framework-audit-readiness, knowbe4-api-patterns, knowbe4-phishing, knowbe4-reporting, knowbe4-training, knowbe4-users, risk-heatmap, threatlocker-api-patterns, threatlocker-approval-requests, threatlocker-audit-log, threatlocker-computer-groups, threatlocker-computers, threatlocker-organizations, vanta-vendor-risk-rollup, vanta-vulnerability-triage
 
+These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/security/skills/<name>/SKILL.md`;
+open the one that matches the task before you start, and follow any reference it names.
+
 ## Standing constraints
 
 1. **Follow org branding.** When the org config has branding configured, all

@@ -1,5 +1,40 @@
 # Changelog
 
+## 17.21.0 - 2026-11-14
+
+Round 2 of the expert audit: closes what 17.20.0 left open, then new critic passes over atlas, armada and programmer. Evidence: `docs/audits/2026-11-14_atlas-round2-expert-audit.md`.
+
+- One spinner everywhere: the band, the TODO and SUBAGENTS block, the side panel, the board and the dispatch cards all turn the same four circle marks on the same beat. The braille spinner on the band and panel is gone. ASCII mode still turns `|/-\`. A new test failed before ("◐" vs "◐⠋"); the bun suite is 4133 pass, 35 skip, 0 fail, was 4123.
+- Fixed: the side panel's phase spinner could drift out of step with the band after the tenth beat.
+- Crew: a check past its timeout is killed with every process it started. A hung or forking shard no longer holds the supervisor past its budget (before: a 3 s budget took 49.1 s), and the timeout output keeps what the check printed.
+- Crew: checks run in their own process group, and kill, Ctrl-C or a closing pane stops them, so no check outlives the process that ran it.
+- Crew: a check that prints non-UTF-8 bytes yields a red verdict instead of crashing the supervisor or `irc check`.
+- Crew: kill only signals processes whose command line names the run; a reused pid from a finished run is left alone.
+- Crew: `wait` and `run --wait` report a supervisor that died without a summary (exit 1, with the `supervisor.log` tail) instead of "still running" forever.
+- Crew: plans with absolute or `../` owned paths, and run ids tmux cannot name (dots, colons, slashes), are refused up front with exit 2.
+- Crew: `_is_ours` matches the run id as a whole argv path component or a `--name <run_id>-` token instead of a substring, so `crew kill` no longer signals unrelated pids.
+- Warm lead: stop during a recycle starts no new lead and leaves no lead process behind.
+- `atlas_resolve.check_paths` now resolves symlinks (realpath) and refuses `--paths` entries that escape the project root through a symlink. New files and in-root symlinks are still accepted. 2 tests failed before; 273 pass after.
+- Status cache: `atlas_status_segment` `refresh_gates` now prunes `status-gates-*.json` and `status-segment-*.json` in `~/.atlas` older than 7 days (the current file, fresh files and unrelated files are kept; errors are ignored). Before: 24 cache files after one day, never deleted. The `PruneStaleCaches` test failed before; 84 pass after.
+- atlas-setup: the scaffold command now runs from the skill directory; from a project it used to fail with "can't open file scripts/scaffold_docs.py".
+- atlas-audit self mode: the `atlas_db.py` and `session_ingest.py` backfill commands now use the plugin path instead of a project-relative one.
+- atlas-doctor now loads for "atlas doctor", "atlas health check" and "atlas band or HUD missing".
+- `docs/reference/atlas-reference.md`: hook table, gate conditions (a) to (s), counts, manual skills, slash-command form and five dead links corrected; removed the `ATLAS_PINNED_PROJECTS` row for a knob no code reads.
+- New contract tests keep skill commands, documented env knobs, doc links and reference counts matched to the code (5 failed before, 118 pass after).
+- READMEs: the quick start boot line and dry-run output now match what the code prints; `worker_report_gate` events; script count 78.
+- Telemetry: counting hooks now start the hourly background send, so a session's usage leaves the machine without waiting for a later session start.
+- Telemetry: `ATLAS_ANALYTICS=on` counts as the first-run notice shown; before, explicit opt-ins never sent. `send --auto` refuses before the notice.
+- Telemetry: crew and colony worker sessions (`ATLAS_WORKER_NAME`, `ATLAS_CREW_WORKER`) no longer count as sessions or active days.
+- Telemetry: the hourly send stamp no longer erases a just-written send result; it takes `analytics/.lock` without blocking and skips the stamp on contention. 2 tests failed before; 263 pass after.
+- Telemetry: the anonymity check no longer refuses sends when a username or hostname equals a public payload value (`linux`, `true`, `3.13`).
+- Telemetry: `status` prints a `send:` line saying whether sending is ready, waiting for the notice or blocked.
+- Telemetry dashboard: hook totals no longer double-count reason sub-keys; hooks that only fault are failures, not use; a skill typed as a slash command is not "unused".
+- Telemetry dashboard: adds `pct`, `per_100_sessions`, `rates` and "Fix or build next" signals with evidence. This is a server change and needs a production deploy, which has not happened yet.
+- omp todo-fallback test: the harness now uses a frozen clock; the wall-clock spinner made it fail about 1 run in 2 under load.
+- `test_atlas_resolve_paths.py` now imports the test isolation helper (the contract test caught it).
+- Measured: Measured (claude-sonnet-5-5, effort medium, same model for lead, workers and the plain baseline; n=3 per cell; all 24 runs passed every test). 8 modules (434 tests): cold 28.3, 27.7, 28.2 s (mean 28.1 s, 53% of plain cold 52.9 s), warm 27.7, 24.7, 23.0 s (mean 25.1 s, 49% of plain warm 51.7 s), 144-152k tokens (57% of plain cold 260k, 46% of plain warm 316k). 16 modules (869 tests): cold 36.8, 32.8, 34.8 s (mean 34.8 s, 31% of plain cold 113.4 s), warm 33.4, 29.3, 30.5 s (mean 31.1 s, 26% of plain warm 121.9 s), 215-228k tokens (38% of plain cold 559k, 36% of plain warm 607k). Warm excludes CLI start and exit; cold includes them. This matrix ran about 2 s slower per atlas run than the 17.20.0 matrix earlier the same day, so an interleaved A/B then ran the 17.20.0 tree and this tree back to back on 16 modules: warm 31.7, 28.6, 138.8 s for 17.20.0 (one worker took 128 s) against 29.0, 28.7, 29.3 s for this release; cold 31.9, 33.9, 30.3 s (mean 32.0 s) against 32.5, 30.4, 28.7 s (mean 30.5 s). This release made the crew neither slower nor faster; the matrix gap was model latency at a different hour. The 1/4 time goal is met warm at 16 modules only within noise (26%) and not at 8 modules (49%).
+- Not changed: the 1/4 wall-time goal at 8 modules is not reachable with the same model (floor 33.7%, see section 1 of the audit doc). Crew `_group_of` and `_stop_pidfile` still match the run id as a substring (an exact-match fix needed a one-line change to an existing test fixture that was refused, so it was left out).
+
 ## 17.20.0 - 2026-11-14
 
 An adversarial audit, four critics on different models (claude-sonnet-5-5 on skills and routing, claude-fable-5-2 on the mods and status line, claude-opus-5-5 on the hooks and the doctor and on armada and programmer), looked for what did not work the way an expert would expect. Each confirmed finding was fixed at the cause with a test that fails before the fix and passes after: the new tests give 98 failures on the 17.18.0 code and none on this release. Evidence: `docs/audits/2026-11-14_atlas-17.20.0-expert-audit.md`. Full suite after the rebase onto 17.19.0: 9101 passed, 5 skipped, 0 failed (`python -m pytest -q -n 4 -p no:cacheprovider plugins/`); `bun test mod omp`: 4123 pass, 0 fail.

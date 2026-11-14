@@ -64,6 +64,18 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-14 | tele-6 | verified | worker sessions record no session/active.day keys | [2026-11-14_tele-6.md](2026-11-14_tele-6.md) |
+| 2026-11-14 | tele-5 | verified | _notice_shown True with ATLAS_ANALYTICS=on; send --auto exits 2 w/o notice | [2026-11-14_tele-5.md](2026-11-14_tele-5.md) |
+| 2026-11-14 | tele-4 | verified | record() adds one os.stat; test_hook_perf 20 passed | [2026-11-14_tele-4.md](2026-11-14_tele-4.md) |
+| 2026-11-14 | tele-3 | verified | _flush stamps before spawn, hourly, no spawn under pytest/off; status does not claim a send | [2026-11-14_tele-3.md](2026-11-14_tele-3.md) |
+| 2026-11-14 | tele-2 | verified | telemetry server node --test 69 pass 0 fail | [2026-11-14_tele-2.md](2026-11-14_tele-2.md) |
+| 2026-11-14 | tele-1 | verified | analytics pytest suites 256 passed | [2026-11-14_tele-1.md](2026-11-14_tele-1.md) |
+| 2026-11-14 | crew-c6 | verified | warm lead stop-during-recycle fix; stop_lead re-reads latest lead_pid; test passes | [2026-11-14_crew-c6.md](2026-11-14_crew-c6.md) |
+| 2026-11-14 | crew-c5 | verified | abs/.. owns and bad run ids exit 2 with message; normal run works | [2026-11-14_crew-c5.md](2026-11-14_crew-c5.md) |
+| 2026-11-14 | crew-c4 | verified | atlas_irc diff: AST changes only run_shell/_kill_group/stop_checks_on_signal/handler + _early_check/_run_unit_check | [2026-11-14_crew-c4.md](2026-11-14_crew-c4.md) |
+| 2026-11-14 | crew-c3 | verified | run_shell kills group on timeout, replaces bad bytes | [2026-11-14_crew-c3.md](2026-11-14_crew-c3.md) |
+| 2026-11-14 | crew-c2 | verified | kill's _is_ours: real fake-claude run, supervisor/wpid/pid cmdlines carry run id, all die | [2026-11-14_crew-c2.md](2026-11-14_crew-c2.md) |
+| 2026-11-14 | crew-c1 | verified | 835 passed crew/irc/mux/warm_lead suites | [2026-11-14_crew-c1.md](2026-11-14_crew-c1.md) |
 | 2026-11-13 | S41 | verified | atlas 17.15.0 released: working signal alive >=99.6%, no frozen working after idle | [2026-11-13_s41.md](2026-11-13_s41.md) |
 | 2026-11-13 | REL-17.14.0 | verified | atlas 17.14.0 released | [2026-11-13_rel-17-14-0.md](2026-11-13_rel-17-14-0.md) |
 | 2026-11-12 | w17-band-count | verified | band todo n/m equals TODO header n/m in all compared frames (150, 110, stoprun) - claim holds; 110 band missing in 25 frames | [2026-11-12_w17-band-count.md](2026-11-12_w17-band-count.md) |

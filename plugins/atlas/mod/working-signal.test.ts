@@ -13,7 +13,7 @@ const CONTRACT = JSON.stringify({
   itemPhasePrefix: '[<phase>] ',
 });
 const T0 = 1_800_000_000_000;
-const SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u; // the band lead is braille (rows keep the circle quarters)
+const SPIN = /[◐◓◑◒]/u; // the one spinner: the band lead and the rows turn the same circle quarters
 
 /** Boot the real module with an empty board and NO listed worker: the lead is the only thing that can be working. */
 function boot(on: On, agents: unknown[] = []) {

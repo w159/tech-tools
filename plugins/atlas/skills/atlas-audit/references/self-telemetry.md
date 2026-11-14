@@ -55,7 +55,7 @@ Public functions in `atlas_db.py`:
 - `run_metrics(conn, run_id) -> dict` -- return the metrics row for a run
 - `derive_run_metrics(conn, run_id, session_id) -> dict` -- compute the metrics no live hook can fill and write them onto the run's metrics row: `est_context_tokens`, `parallel_waves`, and `in_flight_peak` from the transcript mirror; `wall_clock_s` if not already set; `verifier_coverage` from the `dispatches` table (agent_type pairing -- see below -- NOT from `tool_calls` or the transcript mirror). The ingest hook now calls this automatically after every mirror refresh (Stop/SubagentStop/SessionEnd/PreCompact), so live runs populate on their own. Call it manually only for a session whose mirror you just backfilled. It deliberately does NOT touch recall_hits/recall_misses (those are recorded live by the engine Orient signal via `record_recall`), so a derive refresh never clobbers them.
 - `unpaired_implementer_dispatches(conn, run_id) -> int` -- implementer-type dispatches beyond the verifier-type dispatches available to check them: `max(0, implementers - verifiers)`, using the same `dispatches`-table agent_type matching rule as `verifier_coverage`. The completion gate consumes this to flag shipping work that never got an independent verifier.
-- `purge_observer_sessions(conn) -> dict` -- one-shot cleanup of synthetic observer-session mirror rows (deletes the `session_logs` row plus its child rows in `messages`/`tool_calls`/`user_prompts`/`signals` for any transcript matching a known synthetic-session marker); touches only mirror tables, never `runs`/`dispatches`/`events`/`metrics`/`improvements`/`asset_verdicts`. CLI: `python3 scripts/atlas_db.py purge-observer-sessions`.
+- `purge_observer_sessions(conn) -> dict` -- one-shot cleanup of synthetic observer-session mirror rows (deletes the `session_logs` row plus its child rows in `messages`/`tool_calls`/`user_prompts`/`signals` for any transcript matching a known synthetic-session marker); touches only mirror tables, never `runs`/`dispatches`/`events`/`metrics`/`improvements`/`asset_verdicts`. CLI: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_db.py" purge-observer-sessions`.
 - `record_improvement(conn, run_id, dimension, baseline, target, note) -> int` -- persist a proposed improvement
 - `trends(conn, limit=20) -> list` -- cross-run/cross-project trend rows over the FULL metric set (run_id, root_path, inline_ops, dispatches, parallel_waves, in_flight_peak, est_context_tokens, recall_hits, recall_misses, verifier_coverage, wall_clock_s); most recent `limit` runs. Mirror-derived columns read NULL for any run whose session has no ingested transcript.
 
@@ -278,12 +278,12 @@ proposing a rule change, the same way a human would re-read the transcript.
 ### Refresh + backfill
 
 The ingest hook keeps the mirror current for claude sessions. To (re)index
-history on demand: `python3 scripts/session_ingest.py --backfill
+history on demand: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session_ingest.py" --backfill
 [~/.claude/projects]` (idempotent), or one session: `python3
-scripts/session_ingest.py <transcript.jsonl>`.
+"${CLAUDE_PLUGIN_ROOT}/scripts/session_ingest.py" <transcript.jsonl>`.
 
 Codex sessions are never picked up by the claude Stop/SessionEnd hook path -
-backfill them explicitly: `python3 scripts/session_ingest.py --backfill-agent
+backfill them explicitly: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/session_ingest.py" --backfill-agent
 codex [root]` (root defaults to `~/.codex/sessions`). Caveat when comparing
 agents: codex's `token_count` events are per-event deltas that sum to
 `total_token_usage`, but codex emits far more of these events than assistant

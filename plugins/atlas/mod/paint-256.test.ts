@@ -59,7 +59,7 @@ describe('one agent, one spinner frame', () => {
       const frame = spinFrameOf(spinClock(now, 7), '');
       const hud = hudLines({ todos: [], agents }, { cols: 120, maxRows: 20, ui: UI24, now, tick: 7 }).flat();
       const board = boardBody([{ label: 'build it', state: 'running', owner: 'alpha', detail: '' }], { cols: 120, ui: UI24, nowMs: spinClock(now, 7), tick: 7 }).flatMap((l) => l.runs);
-      expect(glyphOf(hud, /[◐◓◑◒]/)).toBe(rowSpinnerGlyph(frame)); // the HUD row keeps the scorer-readable mark (hud-surface SCORER_READS_CIRCLES), on the same clock and phase
+      expect(glyphOf(hud, /[◐◓◑◒]/)).toBe(rowSpinnerGlyph(frame)); // the HUD row turns the one spinner (the circle quarters the capture scorer reads), on the same clock and phase
       expect(glyphOf(board)).toBe(spinnerGlyph(spinFrameOf(spinClock(now, 7), 'alpha')));
     }
   });

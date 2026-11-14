@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { worldGates, worldSidebar, worldSnapshot } from '../contracts/world-live';
-import { LEAD_FRAMES, PALETTE5, SPIN_FRAMES, leadSpinnerGlyph, toneHex, spinClock, spinFrameOf, DONE_DOUBT, rowWordTone, runsString, type Ui } from './atlas-ui';
+import { PALETTE5, SPIN_FRAMES, leadSpinnerGlyph, spinnerGlyph, toneHex, spinClock, spinFrameOf, DONE_DOUBT, rowWordTone, runsString, type Ui } from './atlas-ui';
 import { bandTree } from './band';
 import { boardRowsOf, boardText, boardLines } from './board-model';
 import { liveWorkers } from './data/live';
@@ -53,22 +53,22 @@ describe('the brand mark `◆ ATLAS` sits on the band, the block ribbons, the pa
   });
 });
 
-describe('one spinner family: the band count, the SUBAGENTS title and the panel agent rows turn the band braille frame; plan rows keep the circle quarters', () => {
+describe('one spinner family: the band count, the SUBAGENTS title and the panel agent rows and the plan rows turn the one spinner frame of the band', () => {
   const snap = worldSnapshot();
   const live = liveWorkers(snap, snap.now);
   for (const tick of [0, 1, 2, 3, 7]) {
     test(`tick ${tick}`, () => {
       const frame = spinFrameOf(spinClock(snap.now, tick), '');
-      const braille = LEAD_FRAMES[((frame % 10) + 10) % 10]!;
-      expect(leadSpinnerGlyph(frame)).toBe(braille);
+      const mark = spinnerGlyph(frame);
+      expect(leadSpinnerGlyph(frame)).toBe(mark);
       const band = textOf(bandTree(els, { snapshot: snap, live, gates: worldGates(), columns: 150, tick, maxRows: 1, ui } as never));
-      expect(band).toContain(`${braille} 1 running`);
+      expect(band).toContain(`${mark} 1 running`);
       const agents = hudAgents(live, snap.squad);
       const title = hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick, now: snap.now }).map((r) => runsString(r)).find((l) => l.includes('SUBAGENTS'))!;
-      expect(title).toContain(`${braille} 1 running`);
+      expect(title).toContain(`${mark} 1 running`);
       const team = bodyLines(panelModelOf({ ...worldSidebar('team', 100, snap), tick }, ui, 100)).map(lineText);
-      expect(team.some((l) => l.includes(`${braille} implementer-band`))).toBe(true);
-      // The HUD TODO and SUBAGENTS rows and the band worker rows are glyph-parsed by the capture scorer: circles only.
+      expect(team.some((l) => l.includes(`${mark} implementer-band`))).toBe(true);
+      // The HUD TODO and SUBAGENTS rows and the band worker rows are glyph-parsed by the capture scorer: circles only, and the same frame as the title.
       const hudRows = hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick, now: snap.now }).map((r) => runsString(r)).filter((l) => !l.includes('SUBAGENTS'));
       expect(hudRows.join('\n')).not.toMatch(/[⠀-⣿]/);
       expect(SPIN_FRAMES.length).toBe(4);

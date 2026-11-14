@@ -3,6 +3,7 @@ import type { IncomingMessage } from 'node:http';
 import { assertSuccess } from './xml.js';
 import { createRestClient } from './rest.js';
 import { createJobsClient } from './jobs.js';
+import { resilientFetch } from './net.js';
 import type { ConfigAction, ConfigParams, ExportParams, ImportParams, LogParams, PanosConfig, ReportParams } from './types.js';
 
 const DEFAULT_REST_VERSION = 'v11.1';
@@ -37,13 +38,21 @@ interface TransportInit {
 function insecureFetch(url: string, init: TransportInit): Promise<TransportResponse> {
   return new Promise((resolve, reject) => {
     const agent = new https.Agent({ rejectUnauthorized: false });
+    const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    // One hard deadline for the whole request (connect, TLS handshake, headers and body).
+    // The socket `timeout` option alone is an idle timer that a stalled handshake can outlast.
+    const deadline = setTimeout(
+      () => req.destroy(new Error(`PAN-OS request to ${new URL(url).host} timed out after ${timeoutMs}ms (ETIMEDOUT)`)),
+      timeoutMs,
+    );
     const req = https.request(
       url,
-      { method: init.method ?? 'GET', headers: init.headers, agent, timeout: init.timeoutMs ?? DEFAULT_TIMEOUT_MS },
+      { method: init.method ?? 'GET', headers: init.headers, agent },
       (res: IncomingMessage) => {
         const chunks: Buffer[] = [];
         res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
+          clearTimeout(deadline);
           const buf = Buffer.concat(chunks);
           resolve({
             status: res.statusCode ?? 0,
@@ -54,8 +63,7 @@ function insecureFetch(url: string, init: TransportInit): Promise<TransportRespo
         });
       },
     );
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('PAN-OS request timed out')));
+    req.on('error', (err) => { clearTimeout(deadline); reject(err); });
     if (typeof init.body === 'string') req.write(init.body);
     req.end();
   });
@@ -93,14 +101,14 @@ export class PanosClient {
 
   private async transport(url: string, init: TransportInit): Promise<TransportResponse> {
     if (!this.verifyTls) return insecureFetch(url, init);
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), init.timeoutMs ?? this.timeoutMs);
-    try {
-      const res = await fetch(url, { method: init.method, headers: init.headers, body: init.body, signal: controller.signal });
-      return res as unknown as TransportResponse;
-    } finally {
-      clearTimeout(timeout);
-    }
+    // Per-request deadline and clear network errors ("cannot reach host: reason"); no retries here,
+    // PAN-OS writes are not idempotent and the job poller already repeats reads.
+    const res = await resilientFetch(
+      url,
+      { method: init.method, headers: init.headers, body: init.body },
+      { timeoutMs: init.timeoutMs ?? this.timeoutMs, maxRetries: 0 },
+    );
+    return res as unknown as TransportResponse;
   }
 
   // --- XML API ---

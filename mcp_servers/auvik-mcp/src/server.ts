@@ -1,3 +1,4 @@
+import pkg from '../package.json' with { type: 'json' };
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { toZodShape, type JsonObjectSchema } from '@shared/zod-shape.js';
@@ -195,7 +196,7 @@ const HANDLERS: Record<string, Handler> = {
 };
 
 export function createServer(): McpServer {
-  const server = new McpServer({ name: 'auvik-mcp', version: '0.4.2' }, {
+  const server = new McpServer({ name: 'auvik-mcp', version: pkg.version }, {
     capabilities: { logging: {} },
     instructions:
       'Auvik network monitoring: tenants, devices (details, warranty, lifecycle), networks, interfaces, configurations, components, entity notes and audits, alerts, statistics, and billing usage. ' +

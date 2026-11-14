@@ -7,33 +7,33 @@ import { spin } from './theme';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['research', 'plan', 'build', 'verify', 'done'] as const;
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const model = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150, maxRows: 1, tick: 0, project: 'p', phases: PHASES, phase: 'build', done: 3, total: 7, workers: [], checks: null, ui, ...over });
 const head = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs).trimEnd();
 const lead = (m: MissionModel): string => head(m).replace(/^◖ ◆ ATLAS ◗\s+/, '');
 const live: MissionWorker[] = [{ name: 'impl-a', state: 'running', secs: 4, tool: 'Read', target: 'a.ts' }];
 
-describe('round 3 A1: rows turn circle quarters; the band lead alone turns braille', () => {
+describe('round 3 A1: rows and the band lead turn the same circle quarters', () => {
   test('the spinner, the running glyph and the theme spinner are the same four circle quarters', () => {
     expect(SPIN_FRAMES.join('')).toBe('◐◓◑◒');
     expect([0, 1, 2, 3].map((f) => spinnerGlyph(f)).join('')).toBe('◐◓◑◒');
     expect([0, 1, 2, 3].map((f) => spin(f, 'implement')).join('')).toBe('◐◓◑◒');
     expect(STATE_GLYPHS.running).toBe('◐');
     expect(GLYPH5.running).toBe('◐');
-    expect(BRAILLE.test(ATLAS_GLYPHS)).toBe(false);
+    expect(/[\u2800-\u28ff]/.test(ATLAS_GLYPHS)).toBe(false);
   });
-  test('a working band carries two braille glyphs on one frame, the lead spinner and the agents count, at any tick or width; the worker rows stay circles', () => {
+  test('a working band carries two spinner glyphs on one frame, the lead spinner and the agents count, at any tick or width; the worker rows stay circles', () => {
     for (const cols of [150, 110, 80, 60]) for (const tick of [0, 1, 2, 3, 4]) {
       const t = head(model({ cols, tick, busy: true, workers: live }));
-      expect(t.match(/[\u2800-\u28ff]/g)).toHaveLength(2);
-      expect(t).toContain(`${LEAD_FRAMES[tick % 10]!} working`);
+      expect(t.match(/[◐◓◑◒]/g)).toHaveLength(2);
+      expect(t).toContain(`${LEAD_FRAMES[tick % 4]!} working`);
     }
   });
   test('the lead spinner steps once per frame of the shared clock, the running count on the same frame index', () => {
     for (const tick of [0, 1, 2, 3, 4, 9, 10, 11]) {
       const t = head(model({ tick, busy: true, workers: live }));
-      expect(t).toContain(`${LEAD_FRAMES[tick % 10]!} working`);
-      expect(t).toContain(`${LEAD_FRAMES[tick % 10]!} 1 running`);
+      expect(t).toContain(`${LEAD_FRAMES[tick % 4]!} working`);
+      expect(t).toContain(`${LEAD_FRAMES[tick % 4]!} 1 running`);
     }
   });
 });
@@ -55,7 +55,7 @@ describe('round 3 A3: the palette is one colour per state', () => {
 describe('round 3 A2: the band lead has four states', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols} columns: working, done, idle and blocked each lead with their glyph and word`, () => {
-      expect(lead(model({ cols, busy: true, turnSecs: 36, workers: live }))).toMatch(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:36/);
+      expect(lead(model({ cols, busy: true, turnSecs: 36, workers: live }))).toMatch(/^[◐◓◑◒] working 0:36/);
       expect(lead(model({ cols, phase: 'done', done: 5, total: 5, ranSecs: 62 }))).toMatch(/^● done · 1:02/);
       expect(lead(model({ cols, phase: 'research', done: 0, total: 0 }))).toMatch(/^○ idle/);
       expect(lead(model({ cols, blocked: true, openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>))).toMatch(/^▲ blocked · /);
@@ -65,7 +65,7 @@ describe('round 3 A2: the band lead has four states', () => {
     const m = model({ stopGates: ['dispatch T2 read x open'], openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>);
     expect(lead(m)).toMatch(/^▲ blocked · stop refused/);
     expect(lead({ ...m, busy: true })).toMatch(/^▲ blocked · stop refused/); // critique 28: a stopped band draws no spinner
-    expect(lead({ ...m, busy: true, tick: 1 })).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    expect(lead({ ...m, busy: true, tick: 1 })).not.toMatch(/[◐◓◑◒]/);
     expect(head({ ...m, ui: { ...ui, ascii: true } })).not.toMatch(/[◐◓◑◒]/);
   });
   test('the blocked reason table has two words only: `stop refused` and `N failed` (state 38)', () => {

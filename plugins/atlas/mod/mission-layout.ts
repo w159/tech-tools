@@ -196,18 +196,18 @@ function failedRuns(m: MissionModel, ui: Ui, _words = true): Run[] {
   const glyph = stateRun('failed', ui);
   return [{ ...glyph, t: `${glyph.t} ` }, r(`${n} failed`, ui.ascii || contrast(PALETTES[ui.theme].bad, PALETTES[ui.theme].panel) < NEED.text ? 'text' : 'bad')]; // never the bare `■1`
 }
-/** The running count alone: `⠏ 3 running` (words) or `⠏3`. The band's third segment. */
+/** The running count alone: `◓ 3 running` (words) or `◓3`. The band's third segment. */
 function runningRuns(m: MissionModel, ui: Ui, words: boolean): Run[] {
   const n = countOf(m, 'running');
   if (n <= 0) return [];
-  return animateRow(words ? countRuns('running', n, ui, countFrame(m, 'running'), true) : [stateRun('running', ui, countFrame(m, 'running'), true), r(`${n}`)], 'count:running', 'running', m.motion, ui, BAND_OPTS);
+  return animateRow(words ? countRuns('running', n, ui, countFrame(m, 'running')) : [stateRun('running', ui, countFrame(m, 'running')), r(`${n}`)], 'count:running', 'running', m.motion, ui, BAND_OPTS);
 }
 
 function bandCounts(m: MissionModel, ui: Ui, words: boolean, noun = false, gap = '   ', queued = true): Run[] {
   const n = (s: UiState): number => countOf(m, s);
   const order = COUNT_ORDER.filter((s) => (words ? s === 'running' || s === 'failed' || (s === 'queued' && queued) || s === 'waiting' : s === 'running' || s === 'failed' || s === 'waiting'));
   const parts = order.flatMap((s): Run[][] => [
-    ...(n(s) > 0 ? [animateRow(s === 'failed' ? failedRuns(m, ui) : words ? countRuns(s, n(s), ui, countFrame(m, s), true) : [stateRun(s, ui, countFrame(m, s), true), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
+    ...(n(s) > 0 ? [animateRow(s === 'failed' ? failedRuns(m, ui) : words ? countRuns(s, n(s), ui, countFrame(m, s)) : [stateRun(s, ui, countFrame(m, s)), r(`${n(s)}`)], `count:${s}`, s, m.motion, ui, BAND_OPTS)] : []),
   ]);
   const body = parts.flatMap((p, i) => (i ? [r(words ? gap : ' '), ...p] : p));
   return noun && body.length ? [r('agents ', 'muted'), ...body] : body;
@@ -388,7 +388,7 @@ function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: 
   const fill = idle ? SEG_IDLE[ui.theme] : pal[token];
   const planBg = SEG_PLAN[ui.theme];
   const workBg = SEG_WORK[ui.theme];
-  // The state fill starts at the cell after the wordmark's `◗` (its padding cell), so the row still reads `◖ ◆ ATLAS ◗ ⠸ working` for every reader of the text.
+  // The state fill starts at the cell after the wordmark's `◗` (its padding cell), so the row still reads `◖ ◆ ATLAS ◗ ◒ working` for every reader of the text.
   const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, idle ? 'text' : inkFor(token, ui.theme, ui.color))];
   // Wave 37: STATE | PLAN | WORKERS, always three. A caller with nothing to say in a segment still gets the segment (the forms hand `todo -` and `no agents`), so no state or width draws a different grammar.
   out.push(edge(fill, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg), edge(planBg, workBg), ...onFill([r(' '), ...work, r(' ')], workBg));
@@ -437,7 +437,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const failChip: Run[] = failN > 0 ? [r(' '), stateRun('failed', ui), r(`${failN}`, badTone)] : [];
   const planFig = (open: boolean, word = true): Run[] => (m.total ? [r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${open ? openMore(m) : ''}`), ...failChip] : [r(word ? 'todo -' : '-', 'sub')]); // the narrow forms drop the word `todo`, never the segment
   // State 38: the workers segment prints the very counts the SUBAGENTS title prints (one tally, data/live.ts tallyOf): the running count while any runs, else waiting, done, then `■1` for the failed (`● 2 done · ■1`).
-  // Truth 39 (critique: `⠧ 1 running` hid 1 failed and 1 done, stoprun-110-2 f0078): every non-zero count is a fact of the segment, running first, then waiting, done and failed; the narrow forms keep them as bare figures (`⠧1 ●1 ■1`).
+  // Truth 39 (critique: `◒ 1 running` hid 1 failed and 1 done, stoprun-110-2 f0078): every non-zero count is a fact of the segment, running first, then waiting, done and failed; the narrow forms keep them as bare figures (`◒1 ●1 ■1`).
   const workBody = (words: boolean): Run[] => {
     const parts: Run[][] = [];
     const run = runningRuns(m, ui, words);
@@ -447,7 +447,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const finished = doneCount(m);
     if (finished > 0) parts.push(words ? countRuns('done', finished, ui) : [stateRun('done', ui), r(`${finished}`)]);
     if (failN > 0) parts.push([stateRun('failed', ui), r(`${failN}`, badTone)]);
-    return parts.length ? (words ? joinWork(...parts) : parts.flatMap((g, i) => (i ? [r(' '), ...g] : g))) : [r(words ? 'no agents' : '-', 'sub')]; // the tiny figures sit side by side: `⠧1 ■1 ●2`
+    return parts.length ? (words ? joinWork(...parts) : parts.flatMap((g, i) => (i ? [r(' '), ...g] : g))) : [r(words ? 'no agents' : '-', 'sub')]; // the tiny figures sit side by side: `◒1 ■1 ●2`
   };
   const wide = (gw: number, gap: string): Run[] => {
     const warn = warning('words', 'long', true);
@@ -479,7 +479,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     // the lead gets shorter: the short reason, then the bare reason, then no `fixing`, no clock, no reason
     { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'tiny', warn: 'none' },
     { o: { ...F, reason: 'bare' }, open: false, bw: false, counts: 'tiny', warn: 'none' }, // wave 33: the failure count (`■ 1 failed`, spelled out) outlasts a longer reason, so the shorter reasons come before the forms that drop the counts
-    // Wave 33: then the word `todo` goes, after the lead's reason has shortened and long before the clock (`⠼ working 0:19 · 0/5 · ⠼ 3`). The 150-column band (93 cells docked) keeps `todo` for the scorer's count regex.
+    // Wave 33: then the word `todo` goes, after the lead's reason has shortened and long before the clock (`◐ working 0:19 · 0/5 · ◐ 3`). The 150-column band (93 cells docked) keeps `todo` for the scorer's count regex.
     { o: F, open: false, bw: false, counts: 'tiny', warn: 'none', bare: true },
     { o: { ...F, short: true }, open: false, bw: false, counts: 'tiny', warn: 'none', bare: true },
     { o: { ...F, reason: 'short' }, open: false, bw: false, counts: 'none', warn: 'none' },

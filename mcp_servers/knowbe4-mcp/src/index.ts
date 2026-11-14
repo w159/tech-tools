@@ -26,6 +26,7 @@
  * - reporting: Aggregated reports, risk overview, and phishing/training summaries
  */
 
+import pkg from '../package.json' with { type: 'json' };
 import { createServer as createHttpServer, IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -54,7 +55,7 @@ import {
 const server = new McpServer(
   {
     name: "mcp-server-knowbe4",
-    version: "1.1.2",
+    version: pkg.version,
   },
   {
     capabilities: {

@@ -126,7 +126,7 @@ const r = (t: string, tone: Tone = 'text', o: Partial<Run> = {}): Run => ({ t, t
 const line = (runs: Run[], press?: Press): PanelLine => (press ? { runs, press } : { runs });
 export const BLANK: PanelLine = { runs: [] };
 /** A row's runs mid-transition when the model carries a motion view (key: the row's entry; accent: the state that leads). */
-const moving = (runs: Run[], key: string, accent: MarkState, m: Pick<PanelModel, 'motion' | 'ui'>): Run[] => animateRow(runs, key, accent, m.motion, m.ui, { reveal: false }); // a new row never blanks its name while it appears (critique 26: `⠧                running`)
+const moving = (runs: Run[], key: string, accent: MarkState, m: Pick<PanelModel, 'motion' | 'ui'>): Run[] => animateRow(runs, key, accent, m.motion, m.ui, { reveal: false }); // a new row never blanks its name while it appears (critique 26: `◒                running`)
 const rowWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 const pad = (t: string, n: number): string => t + ' '.repeat(Math.max(0, n - cells(t)));
 const cut = (t: string, n: number): string => pad(clipE(t, n), n);
@@ -162,11 +162,10 @@ const frameOf = (m: Pick<PanelModel, 'now' | 'tick'>, id = ''): number => (m.now
 /** The mark of a core-tab row: a `blocked` state there is a warning (a team off plan, evidence missing, a claim no verdict backs), so it keeps the amber triangle; blocked work is the red square (critique 16 A2). */
 const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : stateRun(s, ui));
 /** The state glyph of agent `id` on its row. */
-/** `braille`: the band lead's frame on the same shared index, for the rows the capture scorer does not read by glyph (the agents lines: live_capture.py reads a team row by its WORD, `\S` for the glyph);
- * the plan rows (route tab `T1`..) are read by glyph (GLYPH_STATE4) and keep the circle quarters. */
+/** One spinner on every row: the circle quarters the capture scorer reads by glyph on the plan rows (route tab `T1`.., GLYPH_STATE4); it reads a team row by its WORD (`\S` for the glyph), so the same marks serve the agents lines. */
 /** A working mark is the accent (141) on every row of the panel, the colour of the band's own spinner (critique 28: the panel's spinners were 252). */
 const accentRun = (x: Run, s: MarkState, ui: Ui): Run => (s === 'running' && !ui.ascii ? { ...x, tone: 'accent' } : x);
-const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick' | 'run'>, id = '', braille = false): Run => accentRun(stateRun(s, m.ui, braille && m.now !== undefined ? (id === 'phase' && m.run?.frame !== undefined ? m.run.frame : sharedSpinFrame(m.now)) : frameOf(m, id), braille), s, m.ui); // truth 41: the phase mark turns the frame the run was built with (the band's own index), never a reading of its own
+const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick' | 'run'>, id = ''): Run => accentRun(stateRun(s, m.ui, id === 'phase' && m.now !== undefined && m.run?.frame !== undefined ? m.run.frame : frameOf(m, id)), s, m.ui); // truth 41: the phase mark turns the frame the run was built with (the band's own index), never a reading of its own
 /** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
 const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal)) || ELLIPSIS; // a worker is never a blank cell: whole name, or `…` (critique 22: `◐ running` with no AGENT)
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
@@ -174,7 +173,7 @@ const nameCap = (cols: number): number => Math.max(18, Math.min(40, cols - GRID_
 
 /** `◐ ` and friends: the state glyph run followed by a space. */
 const mark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick' | 'run'>, id = ''): Run => {
-  const g = stateMark(s, m, id, m.run !== undefined); // wave 32: on the Claude pane a working mark here is the band's braille in 141 (omp keeps the circles its goldens pin); circles stay on the per-task rows (todoRows)
+  const g = stateMark(s, m, id); // a working mark here is the band's spinner in 141, the same circle quarters as the per-task rows (todoRows)
   return { ...g, t: `${g.t} ` };
 };
 
@@ -308,7 +307,7 @@ function todoCount(m: PanelModel): PanelLine {
 function agentsRows(m: PanelModel): PanelLine[] {
   if (!m.workers.length) return [];
   const sep = m.cols >= WIDE ? 3 : 2;
-  const segs = UI_STATES.filter((s) => m.workers.some((w) => w.state === s)).map((s) => countRuns(s, m.workers.filter((w) => w.state === s).length, m.ui, m.now !== undefined ? sharedSpinFrame(m.now) : frameOf(m), true).map((x, i) => (i === 0 ? accentRun(x, s, m.ui) : { ...x, t: x.t.replace(/ failed$/, ` ${KILLED}`) })));
+  const segs = UI_STATES.filter((s) => m.workers.some((w) => w.state === s)).map((s) => countRuns(s, m.workers.filter((w) => w.state === s).length, m.ui, m.now !== undefined ? sharedSpinFrame(m.now) : frameOf(m)).map((x, i) => (i === 0 ? accentRun(x, s, m.ui) : { ...x, t: x.t.replace(/ failed$/, ` ${KILLED}`) })));
   const lead = label('agents', m.cols);
   const w0 = cells(lead.t);
   const out: Run[][] = [[lead]];
@@ -445,7 +444,7 @@ const lastFit = (w: PanelWorker, room: number): string => clipWords(lastText(w.d
 function routeAgentRow(m: PanelModel, w: PanelWorker, nameW: number): PanelLine {
   const tone: Tone = rowWordTone(w.state);
   const last = m.cols >= WIDE ? lastFit(w, m.cols - 2 - (GRID_LEAD + nameW + 1 + WORD_W) - 1) : '';
-  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW, word: { t: wordOf(w.state), tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
+  return line(fitRuns(moving([r('  '), ...gridRow({ cols: m.cols - 2, ui: m.ui, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW, word: { t: wordOf(w.state), tone }, wordW: WORD_W, ...(last ? { detail: { t: last } } : {}) })], `worker:${w.name}`, w.state, m), m.cols));
 }
 
 /** The Claude pane's route tab (`m.run` set: the HUD above the prompt lists the plan and the agents; omp has no HUD and keeps the full list below) is a summary, not a second HUD (critique 29: the full TODO and agent lists on the panel repeated the HUD rows 9-15 of the same frame): the phase as the band reads it, the gates figure, one count per agent state and
@@ -463,7 +462,7 @@ function routeSummary(m: PanelModel): PanelLine[] {
 }
 
 /** Wave 32 (critique 30: the route tab was four stat lines and a sentence pointing at other tabs): the run as a timeline, from the data the panel already holds. The first row is the phase chain,
- * `● research › ⠋ implement 0:28 › ◇ verify` (past phases done, the lit one wearing the band's mark and the run clock, the rest queued); under it one row per plan row, `◐ T1 read alpha.py   +0:00`,
+ * `● research › ◐ implement 0:28 › ◇ verify` (past phases done, the lit one wearing the band's mark and the run clock, the rest queued); under it one row per plan row, `◐ T1 read alpha.py   +0:00`,
  * with the time its owner started, relative to the run's start. */
 function phaseChain(m: PanelModel, compact: boolean | 'auto' = false): PanelLine[] {
   if (compact === 'auto') { const full = phaseChainRuns(m, false, true); return full.length && rowWidth(full[0]!.runs) > m.cols ? phaseChain(m, true) : phaseChain(m); }
@@ -487,7 +486,7 @@ function phaseChainRuns(m0: PanelModel, compact: boolean, raw: boolean): PanelLi
     if (i) runs.push(r(named(p, i) || named(m.phases[i - 1]!, i - 1) ? ` ${m.ui.ascii ? '>' : '›'} ` : ' ', 'dim'));
     const cur = lit === i;
     const entered = enteredAt(p, i);
-    const g: Run = cur ? (kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase', true)) : entered ? stateRun('done', m.ui) : { t: m.ui.ascii ? '.' : '\u00b7', tone: 'dim' };
+    const g: Run = cur ? (kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase')) : entered ? stateRun('done', m.ui) : { t: m.ui.ascii ? '.' : '\u00b7', tone: 'dim' };
     if (compact && !cur) { runs.push(g); return; } // a narrow pane names the lit phase; the rest are their dot
     runs.push({ ...g, t: `${g.t} ` }, r(p, cur ? 'text' : entered ? 'sub' : 'dim', cur ? { bold: true } : {}));
     if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(m.run.secs)}`, 'dim'));
@@ -513,7 +512,7 @@ function routeBodyFull(m: PanelModel): PanelLine[] {
     // Work may be running with no plan on the board: say so with the workers, never "nothing planned".
     const running = listed.length ? [] : team.filter((w) => w.state === 'running');
     const nameW = Math.min(nameCap(m.cols), Math.max(...running.map((w) => cells(nameOf(w))), 1));
-    if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name, true), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
+    if (running.length) rows.push(BLANK, ...running.slice(0, bodyRows(m, rows.length)).map((w) => line(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark('running', m, w.name), name: { t: nameOf(w) }, nameW, detail: { t: lastFit(w, m.cols - (GRID_LEAD + nameW) - 1) } }))));
     else if (!m.workers.length) rows.push(BLANK, ...indentedHint(m, 'add one with /todo add')); // the `todo` row above already says `no tasks yet`
     return rows;
   }
@@ -570,7 +569,7 @@ const STATUS_EVENTS = 5;
 const STATUS_SPARK = 12;
 const dimLine = (m: PanelModel, text: string): PanelLine => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(text, 'dim')], m.cols));
 
-/** `phase  ▲ blocked 0:33` and under it the true phases (`● research › ⠋ implement › · verify`): the word and the clock are the band's own. */
+/** `phase  ▲ blocked 0:33` and under it the true phases (`● research › ◐ implement › · verify`): the word and the clock are the band's own. */
 function statusPhase(m0: PanelModel): PanelLine[] {
   const m = withBandRun(m0);
   const head = phaseRow(m);
@@ -587,7 +586,7 @@ function statusAgentRows(m: PanelModel, ws: readonly PanelWorker[]): PanelLine[]
   return ws.map((w, i): PanelLine => {
     const spark = w.state === 'queued' || !win ? ' '.repeat(STATUS_SPARK) : sparkBraille(w.calls, win.from, win.to, STATUS_SPARK, m.ui.ascii);
     const tail: Run[] = [r('  '), r(spark, w.state === 'running' ? 'accent' : w.state === 'failed' ? 'bad' : 'sub'), ...(ageW ? [r('  '), r(ages[i]!.padStart(ageW), 'muted')] : [])];
-    return line(fitRuns(moving(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW, tail }), `worker:${w.name}`, w.state, m), m.cols));
+    return line(fitRuns(moving(gridRow({ cols: m.cols, ui: m.ui, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW, tail }), `worker:${w.name}`, w.state, m), m.cols));
   });
 }
 
@@ -720,7 +719,7 @@ function workerRows(m: PanelModel, w: PanelWorker, g: TeamGrid, focus: boolean):
     ...(g.sparkW ? [r('  '), r(spark, w.state === 'running' ? 'accent' : w.state === 'failed' ? 'bad' : 'sub')] : []),
     ...(last ? [r('  '), r(last, 'muted')] : []),
   ];
-  const runs = gridRow({ cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name, true), name: { t: nameOf(w), bold: true }, nameW: g.nameW, tail });
+  const runs = gridRow({ cols: m.cols, ui: m.ui, focus, mark: stateMark(w.state, m, w.name), name: { t: nameOf(w), bold: true }, nameW: g.nameW, tail });
   const out = [line(fitRuns(moving(runs, key, w.state, m), m.cols), { kind: 'worker', key, name: w.name })];
   if (m.expanded === key) {
     out.push(...workerDetail(m, w));
@@ -1447,8 +1446,8 @@ const toastHead = (fade: number, ui: Ui, brand = false): Run[] => [r(ui.ascii ? 
 /** `▌ ◆ ATLAS  ● done  implementer-layout  9 of 9 steps` (a finish card, `brand`) or `▌ ◐ running  implementer-layout  what it does`: the bar and the state word in the state's tone, the state, the
  * name, one fact. No full stop. */
 export function toastRuns(state: UiState, name: string, fact: string, ui: Ui, brand = false, frame = 0, fade = 0): Run[] {
-  // Wave 32 (critique 30: the start card's `◐` was a static half circle): a running card wears the band's braille spinner in 141, turning with `frame`.
-  const g = state === 'running' && !ui.ascii ? { ...stateRun('running', ui, frame, true), tone: 'accent' as const } : stateRun(state, ui, frame, true);
+  // Wave 32 (critique 30: the start card's `◐` was a static half circle): a running card wears the band's spinner in 141, turning with `frame`.
+  const g = state === 'running' && !ui.ascii ? { ...stateRun('running', ui, frame), tone: 'accent' as const } : stateRun(state, ui, frame);
   // Design rev 5, C3: the state word sits in a fixed-width column (CARD_WORD_W), so the name starts at the same cell on every card; `failed` is the one failure word.
   return [...toastHead(fade, ui, brand), { ...g, t: `${g.t} ` }, r(wordOf(state), stateWordTone(state, ui), { bold: true }), r(`${' '.repeat(Math.max(0, CARD_WORD_W - cells(state)) + 2)}${name}`), ...(fact ? [r(`  ${oneLine(fact)}`, 'sub')] : [])];
 }

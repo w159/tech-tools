@@ -60,11 +60,11 @@ describe('SUBAGENTS title: the working signal rides the title', () => {
     const frame = spinFrameOf(spinClock(NOW, 0), '');
     const run = rows(todo(2, () => 'in_progress'), [ag('alpha-explorer', 'working')]);
     const head = text(run.find((r) => text(r).includes('SUBAGENTS'))!);
-    expect(head).toContain(`${leadSpinnerGlyph(frame)} 1 running ─`); // the title turns the band's braille frame
+    expect(head).toContain(`${leadSpinnerGlyph(frame)} 1 running ─`); // the title turns the band's spinner frame
     const idle = rows(todo(2, () => 'completed'), [ag('alpha-explorer', 'done')]);
     const idleHead = text(idle.find((r) => text(r).includes('SUBAGENTS'))!);
     expect(idleHead).toContain('1 done');
-    expect(idleHead).not.toMatch(/[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    expect(idleHead).not.toMatch(/[◐◓◑◒]/);
   });
   test('the spinner advances with the tick', () => {
     const at = (tick: number): string => text(rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working')], { tick }).find((r) => text(r).includes('SUBAGENTS'))!);
@@ -72,7 +72,7 @@ describe('SUBAGENTS title: the working signal rides the title', () => {
     expect(at(1)).toContain(`${leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), ''))} 1 running`);
     expect(leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 0), ''))).not.toBe(leadSpinnerGlyph(spinFrameOf(spinClock(NOW, 1), '')));
   });
-  test('critique 25: the title alone turns the band braille frame (same index as the band); every running row keeps one circle quarter on that clock', () => {
+  test('critique 25: the title alone turns the band spinner frame (same index as the band); every running row keeps one circle quarter on that clock', () => {
     for (const tick of [0, 1, 2, 3]) {
       const out = rows(todo(2, () => 'in_progress'), [ag('a-explorer', 'working', { tool: 'Read', target: 'a.py' })], { tick });
       const title = text(out.find((r) => text(r).includes('SUBAGENTS'))!);

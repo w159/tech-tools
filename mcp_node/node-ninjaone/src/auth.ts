@@ -4,6 +4,7 @@
 
 import type { ResolvedConfig } from './config.js';
 import { NinjaOneAuthenticationError } from './errors.js';
+import { NetworkError, resilientFetch } from './net.js';
 
 /**
  * Token information
@@ -138,13 +139,13 @@ export class AuthManager {
     });
 
     try {
-      const response = await fetch(tokenUrl, {
+      const response = await resilientFetch(tokenUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: bodyParams.toString(),
-      });
+      }, { idempotent: true }); // client_credentials grant is safe to repeat
 
       if (!response.ok) {
         const errorBody = await response.text();
@@ -167,8 +168,8 @@ export class AuthManager {
         scope: data.scope ?? this.config.scopes.join(' '),
       };
     } catch (error) {
-      if (error instanceof NinjaOneAuthenticationError) {
-        throw error;
+      if (error instanceof NinjaOneAuthenticationError || error instanceof NetworkError) {
+        throw error; // NetworkError already reads "cannot reach <host>: <reason>"
       }
       throw new NinjaOneAuthenticationError(
         `Failed to acquire token: ${error instanceof Error ? error.message : 'Unknown error'}`,

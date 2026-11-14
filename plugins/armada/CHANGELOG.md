@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.4.0 - 2026-11-14
+
+### Security
+
+- Falcon MCP: credentials and sensitive query parameters in the configured base URL are redacted in `falcon_status`, debug logs and auth hints. The leak was reproduced before the fix; 1505 tests pass.
+
+### Fixed
+
+- Connector tool calls against an unreachable or hung vendor now return a clear `NETWORK_ERROR` ("cannot reach <host>: connection refused" or "timed out after Nms") in under a second for a refused connection and at the per-request timeout (20 s, `MCP_HTTP_TIMEOUT_MS`; panos and sonicwall 60 s) otherwise. Before: blumira and threatlocker retried silently for 7 s, and a vendor that accepted the connection but never answered left all 12 connectors with no reply in 45 s.
+- Network errors no longer show as "HTTP 0" or a bare "fetch failed".
+- MCP connectors now report their `package.json` version in the initialize response. All 12 had drifted (panos, paylocity, sonicwall and others were stale); `test_connector_versions.py` guards against drift.
+- Department agents now name the path of their skill library and say to read it, since department skills are not registered with the Skill tool.
+- Falcon inert-mode guidance now points to the armada plugin config instead of the atlas plugin.
+
+### Changed
+
+- HTTP retries are bounded and idempotent-only (429, 5xx, ECONNRESET; `Retry-After` honored up to 10 s). POST is no longer retried.
+- Rebuilt 11 shipped MCP bundles (all but auvik) from the current `mcp_servers` sources; tool counts are unchanged (429 across 12 servers). The bundles grew because zod went from 4.0.0 to 4.6.7 in the rebuild.
+
+### Added
+
+- A shared resilient-fetch helper in `mcp_servers/_shared`, copied byte-identical into the `node-*` libs (a test checks the copies), with refused-port and never-answering-server tests for every connector.
+- `scripts/rebuild_armada_bundles.mjs` (pinned tsup 8.5.1, esbuild 0.28.2, Node 22; byte-reproducible) and `plugins/armada/mcp/bundles.lock.json`, which records source and bundle hashes.
+- The `armada-bundles` CI workflow, which fails when shipped bundles differ from source, and `test_armada_bundles.py` as a local provenance guard.
+
+### Not changed
+
+- panos and sonicwall keep their 60 s timeout, which ignores `MCP_HTTP_TIMEOUT_MS`.
+
 ## 2.3.1 - 2026-11-14
 
 ### Security

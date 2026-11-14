@@ -10,6 +10,7 @@
 
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { Logger } from '../utils/logger.js';
+import { resilientFetch } from '@shared/resilient-fetch.js';
 
 /** Credentials needed to run the client-credentials flow against Entra ID. */
 export interface TokenProviderConfig {
@@ -114,11 +115,11 @@ export class TokenProvider {
 
     let response: Response;
     try {
-      response = await fetch(this.tokenUrl, {
+      response = await resilientFetch(this.tokenUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: body.toString(),
-      });
+      }, { idempotent: true }); // client_credentials grant is safe to repeat
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new McpError(

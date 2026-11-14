@@ -7,7 +7,7 @@ import { reducedMotion } from './motion';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const SPIN = '[◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]'; // the lead's braille set or a row's circle quarters
+const SPIN = '[◐◓◑◒]'; // the one spinner set
 const PHASES = ['research', 'plan', 'build', 'verify', 'done'] as const;
 const run = (n: number): MissionWorker[] => Array.from({ length: n }, (_, i) => ({ name: `e${i}-explorer`, state: 'running', secs: 4 }));
 const model = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150, maxRows: 1, tick: 0, project: 'p', phases: PHASES, phase: 'build', done: 3, total: 7, workers: [], checks: null, ui, ...over });

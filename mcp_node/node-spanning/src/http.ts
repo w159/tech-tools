@@ -13,6 +13,7 @@
 
 import type { ResolvedConfig } from './config.js';
 import type { RateLimiter } from './rate-limiter.js';
+import { DEFAULT_MAX_RETRY_AFTER_MS, resilientFetch } from './net.js';
 import {
   SpanningError,
   SpanningAuthenticationError,
@@ -88,11 +89,13 @@ export class HttpClient {
 
     let response: Response;
     try {
-      response = await fetch(url, {
-        method,
-        headers,
-        body: bodyString || undefined,
-      });
+      // Per-attempt timeout and clear network errors (see net.ts). Retries for
+      // 429 / 5xx stay in handleResponse, which also feeds the rate limiter.
+      response = await resilientFetch(
+        url,
+        { method, headers, body: bodyString || undefined },
+        { maxRetries: 0 },
+      );
     } finally {
       this.rateLimiter.release();
     }
@@ -149,7 +152,9 @@ export class HttpClient {
       case 429: {
         const retryAfterHeader = response.headers.get('retry-after');
         const retryAfterSeconds = retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined;
-        if (this.rateLimiter.shouldRetry(retryCount)) {
+        // Retry only idempotent requests, and only when the wait is short enough to sit through.
+        const waitable = retryAfterSeconds === undefined || retryAfterSeconds * 1000 <= DEFAULT_MAX_RETRY_AFTER_MS;
+        if (this.rateLimiter.shouldRetry(retryCount) && waitable && method !== 'POST') {
           const delay = this.rateLimiter.calculateRetryDelay(retryCount, retryAfterSeconds);
           await this.sleep(delay);
           return this.executeRequest<T>(url, method, bodyString, retryCount + 1);
@@ -162,7 +167,7 @@ export class HttpClient {
       }
       default:
         if (response.status >= 500 && response.status <= 599) {
-          if (retryCount === 0) {
+          if (retryCount === 0 && method !== 'POST') {
             await this.sleep(1000);
             return this.executeRequest<T>(url, method, bodyString, 1);
           }

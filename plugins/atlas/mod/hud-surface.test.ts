@@ -23,7 +23,7 @@ export const worldAgents = (): AgentRow[] => // the adapter's order (hud.ts agen
   sortAgents(world.workers.map((w) => ({ name: w.name, state: w.state, model: w.model, tasks: world.todos.filter((t) => t.owner === w.name).map((t) => Number(t.id.slice(1))), tool: w.last_tool, ctx: w.ctx, focus: w.state === 'running', elapsed: elapsedClock(w.age_s) })));
 const opts = (cols: number, rich = false): SurfaceOpts => ({ cols, ui, rich, merge: false, phases: { ids: world.phases.map((p) => p.id), active: world.phases.findIndex((p) => p.state === 'active') } });
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
-/** A golden title carries `@SPIN@` for the band's braille spinner glyph at frame 0 (the title turns the band frame; the rows keep the circle quarters). */
+/** A golden title carries `@SPIN@` for the band's spinner glyph at frame 0 (the title turns the band frame; the rows keep the circle quarters). */
 const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes('SUBAGENTS') ? r.replace(leadSpinnerGlyph(0), '@SPIN@') : r));
 const full = { spacers: true, extras: true, close: true };
 

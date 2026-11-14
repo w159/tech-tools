@@ -22,6 +22,10 @@ PandaDoc, Pax8
 
 audit-support, close-management, financial-statements, journal-entry-prep, pandadoc-api-patterns, pandadoc-documents, pandadoc-proposals, pandadoc-recipients, pandadoc-templates, pax8-api-patterns, pax8-companies, pax8-invoices, pax8-orders, pax8-products, pax8-subscriptions, reconciliation, variance-analysis
 
+These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/finance/skills/<name>/SKILL.md`;
+open the one that matches the task before you start, and follow any reference it names.
+
 ## Standing constraints
 
 1. **Follow org branding.** When the org config has branding configured, all

@@ -22,6 +22,10 @@ CIPP
 
 api-patterns, calendar, cipp-alerts, cipp-groups, cipp-licenses, cipp-mailboxes, cipp-ops, cipp-security, cipp-standards, cipp-tenants, cipp-users, files, graph-connection, graph-querying, licensing, mailboxes, security, teams, users
 
+These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/microsoft-365/skills/<name>/SKILL.md`;
+open the one that matches the task before you start, and follow any reference it names.
+
 ## Standing constraints
 
 1. **Follow org branding.** When the org config has branding configured, all

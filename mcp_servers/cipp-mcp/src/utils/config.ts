@@ -2,6 +2,7 @@
 // Handles loading configuration from environment variables and MCP client arguments.
 // Supports gateway mode where credentials come via HTTP request headers.
 
+import pkg from '../../package.json';
 import { McpServerConfig } from '../types/index.js';
 import { LogLevel } from './logger.js';
 
@@ -149,7 +150,7 @@ export function parseCredentialsFromHeaders(
  * | `MCP_HTTP_PORT`     | TCP port for the HTTP transport                     | `8080`           |
  * | `MCP_HTTP_HOST`     | Bind address for the HTTP transport                 | `0.0.0.0`        |
  * | `MCP_SERVER_NAME`   | Server name surfaced to MCP clients                 | `cipp-mcp`       |
- * | `MCP_SERVER_VERSION`| Server version surfaced to MCP clients              | `0.2.2`          |
+ * | `MCP_SERVER_VERSION`| Server version surfaced to MCP clients              | package.json version |
  * | `LOG_LEVEL`         | Winston log level (`error`/`warn`/`info`/`debug`)   | `info`           |
  * | `LOG_FORMAT`        | Log output format (`json` or `simple`)              | `simple`         |
  *
@@ -195,7 +196,7 @@ export function loadEnvironmentConfig(): EnvironmentConfig {
     cipp: cippConfig,
     server: {
       name: process.env.MCP_SERVER_NAME || 'cipp-mcp',
-      version: process.env.MCP_SERVER_VERSION || '0.2.2',
+      version: process.env.MCP_SERVER_VERSION || pkg.version,
     },
     transport: {
       type: transportType,

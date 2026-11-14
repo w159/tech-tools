@@ -1,4 +1,5 @@
 import { AuthenticationError, ServiceError } from './errors.js';
+import { resilientFetch } from './net.js';
 import type { PaylocityToken } from './types/common.js';
 
 export interface PaylocityAuthConfig {
@@ -55,23 +56,15 @@ export class PaylocityAuthManager {
     body.set('grant_type', 'client_credentials');
     if (this.config.scope) body.set('scope', this.config.scope);
 
-    let response: Response;
-    try {
-      response = await fetch(this.config.tokenUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
-        },
-        body: body.toString(),
-      });
-    } catch (err) {
-      throw new ServiceError(
-        `Paylocity token endpoint network error: ${(err as Error).message}`,
-        0,
-        null
-      );
-    }
+    // Throws NetworkError ("cannot reach <host>: ...") when the token endpoint is down or hung.
+    const response = await resilientFetch(this.config.tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: body.toString(),
+    }, { idempotent: true }); // client_credentials grant is safe to repeat
 
     const rawText = await response.text();
     let parsed: unknown;

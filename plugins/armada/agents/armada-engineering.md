@@ -22,6 +22,10 @@ none
 
 code-quality-sweep, code-review, cowork-plugin-customizer, create-cowork-plugin, dead-code-cleanup, documentation, incident-response, observability, sentry-api-patterns, sentry-error-investigation, sentry-issue-triage, sentry-release-health, sentry-seer-root-cause, system-design, tech-debt, testing-strategy
 
+These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/engineering/skills/<name>/SKILL.md`;
+open the one that matches the task before you start, and follow any reference it names.
+
 ## Standing constraints
 
 1. **Follow org branding.** When the org config has branding configured, all

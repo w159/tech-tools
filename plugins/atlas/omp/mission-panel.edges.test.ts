@@ -40,7 +40,7 @@ test("bandText returns the band rows as trimmed plain text", () => {
 	const rows = bandText(m, 140);
 	expect(Array.isArray(rows)).toBe(true);
 	expect(rows.length).toBeGreaterThan(0);
-	expect(rows[0]).toContain("◖ ◆ ATLAS ◗  ⠋ working");
+	expect(rows[0]).toContain("◖ ◆ ATLAS ◗  ◐ working");
 	expect(rows[0]).toContain("phase 4/5"); // no plan: the rail position stands in for the todo count
 	for (const r of rows) {
 		expect(r).toBe(r.trimEnd());

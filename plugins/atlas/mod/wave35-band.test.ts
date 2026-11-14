@@ -36,7 +36,7 @@ const NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
 /** State 39: at 110 columns (a 56-cell body) AGENT is 12 cells, so a longer name ends in `…`. */
 const nameAt = (n: string, body: number): string => (body < 80 && n.length > 12 ? `${n.slice(0, 11)}…` : n);
 const PLAN = ['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 combine the reports', 'T5 write the summary'];
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const PUA = /[\uE000-\uF8FF]/;
 const SIZES = [[150, 45, 93], [110, 40, 56]] as const;
 
@@ -76,7 +76,7 @@ const IDLE: Shape = { ...FINISHED, rest: 60 };
 const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents[1]!, { name: NAMES[2]!, squad: 'failed', mood: 'failed' }], gates: runstate.stopRefusal([], 'Done claimed too early: 1 open dispatch row.') as unknown[] };
 // Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 236, blocked 203.
 const STATES: [string, Shape, string, string, boolean][] = [
-  ['working', RUNNING, 'accent', '[⠀-⣿] working 0:42', true],
+  ['working', RUNNING, 'accent', '[◐◓◑◒] working 0:42', true],
   ['done', FINISHED, 'ok', '● done 1:12', true],
   ['idle', IDLE, 'muted', '○ idle · 1:12', true],
   ['blocked', STOP, 'bad', '▲ blocked', true],
@@ -109,14 +109,14 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
   }
   test('the working band reads the worker counts in the workers segment, after the plan', () => {
     const f = frameOf(RUNNING, 93, 45);
-    expect(f.band).toMatch(/▌ todo \d\/5 ▌ [⠀-⣿] 3 running/);
+    expect(f.band).toMatch(/▌ todo \d\/5 ▌ [◐◓◑◒] 3 running/);
   });
   test('256 colours keep the seams; NO_COLOR/dumb and ASCII degrade to the dot-joined text with no seams; ASCII has no block glyph', () => {
     const base = { maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'research', done: 2, total: 5, openWork: 3, openDispatch: 0, todoBlocked: 0, checks: [], bar: true, workers: [], busy: true, turnSecs: 42, cols: 93 } as const;
     const text = (u: Ui): string => bandLines({ ...base, ui: u } as never)[0]!.runs.map((x) => x.t).join('');
-    expect(text({ theme: 'mocha', ascii: false, color: 'none' })).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:42 · todo 2\/5/);
+    expect(text({ theme: 'mocha', ascii: false, color: 'none' })).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] working 0:42 · todo 2\/5/);
     expect(text({ theme: 'mocha', ascii: true, color: 'truecolor' })).toMatch(/^\[ATLAS\] \| working 0:42 · todo 2\/5/);
-    expect(text({ theme: 'mocha', ascii: false, color: '256' })).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] working 0:42 ▌ todo 2\/5/);
+    expect(text({ theme: 'mocha', ascii: false, color: '256' })).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] working 0:42 ▌ todo 2\/5/);
     for (const color of ['256', 'none'] as const) expect(text({ theme: 'mocha', ascii: false, color })).not.toMatch(PUA);
   });
   test('256 colours keep the stable palette fills (141 / 237 / 235), never an RGB approximation (the pill 97 first)', () => {
@@ -127,10 +127,10 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
   test('a narrow bar keeps all three segments and the clock; the state word is the first thing to give way (wave 37)', () => {
     for (let body = 93; body >= 34; body--) {
       const f = frameOf(RUNNING, body, 45);
-      expect(f.band, `${body}`).toMatch(/^◖ ◆ ATLAS ◗ [⠀-⣿] (working )?0:42 ▌ (todo )?\d\/5 ▌ [⠀-⣿]/);
+      expect(f.band, `${body}`).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] (working )?0:42 ▌ (todo )?\d\/5 ▌ [◐◓◑◒]/);
       expect([...f.band].filter((c) => c === '▌'), `${body}`).toHaveLength(2);
     }
-    expect(frameOf(RUNNING, 93, 45).band).toMatch(/working 0:42 ▌ todo 0\/5 ▌ [⠀-⣿] 3 running/);
+    expect(frameOf(RUNNING, 93, 45).band).toMatch(/working 0:42 ▌ todo 0\/5 ▌ [◐◓◑◒] 3 running/);
   });
 });
 
@@ -199,7 +199,7 @@ describe('6. SUBAGENTS: one rule while they run, a k9s-style table once they hav
       const f = frameOf(RUNNING, body, screen);
       const marks = f.hud.filter((r) => r.includes('◖ ◆ ATLAS ◗ ▸ SUBAGENTS'));
       expect(marks).toHaveLength(1);
-      expect(marks[0]).toMatch(/^╭.*[⠀-⣿] 3 running/);
+      expect(marks[0]).toMatch(/^╭.*[◐◓◑◒] 3 running/);
       expect(f.hud.some((r) => /^\s+AGENT\s+STATE\s+TIME/.test(r)), 'wave 36: the table header shows while they run too').toBe(true);
     });
     test(`${cols} columns: at done the table is AGENT STATE TIME, one row per agent with the name, the state and the clock`, () => {

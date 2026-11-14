@@ -122,7 +122,7 @@ describe('5: one spinner frame per render', () => {
     }
     expect(spinFrameOf(spinClock(0, 3))).toBe(3); // outside a render the clock is the pure now + tick
   });
-  test('the panel, the HUD and the band turn the same braille and the same circle in one render', () => {
+  test('the panel, the HUD and the band turn the same spinner glyph in one render', () => {
     const s = scene('running');
     const live = liveWorkers(s, s.now);
     const hudIn = { todos: ownTodos(s.todos, s.sessionId), agents: hudAgents(live, s.squad, queuedMembers(s)), root: s.root };
@@ -133,9 +133,8 @@ describe('5: one spinner frame per render', () => {
         flat(hudRows(hudIn, { cols: 120, tick: 0, ui: UI256, now: s.now, maxRows: 40 })),
         flat(bandTree(els, { snapshot: s, live, gates: [], columns: 120, tick: 0, maxRows: 12, ui: UI256 } as never)),
       ]) as [string, string, string];
-      const braille = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
       const circles = '◐◓◑◒';
-      expect([frame, seen(panel + hud + band, braille)]).toEqual([frame, [braille[frame % 10]!]]);
+      expect([frame, seen(panel + hud + band, '\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f')]).toEqual([frame, []]); // the retired braille lead set is drawn nowhere
       expect([frame, seen(panel + hud + band, circles)]).toEqual([frame, [circles[frame % 4]!]]);
     }
   });

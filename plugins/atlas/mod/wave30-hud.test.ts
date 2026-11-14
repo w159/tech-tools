@@ -84,7 +84,7 @@ const hostBelow = (running: number): number => 4 + (running > 0 ? 2 + running : 
 const hostBudget = (screenRows: number, running: number): number => Math.floor(screenRows / 2) - hostBelow(running);
 
 const isBandRow = (r: string): boolean => /^◖ ◆ ATLAS ◗(?! ▸)/.test(r.trimStart()) && !r.includes('▸ TODO') && !r.includes('▸ SUBAGENTS');
-const SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const SPIN = /[◐◓◑◒]/;
 
 describe('1. the slot is the rows drawn: no pad under the HUD, no lead above the band', () => {
   for (const [cols, screen] of [[150, 70], [110, 60], [150, 45], [110, 40], [150, 36]] as const) {
@@ -136,7 +136,7 @@ describe('3. SUBAGENTS draws every running agent', () => {
       const f = frameOf({ running: 3, returned: 0, planned: true }, cols - 5, hostBudget(screen, 3), 0);
       const at = f.rows.findIndex((r) => r.includes('▸ SUBAGENTS'));
       expect(at).toBeGreaterThan(-1);
-      const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[⠀-⣿] running/.test(r)); // wave 36: one table row per agent under the plan's closed box
+      const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[◐◓◑◒] running/.test(r)); // wave 36: one table row per agent under the plan's closed box
       const more = Number(f.rows.map((r) => /^ {2}(?:\+|\S )(\d+) more/.exec(r)).find((m) => m)?.[1] ?? 0); // wave 36: a slot too short for the table counts the agents it cannot draw on a `+N more` row (state 39: the one summary row, `2 more running`)
       if (agentRows.length + more === 0) {
         // Wave 38 (live-110 f0030-f0045): a slot too short for the plan's three running rows AND the table folds SUBAGENTS to its one closed title row; the running plan rows keep theirs.
@@ -149,7 +149,7 @@ describe('3. SUBAGENTS draws every running agent', () => {
   }
   test('56 columns (110 with the pane docked): all three rows, each with its clock', () => {
     const f = frameOf({ running: 3, returned: 0, planned: true }, 56, hostBudget(40, 3), 0);
-    const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[⠀-⣿] running/.test(r));
+    const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[◐◓◑◒] running/.test(r));
     if (agentRows.length === 0) { expect(f.rows.filter((r) => /running/.test(r)).length).toBeGreaterThanOrEqual(3); return; } // wave 38: the table folded to its title so the three running plan rows keep theirs
     expect(agentRows).toHaveLength(3);
     for (const r of agentRows) expect(r, r).toMatch(/\d+:\d\d/); // wave 36: each row carries its clock in the TIME column

@@ -1,4 +1,5 @@
 import { RateLimiter } from './rate-limiter.js';
+import { resilientFetch } from './net.js';
 import { PaylocityAuthManager } from './auth.js';
 import {
   ServiceError,
@@ -55,17 +56,11 @@ export class HttpClient {
       if (qs) url += `?${qs}`;
     }
 
-    let lastError: Error | null = null;
     let didRefreshAuth = false;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      if (attempt > 0) {
-        // Exponential backoff with jitter, capped at 60s.
-        const base = Math.min(1000 * 2 ** (attempt - 1), 60_000);
-        const jitter = Math.floor(Math.random() * 250);
-        await new Promise(r => setTimeout(r, base + jitter));
-      }
-
+    // A second pass happens only after a 401 forces a token refresh; every
+    // other retry (429, 5xx, ECONNRESET) lives in resilientFetch.
+    for (let attempt = 0; attempt < 2; attempt++) {
       await this.rateLimiter.acquire();
 
       const token = await this.auth.getAccessToken();
@@ -75,17 +70,13 @@ export class HttpClient {
       };
       if (body) headers['Content-Type'] = 'application/json';
 
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : undefined,
-        });
-      } catch (err) {
-        lastError = err as Error;
-        continue;
-      }
+      // Per-attempt timeout, clear network errors, and bounded retries for
+      // idempotent requests only (see net.ts).
+      const response = await resilientFetch(
+        url,
+        { method, headers, body: body ? JSON.stringify(body) : undefined },
+        { maxRetries: this.maxRetries },
+      );
 
       if (response.ok) {
         if (response.status === 204) return {} as T;
@@ -126,10 +117,6 @@ export class HttpClient {
           throw new NotFoundError(details.message, responseBody, details.traceId);
         case 429: {
           const retryAfter = parseInt(response.headers.get('retry-after') || '5', 10);
-          if (attempt < this.maxRetries) {
-            await new Promise(r => setTimeout(r, retryAfter * 1000));
-            continue;
-          }
           throw new RateLimitError(
             details.message,
             retryAfter,
@@ -139,14 +126,12 @@ export class HttpClient {
         }
         default:
           if (response.status >= 500) {
-            lastError = new ServerError(details.message, responseBody, details.traceId);
-            if (attempt < this.maxRetries) continue;
-            throw lastError;
+            throw new ServerError(details.message, responseBody, details.traceId);
           }
           throw new ServiceError(details.message, response.status, responseBody, details.traceId);
       }
     }
 
-    throw lastError || new Error('Request failed after retries');
+    throw new Error('Request failed after token refresh');
   }
 }

@@ -18,6 +18,7 @@
 import http from "node:http";
 import https from "node:https";
 import { cleanEnv } from "@shared/clean-env.js";
+import { resilientFetch } from "@shared/resilient-fetch.js";
 
 export interface CwManageConfig {
   baseUrl: string;
@@ -254,7 +255,9 @@ export class CwManageClient {
     // the process-wide TLS env toggle must never be mutated here (it would
     // disable verification for every concurrent connection).
     const response = this.rejectUnauthorized
-      ? await fetch(url.toString(), { method, headers, body })
+      // Per-attempt timeout, clear network errors, bounded retries for idempotent
+      // methods only (see _shared/resilient-fetch.ts).
+      ? await resilientFetch(url.toString(), { method, headers, body })
       : await insecureFetch(url, { method, headers, body });
 
     if (!response.ok) {

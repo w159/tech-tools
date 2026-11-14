@@ -575,5 +575,24 @@ class TestFalconMCPServer(unittest.TestCase):
         self.assertEqual(len(version_logs), 1, "Expected exactly one startup log with version")
 
 
+class TestInertGuidanceNamesThePluginThatOwnsFalcon(unittest.TestCase):
+    """Falcon ships in the armada plugin: inert-mode guidance must send the user there, not to atlas."""
+
+    @patch("falcon_mcp.server.FastMCP")
+    def test_missing_credentials_point_at_armada_config(self, mock_fastmcp):
+        mock_fastmcp.return_value = MagicMock()
+        with patch.dict("os.environ", {}, clear=False):
+            import os
+
+            os.environ.pop("FALCON_CLIENT_ID", None)
+            os.environ.pop("FALCON_CLIENT_SECRET", None)
+            server = FalconMCPServer(client_id=None, client_secret=None)
+        instructions = mock_fastmcp.call_args.kwargs["instructions"]
+        message = server.falcon_status()["message"]
+        for text in (instructions, message):
+            self.assertIn("armada", text)
+            self.assertNotIn("atlas", text)
+
+
 if __name__ == "__main__":
     unittest.main()

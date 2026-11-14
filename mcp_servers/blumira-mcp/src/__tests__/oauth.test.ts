@@ -69,6 +69,7 @@ describe('exchangeOAuthToken', () => {
         client_secret: 'test-secret',
         audience: 'public-api',
       }),
+      signal: expect.any(AbortSignal), // per-request timeout added by resilientFetch
     });
   });
 

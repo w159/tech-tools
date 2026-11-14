@@ -12,8 +12,8 @@
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
 import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, LEAD_FRAMES, luminance, markToken, PALETTES, RETURNED, SPINNER_MS, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
 
-/** The ONE spinner tick (wave 37): the braille frame index (0..9, an index into the lead spinner's ten frames) at the clock reading `now` (ms). Every braille spinner (band lead, HUD rows, SUBAGENTS header and rows) reads this one clock, and the
- * HUD's circles `◐◓◑◒` step on the same beat (`sharedSpinFrame(now) % 4` would restart at the wrap, so they count the same beats unwrapped: `Math.floor(now / SPINNER_MS)`). */
+/** The ONE spinner tick (wave 37): the frame index (0..3, an index into the one spinner's four frames) at the clock reading `now` (ms). The band lead, the titles and the side panel read this one clock; the
+ * rows count the same beats unwrapped (`Math.floor(now / SPINNER_MS)`, atlas-ui spinFrameOf), which is the same frame modulo four, so every surface draws one glyph in a frame. */
 export const sharedSpinFrame = (now: number): number => ((Math.floor(now / SPINNER_MS) % LEAD_FRAMES.length) + LEAD_FRAMES.length) % LEAD_FRAMES.length;
 
 /** State 38: the spinner frame and the clock seconds the band just drew, so a second surface (the host's own status row, the run card) can print the same pair on the same render. The band render notes them; a reader gets

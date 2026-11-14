@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.5 - 2026-11-14
+
+### Fixed
+
+- LIT001: the octal check no longer re-splits the file per literal. An 8000-line file scans in 1 s instead of 44 s, so the edit hook stays inside its timeout.
+- CFG001: loopback and test-only hosts, documentation links (`docs_url`, `install_cmd`) and env/config fallback defaults are no longer reported as hardcoded endpoints. 84% of findings on the atlas corpus were false positives before; findings went from 25 to 6.
+- SEC001: string constants, loops over literal table or column tuples, constant if/else values and joins of constant tuples are no longer reported as SQL built from strings (70 to 42 findings).
+- DEM001: str/dict value methods and `unittest.mock` attributes no longer count as message-chain links (15 to 0 findings, all false before).
+- WIN001: flags only marker comments (leading or tagged TODO/FIXME/HACK/XXX, not prose) and treats `print()` in `#!` scripts as program output. On the Atlas corpus WIN001 findings drop from 14 (all false) to 0. 2 tests failed before; 126 pass after.
+
 ## 1.0.4 - 2026-11-14
 
 ### Fixed

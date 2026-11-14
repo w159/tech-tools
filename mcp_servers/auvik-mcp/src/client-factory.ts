@@ -1,4 +1,5 @@
 import { isValidRegion, resolveRegion, type AuvikCredentials } from './credentials.js';
+import { resilientFetch } from '@shared/resilient-fetch.js';
 
 // JSON:API response shapes
 export interface JsonApiResource {
@@ -95,7 +96,6 @@ function toJsonApiParams(input: Record<string, unknown> | undefined): Record<str
 class AuvikHttpClient {
   private region: string;
   private readonly auth: string;
-  private readonly maxRetries = 4;
 
   constructor(credentials: AuvikCredentials) {
     // Re-checked here: credentials can come from env, a gateway header or a caller.
@@ -109,12 +109,13 @@ class AuvikHttpClient {
 
   async request<T = JsonApiResponse>(path: string, params?: Record<string, unknown>): Promise<T> {
     const apiParams = toJsonApiParams(params);
-    let attempt = 0;
     let url = `${this.baseUrl()}${path}${buildQuery(apiParams)}`;
     let redirects = 0;
 
     while (true) {
-      const resp = await fetch(url, {
+      // Per-attempt timeout, clear network errors, and bounded retries on
+      // 429 / 5xx / ECONNRESET (GET only), Retry-After capped (see _shared/resilient-fetch.ts).
+      const resp = await resilientFetch(url, {
         method: 'GET',
         redirect: 'manual',
         headers: {
@@ -142,15 +143,6 @@ class AuvikHttpClient {
 
       if (resp.status === 429) {
         const retryAfter = parseInt(resp.headers.get('retry-after') || '0', 10);
-        if (attempt < this.maxRetries) {
-          const backoff =
-            retryAfter > 0
-              ? Math.min(60_000, retryAfter * 1000)
-              : Math.min(60_000, 1000 * 2 ** attempt + Math.random() * 250);
-          await new Promise((r) => setTimeout(r, backoff));
-          attempt++;
-          continue;
-        }
         throw makeError(429, await resp.json().catch(() => null), retryAfter || undefined);
       }
 

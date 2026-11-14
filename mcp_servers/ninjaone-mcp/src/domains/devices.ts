@@ -494,8 +494,11 @@ async function handleCall(
               organizationId = parseInt(selection, 10);
             }
           }
-        } catch {
-          // If org fetch fails, proceed without filter
+        } catch (err) {
+          // A vendor that is unreachable or hung would make the devices call below fail
+          // (or time out) the same way, so surface it now instead of waiting twice.
+          if ((err as { isNetworkError?: boolean }).isNetworkError === true) throw err;
+          // Any other org fetch failure: proceed without filter
         }
       }
 

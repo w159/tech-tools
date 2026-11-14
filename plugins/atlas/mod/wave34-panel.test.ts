@@ -60,8 +60,8 @@ const body = (view: SidebarView, columns: number, rows: number, s = snap(), run:
 /** Every Text of a tree with its colour. */
 const texts = (n: Node, out: Array<{ t: string; color?: string }> = []): Array<{ t: string; color?: string }> => { if (n.kind === 'Text') out.push({ t: String(n.props.children ?? ''), color: n.props.color }); for (const k of kids(n)) texts(k, out); return out; };
 
-const BRAILLE_SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
-const CIRCLES = /[◐◓◑◒]/;
+const SPIN_MARK = /[◐◓◑◒]/;
+const NO_BRAILLE = /[\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f]/; // the retired ten-frame lead set (the sparkline's cells are other code points)
 const DIM = '#585858'; // 240
 const RED = '#ff5f5f'; // 203
 const GREEN = '#87d787'; // 114
@@ -83,7 +83,7 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
   });
   test('a phase is green only once the run was in it; an unentered phase is a 240 `·`', () => {
     const t = walk(['research', 'implement', 'verify'], { kind: 'working', secs: 40, startMs: NOW - 40000 }).join('\n');
-    expect(t).toMatch(/● research › · theory › · test › ● implement › [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] verify/); // 4d8d8eb1 greened every phase before the lit one
+    expect(t).toMatch(/● research › · theory › · test › ● implement › [◐◓◑◒] verify/); // 4d8d8eb1 greened every phase before the lit one
     const dots = texts(tree('route', 65, 45)).filter((x) => x.t === '· ');
     expect(dots.length).toBeGreaterThan(0);
     for (const d of dots) expect(d.color).toBe(DIM);
@@ -94,7 +94,7 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
     render('route', 65, 45, snap('implement'));
     const done = render('route', 65, 45, snap('done'), { kind: 'done', secs: 52 }).join('\n');
     expect(done).toMatch(/● research › · theory › · test › ● implement › · verify/);
-    expect(done).not.toMatch(BRAILLE_SPIN);
+    expect(done).not.toMatch(SPIN_MARK);
   });
   test('a blocked run keeps the phases it entered green and lights none (critique 33: research stood `◇` after it ran)', () => {
     forgetPhases();
@@ -103,12 +103,12 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
     expect(t).toMatch(/[▲■] research|● research/);
     expect(t).not.toMatch(/◇ research/);
   });
-  test('the current phase turns the braille spinner and no circle spinner is drawn anywhere on the pane', () => {
+  test('the current phase turns the spinner and no braille spinner is drawn anywhere on the pane', () => {
     forgetPhases();
     const t = render('route', 65, 45, snap('implement')).join('\n');
-    expect(t).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] implement/);
+    expect(t).toMatch(/[◐◓◑◒] implement/);
     for (const v of ['route', 'team', 'channel', 'board', 'gates', 'core'] as const) {
-      for (const run of [RUN, { kind: 'done', secs: 52 } as Run, { kind: 'idle' } as Run]) expect(render(v, 65, 45, snap(), run).join('\n')).not.toMatch(CIRCLES); // 4d8d8eb1: `◐ T4` on the board
+      for (const run of [RUN, { kind: 'done', secs: 52 } as Run, { kind: 'idle' } as Run]) expect(render(v, 65, 45, snap(), run).join('\n')).not.toMatch(NO_BRAILLE); // one family on the pane: the circle quarters the HUD rows turn
     }
   });
 });

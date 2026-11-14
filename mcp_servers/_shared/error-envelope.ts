@@ -187,6 +187,13 @@ interface Classification {
 function classifyError(operation: string, err: unknown): Classification {
   // Error instance with a .status or .statusCode field
   // (.status: node-fetch / undici; .statusCode: node-threatlocker / node-vanta ServiceError)
+  if (isNetworkFailure(err)) {
+    return {
+      code: "NETWORK_ERROR",
+      message: `${operation} failed: ${(err as Error).message}`,
+    };
+  }
+
   if (isStatusError(err)) {
     const e = err as Record<string, unknown>;
     const status = (typeof e.status === "number" ? e.status : e.statusCode) as number;
@@ -202,7 +209,8 @@ function classifyError(operation: string, err: unknown): Classification {
     const isNet =
       err.message.includes("ECONNREFUSED") ||
       err.message.includes("ETIMEDOUT") ||
-      err.message.includes("fetch failed");
+      err.message.includes("fetch failed") ||
+      err.message.includes("cannot reach ");
     // Some vendor libraries (node-knowbe4) throw a bare Error for a rejected
     // token; classify it as the auth failure it is, not a server bug.
     const isAuth = /authentication failed|unauthori[sz]ed|invalid token|token revoked/i.test(err.message);
@@ -220,13 +228,24 @@ function classifyError(operation: string, err: unknown): Classification {
   };
 }
 
+// resilient-fetch's NetworkError ("cannot reach host: reason"), possibly wrapped by a
+// vendor library that kept it as `cause`.
+function isNetworkFailure(err: unknown): boolean {
+  for (let cur: unknown = err, i = 0; i < 3 && cur && typeof cur === "object"; i++) {
+    if ((cur as { isNetworkError?: unknown }).isNetworkError === true) return true;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 function isStatusError(
   err: unknown
 ): err is { status?: unknown; statusCode?: unknown; message?: unknown; body?: unknown; response?: unknown } {
   if (err === null || typeof err !== "object") return false;
   const e = err as Record<string, unknown>;
   // Accept either .status (node-fetch/undici) or .statusCode (node-threatlocker/node-vanta ServiceError)
-  return typeof e.status === "number" || typeof e.statusCode === "number";
+  // status 0 is a library's "no HTTP response" marker (network failure), not an HTTP status
+  return (typeof e.status === "number" && e.status > 0) || (typeof e.statusCode === "number" && e.statusCode > 0);
 }
 
 function extractBody(err: {

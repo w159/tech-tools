@@ -10,7 +10,7 @@ two things and nothing else:
                  (environment, else ~/.atlas/settings.json "env"), then the enable/disable choice in
                  analytics/consent.json, then the CI/test guard, then on by default. test_analytics_contract
                  pins the two to the same answers.
-  record(keys)   one append of {"w": ISO week, "k": key, "n": 1} lines to analytics/events.jsonl, for keys
+  record(keys)   (also starts the hourly background send, see _flush) one append of {"w": ISO week, "k": key, "n": 1} lines to analytics/events.jsonl, for keys
                  the caller builds from closed constants (a hook name from a fixed table, an event name, a
                  bucket function, a shipped skill directory). A key not shaped like a counter key is dropped.
                  It does not match the schema: read_events/build_payload in atlas_analytics re-validate every
@@ -21,7 +21,11 @@ Never raises; writes nothing when off.
 
 import json
 import os
+import sys
+import time
 from datetime import datetime, timezone
+
+SEND_RETRY_S = 3600  # the same hourly window as atlas_analytics.SEND_RETRY_S (test_analytics_contract pins them)
 
 OFF_VALUES = ("off", "0", "false", "no", "disabled", "disable")
 ON_VALUES = ("on", "1", "true", "yes", "enabled")
@@ -77,6 +81,100 @@ def enabled():
     return not any(os.environ.get(v) for v in AUTOMATION_VARS)
 
 
+def _under_test():
+    """A test run must never start a real send to the shipped endpoint."""
+    return bool(os.environ.get("PYTEST_CURRENT_TEST")) or "pytest" in sys.modules
+
+
+def _try_lock(adir):
+    """Non-blocking take of the analytics/.lock that atlas_analytics._locked() holds around its read-modify-write
+    of last_send.json. Returns the open handle, None when no lock is available on this platform (proceed
+    unlocked, as _locked does), or False when another process holds it (the caller skips; a hook never waits)."""
+    fh = None
+    try:
+        os.makedirs(adir, exist_ok=True)
+        fh = open(os.path.join(adir, ".lock"), "a+b")
+        try:
+            import fcntl
+
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except ImportError:
+            import msvcrt
+
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        return fh
+    except (BlockingIOError, PermissionError):
+        contended = True
+    except Exception:
+        contended = False  # no lock to be had (read-only directory, no lock module): proceed unlocked
+    if fh is not None:
+        try:
+            fh.close()
+        except Exception:
+            pass
+    return False if contended else None
+
+
+def _unlock(fh):
+    if fh:
+        try:
+            fh.close()  # closing releases the flock
+        except Exception:
+            pass
+
+
+def _flush(adir):
+    """Counts used to leave this machine only when a later session started at least an hour after the last
+    attempt, so a short or only session (a cloud container, a day-long session) sent its session and weekday
+    and none of what it did. Each hook that records counts now checks the same hourly stamp (one stat) and
+    starts the detached `send --auto` the session-start path starts. The child applies every gate (opt-out,
+    first-run notice, endpoint) and sends the current week as a snapshot the server replaces. Claiming the
+    stamp first keeps concurrent hooks to one child; a lost race only repeats an idempotent snapshot."""
+    stamp = os.path.join(adir, "last_send.json")
+    try:
+        if time.time() - os.stat(stamp).st_mtime < SEND_RETRY_S:
+            return
+    except FileNotFoundError:
+        pass
+    if _under_test():
+        return
+    import subprocess
+
+    fh = _try_lock(adir)
+    if fh is False:
+        return  # another process is inside its read-modify-write of the stamp; the next hook retries
+    try:
+        try:
+            if time.time() - os.stat(stamp).st_mtime < SEND_RETRY_S:
+                return  # a concurrent hook or a finishing send refreshed it while we took the lock
+        except FileNotFoundError:
+            pass
+        now = time.time()
+        try:
+            prev = _json(stamp)
+            prev["at"] = now
+            tmp = stamp + ".%d.tmp" % os.getpid()
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(prev, f)
+            os.replace(tmp, stamp)
+        except Exception:
+            return
+    finally:
+        _unlock(fh)
+    try:
+        subprocess.Popen(
+            [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "atlas_analytics.py"), "send", "--auto"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            close_fds=True,
+        )
+    except Exception:
+        return
+
+
 def record(keys, n=1):
     """Append one counter line per well-formed key. No-op when off. Never raises."""
     try:
@@ -95,5 +193,6 @@ def record(keys, n=1):
         os.makedirs(adir, exist_ok=True)
         with open(os.path.join(adir, "events.jsonl"), "a", encoding="utf-8") as f:
             f.write("".join(lines))
+        _flush(adir)
     except Exception:
         return

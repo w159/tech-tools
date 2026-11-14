@@ -323,7 +323,7 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] 2 running +$/);
+	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}[◐◓◑◒] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}[◐◓◑◒] 2 running +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
 	expect(p[2]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +1:12 $/);
 	expect(p[3]).toMatch(/^ ◓ implementer-band running {2}thinking +0:48 $/);
@@ -381,7 +381,7 @@ test("long worker names and roles are cut with an ellipsis in their columns, nev
 test("panel at 60 columns is the band alone", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
 	expect(p).toHaveLength(1);
-	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ⠙ working 2:41 · todo 5/9 · ⠙ 2 running");
+	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ◓ working 2:41 · todo 5/9 · ◓ 2 running");
 });
 
 test("worker marks: a running worker's spinner follows the tick, thinking has a grey one; no faces", () => {
@@ -533,22 +533,22 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 		handlers.message_end?.forEach(h => h({ message: { role: "assistant", content: [{ type: "text", text }] } }, ctx));
 	const railOf = () => plain([calls.at(-1)![0]!]);
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
 	say("ATLAS | ⛭ implement 1/3 | running the team\nbody");
 	say("no header on this follow-up message");
 	say("ATLAS | x verify | sub", { cwd: root, agent: { kind: "sub" } }); // a sub's header never moves the lead's rail
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn: the old header no longer counts
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
 	writeFileSync(join(root, ".atlas", ".run", "todos.json"), JSON.stringify({ version: 1, items: [{ status: "in_progress", phase: "test" }] }));
 	say("ATLAS | ⛭ verify | x");
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/); // critique 15 B1: the header chip outranks the active todo
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/); // critique 15 B1: the header chip outranks the active todo
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn, no header yet: the active todo decides
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
 	view.stop();
 });
 
@@ -839,11 +839,11 @@ test("only the lead's assistant text pins the rail: user messages and non-text c
 	send({ role: "assistant", content: "ATLAS | ⛭ verify | plain string content" });
 	send({ role: "assistant", content: [{ type: "tool_use", text: "ATLAS | ⛭ verify | x" }] });
 	send(null);
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
 	send({ role: "assistant", content: header });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
 	send({ role: "assistant", content: [{ type: "text", text: "ATLAS | ⛭ bogus-phase | x" }] }); // not a rail phase: ignored
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
 	view.stop();
 });
 
@@ -1001,7 +1001,7 @@ test("A4: while a member is unfinished the band spinner steps every 100 ms on it
 	const { calls, ui, timers, view } = harness();
 	view.open(ui, { channel: CHAN, members: ["A"], cwd: f.root });
 	expect(timers.frame).toBeDefined(); // the spinner timer runs with no poll in between
-	const glyphOf = () => plain(calls.at(-1)).match(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/)?.[0];
+	const glyphOf = () => plain(calls.at(-1)).match(/[◐◓◑◒]/)?.[0];
 	const seen: Array<string | undefined> = [];
 	for (let i = 0; i < 4; i++) {
 		timers.clock = i * 100; // the injected clock moves one frame; the poll timer (1.5 s) never fires

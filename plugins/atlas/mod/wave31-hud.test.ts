@@ -121,7 +121,7 @@ describe('1. one block, no hidden rows, no spacers', () => {
   }
 });
 
-// Wave 32 (hud32): the SUBAGENTS box and its AGENT STATE TASK LAST RESULT header are gone in every state; the lower rule of the one block carries the title (`⠹ 3 running` while they work,
+// Wave 32 (hud32): the SUBAGENTS box and its AGENT STATE TASK LAST RESULT header are gone in every state; the lower rule of the one block carries the title (`◑ 3 running` while they work,
 // `● 3 done · times · N fn` once they have stopped). The old at-rest box tests are replaced by the closing-rule form below.
 describe('2. agents ride their TODO rows in every state; SUBAGENTS is the lower rule of the block', () => {
   for (const [, screen, cols] of SIZES) {

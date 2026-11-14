@@ -1,4 +1,5 @@
 import { RateLimiter } from './rate-limiter.js';
+import { resilientFetch } from './net.js';
 import {
   BlumiraError,
   AuthenticationError,
@@ -50,73 +51,53 @@ export class HttpClient {
       if (qs) url += `?${qs}`;
     }
 
-    let lastError: Error | null = null;
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      if (attempt > 0) {
-        const delay = Math.min(1000 * 2 ** (attempt - 1), 30_000);
-        await new Promise(r => setTimeout(r, delay));
-      }
+    await this.rateLimiter.acquire();
 
-      await this.rateLimiter.acquire();
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${this.jwtToken}`,
+      'Accept': 'application/json',
+    };
+    if (body) headers['Content-Type'] = 'application/json';
 
-      const headers: Record<string, string> = {
-        'Authorization': `Bearer ${this.jwtToken}`,
-        'Accept': 'application/json',
-      };
-      if (body) headers['Content-Type'] = 'application/json';
+    // Per-attempt timeout, clear network errors, and bounded retries for
+    // idempotent requests only (see net.ts).
+    const response = await resilientFetch(
+      url,
+      { method, headers, body: body ? JSON.stringify(body) : undefined },
+      { maxRetries: this.maxRetries },
+    );
 
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          method,
-          headers,
-          body: body ? JSON.stringify(body) : undefined,
-        });
-      } catch (err) {
-        lastError = err as Error;
-        continue;
-      }
-
-      if (response.ok) {
-        if (response.status === 204) return {} as T;
-        const contentType = response.headers.get('content-type');
-        if (contentType?.includes('application/json')) return response.json() as Promise<T>;
-        return {} as T;
-      }
-
-      // Read body safely — text first, then parse
-      let responseBody: unknown;
-      const rawText = await response.text();
-      try { responseBody = JSON.parse(rawText); }
-      catch { responseBody = rawText; }
-
-      switch (response.status) {
-        case 400:
-          throw new ValidationError('Bad request', [], responseBody);
-        case 401:
-          throw new AuthenticationError('Authentication failed — check your JWT token', responseBody);
-        case 403:
-          throw new ForbiddenError('Forbidden', responseBody);
-        case 404:
-          throw new NotFoundError('Resource not found', responseBody);
-        case 429: {
-          const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
-          if (attempt < this.maxRetries) {
-            await new Promise(r => setTimeout(r, retryAfter * 1000));
-            continue;
-          }
-          throw new RateLimitError('Rate limit exceeded', retryAfter, responseBody);
-        }
-        default:
-          if (response.status >= 500) {
-            lastError = new ServerError(`Server error: ${response.status}`, responseBody);
-            if (attempt < this.maxRetries) continue;
-            throw lastError;
-          }
-          throw new BlumiraError(`HTTP ${response.status}`, response.status, responseBody);
-      }
+    if (response.ok) {
+      if (response.status === 204) return {} as T;
+      const contentType = response.headers.get('content-type');
+      if (contentType?.includes('application/json')) return response.json() as Promise<T>;
+      return {} as T;
     }
 
-    throw lastError || new Error('Request failed after retries');
+    // Read body safely — text first, then parse
+    let responseBody: unknown;
+    const rawText = await response.text();
+    try { responseBody = JSON.parse(rawText); }
+    catch { responseBody = rawText; }
+
+    switch (response.status) {
+      case 400:
+        throw new ValidationError('Bad request', [], responseBody);
+      case 401:
+        throw new AuthenticationError('Authentication failed — check your JWT token', responseBody);
+      case 403:
+        throw new ForbiddenError('Forbidden', responseBody);
+      case 404:
+        throw new NotFoundError('Resource not found', responseBody);
+      case 429: {
+        const retryAfter = parseInt(response.headers.get('retry-after') || '60', 10);
+        throw new RateLimitError('Rate limit exceeded', retryAfter, responseBody);
+      }
+      default:
+        if (response.status >= 500) {
+          throw new ServerError(`Server error: ${response.status}`, responseBody);
+        }
+        throw new BlumiraError(`HTTP ${response.status}`, response.status, responseBody);
+    }
   }
 }

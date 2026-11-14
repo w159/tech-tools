@@ -25,6 +25,7 @@
  * - X-Ninja-Region
  */
 
+import pkg from '../package.json' with { type: 'json' };
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -405,7 +406,7 @@ async function createMcpServer(credentialOverrides?: NinjaOneCredentials): Promi
   const allDomainTools = await getAllDomainTools();
 
   const server = new McpServer(
-    { name: "ninjaone-mcp", version: "1.8.0" },
+    { name: "ninjaone-mcp", version: pkg.version },
     {
       // registerTool adds the tools capability itself; prompts are served by the
       // low-level handlers in registerPromptHandlers.

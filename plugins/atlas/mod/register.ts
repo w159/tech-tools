@@ -1493,7 +1493,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			look: look.ui,
 			gates: paneGates,
 			core: paneCore,
-			run: { kind: bandKind(bandB), frame: paneFrame % 10, ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(originMs !== undefined ? { startMs: originMs } : {}) },
+			run: { kind: bandKind(bandB), frame: paneFrame, ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(originMs !== undefined ? { startMs: originMs } : {}) },
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,

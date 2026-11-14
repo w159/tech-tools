@@ -58,7 +58,7 @@ const body = (view: SidebarView, columns: number, rows: number, s = snap(), run:
 /** Every Text of a tree with its colour. */
 const texts = (n: Node, out: Array<{ t: string; color?: string }> = []): Array<{ t: string; color?: string }> => { if (n.kind === 'Text') out.push({ t: String(n.props.children ?? ''), color: n.props.color }); for (const k of kids(n)) texts(k, out); return out; };
 
-const BRAILLE_SPIN = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 const CIRCLES = /[◐◓◑◒]/;
 const DIM = '#585858'; // 240
 const RED = '#ff5f5f'; // 203
@@ -170,20 +170,20 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
   test('the ribbon names the view, and the phase line carries the band\'s word and clock', () => {
     const t = rows();
     expect(t[0]).toMatch(/SIDEPANEL.*status/);
-    expect(t.find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+⠋ working .* 0:57$/);
+    expect(t.find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+◐ working .* 0:57$/);
     expect(rows(57, BLOCKED).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+▲ blocked\s+0:57$/);
     expect(rows(57, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+● done\s+0:52$/);
   });
   test('phases are the true ones: only the entered ones are green, the lit one wears the clock', () => {
     const chain = rows(70).find((l) => /research ›/.test(l))!;
-    expect(chain).toMatch(/· research › · theory › · test › [⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] implement 0:57/);
+    expect(chain).toMatch(/· research › · theory › · test › [◐◓◑◒] implement 0:57/);
   });
   test('one 12-cell braille line per agent, with its name and its time', () => {
     const t = rows();
     for (const [name, secs] of [['alpha-explorer', '0:11'], ['ghost-explorer', '0:10'], ['beta-explorer', '0:07']] as const) {
       const row = t.find((l) => l.includes(name))!;
       expect(row).toBeDefined();
-      expect(row).toMatch(new RegExp(`^\\s+[●■◇⠋-⠿] ${name}\\s+[⣀⣤⣶⣿]{12}\\s+${secs}$`));
+      expect(row).toMatch(new RegExp(`^\\s+[●■◇◐◓◑◒] ${name}\\s+[⣀⣤⣶⣿]{12}\\s+${secs}$`));
     }
   });
   test('a failed agent\'s line is in error 203, a running one\'s sparkline in the accent', () => {
@@ -292,7 +292,7 @@ describe('item 4: the board (critique 34: `· total0:3 · 8 tool` at 110, `3 dis
     expect(t.find((l) => /\bitems\b/.test(l))).toMatch(/5 items · 1 dispatch\s/); // 4fef5d66: `5 items · 2 dispatches` over a list of one
     const at = t.findIndex((l) => /^\s*dispatches\s*$/.test(l));
     expect(at).toBeGreaterThan(0);
-    const listed = t.slice(at + 1).filter((l) => /^\s+[●■◇⠋-⠿▲] /.test(l) && /Read ghost\.py first|List the function/.test(l));
+    const listed = t.slice(at + 1).filter((l) => /^\s+[●■◇◐◓◑◒▲] /.test(l) && /Read ghost\.py first|List the function/.test(l));
     expect(listed).toHaveLength(1);
   });
   test('no open dispatch: the header says the items alone and no empty `dispatches` group is drawn', () => {
@@ -313,9 +313,9 @@ describe('item 4: the board (critique 34: `· total0:3 · 8 tool` at 110, `3 dis
 
 describe('item 5: the board\'s one honest motion', () => {
   const glyphs = (s: never, nows: number[]): string[] => nows.map((n) => { forgetPhases(); const t = withGates({ ...(s as object), now: NOW + n } as never, 'board', 57, 40); return /^▸? ?(\S) T4 combine/.exec(t.find((l) => /T4 combine/.test(l))!.trim().replace(/^▸\s*/, ''))?.[1] ?? ''; });
-  test('while a worker runs, its row\'s glyph turns the braille frames', () => {
+  test('while a worker runs, its row\'s glyph turns the spinner frames', () => {
     const g = glyphs(snap(), [0, 100, 200, 300, 400, 500, 600, 700]);
-    expect(g.every((x) => /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]$/.test(x))).toBe(true);
+    expect(g.every((x) => /^[◐◓◑◒]$/.test(x))).toBe(true);
     expect(new Set(g).size).toBeGreaterThan(1);
   });
   test('at rest nothing moves: the same rows at two clocks are the same text', () => {
@@ -323,6 +323,6 @@ describe('item 5: the board\'s one honest motion', () => {
     const a = withGates({ ...(rest as object), now: NOW } as never, 'board', 57, 40, { kind: 'done', secs: 52, startMs: NOW - 52000 });
     const b = withGates({ ...(rest as object), now: NOW + 300 } as never, 'board', 57, 40, { kind: 'done', secs: 52, startMs: NOW - 52000 });
     expect(a.filter((l) => /T\d /.test(l))).toEqual(b.filter((l) => /T\d /.test(l)));
-    expect(a.join('\n')).not.toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    expect(a.join('\n')).not.toMatch(/[◐◓◑◒]/);
   });
 });

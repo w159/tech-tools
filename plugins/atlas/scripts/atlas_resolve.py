@@ -40,9 +40,10 @@ def check_paths(raw, root=None):
     parts = [p.strip() for p in (raw or "").split(",") if p.strip()]
     if not parts:
         raise ValueError("--paths was given but names no path; omit it for whole-project scope")
-    base = os.path.abspath(root or os.getcwd())
+    # realpath (non-strict) follows symlinks yet still resolves a not-yet-existing tail, so a new file is accepted
+    base = os.path.realpath(root or os.getcwd())
     for p in parts:
-        full = os.path.abspath(os.path.join(base, p))
+        full = os.path.realpath(os.path.join(base, p))
         if os.path.commonpath([base, full]) != base:
             raise ValueError(f"path {p!r} resolves outside the project root {base}")
     return parts

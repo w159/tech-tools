@@ -19,6 +19,7 @@ import anyio
 from falconpy import APIHarnessV2  # type: ignore[import-untyped]
 
 from falcon_mcp.common.logging import get_logger
+from falcon_mcp.common.utils import redact_url
 
 logger = get_logger(__name__)
 
@@ -121,7 +122,7 @@ class FalconClient:
         # own POST /oauth2/token. The lock guards only the refresh, never the API call.
         self._token_lock = threading.Lock()
 
-        logger.debug("Initialized Falcon client with base URL: %s", self.base_url)
+        logger.debug("Initialized Falcon client with base URL: %s", redact_url(self.base_url))
         if self.member_cid:
             logger.debug("Flight Control member_cid: %s", self.member_cid)
 
@@ -163,7 +164,7 @@ class FalconClient:
             )
         else:
             parts.append(
-                f"Hint: Check network connectivity to {self.base_url}"
+                f"Hint: Check network connectivity to {redact_url(self.base_url)}"
                 " and verify FALCON_BASE_URL is correct for your CrowdStrike region."
             )
 

@@ -1,6 +1,7 @@
 import { BlumiraClient } from 'node-blumira';
 import { logger } from './logger.js';
 import { resolveBaseUrl } from '../domains/_helpers.js';
+import { resilientFetch } from '@shared/resilient-fetch.js';
 
 // Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
 // and whitespace-only values so optional env vars fall through to their defaults.
@@ -37,7 +38,7 @@ export async function exchangeOAuthToken(
 
   logger.info('Exchanging OAuth2 client credentials for JWT');
 
-  const res = await fetch('https://auth.blumira.com/oauth/token', {
+  const res = await resilientFetch('https://auth.blumira.com/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -48,7 +49,7 @@ export async function exchangeOAuthToken(
       // base URL. See https://support.blumira.com/hc/en-us/articles/41813668396435
       audience: 'public-api',
     }),
-  });
+  }, { idempotent: true }); // client_credentials grant is safe to repeat
 
   if (!res.ok) {
     const text = await res.text();

@@ -23,6 +23,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { logger } from "./logger.js";
 import { KNOWBE4_REGIONS, type KnowBe4Credentials } from "./types.js";
+import { resilientFetch } from "../../../_shared/resilient-fetch.js";
 import { resolveBaseUrl, describeBaseUrl } from "../../../_shared/base-url.js";
 
 // Strip unresolved MCP host template placeholders (e.g. "${user_config.x}")
@@ -126,7 +127,8 @@ export async function apiRequest<T>(
 
   logger.debug("KnowBe4 API request", { method, url: url.toString() });
 
-  const response = await fetch(url.toString(), fetchOptions);
+  // Per-attempt timeout, clear network errors, bounded retries for GET (see _shared/resilient-fetch.ts).
+  const response = await resilientFetch(url.toString(), fetchOptions);
 
   // Safe: read text once, then try JSON parse
   const rawText = await response.text();

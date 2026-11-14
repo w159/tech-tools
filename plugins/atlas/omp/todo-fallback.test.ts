@@ -21,6 +21,7 @@ function harness(root: string, kind = "main") {
 	let tick: (() => void) | undefined;
 	const view = registerTodoFallback(pi as never, {
 		env: { ATLAS_PROJECT_ROOT: root },
+		now: () => 0, // a frozen clock: the running-row spinner turns on wall time, which made unchanged-board repaints flaky
 		setInterval: fn => ((tick = fn), 1),
 		clearInterval: () => {},
 	});

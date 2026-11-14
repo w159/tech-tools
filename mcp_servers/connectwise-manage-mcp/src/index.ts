@@ -33,6 +33,7 @@
  *   MCP_BEARER_TOKEN            - Static bearer token for Claude Code CLI / Claude Desktop
  */
 
+import pkg from '../package.json' with { type: 'json' };
 import {
   createServer,
   IncomingMessage,
@@ -77,7 +78,7 @@ function createMcpServer(): McpServer {
   const server = new McpServer(
     {
       name: "connectwise-manage-mcp",
-      version: "1.5.2",
+      version: pkg.version,
     },
     {
       instructions:

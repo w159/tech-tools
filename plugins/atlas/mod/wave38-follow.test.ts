@@ -6,21 +6,21 @@ import { forgetBandFrame, sharedSpinFrame } from './motion';
 import { lineText, panelLines, type PanelModel } from './panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const BRAILLE = /[⠀-⣿]/;
+const SPIN_MARK = /[◐◓◑◒]/;
 
 describe('follow-up A: the side panel tick is the band tick', () => {
   const phaseRowOf = (over: Partial<PanelModel>): string => {
     const m = panelWorld('route', 110, ui, { rows: 40, now: 1_000_000, run: { kind: 'working', secs: 41 }, phase: 'implement', ...over });
     return panelLines(m).map(lineText).find((l) => /^\s*phase\b/.test(l))!;
   };
-  test('a run that carries frame f and 0:42 prints that braille glyph and that clock, whatever now is (truth 41: no copy of the band\'s last note)', () => {
+  test('a run that carries frame f and 0:42 prints that spinner glyph and that clock, whatever now is (truth 41: no copy of the band\'s last note)', () => {
     const now = 1_000_000;
     const other = (sharedSpinFrame(now) + 3) % 10; // a frame the shared clock does not give at `now`
     const row = phaseRowOf({ now, run: { kind: 'working', secs: 42, frame: other } });
-    expect(row.match(BRAILLE)?.[0]).toBe(leadSpinnerGlyph(other));
+    expect(row.match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
     expect(row).toContain('0:42');
     expect(row).not.toContain('0:41');
-    expect(phaseRowOf({ now: now + 50, run: { kind: 'working', secs: 42, frame: other } }).match(BRAILLE)?.[0]).toBe(leadSpinnerGlyph(other));
+    expect(phaseRowOf({ now: now + 50, run: { kind: 'working', secs: 42, frame: other } }).match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
   });
   test('before the band ever drew, the panel falls back to the shared clock and its own seconds', () => {
     forgetBandFrame();

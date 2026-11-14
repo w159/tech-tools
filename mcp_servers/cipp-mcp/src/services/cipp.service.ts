@@ -6,6 +6,7 @@
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { Logger } from '../utils/logger.js';
 import { TokenProvider } from './token.service.js';
+import { resilientFetch } from '@shared/resilient-fetch.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -150,23 +151,23 @@ export class CippService {
       requestInit.body = JSON.stringify(body);
     }
 
-    if (timeoutMs !== undefined) {
-      // Aborts the fetch if the response is not received in time. The abort
-      // surfaces as a network error below, which callers can catch per request.
-      requestInit.signal = AbortSignal.timeout(timeoutMs);
-    }
-
     this.logger.debug('CIPP API request', { method, url: url.toString() });
 
     let response: Response;
     try {
-      response = await fetch(url.toString(), requestInit);
+      // Per-attempt timeout (explicit `timeoutMs`, else the shared default), clear
+      // network errors, bounded retries for GET only. A timeout surfaces as a
+      // network error below, which callers can catch per request.
+      response = await resilientFetch(url.toString(), requestInit, { timeoutMs });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error('CIPP API network error', { method, url: url.toString(), error: message });
-      throw new Error(
+      const wrapped = new Error(
         `Network error communicating with CIPP API (${method} ${url.toString()}): ${message}`
       );
+      // Keep the NetworkError as `cause` so the shared error envelope classifies it as NETWORK_ERROR.
+      Object.defineProperty(wrapped, 'cause', { value: err, configurable: true, writable: true });
+      throw wrapped;
     }
 
     if (!response.ok) {

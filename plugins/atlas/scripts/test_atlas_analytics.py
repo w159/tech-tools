@@ -1149,6 +1149,7 @@ def test_send_drops_weeks_older_than_retention_unsent(home, net):
             ("2026-W44", "gate.b.block", 1),
         ],
     )
+    enable()  # `send --auto` only runs after the notice, which a decision counts as
     assert A.main(["send", "--auto"]) == 0
     assert [json.loads(b)["week"] for _, b, _, _ in net.posts] == ["2026-W44", "2026-W45"]
     # W30 and W36 (more than 8 weeks old) were dropped, never sent late
@@ -1157,6 +1158,7 @@ def test_send_drops_weeks_older_than_retention_unsent(home, net):
 
 def test_retention_keeps_exactly_eight_weeks(home, net):
     write_events(home, [("2026-W37", "gate.a.block", 1)])  # cutoff week: still sent
+    enable()
     assert A.main(["send", "--auto"]) == 0
     assert [json.loads(b)["week"] for _, b, _, _ in net.posts] == ["2026-W37", "2026-W45"]
 
@@ -1206,6 +1208,7 @@ def test_send_network_error_keeps_events(home, monkeypatch):
 def test_send_auto_prints_nothing_on_every_path(home, monkeypatch, capsys):
     fake = FakeNet(monkeypatch, statuses=[200, 500])
     monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", ENDPOINT)
+    enable()
     capsys.readouterr()
     assert A.main(["send", "--auto"]) == 0  # nothing pending
     write_events(
@@ -1860,3 +1863,82 @@ def test_snapshot_timing_wording_says_session_start_not_while_atlas_runs(home, c
     assert "while Atlas runs" not in A.__doc__
     A.main(["explain"])
     assert "while Atlas runs" not in capsys.readouterr().out
+
+
+# --- telemetry review (2026-11): why submissions went missing --------------------------------------------------
+def test_explicit_on_counts_as_the_notice_having_been_shown(home, bg, monkeypatch):
+    """ATLAS_ANALYTICS=on is a decision. boot_notice stays silent for it (not 'on by default') and never
+    writes notice.json, so the send gate used to stay shut forever: counted locally, never sent."""
+    monkeypatch.setenv("ATLAS_ANALYTICS", "on")
+    (home / "analytics" / "consent.json").unlink()
+    fresh()
+    assert A.boot_notice() is None and not A.is_decided()
+    assert A._notice_shown() is True
+    assert A.maybe_send_in_background() is True
+
+
+def test_a_crew_worker_session_is_not_a_user_session(home, monkeypatch):
+    """Colony workers are full Claude sessions; counting them inflated session.* (the denominator of every
+    rate) by the team size and made active.day look busier than the person was."""
+    monkeypatch.setattr(A, "maybe_send_in_background", lambda: False)
+    monkeypatch.setenv("ATLAS_HARNESS", "claude")
+    monkeypatch.setenv("ATLAS_WORKER_NAME", "general-purpose-1")
+    A.on_session_start({})
+    assert A.build_payload()["counts"] == {}
+    monkeypatch.delenv("ATLAS_WORKER_NAME")
+    monkeypatch.setenv("ATLAS_CREW_WORKER", "1")
+    A.on_session_start({})
+    assert A.build_payload()["counts"] == {}
+    monkeypatch.delenv("ATLAS_CREW_WORKER")
+    A.on_session_start({})
+    assert A.build_payload()["counts"] == {"session.claude": 1, "active.day.tue": 1}
+
+
+def test_status_says_why_nothing_is_being_sent(home, monkeypatch, capsys):
+    """`status` used to print only file presence: an install whose notice.json predates the current schema
+    (or that has no endpoint) showed nothing wrong while it silently never sent."""
+    A.record("skill.atlas-setup")
+    d = home / "analytics"
+    (d / "notice.json").write_text(json.dumps({"schema": 2, "shown": "2026-11-14"}))
+    capsys.readouterr()
+    assert A.main(["status"]) == 0
+    assert "send:       waiting" in capsys.readouterr().out
+    (d / "notice.json").write_text(json.dumps({"schema": A.SCHEMA_VERSION, "shown": "2026-11-14"}))
+    monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", ENDPOINT)
+    assert A.main(["status"]) == 0
+    assert "send:       ready" in capsys.readouterr().out
+    monkeypatch.delenv("ATLAS_ANALYTICS_ENDPOINT")
+    no_schema_endpoint(monkeypatch)
+    assert A.main(["status"]) == 0
+    assert "send:       blocked, no endpoint" in capsys.readouterr().out
+
+
+def test_send_auto_waits_for_the_notice(home, net, monkeypatch):
+    """The hot path starts `send --auto` without the notice check maybe_send_in_background does."""
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    fresh()
+    assert not A._notice_shown()
+    assert A.main(["send", "--auto"]) == 2
+    assert net.posts == []
+    enable()
+    assert A.main(["send", "--auto"]) == 0
+    assert net.posts and json.loads(net.posts[0][1])["week"] == "2026-W44"
+
+
+@pytest.mark.parametrize("name", ["linux", "tru", "3.13", "other", "2026"])
+def test_an_identity_that_equals_a_public_envelope_value_is_not_a_leak(home, name):
+    """A machine or user called 'linux' (or any substring of os/python/week/true/false) made the identity check
+    fail on the payload's own os field, so every send was refused (delivery.fail.refused) for good."""
+    A.record("skill.atlas-setup")
+    payload = A.build_payload()
+    res = A.check_payload(payload, identities=[("username", name), ("hostname", name)])
+    assert [r for r in res if not r[1]] == []
+
+
+def test_an_identity_that_is_not_a_public_value_is_still_caught(home):
+    A.record("skill.atlas-setup")
+    payload = A.build_payload()
+    payload["counts"] = {"skill.atlas-setup": 1}
+    leaked = dict(payload, os="linux-jerrym")
+    res = A.check_payload(leaked, identities=[("username", "jerrym")])
+    assert any(not ok for name, ok, _ in res)

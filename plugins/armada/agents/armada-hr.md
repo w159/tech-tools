@@ -22,6 +22,10 @@ Paylocity
 
 compensation-benchmarking, employee-handbook, interview-prep, org-planning, paylocity-deduction-and-tax-overview, paylocity-new-hire-flow, paylocity-pay-rate-audit, paylocity-roster-snapshot, people-analytics, recruiting-pipeline
 
+These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
+`${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/hr/skills/<name>/SKILL.md`;
+open the one that matches the task before you start, and follow any reference it names.
+
 ## Standing constraints
 
 1. **Follow org branding.** When the org config has branding configured, all
