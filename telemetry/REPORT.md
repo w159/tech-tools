@@ -4,10 +4,10 @@ Anonymous usage counts, aggregated per ISO week. A key, version, OS or Python bu
 
 ## Latest week: 2026-W45
 
-1 submission(s). Fewer than 3, so no details are published.
+2 submission(s). Fewer than 3, so no details are published.
 ## Trend
 
 | Week | Submissions | Top version | Hook deny / ask | Gate block / pass | Team done / failed / timeout | Top 3 skills |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-W45 | 1 | - | - | - | - | - |
+| 2026-W45 | 2 | - | - | - | - | - |
 | 2026-W44 | 0 | - | - | - | - | - |
