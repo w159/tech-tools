@@ -5,7 +5,8 @@
   "description": "Pinned bundler toolchain for plugins/armada/mcp/*/server.mjs. Used only by scripts/rebuild_armada_bundles.mjs.",
   "devDependencies": {
     "esbuild": "0.28.2",
-    "tsup": "8.5.1"
+    "tsup": "8.5.1",
+    "typescript": "5.9.3"
   },
   "overrides": {
     "esbuild": "0.28.2"

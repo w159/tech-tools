@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- CI: the new armada-bundles job failed on a clean runner with "Cannot find module 'typescript'": tsup 8.5.1 requires typescript as a peer, and the toolchain only found it through a global install on the dev box. `mcp_servers/_toolchain` now pins typescript 5.9.3 (the version the connectors lock). A clean clone without NODE_PATH rebuilds byte-identical bundles. No shipped file changed.
+
 ## 2.4.0 - 2026-11-14
 
 ### Security
