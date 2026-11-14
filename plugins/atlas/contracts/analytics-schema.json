@@ -52,6 +52,20 @@
         "other"
       ]
     },
+    "routesrc": {
+      "values": [
+        "model",
+        "fallback"
+      ]
+    },
+    "verifyres": {
+      "values": [
+        "block",
+        "block-would",
+        "pass",
+        "skip"
+      ]
+    },
     "size": {
       "values": [
         "1",
@@ -278,6 +292,13 @@
         "team.wall.{wall}"
       ],
       "purpose": "Team runs improved: which task classes and effort levels are chosen, how large teams get, whether runs finish, fail or time out and how long they take, so the scope matrix defaults match real work and failing or slow team shapes get fixed."
+    },
+    "decision": {
+      "patterns": [
+        "decision.route.{routesrc}",
+        "decision.verify.{verifyres}"
+      ],
+      "purpose": "Decision models improved: how often prompt routing is answered by the decision model against the keyword fallback, and how often the done-claim check blocks, passes or is skipped (endpoint off, slow or down), so routing and verification are tuned on real use and a check that blocks too often or never answers is loosened or fixed."
     },
     "gate": {
       "patterns": [

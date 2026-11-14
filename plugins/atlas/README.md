@@ -462,11 +462,27 @@ judgment:
    label can arm a regex miss; a confident conversation label vetoes a regex
    arm, and only when the prompt also names an engineering object. Timeout, low
    confidence or `ATLAS_DECISION=off` keeps the regex answer. The default
-   endpoint is local; `ATLAS_DECISION_URL` and `ATLAS_DECISION_MODEL` change it. The class and
-   effort in the arming nudge do not come from this model: `classify_scope` in
-   `hooks/prompt_optimizer_core.py` is a first-match keyword heuristic over the
-   scope-matrix class names and aliases (so "do not audit, just implement x"
-   classifies as audit). Moving it onto the decision model is open work.
+   endpoint is local; `ATLAS_DECISION_URL` and `ATLAS_DECISION_MODEL` change it.
+   The class and effort in the arming nudge come from the same model:
+   `route_scope` in `hooks/prompt_optimizer_core.py` asks `task_class` (a
+   choice over the scope-matrix classes) and `effort` (low, medium, high) in
+   the same request as the arming question, so a prompt costs one round trip.
+   It uses an answer only when its confidence is at least 0.8 and the value is
+   valid; otherwise the `classify_scope` keyword heuristic answers, which
+   ignores a class word after a negation ("do not audit, just implement x" is
+   implement). Counters `decision.route.model` and `decision.route.fallback`.
+   Verify check: the completion gate (`hooks/completion_gate_core.py`, letter
+   `v`) sends the final reply to the same endpoint as two noul questions (the
+   reply claims the work is done or fixed; the reply quotes an observed result
+   such as command output, a test count, a file:line or query rows). By default
+   it runs in shadow: it asks the model and records `decision.verify.block-would`
+   when the claim is at least 0.8 and the observed result at most 0.3, but never
+   blocks, because those thresholds are uncalibrated. With
+   `ATLAS_DECISION_VERIFY=block` it blocks on that verdict, at most once per turn (the continuation Stop passes), and only after the
+   deterministic checks pass. The call has a 1.5 second budget; an endpoint
+   that is off, slow, refused or answers badly never blocks.
+   `ATLAS_DECISION_VERIFY=off` turns the check off. Counters
+   `decision.verify.block`, `.block-would`, `.pass` and `.skip`.
 2. Which team, at what cost. `scripts/atlas_resolve.py <class> <effort>` reads
    `contracts/scope-matrix.json` and returns the roles, counts, model tier,
    effort and isolation for the task. It is deterministic: the same input gives
@@ -1179,6 +1195,7 @@ switches:
 | `ATLAS_TRIPWIRE`, `ATLAS_TRIPWIRE_HARD`                        | on                       | `off` disables the tripwire, or only its deny tier            |
 | `ATLAS_ENGINE_ARM`                                             | on                       | `off` stops prompts from arming orchestration                 |
 | `ATLAS_DECISION`, `ATLAS_DECISION_URL`, `ATLAS_DECISION_MODEL` | on, loopback, `nimble`   | Local decision model                                          |
+| `ATLAS_DECISION_VERIFY`                                        | on                       | `off` disables the decision-model done-claim check (gate v)   |
 | `ATLAS_MANDATES`                                               | on                       | `off` drops the recall gate and companion nudges              |
 | `ATLAS_MUX`, `ATLAS_COLONY_TRANSPORT`                          | on, auto                 | Colony mode and transport                                     |
 | `ATLAS_DASHBOARD`                                              | off                      | `on` starts the Command Center at session start               |

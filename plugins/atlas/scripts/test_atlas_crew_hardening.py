@@ -438,6 +438,44 @@ class IsOursExactMatchTests(unittest.TestCase):
         self.assertTrue(self._ours(["python3", "gateway.py", rd]))
 
 
+class GroupAndStopExactMatchTests(unittest.TestCase):
+    """_group_of and _stop_pidfile act only on a process that names the run exactly, never on a substring."""
+
+    def _spawn(self, *argv):
+        proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", *argv], start_new_session=True)
+        self.addCleanup(lambda: (proc.poll() is None and proc.kill(), proc.wait()))
+        end = time.time() + 5
+        while time.time() < end and (argv and argv[-1] not in atlas_crew._read_argv(proc.pid)):
+            time.sleep(0.01)  # the new process's cmdline is readable only once its exec has landed
+        return proc
+
+    def test_group_of_ignores_substring_only_cmdline(self):
+        for argv in (["crew-t2"], ["xcrew-t"], ["--name", "crew-t2-w"]):
+            proc = self._spawn(*argv)
+            self.assertIsNone(atlas_crew._group_of(proc.pid, "crew-t"), argv)
+
+    def test_group_of_matches_real_worker_and_rundir_shapes(self):
+        for argv in (["--name", "crew-t-x"], ["/repo/.atlas/.run/crew/crew-t/irc"]):
+            proc = self._spawn(*argv)
+            self.assertEqual(atlas_crew._group_of(proc.pid, "crew-t"), proc.pid, argv)
+
+    def test_stop_pidfile_leaves_substring_only_process_alone(self):
+        proc = self._spawn("crew-t2")
+        with tempfile.TemporaryDirectory() as tmp:
+            pf = Path(tmp, "pid")
+            pf.write_text(str(proc.pid))
+            self.assertIsNone(atlas_crew._stop_pidfile(pf, "crew-t", wait_s=0.5))
+        self.assertIsNone(proc.poll())
+
+    def test_stop_pidfile_stops_real_worker_shape(self):
+        proc = self._spawn("--name", "crew-t-x")
+        with tempfile.TemporaryDirectory() as tmp:
+            pf = Path(tmp, "pid")
+            pf.write_text(str(proc.pid))
+            self.assertEqual(atlas_crew._stop_pidfile(pf, "crew-t", wait_s=3), proc.pid)
+        proc.wait(timeout=5)
+        self.assertIsNotNone(proc.poll())
+
 
 if __name__ == "__main__":
     unittest.main()

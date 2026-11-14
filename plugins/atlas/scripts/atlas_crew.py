@@ -53,6 +53,7 @@ PLUGIN_ROOT = SCRIPTS.parent
 sys.path.insert(0, str(SCRIPTS))
 import atlas_crew_seal  # noqa: E402
 import atlas_irc  # noqa: E402
+import atlas_provider  # noqa: E402
 
 CREW_REL = Path(".atlas") / ".run" / "crew"
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
@@ -364,7 +365,7 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
 # ---------------------------------------------------------------- worker process
 
 
-def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
+def worker_env(rundir: Path, plan: dict, w: dict, root: str, provider: dict | None = None) -> dict:
     env = {
         k: v
         for k, v in os.environ.items()
@@ -408,6 +409,9 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         }
     )
+    if provider and provider.get("provider") == "ollama":
+        # the worker talks to the local Anthropic-compatible endpoint and cannot fall back to the account token
+        env = atlas_provider.apply_env(env, provider)
     return env
 
 
@@ -474,6 +478,21 @@ def worker_model(w: dict, meta: dict):
     """ATLAS_CREW_WORKER_MODEL ([A-Za-z0-9._-]+) replaces the worker/plan model; unset or invalid: unchanged."""
     env = os.environ.get("ATLAS_CREW_WORKER_MODEL", "").strip()
     return env if re.fullmatch(r"[A-Za-z0-9._-]+", env) else (w.get("model") or meta.get("model"))
+
+
+def worker_provider(w: dict, meta: dict, model) -> dict:
+    """Resolution of the provider that launches this worker: the worker's, else the plan's `provider` (with its
+    `model` when that is "ollama"), else ATLAS_WORKER_PROVIDER. Claude workers keep `model` untouched."""
+    prov = w.get("provider") or meta.get("provider") or None
+    role = w.get("role") or "implementer"
+    return atlas_provider.resolve(role, model if prov == "ollama" else None, prov) if prov else _env_resolve(role, model)
+
+
+def _env_resolve(role: str, model) -> dict:
+    res = atlas_provider.resolve(role, None, None)
+    if res["provider"] == "claude":
+        res["model"] = model  # the plan/CLI model of a Claude worker
+    return res
 
 
 def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None, harness="claude") -> list:
@@ -637,6 +656,29 @@ def cmd_worker(a) -> int:
         )
         resume = sid
     model = worker_model(w, meta)
+    prov_file = rundir / "provider" / f"{a.name}.json"
+    prov = None
+    if harness == "claude":
+        if rnd:
+            # a fix round resumes the round-0 session: it stays on the provider and model it started on
+            try:
+                prev = json.loads(prov_file.read_text(encoding="utf-8"))
+                prov = {**prev, "env": atlas_provider.provider_env(prev["url"]) if prev.get("provider") == "ollama" else {},
+                        "unset": list(atlas_provider.UNSET_ENV) if prev.get("provider") == "ollama" else []}
+            except (OSError, ValueError, KeyError):
+                prov = None
+        if prov is None:
+            try:
+                prov = worker_provider(w, meta, model)
+            except atlas_provider.ProviderRefused as exc:
+                (rundir / "exit").mkdir(exist_ok=True)
+                print(json.dumps({"ok": False, "error": str(exc)}))
+                return 2
+            if not rnd:
+                prov_file.parent.mkdir(exist_ok=True)
+                prov_file.write_text(json.dumps({**atlas_provider.public(prov), "url": prov.get("url")}), encoding="utf-8")
+                atlas_provider.record_launch(prov)
+        model = prov["model"] if prov["provider"] == "ollama" else (prov["model"] or model)
     effort = worker_effort(w, meta)
     argv = worker_argv(
         model,
@@ -648,7 +690,7 @@ def cmd_worker(a) -> int:
         name=f"{meta['run_id']}-{a.name}",
         harness=harness,
     )
-    env = worker_env(rundir, plan, w, root)
+    env = worker_env(rundir, plan, w, root, prov)
     if rnd:
         # a fix round gets a fresh gate budget
         (rundir / "irc" / "stop" / f"{a.name}.json").unlink(missing_ok=True)
@@ -1970,7 +2012,7 @@ def _group_of(pid: int, needle: str) -> int | None:
     try:
         if os.getpgid(pid) != pid:
             return None
-        if needle not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace"):
+        if not _argv_is_ours(_read_argv(pid), needle):
             return None
     except OSError:
         return None
@@ -2019,7 +2061,7 @@ def _stop_pidfile(path: Path, needle: str, wait_s: float = 3.0) -> int | None:
     if not pid or pid == os.getpid() or not _pid_alive(pid):
         return None
     try:
-        if needle not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace"):
+        if not _argv_is_ours(_read_argv(pid), needle):
             return None
     except OSError:
         pass  # no /proc: trust the file

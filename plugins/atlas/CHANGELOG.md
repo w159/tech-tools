@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Decision models now drive routing and verification, with the keyword heuristic and the deterministic gate as fallback. `prompt_decision.ask` is the shared call (loopback guard, lazy urllib, fail open). The prompt hook asks `prompt_class`, `task_class` and `effort` in one request, and the arming nudge's class and effort use the model's answer at confidence 0.8 or more. Tested against a local stub endpoint only; no real model was run in this container.
+- Completion gate letter `v`: two noul questions over the final reply (claims done or fixed; quotes an observed result). It runs in shadow by default (the 0.8/0.3 thresholds are uncalibrated): it asks the model within a 1.5 s budget, records `decision.verify.block-would` and never blocks. `ATLAS_DECISION_VERIFY=block` blocks once per turn when the claim is at least 0.8 and the observed result at most 0.3; `off` disables it. Fails open on any error.
+- Counters `decision.route.model`, `decision.route.fallback`, `decision.verify.block`, `decision.verify.block-would`, `decision.verify.pass`, `decision.verify.skip` (schema family `decision`, added to `telemetry/allowed-keys.json`).
+
+### Fixed
+
+- `classify_scope` ignores a class word after a negation: "do not audit, just implement x" is now implement and "don't refactor, just fix the crash in a.py" is fix (before: audit and implement).
+- Crew stop and process-group lookup now match the run exactly, so they never signal an unrelated process whose command line merely contains the run id.
+
 ## 17.21.0 - 2026-11-14
 
 Round 2 of the expert audit: closes what 17.20.0 left open, then new critic passes over atlas, armada and programmer. Evidence: `docs/audits/2026-11-14_atlas-round2-expert-audit.md`.

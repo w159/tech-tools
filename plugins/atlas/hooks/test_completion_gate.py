@@ -5387,3 +5387,168 @@ class GateBlockAnalyticsTest(GateOrchestrationTest):
         self.assertIn('"decision": "block"', r.stdout)
         ev = Path(ah, "analytics", "events.jsonl").read_text()
         self.assertIn('"k":"gate.c.block"', ev)
+
+
+BLOCK = {"ATLAS_DECISION_VERIFY": "block"}
+
+
+class DecisionVerifyTest(unittest.TestCase):
+    """Decision-model done-claim check (v): a loopback stub answers /v1/systemone, no real model runs."""
+
+    REPLY = (
+        "ATLAS | verify | done\n\nFixed the retry bug in client.py and everything works now, "
+        "the whole flow is finished and ready to ship."
+    )
+
+    def setUp(self):
+        from _decision_stub import StubDecisionServer, free_port, noul
+
+        self.noul = noul
+        self.free_port = free_port
+        self.Stub = StubDecisionServer
+        self.tmp = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_CONTRACT_GATE_DIR=os.path.join(self.tmp, "markers"),
+            ATLAS_DECISION="on",
+        )
+        self.env.pop("ATLAS_DECISION_VERIFY", None)
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(c)
+        atlas_db.start_run(c, atlas_db.register_project(c, self.tmp), "sess-dv")
+        c.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def stop(self, url, reply=None, **extra):
+        env = dict(self.env, ATLAS_DECISION_URL=url)
+        env.update(extra.pop("env", {}))
+        payload = {"session_id": "sess-dv", "cwd": self.tmp, "last_assistant_message": reply or self.REPLY}
+        payload.update(extra)
+        return _run_gate(payload, env).stdout
+
+    def answers(self, claims, observed):
+        return lambda body: {
+            "asserts_success": self.noul(claims),
+            "names_observed_result": self.noul(observed),
+        }
+
+    def test_claim_without_evidence_blocks_once_then_passes(self):
+        with self.Stub(self.answers(0.95, 0.1)) as srv:
+            first = json.loads(self.stop(srv.url, env=BLOCK))
+            self.assertEqual(first["decision"], "block")
+            self.assertIn("(v)", first["reason"])
+            self.assertIn("output", first["reason"])
+            again = self.stop(srv.url, env=BLOCK, stop_hook_active=True)
+        self.assertEqual(again, "")
+        self.assertEqual(len(srv.requests), 1, "the continuation never calls the model")
+
+    def _events(self, ah):
+        return Path(ah, "analytics", "events.jsonl").read_text()
+
+    def _enable_analytics(self, ah):
+        full = dict(self.env, ATLAS_HOME=ah)
+        full.pop("ATLAS_ANALYTICS", None)
+        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        subprocess.run(
+            [sys.executable, os.path.join(scripts, "atlas_analytics.py"), "enable"],
+            env=full, check=True, capture_output=True,
+        )
+
+    def test_default_is_shadow_records_but_never_blocks(self):
+        ah = os.path.join(self.tmp, "ah-shadow")
+        self._enable_analytics(ah)
+        with self.Stub(self.answers(0.95, 0.05)) as srv:
+            out = self.stop(srv.url, env={"ATLAS_HOME": ah})
+        self.assertEqual(out, "")
+        self.assertEqual(len(srv.requests), 1, "shadow still asks the model")
+        ev = self._events(ah)
+        self.assertIn('"k":"decision.verify.block-would"', ev)
+        self.assertNotIn('"k":"decision.verify.block"', ev)
+
+    def test_block_mode_blocks_on_uncalibrated_stub(self):
+        ah = os.path.join(self.tmp, "ah-block")
+        self._enable_analytics(ah)
+        with self.Stub(self.answers(0.95, 0.05)) as srv:
+            out = self.stop(srv.url, env=dict(BLOCK, ATLAS_HOME=ah))
+        self.assertEqual(json.loads(out)["decision"], "block")
+        self.assertIn("(v)", out)
+        self.assertIn('"k":"decision.verify.block"', self._events(ah))
+
+    def test_claim_with_evidence_passes(self):
+        with self.Stub(self.answers(0.95, 0.9)) as srv:
+            self.assertEqual(self.stop(srv.url), "")
+        self.assertEqual(len(srv.requests), 1)
+
+    def test_no_claim_passes(self):
+        with self.Stub(self.answers(0.2, 0.0)) as srv:
+            self.assertEqual(self.stop(srv.url), "")
+
+    def test_thresholds_are_inclusive_at_the_edges(self):
+        for claims, observed, blocks in (
+            (0.8, 0.3, True),
+            (0.79, 0.3, False),
+            (0.8, 0.31, False),
+        ):
+            with self.Stub(self.answers(claims, observed)) as srv:
+                out = self.stop(srv.url, env=BLOCK)
+            self.assertEqual("(v)" in out, blocks, (claims, observed, out))
+
+    def test_refused_connection_fails_open(self):
+        self.assertEqual(self.stop("http://127.0.0.1:%d" % self.free_port()), "")
+
+    def test_timeout_fails_open_within_budget(self):
+        import time
+
+        with self.Stub(self.answers(0.99, 0.0), delay=4.0) as srv:
+            t0 = time.monotonic()
+            out = self.stop(srv.url)
+            took = time.monotonic() - t0
+        self.assertEqual(out, "")
+        self.assertLess(took, 3.5)  # 1.5 s call budget plus interpreter start
+
+    def test_malformed_answer_fails_open(self):
+        with self.Stub(lambda body: {"asserts_success": {"type": "noul"}}) as srv:
+            self.assertEqual(self.stop(srv.url), "")
+
+    def test_kill_switch(self):
+        with self.Stub(self.answers(0.99, 0.0)) as srv:
+            out = self.stop(srv.url, env={"ATLAS_DECISION_VERIFY": "off"})
+        self.assertEqual(out, "")
+        self.assertEqual(srv.requests, [])
+
+    def test_decision_off_and_short_replies_and_sidechains_skip_the_call(self):
+        with self.Stub(self.answers(0.99, 0.0)) as srv:
+            self.stop(srv.url, env={"ATLAS_DECISION": "off"})
+            self.stop(srv.url, reply="done")
+            self.stop(srv.url, agent_id="w1")
+            self.assertEqual(srv.requests, [])
+
+    def test_remote_endpoint_is_never_called(self):
+        with self.Stub(self.answers(0.99, 0.0)) as srv:
+            out = self.stop(srv.url.replace("127.0.0.1", "localhost.evil.invalid"))
+        self.assertEqual(out, "")
+        self.assertEqual(srv.requests, [])
+
+    def test_counters_recorded(self):
+        ah = os.path.join(self.tmp, "ah")
+        env = {"ATLAS_HOME": ah}
+        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        full = dict(self.env, **env)
+        full.pop("ATLAS_ANALYTICS", None)
+        subprocess.run(
+            [sys.executable, os.path.join(scripts, "atlas_analytics.py"), "enable"],
+            env=full, check=True, capture_output=True,
+        )
+        with self.Stub(self.answers(0.95, 0.1)) as srv:
+            self.stop(srv.url, env=dict(env, **BLOCK))
+        with self.Stub(self.answers(0.95, 0.9)) as srv:
+            self.stop(srv.url, env=env)
+        self.stop("http://127.0.0.1:%d" % self.free_port(), env=env)
+        ev = Path(ah, "analytics", "events.jsonl").read_text()
+        for key in ("decision.verify.block", "decision.verify.pass", "decision.verify.skip"):
+            self.assertIn('"k":"%s"' % key, ev)
