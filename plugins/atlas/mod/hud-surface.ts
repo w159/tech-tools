@@ -834,12 +834,15 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
 
 // ---- HEALTH (wave 42) -------------------------------------------------------------------------------------
 
-/** The expanded health card the band's `▾ health` button opens: the TODO box's own shape (ribbon, rows, closing rule), rows from idle-health `healthRows` (only values the mod has). */
+/** The expanded health card the band's `▾ health` button opens: the TODO box's own shape (ribbon, rows padded to the full width, closing rule). It adds what the band does not say, never the band again: each gate
+ * with its own state and checks, the events the hooks saw, the context against its window, how each worker of the last run ended (idle-health `healthRows` detail: only data the mod has). */
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
   const { cols, ui } = o;
-  return [
-    titleRow(cols, 'HEALTH', '', [], ui, false),
-    ...healthRows(h, ui).map((row): Run[] => [t('  '), t(row.label.padEnd(8), 'muted'), t(' '), ...row.runs]),
-    bottomRule(cols, ui),
-  ];
+  const body: Run[][] = [];
+  for (const row of healthRows(h, ui)) {
+    const lines: Run[][] = row.detail.map((d, i): Run[] => (row.id === 'gates' && h.gates.checks[i] ? [stateRun(h.gates.checks[i]!.ok ? (h.gates.checks[i]!.pending ? 'queued' : 'done') : 'failed', ui), t(` ${d}`, 'sub')] : [t(d, 'sub')]));
+    const shown = lines.length ? lines : row.id === 'last' ? [row.runs] : [];
+    shown.forEach((runs, i) => body.push([t('  '), t(i === 0 ? row.label.padEnd(8) : ' '.repeat(8), 'muted'), t(' '), ...runs]));
+  }
+  return padRows([titleRow(cols, 'HEALTH', '', [], ui, false), ...body, bottomRule(cols, ui)], cols);
 }

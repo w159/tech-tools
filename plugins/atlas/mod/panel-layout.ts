@@ -6,7 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { gatesMark, healthDetail, healthRows, type Health } from './idle-health';
+import { agoText, fitFields, gatesMark, healthRows, type Health } from './idle-health';
 import { chevron, clickRun } from './clickable';
 import { brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
@@ -37,7 +37,7 @@ export type StripTab = { id: PanelTab | 'board'; label: string };
 export const STRIP_PAD = 1;
 /** The strip's form: a chip is its label with `pad` cells of padding each side (the chips touch, so `pad` is also the gap), `gap` cells between tabs and `lead` before the first. */
 export type StripForm = { pad: number; gap: number; lead: number };
-/** Forms of the strip, widest first: chips (` status  team  channel ...`: one space each side, no gap); the same words with one space between and no padding, for a narrow pane (the 110 column pane). */
+/** Forms of the strip, widest first: chips (` status  team  channel ...`: one space each side, no gap: a segmented tab bar, every idle chip on a raised tile, the lit one filled with the accent); the same words with one space between and no padding, for a narrow pane (the 110 column pane). */
 const STRIP_FORMS: readonly StripForm[] = [{ pad: 1, gap: 0, lead: 0 }, { pad: 0, gap: 1, lead: STRIP_PAD }];
 /** The text a tab is drawn as under a form: the label with its padding. */
 export const chipText = (label: string, f: Pick<StripForm, 'pad'> = STRIP_FORMS[0]!): string => `${' '.repeat(f.pad)}${label}${' '.repeat(f.pad)}`;
@@ -465,11 +465,17 @@ function routeSummary(m: PanelModel): PanelLine[] {
 /** Wave 32 (critique 30: the route tab was four stat lines and a sentence pointing at other tabs): the run as a timeline, from the data the panel already holds. The first row is the phase chain,
  * `● research › ◐ implement 0:28 › ◇ verify` (past phases done, the lit one wearing the band's mark and the run clock, the rest queued); under it one row per plan row, `◐ T1 read alpha.py   +0:00`,
  * with the time its owner started, relative to the run's start. */
-function phaseChain(m: PanelModel, compact: boolean | 'auto' = false): PanelLine[] {
-  if (compact === 'auto') { const full = phaseChainRuns(m, false, true); return full.length && rowWidth(full[0]!.runs) > m.cols ? phaseChain(m, true) : phaseChain(m); }
+function phaseChain(m: PanelModel, compact: boolean | 'short' | 'auto' = false): PanelLine[] {
+  if (compact === 'auto') {
+    const wide = (c: boolean | 'short'): boolean => { const x = phaseChainRuns(m, c, true); return x.length > 0 && rowWidth(x[0]!.runs) > m.cols; };
+    return phaseChain(m, wide(false) ? (wide('short') ? true : 'short') : false); // whole names, else the lit one whole and the rest by their short stage name, else the rest as dots
+  }
   return phaseChainRuns(m, compact, false);
 }
-function phaseChainRuns(m0: PanelModel, compact: boolean, raw: boolean): PanelLine[] {
+/** A stage's short name for a narrow pane: `research` -> `rsch`, `theory` -> `thy`, `implement` -> `impl`, `verify` -> `ver`; a name of four letters or fewer stays. */
+const SHORT_STAGE: Record<string, string> = { research: 'rsch', theory: 'thy', implement: 'impl', verify: 'ver', review: 'rev', design: 'dsgn', document: 'docs', deliver: 'ship' };
+export const stageShort = (p: string): string => SHORT_STAGE[p] ?? (cells(p) <= 4 ? p : p.slice(0, 4));
+function phaseChainRuns(m0: PanelModel, compact: boolean | 'short', raw: boolean): PanelLine[] {
   const m = withBandRun(m0);
   if (!m.phases.length) return [];
   const finished = m.todos.length > 0 && m.todos.every((t) => t.state === 'done'); // a finished plan at rest is the end of the run: the strip shows where the run got to, not a lit `research`
@@ -482,13 +488,14 @@ function phaseChainRuns(m0: PanelModel, compact: boolean, raw: boolean): PanelLi
   const lit = kind === 'done' ? -1 : kind === 'blocked' ? Math.max(litAt, lastEntered) : litAt >= 0 ? litAt : lastEntered;
   const runs: Run[] = [r(' '.repeat(GRID_LEAD))];
   const enteredAt = (p: string, i: number): boolean => (seen ? seen.has(p) : kind === 'done' || (litAt >= 0 && i < litAt)); // a phase is green only once the run was in it (never from the final status)
-  const named = (_p: string, i: number): boolean => !compact || lit === i;
+  const named = (_p: string, i: number): boolean => !compact || compact === 'short' || lit === i;
   m.phases.forEach((p, i) => {
-    if (i) runs.push(r(named(p, i) || named(m.phases[i - 1]!, i - 1) ? ` ${m.ui.ascii ? '>' : '›'} ` : ' ', 'dim'));
+    if (i) runs.push(r(compact === 'short' ? ' ' : named(p, i) || named(m.phases[i - 1]!, i - 1) ? ` ${m.ui.ascii ? '>' : '›'} ` : ' ', 'dim')); // the short form keeps one space between stages: it is the form for a narrow pane
     const cur = lit === i;
     const entered = enteredAt(p, i);
     const g: Run = cur ? (kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase')) : entered ? stateRun('done', m.ui) : { t: m.ui.ascii ? '.' : '\u00b7', tone: 'dim' };
-    if (compact && !cur) { runs.push(g); return; } // a narrow pane names the lit phase; the rest are their dot
+    if (compact === 'short' && !cur) { runs.push({ ...g, t: `${g.t} ` }, r(stageShort(p), entered ? 'sub' : 'dim')); return; } // a narrow pane names the lit phase whole; the rest by their short stage name
+    if (compact && !cur) { runs.push(g); return; } // narrower still: the rest are their dot
     runs.push({ ...g, t: `${g.t} ` }, r(p, cur ? 'text' : entered ? 'sub' : 'dim', cur ? { bold: true } : {}));
     if (cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(m.run.secs)}`, 'dim'));
   });
@@ -620,25 +627,50 @@ function statusEventRows(m: PanelModel, n: number): PanelLine[] {
 }
 
 /** The status view (Claude pane): the run on one screen, from data the panel already holds and nothing invented. Phase and clock, an activity line per agent, the gates checklist, the last five events. A section with no data is one dim line. */
-/** Wave 42: the idle status view's health block: one pressable row per figure (`▸ gates  ● completion ... 4/4`), the open row's 1-3 detail lines under it. */
+/** Wave 42: the idle status view's health block: one row per figure. A row with real detail is a toggle (`▸ gates  ● 4/4 green`) and opens to its detail lines; a row with none is plain text, not a control. */
+const GATE_DETAIL_ROOM = 2;
+/** A detail line fitted to `room` cells: trailing ` · ` parts go whole before any word is cut. */
+function fitDetail(text: string, room: number): string {
+  let t = text;
+  while (cells(t) > room && t.includes(' · ')) t = t.slice(0, t.lastIndexOf(' · '));
+  return cells(t) > room ? clipE(t, room) : t;
+}
 function healthBlock(m: PanelModel, h: Health): PanelLine[] {
   const out: PanelLine[] = [heading('health', [], m)];
   for (const row of healthRows(h, m.ui)) {
     const key = `health:${row.id}`;
-    const open = m.expanded === key;
-    const lead = clickRun(row.label, open, m.ui, key);
+    const expandable = row.detail.length > 0;
+    const open = expandable && m.expanded === key;
+    const lead: Run = expandable ? clickRun(row.label, open, m.ui, key) : r(`  ${row.label}`, 'muted');
     const gap = r(' '.repeat(Math.max(1, 11 - cells(lead.t))));
-    let value = row.runs;
-    if (GRID_LEAD + cells(lead.t) + cells(gap.t) + rowWidth(value) > m.cols - 1 && row.id === 'gates') value = [gatesMark(h, m.ui), r(` ${h.gates.green}/${h.gates.total} green`, 'sub')]; // the names fold to the count on a narrow pane
-    out.push(line(fitRuns([r(' '.repeat(GRID_LEAD)), lead, gap, ...value], m.cols), { kind: 'toggle', key }));
-    if (open) for (const d of healthDetail(h, row.id)) out.push(line(fitRuns([r(' '.repeat(GRID_LEAD + 3)), r(d, 'sub')], m.cols)));
+    const room = Math.max(8, m.cols - 1 - GRID_LEAD - cells(lead.t) - cells(gap.t));
+    const value = fitFields(row.fields, room);
+    out.push(line(fitRuns([r(' '.repeat(GRID_LEAD)), lead, gap, ...value], m.cols), expandable ? { kind: 'toggle', key } : undefined));
+    if (open) for (const d of row.detail) out.push(line(fitRuns([r(' '.repeat(GRID_LEAD + GATE_DETAIL_ROOM + 1)), r(fitDetail(d, m.cols - 1 - GRID_LEAD - GATE_DETAIL_ROOM - 1), 'sub')], m.cols)));
   }
   return out;
 }
 
+/** The newest events the mod's hooks saw (hook-log.ts), newest first, each `12s ago  tool.call Bash`: real events with their age, nothing else. */
+function activityBlock(m: PanelModel, h: Health, max: number): PanelLine[] {
+  const ev = (h.hooks?.recent ?? []).slice(0, max);
+  if (!ev.length) return [];
+  const ageW = Math.max(...ev.map((e) => cells(`${agoText(e.ageSecs)} ago`)));
+  return [heading('recent', [], m), ...ev.map((e): PanelLine => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(`${agoText(e.ageSecs)} ago`.padStart(ageW), 'dim'), r('  '), r(e.label, 'sub')], m.cols)))];
+}
+
+/** The idle status view ends in a rule under its last row, so a pane with room to spare reads finished, not cut off. */
+const closingRule = (m: PanelModel): PanelLine => line([r(' '.repeat(GRID_LEAD)), r((m.ui.ascii ? '-' : '─').repeat(Math.max(1, m.cols - 1 - 2 * GRID_LEAD)), 'dim')]);
+
 function statusBody(m: PanelModel): PanelLine[] {
   const ws = workersByTask(m);
-  if (m.health && ws.length === 0 && m.run?.kind === 'idle') return [...statusPhase(m), BLANK, ...healthBlock(m, m.health), BLANK, dimLine(m, `${m.notes.length} ${m.notes.length === 1 ? 'message' : 'messages'}`)];
+  if (m.health && ws.length === 0 && m.run?.kind === 'idle') {
+    const head = [...statusPhase(m), BLANK, ...healthBlock(m, m.health)];
+    const tail = [dimLine(m, `${m.notes.length} ${m.notes.length === 1 ? 'message' : 'messages'}`), closingRule(m)];
+    const room = Math.max(0, m.rows - headerRows(m).length - 1 - head.length - tail.length - 2);
+    const activity = activityBlock(m, m.health, Math.min(6, room - 1));
+    return [...head, ...(activity.length ? [BLANK, ...activity] : []), BLANK, ...tail];
+  }
   const gs = countedGates(gatesOf(m));
   const phase = statusPhase(m);
   const room = Math.max(4, m.rows - headerRows(m).length - 1);
@@ -843,6 +875,7 @@ function teamBody(m: PanelModel): PanelLine[] {
   const g = teamGrid(m, everyone);
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[]): PanelLine[] => ws.flatMap((w) => workerRows(m, w, g, w.name === focusName));
+  if (leadRow && !m.workers.length && !mates.length) return [...rows([leadRow]), dimLine(m, `0 workers ${dot(m.ui)} nobody dispatched yet`)]; // nothing ran: the lead's row and one labelled line, no empty time axis and no `0 running` total
   const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet') : [];
   const head = [...(leadRow ? rows([leadRow]) : []), ...hint, ...rows(workers), ...rows(mates), ...sparkAxis(m, g)];
   const body = [...head, ...(m.lead ? [BLANK, ...leadSummary(m)] : [])]; // one row per agent, at every height

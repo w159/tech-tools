@@ -99,8 +99,8 @@ describe('message input row', () => {
   const on = { selectRecipient() {}, toggle() {}, draftChange: (v: string) => calls.push(`draft:${v}`), send: (v: string) => calls.push(`send:${v}`), copy() {}, focus() {}, expand() {}, setView() {} } as unknown as SidebarHandlers;
   const input = (recipient: string | null): Node => all(sidebarTree(els, model(world({ squad: [sq('runner-1', 'failed')] }), { ui: { recipient, expanded: null, draft: 'hi', view: 'team' } as never }), on) as unknown as Node).find((n) => n.kind === 'Input')!;
   test('the label names the recipient, and defaults to the lead', () => {
-    expect(input('runner-1').props.label).toBe('▸ to runner-1');
-    expect(input(null).props.label).toBe('▸ to lead');
+    expect(input('runner-1').props.label).toBe('✎ to runner-1');
+    expect(input(null).props.label).toBe('✎ to lead');
   });
   test('typing calls draftChange and Enter calls send with the text', () => {
     calls.length = 0;

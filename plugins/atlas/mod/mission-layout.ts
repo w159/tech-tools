@@ -515,8 +515,9 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const sg = bandSegments(m.health, ui, ranFor !== undefined ? { secs: ranFor, done: m.done, total: m.total } : undefined);
     const leadFor = (): Run[] => lead({ ...F, clock: false });
     const combos: Run[][][] = [
-      [sg.gates, sg.ctxFull, sg.up, sg.last, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.button], [sg.gates, sg.ctxFull, sg.button],
-      [sg.gates, sg.ctxShort, sg.button], [sg.gates, sg.button], [sg.button],
+      [sg.gates, sg.ctxFull, sg.up, sg.event, sg.last, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.event, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.last, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.button],
+      [sg.gates, sg.ctxFull, sg.event, sg.button], [sg.gates, sg.ctxFull, sg.button],
+      [sg.gates, sg.ctxShort, sg.up, sg.button], [sg.gates, sg.ctxShort, sg.button], [sg.gates, sg.up, sg.button], [sg.gates, sg.button], [sg.button],
     ];
     const seen = new Set<string>();
     for (const c of combos) {
@@ -749,7 +750,10 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
  * pads their gap itself). Fewer rows when only one has content; none when neither. */
 function footerLines(m: MissionModel): Line[] {
   const keys = m.keysWidth ?? 0;
-  const checks = checkRuns(m.checks, m.cols, uiOf(m));
+  // The idle health band carries `● gates 4/4` itself: with every gate green the checks row would say it a second time, so it shows only when a gate needs attention.
+  const healthShows = !!m.health && runStateOf(m).kind === 'idle' && !m.total && m.workers.length === 0;
+  const allGreen = !!m.checks?.length && m.checks.every((c) => c.ok && !c.pending);
+  const checks = healthShows && allGreen ? [] : checkRuns(m.checks, m.cols, uiOf(m));
   return [...(checks.length ? [{ runs: fitRuns(checks, m.cols, uiOf(m)) }] : []), ...(keys > 0 ? [{ runs: [], keys: true }] : [])];
 }
 

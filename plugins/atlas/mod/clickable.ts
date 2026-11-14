@@ -13,3 +13,9 @@ export const clickRun = (label: string, open: boolean, ui: Pick<Ui, 'ascii'>, ke
 export function hoverStyle(ui: Pick<Ui, 'color'>, key: string): { backgroundColor?: string; underline: true; scope: string } {
   return { ...(ui.color === 'none' ? {} : { backgroundColor: xtermHex(238) }), underline: true, scope: key.slice(0, 64) };
 }
+
+/** The fill under an idle tab chip: a raised tile one step off the panel, so a chip reads as a button and not as coloured text (the lit chip is filled with the accent, inverse). With no colour the chip is underlined instead. */
+export function chipStyle(ui: Pick<Ui, 'color' | 'theme'>): { backgroundColor?: string; underline?: true } {
+  if (ui.color === 'none') return { underline: true };
+  return { backgroundColor: xtermHex(ui.theme === 'latte' ? 253 : 237) };
+}

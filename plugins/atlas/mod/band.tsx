@@ -6,12 +6,12 @@ import type { ClientElements, RenderElement } from 'claude-code';
 import { coreCells } from './core-row';
 import type { CoreModel } from './data/core';
 import type { LiveSnapshot } from './orchestra-types';
-import { queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
+import { endedAt, queuedMembers, workerStates, withOwnerStates, type LiveWorker } from './data/live';
 import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from './data/todos';
 import { agentTally, hudAgents, planProgress } from './hud';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
-import { gateTally, leadBusy, planBusy, ranWorkers, withCoreTally } from './data/runstate';
+import { gateTally, leadBusy, planBusy, ranWorkers, STOP_LINE, withCoreTally } from './data/runstate';
 import { fillHex, hostEnv, LINGER_MS, preImage, spinClock, surfaceHex, uiFromEnv, xtermHex, type Ui, runHex } from './atlas-ui';
 import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
@@ -22,7 +22,7 @@ import { todoRows } from './todo-panel';
 import { contractRail, railOf, type Rail } from './rail';
 import { chipText, STRIP_TABS } from './panel-layout';
 import { fitText, textWidth } from './theme';
-import { hoverStyle } from './clickable';
+import { chipStyle, hoverStyle } from './clickable';
 import type { Health, HealthIn } from './idle-health';
 
 export { planRows } from './mission-layout';
@@ -42,7 +42,7 @@ export const MARK = '◆';
 export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; /** Wave 42: the `▸ health` button opens and closes the HUD's health card. */ toggleHealth?(): void };
 /** The band's controls: click chips, one per tab of the side panel's strip (wave 43: no key letters are drawn or bound). */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
-const buttonWidth = (b: { label: string }): number => textWidth(chipText(b.label)); // a chip is its label with a space each side; the chips touch
+const buttonWidth = (b: { label: string }): number => textWidth(chipText(b.label)); // a chip is its label with a space each side
 const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
 
 /** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
@@ -129,20 +129,34 @@ const blockedWhyOf = (plan: readonly { status: string; evidence?: string | null 
 const clock12 = (ms: number): string => { const d = new Date(ms); const h = d.getHours(); return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 
 /** Idle health (wave 42): the one model the band, the HUD card and the panel rows read. Only figures the mod holds; context 0 and absent tokens are unknown, never printed. */
-function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTally>, progress: { done: number; total: number }): Health {
+/** The longest gate note the health detail carries (a line's own words); a longer one is left to the gates tab. */
+const GATE_NOTE_MAX = 32;
+function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTally>, progress: { done: number; total: number }, groups: readonly GateGroup[]): Health {
   const h = b.health!;
   const all = b.live.filter((w) => w.state !== 'parked');
   const wave = lastRun(all, s.now, ownTodos(s.todos, s.sessionId).filter((t) => t.origin === 'dispatch' && t.owner).map((t) => t.owner!));
   const total = todoCounts(s).total;
   const ran = b.ranSecs ?? wave?.secs;
+  const workers = all.filter((w) => w.state === 'done' || w.state === 'failed').map((w) => ({ name: w.name, state: w.state, secs: Math.max(0, Math.round((endedAt(w, s.now) - w.startedAt) / 1000)) }));
+  const group = (id: string): GateGroup | undefined => groups.find((g) => g.id === id);
+  const check = (c: ReturnType<typeof gateTally>['checks'][number]): Health['gates']['checks'][number] => {
+    const g = group(c.id);
+    const lines = g?.lines.filter((l) => l.id !== STOP_LINE) ?? [];
+    const first = lines.find((l) => !l.ok) ?? lines[0];
+    const said = first ? `${first.label}${first.detail ? `: ${first.detail}` : ''}`.replace(/\s+/g, ' ').trim() : '';
+    const note = said.length <= GATE_NOTE_MAX ? said : ''; // a long gate sentence is the gates tab's to show: here it would only be cut
+    return { id: c.id, ok: c.ok, ...(c.pending ? { pending: true as const } : {}), ...(g ? { title: g.title, lines: lines.length, pass: lines.filter((l) => l.ok).length } : {}), ...(note ? { note } : {}) };
+  };
   return {
-    gates: { total: tally.total, green: tally.green, checks: tally.checks.map((c) => ({ id: c.id, ok: c.ok, ...(c.pending ? { pending: true as const } : {}) })) },
+    gates: { total: tally.total, green: tally.green, checks: tally.checks.map(check) },
     ...(s.contextPct > 0 ? { ctxPct: s.contextPct } : {}),
     ...(typeof h.tokens === 'number' && h.tokens > 0 ? { tokens: h.tokens } : {}),
+    ...(typeof h.window === 'number' && h.window > 0 ? { window: h.window } : {}),
+    ...(h.hooks ? { hooks: h.hooks } : {}),
     ...(h.upSecs !== undefined ? { upSecs: h.upSecs } : {}),
     ...(h.branch ? { branch: h.branch } : {}),
     ...(h.version ? { version: h.version } : {}),
-    ...(ran !== undefined ? { last: { secs: ran, done: Math.min(total, progress.done), total, agents: wave?.workers ?? 0, failed: wave?.failed ?? 0, ...(b.restSecs !== undefined ? { endedAt: clock12(s.now - b.restSecs * 1000) } : {}) } } : {}),
+    ...(ran !== undefined ? { last: { secs: ran, done: Math.min(total, progress.done), total, agents: wave?.workers ?? 0, failed: wave?.failed ?? 0, ...(workers.length ? { workers } : {}), ...(b.restSecs !== undefined ? { endedAt: clock12(s.now - b.restSecs * 1000) } : {}) } } : {}),
     ...(h.open ? { open: true } : {}),
   };
 }
@@ -189,7 +203,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
     turnSecs: b.hostOnly ? undefined : b.workSecs, ranSecs: b.ranSecs, ...(b.hostOnly ? { hostOnly: true } : {}), ...(b.restSecs !== undefined ? { restSecs: b.restSecs } : {}), ...(closed ? { closed } : {}),
-    ...(b.health ? { health: healthOf(b, s, tally, progress) } : {}),
+    ...(b.health ? { health: healthOf(b, s, tally, progress, withCoreTally(b.gates, b.core)) } : {}),
     workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.heldKind ? { heldKind: b.heldKind } : {}), ...(b.motion ? { motion: b.motion } : {}),
   };
 }
@@ -239,9 +253,10 @@ function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, u
   const left = segs(l, ui);
   const used = left.reduce((n, x) => n + textWidth(x.t), 0);
   const press = (id: SidebarView | 'board'): (() => void) => (id === 'board' ? on.toggleTodos : () => on.openView(id));
+  const tile = chipStyle(ui);
   const buttons = BAND_BUTTONS.map((b) => els.Button({
     key: `band:${b.id}`, plain: true, label: b.label, onPress: press(b.id),
-    children: [els.Text({ color: accent, backgroundColor: bg, bold: true, hover: hoverStyle(ui, `band:${b.id}`), children: chipText(b.label) })],
+    children: [els.Text({ color: accent, backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}), bold: true, hover: hoverStyle(ui, `band:${b.id}`), children: chipText(b.label) })],
   }));
   const gap = cols - used - KEYS_W - 1; // one cell of margin after the last chip
   return els.Box({

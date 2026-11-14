@@ -15,7 +15,7 @@ export function runEl(els: ClientElements, x: Run, ui: Ui, hoverKey?: string): R
 export const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : surfaceHex('panel', ui));
 
 const rowEl = (els: ClientElements, runs: readonly Run[], ui: Ui): RenderElement =>
-  els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: panelBg(ui), children: runs.map((x) => runEl(els, x, ui)) });
+  els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: panelBg(ui), children: (runs.length ? runs : [{ t: ' ', tone: 'text' as const }]).map((x) => runEl(els, x, ui)) }); // a blank layout row is one space: a Box with no child is no row at all, so the design's blank rows vanished on screen
 
 /** A layout row as an element: a Button when the row is pressable. */
 export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: SidebarHandlers, ui: Ui): RenderElement {
@@ -32,7 +32,7 @@ export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: S
 /** The message field under the team and channel logs. */
 export const inputEl = (els: ClientElements, m: SidebarModel, on: SidebarHandlers): RenderElement => els.Input({
   key: 'msg',
-  label: `▸ to ${m.ui.recipient ?? 'lead'}`,
+  label: `✎ to ${m.ui.recipient ?? 'lead'}`,
   placeholder: 'message',
   value: m.ui.draft,
   onInput: (v: string) => on.draftChange(v),

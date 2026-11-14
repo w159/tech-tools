@@ -4,7 +4,7 @@
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, markOf, runHex, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
-import { hoverStyle } from '../clickable';
+import { chipStyle, hoverStyle } from '../clickable';
 import { centred, chipText, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
@@ -32,7 +32,8 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
       const on_ = it.id === m.ui.view;
       // The chip (mod/clickable.ts): accent bold text with the hover style; the lit tab is filled (inverse) so it reads as pressed in.
       const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
-      const label = els.Text({ color: accent, backgroundColor: bg, bold: true, ...(on_ ? { inverse: true } : {}), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) });
+      const tile = chipStyle(ui);
+      const label = els.Text({ color: accent, bold: true, ...(on_ ? { backgroundColor: bg, inverse: true } : { backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}) }), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) });
       return els.Button({ key: keyOf(it), plain: true, children: [label], label: it.label, onPress: pressOf(it) });
     });
     const between = (i: number): RenderElement[] => (i && f.gap ? [gap(f.gap)] : []);

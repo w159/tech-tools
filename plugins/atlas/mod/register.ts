@@ -16,6 +16,7 @@ import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot } from './slot';
 import { healthCardRows } from './hud-surface';
 import { healthLine, type HealthIn } from './idle-health';
+import { hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
@@ -120,6 +121,7 @@ let beatFrame = 0;
 let sessionStartMs: number | null = null; // wave 42: the idle health's `up 12:04`: the clock reading at this session's start
 let pluginVersion: string | undefined; // read from plugin.json at boot
 let branchName: string | undefined; // the git branch at boot; absent when git said nothing
+let usageWindow: number | null = null; // the model's context window from the last session.measure (the figure ctx % is a share of)
 let healthOpenNow = false; // wave 42: the band's `▸ health` button; the HUD draws the card while it is true (a toggle redraws through the spinner tick)
 let lastIdleSecond = -1; // the idle uptime ticks once a second
 const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
@@ -868,6 +870,8 @@ async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthI
 		...(pluginVersion ? { version: pluginVersion } : {}),
 		...(branchName ? { branch: branchName } : {}),
 		...(typeof usage.tokens === 'number' ? { tokens: usage.tokens } : {}),
+		...(typeof usageWindow === 'number' ? { window: usageWindow } : {}),
+		hooks: hookStats(clockNow),
 		open: healthOpenNow,
 	};
 }
@@ -1185,6 +1189,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		// A fresh session is unmeasured again, whatever an earlier one measured,
 		// and its agents are its own.
 		await update($, usageState, () => ({ tokens: null, contextPct: null }));
+		usageWindow = null;
 		await update($, taskAgentsState, () => []);
 		await update($, paneOpenedState, () => false);
 		paneChecked = false;
@@ -1200,6 +1205,8 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		await update($, isInteractive, () => interactive);
 		builder = new SnapshotBuilder(engineFs($), $.plugin.root);
 		sessionStartMs = await $.clock.now(); // wave 42: the idle health's uptime counts from here
+		resetHookLog();
+		noteHook('session.start', sessionStartMs);
 		lastIdleSecond = -1;
 		pluginVersion = await $.fs.read(`${$.plugin.root.replace(/\/+$/, '')}/.claude-plugin/plugin.json`).then((text) => { const v = (JSON.parse(text) as { version?: unknown }).version; return typeof v === 'string' ? v : undefined; }).catch(() => undefined);
 		const sessionId = await $.session.id();
@@ -1309,6 +1316,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		stopSeen = false; // a new prompt (or a background task's notification) starts a new turn
 		stopRefused = false;
 		const opening = dockOnPrompt($);
+		noteHook('prompt.submit', await hookStamp($));
 		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') { armedAt = await $.clock.now().catch(() => null); resumedAt = null; } // a background task's notification is not the person's prompt: it starts no run
 		else { resumedAt = await $.clock.now().catch(() => null); await noteNotified($, (e as { text?: string }).text ?? ''); } // the notification that draws the card also ends the worker in the HUD rows, on this very render
 		await update($, headerPhaseState, () => null).catch(() => undefined); // a person's prompt starts new work: the last reply's header phase is not this run's (a turn.start also fires for subagents and Stop-hook continuations, which keep it)
@@ -1339,6 +1347,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// A refused Stop is blocked on the update that carries it (critique 28): the completion gate answers `block`, and this hook writes the refusal into the gate groups and bumps the band's
 	// ticks before the host draws its Stop error. The verdict file poll that follows replaces the line with the recorded one.
 	on('classic.Stop', async ($, e, next) => {
+		noteHook('classic.Stop', await hookStamp($));
 		const r = await next(e);
 		if (!(r && typeof (r as { block?: unknown }).block === 'string') && (await read($, isModOn))) {
 			// An allowed Stop is the turn's end: the band, the HUD and the panel read done on the render this write asks for, and the hook holds its return one frame so that render is on screen before the host's prompt returns
@@ -1368,6 +1377,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// Usage figures (tokens / context fill), pushed after each turn.
 	on('session.measure', async ($, e, next) => {
+		noteHook('session.measure', await hookStamp($));
+		if (typeof e.context.window === 'number') usageWindow = e.context.window;
 		if (await read($, isModOn)) {
 			await update($, usageState, (usage) => ({
 				tokens: e.context.tokens ?? usage.tokens,
@@ -1383,6 +1394,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// routing-drift lines reach the debug log here, where `$` exists.
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		try {
+			if (e.agentId === undefined) noteHook('turn.complete', await hookStamp($));
 			if (!(await read($, isModOn))) return next(e);
 			for (const msg of pendingDrift.splice(0)) $.ui.log(msg, { to: 'debug' });
 			if (e.agentId === undefined) {

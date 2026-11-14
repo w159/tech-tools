@@ -29,7 +29,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
     expect(out.at(-1)).toBe('    workers  1 queued · 1 running · 2 done · 1 failed');
   });
   test('the tally always says running, and drops the other states with no worker', () => {
-    expect(body('team', 80, { lead, workers: [] }).at(-1)).toBe('    workers  0 running');
+    expect(body('team', 80, { lead, workers: [] }).at(-1)).toBe('    0 workers · nobody dispatched yet'); // nothing ran: one labelled line, no `0 running` total
     expect(body('team', 80, { lead, workers: [w('a', 'failed')] }).at(-1)).toBe('    workers  0 running · 1 failed');
     expect(body('team', 80, { lead, workers: [w('a', 'done'), w('b', 'done')] }).at(-1)).toBe('    workers  0 running · 2 done');
     expect(body('team', 80, { lead, workers: [w('a', 'running'), w('b', 'waiting')] }).at(-1)).toBe('    workers  1 running · 1 waiting');
@@ -43,7 +43,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
     expect(out.filter((l) => /^ {4}last {2}wrote the summary/.test(l))).toHaveLength(1); // different words: kept
   });
   test('no workers and no roster keeps the hint, and the lead stays above it', () => {
-    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['▹ ◉ lead    waiting  ▁▁▁▁▁▁▁▁▁▁▁▁', ' '.repeat(29) + 'nobody dispatched yet', '', '    workers  0 running']);
+    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['▹ ◉ lead    waiting  ▁▁▁▁▁▁▁▁▁▁▁▁', '    0 workers · nobody dispatched yet']); // wave 44: no orphan time axis (`0:00    0:01`) and no `0 running` total under it
     expect(body('team', 80, { lead: undefined, workers: [], mates: [] })).toEqual([' '.repeat(29) + 'nobody dispatched yet']);
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {

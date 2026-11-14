@@ -96,16 +96,19 @@ export function composeSlot(input: SlotInput): SlotPlan {
 	const fixed = i.hasSlot && i.hudOn && i.budget >= 1 && (i.runOn || i.agentsListed || i.hudIn.todos.length > 0);
 	if (fixed) return composeFixed(i);
 	const { budget, columns, hudIn, hudView } = i;
-	const bandFor = (rows: Segment[][]): BandModel => i.bandIn(rows, i.hasSlot ? budget - rows.length - hudGapRows(hudListsAgents(rows), rows.length, budget) : undefined);
+	let showsCard = false; // set once the HUD proper turns out empty: the open health card then stands in its place, with the blank row a HUD block has under the band
+	const gapOf = (rows: readonly Segment[][]): number => hudGapRows(showsCard || hudListsAgents(rows as Segment[][]), rows.length, budget);
+	const bandFor = (rows: Segment[][]): BandModel => i.bandIn(rows, i.hasSlot ? budget - rows.length - gapOf(rows) : undefined);
 	const want = hudWantRows(hudIn, columns, i.now);
 	const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, i.now), BAND_MIN_ROWS, i.running, i.agentsListed, want);
 	const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
 	// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
 	const hudFull = i.hudOn ? (reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandFor(rows as Segment[][])), drawHud) as Segment[][]) : [];
 	// The band row never goes: whatever the HUD drew, at least one row of the budget stays for the band (a frame with no band was the hole in the readout).
-	const hudBase = hudFull.length === 0 && i.healthCard?.length ? i.healthCard : hudFull; // wave 43: also with ATLAS_HUD=off, where the band's `▸ health` button still opens it
-	const hud = i.hasSlot ? (fitHudToBand(hudBase, budget, (rows) => hudGapRows(hudListsAgents(rows as Segment[][]), rows.length, budget)) as Segment[][]) : hudBase;
-	const gap = hudGapRows(hudListsAgents(hud), hud.length, budget);
+	showsCard = hudFull.length === 0 && !!i.healthCard?.length;
+	const hudBase = showsCard ? i.healthCard! : hudFull; // wave 43: also with ATLAS_HUD=off, where the band's `▸ health` button still opens it
+	const hud = i.hasSlot ? (fitHudToBand(hudBase, budget, (rows) => gapOf(rows)) as Segment[][]) : hudBase;
+	const gap = gapOf(hud);
 	// One slot height for the whole run: the band sits at the top of a bottom-anchored slot, so a HUD that grows (the SUBAGENTS block appearing) or an idle row that goes would move it on screen.
 	const used = bandRowCount(bandFor(hud), true) + gap + hud.length;
 	const held = i.hudOn && i.hasSlot ? slotHold(i.held, i.runOn, used, BAND_KEEP_ROWS + 1 + hudHoldRows(hudIn, columns, i.now, i.orchestrated), budget) : 0;

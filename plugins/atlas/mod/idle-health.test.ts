@@ -48,7 +48,7 @@ describe('idle band shows live health', () => {
   }
   test('at 150 the tokens, the uptime and the version-free summary all show', () => {
     const row = firstRow(model(150));
-    expect(row).toContain('ctx 18% · 42k tok');
+    expect(row).toContain('ctx 18% (42k tok)');
     expect(row).toContain('up 12:04');
   });
   test('a failed gate reads ■ and the count', () => {
@@ -116,20 +116,20 @@ describe('the working band is unchanged', () => {
 const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo ▰▰▰▱▱▱▱▱▱▱ 1/4 ■1 ▌ ◐ 1 running · ■1';
 
 describe('the expanded health card (HUD)', () => {
-  const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };
+  const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };
   const text = (over: Record<string, unknown> = {}): string[] => healthCardRows({ ...h, ...over } as never, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
   test('ribbon, rows and closing rule', () => {
     const t = text();
     expect(t[0]).toContain('◖ ◆ ATLAS ◗ ▸ HEALTH');
-    expect(t.some((l) => /hooks\s+● loaded · atlas 17\.21\.1/.test(l))).toBe(true);
-    expect(t.some((l) => /gates\s+● completion ● tripwire ● routing ● header\s+4\/4/.test(l))).toBe(true);
-    expect(t.some((l) => /session\s+up 12:04 · ctx 18% · 42k tokens · branch main/.test(l))).toBe(true);
+    // wave 44: the card adds detail (per-gate lines, the context against its window, the hooks' event counts); it never restates the band
+    expect(t.some((l) => /gates\s+● completion green 1\/1 pass/.test(l))).toBe(true);
+    expect(t.some((l) => /session\s+42,000 tokens in the window/.test(l))).toBe(true);
     expect(t.some((l) => /last run\s+none this session/.test(l))).toBe(true);
     expect(t[t.length - 1]).toMatch(/^╰─+╯$/);
   });
   test('a finished run fills the last-run row', () => {
-    const t = text({ last: { secs: 134, done: 5, total: 5, agents: 3, failed: 0, endedAt: '9:27 PM' } });
-    expect(t.some((l) => /last run\s+2:14 · 5\/5 todos · 3 agents · 0 failed · ended 9:27 PM/.test(l))).toBe(true);
+    const t = text({ last: { secs: 134, done: 5, total: 5, agents: 3, failed: 0, endedAt: '9:27 PM', workers: [{ name: 'alpha', state: 'done', secs: 42 }] } });
+    expect(t.some((l) => /last run\s+alpha done 0:42/.test(l))).toBe(true);
   });
   test('only values the mod has: no ctx, no tokens, no branch', () => {
     const t = text({ ctxPct: undefined, tokens: undefined, branch: undefined }).join('\n');
@@ -154,7 +154,7 @@ describe('empty HUD boxes say what will appear, with the live summary', () => {
 });
 
 describe('the side panel status view, idle', () => {
-  const health = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1' };
+  const health = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1' };
   const world = (over: Partial<PanelModel> = {}): PanelModel => panelWorld('route', 57, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: NOW }, health, ...over } as never);
   const rows = (m: PanelModel) => bodyLines(m);
   test('health rows replace the bare placeholders', () => {
@@ -163,9 +163,9 @@ describe('the side panel status view, idle', () => {
     for (const label of ['hooks', 'gates', 'session', 'last run']) expect(t).toContain(label);
     expect(t).toContain('up 12:04');
   });
-  test('each row is pressable and shows the closed chevron', () => {
+  test('a row with detail is pressable and shows the closed chevron; one without is plain text', () => {
     const ls = rows(world()).filter((l) => l.press?.key.startsWith('health:'));
-    expect(ls.map((l) => l.press!.key)).toEqual(['health:hooks', 'health:gates', 'health:session', 'health:last']);
+    expect(ls.map((l) => l.press!.key)).toEqual(['health:gates', 'health:session']); // hooks (no events here) and last run (none) have nothing more to show
     for (const l of ls) expect(lineText(l)).toContain('▸');
     expect(rows(world()).map(lineText).join('\n')).not.toContain('completion green'); // closed: no detail lines
   });
@@ -173,10 +173,9 @@ describe('the side panel status view, idle', () => {
     const t = rows(world({ expanded: 'health:gates' })).map(lineText);
     const i = t.findIndex((l) => l.includes('▾') && l.includes('gates'));
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/completion\s+green/);
+    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/completion green 1\/1 pass/);
     const s = rows(world({ expanded: 'health:session' })).map(lineText).join('\n');
-    expect(s).toContain('42,000 tokens');
-    expect(s).toContain('18% of context');
+    expect(s).toContain('42,000 tokens in the window');
   });
   test('with a worker listed the status view is unchanged (no health rows)', () => {
     const t = rows(world({ workers: panelWorld('route', 57, ui).workers })).map(lineText).join('\n');
