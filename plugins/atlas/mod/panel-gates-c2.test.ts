@@ -38,7 +38,7 @@ describe('C2: gates grouped by check', () => {
     const title = lineText(rows[at]!);
     const child = lineText(rows[at + 1]!);
     expect(child).toContain('verification coverage');
-    const markCol = child.search(/\S/);
+    const markCol = child.replace(/^[▸▾]/, ' ').search(/\S/); // the row's own chevron is not its mark
     expect(markCol).toBe(title.indexOf('Completion'));
     expect(child.indexOf('verification')).toBe(markCol + 2);
   });

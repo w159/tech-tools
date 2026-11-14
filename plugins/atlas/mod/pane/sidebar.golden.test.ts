@@ -19,7 +19,7 @@ describe('sidebar golden text', () => {
       expect(r[0]).toContain('ATLAS');
       expect(r[0]).toContain('SIDEPANEL');
       expect(r[1]!.trim()).toBe('');
-      expect(r[2]).toBe(' status  team  channel  gates  core  board');
+      expect(r[2]!.trimEnd()).toBe(' status  team  channel  gates  core  board');
     }
   });
   test('the lit tab is ruled by a heavy line under its label only', () => {
@@ -42,10 +42,10 @@ describe('sidebar golden text', () => {
   });
   test('team: the lead row first, then every subagent by name with its state word, in start order (critique 11 A3)', () => {
     const r = rows('team').slice(4).filter((l) => !/^ {4}\S/.test(l)).slice(0, 4); // the detail rows a tall pane adds sit under their agent
-    expect(r[0]).toMatch(/^ {2}[◐◓◑◒] lead\s+running/);
+    expect(r[0]).toMatch(/^▹ [◐◓◑◒] lead\s+running/);
     expect(r[1]).toMatch(/^▸ [◐◓◑◒] explorer-1\s+running/);
-    expect(r[2]).toMatch(/^ {2}◉ impl-auth\s+(\S+\s+)?waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
-    expect(r[3]).toMatch(/^ {2}■ runner-1\s+(\S+\s+)?failed/);
+    expect(r[2]).toMatch(/^▹ ◉ impl-auth\s+(\S+\s+)?waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
+    expect(r[3]).toMatch(/^▹ ■ runner-1\s+(\S+\s+)?failed/);
   });
   test('team at 38 columns (the 110-column pane) draws the six whole words on one row (critique 18; one form on every tab), and keeps name and state', () => {
     const r = rows('cols38');

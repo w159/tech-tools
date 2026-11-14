@@ -103,7 +103,7 @@ export function composeSlot(input: SlotInput): SlotPlan {
 	// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
 	const hudFull = i.hudOn ? (reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandFor(rows as Segment[][])), drawHud) as Segment[][]) : [];
 	// The band row never goes: whatever the HUD drew, at least one row of the budget stays for the band (a frame with no band was the hole in the readout).
-	const hudBase = hudFull.length === 0 && i.hudOn && i.healthCard?.length ? i.healthCard : hudFull;
+	const hudBase = hudFull.length === 0 && i.healthCard?.length ? i.healthCard : hudFull; // wave 43: also with ATLAS_HUD=off, where the band's `▸ health` button still opens it
 	const hud = i.hasSlot ? (fitHudToBand(hudBase, budget, (rows) => hudGapRows(hudListsAgents(rows as Segment[][]), rows.length, budget)) as Segment[][]) : hudBase;
 	const gap = hudGapRows(hudListsAgents(hud), hud.length, budget);
 	// One slot height for the whole run: the band sits at the top of a bottom-anchored slot, so a HUD that grows (the SUBAGENTS block appearing) or an idle row that goes would move it on screen.

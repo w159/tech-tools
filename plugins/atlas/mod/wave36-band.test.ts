@@ -274,9 +274,9 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
   });
 });
 
-describe('6. the strip tab reads `status`, the key stays `r`', () => {
+describe('6. the strip tab reads `status` (wave 43: no key is bound)', () => {
   test('the first band button', () => {
-    expect(BAND_BUTTONS[0]).toMatchObject({ id: 'route', key: 'r', label: 'status' });
-    expect(BAND_BUTTONS.map((b) => b.key).join('')).toBe('rtcgko');
+    expect(BAND_BUTTONS[0]).toMatchObject({ id: 'route', label: 'status' });
+    expect(BAND_BUTTONS.some((b) => 'key' in b)).toBe(false);
   });
 });

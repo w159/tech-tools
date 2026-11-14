@@ -194,4 +194,10 @@ describe('the slot draws the open card while idle', () => {
     const card = [[{ t: '◖ ◆ ATLAS ◗ ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
     expect(composeSlot(input(card)).hud).toHaveLength(2);
   });
+  test('ATLAS_HUD=off: the band still draws the `▸ health` button, so the card it opens is shown too (wave 43)', () => {
+    const off = (card?: never[][]) => ({ ...(input(card) as object), hudOn: false }) as never;
+    const card = [[{ t: '◖ ◆ ATLAS ◗ ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
+    expect(composeSlot(off()).hud).toHaveLength(0);
+    expect(composeSlot(off(card)).hud).toHaveLength(2);
+  });
 });

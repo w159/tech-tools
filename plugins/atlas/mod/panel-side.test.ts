@@ -166,7 +166,7 @@ describe('fill height: a tall pane shows detail already in the snapshot', () => 
 
 describe('spinners: spinFrameOf(now, worker name) on every row', () => {
   const NOW = 1_700_000_000_000;
-  const glyphOf = (rows: readonly string[], name: string): string => rows.find((l) => l.includes(name))!.trimStart().replace(/^▸\s*/, '')[0]!;
+  const glyphOf = (rows: readonly string[], name: string): string => rows.find((l) => l.includes(name))!.trimStart().replace(/^[▸▹▿]\s*/, '')[0]!;
   const two = [worker('alpha-one'), worker('beta-two')];
   const frame = (name: string): string => leadSpinnerGlyph(spinFrameOf(NOW, name)); // agent rows turn the band's spinner frame
   const planFrame = (name: string): string => spinnerGlyph(spinFrameOf(NOW, name)); // plan rows keep the circle quarters (the scorer parses them by glyph)

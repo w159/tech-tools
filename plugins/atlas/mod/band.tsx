@@ -20,7 +20,7 @@ import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
 import { contractRail, railOf, type Rail } from './rail';
-import { STRIP_TABS } from './panel-layout';
+import { chipText, STRIP_TABS } from './panel-layout';
 import { fitText, textWidth } from './theme';
 import { hoverStyle } from './clickable';
 import type { Health, HealthIn } from './idle-health';
@@ -40,11 +40,9 @@ const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
 export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; /** Wave 42: the `▸ health` button opens and closes the HUD's health card. */ toggleHealth?(): void };
-/** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
-export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
-/** How to give the band the keyboard; shown after the keys when it fits. */
-export const BAND_HINT = 'ctrl+x tab';
-const buttonWidth = (b: { label: string }): number => 3 + textWidth(b.label) + 2; // engine draws `k: label`, two cells between buttons
+/** The band's controls: click chips, one per tab of the side panel's strip (wave 43: no key letters are drawn or bound). */
+export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
+const buttonWidth = (b: { label: string }): number => textWidth(chipText(b.label)); // a chip is its label with a space each side; the chips touch
 const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
 
 /** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
@@ -234,24 +232,21 @@ function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, 
   return els.Box({ flexDirection: 'row', flexShrink: 0, children });
 }
 
-/** The footer with its key buttons (a row of real clickable keys) and, when it fits, the focus hint after them. */
+/** The footer with its tab chips (a row of real clickable chips, accent and bold, lit under the pointer). */
 function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui): RenderElement {
   const bg = panelBg(ui);
-  const mutedColor = ui.color === 'none' ? undefined : runHex({ tone: 'muted' }, ui.theme, ui.color);
+  const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
   const left = segs(l, ui);
   const used = left.reduce((n, x) => n + textWidth(x.t), 0);
-  const hint = used + KEYS_W + textWidth(BAND_HINT) + 3 <= cols ? BAND_HINT : '';
   const press = (id: SidebarView | 'board'): (() => void) => (id === 'board' ? on.toggleTodos : () => on.openView(id));
   const buttons = BAND_BUTTONS.map((b) => els.Button({
-    key: `band:${b.id}`, plain: true, hotkey: b.key, label: b.label, onPress: press(b.id),
-    children: [els.Text({ color: mutedColor, backgroundColor: bg, children: b.label })],
+    key: `band:${b.id}`, plain: true, label: b.label, onPress: press(b.id),
+    children: [els.Text({ color: accent, backgroundColor: bg, bold: true, hover: hoverStyle(ui, `band:${b.id}`), children: chipText(b.label) })],
   }));
-  const tail = hint ? `  ${hint} ` : ' ';
-  const gap = cols - used - KEYS_W - textWidth(tail) + 2; // the last button carries no trailing two-cell gap
-  const sep = (i: number): RenderElement => els.Text({ backgroundColor: bg, children: i ? '  ' : '' });
+  const gap = cols - used - KEYS_W - 1; // one cell of margin after the last chip
   return els.Box({
     flexDirection: 'row', flexShrink: 0,
-    children: [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap)) }), ...buttons.flatMap((b, i) => [sep(i), b]), els.Text({ color: mutedColor, backgroundColor: bg, children: tail })],
+    children: [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap)) }), ...buttons, els.Text({ backgroundColor: bg, children: ' ' })],
   });
 }
 
@@ -291,7 +286,7 @@ function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: Mission
   const m: MissionModel = m0.health ? { ...m0, health: { ...m0.health, ...(on ? { button: true } : {}) } } : m0;
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
   const keys = on && idle; // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
-  const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0, hintWidth: textWidth(BAND_HINT) + 3 });
+  const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   // The narrow form (one band row, no footer) still ends in the key row, blank under 80 columns: an idle band is as tall at 79 columns as at 80, so it never moves when the pane docks.
   if (keys && !lines.some((l) => l.keys) && lines.reduce((n, l) => n + (l.board ?? 1), 0) < maxRows) lines.push({ runs: [], keys: true });
   return { cols, ui, m, lines };

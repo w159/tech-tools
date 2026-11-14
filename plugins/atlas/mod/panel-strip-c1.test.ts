@@ -1,10 +1,9 @@
-// Design rev 5, slice C1: the tab strip is names only (`status  team  channel  gates  core  board`), the same at 110 and 150 columns. The lit tab is bold accent with a
-// one-row accent underline the width of its name, the rest dim neutral, two spaces between names. The keys stay bound (zero-width layer in mod/pane/sidebar.tsx) and are
-// named once in a dim line at the pane foot where the pane has room.
+// Design rev 5, slice C1 (chips in wave 43): the tab strip is names only (` status  team  channel  gates  core  board `), the same at 110 and 150 columns. The lit tab is bold accent with a
+// one-row accent underline the width of its name, the rest accent chips; no key letter is drawn or bound and no key hint line is printed.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
 import { cells, uiFromEnv } from './atlas-ui';
-import { KEY_HINT, fillRows, headerRows, lineText, stripLayout, tabRows, type PanelTab } from './panel-layout';
+import { fillRows, headerRows, lineText, stripLayout, tabRows, type PanelTab } from './panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
@@ -14,16 +13,16 @@ const NAMES = 'status  team  channel  gates  core  board';
 describe('C1: the strip is names only at every width', () => {
   for (const cols of [38, 44, 52, 80, 120, 150]) {
     for (const tab of TABS) {
-      test(`${cols} cells, ${tab} lit: names with two spaces, no key letters, one rule row`, () => {
+      test(`${cols} cells, ${tab} lit: chips (one space between where the pane is narrow), no key letters, one rule row`, () => {
         const rows = tabRows(panelWorld(tab, cols, ui));
         const text = rows.map(lineText);
         expect(rows).toHaveLength(2);
-        expect(text[0]!.trim()).toBe(cols >= 40 ? NAMES : NAMES.replace(/ {2}/g, ' ')); // 38: one-cell gap, still one row
+        expect(text[0]!.trim()).toBe(cols >= 43 ? NAMES : NAMES.replace(/ {2}/g, ' ')); // below 43: one-cell gap and no chip padding, still one row
         expect(text[0]).not.toMatch(/\b[rtcgko]:/);
         for (const t of text) expect(cells(t)).toBeLessThanOrEqual(cols);
-        const lit = rows[0]!.runs.find((x) => x.t === word(tab))!;
+        const lit = rows[0]!.runs.find((x) => x.t.trim() === word(tab))!;
         expect([lit.bold, lit.tone]).toEqual([true, 'accent']);
-        expect(rows[0]!.runs.filter((x) => x.t.trim() && x.t !== word(tab)).every((x) => !x.bold && x.tone === 'muted')).toBe(true);
+        expect(rows[0]!.runs.filter((x) => x.t.trim() && x.t.trim() !== word(tab)).every((x) => !x.bold && x.tone === 'accent')).toBe(true);
         expect(rows[1]!.runs.find((x) => /^[━-]+$/.test(x.t))).toMatchObject({ tone: 'accent' });
         expect(text[1]!.indexOf('━')).toBe(text[0]!.indexOf(word(tab)));
         expect(text[1]!.trim()).toBe('━'.repeat(word(tab).length));
@@ -39,15 +38,14 @@ describe('C1: the strip is names only at every width', () => {
   });
 });
 
-describe('C1: the key hint is one dim line at the pane foot, only where there is room', () => {
-  test('a tall team pane ends its fill with the dim hint', () => {
+describe('C1: no key hint line at the pane foot (wave 43)', () => {
+  test('a tall team pane ends its fill blank: no key hint', () => {
     const m = panelWorld('team', 49, ui);
     const fill = fillRows({ ...m, rows: 40 }, 6);
-    { const t = lineText(fill[fill.length - 1]!).trim(); expect(KEY_HINT.startsWith(t.replace(/\u2026$/, ''))).toBe(true); expect([...t].length).toBeLessThanOrEqual(48); } // the hint is cut to the pane
-    expect(fill[fill.length - 1]!.runs.every((x) => x.tone === 'dim' || !x.t.trim())).toBe(true);
-    expect(fill.filter((l) => lineText(l).includes('r: status'))).toHaveLength(1);
+    expect(fill.length).toBeGreaterThan(2);
+    expect(fill.every((l) => lineText(l).trim() === '')).toBe(true);
   });
-  test('a pane with no spare row draws no hint', () => {
+  test('a pane with no spare row draws no fill', () => {
     const m = panelWorld('team', 49, ui);
     expect(fillRows({ ...m, rows: headerRows(m).length + 6 + 1 }, 6)).toHaveLength(0);
   });

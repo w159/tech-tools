@@ -1,5 +1,5 @@
-// Band controls: every advertised key is a clickable Button with a unique hotkey, pressing one calls the
-// right handler, keys show only while idle at 80+ columns, and the sidebar's hint names only keys that exist.
+// Band controls (wave 43): every tab is a clickable chip Button without a hotkey (no key is bound or printed), pressing one calls the
+// right handler, and the chips show only while idle at 80+ columns.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandTree, type BandHandlers } from './band';
@@ -19,6 +19,8 @@ const all = (n: Node): Node[] => [n, ...kids(n).flatMap(all)];
 const textOf = (n: Node): string => (n.kind === 'Text' || typeof n.props.children === 'string' ? String(n.props.children ?? '') : kids(n).map(textOf).join(''));
 const buttons = (n: Node): Node[] => all(n).filter((x) => x.kind === 'Button');
 const hotkeys = (n: Node): string[] => buttons(n).map((b) => b.props.hotkey).filter(Boolean);
+/** A chip's drawn width: its Text (the label with a space each side). */
+const chipW = (b: Node): number => [...String(kids(b)[0]!.props.children)].length;
 
 const calls: string[] = [];
 const handlers: BandHandlers = { openView: (v) => calls.push(`open:${v}`), toggleTodos: () => calls.push('board') };
@@ -34,10 +36,11 @@ const byKey = (root: Node, key: string): Node => {
 };
 
 describe('band footer buttons', () => {
-  test('route team channel gates core board are Buttons with distinct single-letter hotkeys', () => {
+  test('route team channel gates core board are chip Buttons with no hotkey', () => {
     const t = band();
-    expect(['route', 'team', 'channel', 'gates', 'board'].map((k) => byKey(t, `band:${k}`).props.hotkey)).toEqual(['r', 't', 'c', 'g', 'o']);
-    expect(new Set(hotkeys(t)).size).toBe(hotkeys(t).length);
+    expect(['route', 'team', 'channel', 'gates', 'board'].map((k) => byKey(t, `band:${k}`).props.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect(hotkeys(t)).toEqual([]);
+    expect(kids(byKey(t, 'band:route'))[0]!.props.children).toBe(' status ');
   });
   test('pressing a button opens that pane view, or toggles the board', () => {
     const t = band();
@@ -69,57 +72,53 @@ describe('band footer buttons', () => {
       expect(buttons(checksRow)).toHaveLength(0);
       expect(textOf(keysRow)).not.toContain('checks');
       expect(buttons(keysRow)).toHaveLength(6);
-      const width = (row: Node): number => kids(row).reduce((n, k) => n + (k.kind === 'Button' ? 3 + String(k.props.label).length : [...String(k.props.children ?? '')].length), 0);
+      const width = (row: Node): number => kids(row).reduce((n, k) => n + (k.kind === 'Button' ? chipW(k) : [...String(k.props.children ?? '')].length), 0);
       expect([columns, width(checksRow)]).toEqual([columns, columns]);
       expect([columns, width(keysRow)]).toEqual([columns, columns]);
     }
   });
-  test('the hint is `ctrl+x tab`, shown after the keys only when it fits', () => {
+  test('no hint follows the chips at any width: the band prints no key and no `ctrl+x tab`', () => {
     const groups = ['completion', 'tripwire', 'routing', 'verdict'].map((id, i) => ({ id, title: id, lines: [{ ok: i !== 1, label: id }] })) as any;
     const snapshot = busySnap({ squad: [], activity: {}, comms: [] });
-    const hint = (columns: number) => {
+    for (const columns of [160, 140, 80]) {
       const t = bandTree(els, { snapshot, live: [], gates: groups, columns, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
-      return textOf(kids(t).at(-1)!).includes('ctrl+x tab');
-    };
-    expect(hint(160)).toBe(true);
-    expect(hint(140)).toBe(true);
-    expect(hint(80)).toBe(true); // the checks gave way to the six keys, so the hint has the room they left
+      expect(textOf(kids(t).at(-1)!), `${columns}`).not.toMatch(/ctrl\+|tab\s*$/);
+    }
     expect(textOf(band())).not.toMatch(/click or/);
   });
-  test('the hint sits two cells after the last key, the same gap as between keys', () => {
+  test('the chips touch (their own padding is the gap) and end one cell before the edge', () => {
     const t = bandTree(els, { snapshot: busySnap({ squad: [], activity: {}, comms: [] }), live: [], gates: [], columns: 160, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
-    const tail = textOf(kids(t).at(-1)!);
-    expect(tail.endsWith('board  ctrl+x tab ')).toBe(true);
+    const row = kids(kids(t).at(-1)!);
+    expect(textOf(kids(t).at(-1)!).endsWith(' status  team  channel  gates  core  board  ')).toBe(true);
+    expect(row.at(-1)!.props.children).toBe(' ');
   });
-  test('every key the band advertises exists as a hotkey, unique', () => {
-    const t = band();
-    expect(hotkeys(t).sort()).toEqual(['c', 'g', 'k', 'o', 'r', 't']);
-    expect(new Set(hotkeys(t)).size).toBe(6);
+  test('no hotkey is bound on any band button', () => {
+    expect(hotkeys(band())).toEqual([]);
   });
 });
 
-describe('sidebar hotkeys', () => {
+describe('sidebar chips (no hotkeys)', () => {
   const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, toggleTodos() {} };
   const tree = (view: 'route' | 'team' | 'channel' | 'gates'): Node =>
     sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns: 130, rows: 40 }, side) as unknown as Node;
-  test('no view repeats a hotkey', () => {
-    for (const v of ['route', 'team', 'channel', 'gates'] as const) expect(new Set(hotkeys(tree(v))).size).toBe(hotkeys(tree(v)).length);
+  test('no view binds a hotkey', () => {
+    for (const v of ['route', 'team', 'channel', 'gates'] as const) expect(hotkeys(tree(v))).toEqual([]);
   });
   test('six buttons fit a docked 56-column pane on one strip row (L21)', () => {
     const t = sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'route' }, columns: 56, rows: 40 }, side) as unknown as Node;
-    expect(buttons(t).filter((b) => b.props.hotkey).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
+    expect(hotkeys(t)).toEqual([]);
     const rows = (t.props.children as Node[]).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
     expect(rows).toHaveLength(1); // `chan` for `channel` makes the whole strip 55 cells: no wrapped second row
     for (const row of rows) {
       const kidsOf = row.props.children as Node[];
-      const w = kidsOf.reduce((n, c) => n + (c.kind === 'Button' ? (c.props.hotkey ? 3 : 0) + [...String(c.props.label)].length : c.kind === 'Box' ? 0 : String(c.props.children).length), 0); // the names plus the gaps (the key layer is a zero-width Box)
-      expect(w).toBeLessThanOrEqual(55);
+      const w = kidsOf.reduce((n, c) => n + (c.kind === 'Button' ? chipW(c) : c.kind === 'Box' ? 0 : String(c.props.children).length), 0); // the chips plus any gaps
+      expect(w).toBeLessThanOrEqual(56);
     }
   });
-  test('the labelled strip is the only hint: every hotkey is drawn as a tab label', () => {
+  test('the strip is click chips: every tab is a Button with a label and no hotkey', () => {
     const t = tree('route');
-    expect(hotkeys(t).sort()).toEqual(['c', 'g', 'k', 'o', 'r', 't']);
-    for (const b of buttons(t).filter((x) => x.props.hotkey)) expect(String(b.props.label).length).toBeGreaterThan(0);
+    expect(hotkeys(t)).toEqual([]);
+    for (const b of buttons(t).filter((x) => String(x.props.key).startsWith('tab:'))) expect(String(b.props.label).length).toBeGreaterThan(0);
   });
 });
 

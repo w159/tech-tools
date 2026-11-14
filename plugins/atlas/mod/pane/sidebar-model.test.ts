@@ -23,7 +23,7 @@ describe('team rows from the live snapshot', () => {
   test('the lead row comes first, the workers follow, the lead tally closes', () => {
     const s = world({ squad: [sq('a', 'running'), sq('b', 'finished')], activity: { a: act({ mood: 'working', tool: 'Grep', toolCount: 2 }) } as never });
     const out = team(s, 80);
-    expect(out[0]).toMatch(/^ {2}[◐◓◑◒] lead +running/);
+    expect(out[0]).toMatch(/^▹ [◐◓◑◒] lead +running/);
     expect(out.at(-2)).toBe('    workers  1 running · 1 done');
     expect(out.at(-1)).toMatch(/^ {4}total {4}0:\d\d · 2 worker calls$/); // wave 30: the team's total time and calls close the tab
     expect(out.some((l) => /^ ?[▸ ] ?[◐◓◑◒] a +(runner +)?running/.test(l))).toBe(true);
@@ -31,8 +31,8 @@ describe('team rows from the live snapshot', () => {
   });
   test('an idle lead reads waiting and a roster member the squad does not know reads queued', () => {
     const out = team(world({ members: [{ name: 'leader' }] }), 80);
-    expect(out[0]).toBe('  ◉ lead    waiting  ▁▁▁▁▁▁▁▁▁▁▁▁');
-    expect(out).toContain('  ◇ leader  queued');
+    expect(out[0]).toBe('▹ ◉ lead    waiting  ▁▁▁▁▁▁▁▁▁▁▁▁');
+    expect(out).toContain('▹ ◇ leader  queued');
   });
   test('L13: a state word comes from evidence, never a clock: a host-listed worker is running at any age, a dispatched member the host does not list is queued', () => {
     const at = (ms: number) => world({ squad: [sq('a', 'running')], activity: { a: act({ mood: 'working', startedAt: NOW - ms }) } as never });
@@ -42,7 +42,7 @@ describe('team rows from the live snapshot', () => {
   });
   test('a parked worker draws a queued row without throwing', () => {
     const out = team(world({ squad: [sq('pk', 'parked')], activity: { pk: act() } as never }), 80);
-    expect(out.find((l) => l.includes(' pk '))).toMatch(/^ {2}◇ pk +runner +queued$/) // a queued agent has no elapsed time;
+    expect(out.find((l) => l.includes(' pk '))).toMatch(/^▹ ◇ pk +runner +queued$/) // a queued agent has no elapsed time;
   });
   test('a stale resting member and another session lead are not on the roster', () => {
     const old = new Date(NOW - 2 * 3600_000 - 1000).toISOString();

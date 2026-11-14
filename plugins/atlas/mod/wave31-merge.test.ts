@@ -1,9 +1,8 @@
-// Wave 31 merge follow-ups: the key hint lives once at the side panel's foot, the keys are bound by the panel's own strip (not the HUD's removed Button), and the
-// panel's phase word is the band's own `bandKindOf`.
+// Wave 31 merge follow-ups (wave 43: no key hint is printed and no key is bound; the panel strip is click chips) and the panel phase word, which is the band's own `bandKindOf`.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandKindOf } from './band';
-import { KEY_HINT, PANEL_TABS } from './panel-layout';
+import { PANEL_TABS } from './panel-layout';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
 import { bandKind } from './pane/band-kind';
@@ -22,42 +21,33 @@ const calls: string[] = [];
 const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView: (v) => calls.push(`view:${v}`), toggleTodos: () => calls.push('board') };
 const pane = (columns: number, rows = 60, view: 'route' | 'team' | 'channel' | 'gates' = 'team'): Node =>
   sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows }, side) as unknown as Node;
-const hintNodes = (t: Node): Node[] => all(t).filter((x) => x.kind === 'Text' && typeof x.props.children === 'string' && /^r: status/.test(x.props.children.trim()));
 
-describe('c: the key hint is drawn once, at the foot of the side panel', () => {
-  test('one dim 240 row of `r: status  t: team ...`, no longer than the pane', () => {
-    const t = pane(130);
-    const rows = hintNodes(t);
-    expect(rows).toHaveLength(1);
-    const text = String(rows[0]!.props.children).trim();
-    expect(KEY_HINT.startsWith(text)).toBe(true);
-    expect(KEY_HINT.startsWith('r: status  t: team  c: channel  g: gates  k: core  o: board  ctrl+x tab')).toBe(true);
-    expect(rows[0]!.props.color).toBe('#585858');
-    expect([...String(rows[0]!.props.children)].length).toBeLessThanOrEqual(129);
-  });
-  test('a narrow pane cuts the hint to its width instead of wrapping it', () => {
-    const t = pane(40);
-    const row = hintNodes(t)[0]!;
-    expect([...String(row.props.children)].length).toBeLessThanOrEqual(39);
-    expect(String(row.props.children).trim().endsWith('…')).toBe(true);
-  });
-  test('a pane with no spare row draws no hint (the keys then live only on the strip)', () => {
-    expect(hintNodes(pane(130, 8))).toHaveLength(0);
+describe('c: no key hint is drawn anywhere in the side panel (wave 43)', () => {
+  test('no row reads `r: status  t: team ...` or `ctrl+x tab`, at any width or height', () => {
+    for (const [cols, rows] of [[130, 60], [40, 60], [130, 8]] as const) {
+      const texts = all(pane(cols, rows)).filter((x) => x.kind === 'Text' && typeof x.props.children === 'string').map((x) => String(x.props.children));
+      expect(texts.filter((t) => /\b[a-z]: (status|team|channel|gates|core|board)\b|ctrl\+/.test(t)), `${cols}x${rows}`).toEqual([]);
+    }
   });
 });
 
-describe('c: every advertised key is still bound and pressing it acts (none depended on the HUD Button)', () => {
-  test('the panel strip binds r t c g k o and each press reaches its handler', () => {
+describe('c: every tab is a click chip and pressing it acts (no key is bound)', () => {
+  test('the panel strip has six chips without a hotkey and each press reaches its handler', () => {
     const t = pane(130);
-    const keyed = all(t).filter((x) => x.kind === 'Button' && x.props.hotkey);
-    expect(keyed.map((b) => b.props.hotkey).sort()).toEqual(['c', 'g', 'k', 'o', 'r', 't']);
-    expect(PANEL_TABS.map((p) => p.key).sort()).toEqual(['c', 'g', 'k', 'r', 't']);
+    const chips = all(t).filter((x) => x.kind === 'Button' && String(x.props.key).startsWith('tab:'));
+    expect(chips).toHaveLength(6);
+    expect(chips.map((b) => b.props.hotkey)).toEqual(Array(6).fill(undefined));
+    expect(PANEL_TABS.map((p) => p.id)).toEqual(['route', 'team', 'channel', 'gates', 'core']);
     calls.length = 0;
-    for (const b of keyed) b.props.onPress();
+    for (const b of chips) b.props.onPress();
     expect(calls.sort()).toEqual(['board', 'view:channel', 'view:core', 'view:gates', 'view:route', 'view:team']);
   });
-  test('the keys stay bound on a bare 56-column strip and on a 36-column one', () => {
-    for (const cols of [56, 36]) expect(all(pane(cols)).filter((x) => x.kind === 'Button' && x.props.hotkey).map((b) => b.props.hotkey).sort(), `${cols}`).toEqual(['c', 'g', 'k', 'o', 'r', 't']);
+  test('the chips stay on a 56-column strip and on a 36-column one, still without a hotkey', () => {
+    for (const cols of [56, 36]) {
+      const chips = all(pane(cols)).filter((x) => x.kind === 'Button' && String(x.props.key).startsWith('tab:'));
+      expect(chips, `${cols}`).toHaveLength(6);
+      expect(chips.every((b) => b.props.hotkey === undefined)).toBe(true);
+    }
   });
 });
 

@@ -36,13 +36,13 @@ export type SidebarHandlers = {
   draftChange(text: string): void;
   send(text: string): void;
   copy(text: string): void;
-  /** Move the keyboard focus ring onto the element drawn under `key` (no hotkey: reached with Tab and the arrows). */
+  /** Move the keyboard focus ring onto the element drawn under `key` (reached with Tab and the arrows). */
   focus(key: string): void;
-  /** Expand `key` (never collapse it) and focus it (no hotkey: a row press). */
+  /** Expand `key` (never collapse it) and focus it (a row press). */
   expand(key: string): void;
-  /** Switch the pane view (hotkeys r/t/c/g). */
+  /** Switch the pane view (a tab chip press). */
   setView(v: SidebarView): void;
-  /** Collapse or expand the band's board panel (hotkey `o`); absent in fixtures that do not wire it. */
+  /** Collapse or expand the band's board panel (the board chip); absent in fixtures that do not wire it. */
   toggleTodos?(): void;
 };
 

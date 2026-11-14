@@ -21,7 +21,7 @@ type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
 const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button'), Input: mk('Input') } as unknown as ClientElements;
 const kidsOf = (n: Node): (Node | string)[] => (Array.isArray(n.props.children) ? n.props.children : n.props.children == null ? [] : [n.props.children]);
-/** One element as the host prints it: a hotkey Button reads `k: label`. */
+/** One element as the host prints it (wave 43: no Button carries a hotkey, so none prints a `k: ` prefix). */
 const inline = (n: Node | string): string => (typeof n === 'string' ? n : n.kind === 'Box' && n.props.width === 0 ? '' : (n.kind === 'Button' && n.props.hotkey ? `${n.props.hotkey}: ` : '') + kidsOf(n).map(inline).join(''));
 const ccRows = (tab: PanelTab, cols: number): string[] => {
   const root = sidebarTree(els, { ...worldSidebar(tab, cols), core } as never, { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, toggleTodos() {} }) as unknown as Node;
@@ -34,12 +34,12 @@ describe('change 9: one tab strip on both hosts', () => {
   const WORDS = new Set(['status', 'team', 'channel', 'gates', 'core', 'board']);
   // A strip row is only keys and tab words: `r: route  t: team ...`, or the bare words alone (a narrow pane draws no `k: ` and binds the keys itself).
   const stripOf = (rows: readonly string[]): string[] => rows.filter((l) => { const tk = l.trim().split(/\s+/); return tk.length > 0 && tk[0] !== '' && tk.every((w) => /^[rtcgko]:$/.test(w) || WORDS.has(w)); });
-  test('the strip tabs are status team channel gates core board, keys r t c g k o', () => {
-    const tabs = (L as unknown as { STRIP_TABS: { id: string; key: string; label: string }[] }).STRIP_TABS;
-    expect(tabs.map((t) => `${t.key}:${t.label}`)).toEqual(['r:status', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
+  test('the strip tabs are status team channel gates core board, no keys', () => {
+    const tabs = (L as unknown as { STRIP_TABS: { id: string; label: string }[] }).STRIP_TABS;
+    expect(tabs.map((t) => t.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
   });
   test('the band buttons are the same set in the same order', () => {
-    expect(BAND_BUTTONS.map((b) => `${b.key}:${b.label}`)).toEqual(['r:status', 't:team', 'c:channel', 'g:gates', 'k:core', 'o:board']);
+    expect(BAND_BUTTONS.map((b) => b.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
   });
   for (const cols of [120, 80, 60, 56, 40, 38, 30]) for (const tab of TABS) {
     test(`${tab} at ${cols}: the Claude Code strip and the omp strip print the same rows`, () => {

@@ -77,7 +77,7 @@ describe('team tab (step 2)', () => {
     { name: 'gamma', role: 'runner', state: 'queued' as const, secs: 5, detail: 'waits' },
   ];
   test('one row per agent: glyph, name, role, state word, elapsed, with the columns aligned', () => {
-    const out = body('team', 80, { workers, lead: undefined, mates: [] }).filter((l) => /^[▸ ] ?\S [a-z-]+ /.test(l) && !l.includes('workers'));
+    const out = body('team', 80, { workers, lead: undefined, mates: [] }).filter((l) => /^[▸▹▿ ] ?\S [a-z-]+ /.test(l) && !l.includes('workers'));
     expect(out).toHaveLength(4);
     const col = (re: RegExp): number[] => out.map((l) => l.search(re));
     expect(new Set(col(/ (explorer|verifier|runner)  /)).size).toBe(1); // the role column

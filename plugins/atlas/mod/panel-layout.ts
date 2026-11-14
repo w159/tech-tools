@@ -7,7 +7,7 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { gatesMark, healthDetail, healthRows, type Health } from './idle-health';
-import { clickRun } from './clickable';
+import { chevron, clickRun } from './clickable';
 import { brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
@@ -20,33 +20,32 @@ import type { GateGroup } from './pane/sidebar-types';
 import { ageWord, KILLED, sparkBraille, sparkOf, sparkOver, totalsOf, wordOf } from './pane/activity';
 
 export type PanelTab = 'route' | 'team' | 'channel' | 'gates' | 'core';
-/** Tabs in strip order. Hotkeys: r t c g k (the board toggle `o` belongs to the band). */
-export const PANEL_TABS: readonly { id: PanelTab; key: string; label: string }[] = [
-  { id: 'route', key: 'r', label: 'status' }, { id: 'team', key: 't', label: 'team' }, { id: 'channel', key: 'c', label: 'channel' },
-  { id: 'gates', key: 'g', label: 'gates' }, { id: 'core', key: 'k', label: 'core' },
+/** Tabs in strip order (no key letters: a tab answers a click only). */
+export const PANEL_TABS: readonly { id: PanelTab; label: string }[] = [
+  { id: 'route', label: 'status' }, { id: 'team', label: 'team' }, { id: 'channel', label: 'channel' },
+  { id: 'gates', label: 'gates' }, { id: 'core', label: 'core' },
 ];
 
-/** The tab strip both hosts draw: the five views, then the board toggle (`o`; it opens the Board pane, it is not a view). The band's footer
- * buttons (mod/band.tsx BAND_BUTTONS) are this list. Each tab reads `k: label`, the key the host binds. */
-export const STRIP_TABS: readonly { id: PanelTab | 'board'; key: string; label: string }[] = [...PANEL_TABS, { id: 'board', key: 'o', label: 'board' }];
-/** Cells the `k: ` prefix of a strip tab takes. */
-export const HOTKEY_W = 3;
-/** Cells between strip tabs. */
-export const STRIP_GAP = 2;
-
-/** A strip tab as drawn: its id, hotkey and its label (always the whole word, the same on every surface: no `chan`, no two-letter form). */
-export type StripTab = { id: PanelTab | 'board'; key: string; label: string };
+/** The tab strip both hosts draw: the five views, then the board toggle (it opens the Board pane, it is not a view). The band's footer
+ * buttons (mod/band.tsx BAND_BUTTONS) are this list. Each tab is a click chip named by its label alone. */
+export const STRIP_TABS: readonly { id: PanelTab | 'board'; label: string }[] = [...PANEL_TABS, { id: 'board', label: 'board' }];
+/** Cells a chip adds around its label (one space each side). */
+export const CHIP_PAD = 2;
+/** A strip tab as drawn: its id and its label (always the whole word, the same on every surface: no `chan`, no two-letter form). */
+export type StripTab = { id: PanelTab | 'board'; label: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** Forms of the strip, widest first: the words; the same with one cell between tabs. The first form that fits the pane on one row is drawn;
- * none fitting, the words wrap onto a second row (never a shortened `chan` or a two-letter `rt tm ch` form). */
-type StripForm = { gap: number; label: (id: string, full: string) => string };
-const STRIP_FORMS: readonly StripForm[] = [{ gap: STRIP_GAP, label: (_, full) => full }];
-const stripWidth = (tabs: readonly { label: string }[], gap: number, prefix: number = 0): number => tabs.reduce((n, t, i) => n + (i ? gap : 0) + prefix + cells(t.label), 0);
-const formTabs = (f: StripForm): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t, label: f.label(t.id, t.label) }));
+/** The strip's form: a chip is its label with `pad` cells of padding each side (the chips touch, so `pad` is also the gap), `gap` cells between tabs and `lead` before the first. */
+export type StripForm = { pad: number; gap: number; lead: number };
+/** Forms of the strip, widest first: chips (` status  team  channel ...`: one space each side, no gap); the same words with one space between and no padding, for a narrow pane (the 110 column pane). */
+const STRIP_FORMS: readonly StripForm[] = [{ pad: 1, gap: 0, lead: 0 }, { pad: 0, gap: 1, lead: STRIP_PAD }];
+/** The text a tab is drawn as under a form: the label with its padding. */
+export const chipText = (label: string, f: Pick<StripForm, 'pad'> = STRIP_FORMS[0]!): string => `${' '.repeat(f.pad)}${label}${' '.repeat(f.pad)}`;
+const stripTabs = (): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t }));
+const stripWidth = (tabs: readonly { label: string }[], f: StripForm): number => f.lead + tabs.reduce((n, t, i) => n + (i ? f.gap : 0) + 2 * f.pad + cells(t.label), 0);
 
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus `prefix` cells and `gap` cells between; the rest wrap. */
-export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = STRIP_GAP, prefix: number = HOTKEY_W): T[][] {
+export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = 0, prefix: number = CHIP_PAD): T[][] {
   const rows: T[][] = [];
   let used = 0;
   for (const it of items) {
@@ -58,17 +57,14 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
   return rows;
 }
 
-/** The strip both hosts draw at `cols` cells, after `STRIP_PAD` cells of padding (design rev 5, C1): the names alone, two spaces between, on one row down to 36 cells (one space
- * between below that), else the whole names wrapped. The key letters are never drawn in the strip: they stay bound (mod/pane/sidebar.tsx's zero-width layer), the band footer names
- * them and a dim line at the pane foot repeats them where there is room. The form depends on the width only, never on the lit tab. `bare` is therefore always true. */
-export function stripLayout(cols: number, _lit?: string): { rows: StripTab[][]; gap: number; /** Always true: the `k: ` prefix is never drawn. */ bare: boolean } {
-  const inner = Math.max(1, cols - STRIP_PAD);
+/** The strip both hosts draw at `cols` cells (design rev 5, C1; chips in wave 43): the whole names on one row as chips where they fit (43 cells), else the same words one space apart (37), else the chips wrapped.
+ * The lit tab is filled, the rest are accent text; no key letter is drawn or bound. The form depends on the width only, never on the lit tab. `bare` is always true: no prefix is drawn. */
+export function stripLayout(cols: number, _lit?: string): StripForm & { rows: StripTab[][]; /** Always true: no key prefix is drawn. */ bare: boolean } {
+  const words = stripTabs();
+  const form = STRIP_FORMS.find((f) => stripWidth(words, f) <= Math.max(1, cols));
+  if (form) return { ...form, rows: [words], bare: true };
   const wide = STRIP_FORMS[0]!;
-  for (const gap of [wide.gap, 1]) {
-    const words = formTabs(wide);
-    if (stripWidth(words, gap, 0) <= inner) return { rows: [words], gap, bare: true };
-  }
-  return { rows: stripRows(formTabs(wide), inner, wide.gap, 0), gap: wide.gap, bare: true };
+  return { ...wide, rows: stripRows(words, Math.max(1, cols), wide.gap, 2 * wide.pad), bare: true };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
@@ -229,20 +225,21 @@ export function ribbonRow(m: PanelModel, view?: { title: string; right: string }
   return line(lightRibbon(ribbon(m.cols, view?.title ?? 'SIDEPANEL', fitsRight || keep ? right : '', m.ui), m.ui));
 }
 
-/** The tab strip and the rule under the lit tab (design rev 5, C1): `route  team  channel  gates  core  board`, the lit name bold accent with `━━━━━` in accent under it, the rest
- * dim. No key letters (see stripLayout). A strip too narrow for one row wraps (the rule sits under the row that holds the lit tab). */
+/** The tab strip and the rule under the lit tab (design rev 5, C1): ` status  team  channel  gates  core  board ` as chips, the lit one bold with `━━━━━` under it, the rest
+ * accent. No key letters (see stripLayout). A strip too narrow for one row wraps (the rule sits under the row that holds the lit tab). */
 export function tabRows(m: PanelModel): PanelLine[] {
-  const { rows, gap: g } = stripLayout(m.cols, m.tab);
-  const gap = r(' '.repeat(g));
-  const lead = r(' '.repeat(STRIP_PAD));
-  return rows.flatMap((row): PanelLine[] => {
-    const strip: Run[] = [lead];
-    const under: Run[] = [lead];
+  const f = stripLayout(m.cols, m.tab);
+  const lead = r(' '.repeat(f.lead));
+  const gap = r(' '.repeat(f.gap));
+  return f.rows.flatMap((row): PanelLine[] => {
+    const strip: Run[] = f.lead ? [lead] : [];
+    const under: Run[] = f.lead ? [lead] : [];
     row.forEach((t, i) => {
       const on = t.id === m.tab;
-      if (i) { strip.push(gap); under.push(gap); }
-      strip.push(on ? r(t.label, 'accent', { bold: true }) : r(t.label, 'muted'));
-      under.push(on ? r((m.ui.ascii ? '-' : '━').repeat(cells(t.label)), 'accent') : r(' '.repeat(cells(t.label))));
+      if (i && f.gap) { strip.push(gap); under.push(gap); }
+      const text = chipText(t.label, f);
+      strip.push(on ? r(text, 'accent', { bold: true }) : r(text, 'accent'));
+      under.push(r(' '.repeat(f.pad)), on ? r((m.ui.ascii ? '-' : '━').repeat(cells(t.label)), 'accent') : r(' '.repeat(cells(t.label))), r(' '.repeat(f.pad))); // the rule is as wide as the label, not the chip's padding
     });
     return [line(fitRuns(strip, m.cols)), ...(row.some((t) => t.id === m.tab) ? [line(fitRuns(under, m.cols))] : [])];
   });
@@ -1375,24 +1372,34 @@ function airy(m: PanelModel, lines: PanelLine[]): PanelLine[] {
   if (m.rows < 48 || !AIRY.has(m.tab) || !gaps || lines.length + gaps > m.rows - headerRows(m).length - 1) return lines;
   return lines.flatMap((l, i) => (starts(l, i) ? [BLANK, l] : [l]));
 }
-export const bodyLines = (m: PanelModel): PanelLine[] => airy(m, BODIES[m.tab](m));
+/** Wave 43: a pressable row wears the one clickable look (mod/clickable.ts): its leading blank (the grid's focus cell, or the first of its lead spaces) is the accent chevron (`▸` closed, `▾` open) and every run
+ * of the row takes the hover style. A row that already carries a clickRun (the health rows) is left as it is. */
+function clickable(lines: PanelLine[], m: PanelModel): PanelLine[] {
+  return lines.map((l) => {
+    if (!l.press || l.runs.length === 0 || l.runs.some((x) => x.press)) return l;
+    const [first, ...rest] = l.runs as [Run, ...Run[]];
+    const blank = first.t.length > 0 && first.t.trim() === '';
+    // A worker row keeps the filled `▸` for the recipient (the focus cell, the one row the message goes to), so its own chevron is the hollow `▹` (open `▿`); every other row's is the filled one.
+    const glyph = l.press.kind === 'worker' ? (m.ui.ascii ? '+' : m.expanded === l.press.key ? '▿' : '▹') : chevron(m.expanded === l.press.key, m.ui);
+    const lead: Run[] = blank
+      ? [{ t: glyph, tone: 'accent', bold: true }, ...(first.t.length > 1 ? [{ ...first, t: first.t.slice(1) }] : [])]
+      : [first];
+    return { ...l, runs: [...lead, ...rest].map((x) => ({ ...x, hover: true })) };
+  });
+}
+export const bodyLines = (m: PanelModel): PanelLine[] => airy(m, clickable(BODIES[m.tab](m), m));
 /** Tabs whose body ends where its data does: they carry the panel surface down to the pane's foot row. */
 const FILLED_OLD: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
 /** The Claude pane (`m.run`) fills every tab to its foot row. */
 const FILLED: ReadonlySet<PanelTab> = new Set<PanelTab>(['route', 'team', 'channel', 'gates', 'core']);
 /** Tabs with a message field on the foot row; the others fill the pane to its last row (wave 31, critique 29: the 234 surface stopped where the content ended). */
 const FOOTED: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
-/** The key hint the pane foot prints once (the HUD's footer row is gone): every tab key, then the focus key. */
-export const KEY_HINT = `${STRIP_TABS.map((t) => `${t.key}: ${t.label}`).join('  ')}  ctrl+x tab`;
 /** Blank rows after a `bodyLen`-row body so header + body + fill is `rows - 1` lines, the one foot row staying free (on team and channel the
  * message field is that row). Only on a tab that has fewer rows than the pane; never negative, so a body taller than the pane is untouched. */
 export function fillRows(m: PanelModel, bodyLen: number): PanelLine[] {
   const n = (m.run ? FILLED : FILLED_OLD).has(m.tab) ? m.rows - (FOOTED.has(m.tab) ? 1 : 0) - headerRows(m).length - bodyLen : 0;
   if (n <= 0) return [];
-  const fill = Array.from({ length: n }, () => BLANK);
-  // Design rev 5, C1: the strip names no keys, so the last spare row (above the message field) names them once, dim 240, one row, cut to the pane (wave 31: the HUD no longer prints them).
-  if (n >= 2) fill[n - 1] = line([r(' '.repeat(STRIP_PAD)), r(clipE(KEY_HINT, Math.max(1, m.cols - STRIP_PAD)), 'dim')]);
-  return fill;
+  return Array.from({ length: n }, () => BLANK); // wave 43: no key hint row; the spare rows are the pane's own surface
 }
 /** Every row of the panel: ribbon, blank, tab strip, rule, blank, then the active tab. */
 export const panelLines = (m: PanelModel): PanelLine[] =>

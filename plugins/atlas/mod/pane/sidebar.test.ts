@@ -40,40 +40,40 @@ const tree = (over: Partial<SidebarModel> = {}, view: SidebarModel['ui']['view']
 const TABS = ['route', 'team', 'channel', 'gates', 'core'] as const;
 const buttons = (root: Node): Node[] => all(root).filter((n) => n.kind === 'Button');
 const strip = (root: Node): Node[] => buttons(root).filter((b) => String(b.props.key).startsWith('tab:') && !String(b.props.key).endsWith(':key'));
-/** C1: the strip names no keys; the hotkeys live on the zero-width layer, one Button per tab. */
+/** Wave 43: the strip is click chips, no key is bound and no zero-width key layer exists. */
 const layerKeys = (root: Node): unknown[] => buttons(root).filter((b) => String(b.props.key).endsWith(':key')).map((b) => b.props.hotkey);
-// The host draws a hotkey Button as `k: label`: width = 3 + label.
-const hostW = (b: Node): number => (b.props.hotkey ? 3 : 0) + String(b.props.label).length; // a bare-strip tab carries no hotkey: label alone
-const KEYS_W0 = (n: Node): boolean => n.kind === 'Box' && n.props.width === 0; // the clipped zero-width layer that holds a bare strip's keys
+/** A chip's drawn width: its Text (the label with its padding). */
+const hostW = (b: Node): number => String(kids(b)[0]!.props.children).length;
 
 describe('sidebar shell', () => {
-  test('five plain hotkey tabs r t c g k with plain labels, no glyphs', () => {
+  test('five plain click chips with plain labels, no glyphs and no key layer', () => {
     const t = tree();
     const tabs = TABS.map((v) => tab(t, v).props);
-    expect(layerKeys(t)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
+    expect(layerKeys(t)).toEqual([]);
     expect(tabs.map((b) => b.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined]);
     expect(tabs.map((b) => b.label)).toEqual(['status', 'team', 'channel', 'gates', 'core']);
     expect(tabs.every((b) => b.plain === true)).toBe(true);
   });
 
-  test('the board key o is always in the strip (the same six tabs as omp); it presses only when the board is wired', () => {
+  test('the board chip is always in the strip (the same six tabs as omp); it presses only when the board is wired', () => {
     expect(strip(tree()).map((b) => b.props.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
-    expect(layerKeys(tree())).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
+    expect(layerKeys(tree())).toEqual([]);
     expect(() => tab(tree(), 'todos').props.onPress()).not.toThrow(); // unwired: a no-op
     expect(calls).not.toContain('board');
     const wired = sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: open, ui: { recipient: null, expanded: null, draft: '', view: 'team' }, columns: 70, rows: 40 }, { ...on, toggleTodos: () => calls.push('board') }) as unknown as Node;
-    expect(layerKeys(wired)).toEqual(['r', 't', 'c', 'g', 'k', 'o']);
+    expect(layerKeys(wired)).toEqual([]);
     tab(wired, 'todos').props.onPress();
     expect(calls).toContain('board');
   });
 
-  test('the lit tab is bold text, the others muted; pressing a tab sets that view', () => {
+  test('the lit tab is a filled (inverse) chip, the others accent chips with a hover style; pressing a tab sets that view', () => {
     const t = tree({}, 'channel');
     const head = (v: string) => kids(tab(t, v))[0]!.props;
-    expect(head('channel').bold).toBe(true);
-    expect(head('team').bold).toBeFalsy();
-    expect(head('team').color).toBe(PALETTES.mocha.muted);
-    expect(head('channel').color).not.toBe(head('team').color);
+    expect(head('channel').inverse).toBe(true);
+    expect(head('team').inverse).toBeFalsy();
+    expect(head('team').color).toBe(head('channel').color); // one accent: the fill alone says which tab is lit
+    expect(head('team').hover).toBeDefined();
+    expect(head('team').children).toBe(' team ');
     tab(t, 'route').props.onPress();
     expect(calls).toContain('view:route');
     tab(t, 'core').props.onPress();
@@ -87,36 +87,33 @@ describe('sidebar shell', () => {
       const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
       expect(rowsOf.length).toBeGreaterThan(0);
       for (const row of rowsOf) {
-        const w = kids(row).reduce((n, c) => n + (KEYS_W0(c) ? 0 : c.kind === 'Button' ? hostW(c) : String(c.props.children).length), 0);
+        const w = kids(row).reduce((n, c) => n + (c.kind === 'Button' ? hostW(c) : String(c.props.children).length), 0);
         expect(w).toBeLessThanOrEqual(inner);
       }
     }
   });
 
-  test('critique 18: at 110 columns (38 inner) the strip is one row of the six whole words, the keys bound on the zero-width layer', () => {
+  test('critique 18: at 110 columns (38 inner) the strip is one row of the six whole words, no key layer', () => {
     const t = tree({ columns: 38 }, 'gates');
     const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
     expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs']); // one strip row, never `tabs:1`
     const visible = rowsOf.flatMap((r) => kids(r).filter((c) => c.kind === 'Button'));
     expect(visible.map((b) => b.props.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
     expect(visible.map((b) => b.props.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]); // the host draws no `k: ` for a Button without a hotkey
-    const layer = rowsOf.flatMap((r) => kids(r).filter(KEYS_W0));
-    expect(layer).toHaveLength(1);
-    expect(kids(layer[0]!).map((b) => b.props.hotkey)).toEqual(['r', 't', 'c', 'g', 'k', 'o']); // the keys stay bound
     visible.find((b) => b.props.label === 'team')!.props.onPress();
     expect(calls).toContain('view:team');
   });
 
   test('L21: stripRows keeps every tab, in order, and wraps instead of overflowing', () => {
-    const items = [...'rtcgk'].map((k, i) => ({ id: TABS[i]!, key: k, label: TABS[i]! as string }));
+    const items = TABS.map((id) => ({ id, label: id as string }));
     for (const inner of [20, 29, 37, 45, 60]) {
       const rows = stripRows(items, inner);
       expect(rows.flat().map((x) => x.id)).toEqual([...TABS]);
-      for (const r of rows) expect(r.reduce((n, x, i) => n + (i ? 2 : 0) + 3 + x.label.length, 0)).toBeLessThanOrEqual(Math.max(inner, 3 + 7));
+      for (const r of rows) expect(r.reduce((n, x) => n + 2 + x.label.length, 0)).toBeLessThanOrEqual(Math.max(inner, 2 + 7));
     }
     expect(stripRows(items, 60).length).toBe(1);
-    expect(stripRows(items, 37).length).toBe(2);
-    expect(stripRows(items, 37, 1).length).toBe(2);
+    expect(stripRows(items, 30).length).toBe(2);
+    expect(stripRows(items, 30, 1).length).toBe(2);
   });
 
   test('L21: a narrow pane wraps the strip onto a second row of whole words and rules the lit tab under its drawn label', () => {
@@ -127,7 +124,7 @@ describe('sidebar shell', () => {
       const strip = rowsOf.find((r) => String(r.props.key).startsWith('tabs') && r.props.key !== 'tabs:rule' && textOf(rowsOf[rowsOf.indexOf(r) + 1]!).includes('━'))!;
       const rule = textOf(rowsOf[rowsOf.indexOf(strip) + 1]!);
       expect(rule.replace(/ /g, '')).toBe('━'.repeat(label.length));
-      const drawn = kids(strip).map((c) => (c.kind === 'Button' ? String(c.props.label) : c.kind === 'Box' ? '' : String(c.props.children))).join('');
+      const drawn = kids(strip).map((c) => (c.kind === 'Button' ? String(kids(c)[0]!.props.children) : c.kind === 'Box' ? '' : String(c.props.children))).join('');
       expect(drawn.slice(rule.indexOf('━'), rule.indexOf('━') + label.length)).toBe(label);
     }
   });

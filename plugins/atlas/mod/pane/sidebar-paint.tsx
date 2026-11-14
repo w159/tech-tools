@@ -33,7 +33,7 @@ export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: S
 export const inputEl = (els: ClientElements, m: SidebarModel, on: SidebarHandlers): RenderElement => els.Input({
   key: 'msg',
   label: `▸ to ${m.ui.recipient ?? 'lead'}`,
-  placeholder: 'message · Enter sends',
+  placeholder: 'message',
   value: m.ui.draft,
   onInput: (v: string) => on.draftChange(v),
   onSubmit: (v: string) => on.send(v),

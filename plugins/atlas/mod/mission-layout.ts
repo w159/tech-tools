@@ -92,8 +92,6 @@ export type MissionModel = {
   boardRows?: number;
   /** Cells the band's key buttons take on the footer; 0 on omp. */
   keysWidth?: number;
-  /** Cells the focus hint after the keys wants (with its gap); the checks keep to a shorter form before they push it out. */
-  hintWidth?: number;
   /** Lead context used, 0..1; absent hides the ctx gauge. */
   ctx?: number;
   /** The tall band (phase rail, blank, gauge row) when the width and rows allow it. */

@@ -255,13 +255,13 @@ describe('item 3: the team tab\'s lead row says what the band says', () => {
   const leadDone = (): never => { const s = snap() as unknown as { activity: Record<string, unknown> }; s.activity.lead = act({ mood: 'done', toolCount: 5, startedAt: NOW - 27000 }); return s as never; };
   test('a blocked run: `▲ blocked`, never `done`', () => {
     forgetPhases();
-    const lead = withGates(leadDone(), 'team', 57, 40, BLOCKED).find((l) => /\blead\b/.test(l) && /^\s*\S+ lead\s/.test(l))!;
-    expect(lead).toMatch(/^\s*▲ lead\s+blocked/); // 4fef5d66: `● lead done` under a blocked band
+    const lead = withGates(leadDone(), 'team', 57, 40, BLOCKED).find((l) => /\blead\b/.test(l) && /^[▹▿ ]\s*\S+ lead\s/.test(l))!;
+    expect(lead).toMatch(/^[▹▿ ]\s*▲ lead\s+blocked/); // 4fef5d66: `● lead done` under a blocked band
     expect(lead).not.toMatch(/\bdone\b/);
   });
   test('a run that is done keeps `done`', () => {
     forgetPhases();
-    expect(withGates(leadDone(), 'team', 57, 40, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*\S+ lead\s/.test(l))).toMatch(/● lead\s+done/);
+    expect(withGates(leadDone(), 'team', 57, 40, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^[▹▿ ]\s*\S+ lead\s/.test(l))).toMatch(/● lead\s+done/);
   });
 });
 

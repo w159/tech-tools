@@ -1,11 +1,11 @@
-// Native-element sidebar: the SIDEPANEL ribbon, a tab strip (route, team, channel, gates, core) with the lit tab ruled, and
-// exactly one view under it. The rows come from the shared layout (mod/panel-layout.ts); this file adds the tab Buttons
-// (hotkeys r t c g k o, the six of STRIP_TABS in mod/panel-layout.ts that the omp painter prints too). The strip draws the names only (design rev 5, C1): the hotkeys are
-// Buttons on a clipped zero-width layer, the strip wraps only below 35 cells and never overflows into the neighbouring pane.
+// Native-element sidebar: the SIDEPANEL ribbon, a tab strip (status, team, channel, gates, core, board) with the lit tab ruled, and
+// exactly one view under it. The rows come from the shared layout (mod/panel-layout.ts); this file adds the tab Buttons (the six of STRIP_TABS
+// in mod/panel-layout.ts that the omp painter prints too). Each tab is a click chip (wave 43: no key letters are drawn or bound); the strip wraps only where the chips do not fit and never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { cells, markOf, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
-import { centred, HOTKEY_W, recentRows, ribbonRow, STRIP_PAD, stripLayout, stripRows, type PanelModel } from '../panel-layout';
+import { cells, markOf, runHex, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
+import { hoverStyle } from '../clickable';
+import { centred, chipText, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../board-model';
@@ -24,28 +24,22 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
   const bg = panelBg(ui);
   const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
   const rule = ui.ascii ? '-' : '━';
-  const { rows, gap: stripGap, bare } = stripLayout(inner, m.ui.view); // the widest label form that fits one row (mod/panel-layout.ts); the rule is as wide as the drawn label
-  const prefix = bare ? 0 : HOTKEY_W;
-  return rows.flatMap((row, ri): RenderElement[] => {
+  const f = stripLayout(inner, m.ui.view); // the whole names as chips that fit one row (mod/panel-layout.ts); the rule is as wide as the lit chip
+  return f.rows.flatMap((row, ri): RenderElement[] => {
     const pressOf = (it: { id: string }) => (it.id === 'board' ? () => on.toggleTodos?.() : () => on.setView(it.id as SidebarView));
     const keyOf = (it: { id: string }): string => (it.id === 'board' ? 'tab:todos' : `tab:${it.id}`);
-    const tabs = row.flatMap((it, i): RenderElement[] => {
+    const tabs = row.map((it): RenderElement => {
       const on_ = it.id === m.ui.view;
-      // The lit tab is bold, the rest explicitly not: a host that restyles Buttons reads the flag, not its absence.
-      const label = { ...runEl(els, on_ ? { t: it.label, tone: 'text', bold: true } : { t: it.label, tone: 'muted' }, ui) } as RenderElement & { props: Record<string, unknown> };
-      label.props = { ...label.props, bold: on_ };
-      // Bare strip (a narrow pane): the host draws `k: ` only for a Button that has a hotkey, so these carry none; the keys live on the zero-width layer below.
-      return [...(i ? [gap(stripGap)] : []), els.Button({ key: keyOf(it), plain: true, ...(bare ? {} : { hotkey: it.key }), children: [label], label: it.label, onPress: pressOf(it) })];
+      // The chip (mod/clickable.ts): accent bold text with the hover style; the lit tab is filled (inverse) so it reads as pressed in.
+      const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
+      const label = els.Text({ color: accent, backgroundColor: bg, bold: true, ...(on_ ? { inverse: true } : {}), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) });
+      return els.Button({ key: keyOf(it), plain: true, children: [label], label: it.label, onPress: pressOf(it) });
     });
-    // The keys of a bare strip: the same hotkey Buttons the wide strip draws, in a clipped zero-width box that paints nothing.
-    const keys = bare ? [els.Box({ key: `tabkeys:${ri}`, position: 'absolute', top: 0, left: 0, width: 0, height: 1, overflow: 'hidden', flexDirection: 'row', children: row.map((it) => els.Button({ key: `${keyOf(it)}:key`, plain: true, hotkey: it.key, label: it.label, onPress: pressOf(it) })) })] : [];
-    const under = [gap(STRIP_PAD), ...row.flatMap((it, i): RenderElement[] => [
-      ...(i ? [gap(stripGap)] : []), ...(prefix ? [gap(prefix)] : []),
-      it.id === m.ui.view ? runEl(els, { t: rule.repeat(cells(it.label)), tone: 'accent' }, ui) : gap(cells(it.label)),
-    ])];
+    const between = (i: number): RenderElement[] => (i && f.gap ? [gap(f.gap)] : []);
+    const under = [...(f.lead ? [gap(f.lead)] : []), ...row.flatMap((it, i): RenderElement[] => [...between(i), ...(f.pad ? [gap(f.pad)] : []), it.id === m.ui.view ? runEl(els, { t: rule.repeat(cells(it.label)), tone: 'accent' }, ui) : gap(cells(it.label)), ...(f.pad ? [gap(f.pad)] : [])])];
     const lit = row.some((it) => it.id === m.ui.view);
     return [
-      els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: [gap(STRIP_PAD), ...tabs, ...keys] }),
+      els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: [...(f.lead ? [gap(f.lead)] : []), ...tabs.flatMap((t, i) => [...between(i), t])] }),
       ...(lit ? [els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: under })] : []),
     ];
   });
@@ -97,8 +91,8 @@ export function leadBarState(run: string | undefined, lead: UiState): UiState {
   return run === 'working' || (run === undefined && lead === 'running') ? 'running' : 'done';
 }
 
-/** The board view's ribbon words. Where the strip is the bare one-row form (no `r: status` keys on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
- * tells the pane from a toast box by `r: status` or `▸ SIDEPANEL` and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
+/** The board view's ribbon words. Where the strip is the bare one-row form (wave 43: no key letters on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
+ * tells the pane from a toast box by its `▸ SIDEPANEL` title and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
 export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { title: string; right: string } {
   // The count is said once, by the summary row in the body (`5 items · 3 dispatches`), not again in the ribbon (critique 22: `5 items` twice).
   const b = { title: 'BOARD', right: '' };

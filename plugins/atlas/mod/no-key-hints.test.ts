@@ -1,0 +1,94 @@
+// Wave 43: the mod prints no keyboard key hint (the host's hotkeys do not work for the owner) and every Button wears the one clickable look (mod/clickable.ts):
+// a leading chevron in the accent with a hover style, or, for a tab, an accent chip (the lit tab filled) with a hover style.
+import { describe, expect, test } from 'claude-code/testing';
+import type { ClientElements } from 'claude-code';
+import { bandTree, type BandHandlers, type BandModel } from './band';
+import { liveWorkers } from './data/live';
+import { busySnap, NOW } from './live_fixture';
+import { uiFromEnv } from './atlas-ui';
+import { fillRows, headerRows, lineText, panelLines } from './panel-layout';
+import * as panelLayout from './panel-layout';
+import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
+import { panelWorld } from '../contracts/panel-world';
+
+type Node = { kind: string; props: Record<string, any> };
+const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
+const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button'), Input: mk('Input') } as unknown as ClientElements;
+const kids = (n: Node): Node[] => {
+  const c = n.props.children;
+  return (Array.isArray(c) ? c : c == null ? [] : [c]).filter((x: unknown): x is Node => typeof x === 'object' && x !== null);
+};
+const all = (n: Node): Node[] => [n, ...kids(n).flatMap(all)];
+/** Every string the tree prints: Text children, an Input's label and placeholder. */
+const printed = (n: Node): string[] => all(n).flatMap((x) => (x.kind === 'Text' && typeof x.props.children === 'string' ? [x.props.children] : x.kind === 'Input' ? [x.props.label, x.props.placeholder].filter((s): s is string => typeof s === 'string') : []));
+const buttons = (n: Node): Node[] => all(n).filter((x) => x.kind === 'Button');
+
+const HINTS: RegExp[] = [/\b[a-z]: (status|team|channel|gates|core|board)\b/, /ctrl\+/i, /Enter sends/, /⌃/, /\bshift\+/i];
+const noHints = (rows: string[], where: string): void => { for (const row of rows) for (const re of HINTS) expect(re.test(row), `${where}: ${row}`).toBe(false); };
+
+const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
+const bandOn: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
+const idleSnap = busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 18 } as never);
+const HEALTH = { upSecs: 724, version: '17.21.1', branch: 'main', tokens: 42_000, open: false };
+const bandOf = (columns: number, working: boolean): Node => {
+  const snapshot = working ? busySnap() : idleSnap;
+  const m: BandModel = { snapshot, live: working ? liveWorkers(snapshot, NOW) : [], gates: [], columns, tick: 0, maxRows: 12, ui, health: working ? undefined : HEALTH };
+  return bandTree(els, m, bandOn) as unknown as Node;
+};
+
+const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, toggleTodos() {} };
+const open: GateGroup[] = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, fix: 'run it' } as never] }];
+const VIEWS = ['route', 'team', 'channel', 'gates', 'core', 'board'] as const;
+const pane = (columns: number, view: (typeof VIEWS)[number], working: boolean, expanded: string | null = null): Node =>
+  sidebarTree(els, { snapshot: { ...(working ? busySnap() : idleSnap), now: NOW }, gates: open, ui: { recipient: null, expanded, draft: '', view }, columns, rows: 45 }, side) as unknown as Node;
+
+describe('no printed key hints', () => {
+  for (const cols of [150, 110]) {
+    for (const working of [false, true]) {
+      test(`band at ${cols} (${working ? 'working' : 'idle'}) prints no key hint`, () => noHints(printed(bandOf(cols, working)), `band ${cols}`));
+      for (const view of VIEWS) {
+        test(`side panel ${view} at ${cols} (${working ? 'working' : 'idle'}) prints no key hint`, () => noHints(printed(pane(cols, view, working)), `${view} ${cols}`));
+      }
+    }
+  }
+  test('the shared layout has no KEY_HINT and its spare rows name no key', () => {
+    expect('KEY_HINT' in panelLayout).toBe(false);
+    for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as const) {
+      const m = panelWorld(tab, 130, ui, { rows: 60 } as never);
+      noHints([...fillRows(m, 3), ...headerRows(m), ...panelLines(m)].map(lineText), `layout ${tab}`);
+    }
+  });
+  test('the message field placeholder is `message`', () => {
+    const input = all(pane(150, 'team', true)).find((x) => x.kind === 'Input')!;
+    expect(input.props.placeholder).toBe('message');
+  });
+  test('no Button binds a hotkey', () => {
+    for (const t of [bandOf(150, false), pane(150, 'team', true), pane(110, 'route', false), pane(60, 'gates', true)]) for (const b of buttons(t)) expect(b.props.hotkey, String(b.props.key)).toBeUndefined();
+  });
+});
+
+describe('every Button looks clickable', () => {
+  const CHEVRON = /^[▸▾▹▿>v+]( |$)/;
+  const looks = (b: Node): void => {
+    const texts = all(b).filter((x) => x.kind === 'Text');
+    expect(texts.length, String(b.props.key)).toBeGreaterThan(0);
+    for (const t of texts) expect(t.props.hover, `${b.props.key} hover`).toBeDefined();
+    const first = texts[0]!.props;
+    const chip = /^(band|tab):/.test(String(b.props.key)) && !/^band:health$/.test(String(b.props.key));
+    if (chip) { expect(String(first.children), String(b.props.key)).toMatch(/^ \S.* $/); expect(first.bold === true || first.inverse === true, `${b.props.key} bold`).toBe(true); }
+    else expect(String(first.children), String(b.props.key)).toMatch(CHEVRON);
+  };
+  for (const cols of [150, 110]) {
+    test(`band buttons at ${cols}`, () => { const bs = buttons(bandOf(cols, false)); expect(bs.length).toBeGreaterThan(6); bs.forEach(looks); });
+    for (const view of VIEWS) {
+      test(`side panel ${view} buttons at ${cols}`, () => { const bs = buttons(pane(cols, view, true)); expect(bs.length).toBeGreaterThan(0); bs.forEach(looks); });
+    }
+    test(`the idle status view buttons at ${cols}`, () => buttons(pane(cols, 'route', false)).forEach(looks));
+  }
+  test('the lit tab is a filled chip, the others are not', () => {
+    const strip = buttons(pane(150, 'gates', true)).filter((b) => String(b.props.key).startsWith('tab:'));
+    expect(strip.length).toBe(6);
+    const lit = strip.filter((b) => all(b).some((x) => x.kind === 'Text' && x.props.inverse === true));
+    expect(lit.map((b) => b.props.key)).toEqual(['tab:gates']);
+  });
+});
