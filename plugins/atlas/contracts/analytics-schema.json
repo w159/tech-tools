@@ -52,6 +52,22 @@
         "other"
       ]
     },
+    "provname": {
+      "values": [
+        "claude",
+        "ollama"
+      ]
+    },
+    "fallbackreason": {
+      "values": [
+        "down",
+        "model_missing",
+        "no_anthropic_api",
+        "timeout",
+        "no_model",
+        "remote_refused"
+      ]
+    },
     "routesrc": {
       "values": [
         "model",
@@ -292,6 +308,13 @@
         "team.wall.{wall}"
       ],
       "purpose": "Team runs improved: which task classes and effort levels are chosen, how large teams get, whether runs finish, fail or time out and how long they take, so the scope matrix defaults match real work and failing or slow team shapes get fixed."
+    },
+    "provider": {
+      "patterns": [
+        "provider.{provname}.used",
+        "provider.ollama.fallback.{fallbackreason}"
+      ],
+      "purpose": "Local model workers improved: how many crew and team workers launch on Claude versus a local Ollama model and why an Ollama request fell back to Claude (endpoint down, model not pulled, no Anthropic API, timeout, no model configured, remote URL refused), so the health check and fallback are tuned on real machines. Never a model name or URL."
     },
     "decision": {
       "patterns": [
