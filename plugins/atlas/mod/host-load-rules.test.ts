@@ -177,6 +177,19 @@ function reachable(entry: string): string[] {
   return [...seen];
 }
 
+/** Rule 5: `$.env.get` / `$.env.set` take a quoted literal name as the first argument (the host lists the variables a module reads and writes). */
+export function hostEnvViolations(file: string, source: string): string[] {
+  const code = codeOnly(source);
+  const found: string[] = [];
+  for (const m of code.matchAll(/\$\.env\.(get|set)\s*\(\s*/g)) {
+    const at = m.index! + m[0].length;
+    const arg = source.slice(at);
+    if (/^(?:'[^'\\\n]*'|"[^"\\\n]*"|`[^`$\\]*`)\s*[,)]/.test(arg)) continue;
+    found.push(`${relative(ROOT, file)}:${code.slice(0, at).split('\n').length}  $.env.${m[1]}(${arg.split('\n')[0]!.slice(0, 40)}  first argument is not a string literal`);
+  }
+  return found;
+}
+
 function sources(dir: string, deep: boolean): string[] {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
@@ -233,6 +246,15 @@ describe('host load rule 2: $ is passed only to a top-level function of the same
     const files = reachable(join(ROOT, 'mod', 'register.ts'));
     expect(files.length).toBeGreaterThan(30);
     expect(files.flatMap((f) => hostImportViolations(f, readFileSync(f, 'utf8')))).toEqual([]);
+  });
+  test('rule 5: every $.env.get / $.env.set first argument is a quoted literal', () => {
+    const files = [...sources(join(ROOT, 'mod'), true), ...sources(join(ROOT, 'omp'), false)];
+    expect(files.flatMap((f) => hostEnvViolations(f, readFileSync(f, 'utf8')))).toEqual([]);
+    const file = join(ROOT, 'mod', 'seed.ts');
+    const bad = ['return $.env.get(name).catch(() => undefined);', 'await $.env.get(names[0]);', 'await $.env.set(`K_${n}`, v);', 'await $.env.get(  key )'];
+    for (const stmt of bad) expect([stmt, hostEnvViolations(file, stmt).length]).toEqual([stmt, 1]);
+    const good = ["await $.env.get('A').catch(() => undefined)", 'await $.env.get("A")', "await $.env.set('A', v)", "const s = '$.env.get(name)'; // $.env.get(name)"];
+    for (const stmt of good) expect([stmt, hostEnvViolations(file, stmt)]).toEqual([stmt, []]);
   });
   test('rule 3 and 4: the 09a0dd86 shape and its siblings are caught, the call-site shapes pass', () => {
     const file = join(ROOT, 'mod', 'seed.ts');
