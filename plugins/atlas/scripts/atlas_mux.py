@@ -65,6 +65,7 @@ import tempfile
 from pathlib import Path
 
 import atlas_panefeed
+import atlas_provider
 import atlas_resolve
 import atlas_todo
 
@@ -335,6 +336,9 @@ def worker_env(env: dict | None = None) -> dict:
         if ENV_NAME_RE.match(name.strip())
     }
     allowed = set(WORKER_ENV) | set(FORWARDED_ENV) | extras
+    if source.get("ATLAS_PROVIDER_ACTIVE") == "ollama":
+        # the spawn resolved this worker onto the local endpoint: its provider env reaches the harness, nothing else of the lead's
+        allowed |= set(atlas_provider.PROVIDER_ENV_KEYS)
     return {
         key: value
         for key, value in source.items()
@@ -1275,7 +1279,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
     )
 
 
-def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> int:
+def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str, prov: dict | None = None) -> int:
     """claude-bg transport: `claude --bg` supervises the worker itself — no pane, no run-worker
     wrapper. Status/kill go through `claude agents --json` / `claude stop`."""
     prompt = Path(args.prompt_file).read_text(encoding="utf-8")
@@ -1322,6 +1326,8 @@ def _spawn_claude_bg(args, root: str, chan: str, model, level, session: str) -> 
         _bg_brief(prompt, root, args.name, chan, lead),
     ]
     env = dict(worker_env(), ATLAS_PROJECT_ROOT=root, ATLAS_WORKER_NAME=args.name)
+    if prov and prov.get("provider") == "ollama":
+        env = atlas_provider.apply_env(env, prov)
     # subprocess env= keeps the token out of argv; it is never in FORWARDED_ENV or the brief
     env["ATLAS_OWNER_TOKEN"] = atlas_todo.issue_owner_token(root, args.name)
     res = _claude(*argv, env=env, cwd=os.path.abspath(args.cwd) if args.cwd else root)
@@ -1379,20 +1385,33 @@ def cmd_spawn(args) -> int:
 
 def _spawn_registered(args, root: str, chan) -> int:
     session = _session(args.run)
+    want = getattr(args, "provider", None)
+    prov = None
+    if args.harness == "claude":
+        try:
+            # an explicit `ollama` request carries its Ollama model in --model; any other --model is a Claude model
+            prov = atlas_provider.resolve(args.agent, args.model if want == "ollama" else None, want)
+        except atlas_provider.ProviderRefused as exc:
+            atlas_todo.leave(root, chan, args.name)
+            return _emit({"ok": False, "error": str(exc)}, 2)
+        atlas_provider.record_launch(prov)
     model, level, _, tier_error = _tier(
         args.harness,
         args.agent,
         args.agents_dir,
-        args.model,
+        None if want == "ollama" else args.model,
         args.effort or args.thinking,
     )
     if tier_error:
         atlas_todo.leave(root, chan, args.name)
         return _emit({"ok": False, "error": tier_error}, 2)
+    on_ollama = bool(prov and prov["provider"] == "ollama")
+    if on_ollama:
+        model = prov["model"]
     use = spawn_transport()  # seats start on first use; tmux for this spawn if down
     if use == "claude-bg":
         if args.harness == "claude":
-            return _spawn_claude_bg(args, root, chan, model, level, session)
+            return _spawn_claude_bg(args, root, chan, model, level, session, prov)
         if args.harness == "codex":
             atlas_todo.leave(root, chan, args.name)
             return _emit(
@@ -1447,9 +1466,16 @@ def _spawn_registered(args, root: str, chan) -> int:
     # Lead env a pane would silently lose, forwarded by name: ATLAS_DB (workers would write a different database) and
     # ATLAS_GATE (a gate the lead switched off would come back on). An allowlist, never a copy of the lead's environment.
     forwarded = [f"{k}={os.environ[k]}" for k in FORWARDED_ENV if os.environ.get(k)]
+    unset = []
+    if on_ollama:
+        # a tmux pane inherits the tmux server's env, not this client's: the provider env travels in the pane
+        # command, and the account token is removed so the CLI cannot silently fall back to it
+        worker += ["--provider", "ollama"]
+        forwarded += [f"{k}={v}" for k, v in prov["env"].items()]
+        unset = [x for pair in (("-u", k) for k in prov["unset"]) for x in pair]
     pane = (
         "exec "
-        + (shlex.join(["env", *forwarded]) + " " if forwarded else "")
+        + (shlex.join(["env", *unset, *forwarded]) + " " if forwarded or unset else "")
         + shlex.join(worker)
     )
     _note_run_transport(root, args.run, use)
@@ -1459,6 +1485,8 @@ def _spawn_registered(args, root: str, chan) -> int:
         import atlas_seats
 
         pins = pane_env(root, args.name)
+        if on_ollama:
+            pins.update(prov["env"])
         made = atlas_seats.create_pane(
             args.name,
             pane_command(pins, worker),
@@ -1492,6 +1520,7 @@ def _spawn_registered(args, root: str, chan) -> int:
             "agent": args.agent,
             "model": model,
             "level": level,
+            **({"provider": prov["provider"], **({"fallback": prov["fallback"]} if prov["fallback"] else {})} if prov else {}),
             "board": str(Path(root) / BOARD_REL / f"{args.name}.jsonl"),
         }
     )
@@ -2032,6 +2061,36 @@ def seat_model(member: dict, harness: str) -> str | None:
     return member.get("model") if member.get("seat") and harness == "claude" else None
 
 
+def assign_team_providers(rec: dict, harness: str) -> None:
+    """Stamp each member of a claude team with its provider (and Ollama model), then pair verifiers across model
+    families: implementers on ollama -> verifier seats on claude; implementers on claude and a healthy Ollama model
+    configured for the verifier role -> that verifier on ollama (ATLAS_ADVERSARIAL_PAIRING=off disables the latter)."""
+    if harness != "claude":
+        return
+    seats = []
+    for m in rec["members"]:
+        res = atlas_provider.resolve(m["role"], None, None)
+        on = res["provider"] == "ollama"
+        seats.append(
+            {
+                "name": m["name"],
+                "role": m["role"],
+                "provider": res["provider"],
+                "model": res["model"] if on else seat_model(m, harness),
+                "fallback": res.get("fallback"),
+            }
+        )
+    opts = atlas_provider.team_options([m["role"] for m in rec["members"]])
+    paired = atlas_provider.pair_seats(seats, opts, atlas_provider.adversarial_on())
+    for m, s in zip(rec["members"], paired):
+        if s["provider"] == "ollama":
+            m["provider"], m["provider_model"] = "ollama", s["model"]
+        elif s.get("pair"):
+            m["provider"] = "claude"  # pinned: the spawn must not re-resolve this seat onto ollama
+        if s.get("pair"):
+            m["pair"] = s["pair"]
+
+
 def build_team(
     task_class: str, effort: str, paths=None, task: str = "", team_id: str | None = None
 ) -> dict:
@@ -2483,6 +2542,10 @@ def cmd_spawn_team(args) -> int:
             )
         rec["name"] = team_name
     rec["worktrees"] = worktree_plan(rec, root)
+    try:
+        assign_team_providers(rec, getattr(args, "harness", "claude"))
+    except atlas_provider.ProviderRefused as exc:
+        return _emit({"ok": False, "error": str(exc)}, 2)
     # the plugin preflight runs for a dry run too: a plan that the real spawn would refuse must not read ok
     if getattr(args, "harness", "claude") == "claude" and not (
         getattr(args, "command_override", None) or os.environ.get("ATLAS_MUX_WORKER_CMD")
@@ -2551,7 +2614,8 @@ def cmd_spawn_team(args) -> int:
             harness=args.harness,
             agent=member["role"],
             prompt_file=str(pf),
-            model=seat_model(member, args.harness),
+            model=member["provider_model"] if member.get("provider") == "ollama" else seat_model(member, args.harness),
+            provider=member.get("provider"),
             effort=None,
             thinking=_team_thinking(args.harness, member["role"]),
             agents_dir=None,
@@ -2864,6 +2928,11 @@ def _parser() -> argparse.ArgumentParser:
         sp.add_argument(
             "--model",
             help="override the definition's model (for omp an @role alias resolves via modelRoles); with no usable definition it must be paired with --effort/--thinking",
+        )
+        sp.add_argument(
+            "--provider",
+            choices=atlas_provider.PROVIDERS,
+            help="claude only: claude | ollama | auto (default: ATLAS_WORKER_PROVIDER). With ollama, --model is the Ollama model",
         )
         sp.add_argument(
             "--effort", help="claude only: override the definition's effort"

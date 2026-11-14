@@ -320,7 +320,7 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
 | `ATLAS_DECISION=off` | model-based prompt-arm decision and scope routing (regex and keyword answers stay), and the done-claim check |
-| `ATLAS_DECISION_VERIFY=off` | decision-model done-claim check at Stop (letter v: a reply that claims done or fixed and quotes no observed result blocks once per turn) |
+| `ATLAS_DECISION_VERIFY=block\|off` | decision-model done-claim check at Stop (letter v). Default shadow: records `decision.verify.block-would`, never blocks; `block` blocks once per turn on a done claim with no observed result; `off` skips the call |
 | `ATLAS_MUX` | unset = mux mode on (default); `ATLAS_MUX=off` disables it (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
 | `ATLAS_COLONY_TRANSPORT` | `herdr` (the pane transport label), `tmux` or `claude-bg` forces that transport; unset = managed seats whenever the seat backend is up, else `claude-bg` for claude workers and tmux for omp workers |
 | `ATLAS_SEAT_BACKEND` | `rig` (OpenRig, default when Node 22/24 is present), `herdr`, or `off`; the agent runtime starts itself on first use (a spawn that finds it down launches it detached and runs on tmux that once), nothing is launched by hand (see `docs/architecture/atlas-colony.md`, "Seat backend") |

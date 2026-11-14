@@ -1195,7 +1195,7 @@ switches:
 | `ATLAS_TRIPWIRE`, `ATLAS_TRIPWIRE_HARD`                        | on                       | `off` disables the tripwire, or only its deny tier            |
 | `ATLAS_ENGINE_ARM`                                             | on                       | `off` stops prompts from arming orchestration                 |
 | `ATLAS_DECISION`, `ATLAS_DECISION_URL`, `ATLAS_DECISION_MODEL` | on, loopback, `nimble`   | Local decision model                                          |
-| `ATLAS_DECISION_VERIFY`                                        | on                       | `off` disables the decision-model done-claim check (gate v)   |
+| `ATLAS_DECISION_VERIFY`                                        | shadow                   | `block` lets gate v block, `off` disables it                  |
 | `ATLAS_MANDATES`                                               | on                       | `off` drops the recall gate and companion nudges              |
 | `ATLAS_MUX`, `ATLAS_COLONY_TRANSPORT`                          | on, auto                 | Colony mode and transport                                     |
 | `ATLAS_DASHBOARD`                                              | off                      | `on` starts the Command Center at session start               |

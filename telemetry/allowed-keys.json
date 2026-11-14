@@ -89,6 +89,7 @@
   "decision.route.fallback",
   "decision.route.model",
   "decision.verify.block",
+  "decision.verify.block-would",
   "decision.verify.pass",
   "decision.verify.skip",
   "delivery.fail.http4xx",
