@@ -148,12 +148,6 @@ export async function noteUsage($: EngineInterface, key: UsageKey): Promise<void
 		}
 		if (trailing) return; // one trailing write covers every count that lands inside the window
 		// clock.after is one-shot, and it keeps this timer out of the mod's repeating-tick bookkeeping (clock.every).
-		// A host without clock.after gets an unthrottled write instead of losing the count.
-		if (typeof $.clock.after !== 'function') {
-			lastWriteMs = now;
-			await flush($);
-			return;
-		}
 		trailing = $.clock.after(Math.max(1, lastWriteMs + WRITE_MIN_MS - now), () => {
 			trailing = null;
 			void (async () => {
