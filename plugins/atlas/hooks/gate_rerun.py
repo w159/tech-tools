@@ -530,13 +530,9 @@ def valid_proof(root: Path, session: str, started: float | None, run_paths=()) -
 
 
 def _crew_scripts() -> set:
-    """The atlas_crew.py files a lead's call may legitimately run: this plugin's own, and the one under
-    CLAUDE_PLUGIN_ROOT when set."""
-    paths = {Path(__file__).resolve().parent.parent / "scripts" / "atlas_crew.py"}
-    root = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    if root:
-        paths.add(Path(root) / "scripts" / "atlas_crew.py")
-    return {os.path.realpath(p) for p in paths}
+    """The one atlas_crew.py a lead's call may legitimately run: this plugin's own, the sibling of the
+    atlas_crew_seal.py that `_unsealed` verifies with. A copy or another path never counts."""
+    return {os.path.realpath(Path(__file__).resolve().parent.parent / "scripts" / "atlas_crew.py")}
 
 
 _SEP = re.compile(r"^[&|;()<>]+$")
@@ -578,10 +574,11 @@ def _script_after_interpreter(seg: list) -> tuple[str, list] | None:
 
 
 def _invokes_crew(command: str, cwd: str = "") -> bool:
-    """True when the Bash command runs the crew engine itself: `<python> <path>/atlas_crew.py run|wait ...`
+    """True when the Bash command launches the crew engine itself: `<python> <path>/atlas_crew.py run ...`
     where <path> resolves (CLAUDE_PLUGIN_ROOT expanded, relative paths against `cwd` or a preceding
     `cd <dir> &&`) to this plugin's scripts/atlas_crew.py. `echo atlas_crew r1`, a quoted string or some
-    other script named atlas_crew.py do not qualify."""
+    other script named atlas_crew.py do not qualify, and neither does `wait` or any other subcommand: only a
+    launch earns credit."""
     try:
         lex = shlex.shlex(command, posix=True, punctuation_chars=True)
         lex.whitespace_split = True
@@ -611,7 +608,7 @@ def _invokes_crew(command: str, cwd: str = "") -> bool:
             continue
         script, rest = found
         script = _expand_plugin_root(script)
-        if script is None or os.path.basename(script) != "atlas_crew.py" or not rest or rest[0] not in ("run", "wait"):
+        if script is None or os.path.basename(script) != "atlas_crew.py" or not rest or rest[0] != "run":
             continue
         if not os.path.isabs(script):
             if not here:
@@ -648,18 +645,38 @@ def _engine_json(out: str, run_id: str) -> bool:
     return False
 
 
+def _unsealed(rundir: Path, summary) -> bool:
+    """True when `summary` (the object the caller parsed from this run's summary.json, read once) is not signed by
+    the engine that started the run (scripts/atlas_crew_seal.py: a key record under the Atlas home and an HMAC over
+    the summary). A summary edited or copied after signing fails here. The seal is no boundary against code run
+    as the same user (it can call `create` and `sign`); the launch check in `_engine_run` is what ties a run to
+    this plugin's engine. Fails closed."""
+    try:
+        scripts = str(Path(__file__).resolve().parent.parent / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import atlas_crew_seal
+
+        return atlas_crew_seal.verify_obj(rundir, summary) is not None
+    except Exception:
+        return True
+
+
 def _engine_run(
-    meta_path: Path, meta: dict, started: float | None, transcript_path: str, display: bool = False,
+    meta_path: Path, meta: dict, summary, started: float | None, transcript_path: str, display: bool = False,
     cwd: str = "",
 ) -> bool:
     """Is this crew run dir the engine's own work, launched by this session? Nothing on disk is unforgeable
     (the model can write any file), so all three must hold: run.json's run_id equals the directory name,
     the engine's supervisor.log exists, and an executed Bash call of this session (tool_result back, not a
-    denial) invoked this plugin's scripts/atlas_crew.py (`run` or `wait`) and printed the engine's own JSON for the run id (the launch object, or the
-    summary `wait` prints; a refusal that merely names the id does not count; `wait` itself refuses a dir the engine never started).
+    denial) launched the run with this plugin's scripts/atlas_crew.py `run` and printed the engine's own JSON for the run id (the launch object, or
+    the summary `run --wait` prints; a refusal that merely names the id does not count, and a `wait` alone earns nothing), and the
+    summary's seal verifies (`_unsealed`).
     Shared by `crew_proof` (green) and `crew_red`."""
     run_id = meta_path.parent.name
     if meta.get("run_id") != run_id or not meta_path.with_name("supervisor.log").is_file():
+        return False
+    if _unsealed(meta_path.parent, summary):
         return False
     if display and not transcript_path:
         return True  # a display-only caller with no transcript to check: engine files only (see crew_proof)
@@ -690,11 +707,13 @@ def crew_proof(
             at = summary_path.stat().st_mtime
         except (OSError, ValueError):
             continue
+        if not isinstance(summary, dict):
+            continue
         if str(meta.get("lead_session") or "").strip() != session:
             continue
         if not (summary.get("ok") is True and summary.get("check_exit") == 0 and summary.get("check")):
             continue
-        if not _engine_run(meta_path, meta, started, transcript_path, display, cwd):
+        if not _engine_run(meta_path, meta, summary, started, transcript_path, display, cwd):
             continue
         if started is not None and at < started:
             continue
@@ -717,7 +736,7 @@ def crew_red(
     root: Path, session: str, started: float | None, run_paths=(), transcript_path: str = "", cwd: str = ""
 ) -> dict | None:
     """A crew run of this session whose engine ran the global check and it stayed RED (summary ok false,
-    check_exit a non-zero int), as a dict; else None. The independent red signal that makes an honest
+    check_exit a non-zero int, not killed), as a dict; else None. The independent red signal that makes an honest
     `blocked` report credible. Same session/window/staleness rules as `crew_proof`. Read-only."""
     if not session:
         return None
@@ -730,9 +749,13 @@ def crew_red(
             at = summary_path.stat().st_mtime
         except (OSError, ValueError):
             continue
+        if not isinstance(summary, dict):
+            continue
         if str(meta.get("lead_session") or "").strip() != session:
             continue
-        if not _engine_run(meta_path, meta, started, transcript_path, False, cwd):
+        if summary.get("killed") is True:
+            continue  # a run stopped by `kill` never reached its check: not an engine-verified red
+        if not _engine_run(meta_path, meta, summary, started, transcript_path, False, cwd):
             continue
         code = summary.get("check_exit")
         if not (summary.get("ok") is False and isinstance(code, int) and not isinstance(code, bool) and code != 0):

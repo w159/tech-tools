@@ -6,6 +6,8 @@ import io
 import json
 import os
 import shlex
+import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -19,6 +21,7 @@ from unittest import mock
 
 import _test_isolation  # noqa: F401
 import atlas_crew
+import atlas_crew_seal
 import atlas_irc
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
@@ -1655,7 +1658,7 @@ class SupervisorOverlapTests(unittest.TestCase):
 
                 def popen(*_a, **_k):  # the supervisor "finishes" the moment it is started
                     if summary is not None:
-                        Path(tmp, ".atlas/.run/crew/crew-w/summary.json").write_text(summary)
+                        atlas_crew._write_summary(Path(tmp, ".atlas/.run/crew/crew-w"), json.loads(summary))
 
                 with mock.patch.object(atlas_crew, "_launch", lambda *x: None), \
                      mock.patch.object(atlas_crew.subprocess, "Popen", side_effect=popen), \
@@ -1780,6 +1783,31 @@ class SupervisorOverlapTests(unittest.TestCase):
                 atlas_crew.green_check_guard(plan, tmp)
             self.assertIn("done-already", str(ctx.exception))
 
+    def test_green_check_guard_shares_interpreters_between_plain_pytest_checks(self):
+        # 16 per-worker pytest start-ups on 4 cpus were 1.3 s before any worker launched; plain pytest unit checks
+        # run as one pytest.main per file inside min(cpus, files) interpreters, with the same verdict per worker
+        with tempfile.TemporaryDirectory() as tmp:
+            workers = []
+            for i in range(8):
+                Path(tmp, f"test_m{i}.py").write_text("def test_f():\n    assert %s\n" % ("True" if i == 5 else "False"))
+                workers.append({"name": f"m{i}", "unit_check": f"{sys.executable} -m pytest -q test_m{i}.py"})
+            real = subprocess.Popen
+            spawned = []
+
+            def spy(*a, **k):
+                spawned.append(a[0])
+                return real(*a, **k)
+
+            with mock.patch.object(atlas_crew.os, "cpu_count", return_value=2), mock.patch.object(atlas_crew.subprocess, "Popen", spy):
+                with self.assertRaises(ValueError) as ctx:
+                    atlas_crew.green_check_guard({"workers": workers}, tmp)
+            self.assertIn("m5", str(ctx.exception))
+            self.assertNotIn("m4", str(ctx.exception))
+            self.assertLessEqual(len(spawned), 2)
+            workers[5]["unit_check"] += " -x"  # a flag is passed through; still one verdict per worker
+            Path(tmp, "test_m5.py").write_text("def test_f():\n    assert False\n")
+            atlas_crew.green_check_guard({"workers": workers}, tmp)
+
     def test_parser_accepts_allow_green_check(self):
         self.assertTrue(atlas_crew.parser().parse_args(["run", "--allow-green-check"]).allow_green_check)
         self.assertFalse(atlas_crew.parser().parse_args(["run"]).allow_green_check)
@@ -1881,9 +1909,14 @@ class ShardedCheckTests(unittest.TestCase):
     def test_rest_shard_exit_5_counts_as_a_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             self._tree(tmp, extra=False)
+            Path(tmp, "pytest.ini").write_text("[pytest]\n")  # a pytest config: the rest shard is not provably empty
             code, out = atlas_crew.sharded_check(self.PY, Path(tmp), ["test_a.py", "test_b.py", "test_c.py"], 2)
             self.assertEqual(code, 0, out)
             self.assertIn("rest (everything else)] exit 0", out)
+            Path(tmp, "pytest.ini").unlink()  # provably empty: no rest shard at all
+            code, out = atlas_crew.sharded_check(self.PY, Path(tmp), ["test_a.py", "test_b.py", "test_c.py"], 2)
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("rest (everything else)", out)
 
     def test_known_test_files_expand_globs_and_skip_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2067,6 +2100,28 @@ class CheckCacheTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("2 test files verified by worker DONE on the same bytes; skipped", out)
 
+    def test_rest_shard_is_not_spawned_when_no_test_file_is_left_outside_the_known_ones(self):
+        # every file verified by worker DONE and nothing else to collect: the rest pytest only said "no tests ran"
+        with tempfile.TemporaryDirectory() as tmp:
+            for n in ("test_a.py", "test_b.py"):
+                Path(tmp, n).write_text("def test_x():\n    pass\n")
+            spawned = []
+            with mock.patch.object(atlas_crew.subprocess, "Popen", lambda *a, **k: spawned.append(a[0])):
+                code, out = atlas_crew.sharded_check(self.PY, Path(tmp), ["test_a.py", "test_b.py"], 2,
+                                                     skip=["test_a.py", "test_b.py"], skip_passed=2)
+            self.assertEqual((code, spawned), (0, []))
+            self.assertIn("crew total: 2 passed", out)
+            # a test file outside the known ones, a pytest config, or a path in the command keeps the rest shard
+            for name, text in (("test_other.py", "def test_o():\n    pass\n"), ("pytest.ini", "[pytest]\n"),
+                               ("conftest.py", "def pytest_collection_modifyitems(items):\n    pass\n")):
+                Path(tmp, name).write_text(text)
+                spawned.clear()
+                with mock.patch.object(atlas_crew.subprocess, "Popen", lambda *a, **k: (spawned.append(a[0]), unittest.mock.MagicMock(
+                        communicate=lambda timeout=None: ("", None), returncode=5))[1]):
+                    atlas_crew.sharded_check(self.PY, Path(tmp), ["test_a.py", "test_b.py"], 2, skip=["test_a.py", "test_b.py"], skip_passed=2)
+                self.assertEqual(len(spawned), 1, name)
+                Path(tmp, name).unlink()
+
 
 class CliUsageTests(unittest.TestCase):
     def _main(self, *argv):
@@ -2128,6 +2183,11 @@ class RunDirHelpers(unittest.TestCase):
         (rundir / "run.json").write_text(json.dumps(meta))
         return rundir, meta
 
+    def _seal(self, rundir, body):
+        """summary.json as the engine writes it: a seal record for this run, then the body signed with its key."""
+        atlas_crew_seal.create(rundir, rundir.name)
+        atlas_crew._write_summary(rundir, body)
+
     def test_launch_in_tmux_names_the_window_after_the_round(self):
         rundir, meta = self._run(tmux=True)
         with mock.patch.object(atlas_crew, "_tmux") as tm:
@@ -2178,7 +2238,8 @@ class RunDirHelpers(unittest.TestCase):
         with mock.patch.object(atlas_crew.time, "sleep") as sl:
             self.assertIs(atlas_crew._wait_round(rundir, ["a", "b"], 0, time.time() + 0.05), False)
         self.assertIs(atlas_crew._wait_round(rundir, ["a", "b"], 0, time.time() - 1), False)
-        self.assertEqual(sl.call_args.args, (0.5,))
+        self.assertEqual(sl.call_args.args, (atlas_crew.POLL_S,))
+        self.assertLessEqual(atlas_crew.POLL_S, 0.1)  # was 0.5 s: 0.44-0.91 s from the last DONE to the summary
 
     def test_wait_round_polls_until_the_last_worker_exits(self):
         rundir, _ = self._run()
@@ -2269,17 +2330,20 @@ class RunDirHelpers(unittest.TestCase):
     def test_cmd_wait_prints_a_finished_summary(self):
         rundir, _ = self._run()
         (rundir / "supervisor.pid").write_text("1")
-        (rundir / "summary.json").write_text('{"ok": true}')
+        self._seal(rundir, {"ok": True})
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
-        self.assertEqual((code, buf.getvalue()), (0, '{"ok": true}\n'))
+        out = json.loads(buf.getvalue())
+        self.assertEqual((code, out.pop("sig") != "", out), (0, True, {"ok": True}))
 
     def test_cmd_wait_exit_code_follows_the_summary(self):
         rundir, _ = self._run()
         (rundir / "supervisor.pid").write_text("1")
         for body, rc in (('{"ok": false, "check_exit": 1}', 1), ('{"ok": tr', 1), ('[1]', 1), ('{"ok": true}', 0)):
             (rundir / "summary.json").write_text(body)
+            if body.startswith("{") and body.endswith("}"):
+                self._seal(rundir, json.loads(body))
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5)), rc, body)
 
@@ -2287,12 +2351,105 @@ class RunDirHelpers(unittest.TestCase):
         rundir, _ = self._run()
         (rundir / "supervisor.pid").write_text("1")
         summary = {"ok": True, "run": "r1", "workers": [{"name": "a", "exit": 0}]}
-        (rundir / "summary.json").write_text(json.dumps(summary, indent=1))
+        self._seal(rundir, summary)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
         self.assertEqual(1, len(buf.getvalue().splitlines()))
-        self.assertEqual(summary, json.loads(buf.getvalue()))
+        self.assertEqual(summary, {k: v for k, v in json.loads(buf.getvalue()).items() if k != "sig"})
+
+    def _wait_cli(self, run="r1", timeout="1"):
+        r = subprocess.run([sys.executable, str(Path(atlas_crew.__file__).resolve()), "wait", "--run", run, "--root", str(self.root),
+                            "--timeout", timeout], capture_output=True, text=True, timeout=30)
+        return r.returncode, r.stdout
+
+    def test_a_run_dir_forged_in_full_is_refused_by_a_real_wait(self):
+        rundir, _ = self._run()
+        (rundir / "supervisor.pid").write_text("1")
+        (rundir / "supervisor.log").write_text("")
+        (rundir / "summary.json").write_text(json.dumps(
+            {"ok": True, "run": "r1", "check": "pytest", "check_exit": 0, "workers": [{"name": "a", "exit": 0}]}))
+        code, out = self._wait_cli()
+        self.assertEqual(code, 1, out)
+        got = json.loads(out)
+        self.assertIs(got["ok"], False)
+        self.assertIn("error", got)
+        self.assertNotIn("check_exit", got)
+        # a self-made seal record with a guessed key does not help either: it is keyed by what the engine wrote
+        (rundir / "summary.json").write_text(json.dumps({"ok": True, "run": "r1", "check_exit": 0, "workers": [], "sig": "0" * 64}))
+        code, out = self._wait_cli()
+        self.assertEqual(code, 1, out)
+        self.assertIn("error", json.loads(out))
+
+    def test_a_signed_summary_edited_afterwards_is_refused(self):
+        rundir, _ = self._run()
+        (rundir / "supervisor.pid").write_text("1")
+        self._seal(rundir, {"ok": False, "run": "r1", "check_exit": 1, "workers": []})
+        code, out = self._wait_cli()
+        self.assertEqual((code, "error" in json.loads(out)), (1, False))  # red, but verified
+        edited = json.loads((rundir / "summary.json").read_text())
+        edited.update(ok=True, check_exit=0)
+        (rundir / "summary.json").write_text(json.dumps(edited))
+        code, out = self._wait_cli()
+        self.assertEqual(code, 1, out)
+        self.assertIn("error", json.loads(out))
+        self.assertIsNotNone(atlas_crew_seal.verify(rundir))
+
+    def test_a_signed_run_copied_to_another_run_id_is_refused(self):
+        rundir, _ = self._run()
+        (rundir / "supervisor.pid").write_text("1")
+        self._seal(rundir, {"ok": True, "run": "r1", "check_exit": 0, "workers": []})
+        other = atlas_crew._run_dir(self.root, "r2")
+        shutil.copytree(rundir, other)
+        meta = json.loads((other / "run.json").read_text())
+        (other / "run.json").write_text(json.dumps(meta | {"run_id": "r2"}))
+        code, out = self._wait_cli("r2")
+        self.assertEqual(code, 1, out)
+        self.assertIn("error", json.loads(out))
+        self.assertEqual(self._wait_cli("r1")[0], 0)
+
+    def test_the_seal_record_is_private_and_outside_the_project(self):
+        rundir, _ = self._run()
+        self.assertTrue(atlas_crew_seal.create(rundir, "r1"))
+        rec = atlas_crew_seal.record_path(rundir)
+        self.assertEqual(rec.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(rec.parent.stat().st_mode & 0o777, 0o700)
+        self.assertFalse(str(rec).startswith(str(self.root)))
+        self.assertTrue(str(rec).startswith(os.environ["ATLAS_HOME"]))
+
+    def test_wait_verifies_and_prints_the_one_object_it_read(self):
+        rundir, _ = self._run()
+        (rundir / "supervisor.pid").write_text("1")
+        self._seal(rundir, {"ok": True, "run": "r1", "workers": []})
+        real = atlas_crew_seal.verify_obj
+
+        def swap_file_then_verify(rd, obj):
+            bad = real(rd, obj)
+            (rd / "summary.json").write_text(json.dumps({"ok": False, "run": "r1", "workers": [], "sig": "x"}))  # edited after the read
+            return bad
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew_seal, "verify_obj", swap_file_then_verify):
+            code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
+        self.assertEqual((code, json.loads(buf.getvalue())["ok"]), (0, True))
+
+    def test_seal_records_are_removed_and_pruned(self):
+        rundir, _ = self._run()
+        runs = self.root / ".atlas/.run/crew"
+        mk = lambda n: (runs / n).mkdir(parents=True, exist_ok=True) or runs / n  # noqa: E731
+        live, gone, old = mk("live"), mk("gone"), mk("old")
+        for d in (live, gone, old):
+            self.assertTrue(atlas_crew_seal.create(d, d.name))
+        shutil.rmtree(gone)
+        ancient = time.time() - 15 * 86400
+        os.utime(atlas_crew_seal.record_path(old), (ancient, ancient))
+        self.assertTrue(atlas_crew_seal.create(rundir, "r1"))  # every create prunes
+        self.assertTrue(atlas_crew_seal.record_path(live).exists())
+        self.assertTrue(atlas_crew_seal.record_path(rundir).exists())
+        self.assertFalse(atlas_crew_seal.record_path(gone).exists(), "a record of a vanished run dir stayed")
+        self.assertFalse(atlas_crew_seal.record_path(old).exists(), "a record older than 14 days stayed")
+        atlas_crew_seal.remove(live)
+        self.assertFalse(atlas_crew_seal.record_path(live).exists())
 
     def test_summary_line_shows_a_malformed_file_as_written(self):
         rundir, _ = self._run()
@@ -2310,18 +2467,18 @@ class RunDirHelpers(unittest.TestCase):
         self.assertEqual(got["hint"], "still running; call wait again")
         self.assertEqual(got["running"], ["a", "b"])
 
-    def test_cmd_wait_polls_every_two_seconds_until_the_summary_appears(self):
+    def test_cmd_wait_polls_every_poll_interval_until_the_summary_appears(self):
         rundir, _ = self._run()
 
         def write(_s):
             (rundir / "supervisor.pid").write_text("1")
-            (rundir / "summary.json").write_text('{"ok": true}')
+            self._seal(rundir, {"ok": True})
 
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew.time, "sleep", side_effect=write) as sl:
             code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=60))
         self.assertEqual(code, 0)
-        self.assertEqual(sl.call_args.args, (2,))
+        self.assertEqual(sl.call_args.args, (atlas_crew.POLL_S,))
 
     def test_cmd_kill_terminates_recorded_pids_and_the_tmux_session(self):
         rundir, _ = self._run(tmux=True)
@@ -2993,6 +3150,49 @@ class SupervisorFailureTests(unittest.TestCase):
             finally:
                 self._reap_claude(proc, child)
 
+    def test_kill_between_the_launch_and_the_pid_file_still_stops_claude(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rundir, _ = self._rundir(tmp)
+            (rundir / "prompts" / "a.md").write_text("p")
+            fake = Path(tmp, "bin", "claude")
+            fake.parent.mkdir()
+            fake.write_text(f"#!/bin/sh\nsleep 300 &\necho $! > {tmp}/child.pid\nwait\n")
+            fake.chmod(0o755)
+            scripts = str(Path(atlas_crew.__file__).resolve().parent)
+            driver = (
+                f"import sys, time, types; sys.path.insert(0, {scripts!r}); import atlas_crew\n"
+                "orig = atlas_crew._hand_terminal\n"
+                "def slow(*a, **k):\n    time.sleep(3)\n    return orig(*a, **k)\n"  # the window before the pid file is written
+                "atlas_crew._hand_terminal = slow\n"
+                f"atlas_crew.cmd_worker(types.SimpleNamespace(rundir={str(rundir)!r}, name='a', round=0, nice=0, delay=0, no_hold=True))\n"
+            )
+            env = {**os.environ, "PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}"}
+            wrapper = subprocess.Popen([sys.executable, "-c", driver], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            child = None
+            try:
+                pf = Path(tmp, "child.pid")
+                for _ in range(100):
+                    if pf.exists() and pf.read_text().strip():
+                        break
+                    time.sleep(0.05)
+                child = int(pf.read_text())
+                time.sleep(1.0)
+                self.assertFalse((rundir / "pid" / "a").exists(), "the test missed the window")
+                wrapper.send_signal(signal.SIGTERM)
+                wrapper.wait(timeout=15)
+                for _ in range(50):
+                    if not atlas_crew._pid_alive(child):
+                        break
+                    time.sleep(0.1)
+                self.assertFalse(atlas_crew._pid_alive(child), "claude's child survived a kill before the pid file existed")
+                self.assertTrue((rundir / "exit" / "a.r0.json").exists(), "no exit record after the stop")
+            finally:
+                wrapper.kill()
+                wrapper.wait()
+                if child:
+                    with contextlib.suppress(OSError):
+                        os.kill(child, signal.SIGKILL)
+
     def test_worker_starts_claude_in_its_own_process_group(self):
         with tempfile.TemporaryDirectory() as tmp:
             rundir, _ = self._rundir(tmp)
@@ -3000,7 +3200,9 @@ class SupervisorFailureTests(unittest.TestCase):
             args = types.SimpleNamespace(rundir=str(rundir), name="a", round=0, nice=0, delay=0, no_hold=True)
             with mock.patch.object(atlas_crew.subprocess, "Popen", side_effect=FileNotFoundError) as po:
                 atlas_crew.cmd_worker(args)
-        self.assertIs(po.call_args.kwargs.get("start_new_session"), True)
+        kw = po.call_args.kwargs
+        self.assertFalse(kw.get("start_new_session"), "a new session leaves claude out of the pane's foreground group")
+        self.assertTrue(kw.get("process_group") == 0 or kw.get("preexec_fn") is os.setpgrp)
 
     # 5. the printed next command runs
     def test_run_prints_a_next_command_that_runs(self):
@@ -3081,6 +3283,254 @@ class SupervisorFailureTests(unittest.TestCase):
             finally:
                 other.kill()
                 other.wait()
+
+
+TMUX = shutil.which("tmux")
+
+
+@unittest.skipUnless(TMUX, "tmux is not installed")
+class SealedRunLiveTests(unittest.TestCase):
+    """A real `atlas_crew.py run` (fake claude on PATH, real supervisor) publishes a summary `wait` verifies."""
+
+    def _engine(self, tmp, *args, env_extra=None):
+        fake = Path(tmp, "bin", "claude")
+        if not fake.exists():
+            fake.parent.mkdir()
+            fake.write_text(f"#!/bin/sh\necho ok > {tmp}/proj/z.py\necho '{{\"type\":\"result\",\"is_error\":false}}'\n")
+            fake.chmod(0o755)
+        env = {**os.environ, "ATLAS_CREW_TMUX": "off", "PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}",
+               **(env_extra or {})}
+        r = subprocess.run([sys.executable, str(Path(atlas_crew.__file__).resolve()), *args], capture_output=True, text=True,
+                           env=env, timeout=120, cwd=tmp)
+        return r.returncode, r.stdout
+
+    def _launch(self, tmp, env_extra=None, wait="60", run_id="crew-live"):
+        Path(tmp, "proj").mkdir(exist_ok=True)
+        plan = {"goal": "g", "check": "test -f z.py", "workers": [{"name": "zed", "owns": ["z.py"], "task": "t"}]}
+        Path(tmp, "plan.json").write_text(json.dumps(plan))
+        return self._engine(tmp, "run", "--plan", str(Path(tmp, "plan.json")), "--root", str(Path(tmp, "proj")), "--no-tmux",
+                            "--session", "s1", "--run-id", run_id, "--wait", wait, env_extra=env_extra)
+
+    def test_a_real_run_prints_a_signed_summary_and_wait_verifies_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self._launch(tmp)
+            self.assertEqual(code, 0, out)
+            summary = json.loads(out)
+            self.assertIs(summary["ok"], True)
+            self.assertTrue(summary["sig"])
+            code, out = self._engine(tmp, "wait", "--run", "crew-live", "--root", str(Path(tmp, "proj")), "--timeout", "5")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(json.loads(out), summary)
+            rundir = atlas_crew._run_dir(Path(tmp, "proj"), "crew-live")
+            self.assertIsNone(atlas_crew_seal.verify(rundir))
+
+    def test_a_real_summary_edited_after_signing_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._launch(tmp)
+            rundir = atlas_crew._run_dir(Path(tmp, "proj"), "crew-live")
+            edited = json.loads((rundir / "summary.json").read_text())
+            edited.update(ok=False, check_exit=1)
+            (rundir / "summary.json").write_text(json.dumps(edited))
+            code, out = self._engine(tmp, "wait", "--run", "crew-live", "--root", str(Path(tmp, "proj")), "--timeout", "5")
+            self.assertEqual(code, 1, out)
+            self.assertIn("error", json.loads(out))
+
+
+    def test_run_wait_refuses_at_once_when_the_seal_record_cannot_be_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t0 = time.time()
+            code, out = self._launch(tmp, env_extra={"ATLAS_HOME": "/dev/null/x"}, wait="25")
+            self.assertLess(time.time() - t0, 20, "run --wait spun its whole budget")
+            self.assertEqual(code, 1, out)
+            got = json.loads(out)
+            self.assertIs(got["ok"], False)
+            self.assertIn("no seal record under /dev/null/x", got["error"])
+
+    def test_a_summary_verifies_under_another_atlas_home_than_the_one_it_was_sealed_in(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            home = str(Path(tmp, "home-at-launch"))
+            code, out = self._launch(tmp, env_extra={"ATLAS_HOME": home})
+            self.assertEqual(code, 0, out)
+            rundir = atlas_crew._run_dir(Path(tmp, "proj"), "crew-live")
+            self.assertEqual(json.loads((rundir / "run.json").read_text())["seal_home"], home)
+            self.assertNotEqual(os.environ["ATLAS_HOME"], home)  # this process, the gate and `wait` run under another home
+            self.assertIsNone(atlas_crew_seal.verify(rundir))
+            code, out = self._engine(tmp, "wait", "--run", "crew-live", "--root", str(Path(tmp, "proj")), "--timeout", "5",
+                                     env_extra={"ATLAS_HOME": str(Path(tmp, "elsewhere"))})
+            self.assertEqual(code, 0, out)
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
+            import gate_rerun
+
+            self.assertIsNotNone(gate_rerun.crew_proof(Path(tmp, "proj"), "s1", None, display=True))
+
+    def test_a_worker_stopped_after_its_verified_done_is_not_a_late_exit(self):
+        # the supervisor stops every worker still running once the check is green (its DONE is verified); the
+        # fast polls make that happen while the slowest claude is in its final turn. That stop is recorded as
+        # such, with the turns and tokens the log shows, and is neither a late exit nor an anomaly
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = Path(tmp, "bin", "claude")
+            fake.parent.mkdir()
+            fake.write_text(
+                f"#!{sys.executable}\n"
+                "import json, os, signal, sys, time\n"
+                f"sys.path.insert(0, {str(Path(atlas_crew.__file__).resolve().parent)!r})\n"
+                "import atlas_irc\n"
+                "signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))\n"
+                "nick = os.environ['ATLAS_IRC_NICK']\n"
+                "open(os.path.join(os.environ['ATLAS_CREW_ROOT'], nick + '.py'), 'w').write('ok')\n"
+                "atlas_irc.post(os.environ['ATLAS_IRC_DIR'], nick, '#crew-late', 'DONE ' + nick, kind='done')\n"
+                "u = {'input_tokens': 2, 'cache_creation_input_tokens': 10, 'cache_read_input_tokens': 20, 'output_tokens': 5}\n"
+                "print(json.dumps({'type': 'assistant', 'message': {'id': 'msg_1', 'usage': u}}), flush=True)\n"
+                "if nick == 'slow':\n"
+                "    time.sleep(60)  # the final turn: still running when the green summary is published\n"
+                "print(json.dumps({'type': 'result', 'is_error': False, 'num_turns': 1}), flush=True)\n"
+            )
+            fake.chmod(0o755)
+            root = Path(tmp, "proj")
+            root.mkdir()
+            plan = {"goal": "g", "check": "test -f fast.py -a -f slow.py",
+                    "workers": [{"name": n, "owns": [f"{n}.py"], "task": "t"} for n in ("fast", "slow")]}
+            Path(tmp, "plan.json").write_text(json.dumps(plan))
+            code, out = self._engine(tmp, "run", "--plan", str(Path(tmp, "plan.json")), "--root", str(root), "--no-tmux",
+                                     "--session", "s1", "--run-id", "crew-late", "--wait", "60")
+            self.assertEqual(code, 0, out)
+            rundir = atlas_crew._run_dir(root, "crew-late")
+            pid = atlas_crew._pid_from(rundir / "supervisor.pid")
+            t0 = time.time()
+            while pid and atlas_crew._pid_alive(pid) and time.time() - t0 < 30:
+                time.sleep(0.1)
+            summary = json.loads((rundir / "summary.json").read_text())
+            slow = next(w for w in summary["workers"] if w["name"] == "slow")
+        self.assertIs(summary["ok"], True)
+        self.assertEqual(summary["late_exits"], {})
+        self.assertEqual(summary["failed_workers"], [])
+        self.assertEqual(summary["pending_exits"], [])
+        self.assertIs(slow["stopped_after_done"], True)
+        self.assertEqual(slow["turns"], 1)
+        self.assertEqual(slow["tokens"], 37)
+
+    def test_a_run_id_is_used_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp, "proj")
+            stale = atlas_crew._run_dir(root, "crew-again")
+            (stale / "exit").mkdir(parents=True)
+            (stale / "killed").write_text("1")
+            plan = Path(tmp, "plan.json")
+            plan.write_text(json.dumps({"goal": "g", "check": "true", "workers": [{"name": "zed", "owns": ["z.py"], "task": "t"}]}))
+            code, out = self._engine(tmp, "run", "--plan", str(plan), "--root", str(root), "--no-tmux", "--session", "s1",
+                                     "--run-id", "crew-again")
+            self.assertEqual(code, 2, out)
+            self.assertIn("crew-again", json.loads(out)["error"])
+            self.assertEqual(sorted(p.name for p in stale.iterdir()), ["exit", "killed"], "the refused run touched the old dir")
+
+
+class LiveTmuxWorkerTests(unittest.TestCase):
+    """A worker started through the real launch path in a real tmux pane: the pane's Ctrl-C reaches claude,
+    and `kill` still leaves no process of the worker behind."""
+
+    FAKE = (
+        "#!{py}\n"
+        "import os, signal, subprocess, sys, time\n"
+        "d = os.environ['FAKE_DIR']\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)', d])\n"
+        "def on_int(*_):\n"
+        "    open(os.path.join(d, 'sigint'), 'w').write('int')\n"
+        "    child.kill()\n"
+        "    sys.exit(0)\n"
+        "signal.signal(signal.SIGINT, on_int)\n"
+        "open(os.path.join(d, 'ready'), 'w').write(str(child.pid))\n"
+        "time.sleep(120)\n"
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.tmp = Path(self._tmp.name)
+        self.fake = self.tmp / "fake"
+        self.fake.mkdir()
+        claude = self.fake / "bin" / "claude"
+        claude.parent.mkdir()
+        claude.write_text(self.FAKE.format(py=sys.executable))
+        claude.chmod(0o755)
+        self.run_id = f"crew-sigint-{os.getpid()}-{int(time.time() * 1000) % 100000}"
+        self.session = f"atlas-{self.run_id}"
+        env = {"PATH": f"{claude.parent}{os.pathsep}{os.environ['PATH']}", "FAKE_DIR": str(self.fake)}
+        patcher = mock.patch.dict(os.environ, env)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(lambda: atlas_crew._tmux("kill-session", "-t", self.session))
+        self.addCleanup(self._sweep)
+        self.rundir = atlas_crew._run_dir(self.tmp, self.run_id)
+        for sub in ("exit", "prompts", "irc"):
+            (self.rundir / sub).mkdir(parents=True, exist_ok=True)
+        atlas_irc.init_bus(self.rundir / "irc", f"#{self.run_id}", ["a"], lead="lead")
+        plan = {"workers": [{"name": "a", "owns": ["a.py"], "task": "t"}]}
+        self.meta = {"run_id": self.run_id, "root": str(self.tmp), "plan": plan, "tmux": True, "settings": "{}",
+                     "session": self.session, "started": time.time(), "fix_rounds": 0, "timeout": 60}
+        (self.rundir / "run.json").write_text(json.dumps(self.meta))
+        (self.rundir / "prompts" / "a.md").write_text("p")
+        (self.tmp / "a.py").write_text("a")
+        res = atlas_crew._tmux("new-session", "-d", "-s", self.session, "-x", "200", "-y", "50", "sleep 600")
+        self.assertEqual(0, res.returncode, res.stderr)
+
+    def _sweep(self):
+        """A failing test must not leave its fake claude behind."""
+        for pid in self._procs_of_worker():
+            with contextlib.suppress(OSError):
+                os.kill(pid, signal.SIGKILL)
+
+    def _launch_worker(self):
+        cmd = atlas_crew._self_cmd("worker", "--rundir", str(self.rundir), "--name", "a", "--nice", "0", "--delay", "0")
+        self.assertIsNone(atlas_crew._launch(self.meta, self.rundir, "a", 0, cmd))
+        ready = self.fake / "ready"
+        for _ in range(200):
+            if ready.exists() and ready.read_text() and (self.rundir / "pid" / "a").exists():
+                return int(ready.read_text())
+            time.sleep(0.1)
+        self.fail("the fake claude never started in the pane")
+
+    def _procs_of_worker(self):
+        """pids whose command line names this run (the wrapper) or the fake claude's child."""
+        out = []
+        for d in Path("/proc").iterdir():
+            if not d.name.isdigit() or int(d.name) == os.getpid():
+                continue
+            try:
+                cmd = (d / "cmdline").read_bytes().decode("utf-8", "replace")
+                state = (d / "stat").read_text().rsplit(")", 1)[1].split()[0]
+            except OSError:
+                continue
+            if state != "Z" and (str(self.rundir) in cmd or str(self.fake) in cmd):
+                out.append(int(d.name))
+        return out
+
+    def test_ctrl_c_typed_in_the_pane_reaches_claude(self):
+        self._launch_worker()
+        res = atlas_crew._tmux("send-keys", "-t", f"{self.session}:a", "C-c")
+        self.assertEqual(0, res.returncode, res.stderr)
+        marker = self.fake / "sigint"
+        for _ in range(60):
+            if marker.exists():
+                break
+            time.sleep(0.1)
+        self.assertTrue(marker.exists(), "Ctrl-C in the pane never reached claude")
+        for _ in range(60):  # the wrapper survives the interrupt and records how claude ended
+            if (self.rundir / "exit" / "a.r0.json").exists():
+                break
+            time.sleep(0.1)
+        self.assertTrue((self.rundir / "exit" / "a.r0.json").exists(), "the wrapper died with claude's interrupt")
+
+    def test_kill_leaves_no_process_of_the_worker(self):
+        self._launch_worker()
+        self.assertTrue(self._procs_of_worker())
+        with contextlib.redirect_stdout(io.StringIO()):
+            atlas_crew.cmd_kill(types.SimpleNamespace(root=str(self.tmp), run=self.run_id))
+        for _ in range(50):
+            if not self._procs_of_worker():
+                break
+            time.sleep(0.1)
+        self.assertEqual([], self._procs_of_worker(), "kill left a process of the worker running")
+        self.assertNotEqual(0, atlas_crew._tmux("has-session", "-t", self.session).returncode)
 
 
 if __name__ == "__main__":

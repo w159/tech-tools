@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 17.18.0 - 2026-11-14
+
+- atlas 17.18.0: Ctrl-C in a tmux pane reaches the worker claude again; crew summaries are HMAC-sealed and the Stop gate credits a crew only for this plugin's own `atlas_crew.py run` plus a verified seal; the lead no longer re-verifies after a green crew; the crew engine polls every 0.05 s. On the benchmark the crew is 48% (8 modules) and 29% (16 modules) of one prompt's cold wall time and 43% and 49% of its tokens; 1/4 of the wall time is not met. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-14_atlas-17.18.0-crew-time.md](audits/2026-11-14_atlas-17.18.0-crew-time.md).
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
+## marketplace 5.23.0 - 2026-11-14
+
+- marketplace 5.23.0: atlas 17.18.0. armada and programmer are unchanged.
+
 ## atlas 17.17.1 - 2026-11-14
 
 - atlas 17.17.1: a new session resets the worktree status throttle in the mod. The `tests` workflow had failed on every push since 17.15.0 on `atlas_wt.py status runs at most every 5 s of the clock`, because the throttle survived into the next session. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-14_atlas-17.17.0-silent-failures.md](audits/2026-11-14_atlas-17.17.0-silent-failures.md).

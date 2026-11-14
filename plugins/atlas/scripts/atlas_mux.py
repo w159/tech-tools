@@ -1865,15 +1865,28 @@ def _exited(root: str, name: str, since: float | None = None) -> bool:
     return bool(mine) and bool(EXIT_NOTE_RE.search(str(mine[-1].get("text") or "")))
 
 
-def _kill_notes(root: str, names) -> None:
+def _run_since(root: str, run: str) -> float | None:
+    """Spawn time of the latest launch of `run` (its team record's `created`); None when it left no record."""
+    for rec_path in (_team_dir(root) / f"{run}.json", _team_dir(root) / "archive" / f"{run}.json"):
+        try:
+            created = json.loads(rec_path.read_text(encoding="utf-8")).get("created")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(created, (int, float)):
+            return float(created)
+    return None
+
+
+def _kill_notes(root: str, names, since: float | None = None) -> None:
     """Fallback exit for killed workers that never posted their own (SIGHUP/SIGTERM makes
     run-worker post it, so give those up to 2s first). Same C2 shape: report note to the
-    worker's lead and channel, then mark_finished + leave."""
+    worker's lead and channel, then mark_finished + leave. `since` (the spawn time) keeps an
+    exit note of a previous run under the same name from counting as this run's exit."""
     deadline = time.time() + 2
-    pending = [n for n in names if not _exited(root, n)]
+    pending = [n for n in names if not _exited(root, n, since)]
     while pending and time.time() < deadline:
         time.sleep(0.1)
-        pending = [n for n in pending if not _exited(root, n)]
+        pending = [n for n in pending if not _exited(root, n, since)]
     for name in pending:
         mine = atlas_todo.channels_of(root, name)
         chan = mine[-1] if mine else ""
@@ -1912,6 +1925,7 @@ def cmd_kill(args) -> int:
     )
     use = _run_transport(root, args.run)
     configured = use
+    since = _run_since(root, args.run)
     stopped: list = []
     if use == "claude-bg":
         stopped = _stop_claude_bg(str(root))
@@ -1925,7 +1939,7 @@ def cmd_kill(args) -> int:
                           "error": f"unknown run {args.run!r}"}, 1)
         if not res["ok"]:
             if stopped:
-                _kill_notes(root, stopped)
+                _kill_notes(root, stopped, since)
             return _emit(
                 {
                     "ok": False,
@@ -1937,7 +1951,7 @@ def cmd_kill(args) -> int:
                 1,
             )
         # a killed worker never writes its own exit: without one it reads as working forever
-        _kill_notes(root, [*res["closed"], *stopped])
+        _kill_notes(root, [*res["closed"], *stopped], since)
         return _emit(
             {
                 "ok": True,
@@ -1948,7 +1962,7 @@ def cmd_kill(args) -> int:
         )
     if _tmux("has-session", "-t", session).returncode != 0:
         if stopped:
-            _kill_notes(root, stopped)
+            _kill_notes(root, stopped, since)
         elif configured != "claude-bg" and _run_trace(root, args.run) is None:
             return _emit({"ok": False, "session_name": session, "transport": configured, "killed": False,
                           "error": f"unknown run {args.run!r}"}, 1)
@@ -1964,7 +1978,7 @@ def cmd_kill(args) -> int:
     res = _tmux("kill-session", "-t", f"={session}")
     if res.returncode == 0:
         # a killed worker never writes its own exit: without one it reads as working forever
-        _kill_notes(root, [*victims, *stopped])
+        _kill_notes(root, [*victims, *stopped], since)
     return _emit(
         {
             "ok": res.returncode == 0,
@@ -2778,7 +2792,7 @@ def cmd_reap(args) -> int:
     elif _tmux("has-session", "-t", session).returncode == 0:
         killed = _tmux("kill-session", "-t", f"={session}").returncode == 0
     _kill_notes(
-        root, names
+        root, names, rec.get("created")
     )  # exit note + mark_finished + leave for any worker that never posted its own
     for n in (
         names

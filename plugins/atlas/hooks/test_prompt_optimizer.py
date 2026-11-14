@@ -793,6 +793,10 @@ class RouteScopeTest(unittest.TestCase):
         self.assertIn("Don't write those files or read them", nudge)
         self.assertIn("--wait 110 --changelog '<one line: what changed>'`", nudge)
         self.assertIn("don't re-run tests", nudge)
+        # the final reply after a green crew run is capped: 3 lines, pass count + files, no recap
+        self.assertIn("at most 3 lines", nudge)
+        self.assertIn("pass count", nudge)
+        self.assertIn("files changed", nudge)
         self.assertLess(len(nudge.encode()), po._CREW_NUDGE_MAX_BYTES)
         self.assertLess(len(nudge.encode()), 700)
 

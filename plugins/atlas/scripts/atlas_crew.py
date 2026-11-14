@@ -51,6 +51,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 PLUGIN_ROOT = SCRIPTS.parent
 sys.path.insert(0, str(SCRIPTS))
+import atlas_crew_seal  # noqa: E402
 import atlas_irc  # noqa: E402
 
 CREW_REL = Path(".atlas") / ".run" / "crew"
@@ -575,6 +576,30 @@ def _codex_thread_id(log_path) -> str | None:
     return None
 
 
+# claude leads its own process group in the wrapper's session (not a new session: a session has no pane
+# terminal, and `setsid` made tmux's C-c, a SIGINT to the pane's foreground group, miss claude)
+_OWN_GROUP = {"process_group": 0} if sys.version_info >= (3, 11) else {"preexec_fn": os.setpgrp}
+
+
+def _hand_terminal(pgid: int, fd: int | None = None) -> int | None:
+    """Make process group `pgid` the foreground group of the pane terminal on stdout, as a shell does for a job.
+    Returns the terminal's fd (None when stdout is no terminal or the group is gone). SIGTTOU is blocked for the
+    call: it is how a background group is told off for this, and the wrapper is one once claude runs."""
+    try:
+        if fd is None:
+            fd = sys.stdout.fileno()
+            if not os.isatty(fd):
+                return None
+        old = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGTTOU})
+        try:
+            os.tcsetpgrp(fd, pgid)
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, old)
+        return fd
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
 def cmd_worker(a) -> int:
     """Pane command: run one worker (or one fix round), render it, log it, record the exit."""
     rundir = Path(a.rundir)
@@ -646,10 +671,30 @@ def cmd_worker(a) -> int:
             pass
     t0 = time.time()
     code = 1
+    # `kill` (SIGTERM) and a closing pane (SIGHUP) must stop claude even when they land between Popen and the
+    # pid-file write below: the handler stops claude's group, and the loop then ends and the exit record is written
+    stop = {"proc": None, "asked": False}
+
+    def _stop_child(_sig=None, _frm=None):
+        stop["asked"] = True
+        if stop["proc"] is not None:
+            try:
+                os.killpg(stop["proc"].pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+    old_handlers = {}
+    for sg in (signal.SIGTERM, signal.SIGHUP):
+        try:
+            old_handlers[sg] = signal.signal(sg, _stop_child)
+        except (ValueError, OSError):  # not the main thread
+            pass
     with log_path.open("w", encoding="utf-8") as log:
         log.write("$ " + shlex.join(argv[:-1]) + " <prompt>\n")
         log.flush()
         try:
+            if stop["asked"]:
+                raise ChildProcessError  # stopped before claude started: start none
             proc = subprocess.Popen(
                 argv,
                 cwd=root,
@@ -658,8 +703,12 @@ def cmd_worker(a) -> int:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                start_new_session=True,  # its own process group: the supervisor and `kill` stop claude with its children
+                **_OWN_GROUP,  # its own process group: the supervisor and `kill` stop claude with its children
             )
+            stop["proc"] = proc
+            if stop["asked"]:
+                _stop_child()
+            tty = _hand_terminal(proc.pid)  # the pane's Ctrl-C goes to claude's group, not to this wrapper
             (rundir / "pid").mkdir(exist_ok=True)
             (rundir / "pid" / a.name).write_text(str(proc.pid))
             reaper = None
@@ -681,6 +730,7 @@ def cmd_worker(a) -> int:
                 elif not sys.stdout.isatty():
                     pass
             code = proc.wait()
+            _hand_terminal(os.getpgrp(), tty)
             if reaper is not None:
                 reaper.cancel()
                 if code != 0 and _result_ok(log_path):
@@ -688,6 +738,15 @@ def cmd_worker(a) -> int:
         except FileNotFoundError:
             log.write(f"{argv[0]} not found on PATH\n")
             code = 127
+        except ChildProcessError:
+            log.write("stopped before claude started\n")
+            code = 143
+        finally:
+            for sg, old in old_handlers.items():
+                try:
+                    signal.signal(sg, old)
+                except (ValueError, OSError):
+                    pass
     if harness == "codex":
         sid = _codex_thread_id(log_path) or sid
         if sid:
@@ -1083,26 +1142,90 @@ def lead_session(flag=None) -> str:
         return ""
 
 
+# Poll interval of every wait on a file another process writes (summary, exits, DONE): the measured gap between
+# the last DONE and the published summary was 0.44-0.91 s, mostly a 0.5 s sleep; a stat per poll costs nothing.
+POLL_S = 0.05
 GREEN_CHECK_TIMEOUT = 300
+
+
+_GUARD_DRIVER = (
+    "import json, sys, pytest\n"
+    "n = int(sys.argv[1]); flags = sys.argv[2:2 + n]\n"
+    "res = {f: int(pytest.main([*flags, f])) for f in sys.argv[2 + n:]}\n"
+    "sys.stdout.write('\\nATLAS_GUARD ' + json.dumps(res) + '\\n')\n"
+)
+
+
+def _pytest_unit(unit: str, root):
+    """(interpreter, flags, test files) when `unit` is `<python> -m pytest` with only the flags
+    _plain_pytest_files allows and at least one existing test file, else None."""
+    files = _plain_pytest_files(unit, root)
+    if not files:
+        return None
+    toks = shlex.split(unit)
+    if not _PY_BIN.match(os.path.basename(toks[0])):
+        return None
+    return toks[0], [t for t in toks[3:] if t not in files], files
+
+
+def _guard_codes(units: list, root, timeout) -> dict:
+    """{index: exit code} of each (index, unit check) pair. Plain-pytest checks run as one `pytest.main` per test
+    file inside a few shared interpreters (min(cpus, files) of them, grouped by interpreter and flags) instead of
+    one process per worker: 16 pytest start-ups on 4 cpus were 1.3 s, and the exit code of each file is the one
+    its own command line gives. Anything else runs as its own shell command."""
+    codes: dict = {}
+    text = dict(units)
+    groups: dict = {}
+    singles = []
+    for i, unit in units:
+        parts = _pytest_unit(unit, root)
+        if parts and len(parts[2]) == 1:
+            groups.setdefault((parts[0], tuple(parts[1])), []).append((i, parts[2][0]))
+        else:
+            singles.append((i, unit))
+    jobs = []  # (target(), indices)
+    for (py, flags), members in groups.items():
+        if len(members) < 2:
+            singles.extend((i, text[i]) for i, _ in members)
+            continue
+        by_file = {}
+        for i, f in members:
+            by_file.setdefault(f, []).append(i)
+        for chunk in _shard_files(list(by_file), root, min(os.cpu_count() or 1, len(by_file))):
+            argv = [py, "-c", _GUARD_DRIVER, str(len(flags)), *flags, *chunk]
+            jobs.append((argv, [(f, by_file[f]) for f in chunk]))
+
+    def run_group(argv, files):
+        try:
+            r = subprocess.run(argv, cwd=root, capture_output=True, text=True, timeout=timeout)
+            line = next((l for l in reversed(r.stdout.splitlines()) if l.startswith("ATLAS_GUARD ")), None)
+            res = json.loads(line[len("ATLAS_GUARD "):]) if line else {}
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            res = {}
+        for f, idxs in files:
+            for i in idxs:  # no verdict (driver died): run the worker's own command, as before
+                codes[i] = res[f] if f in res else _run_check(text[i], root, timeout=timeout)[0]
+
+    def one(i, unit):
+        codes[i] = _run_check(unit, root, timeout=timeout)[0]
+
+    threads = [threading.Thread(target=run_group, args=j, daemon=True) for j in jobs]
+    threads += [threading.Thread(target=one, args=u, daemon=True) for u in singles]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return codes
 
 
 def green_check_guard(plan: dict, root, timeout=GREEN_CHECK_TIMEOUT) -> None:
     """Raise ValueError when a worker unit check already exits 0 before any work. crew_worker ends a worker as
     soon as its check passes, so a check that is green at launch would end it mid-work and report DONE falsely.
-    The checks run at once (one thread each): run one after another, 8 pytest start-ups held every worker back
-    about 4 s, and one hung check held the rest up to `timeout` each."""
+    The checks run at once, not one after another (8 pytest start-ups held every worker back about 4 s, and one
+    hung check held the rest up to `timeout` each), and plain-pytest checks share interpreters (_guard_codes)."""
     units = [(w, (w.get("unit_check") or "").strip()) for w in plan["workers"]]
     units = [(w, u) for w, u in units if u]
-    codes: dict = {}
-
-    def one(i, unit):
-        codes[i] = _run_check(unit, root, timeout=timeout)[0]
-
-    threads = [threading.Thread(target=one, args=(i, u), daemon=True) for i, (_, u) in enumerate(units)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+    codes = _guard_codes([(i, u) for i, (_, u) in enumerate(units)], root, timeout)
     for i, (w, unit) in enumerate(units):
         if codes.get(i) == 0:
             raise ValueError(
@@ -1129,6 +1252,12 @@ def cmd_run(a) -> int:
         return 2
     run_id = a.run_id or "crew-" + time.strftime("%H%M%S") + uuid.uuid4().hex[:4]
     rundir = _run_dir(root, run_id)
+    try:  # a run id is used once: a reused dir would carry over killed, exit/, pid/ and summary.json
+        rundir.parent.mkdir(parents=True, exist_ok=True)
+        rundir.mkdir()
+    except FileExistsError:
+        print(json.dumps({"ok": False, "error": f"run id {run_id!r} already exists at {rundir}: pick another --run-id"}))
+        return 2
     (rundir / "prompts").mkdir(parents=True, exist_ok=True)
     (rundir / "bin").mkdir(exist_ok=True)
     Path(root, ".atlas", "tmp").mkdir(parents=True, exist_ok=True)  # worker scratch space (rule 6)
@@ -1155,6 +1284,7 @@ def cmd_run(a) -> int:
         "fix_rounds": a.fix_rounds,
         "timeout": a.timeout,
         "changelog": (getattr(a, "changelog", None) or "").strip() or None,
+        "seal_home": str(atlas_crew_seal.home()),  # where the seal record lives, whatever ATLAS_HOME a later reader has
     }
     for w in plan["workers"]:
         (rundir / "prompts" / f"{w['name']}.md").write_text(
@@ -1165,6 +1295,7 @@ def cmd_run(a) -> int:
     else:
         meta["launch"] = launch_order(plan, root)
     (rundir / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    sealed = atlas_crew_seal.create(rundir, run_id)  # the supervisor signs summary.json with this record's key
     save_stubs(rundir, plan, root)
     roster = "; ".join(f"{w['name']}: {', '.join(w['owns'])}" for w in plan["workers"])
     atlas_irc.post(
@@ -1237,9 +1368,13 @@ def cmd_run(a) -> int:
         end = time.time() + a.wait
         while time.time() < end:
             if (rundir / "summary.json").exists():
-                print(_summary_line(rundir / "summary.json"))
-                return _summary_rc(rundir / "summary.json")
-            time.sleep(0.5)
+                obj, bad = _load_summary(rundir)
+                if bad:  # no point waiting out the budget: a signed summary is published whole
+                    print(json.dumps({"ok": False, "error": f"run {run_id!r} summary refused: {bad}"}))
+                    return 1
+                print(json.dumps(obj))
+                return 0 if obj.get("ok") is True else 1
+            time.sleep(POLL_S)
     print(
         json.dumps(
             {
@@ -1252,6 +1387,7 @@ def cmd_run(a) -> int:
                 "irc": f"irc gateway: 127.0.0.1:$(cat {rundir / 'irc' / 'port'}) channel #{run_id}",
                 "next": _self_cmd("wait", "--run", run_id, "--root", root),
                 **({"launch_errors": launch_errors} if launch_errors else {}),
+                **({} if sealed else {"warning_seal": f"could not write the run's seal under {atlas_crew_seal.record_path(rundir).parent}: the completion gate will not credit this crew"}),
                 **({"warning": "no lead session id: pass --session <id> or the completion gate will not credit this crew"} if not meta["lead_session"] else {}),
             }
         )
@@ -1339,7 +1475,7 @@ def _wait_round(rundir, names, rnd, deadline) -> bool:
     while time.time() < deadline:
         if all([_settle(rundir, n, rnd) for n in names]):
             return True
-        time.sleep(0.5)
+        time.sleep(POLL_S)
     return False
 
 
@@ -1348,7 +1484,7 @@ def _wait_ready(rundir, names, rnd, deadline) -> bool:
     while time.time() < deadline:
         if all([_settle(rundir, n, rnd) or atlas_irc.has_done(rundir / "irc", n) for n in names]):
             return True
-        time.sleep(0.5)
+        time.sleep(POLL_S)
     return False
 
 
@@ -1457,6 +1593,47 @@ def shard_count(cmd, root, test_files, ncpu) -> int:
     return len(_shard_jobs(cmd, root, test_files, ncpu)) or 1
 
 
+_NO_RECURSE = ("*.egg", ".*", "_darcs", "build", "CVS", "dist", "node_modules", "venv", "{arch}")
+_PYTEST_CONFIG = ("pytest.ini", ".pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml")
+_REST_WALK_MAX = 20000
+
+
+def _rest_is_empty(cmd, root, known) -> bool:
+    """True only when pytest, run as `cmd` from root, provably collects nothing outside the `known` test files:
+    `cmd` names no path and no flag but the plain ones, no pytest config (pytest.ini, tox.ini, setup.cfg,
+    pyproject.toml with a pytest table) or PYTEST_ADDOPTS can change what is collected, no conftest.py talks about
+    collection, and no file matching pytest's default test_*.py / *_test.py sits outside `known` under a directory
+    pytest recurses into. False when anything is unclear (the rest shard then runs, as before)."""
+    import fnmatch
+
+    if os.environ.get("PYTEST_ADDOPTS") or _plain_pytest_files(cmd, root) != []:
+        return False
+    known, seen = set(known or ()), 0
+    try:
+        for dirpath, dirs, files in os.walk(root):
+            dirs[:] = [d for d in dirs if not any(fnmatch.fnmatch(d, pat) for pat in _NO_RECURSE)]
+            for f in files:
+                seen += 1
+                path = Path(dirpath, f)
+                rel = path.relative_to(root).as_posix()
+                if seen > _REST_WALK_MAX:
+                    return False
+                if f in _PYTEST_CONFIG:
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                    if f == "pyproject.toml" and "pytest" not in text:
+                        continue
+                    if f in ("tox.ini", "setup.cfg") and "pytest" not in text:
+                        continue
+                    return False
+                if f == "conftest.py" and "collect" in path.read_text(encoding="utf-8", errors="replace"):
+                    return False
+                if f.endswith(".py") and (f.startswith("test_") or f.endswith("_test.py")) and rel not in known:
+                    return False
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=(), skip_passed=None):
     """Run a plain pytest `cmd` as parallel shards: min(ncpu, files) shards of the workers' known test files
     plus one "rest" shard (`--ignore` for every known file) so tests outside their lists still run. The
@@ -1469,6 +1646,8 @@ def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=(), skip_passed
     jobs = _shard_jobs(cmd, root, test_files, ncpu, skip)
     if not jobs:
         return _run_check(cmd, root, timeout)
+    if jobs[-1][2] and _rest_is_empty(cmd, root, [*(test_files or []), *skip]):
+        jobs = jobs[:-1]  # nothing outside the known files: the rest shard would only report "no tests ran"
     procs = [
         (subprocess.Popen(c, shell=True, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True), label, rest)
         for c, label, rest in jobs
@@ -1713,7 +1892,7 @@ def _killed(rundir: Path) -> bool:
 
 def _write_summary(rundir: Path, summary: dict) -> None:
     tmp = rundir / f"summary.json.{os.getpid()}.tmp"
-    tmp.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    tmp.write_text(json.dumps(atlas_crew_seal.sign(rundir, summary), indent=1), encoding="utf-8")
     os.replace(tmp, rundir / "summary.json")
 
 
@@ -1764,6 +1943,16 @@ def _stop_pidfile(path: Path, needle: str, wait_s: float = 3.0) -> int | None:
     if _pid_alive(pid):
         send(signal.SIGKILL)
     return pid
+
+
+def _mark_stopped(rundir: Path, name: str) -> None:
+    """Record that the supervisor stops `name` after a green check on its verified DONE (the fast polls make
+    that land while the slowest claude is still in its final turn)."""
+    try:
+        (rundir / "stopped").mkdir(exist_ok=True)
+        (rundir / "stopped" / name).write_text(str(time.time()))
+    except OSError:
+        pass
 
 
 def _stale_dones(plan: dict, root, rundir: Path, check, tfiles, ncpu, cached) -> dict:
@@ -1843,7 +2032,8 @@ def cmd_supervise(a) -> int:
         # DONE), so nothing edits an owned file after the verdict; a change while they stopped re-checks
         for n in names:
             if not _exited(rundir, n, 0):
-                _stop_pidfile(rundir / "pid" / n, rundir.name)
+                if _stop_pidfile(rundir / "pid" / n, rundir.name):
+                    _mark_stopped(rundir, n)  # its signal exit is this stop, not a crash
         if check and _owned_hashes(root, plan) != before:
             code, out, cached = _global_check(plan, root, rundir, check, tfiles, ncpu)
             before = _owned_hashes(root, plan)
@@ -1962,9 +2152,13 @@ def usage_of(log: Path) -> dict:
         fh = log.open(encoding="utf-8", errors="replace")
     except OSError:
         return {**t, "total": 0}
+    seen: dict = {}  # message id -> largest usage per field, for a process stopped before its result
     with fh:
         for line in fh:
             kind = _event_type(line)
+            if kind in ("assistant", "stream_event"):
+                _note_message_usage(line, seen)
+                continue
             if kind == "turn.completed":
                 # codex exec --json: usage is per turn; input_tokens includes the cached part
                 usage = json.loads(line).get("usage") or {}
@@ -1987,9 +2181,46 @@ def usage_of(log: Path) -> dict:
                 t["cache_write"] += u.get("cacheCreationInputTokens", 0)
                 t["cache_read"] += u.get("cacheReadInputTokens", 0)
                 t["output"] += u.get("outputTokens", 0)
+    if not t["results"] and seen:
+        # no result event: the process was stopped mid-turn (a worker stopped after its verified DONE). The
+        # assistant messages it did stream are its real turns and tokens.
+        t["turns"] = len(seen)
+        for u in seen.values():
+            t["input"] += u["input_tokens"]
+            t["cache_write"] += u["cache_creation_input_tokens"]
+            t["cache_read"] += u["cache_read_input_tokens"]
+            t["output"] += u["output_tokens"]
     t["total"] = t["input"] + t["cache_write"] + t["cache_read"] + t["output"]
     t["cost_usd"] = round(t["cost_usd"], 4)
     return t
+
+
+_USAGE_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
+
+
+def _note_message_usage(line: str, seen: dict) -> None:
+    """Fold the usage of one streamed assistant message (a message event, or a stream_event delta) into `seen`."""
+    try:
+        e = json.loads(line)
+    except ValueError:
+        return
+    if not isinstance(e, dict):
+        return
+    msg = e.get("message") if e.get("type") == "assistant" else None
+    if isinstance(msg, dict):
+        mid, usage = msg.get("id"), msg.get("usage")
+    else:
+        ev = e.get("event")
+        mid = e.get("api_message_id")
+        usage = ev.get("usage") if isinstance(ev, dict) and ev.get("type") == "message_delta" else None
+    if not mid or not isinstance(usage, dict):
+        return
+    cur = seen.setdefault(mid, dict.fromkeys(_USAGE_KEYS, 0))
+    for k in _USAGE_KEYS:
+        try:
+            cur[k] = max(cur[k], int(usage.get(k) or 0))
+        except (TypeError, ValueError):
+            pass
 
 
 def irc_stats(d: Path, names) -> dict:
@@ -2026,10 +2257,12 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
     """Run verdict. ok needs a green check and no failed worker: one whose final exit is nonzero, or that left no
     exit and holds no verified DONE. A worker whose DONE still stands under a green check is verified work; its
     nonzero exit (the reaper, a crash after the result) is reported in late_exits and a missing one in
-    pending_exits (the supervisor publishes at once after a green check and collects exits after), neither red."""
+    pending_exits (the supervisor publishes at once after a green check and collects exits after), neither red.
+    The stop the supervisor itself makes after the green check (rundir/stopped/<name>) is no late exit: the
+    worker row carries stopped_after_done."""
     names = [w["name"] for w in meta["plan"]["workers"]]
     workers, tot = [], {"total": 0, "cost_usd": 0.0}
-    failed, late, pending = [], {}, []
+    failed, late, pending, stopped = [], {}, [], []
     for n in names:
         u = {"total": 0, "cost_usd": 0.0, "turns": 0}
         for log in sorted((rundir / "logs").glob(f"{n}*.log")):
@@ -2051,7 +2284,9 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
             else:
                 failed.append({"name": n, "exit": None, "why": "no exit recorded and no verified DONE"})
         elif ex.get("exit") != 0:
-            if done and code == 0:
+            if done and code == 0 and (rundir / "stopped" / n).exists():
+                stopped.append(n)  # the supervisor stopped it after the green check: not a crash, not late
+            elif done and code == 0:
                 late[n] = ex.get("exit")
             else:
                 why = ex.get("launch_error") or ex.get("why") or f"exited {ex.get('exit')}"
@@ -2064,6 +2299,7 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
                 "turns": u.get("turns"),
                 "tokens": u.get("total"),
                 "cost_usd": round(u.get("cost_usd", 0), 4),
+                **({"stopped_after_done": True} if n in stopped else {}),
                 "gate_refusals": gate.get("blocks"),
                 "own_check_passed": gate.get("passed"),
             }
@@ -2148,6 +2384,16 @@ def _known_run(a) -> Path | None:
     return None
 
 
+def _load_summary(rundir: Path) -> tuple[dict | None, str | None]:
+    """(summary object, None) when rundir/summary.json parses once and its seal verifies, else (None, why not)."""
+    try:
+        obj = json.loads((rundir / "summary.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, "summary.json unreadable"
+    bad = atlas_crew_seal.verify_obj(rundir, obj)
+    return (None, bad) if bad else (obj, None)
+
+
 def _summary_line(path: Path) -> str:
     """summary.json as one JSON line: the file is indented for people, and `run --wait` / `wait` print it
     into the lead's context, where the indentation is about a third of the bytes. Same keys either way."""
@@ -2180,9 +2426,13 @@ def cmd_wait(a) -> int:
                 # one was not written by the engine: print nothing it says.
                 print(json.dumps({"ok": False, "error": f"run {a.run!r} was never started by the crew engine (no supervisor.pid)"}))
                 return 1
-            print(_summary_line(s))
-            return _summary_rc(s)
-        time.sleep(2)
+            obj, bad = _load_summary(rundir)
+            if bad:
+                print(json.dumps({"ok": False, "error": f"run {a.run!r} summary refused: {bad}"}))
+                return 1
+            print(json.dumps(obj))
+            return 0 if obj.get("ok") is True else 1
+        time.sleep(POLL_S)
     print(
         json.dumps(
             status(rundir) | {"done": False, "hint": "still running; call wait again"}

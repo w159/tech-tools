@@ -12,6 +12,7 @@ _iso_sys.path.insert(
 import _test_isolation  # noqa: F401,E402
 import json  # noqa: E402
 import os  # noqa: E402
+import subprocess  # noqa: E402
 import sys  # noqa: E402
 import tempfile  # noqa: E402
 import time  # noqa: E402
@@ -22,11 +23,20 @@ from unittest import mock  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+import atlas_crew_seal  # noqa: E402
 import gate_rerun  # noqa: E402
 from test_completion_gate import GateOrchestrationTest, _run_gate  # noqa: E402
 
 PASSING = "def test_ok():\n    assert 1 + 1 == 2\n"
 FAILING = "def test_bad():\n    assert 1 + 1 == 3\n"
+
+
+def _write_summary(run, summary, sealed=True):
+    """summary.json in `run`: signed by a fresh seal record the way the engine does, or (sealed=False) bare, as a forger writes it."""
+    run = Path(run)
+    if sealed:
+        atlas_crew_seal.create(run, run.name)
+    (run / "summary.json").write_text(json.dumps(atlas_crew_seal.sign(run, summary) if sealed else summary))
 
 
 def _venv_python(root):
@@ -372,8 +382,11 @@ class RerunProofTest(unittest.TestCase):
             Path(tx).write_text(_bash_line(cmd, output=LAUNCH_OUT) + "\n")
             self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx), cmd)
         tx = self._crew_run(green)
-        Path(tx).write_text(_bash_line(f"python3 {CREW_SCRIPT} wait --run r1 --root .", output=SUMMARY_OUT) + "\n")
+        Path(tx).write_text(_bash_line(f"python3 {CREW_SCRIPT} run --plan p.json --wait 60", output=SUMMARY_OUT) + "\n")
         self.assertIsNotNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
+        # a `wait` alone earns nothing, whatever it printed
+        Path(tx).write_text(_bash_line(f"python3 {CREW_SCRIPT} wait --run r1 --root .", output=SUMMARY_OUT) + "\n")
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
 
     def test_crew_launch_forms_a_lead_really_types(self):
         script = CREW_SCRIPT
@@ -384,10 +397,10 @@ class RerunProofTest(unittest.TestCase):
             accepted = {
                 "absolute": f"python3 {script} run --plan p.json",
                 "braced var, quoted": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run --plan p.json',
-                "bare var": "python3 $CLAUDE_PLUGIN_ROOT/scripts/atlas_crew.py wait --run r1",
+                "bare var": "python3 $CLAUDE_PLUGIN_ROOT/scripts/atlas_crew.py run --run-id r1",
                 "quoted var then path": 'python3 "$CLAUDE_PLUGIN_ROOT"/scripts/atlas_crew.py run',
                 "-S": f"python3 -S {script} run",
-                "-u": f"python3 -u {script} wait --run r1",
+                "-u": f"python3 -u {script} run --run-id r1",
                 "-S -u": f"python3 -S -u {script} run",
                 "/usr/bin/python3": f"/usr/bin/python3 {script} run",
                 "python3.12": f"python3.12 {script} run",
@@ -404,7 +417,7 @@ class RerunProofTest(unittest.TestCase):
             # relative path: against the session cwd, or a preceding cd
             self.assertTrue(gate_rerun._invokes_crew(f"python3 {rel} run", repo))
             self.assertTrue(gate_rerun._invokes_crew(f"cd {repo} && python3 {rel} run", "/elsewhere"))
-            self.assertTrue(gate_rerun._invokes_crew(f"cd {os.path.dirname(repo)} && cd {os.path.basename(repo)} && python3 {rel} wait --run r", ""))
+            self.assertTrue(gate_rerun._invokes_crew(f"cd {os.path.dirname(repo)} && cd {os.path.basename(repo)} && python3 {rel} run --run-id r", ""))
             self.assertFalse(gate_rerun._invokes_crew(f"python3 {rel} run", ""), "relative with no cwd")
             self.assertFalse(gate_rerun._invokes_crew(f"python3 {rel} run", "/elsewhere"))
             refused = {
@@ -569,11 +582,11 @@ class RerunProofTest(unittest.TestCase):
         Path(tx).write_text(_bash_line(CREW_RUN, result=None) + "\n")
         self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx), "launch never ran")
 
-    def _crew_run(self, summary, launched=True, engine_made=True):
+    def _crew_run(self, summary, launched=True, engine_made=True, sealed=True):
         run = self.root / ".atlas/.run/crew/r1"
         run.mkdir(parents=True, exist_ok=True)
         (run / "run.json").write_text(json.dumps({"lead_session": "sess-1", "run_id": "r1"}))
-        (run / "summary.json").write_text(json.dumps(summary))
+        _write_summary(run, summary, sealed)
         (run / "supervisor.log").unlink(missing_ok=True)
         if engine_made:
             (run / "supervisor.log").write_text("")
@@ -583,6 +596,135 @@ class RerunProofTest(unittest.TestCase):
             + "\n"
         )
         return str(tx)
+
+    def _real_wait_out(self, run_id="r1"):
+        """What a real `atlas_crew.py wait` prints over the run dir on disk (the engine, as a subprocess, with this process's ATLAS_HOME)."""
+        res = subprocess.run(
+            [sys.executable, CREW_SCRIPT, "wait", "--run", run_id, "--root", str(self.root), "--timeout", "1"],
+            capture_output=True, text=True, timeout=30,
+        )
+        return res.returncode, res.stdout
+
+    def _wait_tx(self, out):
+        tx = self.root / "crew-wait.jsonl"
+        tx.write_text(
+            _bash_line(CREW_RUN, output=LAUNCH_OUT) + "\n"
+            + _bash_line(f"python3 {CREW_SCRIPT} wait --run r1 --root {self.root}", output=out) + "\n"
+        )
+        return str(tx)
+
+    def test_a_run_dir_forged_in_full_plus_a_real_wait_grants_no_crew_proof(self):
+        started = time.time() - 60
+        for ok, check_exit in ((True, 0), (False, 1)):
+            summary = {"ok": ok, "check_exit": check_exit, "check": "pytest", "run": "r1", "workers": [{"name": "a"}]}
+            self._crew_run(summary, sealed=False)  # run.json, supervisor.log, summary.json hand-written
+            (self.root / ".atlas/.run/crew/r1/supervisor.pid").write_text("1")
+            code, out = self._real_wait_out()
+            self.assertEqual(code, 1, out)
+            self.assertIn("error", json.loads(out))
+            tx = self._wait_tx(out)
+            self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx), ok)
+            self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx), ok)
+            # even a transcript that shows engine-looking output for the forged run buys nothing
+            fake = self._wait_tx(json.dumps(summary))
+            self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), fake), ok)
+            self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), fake), ok)
+            self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, display=True), ok)
+
+    def test_a_sealed_run_still_earns_proof_and_an_edit_after_signing_does_not(self):
+        started = time.time() - 60
+        red = {"ok": False, "check_exit": 1, "check": "pytest", "run": "r1", "workers": [{"name": "a"}]}
+        self._crew_run(red)
+        (self.root / ".atlas/.run/crew/r1/supervisor.pid").write_text("1")
+        code, out = self._real_wait_out()
+        self.assertEqual(code, 1)  # a red summary: exit 1, but a verified one
+        self.assertNotIn("error", json.loads(out))
+        tx = self._wait_tx(out)
+        self.assertEqual(gate_rerun.crew_red(self.root, "sess-1", started, (), tx)["crew_run"], "r1")
+        edited = json.loads((self.root / ".atlas/.run/crew/r1/summary.json").read_text())
+        edited.update(ok=True, check_exit=0)
+        (self.root / ".atlas/.run/crew/r1/summary.json").write_text(json.dumps(edited))
+        code, out = self._real_wait_out()
+        self.assertEqual(code, 1)
+        self.assertIn("error", json.loads(out))
+        tx = self._wait_tx(json.dumps(edited))
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
+
+    def test_a_real_engine_run_still_earns_proof(self):
+        started = time.time() - 60
+        fake = self.root / "bin" / "claude"
+        fake.parent.mkdir()
+        fake.write_text(f"#!/bin/sh\necho ok > {self.root}/z.py\necho '{{\"type\":\"result\",\"is_error\":false}}'\n")
+        fake.chmod(0o755)
+        plan = self.root / "plan.json"
+        plan.write_text(json.dumps({"goal": "g", "check": "test -f z.py", "workers": [{"name": "zed", "owns": ["z.py"], "task": "t"}]}))
+        env = {**os.environ, "ATLAS_CREW_TMUX": "off", "PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}"}
+        launch = f"python3 {CREW_SCRIPT} run --plan {plan} --root {self.root} --no-tmux --session sess-1 --run-id r1 --wait 60"
+        res = subprocess.run(launch.replace("python3", sys.executable, 1).split(), capture_output=True, text=True, env=env, timeout=120)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        tx = self.root / "crew-live.jsonl"
+        tx.write_text(_bash_line(launch, output=res.stdout) + "\n")
+        proof = gate_rerun.crew_proof(self.root, "sess-1", started, (), str(tx))
+        self.assertEqual(proof["crew_run"], "r1")
+        self.assertEqual(proof["exit"], 0)
+        # the same run after its summary is edited (red -> green is the forger's move; here green -> still green but altered)
+        path = self.root / ".atlas/.run/crew/r1/summary.json"
+        edited = json.loads(path.read_text())
+        edited["check"] = "true"
+        path.write_text(json.dumps(edited))
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), str(tx)))
+
+    def test_a_forged_seal_and_a_real_wait_without_a_launch_earn_no_credit(self):
+        started = time.time() - 60
+        run = self.root / ".atlas/.run/crew/r1"
+        run.mkdir(parents=True)
+        (run / "run.json").write_text(json.dumps({"lead_session": "sess-1", "run_id": "r1"}))
+        (run / "supervisor.log").write_text("")
+        (run / "supervisor.pid").write_text("1")
+        forge = (
+            f"import sys; sys.path.insert(0, {os.path.dirname(CREW_SCRIPT)!r}); import atlas_crew_seal as s; "
+            f"s.create({str(run)!r}, 'r1'); import json; "
+            f"open({str(run / 'summary.json')!r}, 'w').write(json.dumps(s.sign({str(run)!r}, "
+            "{'ok': True, 'check_exit': 0, 'check': 'pytest', 'run': 'r1', 'workers': [{'name': 'a'}]})))"
+        )
+        subprocess.run([sys.executable, "-c", forge], check=True, timeout=30)
+        code, out = self._real_wait_out()
+        self.assertEqual(code, 0, out)  # the engine's own wait prints the forged summary as ok
+        tx = self.root / "forged.jsonl"
+        tx.write_text(
+            _bash_line(f'python3 -c "{forge}"', output="") + "\n"
+            + _bash_line(f"python3 {CREW_SCRIPT} wait --run r1 --root {self.root}", output=out) + "\n"
+        )
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), str(tx)))
+        # a copied engine script is no launch either
+        copy = self.root / "atlas_crew.py"
+        copy.write_text("")
+        tx.write_text(_bash_line(f"python3 {copy} run --plan p.json", output=out) + "\n")
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), str(tx)))
+        # control: the plugin's own `run` that printed this run's id, over a verifying seal, is credited
+        tx.write_text(_bash_line(f"python3 {CREW_SCRIPT} run --plan p.json --wait 60", output=out) + "\n")
+        self.assertIsNotNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), str(tx)))
+
+    def test_a_killed_run_is_no_engine_verified_red(self):
+        started = time.time() - 60
+        killed = {"ok": False, "killed": True, "check_exit": 1, "check": "pytest", "run": "r1", "workers": [{"name": "a"}]}
+        tx = self._crew_run(killed)
+        Path(tx).write_text(_bash_line(f"python3 {CREW_SCRIPT} run --plan p.json --wait 60", output=json.dumps(killed)) + "\n")
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
+        red = dict(killed, killed=False)
+        self._crew_run(red)
+        self.assertEqual(gate_rerun.crew_red(self.root, "sess-1", started, (), tx)["exit"], 1)
+
+    def test_unsealed_checks_the_object_it_is_given_not_a_second_read_of_the_file(self):
+        run = self.root / ".atlas/.run/crew/r1"
+        run.mkdir(parents=True)
+        (run / "run.json").write_text(json.dumps({"lead_session": "sess-1", "run_id": "r1"}))
+        atlas_crew_seal.create(run, "r1")
+        signed = atlas_crew_seal.sign(run, {"ok": True, "run": "r1", "check_exit": 0})
+        (run / "summary.json").write_text(json.dumps({**signed, "ok": False}))  # the file moved on after the caller read it
+        self.assertFalse(gate_rerun._unsealed(run, signed))
+        self.assertTrue(gate_rerun._unsealed(run, {**signed, "ok": False}))
 
     def test_crew_red_needs_this_session_and_a_red_check(self):
         started = time.time() - 60
@@ -679,14 +821,13 @@ class GateWiringTest(GateOrchestrationTest):
         self.assertNotIn("Fix the failure", second.stdout)
         self.assertNotIn("Shortcut", second.stdout)
 
-    def _crew_summary(self, ok, check_exit):
+    def _crew_summary(self, ok, check_exit, sealed=True):
         run = os.path.join(self.tmp, ".atlas", ".run", "crew", "r1")
         os.makedirs(run, exist_ok=True)
         with open(os.path.join(run, "run.json"), "w") as f:
             json.dump({"lead_session": "sess-orch", "run_id": "r1"}, f)
         open(os.path.join(run, "supervisor.log"), "w").close()
-        with open(os.path.join(run, "summary.json"), "w") as f:
-            json.dump({"ok": ok, "check_exit": check_exit, "check": "pytest -q", "run": "r1"}, f)
+        _write_summary(run, {"ok": ok, "check_exit": check_exit, "check": "pytest -q", "run": "r1"}, sealed)
 
     def _run_reply(self, reply, launched=True):
         env = dict(self.env, ATLAS_GATE_COLONY="off", ATLAS_GATE_DONE="off")
@@ -714,6 +855,12 @@ class GateWiringTest(GateOrchestrationTest):
         self._shared_setup(PASSING)
         self._crew_summary(False, 1)
         r = self._run_reply(self.BLOCKED, launched=False)  # files exist, no crew launch in the transcript
+        self.assertIn("\\n  (a)", r.stdout)
+
+    def test_blocked_report_with_an_unsigned_crew_summary_still_owes_paperwork(self):
+        self._shared_setup(PASSING)
+        self._crew_summary(False, 1, sealed=False)  # a launch is in the transcript, but the dir was written by hand
+        r = self._run_reply(self.BLOCKED)
         self.assertIn("\\n  (a)", r.stdout)
 
     def test_blocked_report_with_a_passing_suite_and_nothing_collected_is_not_red(self):

@@ -536,6 +536,23 @@ def test_announce_done_records_digests(bus, proj, monkeypatch, capsys):
     assert len(irc.history(bus)) == 1
 
 
+def test_announce_done_reposts_after_a_fix_with_unchanged_files(bus, proj, monkeypatch, capsys):
+    (proj / "a.py").write_text("v")
+    monkeypatch.setenv("ATLAS_CREW_ROOT", str(proj))
+    monkeypatch.setenv("ATLAS_CREW_OWNS", '["a.py"]')
+    irc._announce_done(bus, "a", "first")
+    irc.post(bus, "boss", "a", "global check fails in your area", kind="fix")
+    capsys.readouterr()
+    irc._announce_done(bus, "a", "second")
+    assert capsys.readouterr().out == "posted DONE for a\n"
+    assert [r["kind"] for r in irc.history(bus)] == ["done", "fix", "done"]
+    irc._announce_done(bus, "a", "third")
+    assert capsys.readouterr().out == "already announced DONE for a\n"
+    irc.post(bus, "boss", "b", "fix for b only", kind="fix")
+    irc._announce_done(bus, "a", "fourth")
+    assert capsys.readouterr().out == "already announced DONE for a\n"
+
+
 def test_announce_done_without_peer_digests_and_default_channel(tmp_path, proj, monkeypatch):
     monkeypatch.setenv("ATLAS_CREW_ROOT", str(proj))
     irc._announce_done(tmp_path / "bare", "n", "x")

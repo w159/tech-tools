@@ -514,5 +514,22 @@ class ExitedIgnoresPreviousRun(unittest.TestCase):
             self.assertTrue(mux._exited(root, "implementer-bde8", spawned))
 
 
+
+class KillNotesSinceTests(TmpCase):
+    def test_exit_note_of_an_earlier_run_does_not_suppress_the_kill_note(self):
+        import time as _t
+
+        import atlas_todo
+
+        root = str(self.root)
+        atlas_todo.note(root, "w1", "exit 0 [ok: previous run]", to="lead", kind="report")
+        _t.sleep(0.02)
+        since = _t.time()
+        with mock.patch.object(mux.time, "sleep"):
+            mux._kill_notes(root, ["w1"], since)
+        texts = [r["text"] for r in atlas_todo.notes(root, since=since) if r.get("owner") == "w1"]
+        self.assertEqual(["exit 137 [failed: killed by atlas_mux kill]"], texts)
+
+
 if __name__ == "__main__":
     unittest.main()

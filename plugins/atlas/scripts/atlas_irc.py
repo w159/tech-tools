@@ -987,13 +987,18 @@ def _install_from_env() -> list:
     return got
 
 
+def _fix_after(d, nick: str, seq: int) -> bool:
+    """True when a fix message addressed to `nick` (or broadcast) is newer than the DONE at `seq`: that DONE no longer answers it."""
+    return any(r.get("kind") == "fix" and r.get("to") in (nick, "*") and int(r.get("seq") or 0) > seq for r in history(d))
+
+
 def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) -> None:
     """Post DONE with the own-files digest and test_digest (test files + shared pytest inputs); `peer_digests` ({peer: digest} of the closure bytes the passing unit
     check ran against) rides along when given, so the supervisor can skip re-running this worker's tests."""
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
     digest = _owned_digest(root, _env_owns())
     prev = latest_done_record(d, nick)
-    if prev is not None and prev.get("digest") == digest:
+    if prev is not None and prev.get("digest") == digest and not _fix_after(d, nick, int(prev.get("seq") or 0)):
         print(f"already announced DONE for {nick}")
         return
     extra = {"digest": digest, "test_digest": test_inputs_digest(root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or "")}

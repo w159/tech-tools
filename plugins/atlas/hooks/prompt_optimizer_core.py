@@ -582,8 +582,9 @@ def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None 
         nxt = (
             "Don't write those files or read them. ONE Bash call now: `%s` (a crew in THIS tree: "
             "worker per file, leases, live IRC; it adds your CHANGELOG line when green). Exit 0: its "
-            "gate re-ran the check, the verified result with the count; don't re-run tests, reply and "
-            "stop. Exit 3: run the `wait` it prints. Exit 1: fix from check_tail." % crew_cmd
+            "gate re-ran the check; don't re-run tests. Reply in at most 3 lines: the pass count and the "
+            "files changed, no recap of the summary, then stop. Exit 3: run the `wait` it prints. "
+            "Exit 1: fix from check_tail." % crew_cmd
         )
     elif n >= 2:
         # No spec/files/check to build a runnable crew command from: never print one with

@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.17.1 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.18.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -211,8 +211,12 @@ What the re-run trusts (17.17.0):
   retried, and the gate takes the paperwork path. The cap is 100 s inside the
   150 s hook.
 - A crew counts green or red only if this session ran the plugin's own
-  `atlas_crew.py run` or `wait` (checked by realpath) and that call printed the
-  engine's summary for that run id. A hand-written `summary.json` proves nothing.
+  `atlas_crew.py run` (checked by realpath) and that call printed that run id,
+  and the run's summary seal verifies (17.18.0). A `wait` alone, a `python -c` or a
+  copied script earns nothing. A killed run is not an engine-verified red. A
+  hand-written or edited `summary.json` proves nothing. The seal does not stop
+  code running as the same user from forging: it catches edited or copied
+  summaries, and the launch check catches forged run dirs.
   `atlas_gates.py` and the omp panel have no transcript to check and show the
   proof marked `launch_checked: false`.
 - A session that ends blocked, with a `blocked` header and an engine-verified red
@@ -314,11 +318,23 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
 - `atlas_crew.py kill --run <id>` stops everything: the supervisor, every worker
   process group, the wrappers and the IRC gateway, and it writes a killed summary
   (`killed: true`). On a finished run it leaves the real summary alone and says
-  `already_finished`. Workers run in their own session, so Ctrl-C in a tmux pane
-  does not reach claude; use `kill`.
+  `already_finished`. Each worker's claude starts in its own process group and is made the pane's
+  foreground group, so Ctrl-C in a tmux pane reaches claude again (17.17.0 had
+  moved workers to their own session, which cut it off). A SIGTERM or SIGHUP
+  handler installed before the launch stops the group, so a kill between launch
+  and the pid-file write no longer leaves claude running.
 - `wait` refuses a run directory the engine never started (no `supervisor.pid`).
   On a green check the summary is published at once: workers that posted DONE are
   stopped (SIGTERM, SIGKILL after 3 s) and late exits are recorded for up to 30 s.
+- Crew summaries are HMAC-sealed (`scripts/atlas_crew_seal.py`, 17.18.0): a
+  per-run key in `$ATLAS_HOME/crew-seals` (mode 0600; the seal home is stored in
+  `run.json`, so a different `ATLAS_HOME` still verifies; records are pruned when
+  the run dir is gone or after 14 days). `wait` and `run --wait` refuse an
+  unsealed or edited summary, and `run --wait` returns at once with
+  `no seal record under <home>` instead of spinning its budget. A run id cannot be
+  reused. A worker the supervisor stops after its verified DONE is marked
+  `stopped_after_done` and is not a late exit; its turns and tokens are counted
+  from the stream when no result event exists.
 - Workers are lean: their own session id, no MCP servers, project settings
   only, tools `Bash,Edit`, a short system prompt. The lead's context gets one
   JSON summary (tokens, cost, wall time, gate refusals, channel counts).
@@ -350,6 +366,16 @@ Against one plain prompt on fixture-p (51.7 and 55.7 s, 307,662 and 364,959 toke
 the wall time and 47% of the tokens; warm it is 48% of the wall time. 1/4 of the single prompt's wall time is
 still not met. The 17.16.0 numbers (cold 62% of the wall time and 53% of the tokens against one prompt) are in
 [2026-11-14_atlas-17.16.0-team-performance.md](../../docs/audits/2026-11-14_atlas-17.16.0-team-performance.md).
+
+Atlas 17.18.0 (same model, effort and harness; n=2 per cell at 8 modules, n=3 at 16 modules). 8 modules: cold
+25.9, 27.9 s (mean 26.9 s, 48% of plain), warm 27.1, 25.3 s (mean 26.2 s, 47%), 151k tokens (43%), all 434
+passed. 16 modules (842 tests): cold 25.4, 27.3, 27.1 s (mean 26.6 s, 29% of plain), warm 26.3, 25.8, 25.6 s
+(mean 25.9 s, 28%), 202-217k tokens (mean about 213k, 49%), all 842 passed. Plain one prompt: 55.9 s mean and
+353k tokens at 8 modules (n=4), 92.4 s mean and 438k tokens at 16 modules (n=4). 50% of the tokens is met at
+both sizes. 1/4 of the wall time is not met: the floor is the slowest worker's own model time (about 14 s) plus
+about 11 s of lead time. Crew time stayed flat from 8 to 16 modules while plain time grew; that is a trend from
+two sizes, not a measured 1/4. Method and trials that did not help:
+[2026-11-14_atlas-17.18.0-crew-time.md](../../docs/audits/2026-11-14_atlas-17.18.0-crew-time.md).
 
 A cold crew costs more dollars than one prompt (about $0.26 against $0.19 on 17.16.0): each worker pays its own
 cache creation.
@@ -1165,7 +1191,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.17.1
+|-- .claude-plugin/plugin.json   manifest, version 17.18.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
