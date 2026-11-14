@@ -6,6 +6,8 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
+import { gatesMark, healthDetail, healthRows, type Health } from './idle-health';
+import { clickRun } from './clickable';
 import { brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
@@ -113,6 +115,8 @@ export type PanelModel = {
    * Present: the phase row prints exactly the band's glyph and word, and every total on the panel reads `secs`. Absent (omp, fixtures): the panel derives its own. */
   /** `frame`: the spinner frame index (0..9) the band turns for this render: the phase mark draws it, so band and panel show one glyph (truth 41). */
   run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
+  /** Wave 42: the idle health (register.ts builds it from the band's own inputs): an idle status view with no agent draws these rows, each a pressable row that opens 1-3 detail lines, instead of `no agents yet` and `no events yet`. Absent: the view as before. */
+  health?: Health;
 };
 
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
@@ -619,8 +623,25 @@ function statusEventRows(m: PanelModel, n: number): PanelLine[] {
 }
 
 /** The status view (Claude pane): the run on one screen, from data the panel already holds and nothing invented. Phase and clock, an activity line per agent, the gates checklist, the last five events. A section with no data is one dim line. */
+/** Wave 42: the idle status view's health block: one pressable row per figure (`▸ gates  ● completion ... 4/4`), the open row's 1-3 detail lines under it. */
+function healthBlock(m: PanelModel, h: Health): PanelLine[] {
+  const out: PanelLine[] = [heading('health', [], m)];
+  for (const row of healthRows(h, m.ui)) {
+    const key = `health:${row.id}`;
+    const open = m.expanded === key;
+    const lead = clickRun(row.label, open, m.ui, key);
+    const gap = r(' '.repeat(Math.max(1, 11 - cells(lead.t))));
+    let value = row.runs;
+    if (GRID_LEAD + cells(lead.t) + cells(gap.t) + rowWidth(value) > m.cols - 1 && row.id === 'gates') value = [gatesMark(h, m.ui), r(` ${h.gates.green}/${h.gates.total} green`, 'sub')]; // the names fold to the count on a narrow pane
+    out.push(line(fitRuns([r(' '.repeat(GRID_LEAD)), lead, gap, ...value], m.cols), { kind: 'toggle', key }));
+    if (open) for (const d of healthDetail(h, row.id)) out.push(line(fitRuns([r(' '.repeat(GRID_LEAD + 3)), r(d, 'sub')], m.cols)));
+  }
+  return out;
+}
+
 function statusBody(m: PanelModel): PanelLine[] {
   const ws = workersByTask(m);
+  if (m.health && ws.length === 0 && m.run?.kind === 'idle') return [...statusPhase(m), BLANK, ...healthBlock(m, m.health), BLANK, dimLine(m, `${m.notes.length} ${m.notes.length === 1 ? 'message' : 'messages'}`)];
   const gs = countedGates(gatesOf(m));
   const phase = statusPhase(m);
   const room = Math.max(4, m.rows - headerRows(m).length - 1);

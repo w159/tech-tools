@@ -15,6 +15,7 @@ import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
 import { displayName } from './hud';
 import { fitText, textWidth } from './theme';
+import { bandSegments, type Health } from './idle-health';
 
 export type { Run, Tone };
 /** One row, on the theme's panel colour. `keys`: the footer, where the band appends its key buttons in `keysWidth`
@@ -121,6 +122,8 @@ export type MissionModel = {
   holdBlocked?: boolean;
   /** State 38: the last non-idle word the band showed, held for 1 s before `idle` may replace it (band-motion stepKind). */
   heldKind?: BandKind;
+  /** Idle health (wave 42): with no run yet (no plan, no worker) the bar's plan and worker segments read live health figures, and the button expands the card. Absent: the bar as before. */
+  health?: Health;
   /** The Claude Code band bar (band.tsx only): the first row ends flush at the column's last cell (the host's `[-]` follows it), the label is `todo n/m` for the whole run and the gates segment is `gates 2/4`. The omp panel draws none of these. */
   bar?: boolean;
 };
@@ -394,6 +397,19 @@ function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: 
   out.push(edge(fill, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg), edge(planBg, workBg), ...onFill([r(' '), ...work, r(' ')], workBg));
   return out; // the last fill runs on to the last cell (withHandle pads it), right up to the host's `[-]`
 }
+/** Idle health (wave 42): `lead | seg | seg | ...` on the alternating plan and worker fills; the last seg is the clickable button. */
+function healthSegmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], segs: Run[][]): Run[] {
+  const fill = SEG_IDLE[ui.theme];
+  const fills = [SEG_PLAN[ui.theme], SEG_WORK[ui.theme]];
+  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, st.kind === 'idle' ? 'text' : undefined)];
+  let prev = fill;
+  segs.forEach((seg, i) => {
+    const next = fills[i % 2]!;
+    out.push(edge(prev, next), ...onFill([r(' '), ...seg, r(' ')], next));
+    prev = next;
+  });
+  return out;
+}
 /** The workers segment: the groups joined by a middle dot, empty groups left out. */
 const joinWork = (...groups: Run[][]): Run[] => groups.filter((g) => g.length > 0).flatMap((g, i) => (i ? [r(' · ', 'sub'), ...g] : g));
 
@@ -494,8 +510,28 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     { o: { clock: false, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none' },
     { o: { clock: false, reason: 'none', fix: false }, open: false, bw: false, counts: 'none', warn: 'none' },
   ];
+  // Wave 42: idle with no run yet (no plan, no worker) the plan and worker segments hold live health instead of `todo -` and `no agents`: gates, context, uptime, the last run, then the button.
+  const health: Form[] = [];
+  if (m.health && st.kind === 'idle' && !m.total && workBody(false).every((x) => x.t === '-')) {
+    const ranFor = m.ranSecs ?? m.lastRun?.secs;
+    const sg = bandSegments(m.health, ui, ranFor !== undefined ? { secs: ranFor, done: m.done, total: m.total } : undefined);
+    const leadFor = (): Run[] => lead({ ...F, clock: false });
+    const combos: Run[][][] = [
+      [sg.gates, sg.ctxFull, sg.up, sg.last, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.button], [sg.gates, sg.ctxFull, sg.button],
+      [sg.gates, sg.ctxShort, sg.button], [sg.gates, sg.button], [sg.button],
+    ];
+    const seen = new Set<string>();
+    for (const c of combos) {
+      const segs = c.filter((x) => x.length > 0);
+      const key = segs.map((x) => x.map((y) => y.t).join('')).join('|');
+      if (!segs.length || seen.has(key)) continue;
+      seen.add(key);
+      health.push({ min: 0, runs: seg ? healthSegmented(ui, st, cap, leadFor(), segs) : [...cap, r(' '), ...leadFor(), ...segs.flatMap((x) => [glue, ...x])] });
+    }
+  }
   // State 38: a blocked band's run clock (`▲ blocked · stop refused 0:37`) goes before the reason, the word `todo` or a count does: only the word forms keep it.
   const out: Form[] = [
+    ...health,
     { runs: wide(10, '   '), min: GAUGE_MIN }, { runs: wide(8, '  '), min: GAUGE_MIN },
     ...levels.map((v) => row(v, v.bare !== true)),
     // Wave 37: below that the state word goes, never a segment: glyph and clock, then the glyph alone (the fill still says which state), each beside `n/m` and the worker count.

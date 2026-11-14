@@ -159,7 +159,7 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
     expect(phaseGlyph('blocked', 0)).toBe('▲');
   });
   test('register.ts builds the band\'s model and the panel\'s from one function', () => {
-    expect(src).toContain('...runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look })');
+    expect(src).toContain('...runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look, health: healthIn })');
     expect(src).toContain('...runBandModel({ snapshot, live: paneLive,');
     expect(src).toContain('frame: paneFrame,'); // the unwrapped beat: a modulo ten here (the retired ten-frame set) would put the phase mark out of step with the band from the tenth beat on
   });

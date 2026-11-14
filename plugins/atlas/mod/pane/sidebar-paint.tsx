@@ -2,13 +2,14 @@
 // run is painted in the live theme's tone on the rev 4 panel token, so the pane meets the band without a seam.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { surfaceHex, uiFromEnv, type Run, type Ui, runHex } from '../atlas-ui';
+import { hoverStyle } from '../clickable';
 import { bodyLines, fillRows, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
 /** One run as a Text on the panel (or on its own fill); with NO_COLOR only bold and strike remain. */
-export function runEl(els: ClientElements, x: Run, ui: Ui): RenderElement {
-  const base = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strikethrough: true } : {}) };
+export function runEl(els: ClientElements, x: Run, ui: Ui, hoverKey?: string): RenderElement {
+  const base = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strikethrough: true } : {}), ...(hoverKey && x.hover ? { hover: hoverStyle(ui, hoverKey) } : {}) };
   return els.Text(ui.color === 'none' ? { ...base, children: x.t } : { ...base, color: runHex(x, ui.theme, ui.color), backgroundColor: surfaceHex(x.bg ?? 'panel', ui), children: x.t });
 }
 export const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined : surfaceHex('panel', ui));
@@ -25,7 +26,7 @@ export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: S
     if (press.copy && m.ui.expanded === press.key) on.copy(press.copy);
     else on.toggle(press.key);
   };
-  return els.Button({ key: press.key, plain: true, onPress, children: l.runs.map((x) => runEl(els, x, ui)) });
+  return els.Button({ key: press.key, plain: true, onPress, children: l.runs.map((x) => runEl(els, x, ui, press.key)) });
 }
 
 /** The message field under the team and channel logs. */

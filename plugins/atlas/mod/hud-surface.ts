@@ -6,6 +6,7 @@ import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFram
 import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
+import { healthRows, type Health } from './idle-health';
 import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
@@ -87,6 +88,8 @@ export type SurfaceOpts = {
   now?: number | undefined;
   /** The run's fixed shape (slot.ts): an empty block still draws its closed box with one quiet row (`no tasks yet`, `none running yet`), so the HUD has one shape from the first working frame to idle. */
   reserve?: boolean | undefined;
+  /** Wave 42: the live health summary (`● gates 4/4 · ctx 18%`): an empty reserved box says what will appear and this, never an empty-looking box. Absent: the old quiet words. */
+  healthLine?: string | undefined;
   /** False: never merge the running agents into the TODO rows (the row counters ask for the roomiest form so the slot holds one height). */
   merge?: boolean | undefined;
 };
@@ -221,7 +224,7 @@ export function planWindow<T extends { state: UiState; word?: string; doneAt?: n
 }
 
 export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
-  if (rows.length === 0) return o.reserve ? emptyBox(o, 'TODO', 'no tasks yet') : [];
+  if (rows.length === 0) return o.reserve ? emptyBox(o, 'TODO', o.healthLine ? `plan rows appear here  ·  ${o.healthLine}` : 'no tasks yet') : [];
   const { ui, cols } = o;
   const tier = tierOf(cols);
   const rich = isRich(o);
@@ -427,7 +430,7 @@ export const sortAgents = <T extends { tasks?: readonly number[] }>(rows: readon
 
 /** The Subagents block at every width: a docked side pane leaves the transcript about 61 cells at 110 columns, and the block still shows there with its ribbon and a row per agent (the columns drop first). */
 export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
-  if (rows.length === 0) return o.reserve ? emptyBox(o, 'SUBAGENTS', 'none running yet') : [];
+  if (rows.length === 0) return o.reserve ? emptyBox(o, 'SUBAGENTS', o.healthLine ? `agents appear here  ·  ${o.healthLine}` : 'none running yet') : [];
   const { ui, cols } = o;
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
@@ -648,9 +651,9 @@ function shortTally(states: readonly UiState[], ui: Ui, o: SurfaceOpts): Run[] {
  * `╰─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done · 0:04 0:01 0:02 · 5 fn ───╯` once none does (the mark of the worst state, each agent's clock, the count of what they found). */
 function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
   const { ui, cols } = o;
-  if (s.agents.length === 0) return titleRow(cols, 'SUBAGENTS', '', [t('none running yet', 'sub')], ui, false, true); // the run's block before its first agent: the same closing rule, nothing listed yet
+  if (s.agents.length === 0) return titleRow(cols, 'SUBAGENTS', '', [t(o.healthLine ? 'agents appear here' : 'none running yet', 'sub')], ui, false, true); // the run's block before its first agent: the same closing rule, nothing listed yet
   const agents = s.agents.filter((a) => a.state !== 'queued'); // wave 34: the rule counts agents only; a queued dispatch is a child line of the plan, not an agent (`3 running · 3 queued` beside three agents)
-  if (agents.length === 0) return titleRow(cols, 'SUBAGENTS', '', [t('none running yet', 'sub')], ui, false, true);
+  if (agents.length === 0) return titleRow(cols, 'SUBAGENTS', '', [t(o.healthLine ? 'agents appear here' : 'none running yet', 'sub')], ui, false, true);
   const states = agents.map((r) => r.state);
   const counts = stateCounts(states);
   const live = agents.some(isLive);
@@ -827,4 +830,16 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   // One row: the agents' ribbon when any run, else the plan's.
   const agents = agentRows(ss.agents, o, { spacers: false, extras: false, cap: 0 });
   return agents.length > 0 ? agents.slice(0, 1) : todoRows(ss.todos, o, { spacers: false, extras: false, cap: 0 }).slice(0, 1);
+}
+
+// ---- HEALTH (wave 42) -------------------------------------------------------------------------------------
+
+/** The expanded health card the band's `▾ health` button opens: the TODO box's own shape (ribbon, rows, closing rule), rows from idle-health `healthRows` (only values the mod has). */
+export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
+  const { cols, ui } = o;
+  return [
+    titleRow(cols, 'HEALTH', '', [], ui, false),
+    ...healthRows(h, ui).map((row): Run[] => [t('  '), t(row.label.padEnd(8), 'muted'), t(' '), ...row.runs]),
+    bottomRule(cols, ui),
+  ];
 }

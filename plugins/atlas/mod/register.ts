@@ -10,10 +10,12 @@ import type { ClientElements, EngineInterface, On, PluginOptions, RenderElement 
 import { SnapshotBuilder } from './snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './intents';
-import { bandBlockedOf, bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
+import { bandBlockedOf, bandHealth, bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot } from './slot';
+import { healthCardRows } from './hud-surface';
+import { healthLine, type HealthIn } from './idle-health';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
@@ -115,6 +117,11 @@ const expandedState = atom({ plugin: 'atlas', key: 'sidebarExpanded' } as const,
 const draftState = atom({ plugin: 'atlas', key: 'sidebarDraft' } as const, '');
 /** The frame the last beat published: the band and the pane renders both read THIS value, so they never turn adjacent frames (critique 26: `⠸`/`⠼`, `◑`/`◓`). */
 let beatFrame = 0;
+let sessionStartMs: number | null = null; // wave 42: the idle health's `up 12:04`: the clock reading at this session's start
+let pluginVersion: string | undefined; // read from plugin.json at boot
+let branchName: string | undefined; // the git branch at boot; absent when git said nothing
+let healthOpenNow = false; // wave 42: the band's `▸ health` button; the HUD draws the card while it is true (a toggle redraws through the spinner tick)
+let lastIdleSecond = -1; // the idle uptime ticks once a second
 const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
 const gaugeState = atom({ plugin: 'atlas', key: 'bandGauges' } as const, null as GaugeMoves | null); // the band gauges' glide, retargeted by the tick when a figure moves
 const easeTickState = atom({ plugin: 'atlas', key: 'easeTick' } as const, 0); // bumped by the ease timer so the band redraws each frame of a glide
@@ -739,6 +746,7 @@ async function gitBranch($: EngineInterface, cwd: string): Promise<string> {
 	try {
 		const out = await $.process.run(['git', '-C', cwd, 'rev-parse', '--abbrev-ref', 'HEAD']);
 		const branch = out.stdout.trim();
+		branchName = branch === '' ? undefined : branch; // wave 42: the health card prints the branch git really said, never the `main` fallback below
 		return branch === '' ? 'main' : branch;
 	} catch {
 		return 'main';
@@ -852,6 +860,18 @@ export async function openBoard($: EngineInterface): Promise<void> {
 }
 
 /** Band footer presses: open (or focus) the pane on a view, as /atlas-cc does, or open the Board pane. */
+/** Wave 42: the idle health's raw inputs: uptime on the clock, the version and branch read at boot, the tokens the host measured, whether the card is open. */
+async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthIn> {
+	const usage = await read($, usageState);
+	return {
+		...(sessionStartMs !== null ? { upSecs: Math.max(0, Math.floor((clockNow - sessionStartMs) / 1000)) } : {}),
+		...(pluginVersion ? { version: pluginVersion } : {}),
+		...(branchName ? { branch: branchName } : {}),
+		...(typeof usage.tokens === 'number' ? { tokens: usage.tokens } : {}),
+		open: healthOpenNow,
+	};
+}
+
 function bandHandlers($: EngineInterface): BandHandlers {
 	const guarded = guardedBy($);
 	return {
@@ -865,6 +885,7 @@ function bandHandlers($: EngineInterface): BandHandlers {
 				toastUnplaced($)(await opened);
 			}),
 		toggleTodos: () => guarded(() => openBoard($)),
+		toggleHealth: () => guarded(() => { healthOpenNow = !healthOpenNow; return update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; }); }),
 	};
 }
 
@@ -1087,7 +1108,7 @@ export function isWorkingNow(snap: LiveSnapshot, host: boolean, hostIdle = false
 
 /** Truth 41: the run state of the band, built ONE way for the band's render and the side panel's (critique 40: `⠸ working` under `● done`, `done 0:47` against `0:48`). Both pass what they read; the state kind, the three clock figures and the
  * spinner frame come out of the same functions, so for one now the glyph, the word and the clock are identical. */
-function runBandModel(i: { snapshot: LiveSnapshot; live: BandModel['live']; gates: GateGroup[]; core: CoreModel | null; agentsAlive: boolean; isWorking: boolean | undefined; clockNow: number; look: { ui: Ui; rich: boolean } }): Pick<BandModel, 'snapshot' | 'live' | 'gates' | 'core' | 'agentsRunning' | 'hostOnly' | 'working' | 'workSecs' | 'ranSecs' | 'restSecs' | 'ui' | 'rich' | 'lastPhase' | 'leadName' | 'blockedConfirmed' | 'heldKind'> {
+function runBandModel(i: { snapshot: LiveSnapshot; live: BandModel['live']; gates: GateGroup[]; core: CoreModel | null; agentsAlive: boolean; isWorking: boolean | undefined; clockNow: number; look: { ui: Ui; rich: boolean }; health?: HealthIn }): Pick<BandModel, 'health' | 'snapshot' | 'live' | 'gates' | 'core' | 'agentsRunning' | 'hostOnly' | 'working' | 'workSecs' | 'ranSecs' | 'restSecs' | 'ui' | 'rich' | 'lastPhase' | 'leadName' | 'blockedConfirmed' | 'heldKind'> {
 	const turnOn = hostTurnRunning(i.isWorking, stopSeen);
 	const runOn = runLive(runClock, armedAt !== null, resumedNow(i.clockNow));
 	const work = heldWork(i.clockNow);
@@ -1095,6 +1116,7 @@ function runBandModel(i: { snapshot: LiveSnapshot; live: BandModel['live']; gate
 	const rest = restSecsOf(runClock, i.clockNow);
 	return {
 		snapshot: i.snapshot, live: i.live, gates: i.gates, core: i.core,
+		...(i.health ? { health: i.health } : {}),
 		...(i.agentsAlive ? { agentsRunning: true } : {}),
 		...(turnOn && !runOn ? { hostOnly: true } : {}),
 		working: (turnOn && runOn) || (i.isWorking !== false && !stopSeen && runClock.startMs !== null),
@@ -1177,6 +1199,9 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		if (!modOn) return;
 		await update($, isInteractive, () => interactive);
 		builder = new SnapshotBuilder(engineFs($), $.plugin.root);
+		sessionStartMs = await $.clock.now(); // wave 42: the idle health's uptime counts from here
+		lastIdleSecond = -1;
+		pluginVersion = await $.fs.read(`${$.plugin.root.replace(/\/+$/, '')}/.claude-plugin/plugin.json`).then((text) => { const v = (JSON.parse(text) as { version?: unknown }).version; return typeof v === 'string' ? v : undefined; }).catch(() => undefined);
 		const sessionId = await $.session.id();
 		sessionUuid = sessionId;
 		nameMemo = {};
@@ -1227,6 +1252,9 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					await easeTick($, snap as LiveSnapshot);
 					await motionTick($, snap as LiveSnapshot);
 					if (isWorkingNow(snap as LiveSnapshot, hostWorking)) await verdictFast($, snap as LiveSnapshot); // the Stop hook runs inside a busy turn: read its write on this tick
+					// Wave 42: the idle health's `up 12:04` ticks once a second (a working session redraws on the frame loop already).
+					const second = Math.floor((await $.clock.now()) / 1000);
+					if (second !== lastIdleSecond && !isWorkingNow(snap as LiveSnapshot, hostWorking)) { lastIdleSecond = second; await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; }); }
 				})().catch(() => undefined);
 			});
 		}
@@ -1423,7 +1451,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const eased = glide ? easedNow(glide, await $.clock.now()) : undefined;
 		const core = await read($, coreState);
 		const agentsAlive = [...agents, ...namedAgents(hudIn.todos, agents)].some(isAlive);
-		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ ...runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look }), columns, tick: frame, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, motion: motionCtx });
+		const healthIn = await healthInOf($, clockNow);
+		const bandIn = (hudRowsDrawn: Segment[][], maxRows: number | undefined): BandModel => ({ ...runBandModel({ snapshot, live, gates, core, agentsAlive, isWorking: e.props.isWorking, clockNow, look, health: healthIn }), columns, tick: frame, workersInHud: hudListsAgents(hudRowsDrawn), eased, maxRows, motion: motionCtx });
 		// The blocked debounce: ask the band what it computes with nothing held back, then tell it whether it may read blocked.
 		const probe = bandKindOf({ ...bandIn([], 1), blockedConfirmed: true }) === 'blocked';
 		const step = stepBlocked(blockedStreak, probe, turnOn, stopRefused || gateTally(withCoreTally(gates, core)).stop?.blocked === true);
@@ -1440,7 +1469,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		noteBlocked(kStep.shown === 'blocked' ? bandBlockedOf(bandIn([], 1)) : null);
 		const agentsListed = agents.length > 0;
 		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
-		const plan = composeSlot({ budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView, running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: slotHeld });
+		const health = bandHealth(bandIn([], 1)); // wave 42: the idle health, from the band's own inputs
+		const healthLn = health ? healthLine(health, look.ui) : '';
+		const healthCard = health && healthIn.open ? healthCardRows(health, { cols: columns, ui: look.ui }).map((row) => row.filter((x) => x.t !== '').map((x) => segmentOf(x, look.ui))) : undefined;
+		const plan = composeSlot({ budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView: { ...hudView, ...(healthLn ? { healthLine: healthLn } : {}) }, ...(healthCard ? { healthCard } : {}), running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: slotHeld });
 		slotHeld = plan.held;
 		const hud = plan.hud;
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
@@ -1484,7 +1516,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		// The band's own run state and run clock (wave 31, critique 29): the panel's phase row and every total on it read what the band reads, built from the band's own inputs.
 		const paneLive = liveWorkers(snapshot, snapshot.now);
 		const paneAgents = hudAgents(paneLive, snapshot.squad, queuedMembers(snapshot));
-		const bandB: BandModel = { ...runBandModel({ snapshot, live: paneLive, gates: paneGates, core: paneCore, agentsAlive: [...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive), isWorking: hostFlag, clockNow: paneNow, look }), columns: 120, tick: paneFrame };
+		const bandB: BandModel = { ...runBandModel({ snapshot, live: paneLive, gates: paneGates, core: paneCore, agentsAlive: [...paneAgents, ...namedAgents(ownTodos(snapshot.todos ?? [], snapshot.sessionId), paneAgents)].some(isAlive), isWorking: hostFlag, clockNow: paneNow, look, health: await healthInOf($, paneNow) }), columns: 120, tick: paneFrame };
 		const originMs = originOf(snapshot.now, paneNow);
 		const runSecs = heldWork(paneNow);
 		return sidebarTree($.ui.resolve(e), {
@@ -1493,6 +1525,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			look: look.ui,
 			gates: paneGates,
 			core: paneCore,
+			...(bandHealth(bandB) ? { health: bandHealth(bandB) } : {}),
 			run: { kind: bandKind(bandB), frame: paneFrame, ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(originMs !== undefined ? { startMs: originMs } : {}) },
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
 			columns: e.props.bodyColumns,

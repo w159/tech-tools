@@ -1,4 +1,5 @@
 // Shared sidebar model types and the one padding helper the section builders use.
+import type { Health } from '../idle-health';
 import type { CoreModel } from '../data/core';
 import type { Ui } from '../atlas-ui';
 import type { MotionCtx } from '../motion';
@@ -26,6 +27,8 @@ export type SidebarModel = {
   /** The shared clock reading the HUD times a running agent on (`$.clock.now()`): the lanes read the same figure as the SUBAGENTS rows (truth 41: alpha 0:16 against 0:17 on one frame). */
   clock?: number;
   run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
+  /** Wave 42: the idle health the band shows (register.ts, from the band's own inputs); the idle status view draws it as pressable rows. */
+  health?: Health;
 };
 export type SidebarHandlers = {
   selectRecipient(name: string): void;

@@ -152,6 +152,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     ...(m.run ? { run: m.run } : {}),
+    ...(m.health ? { health: m.health } : {}),
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
     ...(finishes.length ? { finishes } : {}),
     ...(starts.length ? { starts } : {}),

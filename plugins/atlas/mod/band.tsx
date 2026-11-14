@@ -21,12 +21,14 @@ import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
 import { contractRail, railOf, type Rail } from './rail';
 import { STRIP_TABS } from './panel-layout';
-import { textWidth } from './theme';
+import { fitText, textWidth } from './theme';
+import { hoverStyle } from './clickable';
+import type { Health, HealthIn } from './idle-health';
 
 export { planRows } from './mission-layout';
 
 /** `lastPhase`: the last rail phase the caller rendered, lit while the snapshot phase is `blocked`. */
-export type BandModel = { /** Wave 40: the host turn is on but no run is live (a slash command after a finished run): the band reads `working` with a spinner and no clock, and the closed run is left as it was. */ hostOnly?: boolean; /** State 38: the word held for 1 s before idle (band-motion stepKind). */ heldKind?: BandKind; snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; /** Wave 36 (debounce): false holds back a blocked verdict that is not confirmed yet (register.ts stepBlocked); absent or true: the band reads it as computed. */ blockedConfirmed?: boolean; /** The HUD draws an agent running (listed, resumed or queued): the band reads working whatever the host's turn flag says. */ agentsRunning?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
+export type BandModel = { /** Wave 42: idle health inputs (uptime, version, branch, tokens, whether the card is open); absent: the band draws no health. */ health?: HealthIn; /** Wave 40: the host turn is on but no run is live (a slash command after a finished run): the band reads `working` with a spinner and no clock, and the closed run is left as it was. */ hostOnly?: boolean; /** State 38: the word held for 1 s before idle (band-motion stepKind). */ heldKind?: BandKind; snapshot: LiveSnapshot; live: LiveWorker[]; gates: GateGroup[]; columns: number; tick: number; maxRows?: number; lastPhase?: string | null; todoExpanded?: boolean; /** The host says a model turn is running (AbovePrompt `isWorking`): true from Enter, before any hook of the turn fires (the first prompt waits on SessionStart hooks), so the band never reads `idle` under a running spinner. */ working?: boolean; /** Seconds the current run of work has lasted (the shared tick counted in seconds): the `0:42` after `working`. */ workSecs?: number; /** Seconds the last run took: the `1:12` after `done`. */ ranSecs?: number; /** Seconds at rest since the last run ended (from IDLE_AFTER_SECS the finished band reads `idle`). */ restSecs?: number; core?: CoreModel | null; team?: string; leadName?: string; ui?: Ui; rich?: boolean; workersInHud?: boolean; /** Wave 36 (debounce): false holds back a blocked verdict that is not confirmed yet (register.ts stepBlocked); absent or true: the band reads it as computed. */ blockedConfirmed?: boolean; /** The HUD draws an agent running (listed, resumed or queued): the band reads working whatever the host's turn flag says. */ agentsRunning?: boolean; eased?: { todo?: number; ctx?: number }; /** Motion view (mod/motion.ts); absent: the resting render. */ motion?: MotionCtx | undefined };
 // `team` (omp: the team record's `<class>/<effort>`) is the header's scope label; `leadName` (omp: `lead-<sid6>`)
 // names the lead in the message row. Both absent: not shown / `lead`. `ui` (theme, ASCII, colour depth) defaults to the
 // environment; `rich` (ATLAS_BAND_RICH=1) draws the tall band when the rows allow. `workersInHud`: the HUD's Subagents
@@ -37,7 +39,7 @@ const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
-export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void };
+export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; /** Wave 42: the `▸ health` button opens and closes the HUD's health card. */ toggleHealth?(): void };
 /** The band's controls: hotkeys press only while the band holds the keyboard (ctrl+x, Tab, or a click), and are unique within it. */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; key: string; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
 /** How to give the band the keyboard; shown after the keys when it fits. */
@@ -125,6 +127,28 @@ const blockedWhyOf = (plan: readonly { status: string; evidence?: string | null 
   return why ? { blockedWhy: why } : {};
 };
 
+/** The wall clock a run ended, `9:27 PM`, from the snapshot clock less the seconds at rest. */
+const clock12 = (ms: number): string => { const d = new Date(ms); const h = d.getHours(); return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
+
+/** Idle health (wave 42): the one model the band, the HUD card and the panel rows read. Only figures the mod holds; context 0 and absent tokens are unknown, never printed. */
+function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTally>, progress: { done: number; total: number }): Health {
+  const h = b.health!;
+  const all = b.live.filter((w) => w.state !== 'parked');
+  const wave = lastRun(all, s.now, ownTodos(s.todos, s.sessionId).filter((t) => t.origin === 'dispatch' && t.owner).map((t) => t.owner!));
+  const total = todoCounts(s).total;
+  const ran = b.ranSecs ?? wave?.secs;
+  return {
+    gates: { total: tally.total, green: tally.green, checks: tally.checks.map((c) => ({ id: c.id, ok: c.ok, ...(c.pending ? { pending: true as const } : {}) })) },
+    ...(s.contextPct > 0 ? { ctxPct: s.contextPct } : {}),
+    ...(typeof h.tokens === 'number' && h.tokens > 0 ? { tokens: h.tokens } : {}),
+    ...(h.upSecs !== undefined ? { upSecs: h.upSecs } : {}),
+    ...(h.branch ? { branch: h.branch } : {}),
+    ...(h.version ? { version: h.version } : {}),
+    ...(ran !== undefined ? { last: { secs: ran, done: Math.min(total, progress.done), total, agents: wave?.workers ?? 0, failed: wave?.failed ?? 0, ...(b.restSecs !== undefined ? { endedAt: clock12(s.now - b.restSecs * 1000) } : {}) } } : {}),
+    ...(h.open ? { open: true } : {}),
+  };
+}
+
 function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const s = b.snapshot;
   const now = s.now;
@@ -167,6 +191,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
     ui: b.ui ?? uiFromEnv(),
     turnSecs: b.hostOnly ? undefined : b.workSecs, ranSecs: b.ranSecs, ...(b.hostOnly ? { hostOnly: true } : {}), ...(b.restSecs !== undefined ? { restSecs: b.restSecs } : {}), ...(closed ? { closed } : {}),
+    ...(b.health ? { health: healthOf(b, s, tally, progress) } : {}),
     workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.heldKind ? { heldKind: b.heldKind } : {}), ...(b.motion ? { motion: b.motion } : {}),
   };
 }
@@ -193,6 +218,20 @@ const panelBg = (ui: Ui): string | undefined => (ui.color === 'none' ? undefined
 /** The band rows alone (no workers, footer or board), plain text per row: what the tier goldens compare. */
 export function bandRows(m: MissionModel): string[] {
   return bandLines(m).map((l) => l.runs.map((x) => x.t).join(''));
+}
+
+/** A row that holds clickable runs (wave 42, `▸ health`): the runs around a control are Texts, the control is a Button of one Text in the accent with the hover style. */
+function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui): RenderElement {
+  const ss = segs(l, ui);
+  let left = Math.max(1, cols);
+  const children = l.runs.flatMap((x, i): RenderElement[] => {
+    const sg = ss[i]!;
+    const room = left;
+    left -= textWidth(sg.t);
+    if (!x.press) return fitRuns(els, [sg], room);
+    return [els.Button({ key: x.press, plain: true, onPress: () => on.toggleHealth?.(), children: [els.Text({ color: sg.color, backgroundColor: sg.bg, bold: true, hover: hoverStyle(ui, x.press), children: fitText(sg.t, room) })] })];
+  });
+  return els.Box({ flexDirection: 'row', flexShrink: 0, children });
 }
 
 /** The footer with its key buttons (a row of real clickable keys) and, when it fits, the focus hint after them. */
@@ -223,7 +262,7 @@ const panel = (els: ClientElements, rows: Row[], cols: number, ui: Ui): RenderEl
 /** Any MissionModel as the band tree (the shared-world goldens and the renderer feed models directly). */
 export function missionTree(els: ClientElements, m: MissionModel, todoRows: (rows: number) => Segment[][] = () => [], on?: BandHandlers): RenderElement {
   const ui = m.ui ?? uiFromEnv();
-  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : [segs(l, ui)]));
+  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui)] : [segs(l, ui)]));
   return panel(els, rows, m.cols, ui);
 }
 
@@ -248,7 +287,8 @@ function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: Mission
   const maxRows = b.maxRows ?? 12;
   const ui = b.ui ?? uiFromEnv();
   if (maxRows < 1) return null; // the HUD can take the whole slot: draw nothing rather than a row past the budget
-  const m = missionModel({ ...b, maxRows, ui });
+  const m0 = missionModel({ ...b, maxRows, ui });
+  const m: MissionModel = m0.health ? { ...m0, health: { ...m0.health, ...(on ? { button: true } : {}) } } : m0;
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
   const keys = on && idle; // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0, hintWidth: textWidth(BAND_HINT) + 3 });
@@ -277,6 +317,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
     if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
+    if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });
   return panel(els, rows, cols, ui);
@@ -295,4 +336,9 @@ export function bandBlockedOf(b: BandModel): { reason: string; secs?: number } |
   if (st.kind !== 'blocked') return null;
   const secs = m.ranSecs ?? m.lastRun?.secs ?? m.turnSecs;
   return { reason: st.reason.long, ...(secs !== undefined ? { secs } : {}) };
+}
+
+/** Wave 42: the idle health the band, the HUD card and the side panel share (band.tsx builds it from the band's own inputs); undefined when the caller passed none. */
+export function bandHealth(b: BandModel): Health | undefined {
+  return missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() }).health;
 }
