@@ -15,7 +15,7 @@ import { gateTally, leadBusy, planBusy, ranWorkers, STOP_LINE, withCoreTally } f
 import { fillHex, hostEnv, LINGER_MS, preImage, spinClock, surfaceHex, uiFromEnv, xtermHex, type Ui, runHex } from './atlas-ui';
 import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
-import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines } from './mission-layout';
+import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, healthStripBg } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
 import { todoRows } from './todo-panel';
@@ -158,6 +158,7 @@ function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTa
     ...(h.version ? { version: h.version } : {}),
     ...(ran !== undefined ? { last: { secs: ran, done: Math.min(total, progress.done), total, agents: wave?.workers ?? 0, failed: wave?.failed ?? 0, ...(workers.length ? { workers } : {}), ...(b.restSecs !== undefined ? { endedAt: clock12(s.now - b.restSecs * 1000) } : {}) } } : {}),
     ...(h.open ? { open: true } : {}),
+    ...(h.panel ? { panel: true } : {}),
   };
 }
 
@@ -249,6 +250,7 @@ function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, 
 /** The footer with its tab chips (a row of real clickable chips, accent and bold, lit under the pointer). */
 function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui): RenderElement {
   const bg = panelBg(ui);
+  const strip = l.edge && ui.color !== 'none' ? healthStripBg(ui) : undefined; // under the health band the chips sit on the band's own last fill, to its right edge
   const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
   const left = segs(l, ui);
   const used = left.reduce((n, x) => n + textWidth(x.t), 0);
@@ -261,7 +263,9 @@ function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, u
   const gap = cols - used - KEYS_W - 1; // one cell of margin after the last chip
   return els.Box({
     flexDirection: 'row', flexShrink: 0,
-    children: [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap)) }), ...buttons, els.Text({ backgroundColor: bg, children: ' ' })],
+    children: strip
+      ? [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap - 1)) }), els.Text({ backgroundColor: strip, children: ' ' }), ...buttons, els.Text({ backgroundColor: strip, children: ' ' })]
+      : [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap)) }), ...buttons, els.Text({ backgroundColor: bg, children: ' ' })],
   });
 }
 

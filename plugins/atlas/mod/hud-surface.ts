@@ -55,8 +55,8 @@ const titleRun = (text: string, ui: Pick<Ui, 'theme'>): Run => ({ t: text, tone:
  * first row (host types AbovePrompt, .claude-plugin/types/claude-code/index.d.ts:11227 and :11262-11270: `bodyColumns` is the column less the engine's five, which hold the `[-]`; the mod cannot draw in them and
  * the types give a mod no way to place text inside them), so the corner stands against the host's cells and `[-]` sits right of it, never inside the rule. Wider than `cols` when the parts and the corner do not fit; callers try narrower forms.
  * `flat`: a block drawn with no bottom rule has no box to open, so its ribbon has no corners either (a top edge with nothing to close it was a box left open: critique 27, live-150-46d4825c-1 f0065:25-36). */
-export function titleRow(cols: number, title: string, count: string, mid: readonly Run[], ui: Ui, flat = false, bottom = false): Run[] {
-  const left: Run[] = [dimRun(ui.ascii ? (flat ? '-- ' : '+- ') : flat ? '── ' : bottom ? '╰─ ' : '╭─ ', ui), ...brand(ui), dimRun(ui.ascii ? ' > ' : ' ▸ ', ui), titleRun(title, ui), ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), ...(mid.length > 0 ? [dimRun(' ', ui), ...mid] : []), dimRun(' ', ui)];
+export function titleRow(cols: number, title: string, count: string, mid: readonly Run[], ui: Ui, flat = false, bottom = false, badge = true): Run[] {
+  const left: Run[] = [dimRun(ui.ascii ? (flat ? '-- ' : '+- ') : flat ? '── ' : bottom ? '╰─ ' : '╭─ ', ui), ...(badge ? [...brand(ui), dimRun(ui.ascii ? ' > ' : ' ▸ ', ui)] : []), titleRun(title, ui), ...(count ? [{ t: `  ${count}`, tone: 'sub' as const }] : []), ...(mid.length > 0 ? [dimRun(' ', ui), ...mid] : []), dimRun(' ', ui)];
   const room = Math.max(1, cols - runsCells(left) - 1); // the rule to the cell before the corner
   return [...left, dimRun((ui.ascii ? '-' : RULE).repeat(room) + (flat ? (ui.ascii ? '-' : RULE) : ui.ascii ? '+' : bottom ? '╯' : '╮'), ui)];
 }
@@ -164,6 +164,8 @@ export function windowRows<T extends { state: UiState; word?: string; doneAt?: n
 // ---- TODO ------------------------------------------------------------------------------------------------
 
 /** An empty block of the fixed shape: the closed box with one quiet row (critique 28: bare rows under a box). */
+/** A run with no plan row and no agent yet (the health band is on): ONE ribbon line, `── ATLAS ▸ TODO  no plan yet · 0 agents ───`, in place of two boxes that each say they are empty. */
+export const emptyRibbon = (o: SurfaceOpts): Run[] => titleRow(o.cols, 'TODO', '', [t('no plan yet', 'sub'), dimRun(o.ui.ascii ? ' . ' : ' · ', o.ui), t('0 agents', 'sub')], o.ui, true);
 const emptyBox = (o: SurfaceOpts, title: string, text: string): Run[][] => [titleRow(o.cols, title, '', [], o.ui, false), [t(`  ${text}`, 'muted')], bottomRule(o.cols, o.ui)];
 
 /** One overflow idiom for every block (state 39): the rows a block cannot draw are counted on ONE dim summary row, the last row inside its box, never on the title: `● 2 done  ■ 1 failed  ◇ 1 queued`, and a hidden open row is
@@ -224,7 +226,7 @@ export function planWindow<T extends { state: UiState; word?: string; doneAt?: n
 }
 
 export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
-  if (rows.length === 0) return o.reserve ? emptyBox(o, 'TODO', o.healthLine ? `plan rows appear here  ·  ${o.healthLine}` : 'no tasks yet') : [];
+  if (rows.length === 0) return o.reserve ? emptyBox(o, 'TODO', o.healthLine ? 'plan rows appear here' : 'no tasks yet') : []; // the gates figure is the band's: a box that waits for data does not say it again
   const { ui, cols } = o;
   const tier = tierOf(cols);
   const rich = isRich(o);
@@ -430,7 +432,7 @@ export const sortAgents = <T extends { tasks?: readonly number[] }>(rows: readon
 
 /** The Subagents block at every width: a docked side pane leaves the transcript about 61 cells at 110 columns, and the block still shows there with its ribbon and a row per agent (the columns drop first). */
 export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
-  if (rows.length === 0) return o.reserve ? emptyBox(o, 'SUBAGENTS', o.healthLine ? `agents appear here  ·  ${o.healthLine}` : 'none running yet') : [];
+  if (rows.length === 0) return o.reserve ? emptyBox(o, 'SUBAGENTS', o.healthLine ? 'agents appear here' : 'none running yet') : [];
   const { ui, cols } = o;
   const rich = isRich(o);
   // The counts give way to the running count, then to nothing, where the full line would overflow the row (a narrow transcript beside the docked pane).
@@ -839,10 +841,11 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
   const { cols, ui } = o;
   const body: Run[][] = [];
-  for (const row of healthRows(h, ui)) {
+  const panel = h.panel === true; // the side panel is up: its rows (and its footer, which holds the version) say every figure; without it the band's second line says the last run and the events
+  for (const row of healthRows(h, ui, { recent: true, footer: panel && !!h.version })) {
     const lines: Run[][] = row.detail.map((d, i): Run[] => (row.id === 'gates' && h.gates.checks[i] ? [stateRun(h.gates.checks[i]!.ok ? (h.gates.checks[i]!.pending ? 'queued' : 'done') : 'failed', ui), t(` ${d}`, 'sub')] : [t(d, 'sub')]));
-    const shown = lines.length ? lines : row.id === 'last' ? [row.runs] : [];
+    const shown = lines; // the last run's own line and the event count are the band's second line (or the panel's rows): the card is only what opening a row adds
     shown.forEach((runs, i) => body.push([t('  '), t(i === 0 ? row.label.padEnd(8) : ' '.repeat(8), 'muted'), t(' '), ...runs]));
   }
-  return padRows([titleRow(cols, 'HEALTH', '', [], ui, false), ...body, bottomRule(cols, ui)], cols);
+  return padRows([titleRow(cols, 'HEALTH', '', [], ui, false, false, false), ...body, bottomRule(cols, ui)], cols); // the ATLAS badge is the TODO and SUBAGENTS ribbon's; a card opened from the band does not repeat it
 }

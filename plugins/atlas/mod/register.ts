@@ -873,6 +873,7 @@ async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthI
 		...(typeof usageWindow === 'number' ? { window: usageWindow } : {}),
 		hooks: hookStats(clockNow),
 		open: healthOpenNow,
+		...((await read($, paneOpenedState)) ? { panel: true } : {}), // the side panel is up: it says the gates, the uptime, the context and the events; the band and the card say only what it does not
 	};
 }
 

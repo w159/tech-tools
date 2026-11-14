@@ -169,14 +169,15 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
 
   test('the ribbon names the view, and the phase line carries the band\'s word and clock', () => {
     const t = rows();
-    expect(t[0]).toMatch(/SIDEPANEL.*status/);
+    expect(t[0]).toMatch(/SIDEPANEL/);
+    expect(t[0]).not.toMatch(/status\s*$/); // round 2: the lit chip says `status`; the ribbon does not repeat it
     expect(t.find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+◐ working .* 0:57$/);
     expect(rows(57, BLOCKED).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+▲ blocked\s+0:57$/);
     expect(rows(57, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+● done\s+0:52$/);
   });
   test('phases are the true ones: only the entered ones are green, the lit one wears the clock', () => {
     const chain = rows(70).find((l) => /research ›/.test(l))!;
-    expect(chain).toMatch(/· research › · theory › · test › [◐◓◑◒] implement 0:57/);
+    expect(chain).toMatch(/research › theory › test › [◐◓◑◒] implement 0:57/);
   });
   test('one 12-cell braille line per agent, with its name and its time', () => {
     const t = rows();

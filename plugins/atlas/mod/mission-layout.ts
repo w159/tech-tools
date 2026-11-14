@@ -15,12 +15,12 @@ import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
 import { displayName } from './hud';
 import { fitText, textWidth } from './theme';
-import { bandSegments, type Health } from './idle-health';
+import { bandDetail, bandSegments, type Health } from './idle-health';
 
 export type { Run, Tone };
 /** One row, on the theme's panel colour. `keys`: the footer, where the band appends its key buttons in `keysWidth`
  * cells. `board`: a slot of `rows` rows the harness fills with its own todo list. */
-export type Line = { runs: Run[]; keys?: boolean; board?: number };
+export type Line = { runs: Run[]; keys?: boolean; board?: number; /** The key row sits under the idle health band: its chips share the health button's fill and the band's right edge. */ edge?: boolean };
 
 /** Mocha hexes for each tone (the default theme); the hosts paint the live theme through atlas-ui `toneHex`. */
 export const TONE_HEX: Record<Tone, string> = { ...PALETTES.mocha, dim: '#585858' };
@@ -365,9 +365,11 @@ function leadRuns(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, re
 const SEG_PLAN = { mocha: xtermHex(237), latte: PALETTES.latte.queued_fill } as const;
 const SEG_WORK = { mocha: xtermHex(235), latte: PALETTES.latte.base } as const;
 /** The idle state slab: 240 with 252 text (wave 37; it was 236, which vanished beside the 237 plan segment). */
-const SEG_IDLE = { mocha: xtermHex(240), latte: PALETTES.latte.queued_fill } as const;
+/** The fill of the idle health band's last segment (the `▸ health` button) and of the chip strip under it: one background, one right edge. */
+export const healthStripBg = (ui: Pick<Ui, 'theme'>): string => SEG_WORK[ui.theme];
 /** The wordmark pill's fill: xterm 97 with white ink, darker than the 141 working slab beside it so the two never merge (wave 36). */
 const PILL = { mocha: xtermHex(97), latte: xtermHex(54) } as const;
+const SEG_IDLE = { mocha: xtermHex(240), latte: PALETTES.latte.queued_fill } as const;
 const EDGE = '▌';
 /** The bar draws filled segments: a colour terminal, not ASCII, and only the Claude Code bar (`bar`). */
 export const segmentedOn = (m: Pick<MissionModel, 'bar'>, ui: Ui): boolean => !!m.bar && !ui.ascii && ui.color !== 'none';
@@ -402,7 +404,7 @@ function healthSegmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], 
   const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, st.kind === 'idle' ? 'text' : undefined)];
   let prev = fill;
   segs.forEach((seg, i) => {
-    const next = fills[i % 2]!;
+    const next = fills[(segs.length - 1 - i) % 2 === 0 ? 1 : 0]!; // counted from the button: it is always the strip's fill, the segments before it alternate
     out.push(edge(prev, next), ...onFill([r(' '), ...seg, r(' ')], next));
     prev = next;
   });
@@ -754,7 +756,10 @@ function footerLines(m: MissionModel): Line[] {
   const healthShows = !!m.health && runStateOf(m).kind === 'idle' && !m.total && m.workers.length === 0;
   const allGreen = !!m.checks?.length && m.checks.every((c) => c.ok && !c.pending);
   const checks = healthShows && allGreen ? [] : checkRuns(m.checks, m.cols, uiOf(m));
-  return [...(checks.length ? [{ runs: fitRuns(checks, m.cols, uiOf(m)) }] : []), ...(keys > 0 ? [{ runs: [], keys: true }] : [])];
+  // No side panel beside the transcript (under 144 columns nothing docks unasked): a second compact line says the last run and the events, so an idle band is more than one line of figures.
+  const ranFor = m.ranSecs ?? m.lastRun?.secs;
+  const detail = healthShows && m.health ? bandDetail(m.health, { ...(ranFor !== undefined ? { secs: ranFor } : {}), done: m.done, total: m.total }) : [];
+  return [...(detail.length ? [{ runs: fitRuns([r('  '), ...detail], m.cols, uiOf(m)) }] : []), ...(checks.length ? [{ runs: fitRuns(checks, m.cols, uiOf(m)) }] : []), ...(keys > 0 ? [{ runs: [], keys: true, ...(healthShows ? { edge: true } : {}) }] : [])];
 }
 
 // ---- row budget -----------------------------------------------------------------------

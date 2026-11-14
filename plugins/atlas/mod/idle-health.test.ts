@@ -39,16 +39,17 @@ describe('idle band shows live health', () => {
       const row = firstRow(model(cols));
       expect(row).toContain('◖ ◆ ATLAS ◗ ○ idle');
       expect(row).toContain('● gates 4/4');
-      expect(row).toContain('ctx 18%');
+      expect(row).toContain('context 18%');
       expect(row).toContain('▸ health');
       expect(row).not.toContain('todo -');
       expect(row).not.toContain('no agents');
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
     });
   }
-  test('at 150 the tokens, the uptime and the version-free summary all show', () => {
+  test('at 150 the context (no tokens, round 2), the uptime and the version-free summary all show', () => {
     const row = firstRow(model(150));
-    expect(row).toContain('ctx 18% (42k tok)');
+    expect(row).toContain('context 18%');
+    expect(row).not.toContain('tok');
     expect(row).toContain('up 12:04');
   });
   test('a failed gate reads ■ and the count', () => {
@@ -62,8 +63,8 @@ describe('idle band shows live health', () => {
     expect(row).toContain('up 12:04');
   });
   test('a run that ended this session adds `last run`', () => {
-    const row = firstRow(model(150, { ranSecs: 134, restSecs: 40 }));
-    expect(row).toContain('last run 2:14');
+    const second = textOf(kids(bandTree(els, model(150, { ranSecs: 134, restSecs: 40 }), handlers) as unknown as Node)[1]!); // round 2: the last run is the band's second line
+    expect(second).toContain('last run 2:14');
   });
   test('the uptime ticks', () => {
     expect(firstRow(model(150, { health: { ...HEALTH, upSecs: 725 } }))).toContain('up 12:05');
@@ -120,11 +121,11 @@ describe('the expanded health card (HUD)', () => {
   const text = (over: Record<string, unknown> = {}): string[] => healthCardRows({ ...h, ...over } as never, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
   test('ribbon, rows and closing rule', () => {
     const t = text();
-    expect(t[0]).toContain('◖ ◆ ATLAS ◗ ▸ HEALTH');
+    expect(t[0]).toMatch(/^╭─ HEALTH ─+╮$/); // round 2: no second badge (the TODO and SUBAGENTS ribbons keep theirs)
     // wave 44: the card adds detail (per-gate lines, the context against its window, the hooks' event counts); it never restates the band
     expect(t.some((l) => /gates\s+● completion green 1\/1 pass/.test(l))).toBe(true);
     expect(t.some((l) => /session\s+42,000 tokens in the window/.test(l))).toBe(true);
-    expect(t.some((l) => /last run\s+none this session/.test(l))).toBe(true);
+    expect(t.some((l) => /last run/.test(l))).toBe(false); // round 2: the band's second line says it
     expect(t[t.length - 1]).toMatch(/^╰─+╯$/);
   });
   test('a finished run fills the last-run row', () => {
@@ -139,14 +140,14 @@ describe('the expanded health card (HUD)', () => {
   });
 });
 
-describe('empty HUD boxes say what will appear, with the live summary', () => {
+describe('empty HUD boxes say what will appear, never the gates figure again', () => {
   const o = { cols: 110, ui, reserve: true, healthLine: '● gates 4/4 · ctx 18%' };
   test('TODO and SUBAGENTS', () => {
     const todo = todoRows([], o as never, { spacers: false, extras: false }).map((r) => r.map((x) => x.t).join('')).join('\n');
     const subs = agentRows([], o as never, { spacers: false, extras: false }).map((r) => r.map((x) => x.t).join('')).join('\n');
     for (const s of [todo, subs]) {
       expect(s).not.toMatch(/no tasks yet|none running yet/);
-      expect(s).toContain('● gates 4/4 · ctx 18%');
+      expect(s).not.toContain('gates 4/4'); // round 2: the band says it once
     }
     expect(todo).toContain('plan rows appear here');
     expect(subs).toContain('agents appear here');

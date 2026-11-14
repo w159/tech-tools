@@ -99,13 +99,13 @@ describe('3: a health row opens only when it has real detail', () => {
     const t = body(world(57, { expanded: 'health:hooks' })).join('\n');
     expect(t).toMatch(/tool\.call 3 {3}session\.measure 2/);
     expect(t).not.toContain('hooks module loaded, mod drawing');
-    expect(t).not.toContain('atlas 17.21.1'); // the version is the session row's detail, said once
+    expect(t.match(/atlas 17\.21\.1/g)?.length).toBe(1); // round 2: the version is said once, in the pinned footer (the session row's detail no longer repeats it)
   });
   test('the session row never prints what its detail says: the branch and the version only show when it opens', () => {
     expect(body(world(80)).find((l) => l.includes('session'))).not.toContain('branch');
     const open = body(world(57, { expanded: 'health:session' })).join('\n');
     expect(open).toContain('branch master');
-    expect(open).toContain('atlas 17.21.1');
+    expect(open.match(/atlas 17\.21\.1/g)?.length).toBe(1); // the pinned footer is where the version lives
   });
   test('session opens to the context against its window; last run to each agent`s end state', () => {
     expect(body(world(57, { expanded: 'health:session' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
@@ -125,12 +125,16 @@ describe('4: the idle panel ends finished, with live content from real events', 
     const i = t.findIndex((l) => l.includes('recent'));
     expect(i).toBeGreaterThan(0);
     expect(t.slice(i + 1, i + 3).map((l) => l.trim())).toEqual(['12s ago  tool.call Bash', '40s ago  session.measure']);
-    expect(t.filter((l) => l.trim() !== '').at(-1)).toMatch(/^\s+─{20,}$/);
+    const tail = t.filter((l) => l.trim() !== '');
+    expect(tail.at(-2)).toMatch(/^\s+─{20,}$/); // round 2: the rule, then the pinned footer
+    expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1 · hooks loaded$/);
   });
   test('with no events the panel still ends in the rule and prints no recent heading', () => {
     const t = body(world(57, { health: { ...h, hooks: undefined } }));
     expect(t.join('\n')).not.toContain('recent');
-    expect(t.filter((l) => l.trim() !== '').at(-1)).toMatch(/^\s+─{20,}$/);
+    const tail = t.filter((l) => l.trim() !== '');
+    expect(tail.at(-2)).toMatch(/^\s+─{20,}$/);
+    expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1$/); // no hooks stats: the footer holds only the version
   });
 });
 
@@ -160,13 +164,13 @@ describe('5: rows fit by dropping the lowest-value field, never by cutting', () 
 });
 
 describe('6: ctx and tokens are one measure, labelled so', () => {
-  test('band: `ctx 18% (42k tok)`, not two figures with a dot between', () => {
+  test('band: `context 18%` (round 2: the tokens are the session detail, never beside the figure)', () => {
     const row = rowsOf(model(150))[0]!;
-    expect(row).toContain('ctx 18% (42k tok)');
-    expect(row).not.toContain('· 42k tok');
+    expect(row).toContain('context 18%');
+    expect(row).not.toContain('42k tok');
   });
   test('the panel session row reads the same words', () => {
-    expect(body(world(57)).find((l) => l.includes('session'))).toContain('ctx 6% (63k tok)');
+    expect(body(world(57)).find((l) => l.includes('session'))).toContain('context 6%');
   });
   test('the detail says what the figure is', () => {
     expect(ih.healthDetail(h, 'session')).toContain('measured on the last response, not a session total');
@@ -181,19 +185,19 @@ describe('6: ctx and tokens are one measure, labelled so', () => {
   });
 });
 
-describe('7: the idle band carries one more live figure, the age of the last event', () => {
-  test('`last event 12s ago` when a hook has fired since boot', () => {
-    expect(rowsOf(model(150))[0]).toContain('last event 12s ago');
+describe('7: the idle band carries one more live figure, the age of the last event (round 2: on its second line)', () => {
+  test('`last 12s ago` when a hook has fired since boot', () => {
+    expect(rowsOf(model(150))[1]).toContain('last 12s ago');
   });
   test('the age ticks', () => {
-    expect(rowsOf(model(150, { health: { ...HEALTH, hooks: { ...HOOKS, lastEventSecs: 13 } } }))[0]).toContain('last event 13s ago');
+    expect(rowsOf(model(150, { health: { ...HEALTH, hooks: { ...HOOKS, lastEventSecs: 13 } } }))[1]).toContain('last 13s ago');
   });
   test('absent when only the session start has fired (it would only repeat the uptime)', () => {
     resetHookLog();
     noteHook('session.start', 1000);
     const s = hookStats(61_000);
     expect(s.lastEventSecs).toBeUndefined();
-    expect(rowsOf(model(150, { health: { ...HEALTH, hooks: s } }))[0]).not.toContain('last event');
+    expect(rowsOf(model(150, { health: { ...HEALTH, hooks: s } })).join('\n')).not.toMatch(/last \d+s ago/);
     noteHook('tool.call Read', 31_000);
     expect(hookStats(61_000).lastEventSecs).toBe(30);
     expect(hookStats(61_000).byLabel).toEqual([{ label: 'session.start', n: 1 }, { label: 'tool.call', n: 1 }]);
@@ -207,10 +211,10 @@ describe('7: the idle band carries one more live figure, the age of the last eve
 });
 
 describe('8: a narrow pane names the stages, it does not print bare dots', () => {
-  for (const cols of [54, 46]) {
-    test(`the idle phase chain at ${cols} cells reads short stage names`, () => {
+  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /research.*thy.*test.*impl.*ver/]] as const) {
+    test(`the idle phase chain at ${cols} cells reads ${cols === 54 ? 'whole names (round 2: no dot marks, so they fit)' : 'short stage names'}`, () => {
       const t = body(world(cols, { phases: ['research', 'theory', 'test', 'implement', 'verify'], phase: 'research' })).find((l) => l.includes('research'))!;
-      expect(t).toMatch(/research.*thy.*test.*impl.*ver/);
+      expect(t).toMatch(names);
       expect(t).not.toContain('· · ·');
       expect(textWidth(t)).toBeLessThanOrEqual(cols);
     });
@@ -251,7 +255,7 @@ describe('11: the team tab has no orphan time axis when nothing ran', () => {
     const lead = { name: 'lead', state: 'waiting', detail: '', secs: 0 } as never;
     const t = body(world(57, { lead, workers: [], mates: [] }, 'team'));
     expect(t.join('\n')).not.toMatch(/^\s*\d+:\d\d\s+\d+:\d\d\s*$/m);
-    expect(t.join('\n')).toContain('0 workers · nobody dispatched yet');
+    expect(t.join('\n')).toContain('no workers yet');
     expect(t.join('\n')).not.toContain('0 running');
   });
 });

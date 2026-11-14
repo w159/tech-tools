@@ -26,10 +26,12 @@ export type Health = {
   open?: boolean;
   /** Handlers are wired: the band draws the clickable button. */
   button?: boolean;
+  /** The side panel is drawn beside the transcript: it already says the gates, the uptime, the context, the events and the last run, so the band and the card say only what it does not. */
+  panel?: boolean;
 };
 
 /** The raw inputs register.ts hands the band; band.tsx completes them from the snapshot, the gates and the run clocks. */
-export type HealthIn = { upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
+export type HealthIn = { panel?: boolean; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
 
 const r = (t: string, tone: Run['tone'] = 'text', o: Partial<Run> = {}): Run => ({ t, tone, ...o });
 const glue = (): Run => r(' · ', 'sub');
@@ -44,20 +46,31 @@ export const gatesMark = (h: Pick<Health, 'gates'>, ui: Ui): Run => stateRun(gat
 
 /** `12s`, `3m`, `2h`: a whole-number age. */
 export const agoText = (secs: number): string => (secs < 60 ? `${Math.max(0, Math.floor(secs))}s` : secs < 3600 ? `${Math.floor(secs / 60)}m` : `${Math.floor(secs / 3600)}h`);
-/** The one wording of the context figures on every surface: the window fill, and the tokens it is made of (the same host measure, so they read as one thing). */
-export const ctxText = (h: Pick<Health, 'ctxPct' | 'tokens'>): string => (h.ctxPct === undefined ? '' : h.tokens !== undefined ? `ctx ${Math.round(h.ctxPct)}% (${tokenText(h.tokens)} tok)` : `ctx ${Math.round(h.ctxPct)}%`);
+/** The one wording of the context figure on every surface: `context 6%`. The tokens it is made of and the window are the session row's detail, never beside it. */
+export const ctxText = (h: Pick<Health, 'ctxPct'>): string => (h.ctxPct === undefined ? '' : `context ${Math.round(h.ctxPct)}%`);
 
 /** The band's segments, in priority order: each is a list of runs (the painter lays each on its own fill). The button is last and never dropped while any form shows. */
 export type BandSegments = { gates: Run[]; ctxFull: Run[]; ctxShort: Run[]; up: Run[]; event: Run[]; last: Run[]; button: Run[] };
 export function bandSegments(h: Health, ui: Ui, lastRun: { secs?: number; done: number; total: number } | undefined): BandSegments {
-  const gates = h.gates.total > 0 ? [gatesMark(h, ui), r(` gates ${h.gates.green}/${h.gates.total}`)] : [];
-  const ctxFull = ctxText(h) ? [r(ctxText(h))] : [];
-  const ctxShort = h.ctxPct !== undefined ? [r(`ctx ${Math.round(h.ctxPct)}%`)] : [];
-  const up = h.upSecs !== undefined ? [r(`up ${elapsedClock(h.upSecs)}`, 'sub')] : [];
-  const event = h.hooks?.lastEventSecs !== undefined ? [r(`last event ${agoText(h.hooks.lastEventSecs)} ago`, 'sub')] : [];
-  const last = lastRun && lastRun.secs !== undefined ? [r(`last run ${elapsedClock(lastRun.secs)}${lastRun.total > 0 ? ` · ${lastRun.done}/${lastRun.total} done` : ''}`, 'sub')] : [];
+  const own = !h.panel; // the side panel beside the transcript says the figures itself: the band keeps only its state and the button
+  const gates = own && h.gates.total > 0 ? [gatesMark(h, ui), r(` gates ${h.gates.green}/${h.gates.total}`)] : [];
+  const ctxFull = own && ctxText(h) ? [r(ctxText(h))] : [];
+  const ctxShort = own && h.ctxPct !== undefined ? [r(`ctx ${Math.round(h.ctxPct)}%`)] : [];
+  const up = own && h.upSecs !== undefined ? [r(`up ${elapsedClock(h.upSecs)}`, 'sub')] : [];
+  const event: Run[] = []; // the events and the last run are the band's second line (bandDetail), not a segment of its first
+  const last: Run[] = [];
+  void lastRun;
   const button = h.button ? [clickRun('health', !!h.open, ui, 'band:health')] : [];
   return { gates, ctxFull, ctxShort, up, event, last, button };
+}
+
+/** The band's second line while no side panel shows (a terminal under 144 columns docks none unasked): the last run and the events the hooks saw, `last run none · 1 event · last 7s ago`. Empty when the panel is drawn (it has them) or the mod has neither. */
+export function bandDetail(h: Health, lastRun: { secs?: number; done: number; total: number } | undefined): Run[] {
+  if (h.panel) return [];
+  const ev = h.hooks;
+  const run = lastRun && lastRun.secs !== undefined ? `last run ${elapsedClock(lastRun.secs)}${lastRun.total > 0 ? ` · ${lastRun.done}/${lastRun.total} done` : ''}` : 'last run none';
+  const bits = [run, ...(ev && ev.total > 0 ? [plural(ev.total, 'event')] : []), ...(ev?.lastEventSecs !== undefined ? [`last ${agoText(ev.lastEventSecs)} ago`] : [])];
+  return [r(bits.join(' · '), 'sub')];
 }
 
 /** A row's fields in drawing order; `keep` says how long a field survives a narrow pane (the lowest goes first, a field is dropped whole, never cut). */
@@ -80,22 +93,24 @@ export function fitFields(fields: readonly HealthField[], room: number): Run[] {
 const plural = (n: number, w: string): string => `${n} ${w}${n === 1 ? '' : 's'}`;
 const seconds = (n: number | undefined): string => (n === undefined ? '' : elapsedClock(n));
 
-export function healthRows(h: Health, ui: Ui): HealthRow[] {
+/** `recent`: a recent-events list is drawn beside the rows, so the hooks row leaves out the age of the last event and the per-label counts that the list already says. */
+export type RowOpts = { recent?: boolean; /** The panel's pinned footer says the version, so the session detail does not. */ footer?: boolean };
+export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
   const rows: HealthRow[] = [];
   const f = (text: string, keep: number, tone: Run['tone'] = 'text'): HealthField => ({ runs: [r(text, tone)], keep });
   const ev = h.hooks;
-  const hooksFields: HealthField[] = [{ runs: [stateRun('done', ui), r(ev && ev.total > 0 ? ` ${plural(ev.total, 'event')}` : ' loaded')], keep: 9 }, ...(ev?.lastEventSecs !== undefined ? [f(`last ${agoText(ev.lastEventSecs)} ago`, 5, 'sub')] : [])];
-  rows.push({ id: 'hooks', label: 'hooks', fields: hooksFields, runs: hooksFields.flatMap((x) => x.runs), detail: healthDetail(h, 'hooks') });
+  const hooksFields: HealthField[] = [{ runs: [stateRun('done', ui), r(ev && ev.total > 0 ? ` ${plural(ev.total, 'event')}` : ' loaded')], keep: 9 }, ...(ev?.lastEventSecs !== undefined && !o.recent ? [f(`last ${agoText(ev.lastEventSecs)} ago`, 5, 'sub')] : [])];
+  rows.push({ id: 'hooks', label: 'hooks', fields: hooksFields, runs: hooksFields.flatMap((x) => x.runs), detail: healthDetail(h, 'hooks', o) });
   if (h.gates.total > 0) {
     const checks = h.gates.checks.reduce((n, c) => n + (c.lines ?? 0), 0);
     const fields: HealthField[] = [{ runs: [gatesMark(h, ui), r(` ${h.gates.green}/${h.gates.total} green`)], keep: 9 }, ...(checks > 0 ? [f(`${plural(h.gates.checks.reduce((n, c) => n + (c.pass ?? 0), 0), 'check')} pass`, 3, 'sub')] : [])];
-    rows.push({ id: 'gates', label: 'gates', fields, runs: [gatesMark(h, ui), r(` ${h.gates.green}/${h.gates.total} green`, 'sub')], detail: healthDetail(h, 'gates') });
+    rows.push({ id: 'gates', label: 'gates', fields, runs: [gatesMark(h, ui), r(` ${h.gates.green}/${h.gates.total} green`, 'sub')], detail: healthDetail(h, 'gates', o) });
   }
   const sessionFields: HealthField[] = [
     ...(h.upSecs !== undefined ? [f(`up ${elapsedClock(h.upSecs)}`, 9)] : []),
     ...(h.ctxPct !== undefined ? [f(ctxText(h), 8)] : h.tokens !== undefined ? [f(`${tokenText(h.tokens)} tok`, 8)] : []),
   ]; // the branch and the version are the row's detail, not its value: opening the row is how you see them
-  if (sessionFields.length) rows.push({ id: 'session', label: 'session', fields: sessionFields, runs: sessionFields.flatMap((x) => x.runs), detail: healthDetail(h, 'session') });
+  if (sessionFields.length) rows.push({ id: 'session', label: 'session', fields: sessionFields, runs: sessionFields.flatMap((x) => x.runs), detail: healthDetail(h, 'session', o) });
   const l = h.last;
   const lastFields: HealthField[] = l
     ? [
@@ -106,7 +121,7 @@ export function healthRows(h: Health, ui: Ui): HealthRow[] {
         ...(l.total > 0 ? [f(`${l.done}/${l.total} todos`, 3)] : []),
       ]
     : [{ runs: [r('none this session', 'muted')], keep: 9 }];
-  rows.push({ id: 'last', label: 'last run', fields: lastFields, runs: lastFields.flatMap((x) => x.runs), detail: healthDetail(h, 'last') });
+  rows.push({ id: 'last', label: 'last run', fields: lastFields, runs: lastFields.flatMap((x) => x.runs), detail: healthDetail(h, 'last', o) });
   return rows;
 }
 
@@ -117,7 +132,7 @@ export function healthLine(h: Health, ui: Ui): string {
 }
 
 /** What opening a row adds, from data the mod holds and the collapsed value lacks: no line restates the row. An empty list means the row has nothing more to show (it is not expandable). */
-export function healthDetail(h: Health, id: HealthRow['id']): string[] {
+export function healthDetail(h: Health, id: HealthRow['id'], o: RowOpts = {}): string[] {
   if (id === 'gates') {
     return h.gates.checks.map((c) => {
       const state = c.ok ? (c.pending ? 'pending' : 'green') : 'failed';
@@ -130,11 +145,11 @@ export function healthDetail(h: Health, id: HealthRow['id']): string[] {
     if (h.tokens !== undefined) out.push(h.window !== undefined ? `${grouped(h.tokens)} of ${grouped(h.window)} tokens in the window` : `${grouped(h.tokens)} tokens in the window`);
     if (h.tokens !== undefined) out.push('measured on the last response, not a session total');
     if (h.branch) out.push(`branch ${h.branch}`);
-    if (h.version) out.push(`atlas ${h.version}`);
+    if (h.version && !o.footer) out.push(`atlas ${h.version}`);
     return out;
   }
   if (id === 'hooks') {
-    const by = h.hooks?.byLabel ?? [];
+    const by = (h.hooks?.byLabel ?? []).filter((e) => !o.recent || e.n > 1); // a label seen once is a line of the recent list: only a count says more than it
     const words = by.map((e) => `${e.label} ${e.n}`);
     const lines = Array.from({ length: Math.min(3, Math.ceil(words.length / 2)) }, (_, k) => words.slice(k * 2, k * 2 + 2).join('   '));
     return lines;
