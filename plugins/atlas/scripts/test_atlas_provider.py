@@ -1609,6 +1609,7 @@ class BenchTests(Base):
         self.assertIn("not healthy", err.getvalue())
 
 
+@unittest.skipUnless(shutil.which("claude"), "claude CLI not on PATH")
 class RealCliWiringTests(Base):
     def test_claude_p_reaches_the_stub_with_the_resolved_env(self):
         st = self.stub(models=("stub-model",))
