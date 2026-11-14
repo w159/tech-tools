@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.15.1 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.16.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -107,7 +107,8 @@ it Atlas falls back to `claude --bg` workers.
 
    Output (trimmed): two `implementer` members with `tools_profile: edit`, one
    `verifier` with `tools_profile: exec`, `max_parallel: 3`,
-   `isolation: worktree`, and one git worktree per implementer.
+   `isolation: shared`: every member works in the one tree, with no worktree or
+   branch.
 
 To update to a new release, refresh the catalog first and then update the
 plugin, and restart the session so the hooks resolve again:
@@ -135,8 +136,8 @@ separate install: `claude plugin install armada@tech-tools`
  research -> theory -> test -> validate -> implement -> verify -> done
                                              |            |
                                 atlas:implementer     atlas:verifier
-                                (edit tools, own      (no write tools, fresh
-                                 worktree)             context, refutes)
+                                (edit tools, leased   (no write tools, fresh
+                                 files, one tree)      context, refutes)
                                              |            |
                                              +---- findings.json verdict
                                                           |
@@ -185,6 +186,17 @@ blocks, it names the letters:
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
 | i      | open todos                                       | r      | `done` header while work is open           |
 |        |                                                  | s      | 2+ in-process workers, no tmux team or crew |
+
+The gate checks the work itself before it asks for paperwork. When (a), (b),
+(g), (k), (m) or (o) would block, it re-runs the session's last plain test
+command (`pytest`, `npm test`, `go test`, `cargo test`, `make test` and the like,
+no shell operators, from the transcript of this run; `hooks/gate_rerun.py`). A
+green re-run writes its own evidence file and a verified finding and clears
+those six letters; a red one blocks with the command, exit code and output tail.
+A crew whose `summary.json` is green for this session counts the same way. Any
+code edit after the re-run voids it; a docs edit does not. The docs letters
+still apply. `ATLAS_GATE_RERUN=off` restores the old behavior;
+`ATLAS_GATE_RERUN_TIMEOUT` caps the re-run (default 90 s).
 
 The gate arms inside a project: a directory with `docs/`, or one under a
 project marker (`.git`, `.claude`, `.atlas`, `package.json`, `pyproject.toml`,
@@ -260,6 +272,9 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
   reports (`irc say --to <nick>`) and wait with `irc wait`, never `sleep`.
 - Each worker owns a set of files on one tree. A hook denies edits to a peer's
   file and names the owner to ask. No worktrees, so nothing waits on a merge.
+  A file moves to a peer live: `irc give <path> <peer>` hands it over and
+  announces `LEASE <path> -> <peer>` on the channel, `irc claim <path>` takes an
+  unowned one, and fix rounds follow the moved lease.
 - A worker cannot stop until its own check passes: the Stop hook re-runs the
   check instead of taking the worker's word. After all workers exit, the
   global check runs and only the owners of failing tests are resumed.
@@ -275,6 +290,19 @@ passed every test. Numbers and method: [2026-10-28_atlas-16.4.0-crew-benchmark.m
 | -------------------------------------- | ---------------------- | ------------------- | -------------- |
 | 8 modules, 213 tests (3 runs each)     | 853k tokens, 144 s     | 137k tokens, 41 s   | 16% tokens, 28% time |
 | 18 modules, 469 tests (3 runs each)    | 2.29M tokens, 181 s    | 307k tokens, 55 s   | 13% tokens, 30% time |
+
+Routed from a plain prompt (17.16.0): the lead is told to start the crew and does it in one Bash call.
+Same model and flags, one task with 8 modules and 434 tests; cold is process start to exit, warm is a lead
+already running. Method and every run: [2026-11-14_atlas-17.16.0-team-performance.md](../../docs/audits/2026-11-14_atlas-17.16.0-team-performance.md).
+
+| Run                         | Single prompt          | Atlas 17.16.0         | Atlas vs single      |
+| --------------------------- | ---------------------- | --------------------- | -------------------- |
+| cold, with a changelog      | 296k tokens, 49.4 s    | 157k tokens, 30.4 s   | 53% tokens, 62% time |
+| warm, with a changelog      | 354k tokens, 59.3 s    | 157k tokens, 26.5 s   | 44% tokens, 45% time |
+| cold, no docs               | 244k tokens, 50.1 s    | 155k tokens, 31.0 s   | 64% tokens, 62% time |
+
+A cold crew costs more dollars than one prompt (about $0.26 against $0.19): each worker pays its own cache
+creation.
 
 Usage and the plan format: `skills/atlas-orchestrate/references/crew.md`.
 
@@ -314,9 +342,10 @@ next command). Add `--json` for the full JSON object.
   EVIDENCE and NEXT report from `contracts/worker-protocol.json`. Full stdout and
   stderr go to `<project>/.atlas/.run/logs/<worker>.log`. The lead reads the
   report; the log stays on disk.
-- Implementers get their own git worktree and branch
-  (`atlas/<team>/<member>`). Gate condition (q) blocks until worker branches are
-  merged.
+- Every team works in the one tree (`isolation: shared` in every scope-matrix
+  cell): no worktree or branch per member, so nothing waits on a merge. Writers
+  that build together belong in a crew (below), where file leases keep them
+  apart and `irc give` hands a file to a peer live.
 - Claude workers get `--allowedTools` scoped by their `tools_profile` (`read`,
   `edit`, `exec`), so an exec worker can run test runners and read-only git
   without a permission prompt.
@@ -358,7 +387,7 @@ judgment:
 
    ```
    $ python3 scripts/atlas_resolve.py build medium --paths src/a.py
-   {"effort": "medium", "file_scope": ["src/a.py"], "isolation": "worktree",
+   {"effort": "medium", "file_scope": ["src/a.py"], "isolation": "shared",
     "max_parallel": 3, "task_class": "implement", "team": [
      {"count": 2, "effort": "medium", "model": "sonnet", "role": "implementer", "tools_profile": "edit"},
      {"count": 1, "effort": "medium", "model": "sonnet", "role": "verifier", "tools_profile": "exec"}]}
@@ -1081,7 +1110,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.15.1
+|-- .claude-plugin/plugin.json   manifest, version 17.16.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

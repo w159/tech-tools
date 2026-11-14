@@ -194,6 +194,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from docs_drift import docs_drift as _docs_drift  # noqa: E402
 from docs_drift import find_root as _find_root  # noqa: E402
 from docs_drift import git_changed_paths as _git_changed_paths  # noqa: E402
+import gate_rerun  # noqa: E402
 
 
 def _record_analytics(key):
@@ -1390,6 +1391,19 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         p for p in _shell_changed_code(root, session) if p not in run_paths
     ]
     code_changed = _nondocs_changed(run_paths)
+    # The gate's own independent check (hooks/gate_rerun.py): this run's test command re-run by the hook,
+    # green, with no code written after it, or a crew of this session whose engine re-ran the global check
+    # green. It stands in for the evidence file, findings row, verifier dispatch, todo plan, phase tags and
+    # after-the-fact dispatch that (a)(b)(g)(k)(m)(o) otherwise demand: those were paperwork around the
+    # same test, and cost a measured ~80 s and ~500k tokens per run.
+    started_early = _run_started_at(session)
+    proof = None
+    if code_changed and not gate_rerun.switched_off():
+        proof = gate_rerun.valid_proof(
+            root, session, started_early, run_paths
+        ) or gate_rerun.crew_proof(root, session, started_early, run_paths)
+    if proof:
+        missing_delegation = False
     # (c)-(f) and (h) are docs-currency checks: they need a docs/ SSOT to
     # check against, so a project without one is never blocked on them.
     docs_exist = (root / "docs").is_dir()
@@ -1399,9 +1413,9 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # inapplicable gate is the defect, not the fix. Both are further
     # scoped to THIS RUN's own window via `started`: evidence/findings
     # left over from an earlier session must not satisfy today's gate.
-    started = _run_started_at(str(data.get("session_id") or ""))
-    ok_a = _check_evidence(root, started) if code_changed else True
-    ok_b = _check_findings(root, started) if code_changed else True
+    started = started_early
+    ok_a = _check_evidence(root, started) if code_changed and not proof else True
+    ok_b = _check_findings(root, started) if code_changed and not proof else True
     docs_check = code_changed and docs_exist
     ok_c = _check_changelog(root) if docs_check else True
     ok_d = _check_roadmap(root) if docs_check else True
@@ -1443,7 +1457,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # (k) Plan mandate. (i) enforces draining a list, so a run that never
     # made one passed it trivially -- an absent list has zero open items.
     # (k) closes that gap on code-shipping runs only.
-    missing_plan = code_changed and not _has_todo_plan(
+    missing_plan = code_changed and not proof and not _has_todo_plan(
         str(data.get("transcript_path") or ""),
         root,
         str(data.get("session_id") or ""),
@@ -1462,7 +1476,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         nv for nv in _docs_name_violations(root) if _target_exists(nv[0], root)
     ]
     unverified = 0
-    if code_changed:
+    if code_changed and not proof:
         session = data.get("session_id", "")
         unverified = max(
             0,
@@ -1496,7 +1510,10 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     header_failing = not sidechain and _status_header_would_block(data, contract)
     phases_missing = (
         []
-        if sidechain or not code_changed or _contract_block_used("o", session, root)
+        if sidechain
+        or not code_changed
+        or proof
+        or _contract_block_used("o", session, root)
         else _missing_required_phases(root, session, contract)
     )
     colony_workers = None
@@ -1563,6 +1580,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         "team_inprocess": team_inprocess if team_failing else 0,
         "team_advisory": team_inprocess if team_advisory else 0,
         "missing_delegation": missing_delegation,
+        "proof": proof,
         "started": started,
         "failed": failed,
     }
@@ -1647,6 +1665,10 @@ def main() -> int:
                 _STOP.get("letters", []),
                 _STOP.get("why"),
             )
+
+
+# Letters a green gate re-run (hooks/gate_rerun.py) satisfies; see evaluate().
+_RERUN_LETTERS = frozenset("abgkmo")
 
 
 def _main() -> int:
@@ -1794,6 +1816,37 @@ def _main() -> int:
         # Fail-open: any DB error yields an empty path list -> treated the
         # same as "wrote nothing", never a false block.
         ev = evaluate(data, root, missing_delegation)
+        # The gate's own adversarial check: when the only thing between this run and a pass is proof
+        # (evidence, findings, verifier, plan, phases, delegation), re-run the session's last test command
+        # here, in the hook, and let its exit code decide. Never inside evaluate(): the band polls that.
+        rerun_note = ""
+        if (
+            set(ev["failed"]) & _RERUN_LETTERS
+            and not ev.get("proof")
+            and not gate_rerun.switched_off()
+        ):
+            cmd = gate_rerun.last_test_command(
+                str(data.get("transcript_path") or ""), ev.get("started"), root
+            )
+            result = gate_rerun.rerun(cmd, root) if cmd else None
+            if result and result["exit"] == 0:
+                gate_rerun.write_proof(root, session, result)
+                ev = evaluate(data, root, missing_delegation)
+            elif result:
+                rerun_note = (
+                    f"[atlas] The gate re-ran `{result['command']}` in {result['cwd']} itself: "
+                    f"exit {result['exit']}. Fix the failure; the next Stop re-runs it.\n"
+                    + "\n".join(result["tail"].strip().splitlines()[-12:])
+                    + "\n"
+                )
+            else:
+                rerun_note = (
+                    "[atlas] Shortcut: the gate re-runs this run's last plain test command itself "
+                    "(e.g. `python3 -m pytest -q`, `npm test`, `go test ./...`) and a green exit "
+                    "satisfies the letters a, b, g, k, m and o. Run it with Bash, then Stop again; no evidence "
+                    "file, findings row, plan or verifier is needed.\n"
+                )
+        missing_delegation = ev["missing_delegation"]  # a valid proof clears (m)
         (ok_a, ok_b, ok_c, ok_d, ok_e, ok_h) = (
             ev[k] for k in ("ok_a", "ok_b", "ok_c", "ok_d", "ok_e", "ok_h")
         )
@@ -1863,6 +1916,8 @@ def _main() -> int:
             delegation_paths=delegation_paths,
             solo_delegation_note=solo_delegation_note,
         )
+        if rerun_note and set(failed) & _RERUN_LETTERS:
+            block_reason = rerun_note + block_reason
         notice = _block_loop_notice(count, failed)
         if notice:
             block_reason += "\n" + notice

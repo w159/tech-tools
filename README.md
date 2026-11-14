@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.15.1, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.16.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -147,7 +147,7 @@ This picture is from an earlier build.
 ## What it changes on your machine
 
 - **Hooks.** The plugin registers 23 hook bindings (19 programs; `plugins/atlas/hooks/hooks.json` holds 14 commands, two of them the in-process dispatcher) for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas-setup` step you approve.
-- **Project files.** `/atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Worktrees for isolated parallel implementers go under `.atlas/wt/`.
+- **Project files.** `/atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Parallel implementers share the one tree under file leases; the `atlas-worktree` skill still puts a worktree you ask for under `.atlas/wt/`.
 - **State in `~/.atlas/`.** `atlas.db` (SQLite telemetry), `memory/` (lessons saved at Stop and reloaded at boot), `dashboard-prefs.json`, and self-fix worktrees.
 - **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.
 - **Local dashboard.** A daemon serves `http://127.0.0.1:7421/` (loopback only, shared by every open terminal, a per-start token guards writes). It is off by default; `ATLAS_DASHBOARD=on` starts it at session start.
@@ -178,7 +178,7 @@ The lead classifies the task and resolves its team from one scope matrix:
 
 ```text
 $ python3 plugins/atlas/scripts/atlas_resolve.py implement medium --paths plugins/atlas/omp/advisor.ts
-{"effort": "medium", "task_class": "implement", "isolation": "worktree", "max_parallel": 3,
+{"effort": "medium", "task_class": "implement", "isolation": "shared", "max_parallel": 3,
  "team": [{"count": 2, "role": "implementer"}, {"count": 1, "role": "verifier"}]}
 ```
 

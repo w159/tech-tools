@@ -54,7 +54,7 @@
       "model": "sonnet"
      }
     ],
-    "isolation": "worktree",
+    "isolation": "shared",
     "max_parallel": 3
    },
    "high": {
@@ -81,7 +81,7 @@
       "model": "sonnet"
      }
     ],
-    "isolation": "worktree",
+    "isolation": "shared",
     "max_parallel": 5
    }
   },
@@ -150,7 +150,7 @@
       "model": "sonnet"
      }
     ],
-    "isolation": "worktree",
+    "isolation": "shared",
     "max_parallel": 4
    }
   },
@@ -432,7 +432,7 @@
       "model": "sonnet"
      }
     ],
-    "isolation": "worktree",
+    "isolation": "shared",
     "max_parallel": 2
    },
    "high": {
@@ -452,7 +452,7 @@
       "model": "sonnet"
      }
     ],
-    "isolation": "worktree",
+    "isolation": "shared",
     "max_parallel": 4
    }
   },

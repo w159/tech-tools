@@ -44,7 +44,7 @@ If it feels too small to delegate, delegate anyway (unless `ATLAS_MODE=solo` is 
 
 ## Laws and gates (load full text when acting)
 
-**One-line laws:** (1) delegate all execution (2) resolve the team, 2+ workers run as a tmux team; parallel writers own disjoint files (crew leases) or, only when they truly collide, a capped worktree; one git policy, `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md` (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
+**One-line laws:** (1) delegate all execution (2) resolve the team, 2+ workers run as a tmux team; parallel writers share ONE tree as a crew: disjoint file leases, handed over live with `irc give` (no worktrees, no branches); one git policy, `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md` (3) evidence = correct observed behavior on the failing case (4) docs before edits (5) different agent verifies with independent judgment (6) gate writes and completion (7) scaffold per-root.
 
 **Before any other action, run the decision gate:** multi-stage OR multi-surface OR whole-repo/audit? → Workflow or parallel wave first; no inline. Tripwire advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and denies the 7th unsanctioned inline op since the last dispatch (a shell call that runs `atlas_mux.py spawn-team` or `atlas_crew.py run` counts as a dispatch and resets the count), and non-docs Edit|Write|NotebookEdit in orchestration sessions (`ATLAS_TRIPWIRE*`); `docs/` and `.atlas/` writes and URI writes (`agent://`, `xd://`) are not counted.
 
@@ -54,7 +54,7 @@ If it feels too small to delegate, delegate anyway (unless `ATLAS_MODE=solo` is 
    2+ read-only or review workers: `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E --paths a,b --task "..."` (omp: the `atlas_team` tool), then `atlas_mux.py wait --team T`, read the board, `atlas_mux.py reap --team T`.
 3. One bounded worker (e.g. a single read-only lookup) may stay an in-process `atlas:*` Agent call; its prompt carries `SCOPE: <class>/<effort>` and its role must be on that team. The tripwire denies an unscoped or off-team `atlas:*` dispatch (`ATLAS_SCOPE_GATE=off` makes it advisory) and advises spawn-team on a 2nd dispatch within 10 s. It denies the 2nd in-process working-role dispatch of a run (`dispatch_denied:team`) when the scope has 2+ working seats and tmux is on PATH; closing roles are exempt, a run that already launched a team or crew is skipped, and no tmux or `ATLAS_TEAM_GATE=off` makes it an advisory (details: `references/subagent-kit.md`).
 
-Up front: delegate every edit, one message for independent agents, writers get isolated worktrees, evidence is the failing case turned green, a different agent verifies. Full laws, TodoWrite rules and mid-run steering: load `references/laws-and-gates.md` on the first dispatch of a run.
+Up front: delegate every edit, one message for independent agents, writers share one tree under crew file leases, evidence is the failing case turned green, a different agent verifies. Full laws, TodoWrite rules and mid-run steering: load `references/laws-and-gates.md` on the first dispatch of a run.
 
 ## The loop (load full text when running a wave)
 

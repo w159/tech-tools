@@ -133,6 +133,7 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   `atlas:*` dispatch); condition (m) deliberately checks unarmed runs too. Without docs/ the
   docs conditions (c)-(f) and (h) are skipped; outside a project every condition is silent.
 - **What satisfies it.** All nineteen conditions (a)-(s) must hold:
+  - Re-run shortcut (`hooks/gate_rerun.py`): before (a), (b), (g), (k), (m) or (o) block, the gate re-runs the session's last allowlisted test command itself (argv, no shell; `cd <dir> &&` inside the root allowed; the last test segment of a compound call is used). Exit 0 writes `.atlas/evidence/<stamp>_gate-rerun_<sid>.txt`, a finding with `verified_by: completion-gate` and `.atlas/.run/gate-proof.json`, and those six letters pass; a non-zero exit blocks with the command, exit and tail. A green crew `summary.json` with `lead_session` equal to this session is the same proof (`crew_proof`). A later code-file edit voids the proof; docs edits do not. `ATLAS_GATE_RERUN=off`, `ATLAS_GATE_RERUN_TIMEOUT` (default 90). Stop hook timeout is 150 s to fit the re-run.
   - (a) At least one file under `.atlas/evidence/` (observed-behavior proof captured), at any depth, so nested dated folders such as `.atlas/evidence/<date>-<slug>/` count. Only checked when this run wrote non-docs code; files older than the run start do not count.
   - (b) `.atlas/.run/findings.json` exists and records at least one entry with status `verified`
     (an independent check happened - a deterministic test recorded via

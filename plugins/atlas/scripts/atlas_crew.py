@@ -146,13 +146,17 @@ Channel commands (run them with Bash):
                                       block until that peer posts a NEW matching message
                                       (--all: history too)
   irc check                           wait for your peers, run your unit check, post DONE if it passes
+  irc give <file> <peer> [note]       hand a file you own to a peer (it may edit it from then on, fixes
+                                      for it go to it); use it when the peer is better placed to finish it
+  irc claim <file>                    take a file nobody owns yet (a new shared helper); first claim wins
   Both time out after 100s (the shell kills a command after 2 minutes): rerun on a timeout.
   Never `sleep`: wait with `irc wait`. Peers are the workers listed below; the lead posts no READY.
   irc read                            print anything unread
 Messages from peers are pushed to you automatically after your tool calls as [irc] lines.
 
 Rules:
-1. Edit only the files you own; edits elsewhere are blocked. Need a change in a peer's file? Ask its owner.
+1. Edit only the files you own; edits elsewhere are blocked. Need a change in a peer's file? Ask its owner,
+   who either makes it or hands you the file with `irc give`; a lease that moves is announced on the channel.
 2. Write each file you own in full with the Write tool to its staged path (listed under "You own"; a new
    file, so no Read is needed), and in the SAME reply call Bash `irc check` exactly as is (never piped,
    chained or wrapped) after the Write. `irc check` copies a staged file over the real one when the staged
@@ -1118,6 +1122,7 @@ def cmd_run(a) -> int:
         "started": time.time(),
         "fix_rounds": a.fix_rounds,
         "timeout": a.timeout,
+        "changelog": (getattr(a, "changelog", None) or "").strip() or None,
     }
     for w in plan["workers"]:
         (rundir / "prompts" / f"{w['name']}.md").write_text(
@@ -1196,7 +1201,7 @@ def cmd_run(a) -> int:
         while time.time() < end:
             if (rundir / "summary.json").exists():
                 print(_summary_line(rundir / "summary.json"))
-                return 0
+                return _summary_rc(rundir / "summary.json")
             time.sleep(0.5)
     print(
         json.dumps(
@@ -1213,7 +1218,7 @@ def cmd_run(a) -> int:
             }
         )
     )
-    return 0
+    return 3 if a.wait else 0  # 3: still running, same code as `wait` timing out
 
 
 def _self_cmd_irc(rundir: Path, sub: str) -> str:
@@ -1361,7 +1366,7 @@ def shard_count(cmd, root, test_files, ncpu) -> int:
     return len(_shard_jobs(cmd, root, test_files, ncpu)) or 1
 
 
-def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=()):
+def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=(), skip_passed=None):
     """Run a plain pytest `cmd` as parallel shards: min(ncpu, files) shards of the workers' known test files
     plus one "rest" shard (`--ignore` for every known file) so tests outside their lists still run. The
     supervisor's global check runs after the last DONE, on the critical path: the 784-test `python3 -m pytest
@@ -1395,7 +1400,13 @@ def sharded_check(cmd, root, test_files, ncpu, timeout=900, skip=()):
     for code, label, o in sorted(results, key=lambda r: r[0] != 0):  # stable: failing shards last, so out[-800:] shows them
         parts.append(f"=== shard [{label}] exit {code} ===\n{o[-(SHARD_TAIL_CHARS if code else 200):]}")
     if skip:
-        parts.insert(0, f"{len(skip)} test files verified by worker DONE on the same bytes; skipped")
+        note = "" if skip_passed is None else f", {skip_passed} passed"
+        parts.insert(0, f"{len(skip)} test files verified by worker DONE on the same bytes{note}; skipped")
+    ran = [atlas_irc.passed_count(o) for c, _, o in results if c == 0]
+    if not combined and (skip_passed is not None or not skip) and all(n is not None for n in ran if n):
+        # one count for the whole check, so nobody re-runs the suite to learn it: DONE-verified files plus the shards
+        total = (skip_passed or 0) + sum(n or 0 for n in ran)
+        parts.append(f"crew total: {total} passed ({skip_passed or 0} verified by worker DONE, {total - (skip_passed or 0)} run here)")
     return combined, "\n".join(parts)
 
 
@@ -1477,17 +1488,42 @@ def verified_test_files(plan: dict, root, irc_dir, cmd, test_files, ncpu) -> lis
 def _global_check(plan: dict, root, rundir, check, tfiles, ncpu):
     """(code, output, cached) of one sharded global check; cached = the test files skipped as worker-verified."""
     cached = verified_test_files(plan, root, rundir / "irc", check, tfiles, ncpu)
-    code, out = sharded_check(check, root, tfiles, ncpu, skip=cached)
+    code, out = sharded_check(check, root, tfiles, ncpu, skip=cached, skip_passed=done_passed(plan, root, rundir / "irc", cached))
     return code, out, cached
 
 
-def route_failures(plan: dict, output: str) -> dict:
+def done_passed(plan: dict, root, irc_dir, cached):
+    """Sum of the `passed` counts on the standing DONEs of the workers whose test files are all in `cached`,
+    or None when any cached file is not covered by exactly one such DONE (then no total is claimed)."""
+    if not cached:
+        return 0
+    known, cover, total = set(cached), {}, 0
+    for w in plan.get("workers") or []:
+        files = _worker_test_files(w, root) & known
+        if not files:
+            continue
+        rec = atlas_irc.latest_done_record(irc_dir, w["name"]) or {}
+        n = rec.get("passed")
+        if not isinstance(n, int) or isinstance(n, bool):
+            return None
+        total += n
+        for f in files:
+            cover[f] = cover.get(f, 0) + 1
+    return total if set(cover) == known and all(v == 1 for v in cover.values()) else None
+
+
+def route_failures(plan: dict, output: str, moved: dict | None = None) -> dict:
     """{worker: failure excerpt} for a failed global check: a worker gets the failures that name a
-    file it owns or one of its `tests`. Unrouted failures go to every worker whose own check fails."""
+    file it owns or one of its `tests`. Unrouted failures go to every worker whose own check fails.
+    `moved` is the live lease table (atlas_irc.leases): a file handed over with `irc give` routes to
+    its new owner, not to the plan's."""
     out = {}
     lines = output.splitlines()
+    moved = moved or {}
     for w in plan["workers"]:
-        keys = [k for k in (w.get("owns") or []) + (w.get("tests") or [])]
+        own = [p for p in (w.get("owns") or []) if moved.get(p, w["name"]) == w["name"]]
+        own += [p for p, who in moved.items() if who == w["name"] and p not in own]
+        keys = [k for k in own + (w.get("tests") or [])]
         hit = [
             ln
             for ln in lines
@@ -1531,7 +1567,7 @@ def cmd_supervise(a) -> int:
     for rnd in range(1, int(meta.get("fix_rounds") or 0) + 1):
         if code == 0 or not finished:
             break
-        routed = route_failures(plan, out)
+        routed = route_failures(plan, out, atlas_irc.leases(rundir / "irc"))
         if not routed:
             for w in plan["workers"]:
                 if w.get("check"):
@@ -1587,6 +1623,8 @@ def cmd_supervise(a) -> int:
             }
         )
     summary = summarize(rundir, meta, rounds, code, out)
+    if code == 0 and meta.get("changelog"):
+        summary["changelog"] = write_changelog(root, meta["changelog"])
     (rundir / "summary.json").write_text(
         json.dumps(summary, indent=1), encoding="utf-8"
     )
@@ -1719,6 +1757,54 @@ def summarize(rundir: Path, meta: dict, rounds, code, out) -> dict:
     }
 
 
+_UNRELEASED = re.compile(r"^##\s*\[?unreleased\]?\s*$", re.I)
+
+
+def write_changelog(root, text: str) -> str | None:
+    """Add `text` as one bullet under `## Unreleased` of docs/CHANGELOG.md (else CHANGELOG.md), creating that
+    heading above the first `## ` section when there is none. A project that keeps no changelog gets none:
+    creating docs/ would arm the Stop gate's docs letters (c)-(h) on a project that never had them. The
+    supervisor calls it only after a green global check, so a red crew never records a change it did not
+    make. Returns the path written, relative to root, or None when nothing was written."""
+    root = Path(root)
+    line = " ".join(str(text).split())
+    if not line:
+        return None
+    bullet = line if line.startswith(("- ", "* ")) else f"- {line}"
+    rel = next((p for p in ("docs/CHANGELOG.md", "CHANGELOG.md") if (root / p).is_file()), None)
+    if rel is None:
+        return None
+    path = root / rel
+    try:
+        body = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if bullet in body.splitlines():
+        return rel
+    lines = body.splitlines(keepends=True)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    head = next((i for i, x in enumerate(lines) if _UNRELEASED.match(x.strip())), None)
+    if head is not None:
+        j = head + 1
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+        lines[j:j] = ([] if j > head + 1 else ["\n"]) + [bullet + "\n"] + ([] if j == len(lines) or lines[j].lstrip().startswith(("- ", "* ")) else ["\n"])
+    else:
+        first = next((i for i, x in enumerate(lines) if x.startswith("## ")), None)
+        block = ["## Unreleased\n", "\n", bullet + "\n", "\n"]
+        if first is None:
+            lines += (["\n"] if lines and lines[-1].strip() else []) + block[:-1]
+        else:
+            lines[first:first] = block
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(lines), encoding="utf-8")
+    except OSError:
+        return None
+    return rel
+
+
 def _known_run(a) -> Path | None:
     """The run's directory, or None after printing an unknown-run error (a run exists once `run` wrote run.json)."""
     rundir = _run_dir(a.root or os.getcwd(), a.run)
@@ -1738,6 +1824,15 @@ def _summary_line(path: Path) -> str:
         return text
 
 
+def _summary_rc(path: Path) -> int:
+    """Exit code for a finished run: 0 only when the summary says ok, so `run --wait ... && <docs step>`
+    writes the docs on a green crew alone and a red one stops the chain."""
+    try:
+        return 0 if json.loads(path.read_text(encoding="utf-8")).get("ok") is True else 1
+    except (OSError, ValueError, AttributeError):
+        return 1
+
+
 def cmd_wait(a) -> int:
     rundir = _known_run(a)
     if rundir is None:
@@ -1747,7 +1842,7 @@ def cmd_wait(a) -> int:
         s = rundir / "summary.json"
         if s.exists():
             print(_summary_line(s))
-            return 0
+            return _summary_rc(s)
         time.sleep(2)
     print(
         json.dumps(
@@ -1818,6 +1913,7 @@ def parser():
     r.add_argument("--harness", choices=("claude", "codex"), default="claude")
     r.add_argument("--run-id")
     r.add_argument("--session", help="lead session id stamped into run.json as lead_session")
+    r.add_argument("--changelog", help="one-line CHANGELOG entry the supervisor adds under ## Unreleased once the check is green")
     r.add_argument("--fix-rounds", type=int, default=2)
     r.add_argument("--timeout", type=float, default=3600)
     r.add_argument("--no-tmux", action="store_true")

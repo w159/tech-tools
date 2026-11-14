@@ -31,7 +31,7 @@ ROWS = [
         "implement",
         "medium",
         [("implementer", 2, "medium", "edit"), ("verifier", 1, "medium", "exec")],
-        "worktree",
+        "shared",
     ),
     (
         "fix",
@@ -41,7 +41,7 @@ ROWS = [
             ("implementer", 1, "medium", "edit"),
             ("verifier", 1, "medium", "exec"),
         ],
-        "worktree",
+        "shared",
     ),
     (
         "verify",
@@ -77,7 +77,9 @@ class Resolve(unittest.TestCase):
                 self.assertLessEqual(
                     max(t["count"] for t in cell["team"]), cell["max_parallel"]
                 )
-                self.assertIn(cell["isolation"], ("worktree", "shared"))
+                # One workspace for every team: workers share the tree and coordinate (crew leases,
+                # IRC), never isolated worktree/branch copies.
+                self.assertEqual(cell["isolation"], "shared", (cls, eff))
                 for t in cell["team"]:
                     self.assertTrue(
                         (ATLAS / "agents" / f"{t['role']}.md").exists(), t["role"]

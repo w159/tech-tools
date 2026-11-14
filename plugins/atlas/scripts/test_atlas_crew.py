@@ -1646,6 +1646,24 @@ class SupervisorOverlapTests(unittest.TestCase):
         self.assertIn(" z ", launched[0] + " ")
 
 
+    def test_run_wait_exit_code_is_3_running_1_red_0_green(self):
+        plan = {"workers": [{"name": "z", "owns": ["z.py"], "task": "t"}]}
+        for summary, rc in ((None, 3), ('{"ok": false}', 1), ('{"ok": true}', 0)):
+            with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"ATLAS_CREW_TMUX": "off"}):
+                Path(tmp, "p.json").write_text(json.dumps(plan))
+
+                def popen(*_a, **_k):  # the supervisor "finishes" the moment it is started
+                    if summary is not None:
+                        Path(tmp, ".atlas/.run/crew/crew-w/summary.json").write_text(summary)
+
+                with mock.patch.object(atlas_crew, "_launch", lambda *x: None), \
+                     mock.patch.object(atlas_crew.subprocess, "Popen", side_effect=popen), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    code = atlas_crew.cmd_run(types.SimpleNamespace(
+                        plan=str(Path(tmp, "p.json")), root=tmp, run_id="crew-w", model=None, effort=None, fix_rounds=0,
+                        timeout=60, no_tmux=True, wait=0.6, spec=None, files=None, session="s"))
+            self.assertEqual(code, rc, summary)
+
     def _run_meta(self, tmp, env, **extra):
         plan = {"workers": [{"name": "z", "owns": ["z.py"], "task": "t"}]}
         Path(tmp, "p.json").write_text(json.dumps(plan))
@@ -2184,6 +2202,13 @@ class RunDirHelpers(unittest.TestCase):
             code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
         self.assertEqual((code, buf.getvalue()), (0, '{"ok": true}\n'))
 
+    def test_cmd_wait_exit_code_follows_the_summary(self):
+        rundir, _ = self._run()
+        for body, rc in (('{"ok": false, "check_exit": 1}', 1), ('{"ok": tr', 1), ('[1]', 1), ('{"ok": true}', 0)):
+            (rundir / "summary.json").write_text(body)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5)), rc, body)
+
     def test_cmd_wait_prints_an_indented_summary_as_one_json_line(self):
         rundir, _ = self._run()
         summary = {"ok": True, "run": "r1", "workers": [{"name": "a", "exit": 0}]}
@@ -2214,7 +2239,7 @@ class RunDirHelpers(unittest.TestCase):
         rundir, _ = self._run()
 
         def write(_s):
-            (rundir / "summary.json").write_text("{}")
+            (rundir / "summary.json").write_text('{"ok": true}')
 
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf), mock.patch.object(atlas_crew.time, "sleep", side_effect=write) as sl:

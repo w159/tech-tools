@@ -605,12 +605,135 @@ def test_inputs_digest(root, unit_check) -> str:
     return h.hexdigest()
 
 
-def _env_owns():
+def _static_owns():
     try:
         owns = json.loads(os.environ.get("ATLAS_CREW_OWNS") or "[]")
     except ValueError:
         return []
     return owns if isinstance(owns, list) else []
+
+
+# ---------------------------------------------------------------- live file leases (handoffs)
+# The plan hands each worker its files; during the run a worker can pass one of its files to a peer
+# (`irc give`) or take a file nobody owns (`irc claim`). The table lives on the bus, so every worker's
+# lease hook, `irc check` and the supervisor's fix routing see the same owner at once.
+LEASES = "leases.json"
+
+
+def leases(d) -> dict:
+    """{path: nick} of every lease moved during the run (exact relative paths)."""
+    try:
+        data = json.loads((Path(d) / LEASES).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def effective_owns(d, nick: str, static=None) -> list:
+    """The plan's paths for `nick` minus those it gave away, plus those given to or claimed by it."""
+    static = _static_owns() if static is None else static
+    table = leases(d) if d else {}
+    kept = [p for p in static if table.get(p, nick) == nick]
+    return kept + [p for p, who in table.items() if who == nick and p not in kept]
+
+
+def _env_owns():
+    d = os.environ.get("ATLAS_IRC_DIR") or ""
+    nick = os.environ.get("ATLAS_IRC_NICK") or ""
+    return effective_owns(d, nick) if d and nick else _static_owns()
+
+
+def _static_owner(rel: str):
+    try:
+        owners = json.loads(os.environ.get("ATLAS_CREW_OWNERS") or "{}")
+    except ValueError:
+        return None
+    import fnmatch
+
+    for pat, who in (owners or {}).items():
+        pat = str(pat).rstrip("/")
+        if rel == pat or fnmatch.fnmatch(rel, pat) or rel.startswith(pat + "/"):
+            return who
+    return None
+
+
+def _norm_rel(path: str) -> str:
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    full = path if os.path.isabs(path) else os.path.join(root, path)
+    return os.path.relpath(os.path.realpath(full), os.path.realpath(root))
+
+
+def _move_lease(d, path: str, to: str, check) -> str | None:
+    """Set leases[path] = to under the bus lock when check(table) returns None; else that refusal."""
+    lock = Path(d) / (LEASES + ".lock")
+    with open(lock, "a+") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            table = leases(d)
+            why = check(table)
+            if why:
+                return why
+            table[path] = to
+            tmp = Path(d) / (LEASES + f".tmp{os.getpid()}")
+            tmp.write_text(json.dumps(table, indent=1), encoding="utf-8")
+            os.replace(tmp, Path(d) / LEASES)
+            return None
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def cmd_give(a) -> int:
+    """Hand a file you own to a peer: from now on only the peer may edit it, and fixes for it go to the peer."""
+    d = _dir(a.dir)
+    nick = _env_nick(a)
+    rel = _norm_rel(a.path)
+    _install_from_env()  # the newest staged copy lands first, so the peer takes over the current file
+    peers = set(members(d).get("members") or [])
+    if a.peer not in peers or a.peer == nick:
+        print(f"give refused: {a.peer!r} is not a peer on this crew ({', '.join(sorted(peers))})")
+        return 2
+
+    def check(table):
+        if table.get(rel, _static_owner(rel)) != nick:
+            return f"give refused: {rel} is leased to {table.get(rel, _static_owner(rel)) or 'nobody'}, not you"
+        return None
+
+    why = _move_lease(d, rel, a.peer, check)
+    if why:
+        print(why)
+        return 2
+    note = (" " + " ".join(a.note)) if a.note else ""
+    post(d, nick, a.peer, f"LEASE {rel} -> {a.peer}: it is yours now.{note}", kind="lease", extra={"path": rel, "to": a.peer})
+    print(f"{rel} is now leased to {a.peer}")
+    return 0
+
+
+def cmd_claim(a) -> int:
+    """Take a file nobody owns (a new helper module, a shared fixture): first claim wins."""
+    d = _dir(a.dir)
+    nick = _env_nick(a)
+    rel = _norm_rel(a.path)
+
+    def check(table):
+        owner = table.get(rel, _static_owner(rel))
+        if owner and owner != nick:
+            return f"claim refused: {rel} is leased to {owner}; ask it with `irc say --to {owner} ...` or `irc give`"
+        return None
+
+    why = _move_lease(d, rel, nick, check)
+    if why:
+        print(why)
+        return 2
+    post(d, nick, _bus_channel(d) or "#team", f"LEASE {rel} -> {nick} (claimed)", kind="lease", extra={"path": rel, "to": nick})
+    print(f"{rel} is now leased to {nick}")
+    return 0
+
+
+def cmd_leases(a) -> int:
+    d = _dir(a.dir)
+    for rel, who in sorted(leases(d).items()):
+        print(f"{rel} {who}")
+    return 0
 
 
 def done_current(d, nick: str, root=None, owns=None) -> bool:
@@ -654,6 +777,16 @@ CHECK_TIMEOUT_S = 600
 TAIL_CHARS = 6000
 
 
+_LAST_UNIT: dict = {}  # the last unit check's exit and output tail, so DONE can carry its pass count
+
+
+def passed_count(text: str):
+    """The pass count of a test runner's summary line (`434 passed`, `12 passed, 1 skipped`): the last
+    `N passed` in the text, or None when there is none."""
+    hits = re.findall(r"\b(\d+) passed\b", text or "")
+    return int(hits[-1]) if hits else None
+
+
 def _run_unit_check(d, nick: str, quiet: bool = False, capture: list | None = None):
     """Run ATLAS_CREW_UNIT_CHECK (shell, cwd ATLAS_CREW_ROOT) and print its output tail. Returns its exit code,
     or None when no unit check is set. A failure is recorded as an `unverified` note to the nick itself (peers
@@ -670,6 +803,8 @@ def _run_unit_check(d, nick: str, quiet: bool = False, capture: list | None = No
         code, out = 124, f"check timed out after {CHECK_TIMEOUT_S}s\n"
     tail = out[-TAIL_CHARS:]
     tail += "" if tail.endswith("\n") or not tail else "\n"
+    _LAST_UNIT.clear()
+    _LAST_UNIT.update(code=code, tail=tail)
     if quiet:
         if capture is not None:
             capture.append(tail)
@@ -847,10 +982,7 @@ def _install_from_env() -> list:
     stage = os.environ.get("ATLAS_CREW_STAGE")
     if not stage:
         return []
-    try:
-        owns = json.loads(os.environ.get("ATLAS_CREW_OWNS") or "[]")
-    except ValueError:
-        return []
+    owns = _env_owns()  # a file given away is no longer installed from this worker's stage
     root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
     got = install_staged(stage, root, owns)
     for p in got:
@@ -868,6 +1000,9 @@ def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) ->
     extra = {"digest": _owned_digest(root, _env_owns()), "test_digest": test_inputs_digest(root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or "")}
     if peer_digests is not None:
         extra["peer_digests"] = peer_digests
+    n = passed_count(_LAST_UNIT.get("tail", "")) if _LAST_UNIT.get("code") == 0 else None
+    if n is not None:
+        extra["passed"] = n  # the supervisor reports it for the test files it skips as verified
     post(d, nick, _bus_channel(d) or os.environ.get("ATLAS_IRC_CHANNEL") or "#team", f"DONE {nick}: {text}", kind="done",
          extra=extra)
     print(f"posted DONE for {nick}")
@@ -1281,6 +1416,18 @@ def parser() -> argparse.ArgumentParser:
     ck.add_argument("--as", dest="as_")
     ck.add_argument("--timeout", type=float, default=100)
     ck.set_defaults(fn=cmd_check)
+    gv = sub.add_parser("give", help="hand a file you own to a peer (live lease move; fixes follow the file)")
+    gv.add_argument("--as", dest="as_")
+    gv.add_argument("path")
+    gv.add_argument("peer")
+    gv.add_argument("note", nargs="*")
+    gv.set_defaults(fn=cmd_give)
+    cl = sub.add_parser("claim", help="take a file nobody owns (first claim wins)")
+    cl.add_argument("--as", dest="as_")
+    cl.add_argument("path")
+    cl.set_defaults(fn=cmd_claim)
+    ls_ = sub.add_parser("leases", help="print every lease moved during the run")
+    ls_.set_defaults(fn=cmd_leases)
     r = sub.add_parser("read", help="print unread messages (advances your cursor)")
     r.add_argument("--as", dest="as_")
     r.add_argument("--all", action="store_true")

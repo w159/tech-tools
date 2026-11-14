@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -648,7 +649,8 @@ class RouteScopeTest(unittest.TestCase):
             "build the export flow across plugins/atlas/hooks/a.py, "
             "plugins/atlas/scripts/b.py and plugins/atlas/mod/c.ts",
         )
-        self.assertIn("atlas_crew.py run", nudge)
+        self.assertIn('atlas_crew.py" run', nudge)
+        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", nudge)
         self.assertIn("implement/", nudge)
         self.assertLess(len(nudge.encode()), 700)
         scope = po.resolved_scope("m1", self.tmp)
@@ -668,7 +670,8 @@ class RouteScopeTest(unittest.TestCase):
 
     def test_read_only_team_uses_spawn_team(self):
         nudge = self._arm("r1", "audit every hook across the whole repo for leaks")
-        self.assertIn("atlas_mux.py spawn-team --class audit --effort high", nudge)
+        self.assertIn('atlas_mux.py" spawn-team --class audit --effort high', nudge)
+        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", nudge)
         self.assertLess(len(nudge.encode()), 700)
 
     def test_resolver_exception_keeps_old_nudge(self):
@@ -693,6 +696,52 @@ class RouteScopeTest(unittest.TestCase):
         self.assertIsNotNone(po.resolved_scope("s2", self.tmp))
         self.assertIsNone(self._arm("s2", "/atlas:status"))
         self.assertIsNone(po.resolved_scope("s2", self.tmp))
+
+    def _spec_repo(self):
+        root = Path(self.tmp)
+        (root / "kit").mkdir()
+        (root / "tests").mkdir()
+        (root / "docs").mkdir()
+        (root / "SPEC.md").write_text("# Kit\n## kit/a.py\nA\n## kit/b.py\nB\n")
+        for stem in ("a", "b"):
+            (root / "kit" / f"{stem}.py").write_text("def f():\n    raise NotImplementedError\n")
+            (root / "tests" / f"test_{stem}.py").write_text("def test_x():\n    pass\n")
+        (root / "kit" / "__init__.py").write_text("")
+        (root / "docs" / "CHANGELOG.md").write_text("# Changelog\n")
+        return root
+
+    PROMPT = (
+        "Implement every module in kit/ per SPEC.md so that `python3 -m pytest -q` passes. "
+        "Update docs/CHANGELOG.md for the change."
+    )
+
+    def test_crew_command_is_exact_and_repo_aware(self):
+        self._spec_repo()
+        cmd = po.crew_command(self.tmp, self.PROMPT, "sess-9")
+        self.assertIn("atlas_crew.py\" run --spec SPEC.md --files 'kit/*.py'", cmd)
+        self.assertIn("--tests 'tests/test_{stem}.py'", cmd)
+        self.assertIn("--check 'python3 -m pytest -q'", cmd)
+        self.assertIn("--session sess-9 --wait 110 --changelog", cmd)
+        self.assertTrue(os.path.isfile(cmd.split('"')[1]), cmd)  # the script path is real and absolute
+        nudge = self._arm("c1", self.PROMPT)
+        self.assertIn("--files 'kit/*.py'", nudge)
+        self.assertIn("Don't write those files or read them", nudge)
+        self.assertIn("--wait 110 --changelog '<one line: what changed>'`", nudge)
+        self.assertIn("don't re-run tests", nudge)
+        self.assertLess(len(nudge.encode()), po._CREW_NUDGE_MAX_BYTES)
+        self.assertLess(len(nudge.encode()), 700)
+
+    def test_crew_command_none_without_spec_dir_or_check(self):
+        root = self._spec_repo()
+        self.assertIsNone(po.crew_command(self.tmp, "Implement every module in docs/ per SPEC.md", ""))
+        (root / "SPEC.md").unlink()
+        self.assertIsNone(po.crew_command(self.tmp, self.PROMPT, ""))
+        nudge = self._arm("c2", self.PROMPT)
+        self.assertIn("--spec <spec.md>", nudge)  # placeholders only when the repo cannot fill them
+
+    def test_every_module_is_high_effort(self):
+        self.assertEqual(po.classify_scope("implement every module in kit/")[1], "high")
+        self.assertEqual(po.classify_scope("fix all the file headers")[1], "high")
 
     def test_resolved_scope_missing_or_empty(self):
         self.assertIsNone(po.resolved_scope("nope", self.tmp))

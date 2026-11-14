@@ -55,10 +55,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import prompt_decision
 
@@ -327,6 +329,9 @@ _MATRIX_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "scope-matrix.json"
 )
 _NUDGE_MAX_BYTES = 700
+# A crew nudge carries the whole runnable command (an absolute plugin path, the session id, the CHANGELOG
+# line), and it replaces the lead's planning turns, so it gets a larger budget than an advisory nudge.
+_CREW_NUDGE_MAX_BYTES = 900
 _WORD_RE = re.compile(r"[a-z][a-z-]*")
 _FILE_REF_RE = re.compile(
     r"[\w./-]+\.(?:py|ts|tsx|js|jsx|go|rs|java|rb|php|sql|json|ya?ml|toml|sh|"
@@ -342,8 +347,8 @@ _HIGH_EFFORT_RE = re.compile(
     r"|\b(?:audit|review|check|scan|sweep)\s+(?:all|every|everything)\b"
     r"|\b(?:across|throughout)\s+(?:the\s+)?(?:whole\s+)?"
     r"(?:repo|repository|codebase|project|tree|plugins?|surfaces|modules|services)\b"
-    r"|\b(?:all|every)\s+(?:the\s+)?(?:files|modules|hooks|surfaces|plugins|packages|"
-    r"services|scripts|components|endpoints)\b"
+    r"|\b(?:all|every)\s+(?:the\s+)?(?:files?|modules?|hooks?|surfaces?|plugins?|packages?|"
+    r"services?|scripts?|components?|endpoints?)\b"
     r"|\bmany\s+(?:files|surfaces|modules)\b|\b(?:repo|codebase)-wide\b",
     re.IGNORECASE,
 )
@@ -470,7 +475,82 @@ def resolved_scope(session_id: str, root: str | None = None) -> dict | None:
     return None
 
 
-def _route_nudge(task_class: str, effort: str, team: list) -> str:
+_CREW_SRC_EXTS = ("py", "ts", "tsx", "js", "go", "rs")
+_DIR_REF_RE = re.compile(r"(?<![\w./-])([A-Za-z_][\w.-]*(?:/[\w.-]+)*)/")
+_RUNNER_REF_RE = re.compile(
+    r"`((?:python3?\s+-m\s+pytest|pytest|uv\s+run\s+pytest|npm\s+(?:run\s+)?test|yarn\s+test|"
+    r"pnpm\s+test|bun\s+test|go\s+test|cargo\s+test|make\s+test)[^`]*)`"
+)
+_NOT_WORK_DIRS = frozenset({"docs", "tests", "test", ".atlas", ".git", "node_modules", ".claude"})
+
+
+def _scripts_dir() -> str:
+    """The plugin's scripts dir as an absolute path: the lead pastes the nudge into a Bash call, where
+    ${CLAUDE_PLUGIN_ROOT} is not set, so a placeholder there is a command that cannot run."""
+    root = os.environ.get("CLAUDE_PLUGIN_ROOT", "").strip()
+    if root:
+        return os.path.join(root, "scripts")
+    return os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+
+
+def crew_command(cwd, prompt: str, session: str = "") -> str | None:
+    """The exact `atlas_crew.py run` command for a spec-driven multi-file job in this repo, else None.
+
+    Repo-aware: the spec is a .md the prompt names (or SPEC.md / spec.md / docs/SPEC.md); the files are
+    the dominant source extension of a directory the prompt names, two or more files; the check is a
+    backticked test command from the prompt, else `python3 -m pytest -q` when tests/ holds test_*.py.
+    None when any piece is missing, so a guess never reaches the lead as a runnable command."""
+    try:
+        root = Path(_scope_root(cwd))
+        text = prompt or ""
+        specs = [
+            m
+            for m in _FILE_REF_RE.findall(text)
+            if m.lower().endswith(".md")
+            and (root / m).is_file()
+            and Path(m).name.upper() not in ("CHANGELOG.MD", "README.MD", "ROADMAP.MD")
+        ] or [c for c in ("SPEC.md", "spec.md", "docs/SPEC.md") if (root / c).is_file()]
+        if not specs:
+            return None
+        best = None
+        for d in dict.fromkeys(_DIR_REF_RE.findall(text)):
+            if d.split("/")[0] in _NOT_WORK_DIRS or not (root / d).is_dir():
+                continue
+            for ext in _CREW_SRC_EXTS:
+                n = sum(
+                    1
+                    for f in (root / d).glob("*." + ext)
+                    if f.is_file()
+                    and f.name not in ("__init__.py", "conftest.py")
+                    and not f.name.startswith("test_")
+                )
+                if n >= 2 and (best is None or n > best[2]):
+                    best = (d, ext, n)
+        if best is None:
+            return None
+        d, ext, _ = best
+        m = _RUNNER_REF_RE.search(text)
+        check = m.group(1).strip() if m else None
+        tests_dir = root / "tests"
+        if check is None and ext == "py" and any(tests_dir.glob("test_*.py")):
+            check = "python3 -m pytest -q"
+        if not check:
+            return None
+        stems = [f.stem for f in (root / d).glob("*." + ext) if f.name != "__init__.py"]
+        tests = ""
+        if ext == "py" and stems and sum((tests_dir / f"test_{s}.py").is_file() for s in stems) * 2 >= len(stems):
+            tests = " --tests 'tests/test_{stem}.py'"
+        sess = f" --session {shlex.quote(session)}" if session else ""
+        return (
+            f'python3 "{os.path.join(_scripts_dir(), "atlas_crew.py")}" run --spec {shlex.quote(specs[0])} '
+            f"--files '{d}/*.{ext}'{tests} --check {shlex.quote(check)}{sess} --wait 110 "
+            "--changelog '<one line: what changed>'"
+        )
+    except Exception:
+        return None
+
+
+def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None = None) -> str:
     seats = ", ".join(
         "%s x%d (%s)" % (s["role"], int(s.get("count", 1) or 1), s.get("model") or "default")
         for s in team
@@ -480,15 +560,22 @@ def _route_nudge(task_class: str, effort: str, team: list) -> str:
     scope = "%s/%s" % (task_class, effort)
     if n >= 2 and task_class in _READ_ONLY_CLASSES:
         nxt = (
-            "Next: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py spawn-team "
+            'Next: python3 "%s/atlas_mux.py" spawn-team '
             "--class %s --effort %s --task '<task>' (tmux team; not in-process "
-            "atlas:* calls)." % (task_class, effort)
+            "atlas:* calls)." % (_scripts_dir(), task_class, effort)
+        )
+    elif n >= 2 and crew_cmd:
+        nxt = (
+            "Don't write those files or read them. ONE Bash call now: `%s` (a crew in THIS tree: "
+            "worker per file, leases, live IRC; it adds your CHANGELOG line when green). Exit 0: its "
+            "gate re-ran the check, the verified result with the count; don't re-run tests, reply and "
+            "stop. Exit 3: run the `wait` it prints. Exit 1: fix from check_tail." % crew_cmd
         )
     elif n >= 2:
         nxt = (
-            "Next: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py run "
-            "--spec <spec.md> --files '<glob>' --check '<test cmd>' "
-            "(tmux crew; not in-process atlas:* calls)."
+            'Next: python3 "%s/atlas_crew.py" run '
+            "--spec <spec.md> --files '<glob>' --check '<test cmd>' --wait 110 "
+            "(tmux crew in this tree; not in-process atlas:* calls)." % _scripts_dir()
         )
     else:
         role = (working or team)[0]["role"]
@@ -500,10 +587,14 @@ def _route_nudge(task_class: str, effort: str, team: list) -> str:
         "[atlas-orchestrate] Session armed: use the atlas:atlas-orchestrate skill "
         "and dispatch, not inline work."
     )
+    if crew_cmd and n >= 2 and task_class not in _READ_ONLY_CLASSES:
+        head = "[atlas-orchestrate] Session armed."
+        seats = "atlas crew"
+    cap = _CREW_NUDGE_MAX_BYTES if crew_cmd and n >= 2 and task_class not in _READ_ONLY_CLASSES else _NUDGE_MAX_BYTES
     msg = " ".join((head, "Route %s -> %s." % (scope, seats), nxt))
-    if len(msg.encode()) >= _NUDGE_MAX_BYTES:
+    if len(msg.encode()) >= cap:
         msg = " ".join((head, "Route %s." % scope, nxt))
-    if len(msg.encode()) >= _NUDGE_MAX_BYTES:
+    if len(msg.encode()) >= cap:
         raise ValueError("route nudge too long")
     return msg
 
@@ -518,7 +609,12 @@ def _routed_nudge(data: dict, prompt: str) -> str:
         res = atlas_resolve.resolve(task_class, effort)
         team = list(res["team"])
         task_class, effort = res["task_class"], res["effort"]
-        msg = _route_nudge(task_class, effort, team)
+        crew_cmd = (
+            crew_command(cwd, prompt, session)
+            if task_class not in _READ_ONLY_CLASSES and _working_seats(team) >= 2
+            else None
+        )
+        msg = _route_nudge(task_class, effort, team, crew_cmd)
     except Exception as exc:
         try:
             atlas_hook_guard.fault("prompt_optimizer", "route resolve failed: %s" % exc)

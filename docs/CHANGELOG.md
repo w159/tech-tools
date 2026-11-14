@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.16.0 - 2026-11-14
+
+- atlas 17.16.0: the crew is one team on one tree, started in one call from a plain prompt (the router's nudge could not be run before), and the Stop gate re-runs the session's own tests instead of asking for paperwork. On the 8-module benchmark: 133.3 s and 841k tokens on 17.15.1, 30.4 s and 157k now, against 49.4 s and 296k for one plain prompt. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-14_atlas-17.16.0-team-performance.md](audits/2026-11-14_atlas-17.16.0-team-performance.md).
+
+## marketplace 5.21.0 - 2026-11-14
+
+- marketplace 5.21.0: atlas 17.16.0. armada and programmer are unchanged.
+
 ## atlas 17.15.1 - 2026-11-13
 
 - atlas 17.15.1: the mod slot is exactly the rows drawn (no blank rows between the mod and the prompt) and the mod no longer asks the status line to shrink to one row. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-13-gap-statusline.md](audits/2026-11-13-gap-statusline.md).

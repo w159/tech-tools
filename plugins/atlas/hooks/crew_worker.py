@@ -187,11 +187,14 @@ def pre_tool_use(payload) -> None:
             "(returns the moment it posts), or run `irc check` (waits for your peers, then runs your unit check)."
         )
         return
-    mine = _env_json("ATLAS_CREW_OWNS", None)
-    if not mine:
+    if not _env_json("ATLAS_CREW_OWNS", None):
         return  # no lease list: unrestricted worker
+    # live leases: a file a peer gave this worker (`irc give`) or it claimed is its own; one it gave away is not
+    mine = atlas_irc._env_owns()
+    moved = atlas_irc.leases(os.environ.get("ATLAS_IRC_DIR") or "") if os.environ.get("ATLAS_IRC_DIR") else {}
+    owners = {**_env_json("ATLAS_CREW_OWNERS", {}), **moved}
     if tool == "Bash":
-        hit = bash_writes_peer_file(ti.get("command") or "", mine, _env_json("ATLAS_CREW_OWNERS", {}))
+        hit = bash_writes_peer_file(ti.get("command") or "", mine, owners)
         if hit:
             _deny(
                 f"{hit[0]} is leased to {hit[1]}; you own {', '.join(mine)}. Ask {hit[1]} for the change "
@@ -203,14 +206,16 @@ def pre_tool_use(payload) -> None:
         return
     full = path if os.path.isabs(path) else os.path.join(root, path)
     rel = _rel(full, root)
-    if owns(rel, mine):
+    if moved.get(rel) not in (None, os.environ.get("ATLAS_IRC_NICK")):
+        mine = [p for p in mine if p != rel]  # given away: a glob it still matches no longer covers it
+    elif owns(rel, mine):
         return
     stage = os.environ.get("ATLAS_CREW_STAGE")  # own stage dir only: `irc check` installs what is written there
     if stage:
         sreal = os.path.realpath(stage)
         if os.path.realpath(full).startswith(sreal + os.sep):
             return
-    who = owner_of(rel, _env_json("ATLAS_CREW_OWNERS", {})) or "the lead"
+    who = moved.get(rel) or owner_of(rel, _env_json("ATLAS_CREW_OWNERS", {})) or "the lead"
     _out(
         {
             "hookSpecificOutput": {

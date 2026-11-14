@@ -39,6 +39,27 @@ prints only the start line, run `atlas_crew.py wait --run <id>` until it does.
 Do not read worker logs while it runs. If `check_exit` is 0 the build is done;
 otherwise read `check_tail` and route what remains.
 
+Exit codes (`run --wait` and `wait`): 0 the summary says `ok`, 1 it does not,
+3 still running (run the `wait` it prints).
+
+`--changelog '<one line>'` hands the docs step to the crew: after a green global
+check the supervisor adds that line as a bullet under `## Unreleased` of
+`docs/CHANGELOG.md` (else `CHANGELOG.md`), creating the heading above the
+first `## ` section when there is none, and records the path as
+`summary.changelog`. A red crew writes nothing, and a project with no changelog
+gets none: a new `docs/` would arm the Stop gate's docs letters on a project
+that never kept them.
+
+The summary carries one pass count for the whole check: each worker's DONE
+records its unit check's `N passed`, and when the global check skips a file as
+DONE-verified the tail ends `crew total: <n> passed (<k> verified by worker DONE,
+<m> run here)`. So the lead has no reason to re-run the suite, and the completion
+gate credits a green `summary.json` whose `lead_session` is this session
+(`hooks/gate_rerun.py` `crew_proof`). The UserPromptSubmit router prints the
+exact command, with the repo's spec, files, tests and check filled in, when it
+can see them (`prompt_optimizer_core.crew_command`): on fixture-p (8 modules,
+434 tests) the lead then takes 2 to 3 turns instead of 5 to 6.
+
 `--tests` takes `{stem}`, `{name}` and `{parent}` (for `tests/{parent}/test_{stem}.py`
 in a multi-package tree). `atlas_crew.py plan ...` prints the plan without
 starting anything.
@@ -54,6 +75,7 @@ starting anything.
 | Leases       | PreToolUse denies Edit/Write outside the worker's `owns`, and a Bash command that plainly writes a peer's file, naming the owner to ask instead. Edit/Write inside the worker's own stage dir is allowed; a peer's stage dir stays denied. One tree, no worktrees. The hook grants nothing past Claude Code's own safety checks. |
 | Check gate   | Stop re-runs the worker's own `check` and refuses to let it stop while the check fails (3 refusals, then GAVE UP is posted). A claim of done is never taken as evidence. Skipped when the DONE's owned-file digest still matches (`done_current`). |
 | Verified DONE | A worker's check is `irc check`: it waits for `ATLAS_CREW_NEEDS` (as `irc need --done`, exit 2/3/4), runs `ATLAS_CREW_UNIT_CHECK` in the project root, prints the output and posts DONE only when that exits 0, so piping it cannot fake a DONE. Before it runs the unit check it restores the stub docstrings the worker's rewrite dropped (`ATLAS_CREW_STUBS` maps each owned file to the pristine copy the run saved under `<rundir>/stubs/`): only where the stub has one and the worker's module, class, function or method has none, and only a result that parses. The unit check then runs once, on the files with docstrings: a pass keeps them and posts DONE; a failure puts back the exact pre-restore bytes and prints one line saying the output is from the run with docstrings. (A second unit-check run after the restore cost the store worker's DONE hop 8.9-9.6 s instead of one 3.3-4.8 s check, on the critical chain.) While a need is not DONE, the first `irc check` per owned-files digest also runs a pytest unit check once (20 s cap, junit-xml): a failure whose text has no `NotImplementedError` or import error is the worker's own, so it prints it and exits 1 with no DONE, so the fix happens during the wait; an unchanged digest or `ATLAS_CREW_EARLY_CHECK=off` skips it. A manual `irc done` follows the same single-run order and refuses (exit 1) on failure. The supervisor does not wait for worker processes before the global check (exit tails run 1-8 s under load): it starts the check once every worker has exited or holds a current verified DONE, snapshots the sha256 of every owned file, then waits for the exits (cap `RESULT_GRACE_S` + 10 s) and re-runs the check if an owned file changed meanwhile. Round 0 reports `all_exited` and `check_started_before_exit`; the stage dirs are removed after `summary.json`. A failing check voids the worker's earlier DONE, and a later pass posts a fresh one. |
+| Handoffs     | One tree, so work moves by lease, not by merge. `irc give <path> <peer> [note]` installs the giver's newest staged copy, moves the lease (`irc/leases.json`, locked, atomic) and posts `LEASE <path> -> <peer>` to the channel; only the current owner can give, and only to a crew member. `irc claim <path>` takes a file no worker owns (first claim wins). `irc leases` prints the table. The lease hook, `irc check`'s install step and the supervisor's fix routing (`route_failures`) all follow the moved lease, so a failing test in a handed-over file goes to its new owner. |
 | No sleeping  | PreToolUse denies `sleep N` with N >= 3 s; workers wait with `irc wait --from <peer> --timeout <s>` or `irc check`. |
 | Fix rounds   | After all workers exit, the supervisor runs the global check and resumes only the owners of failing tests (`--fix-rounds`, default 2). Sharded final check: When the global check is a plain `pytest` command (no `\|`, `&&`, `;`, `>`) and the workers' `tests` name at least 2 existing files, the supervisor (round 0 and fix rounds) runs it as `min(ncpu, files)` parallel shards of those files, balanced by file size, plus one rest shard with `--ignore=<file>` for each so other tests still run (rest exit 5, nothing collected, counts as a pass). Failing shards' output comes first, so `route_failures` still sees the test file names; the round records `check_shards`. Reason: the 784-test `python3 -m pytest -q` took 3.95 s in one benchmark run and 8.5-8.9 s in two others (one test file had a 5.1 s test), after the last DONE. `ATLAS_CREW_SHARD=off` runs the command once. A test file is also skipped (round records `check_cached`) when its worker's standing DONE carries `digest`, `peer_digests` (its needs closure) and `test_digest` (its tests plus conftest.py/pytest.ini/pyproject.toml/setup.cfg/tox.ini) equal to the bytes now on disk and its `unit_check` is plain pytest (only `-q`, `-qq`, `-x`, `-p no:cacheprovider`, literal test files) (1.4-4.4 s on the critical path measured at 18-30 modules); `ATLAS_CREW_CHECK_CACHE=off` disables it. |
 | Early exit   | PostToolUse ends the worker's session right after a Bash call whose check posted DONE and whose check, re-run by the hook, passes: no final model turn. The re-run is skipped when `done_current` proves the DONE (stored `digest`) matches the owned files. |

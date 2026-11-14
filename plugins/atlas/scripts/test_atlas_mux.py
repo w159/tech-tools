@@ -3427,8 +3427,17 @@ class DefaultTransportAndMemberTaskTests(unittest.TestCase):
             self.assertIn("SLICE-TWO", b1)
 
 
+def _worktree_cells():
+    """Every shipped scope-matrix cell is `isolation: shared` (one tree, file leases, no branches). The
+    worktree path in spawn-team is kept for a matrix that opts in; these tests force that opt-in."""
+    import atlas_mux
+
+    real = atlas_mux.atlas_resolve.resolve
+    return mock.patch.object(atlas_mux.atlas_resolve, "resolve", lambda *a, **k: dict(real(*a, **k), isolation="worktree"))
+
+
 class WorktreeIsolationTests(unittest.TestCase):
-    """spawn-team honours the resolved isolation=worktree: one worktree per edit-capable member."""
+    """spawn-team honours a resolved isolation=worktree: one worktree per edit-capable member."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -3439,7 +3448,7 @@ class WorktreeIsolationTests(unittest.TestCase):
         git("init", "-q")
         git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "i")
 
-    def _spawn_team(self, *extra):
+    def _spawn_team(self, *extra, shipped=False):
         import atlas_mux
 
         seen, buf = [], io.StringIO()
@@ -3450,7 +3459,8 @@ class WorktreeIsolationTests(unittest.TestCase):
             return 0
 
         env = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on"}
-        with mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
+        cells = contextlib.nullcontext() if shipped else _worktree_cells()
+        with cells, mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-wt")), \
                 contextlib.redirect_stdout(buf):
             code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
@@ -3486,6 +3496,18 @@ class WorktreeIsolationTests(unittest.TestCase):
         ignored = subprocess.run(["git", "-C", self.repo, "check-ignore", "-q", ".atlas/wt/"]).returncode
         self.assertEqual(0, ignored)  # the worktrees never show up as untracked files
         self.assertTrue(all("worktree" in m for m in out["members"] if m["name"] in wts))
+
+    def test_shipped_matrix_spawns_one_shared_tree(self):
+        code, out, _ = self._spawn_team("--dry-run", shipped=True)
+        self.assertEqual(0, code)
+        self.assertEqual("shared", out["team"]["isolation"])
+        self.assertEqual({}, out["team"]["worktrees"])
+        code, out, seen = self._spawn_team(shipped=True)
+        self.assertEqual(0, code, out)
+        self.assertEqual({}, out["worktrees"])
+        self.assertTrue(seen and all(ns.cwd is None for ns in seen))  # every member works in the main tree
+        listed = subprocess.run(["git", "-C", self.repo, "worktree", "list"], capture_output=True, text=True).stdout
+        self.assertEqual(1, len(listed.splitlines()))  # no linked worktree, no worker branch
 
     def test_non_git_root_gets_no_worktrees(self):
         import atlas_mux
@@ -3524,7 +3546,7 @@ class TeamFlowFixTests(unittest.TestCase):
             return 0
 
         e = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on", **(env or {})}
-        with mock.patch.dict(os.environ, e), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
+        with _worktree_cells(), mock.patch.dict(os.environ, e), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-tf")), \
                 contextlib.redirect_stdout(buf):
             code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
