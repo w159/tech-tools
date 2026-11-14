@@ -52,6 +52,7 @@ import argparse
 import contextlib
 import hashlib
 import io
+import copy
 import json
 import os
 import re
@@ -336,13 +337,16 @@ def worker_env(env: dict | None = None) -> dict:
         if ENV_NAME_RE.match(name.strip())
     }
     allowed = set(WORKER_ENV) | set(FORWARDED_ENV) | extras
-    if source.get("ATLAS_PROVIDER_ACTIVE") == "ollama":
+    local = source.get("ATLAS_PROVIDER_ACTIVE") == "ollama"
+    if local:
         # the spawn resolved this worker onto the local endpoint: its provider env reaches the harness, nothing else of the lead's
         allowed |= set(atlas_provider.PROVIDER_ENV_KEYS)
     return {
         key: value
         for key, value in source.items()
-        if key in allowed or key.startswith("LC_")
+        if (key in allowed or key.startswith("LC_"))
+        # even when ATLAS_WORKER_FORWARD_ENV names them: a local worker never keeps a cloud route or the account token
+        and not (local and key in atlas_provider.UNSET_ENV)
     }
 
 
@@ -531,9 +535,11 @@ def pane_env(root: str, name: str) -> dict:
     return env
 
 
-def pane_command(env: dict, argv: list) -> str:
-    """`exec env K=V ... argv`: the pins travel in the command itself, so a shell that resets its env cannot drop them."""
-    return "exec " + shlex.join(["env", *[f"{k}={v}" for k, v in env.items()], *argv])
+def pane_command(env: dict, argv: list, unset=()) -> str:
+    """`exec env [-u K ...] K=V ... argv`: the pins travel in the command itself, so a shell that resets its env cannot
+    drop them; `unset` names variables the pane's own env must not hand the worker."""
+    gone = [x for k in unset for x in ("-u", k)]
+    return "exec " + shlex.join(["env", *gone, *[f"{k}={v}" for k, v in env.items()], *argv])
 
 
 def with_token_file(root: str, name: str, pane: str) -> str:
@@ -1489,7 +1495,7 @@ def _spawn_registered(args, root: str, chan) -> int:
             pins.update(prov["env"])
         made = atlas_seats.create_pane(
             args.name,
-            pane_command(pins, worker),
+            pane_command(pins, worker, prov["unset"] if on_ollama else ()),
             cwd=os.path.abspath(args.cwd) if args.cwd else root,
             run=args.run,
             # the herdr socket env, not the typed command line, carries the token
@@ -1589,6 +1595,8 @@ def cmd_run_worker(args) -> int:
     log_path = Path(root) / ".atlas" / ".run" / "logs" / f"{args.name}.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log = log_path.open("w", encoding="utf-8")
+    local = env.get("ATLAS_PROVIDER_ACTIVE") == "ollama"  # a local endpoint can die under a running worker
+    fail = {"kind": None, "retries": 0}
     feed = atlas_panefeed.Feed(
         args.name,
         args.agent,
@@ -1620,17 +1628,19 @@ def cmd_run_worker(args) -> int:
     log.write(f"$ {shlex.join(argv)}\n")
     log.flush()
     # guaranteed start note: the board shows the worker even when the model skips its own
-    try:
-        atlas_todo.note(
-            root,
-            args.name,
-            f"start: {args.agent} worker {args.name} running",
-            to=lead,
-            channel=channel or None,
-            kind="start",
-        )
-    except OSError as exc:
-        log.write(f"start note failed: {exc}\n")
+    # (not repeated on the relaunch after a provider failure: the first attempt's note stands)
+    if not getattr(args, "failover_from", None):
+        try:
+            atlas_todo.note(
+                root,
+                args.name,
+                f"start: {args.agent} worker {args.name} running",
+                to=lead,
+                channel=channel or None,
+                kind="start",
+            )
+        except OSError as exc:
+            log.write(f"start note failed: {exc}\n")
     feed.start()
     try:
         proc = subprocess.Popen(
@@ -1661,6 +1671,15 @@ def cmd_run_worker(args) -> int:
             log.write(raw if raw.endswith("\n") else raw + "\n")
             log.flush()
             lines += _feed_line(raw.rstrip("\n"), feed)
+            if local and atlas_provider.stream_failed(raw, fail):
+                proc.terminate()  # the CLI retries a dead endpoint up to 300 times and never exits
+                break
+        if fail["kind"] and proc.wait() != 0:
+            # one relaunch on Claude, the Ollama attempt's log kept beside the new one
+            log.write(f"provider failover: ollama {fail['kind']}; relaunching on claude\n")
+            log.close()
+            feed.finish(proc.returncode)
+            return _relaunch_on_claude(args, fail["kind"], log_path)
         # classify the harness output only: the STATUS..NEXT report is the worker's own prose
         # (it may cite `foo.py:402`) and must not trip the 402/401 signs
         head = lines[
@@ -1676,6 +1695,25 @@ def cmd_run_worker(args) -> int:
         proc.terminate()
         return finish(code, _report(lines), f"killed by signal {code - 128}")
     return finish(code, _report(lines), reason)
+
+
+def _relaunch_on_claude(args, kind: str, log_path: Path) -> int:
+    """run-worker's second attempt after its Ollama endpoint failed: the provider env leaves the process, the
+    Ollama model leaves the argv, and the fallback is counted as runtime_<kind>. Only reached from a local worker,
+    and the relaunch is no longer local, so it cannot loop. The pane unset the account token on purpose: a Claude
+    worker that needed ATLAS_WORKER_FORWARD_ENV for auth fails visibly here rather than getting it back."""
+    try:
+        os.replace(log_path, log_path.with_name(log_path.stem + ".ollama.log"))
+    except OSError:
+        pass
+    for key in atlas_provider.PROVIDER_ENV_KEYS:
+        os.environ.pop(key, None)
+    atlas_provider.record_launch(
+        atlas_provider.runtime_fallback({"requested": getattr(args, "provider", None) or "ollama", "model": args.model}, kind)
+    )
+    again = copy.copy(args)
+    again.model, again.provider, again.failover_from = None, "claude", kind
+    return cmd_run_worker(again)
 
 
 def _feed_line(text: str, feed=None) -> list[str]:
@@ -2062,7 +2100,7 @@ def seat_model(member: dict, harness: str) -> str | None:
 
 
 def assign_team_providers(rec: dict, harness: str) -> None:
-    """Stamp each member of a claude team with its provider (and Ollama model), then pair verifiers across model
+    """Stamp each member of a claude team with its provider (claude included) and Ollama model, then pair verifiers across model
     families: implementers on ollama -> verifier seats on claude; implementers on claude and a healthy Ollama model
     configured for the verifier role -> that verifier on ollama (ATLAS_ADVERSARIAL_PAIRING=off disables the latter)."""
     if harness != "claude":
@@ -2085,8 +2123,10 @@ def assign_team_providers(rec: dict, harness: str) -> None:
     for m, s in zip(rec["members"], paired):
         if s["provider"] == "ollama":
             m["provider"], m["provider_model"] = "ollama", s["model"]
-        elif s.get("pair"):
-            m["provider"] = "claude"  # pinned: the spawn must not re-resolve this seat onto ollama
+        else:
+            m["provider"] = "claude"  # pinned: the spawn must not re-resolve this seat (Ollama may be back up by then)
+            if s.get("fallback"):
+                m["provider_fallback"] = s["fallback"]
         if s.get("pair"):
             m["pair"] = s["pair"]
 

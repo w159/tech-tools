@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import copy
 import json
 import os
 import re
@@ -520,7 +521,7 @@ def load_provider(rundir: Path, name: str):
     except (OSError, ValueError):
         return None
     if rec.get("provider") == "ollama" and rec.get("url"):
-        return {**rec, "env": atlas_provider.provider_env(rec["url"]), "unset": list(atlas_provider.UNSET_ENV)}
+        return {**rec, "env": atlas_provider.provider_env(rec["url"], rec.get("model")), "unset": list(atlas_provider.UNSET_ENV)}
     return {**rec, "env": {}, "unset": []}
 
 
@@ -656,6 +657,24 @@ def _hand_terminal(pgid: int, fd: int | None = None) -> int | None:
         return None
 
 
+def _failover_to_claude(a, rundir: Path, w: dict, meta: dict, prov: dict, kind: str, log_path: Path) -> int:
+    """Record the runtime fallback, keep the Ollama attempt's log beside the new one, relaunch this worker on Claude."""
+    claude_model = next(
+        (m for m in (worker_model(w, meta), w.get("model"), meta.get("model")) if m and atlas_provider.is_claude_model(m)),
+        None,
+    )
+    res = atlas_provider.runtime_fallback(prov, kind, claude_model)
+    provider_record_path(rundir, a.name).write_text(json.dumps({**atlas_provider.public(res), "url": None}), encoding="utf-8")
+    try:
+        os.replace(log_path, log_path.with_name(log_path.stem + ".ollama.log"))
+    except OSError:
+        pass
+    atlas_provider.record_launch(res)
+    again = copy.copy(a)
+    again.delay = 0
+    return cmd_worker(again)
+
+
 def cmd_worker(a) -> int:
     """Pane command: run one worker (or one fix round), render it, log it, record the exit."""
     rundir = Path(a.rundir)
@@ -694,7 +713,12 @@ def cmd_worker(a) -> int:
             except atlas_provider.ProviderRefused as exc:
                 _write_exit(rundir, a.name, rnd, {"exit": 2, "wall_s": None, "sid": None, "launch_error": str(exc)})
                 return 2
-        model = prov["model"] if prov["provider"] == "ollama" else (prov.get("model") or model)
+        if prov["provider"] == "ollama":
+            model = prov["model"]
+        elif str(prov.get("fallback") or "").startswith("runtime_"):
+            model = prov.get("model")  # a failover never inherits an Ollama tag from ATLAS_CREW_WORKER_MODEL
+        else:
+            model = prov.get("model") or model
     effort = worker_effort(w, meta)
     argv = worker_argv(
         model,
@@ -737,6 +761,8 @@ def cmd_worker(a) -> int:
             pass
     t0 = time.time()
     code = 1
+    watch = bool(prov and prov["provider"] == "ollama")  # a local endpoint can die under a running worker
+    fail = {"kind": None, "retries": 0}
     # `kill` (SIGTERM) and a closing pane (SIGHUP) must stop claude even when they land between Popen and the
     # pid-file write below: the handler stops claude's group, and the loop then ends and the exit record is written
     stop = {"proc": None, "asked": False}
@@ -781,6 +807,11 @@ def cmd_worker(a) -> int:
             for line in proc.stdout:
                 log.write(line)
                 log.flush()
+                if watch and fail["kind"] is None and atlas_provider.stream_failed(line, fail):
+                    try:  # the CLI would retry a dead endpoint up to 300 times and never exit
+                        os.killpg(proc.pid, signal.SIGTERM)
+                    except OSError:
+                        pass
                 if reaper is None and _event_type(line) in ("result", "turn.completed"):
                     # the turn is over; a process still alive after the grace period is held open
                     # by something left running (a shell, a watcher), not by work
@@ -813,6 +844,14 @@ def cmd_worker(a) -> int:
                     signal.signal(sg, old)
                 except (ValueError, OSError):
                     pass
+    if fail["kind"] and code != 0 and not stop["asked"]:
+        # the endpoint failed under a running worker: one relaunch on Claude (the record now says claude, so no loop)
+        if feed is not None:
+            try:
+                feed.finish(code)
+            except Exception:
+                pass
+        return _failover_to_claude(a, rundir, w, meta, prov, fail["kind"], log_path)
     if harness == "codex":
         sid = _codex_thread_id(log_path) or sid
         if sid:
@@ -2304,7 +2343,9 @@ def cmd_supervise(a) -> int:
 def usage_of(log: Path) -> dict:
     """Token use of one stream-json log. modelUsage and total_cost_usd are cumulative for the process
     (a second result after a background task repeats them; live 2026-10-28), so the last result counts;
-    num_turns is per result and is summed. total = all tokens the API processed."""
+    num_turns is per result and is summed. total = all tokens the API processed. cost_known is True only when
+    a result event supplied total_cost_usd: a process stopped before its result streams tokens but no dollars,
+    so its 0.0 is "unknown", not a real zero."""
     t = {
         "input": 0,
         "cache_write": 0,
@@ -2313,6 +2354,7 @@ def usage_of(log: Path) -> dict:
         "cost_usd": 0.0,
         "turns": 0,
         "results": 0,
+        "cost_known": False,
     }
     try:
         fh = log.open(encoding="utf-8", errors="replace")
@@ -2340,6 +2382,7 @@ def usage_of(log: Path) -> dict:
             e = json.loads(line)
             t["results"] += 1
             t["cost_usd"] = float(e.get("total_cost_usd") or 0)
+            t["cost_known"] = e.get("total_cost_usd") is not None
             t["turns"] += int(e.get("num_turns") or 0)
             t.update(input=0, cache_write=0, cache_read=0, output=0)
             for u in (e.get("modelUsage") or {}).values():
@@ -2428,13 +2471,18 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
     worker row carries stopped_after_done."""
     names = [w["name"] for w in meta["plan"]["workers"]]
     workers, tot = [], {"total": 0, "cost_usd": 0.0}
+    cost_complete = True
     failed, late, pending, stopped = [], {}, [], []
     for n in names:
         u = {"total": 0, "cost_usd": 0.0, "turns": 0}
+        unknown = False  # a log with tokens but no result event leaves the worker's cost unknown
         for log in sorted((rundir / "logs").glob(f"{n}*.log")):
             x = usage_of(log)
+            if not x.pop("cost_known", False) and x["total"]:
+                unknown = True
             for k, v in x.items():
                 u[k] = u.get(k, 0) + v
+        cost_known = not unknown
         gate = {}
         try:
             gate = json.loads((rundir / "irc" / "stop" / f"{n}.json").read_text())
@@ -2461,6 +2509,7 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
         local = prec.get("provider") == "ollama"
         if local:
             u["cost_usd"] = 0.0  # a local model has no API bill: tokens are counted, dollars are not
+            cost_known = True
         workers.append(
             {
                 "name": n,
@@ -2468,7 +2517,8 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
                 "wall_s": ex.get("wall_s"),
                 "turns": u.get("turns"),
                 "tokens": u.get("total"),
-                "cost_usd": round(u.get("cost_usd", 0), 4),
+                "cost_usd": round(u.get("cost_usd", 0), 4) if cost_known else None,
+                "cost_known": cost_known,
                 **({"provider": prec.get("provider"), "model": prec.get("model")} if prec else {}),
                 **({"local": True} if local else {}),
                 **({"fallback": prec["fallback"]} if prec.get("fallback") else {}),
@@ -2479,9 +2529,11 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
         )
         tot["total"] += u.get("total", 0)
         tot["cost_usd"] += u.get("cost_usd", 0)
+        cost_complete = cost_complete and cost_known
         if local:
             tot["tokens_local"] = tot.get("tokens_local", 0) + u.get("total", 0)
-    tot["cost_usd"] = round(tot["cost_usd"], 4)
+    tot["cost_usd"] = round(tot["cost_usd"], 4) if cost_complete else None
+    tot["cost_complete"] = cost_complete
     return {
         "ok": code == 0 and not failed and not killed,
         "killed": killed,

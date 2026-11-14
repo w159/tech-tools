@@ -76,6 +76,8 @@ CALL_SITES = {
     "decision.route.{routesrc}": [
         ("hooks/prompt_optimizer_core.py", '"decision.route.model"'),
         ("hooks/prompt_optimizer_core.py", '"decision.route.fallback"'),
+        ("hooks/prompt_optimizer_core.py", '"decision.route.agree"'),
+        ("hooks/prompt_optimizer_core.py", '"decision.route.disagree"'),
     ],
     "decision.verify.{verifyres}": [
         ("hooks/completion_gate_core.py", '"decision.verify.block"'),
@@ -164,6 +166,14 @@ def test_every_schema_pattern_has_a_call_site_or_is_listed_as_unwired():
         "stale entry: pattern no longer in the schema"
     )
     assert not (set(CALL_SITES) & KNOWN_UNWIRED)
+
+
+@pytest.mark.parametrize("key", ["decision.route.agree", "decision.route.disagree"])
+def test_route_agreement_counters_are_valid_and_allowlisted(key):
+    assert A.valid_key(key)
+    assert key in A.allowed_keys()
+    if ALLOWED.parent.is_dir():
+        assert key in json.loads(ALLOWED.read_text(encoding="utf-8"))["keys"]
 
 
 @pytest.mark.parametrize("pattern", sorted(CALL_SITES))

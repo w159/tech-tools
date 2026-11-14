@@ -44,25 +44,43 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
       - run: bun test omp mod
         working-directory: plugins/atlas
 
   # Release gate: the mod's hooks module must load the way a Claude Code session loads it and the band must render
-  # (plugins/atlas/scripts/atlas_mod_gate.py; --live adds the real host via the pinned CLI, isolated HOME).
+  # (plugins/atlas/scripts/atlas_mod_gate.py; --live adds the real host via the pinned CLI, isolated HOME;
+  # --require-live turns a live check that did not really run into a failure instead of a skip).
   atlas-mod-gate:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
       - run: npm install -g @anthropic-ai/claude-code@2.1.325
-      - run: python3 plugins/atlas/scripts/atlas_mod_gate.py --live
+      - run: claude --version
+      - run: python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live
+
+  # Early warning, never blocking: the same gate against the newest published CLI, so a host change that rejects the
+  # mod shows up before the pin is bumped. continue-on-error keeps a red run from failing the workflow.
+  atlas-mod-gate-latest:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+      - run: npm install -g @anthropic-ai/claude-code@latest
+      - run: claude --version
+      - run: python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live
 
   # The owner does not want Claude credited in commits or listed as a contributor.
   # Checks only the commits this push or PR adds; a force push or new branch checks all of HEAD.
@@ -99,7 +117,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       # tmux is used by the atlas colony/mux tests; ubuntu-latest does not guarantee it.
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq tmux
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
       - run: python3 --version && python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest

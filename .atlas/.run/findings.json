@@ -12236,5 +12236,90 @@
     "status": "rejected",
     "verified_at": "2026-11-14T22:18:17+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-hooks-D1-D2-D8",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "decision hook proxy leak, malformed HTTP, confidence clamp closed",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/d1.py output: proxy conns 0; trunc/badstatus None; bool/NaN rejected"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/d1.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:59:41+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-router-D3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "keyword router D3 cases all pass; 12/15 on new prompts (P2 negation gap)",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/r1.py, /tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/r2.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/r1.py; python3 /tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/r2.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:59:41+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-provider",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "provider health/resolve/env strip/is_loopback closed; no proxy use",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/p1.py,/tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/p2.py output"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 /tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/p1.py; python3 /tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/p2.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:59:41+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-gate-ci",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod gate require-live/classify_live/hooks.json fail; CI split verified; setup-bun SHA not network-verified",
+    "evidence": [
+      "atlas_mod_gate.py classify_live; release.yml jobs mod-gate->release"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live; PATH without claude --require-live rc=1",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:59:41+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-suites",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hooks 3070 passed 4 skipped; scripts 5953 passed 1 skipped",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/hooks.out /tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/scripts.out"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest plugins/atlas/hooks -q -p no:cacheprovider; pytest plugins/atlas/scripts -q -p no:cacheprovider",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:59:41+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

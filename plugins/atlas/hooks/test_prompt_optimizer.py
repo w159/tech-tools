@@ -857,6 +857,150 @@ class ScopeNegationTest(unittest.TestCase):
             self.assertEqual(po.classify_scope(prompt)[0], want, prompt)
 
 
+class ScopeNegationRegressionTest(unittest.TestCase):
+    """D3: negation removes only the negated class verb, never a state word, and never turns a write
+    ask into a read-only class."""
+
+    def test_regressions_from_review(self):
+        cases = {
+            "login does not work fix it": "fix",
+            "this is not working please fix": "fix",
+            "Don't audit the db schema, add a column": "db",
+            "don't just review it, fix it": "fix",
+            "we shouldn't review this, just fix it": "fix",
+        }
+        for prompt, want in cases.items():
+            self.assertEqual(po.classify_scope(prompt)[0], want, prompt)
+
+    def test_must_keep_working(self):
+        cases = {
+            "do not audit, just implement x": "implement",
+            "don't refactor, just fix the crash in a.py": "fix",
+            "no need to test, just ship it": "implement",
+            "don't break the build": "implement",
+            "fix the audit script": "fix",
+            "without review, fix the crash in a.py": "fix",
+            "you should not audit this, only fix the bug": "fix",
+            "never review it, build the exporter": "implement",
+            "stop auditing and fix the crash in a.py": "fix",
+        }
+        for prompt, want in cases.items():
+            self.assertEqual(po.classify_scope(prompt)[0], want, prompt)
+
+    def test_think_we_need_and_need_phrases_negate_the_class_noun(self):
+        cases = {
+            "I don't think we need an audit, please just patch the null check in api.py": "fix",
+            "I do not think we need a review, just fix the crash in a.py": "fix",
+            "no need for an audit, just patch the null check in api.py": "fix",
+            "we don't need an audit, fix the crash in a.py": "fix",
+            "we do not need to audit this, fix the crash in a.py": "fix",
+        }
+        for prompt, want in cases.items():
+            self.assertEqual(po.classify_scope(prompt)[0], want, prompt)
+
+    def test_negation_never_makes_a_write_ask_read_only(self):
+        for prompt in (
+            "don't just audit the schema, add a column",
+            "we shouldn't only review the hooks, change them",
+            "no need for an audit, fix the db migration",
+            "do not review it, implement the change",
+        ):
+            self.assertNotIn(po.classify_scope(prompt)[0], ("audit", "db-audit"), prompt)
+
+
+CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routing_corpus.jsonl")
+# Keyword-router class accuracy of the router at commit d8a7adce (before the negation and cue rework) on
+# routing_corpus.jsonl: 45 of 86. Measured by loading `git show d8a7adce:plugins/atlas/hooks/prompt_optimizer_core.py`.
+HEAD_ROUTER_ACCURACY = 45 / 86
+MIN_ACCURACY = 0.85
+
+
+class RoutingCorpusTest(unittest.TestCase):
+    def _rows(self):
+        with open(CORPUS, encoding="utf-8") as fh:
+            return [json.loads(line) for line in fh if line.strip()]
+
+    def test_corpus_shape(self):
+        rows = self._rows()
+        self.assertGreaterEqual(len(rows), 60)
+        classes = set(json.load(open(os.path.join(os.path.dirname(CORPUS), "..", "contracts", "scope-matrix.json")))["classes"])
+        self.assertEqual({r["class"] for r in rows}, classes, "every scope-matrix class is covered")
+        for r in rows:
+            self.assertEqual(set(r), {"prompt", "class", "effort"})
+            self.assertIn(r["effort"], ("low", "medium", "high"))
+        per_class = {c: sum(1 for r in rows if r["class"] == c) for c in classes}
+        self.assertGreaterEqual(min(per_class.values()), 3, per_class)
+
+    def test_keyword_router_accuracy(self):
+        rows = self._rows()
+        misses = [(r["class"], po.classify_scope(r["prompt"])[0], r["prompt"]) for r in rows]
+        misses = [m for m in misses if m[0] != m[1]]
+        acc = 1 - len(misses) / len(rows)
+        print("\nrouting corpus: %d/%d = %.3f (HEAD router %.3f)" % (len(rows) - len(misses), len(rows), acc, HEAD_ROUTER_ACCURACY))
+        for want, got, prompt in misses:
+            print("  MISS want=%s got=%s | %s" % (want, got, prompt))
+        self.assertGreaterEqual(acc, HEAD_ROUTER_ACCURACY)
+        self.assertGreaterEqual(acc, MIN_ACCURACY)
+
+    def test_eval_routing_cli_reports_model_unavailable_without_inventing_numbers(self):
+        env = dict(os.environ, ATLAS_DECISION_URL="http://127.0.0.1:%d" % free_port(), ATLAS_DECISION="on")
+        out = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(CORPUS), "prompt_optimizer_core.py"), "--eval-routing", "--model"],
+            capture_output=True, text=True, env=env, timeout=60,
+        )
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertRegex(out.stdout, r"heuristic: \d+/\d+ = \d\.\d{3}")
+        self.assertIn("model: unavailable", out.stdout)
+        self.assertNotRegex(out.stdout, r"model: \d")
+
+    def test_eval_routing_scores_the_model_when_an_endpoint_answers(self):
+        rows = self._rows()
+        by_prompt = {r["prompt"]: r["class"] for r in rows}
+
+        def respond(body):
+            return {"task_class": choice(by_prompt.get(body["state"], "implement"), 0.95)}
+
+        with StubDecisionServer(respond) as srv:
+            result = po.eval_routing(CORPUS, use_model=True, url=srv.url)
+        self.assertTrue(result["model"]["available"])
+        self.assertEqual(result["model"]["answered"], len(rows))
+        self.assertEqual(result["model"]["correct"], len(rows))
+        self.assertEqual(result["model"]["combined_correct"], len(rows))
+        self.assertIsNotNone(result["heuristic"]["accuracy"])
+
+
+class RouteAgreeCountersTest(unittest.TestCase):
+    PROMPT = "fix the bug in foo.py"
+
+    def setUp(self):
+        prompt_decision.reset_cache()
+
+    def _run(self, answers):
+        recorded = []
+        import atlas_analytics
+
+        with StubDecisionServer(lambda b: answers) as srv, mock.patch.dict(
+            os.environ, {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": srv.url}, clear=False
+        ), mock.patch.object(atlas_analytics, "record", lambda key, *a, **k: recorded.append(key)):
+            po.route_scope(self.PROMPT)
+        return recorded
+
+    def test_agree_when_model_class_matches_heuristic(self):
+        keys = self._run({"task_class": choice("fix", 0.95), "effort": choice("low", 0.9)})
+        self.assertIn("decision.route.agree", keys)
+        self.assertNotIn("decision.route.disagree", keys)
+
+    def test_disagree_when_model_class_differs(self):
+        keys = self._run({"task_class": choice("audit", 0.95), "effort": choice("low", 0.9)})
+        self.assertIn("decision.route.disagree", keys)
+        self.assertNotIn("decision.route.agree", keys)
+
+    def test_neither_when_model_did_not_answer_a_class(self):
+        keys = self._run({"task_class": choice("audit", 0.5)})
+        self.assertNotIn("decision.route.agree", keys)
+        self.assertNotIn("decision.route.disagree", keys)
+
+
 class RouteScopeDecisionTest(unittest.TestCase):
     PROMPT = "do not audit, just implement the retry logic in client.py"
 

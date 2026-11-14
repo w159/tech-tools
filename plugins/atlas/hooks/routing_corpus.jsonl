@@ -1,0 +1,86 @@
+{"prompt": "add a --json flag to the status command", "class": "implement", "effort": "low"}
+{"prompt": "rename the session helper to session_state across the hooks", "class": "implement", "effort": "medium"}
+{"prompt": "build a retry wrapper around the provider call with exponential backoff", "class": "implement", "effort": "medium"}
+{"prompt": "implement caching for the scope matrix lookup", "class": "implement", "effort": "low"}
+{"prompt": "please make the dashboard header sticky", "class": "implement", "effort": "low"}
+{"prompt": "create a new hook that warns when a commit message is longer than 72 characters", "class": "implement", "effort": "medium"}
+{"prompt": "refactor the completion gate so every check is its own function", "class": "implement", "effort": "medium"}
+{"prompt": "no need to test, just ship it", "class": "implement", "effort": "low"}
+{"prompt": "add pagination to the list endpoint but don't break the existing clients", "class": "implement", "effort": "medium"}
+{"prompt": "do not audit, just implement the export button", "class": "implement", "effort": "low"}
+{"prompt": "don't break the build while you move the helpers into utils.py", "class": "implement", "effort": "low"}
+{"prompt": "we need a CSV export for the transportation report", "class": "implement", "effort": "medium"}
+{"prompt": "wire the new feature flag into the settings page", "class": "implement", "effort": "medium"}
+{"prompt": "port the bash installer to python", "class": "implement", "effort": "medium"}
+{"prompt": "add a dark mode toggle to the options panel", "class": "implement", "effort": "low"}
+{"prompt": "write a small cli that prints the current branch and dirty state", "class": "implement", "effort": "low"}
+{"prompt": "the login page crashes with a TypeError when the email is empty, please fix it", "class": "fix", "effort": "low"}
+{"prompt": "login does not work fix it", "class": "fix", "effort": "low"}
+{"prompt": "this is not working please fix", "class": "fix", "effort": "low"}
+{"prompt": "fix the audit script, it exits 1 on a clean tree", "class": "fix", "effort": "low"}
+{"prompt": "don't refactor, just fix the crash in a.py", "class": "fix", "effort": "low"}
+{"prompt": "getting a KeyError on startup when the config file is missing, sort it out", "class": "fix", "effort": "low"}
+{"prompt": "the nightly job double counts rows after the dst change, find the cause and fix it", "class": "fix", "effort": "medium"}
+{"prompt": "pytest fails on test_resolve.py with an assertion error, repair it", "class": "fix", "effort": "low"}
+{"prompt": "the build is broken after the last merge, fix it", "class": "fix", "effort": "medium"}
+{"prompt": "don't just review it, fix it", "class": "fix", "effort": "low"}
+{"prompt": "we shouldn't review this, just fix it", "class": "fix", "effort": "low"}
+{"prompt": "the upload button does nothing on safari, bug in the click handler", "class": "fix", "effort": "low"}
+{"prompt": "stack trace says NoneType has no attribute get in session_boot.py line 88", "class": "fix", "effort": "low"}
+{"prompt": "the report shows yesterday's numbers, that's a bug, correct it", "class": "fix", "effort": "low"}
+{"prompt": "verify that the migration finished and nothing was dropped", "class": "verify", "effort": "low"}
+{"prompt": "run the full suite and confirm everything still passes", "class": "verify", "effort": "medium"}
+{"prompt": "double check the release notes match what shipped", "class": "verify", "effort": "low"}
+{"prompt": "confirm the fix works on a clean checkout", "class": "verify", "effort": "low"}
+{"prompt": "make sure the hook still blocks when the reply has no evidence", "class": "verify", "effort": "low"}
+{"prompt": "validate that the exported csv has the same row count as the table", "class": "verify", "effort": "low"}
+{"prompt": "audit the permissions in the shared drive and list who has write access", "class": "audit", "effort": "medium"}
+{"prompt": "review the diff on this branch for bugs", "class": "audit", "effort": "medium"}
+{"prompt": "review the whole codebase for places that swallow exceptions", "class": "audit", "effort": "high"}
+{"prompt": "investigate why the crew runs get slower after round three, do not change anything", "class": "audit", "effort": "medium"}
+{"prompt": "explain how the dispatch gate decides to deny a call", "class": "audit", "effort": "low"}
+{"prompt": "research how other plugins register their hooks and summarize the options", "class": "audit", "effort": "medium"}
+{"prompt": "read through the telemetry code and tell me what leaves the machine", "class": "audit", "effort": "medium"}
+{"prompt": "what does the completion gate do when the todo list is empty", "class": "audit", "effort": "low"}
+{"prompt": "don't fix anything yet, just audit the auth flow and report back", "class": "audit", "effort": "medium"}
+{"prompt": "look over the install script for anything unsafe", "class": "audit", "effort": "low"}
+{"prompt": "update the readme with the new environment variables", "class": "docs", "effort": "low"}
+{"prompt": "write docs for the decision models section", "class": "docs", "effort": "medium"}
+{"prompt": "add a changelog entry for the proxy fix", "class": "docs", "effort": "low"}
+{"prompt": "document the corpus format in the contributing guide", "class": "docs", "effort": "low"}
+{"prompt": "the docs still describe the old flags, bring them up to date", "class": "docs", "effort": "medium"}
+{"prompt": "no need for tests, just write the migration guide", "class": "docs", "effort": "medium"}
+{"prompt": "add a migration that creates the audit_log table", "class": "db", "effort": "medium"}
+{"prompt": "change the users table so email is unique", "class": "db", "effort": "low"}
+{"prompt": "write a query that returns the ten slowest jobs per day", "class": "db", "effort": "low"}
+{"prompt": "create an index on events.created_at", "class": "db", "effort": "low"}
+{"prompt": "Don't audit the db schema, add a column called retired_at to users", "class": "db", "effort": "low"}
+{"prompt": "drop the unused legacy_flags table in a new migration", "class": "db", "effort": "low"}
+{"prompt": "open the app in a browser and click through checkout, tell me what breaks", "class": "ui-test", "effort": "medium"}
+{"prompt": "run the ui test pass on the settings screens at phone width", "class": "ui-test", "effort": "medium"}
+{"prompt": "drive the signup form with weird inputs and report anything odd", "class": "ui-test", "effort": "medium"}
+{"prompt": "walk through the onboarding flow as a new user and note every rough edge", "class": "ui-test", "effort": "medium"}
+{"prompt": "test the dropdown with the keyboard only in a real browser", "class": "ui-test", "effort": "low"}
+{"prompt": "write unit tests for the slugify helper", "class": "test", "effort": "low"}
+{"prompt": "add test coverage for the negative cache", "class": "test", "effort": "low"}
+{"prompt": "the parser has no tests, write some", "class": "test", "effort": "low"}
+{"prompt": "update the tests in test_gate.py for the new reason text", "class": "test", "effort": "low"}
+{"prompt": "add a regression test for the proxy leak", "class": "test", "effort": "low"}
+{"prompt": "we need more tests around the retry logic", "class": "test", "effort": "medium"}
+{"prompt": "review the live database schema and list tables without a primary key", "class": "db-audit", "effort": "medium"}
+{"prompt": "check which roles can read the payments table in production, read only", "class": "db-audit", "effort": "medium"}
+{"prompt": "compare the schema in prod to the models in code and list the drift", "class": "db-audit", "effort": "medium"}
+{"prompt": "audit the rls policies on the customer tables", "class": "db-audit", "effort": "medium"}
+{"prompt": "does anything in the database still reference the old tenant column", "class": "db-audit", "effort": "low"}
+{"prompt": "hey can you look at why the cache never expires, then fix it", "class": "fix", "effort": "low"}
+{"prompt": "add a retry to the fetch and then test it", "class": "implement", "effort": "low"}
+{"prompt": "what is the difference between the audit and verify roles", "class": "audit", "effort": "low"}
+{"prompt": "tidy up the helper functions in util.py", "class": "implement", "effort": "low"}
+{"prompt": "make the crew status output easier to read", "class": "implement", "effort": "medium"}
+{"prompt": "the sort order is wrong on the dashboard table, flip it", "class": "fix", "effort": "low"}
+{"prompt": "please look into the flaky test in test_crew.py and stabilise it", "class": "fix", "effort": "medium"}
+{"prompt": "check that the changelog mentions every user visible change since the last tag", "class": "verify", "effort": "medium"}
+{"prompt": "go through every script and add type hints", "class": "implement", "effort": "high"}
+{"prompt": "audit every module in the repo for hardcoded paths", "class": "audit", "effort": "high"}
+{"prompt": "the build does not pass on windows, find out why and fix", "class": "fix", "effort": "medium"}
+{"prompt": "should we use sqlite or postgres for the dashboard, give me a recommendation", "class": "audit", "effort": "low"}

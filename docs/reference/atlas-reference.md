@@ -333,9 +333,13 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_MAX_TEAM` | most workers one `atlas_mux.py spawn` team may start (default 6); a larger team is refused with a JSON error |
 | `ATLAS_WAIT_KILL=1` | `atlas_mux.py wait` kills the team's tmux session when its timeout expires, same as `wait --kill-on-timeout` (default off; not applied to claude-bg or herdr teams) |
 | `ATLAS_DECISION_ALLOW_REMOTE=1` | lets `ATLAS_DECISION_URL` name a non-loopback host; otherwise a remote URL is refused and the regex result is kept (default off) |
-| `ATLAS_WORKER_PROVIDER` | `claude` (default), `ollama` or `auto`: which provider launches crew and team workers; `auto` uses Ollama only while it is healthy |
+| `ATLAS_WORKER_PROVIDER` | `claude` (default), `ollama` or `auto`: which provider launches crew and team workers; `auto` moves only the roles in `ATLAS_OLLAMA_AUTO_ROLES` (or with a role model), and only while Ollama is healthy |
 | `ATLAS_OLLAMA_MODEL` | default Ollama model for every worker role (a worker with no model resolves to claude with fallback `no_model`) |
 | `ATLAS_OLLAMA_ROLE_MODELS` | per-role Ollama models, `explorer=qwen3:8b,runner=qwen3:8b`; an explicit `verifier=` entry also lets pairing put the verifier on Ollama |
+| `ATLAS_OLLAMA_AUTO_ROLES` | roles `auto` may move onto Ollama (default `explorer,docs-auditor`, the read-only haiku-tier roles); set but empty moves none; a role with an `ATLAS_OLLAMA_ROLE_MODELS` entry is eligible too |
+| `ATLAS_OLLAMA_MIN_CTX` | smallest context window `/api/show` may report (default 32768); below it the worker falls back with `ctx_too_small`; a model without the `tools` capability falls back with `no_tools` |
+| `ATLAS_OLLAMA_PROBE_TIMEOUT` | seconds the one-token `/v1/messages` health probe may take (default 30: the first request loads the model); a bad answer is `probe_failed` |
+| `ATLAS_OLLAMA_RETRY_LIMIT` | `api_retry` events an Ollama worker may emit before it is relaunched once on Claude (default 3); the record shows `runtime_down`, `runtime_5xx` or `runtime_model_missing` |
 | `ATLAS_OLLAMA_URL` | Ollama endpoint (default `http://127.0.0.1:11434`); loopback only unless `ATLAS_OLLAMA_ALLOW_REMOTE=1` |
 | `ATLAS_OLLAMA_ALLOW_REMOTE=1` | lets `ATLAS_OLLAMA_URL` name a non-loopback host; otherwise fallback `remote_refused` (default off) |
 | `ATLAS_OLLAMA_STRICT=1` | an unhealthy or unconfigured Ollama refuses the worker (exit 2) instead of falling back to claude (default off) |

@@ -70,6 +70,11 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-14 | tele-3 | verified | _flush stamps before spawn, hourly, no spawn under pytest/off; status does not claim a send | [2026-11-14_tele-3.md](2026-11-14_tele-3.md) |
 | 2026-11-14 | tele-2 | verified | telemetry server node --test 69 pass 0 fail | [2026-11-14_tele-2.md](2026-11-14_tele-2.md) |
 | 2026-11-14 | tele-1 | verified | analytics pytest suites 256 passed | [2026-11-14_tele-1.md](2026-11-14_tele-1.md) |
+| 2026-11-14 | r3-suites | verified | hooks 3070 passed 4 skipped; scripts 5953 passed 1 skipped | [2026-11-14_r3-suites.md](2026-11-14_r3-suites.md) |
+| 2026-11-14 | r3-router-D3 | verified | keyword router D3 cases all pass; 12/15 on new prompts (P2 negation gap) | [2026-11-14_r3-router-d3.md](2026-11-14_r3-router-d3.md) |
+| 2026-11-14 | r3-provider | verified | provider health/resolve/env strip/is_loopback closed; no proxy use | [2026-11-14_r3-provider.md](2026-11-14_r3-provider.md) |
+| 2026-11-14 | r3-hooks-D1-D2-D8 | verified | decision hook proxy leak, malformed HTTP, confidence clamp closed | [2026-11-14_r3-hooks-d1-d2-d8.md](2026-11-14_r3-hooks-d1-d2-d8.md) |
+| 2026-11-14 | r3-gate-ci | verified | mod gate require-live/classify_live/hooks.json fail; CI split verified; setup-bun SHA not network-verified | [2026-11-14_r3-gate-ci.md](2026-11-14_r3-gate-ci.md) |
 | 2026-11-14 | r3-d4-livegate | rejected | P0-for-release: atlas_mod_gate.py --live FAILS on the current tree: mod/usage.ts non-literal $.env.get(name); release.yml and tests.yml atlas-mod-gate will be red | [2026-11-14_r3-d4-livegate.md](2026-11-14_r3-d4-livegate.md) |
 | 2026-11-14 | r3-d3-negation | rejected | P1 classify_scope regression: 'login does not work fix it' / 'this is not working please fix' now implement (HEAD: fix); 'Don't audit the db schema, add a column' -> db-audit; 'don't just review it, fix it' -> audit | [2026-11-14_r3-d3-negation.md](2026-11-14_r3-d3-negation.md) |
 | 2026-11-14 | r3-d2-httpexc | rejected | P2 ask() 'never raise' false: http.client.HTTPException (BadStatusLine/IncompleteRead) escapes | [2026-11-14_r3-d2-httpexc.md](2026-11-14_r3-d2-httpexc.md) |

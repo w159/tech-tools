@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 17.22.0 - 2026-11-14
+
+- atlas 17.22.0: decision models drive prompt routing and a shadow done-claim check; crew and tmux workers can run on a local Ollama model (`atlas_provider.py`, with `bench`); the mod-load release gate (`atlas_mod_gate.py --live --require-live`) runs in CI and before release. No real Ollama model was run in development. Audit: `docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md`.
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
+## marketplace 5.27.0 - 2026-11-14
+
+- marketplace 5.27.0: atlas 17.22.0. armada and programmer are unchanged.
+
 ## atlas 17.21.1 - 2026-11-14
 
 - atlas 17.21.1: the hooks module loads again. In 17.19.0, 17.20.0 and 17.21.0 `mod/usage.ts` broke two host loader rules (`$.env.get` with a variable name; `typeof $.clock.after` reading a `$` member as a value), so Claude Code refused the module and no mod surface drew. Fixed in usage.ts, with two new static checks (rules 5 and 6 in `host-load-rules.test.ts`) over every mod and omp source, and a clean `tsc -p mod/tsconfig.json`. Audit: `docs/audits/2026-11-14-mod-load.md`.

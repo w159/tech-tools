@@ -2877,9 +2877,12 @@ def _decision_verify_reason(data: dict, continuation: bool) -> str:
 
     Advisory by construction: it runs only on a Stop the deterministic checks already allowed, only on
     a fresh Stop (a stop_hook_active continuation always passes, so it can block at most once per
-    turn and never loops), only when a decision endpoint is configured, and the call is capped at
-    prompt_decision.VERIFY_TIMEOUT_S. Any error, timeout, refused connection, unreadable answer, a
-    sidechain, a short reply or ATLAS_DECISION_VERIFY=off fails open. Counters: decision.verify.*.
+    turn and never loops), and the call is capped at prompt_decision.VERIFY_TIMEOUT_S. It does NOT need
+    an endpoint to be configured: decision_url() defaults to loopback (Ollama on 127.0.0.1:11434), so the
+    call is attempted on every fresh Stop unless ATLAS_DECISION=off or ATLAS_DECISION_VERIFY=off. A
+    machine without a model pays the refused connection at most once a minute (prompt_decision's 60 s
+    negative cache, in process and in a small file under ATLAS_HOME). Any error, timeout, refused
+    connection, unreadable answer, a sidechain or a short reply fails open. Counters: decision.verify.*.
 
     The 0.8/0.3 thresholds are uncalibrated, so the default is shadow: ask the model and record
     decision.verify.block-would, never block. ATLAS_DECISION_VERIFY=block restores the block."""

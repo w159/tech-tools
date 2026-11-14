@@ -3,7 +3,7 @@
 cross-family verifier pairing, crew and mux wiring, telemetry, and a real-CLI wiring proof against a local stub.
 
 No real model runs here: every Ollama endpoint is a stub http.server on 127.0.0.1 that answers /api/version,
-/api/tags and POST /v1/messages (one JSON message, or a minimal SSE stream when stream=true).
+/api/tags, POST /api/show and POST /v1/messages (one JSON message, or a minimal SSE stream when stream=true).
 """
 
 from __future__ import annotations
@@ -37,7 +37,14 @@ class Stub:
     """A local Ollama stand-in. `models` is what /api/tags lists; `messages_status` 404 means no Anthropic API."""
 
     def __init__(
-        self, models=("qwen3:8b",), messages_status=200, delay=0.0, version_status=200
+        self,
+        models=("qwen3:8b",),
+        messages_status=200,
+        delay=0.0,
+        version_status=200,
+        show=None,
+        post_delay=0.0,
+        message_body=None,
     ):
         self.models, self.messages_status, self.delay, self.version_status = (
             list(models),
@@ -45,6 +52,17 @@ class Stub:
             delay,
             version_status,
         )
+        # POST /api/show answer: a tool-capable model with a 128k trained context unless a test overrides it
+        self.show = (
+            show
+            if show is not None
+            else {
+                "capabilities": ["completion", "tools"],
+                "model_info": {"general.architecture": "llama", "llama.context_length": 131072},
+                "parameters": "",
+            }
+        )
+        self.post_delay, self.message_body = post_delay, message_body
         self.requests: list = []
         stub = self
 
@@ -79,6 +97,19 @@ class Stub:
                 except ValueError:
                     body = None
                 stub.requests.append(("POST", self.path, body))
+                if self.path == "/api/show":
+                    if not isinstance(body, dict) or body.get("model") not in stub.models:
+                        return self._send(404, {"error": "model not found"})
+                    return self._send(200, stub.show)
+                if self.path.split("?")[0] == "/v1/messages" and stub.post_delay:
+                    time.sleep(stub.post_delay)
+                if (
+                    self.path.split("?")[0] == "/v1/messages"
+                    and stub.messages_status not in (200, 404)
+                ):
+                    return self._send(stub.messages_status, {"type": "error", "error": {"type": "api_error", "message": "boom"}})
+                if self.path.split("?")[0] == "/v1/messages" and stub.message_body is not None:
+                    return self._send(200, stub.message_body)
                 if (
                     self.path.split("?")[0] != "/v1/messages"
                     or stub.messages_status == 404
@@ -287,9 +318,9 @@ class ResolveTests(Base):
             ATLAS_OLLAMA_MODEL="qwen3:8b",
             ATLAS_OLLAMA_URL=st.url,
         )
-        self.assertEqual(P.resolve("implementer", None, None)["provider"], "ollama")
+        self.assertEqual(P.resolve("explorer", None, None)["provider"], "ollama")
         os.environ["ATLAS_OLLAMA_URL"] = closed_port_url()
-        r = P.resolve("implementer", None, None)
+        r = P.resolve("explorer", None, None)
         self.assertEqual((r["provider"], r["fallback"]), ("claude", "down"))
 
     def test_explicit_ollama_unhealthy_falls_back_and_drops_the_ollama_model(self):
@@ -318,7 +349,12 @@ class HealthTests(Base):
         paths = [(m, p) for m, p, _ in st.requests]
         self.assertEqual(
             paths,
-            [("GET", "/api/version"), ("GET", "/api/tags"), ("POST", "/v1/messages")],
+            [
+                ("GET", "/api/version"),
+                ("GET", "/api/tags"),
+                ("POST", "/api/show"),
+                ("POST", "/v1/messages"),
+            ],
         )
 
     def test_latest_tag_matches_a_bare_name(self):
@@ -725,7 +761,8 @@ class CrewWiringTests(Base):
         )
         self.assertNotIn("local", rows["b"])
         self.assertEqual(
-            out["tokens_workers"], {"total": 160, "cost_usd": 0.25, "tokens_local": 110}
+            out["tokens_workers"],
+            {"total": 160, "cost_usd": 0.25, "tokens_local": 110, "cost_complete": True},
         )
 
     def test_status_lists_providers(self):
@@ -903,17 +940,529 @@ class MuxWiringTests(Base):
         got = {m["role"]: m.get("provider") for m in rec["members"]}
         self.assertEqual(
             got,
-            {"implementer": None, "verifier": "ollama", "completeness-critic": None},
+            {
+                "implementer": "claude",
+                "verifier": "ollama",
+                "completeness-critic": "claude",
+            },
         )
         os.environ["ATLAS_ADVERSARIAL_PAIRING"] = "off"
         rec = self.team("implementer", "verifier")
         atlas_mux.assign_team_providers(rec, "claude")
-        self.assertIsNone(rec["members"][1].get("provider"))
+        self.assertEqual(rec["members"][1].get("provider"), "claude")
 
-    def test_default_team_is_unchanged(self):
+    def test_default_team_pins_every_member_to_claude(self):
         rec = self.team("implementer", "verifier")
         atlas_mux.assign_team_providers(rec, "claude")
-        self.assertEqual(rec, self.team("implementer", "verifier"))
+        want = self.team("implementer", "verifier")
+        for m in want["members"]:
+            m["provider"] = "claude"
+        self.assertEqual(rec, want)
+
+
+class HealthDepthTests(Base):
+    """P0-1 (context window and tool capability) and P0-2 (a real one-token probe)."""
+
+    def posts_to(self, st, path):
+        return [b for m, p, b in st.requests if m == "POST" and p == path]
+
+    def test_show_is_asked_for_the_model(self):
+        st = self.stub()
+        P.health(st.url, "qwen3:8b", use_cache=False)
+        self.assertEqual(self.posts_to(st, "/api/show"), [{"model": "qwen3:8b"}])
+
+    def test_a_model_without_the_tools_capability_is_refused_before_it_is_loaded(self):
+        st = self.stub(show={"capabilities": ["completion"], "model_info": {"llama.context_length": 131072}})
+        h = P.health(st.url, "qwen3:8b", use_cache=False)
+        self.assertEqual((h["ok"], h["reason"]), (False, "no_tools"))
+        self.assertEqual(self.posts_to(st, "/v1/messages"), [], "a refused model is never loaded")
+
+    def test_a_small_trained_context_is_refused(self):
+        st = self.stub(show={"capabilities": ["tools"], "model_info": {"llama.context_length": 8192}})
+        h = P.health(st.url, "qwen3:8b", use_cache=False)
+        self.assertEqual((h["ok"], h["reason"]), (False, "ctx_too_small"))
+
+    def test_the_architecture_prefix_does_not_matter(self):
+        st = self.stub(show={"capabilities": ["tools"], "model_info": {"qwen3.context_length": 4096}})
+        self.assertEqual(P.health(st.url, "qwen3:8b", use_cache=False)["reason"], "ctx_too_small")
+
+    def test_a_modelfile_num_ctx_below_the_minimum_is_refused(self):
+        st = self.stub(
+            show={
+                "capabilities": ["tools"],
+                "model_info": {"llama.context_length": 131072},
+                "parameters": 'stop "<|eot_id|>"\nnum_ctx                        4096',
+            }
+        )
+        self.assertEqual(P.health(st.url, "qwen3:8b", use_cache=False)["reason"], "ctx_too_small")
+
+    def test_min_ctx_env_moves_the_bar_and_the_cache_key(self):
+        st = self.stub(show={"capabilities": ["tools"], "model_info": {"llama.context_length": 8192}})
+        self.assertEqual(P.health(st.url, "qwen3:8b")["reason"], "ctx_too_small")
+        self.env(ATLAS_OLLAMA_MIN_CTX="4096")
+        self.assertTrue(P.health(st.url, "qwen3:8b")["ok"], "a new bar is not answered from the old cache")
+        self.env(ATLAS_OLLAMA_MIN_CTX="junk")
+        self.assertEqual(P.min_ctx(), 32768)
+
+    def test_fields_the_daemon_does_not_report_are_not_a_failure(self):
+        for show in ({}, {"model_info": {"general.architecture": "x"}}, {"capabilities": ["completion", "tools"]}):
+            st = self.stub(show=show)
+            self.assertTrue(P.health(st.url, "qwen3:8b", use_cache=False)["ok"], show)
+
+    def test_the_probe_is_a_one_token_request_with_a_tool(self):
+        st = self.stub()
+        P.health(st.url, "qwen3:8b", use_cache=False)
+        (body,) = self.posts_to(st, "/v1/messages")
+        self.assertEqual((body["model"], body["max_tokens"]), ("qwen3:8b", 1))
+        self.assertEqual(len(body["tools"]), 1)
+        self.assertEqual(body["tools"][0]["input_schema"]["type"], "object")
+        self.assertTrue(body["messages"])
+
+    def test_a_server_error_on_the_probe_is_probe_failed(self):
+        st = self.stub(messages_status=500)
+        h = P.health(st.url, "qwen3:8b", use_cache=False)
+        self.assertEqual((h["ok"], h["reason"]), (False, "probe_failed"))
+
+    def test_a_200_that_is_not_an_anthropic_message_is_probe_failed(self):
+        for body in ({"ok": True}, {"type": "message"}, {"type": "error", "content": []}):
+            st = self.stub(message_body=body)
+            self.assertEqual(P.health(st.url, "qwen3:8b", use_cache=False)["reason"], "probe_failed", body)
+
+    def test_the_cold_probe_waits_on_the_probe_timeout_not_the_health_timeout(self):
+        st = self.stub(post_delay=0.8)
+        self.env(ATLAS_OLLAMA_PROBE_TIMEOUT="5")
+        self.assertTrue(P.health(st.url, "qwen3:8b", timeout=0.3, use_cache=False)["ok"])
+        self.env(ATLAS_OLLAMA_PROBE_TIMEOUT="0.2")
+        self.assertEqual(P.health(st.url, "qwen3:8b", timeout=5, use_cache=False)["reason"], "timeout")
+
+    def test_the_cached_path_makes_no_request(self):
+        st = self.stub()
+        P.health(st.url, "qwen3:8b")
+        n = len(st.requests)
+        self.assertTrue(P.health(st.url, "qwen3:8b")["cached"])
+        self.assertEqual(len(st.requests), n)
+
+    def test_every_new_reason_is_a_schema_key(self):
+        import atlas_analytics
+
+        for r in ("no_tools", "ctx_too_small", "probe_failed", "runtime_down", "runtime_5xx", "runtime_model_missing"):
+            self.assertIn(r, P.FALLBACK_REASONS)
+            self.assertTrue(atlas_analytics.valid_key(f"provider.ollama.fallback.{r}"), r)
+
+
+class AutoAndModelTests(Base):
+    """auto applies to read-only roles only; a Claude model name is never an Ollama model; aliases are pinned."""
+
+    def setUp(self):
+        super().setUp()
+        self.st = self.stub(models=("qwen3:8b", "tiny:1b"))
+        self.env(ATLAS_OLLAMA_URL=self.st.url, ATLAS_OLLAMA_MODEL="qwen3:8b", ATLAS_WORKER_PROVIDER="auto")
+
+    def test_auto_moves_only_the_read_only_roles_by_default(self):
+        got = {r: P.resolve(r, None, None) for r in ("explorer", "docs-auditor", "implementer", "verifier", "runner")}
+        self.assertEqual(
+            {r: g["provider"] for r, g in got.items()},
+            {"explorer": "ollama", "docs-auditor": "ollama", "implementer": "claude", "verifier": "claude", "runner": "claude"},
+        )
+        self.assertIsNone(got["implementer"]["fallback"], "staying on Claude is not a fallback")
+        self.assertEqual(got["implementer"]["requested"], "auto")
+
+    def test_auto_roles_env_and_explicit_role_models_extend_it(self):
+        self.env(ATLAS_OLLAMA_AUTO_ROLES="runner")
+        self.assertEqual(P.resolve("runner", None, None)["provider"], "ollama")
+        self.assertEqual(P.resolve("explorer", None, None)["provider"], "claude")
+        self.env(ATLAS_OLLAMA_ROLE_MODELS="implementer=tiny:1b")
+        r = P.resolve("implementer", None, None)
+        self.assertEqual((r["provider"], r["model"], r["model_source"]), ("ollama", "tiny:1b", "role_models"))
+
+    def test_an_empty_auto_roles_moves_nothing(self):
+        self.env(ATLAS_OLLAMA_AUTO_ROLES="")
+        self.assertEqual(P.resolve("explorer", None, None)["provider"], "claude")
+
+    def test_an_explicit_ollama_request_still_moves_any_role(self):
+        self.assertEqual(P.resolve("implementer", None, "ollama")["provider"], "ollama")
+
+    def test_the_verifier_stays_on_claude_without_its_own_entry(self):
+        self.env(ATLAS_OLLAMA_ROLE_MODELS="explorer=tiny:1b")
+        self.assertEqual(P.resolve("verifier", None, None)["provider"], "claude")
+        self.assertEqual(P.team_options(["verifier"]), {})
+
+    def test_claude_model_names_are_never_an_ollama_model(self):
+        for name in ("sonnet", "opus", "haiku", "Sonnet", "claude-sonnet-5", "claude-opus-4-8", "sonnet[1m]", "us.anthropic.claude-x"):
+            r = P.resolve("implementer", name, "ollama")
+            self.assertEqual((r["provider"], r["model"]), ("ollama", "qwen3:8b"), name)
+            self.assertEqual((r["model_source"], r["ignored_model"]), ("default_env", name))
+            self.assertEqual(P.public(r)["ignored_model"], name)
+
+    def test_a_valid_tag_is_used_and_says_so(self):
+        r = P.resolve("implementer", "tiny:1b", "ollama")
+        self.assertEqual((r["model"], r["model_source"]), ("tiny:1b", "explicit"))
+        self.assertNotIn("ignored_model", r)
+
+    def test_a_claude_alias_with_no_configured_model_falls_back_with_no_model(self):
+        os.environ.pop("ATLAS_OLLAMA_MODEL")
+        r = P.resolve("implementer", "sonnet", "ollama")
+        self.assertEqual((r["provider"], r["fallback"], r["model"]), ("claude", "no_model", None))
+
+    def test_the_crew_plan_model_is_not_passed_to_ollama(self):
+        w = {"name": "a", "owns": ["a.py"], "role": "implementer"}
+        prov = atlas_crew.worker_provider(w, {"provider": "ollama", "model": "sonnet"}, "sonnet")
+        self.assertEqual((prov["provider"], prov["model"], prov["model_source"]), ("ollama", "qwen3:8b", "default_env"))
+        self.assertEqual(prov["ignored_model"], "sonnet")
+        d = Path(self.home) / "run"
+        got = atlas_crew.assign_providers(d, {"workers": [w]}, {"provider": "ollama", "model": "sonnet"})
+        rec = json.loads((d / "provider" / "a.json").read_text())
+        self.assertEqual((rec["model"], rec["model_source"], rec["ignored_model"]), ("qwen3:8b", "default_env", "sonnet"))
+        self.assertEqual(got["a"]["model"], "qwen3:8b")
+
+    def test_the_ollama_env_pins_every_model_alias_to_the_tag(self):
+        r = P.resolve("explorer", None, None)
+        for k in (
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_SMALL_FAST_MODEL",
+            "CLAUDE_CODE_SUBAGENT_MODEL",
+        ):
+            self.assertEqual(r["env"][k], "qwen3:8b", k)
+            self.assertIn(k, P.PROVIDER_ENV_KEYS)
+        self.assertEqual(P.provider_env("http://x")["ATLAS_PROVIDER_ACTIVE"], "ollama")
+        self.assertNotIn("ANTHROPIC_DEFAULT_HAIKU_MODEL", P.provider_env("http://x"))
+
+    def test_the_crew_record_rebuilds_the_alias_env(self):
+        w = {"name": "a", "owns": ["a.py"], "role": "explorer"}
+        d = Path(self.home) / "run"
+        atlas_crew.assign_providers(d, {"workers": [w]}, {})
+        env = atlas_crew.load_provider(d, "a")["env"]
+        self.assertEqual(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"], "qwen3:8b")
+
+
+CLOUD_ENV = {
+    "CLAUDE_CODE_USE_BEDROCK": "1",
+    "CLAUDE_CODE_USE_VERTEX": "1",
+    "CLAUDE_CODE_USE_FOUNDRY": "1",
+    "ANTHROPIC_BEDROCK_BASE_URL": "https://bedrock.example",
+    "ANTHROPIC_VERTEX_BASE_URL": "https://vertex.example",
+    "ANTHROPIC_FOUNDRY_BASE_URL": "https://foundry.example",
+    "ANTHROPIC_FOUNDRY_RESOURCE": "res",
+    "ANTHROPIC_FOUNDRY_API_KEY": "k",
+    "AWS_BEARER_TOKEN_BEDROCK": "b",
+    "CLAUDE_CODE_OAUTH_TOKEN": "acct",
+    "ANTHROPIC_PROFILE": "work",
+    "ANTHROPIC_CUSTOM_HEADERS": "X-A: b",
+}
+
+
+class NoCloudRoutingTests(Base):
+    """D4, D5, D6: an Ollama worker never keeps cloud routing or Claude credentials; teams pin their provider."""
+
+    def setUp(self):
+        super().setUp()
+        self.st = self.stub()
+        self.env(ATLAS_OLLAMA_URL=self.st.url, ATLAS_OLLAMA_MODEL="qwen3:8b")
+
+    def test_apply_env_strips_every_cloud_and_credential_variable(self):
+        r = P.resolve("explorer", None, "ollama")
+        out = P.apply_env({**CLOUD_ENV, "PATH": "/bin"}, r)
+        self.assertEqual(sorted(set(CLOUD_ENV) & set(out)), [])
+        self.assertEqual(out["PATH"], "/bin")
+        self.assertEqual(out["ANTHROPIC_BASE_URL"], self.st.url)
+
+    def test_crew_worker_env_strips_them_from_the_lead_env(self):
+        plan = {"workers": [{"name": "a", "owns": ["a.py"], "provider": "ollama"}]}
+        w = plan["workers"][0]
+        os.environ.update(CLOUD_ENV)
+        prov = atlas_crew.worker_provider(w, {}, None)
+        env = atlas_crew.worker_env(Path(self.home) / "r", plan, w, self.home, prov)
+        self.assertEqual(sorted(set(CLOUD_ENV) & set(env)), [])
+        self.assertEqual(env["ANTHROPIC_BASE_URL"], self.st.url)
+        again = atlas_crew.worker_env(Path(self.home) / "r", plan, w, self.home, {**prov, "unset": list(P.UNSET_ENV)})
+        self.assertEqual(sorted(set(CLOUD_ENV) & set(again)), [])
+        claude = atlas_crew.worker_env(Path(self.home) / "r", plan, w, self.home, None)
+        self.assertIn("CLAUDE_CODE_USE_BEDROCK", claude, "a Claude worker keeps the lead's routing")
+
+    def test_mux_worker_env_drops_a_forwarded_token_and_cloud_vars_for_an_ollama_worker(self):
+        base = {
+            **CLOUD_ENV,
+            "PATH": "/bin",
+            "ATLAS_WORKER_FORWARD_ENV": ",".join(CLOUD_ENV),
+            "ATLAS_PROVIDER_ACTIVE": "ollama",
+            "ANTHROPIC_BASE_URL": self.st.url,
+        }
+        out = atlas_mux.worker_env(base)
+        self.assertEqual(sorted(set(CLOUD_ENV) & set(out)), [])
+        self.assertEqual(out["ANTHROPIC_BASE_URL"], self.st.url)
+        claude = atlas_mux.worker_env({**base, "ATLAS_PROVIDER_ACTIVE": ""})
+        self.assertEqual(claude["CLAUDE_CODE_OAUTH_TOKEN"], "acct", "a Claude worker still gets what is named")
+
+    def test_the_tmux_pane_unsets_every_cloud_variable(self):
+        os.environ.update(CLOUD_ENV)
+        rc, pane, out = MuxSpawn(self)(provider="ollama", model="qwen3:8b")
+        self.assertEqual(rc, 0, out)
+        toks = shlex.split(pane)
+        unset = {toks[i + 1] for i, t in enumerate(toks) if t == "-u"}
+        self.assertEqual(sorted(set(CLOUD_ENV) - unset), [])
+
+    def test_the_herdr_pane_unsets_the_account_token_and_cloud_variables(self):
+        os.environ.update(CLOUD_ENV)
+        made = {}
+        with mock.patch("atlas_seats.create_pane", side_effect=lambda *a, **k: made.update(cmd=a[1]) or {"ok": True, "pane_id": "p1"}):
+            rc, pane, out = MuxSpawn(self)(transport="herdr", provider="ollama", model="qwen3:8b")
+        self.assertEqual(rc, 0, out)
+        toks = shlex.split(made["cmd"])
+        unset = {toks[i + 1] for i, t in enumerate(toks) if t == "-u"}
+        self.assertEqual(sorted(set(CLOUD_ENV) - unset), [])
+        self.assertTrue(any(t.startswith("ANTHROPIC_BASE_URL=") for t in toks))
+
+    def test_a_claude_herdr_pane_has_no_unset_flags(self):
+        made = {}
+        with mock.patch("atlas_seats.create_pane", side_effect=lambda *a, **k: made.update(cmd=a[1]) or {"ok": True, "pane_id": "p1"}):
+            MuxSpawn(self)(transport="herdr")
+        self.assertNotIn("-u", shlex.split(made["cmd"]))
+
+    def test_the_bg_transport_env_strips_them(self):
+        os.environ.update({**CLOUD_ENV, "ATLAS_WORKER_FORWARD_ENV": ",".join(CLOUD_ENV)})
+        seen = {}
+
+        def fake_claude(*argv, env=None, cwd=None):
+            seen["env"] = env
+            return subprocess.CompletedProcess(argv, 0, "agent id: abcdef12\n", "")
+
+        with (
+            mock.patch.object(atlas_mux, "_claude", side_effect=fake_claude),
+            mock.patch.object(atlas_mux.atlas_todo, "issue_owner_token", return_value="t"),
+            mock.patch.object(atlas_mux.atlas_todo, "set_member_handles"),
+        ):
+            rc, pane, out = MuxSpawn(self)(transport="claude-bg", provider="ollama", model="qwen3:8b")
+        self.assertIn("env", seen, out)
+        self.assertEqual(sorted(set(CLOUD_ENV) & set(seen["env"])), [])
+        self.assertEqual(seen["env"]["ANTHROPIC_BASE_URL"], self.st.url)
+
+    def test_a_team_pins_the_resolved_provider_on_every_member_even_when_ollama_is_down(self):
+        os.environ["ATLAS_OLLAMA_URL"] = closed_port_url()
+        os.environ["ATLAS_WORKER_PROVIDER"] = "ollama"
+        rec = {"members": [{"name": "i0", "role": "implementer"}, {"name": "v1", "role": "verifier"}]}
+        atlas_mux.assign_team_providers(rec, "claude")
+        self.assertEqual([m["provider"] for m in rec["members"]], ["claude", "claude"])
+        # Ollama comes back before the spawn: the pinned member must not move onto it
+        os.environ["ATLAS_OLLAMA_URL"] = self.st.url
+        rc, pane, out = MuxSpawn(self)(provider=rec["members"][0]["provider"])
+        self.assertNotIn("ANTHROPIC_BASE_URL", pane)
+        self.assertNotIn("--provider ollama", pane)
+
+
+class MuxSpawn:
+    """Drive atlas_mux._spawn_registered with the pane/transport stubbed; returns (rc, pane string, stdout)."""
+
+    def __init__(self, case):
+        self.case = case
+
+    def __call__(self, transport="tmux", **ns):
+        captured = {}
+        args = argparse.Namespace(
+            run="r1", name="w1", harness="claude", agent="implementer", prompt_file="/dev/null", model=None,
+            effort=None, thinking=None, agents_dir=None, permission_mode=None, tools_profile=None,
+            command_override=None, omp_extension=None, root=self.case.home, cwd=None, team=None, provider=None,
+        )  # fmt: skip
+        for k, v in ns.items():
+            setattr(args, k, v)
+
+        def fake_open(session, name, pane, team=None):
+            captured["pane"] = pane
+
+        out = io.StringIO()
+        with (
+            mock.patch.object(atlas_mux, "spawn_transport", return_value=transport),
+            mock.patch.object(atlas_mux, "_pane_transport", return_value=transport),
+            mock.patch.object(atlas_mux, "_open_window", side_effect=fake_open),
+            mock.patch.object(atlas_mux, "_note_run_transport"),
+            mock.patch.object(atlas_mux, "with_token_file", side_effect=lambda r, n, p: p),
+            mock.patch.object(atlas_mux.atlas_todo, "issue_owner_token", return_value="t"),
+            mock.patch.object(atlas_mux.atlas_todo, "set_member_handles"),
+            mock.patch.object(atlas_mux, "_tier", side_effect=lambda h, role, d, model, level: (model or "sonnet", level, "", None)),
+            contextlib.redirect_stdout(out),
+        ):  # fmt: skip
+            rc = atlas_mux._spawn_registered(args, self.case.home, None)
+        return rc, captured.get("pane", ""), out.getvalue()
+
+
+class LoopbackAndProxyTests(Base):
+    def test_only_plain_loopback_http_is_loopback(self):
+        yes = ("http://127.0.0.1:11434", "http://localhost:11434", "http://[::1]:11434", "https://localhost", "http://127.0.0.1")
+        no = (
+            "http://evil.com\\@127.0.0.1:11434",
+            "http://evil.com\\127.0.0.1",
+            "http://user:pw@127.0.0.1:11434",
+            "http://127.0.0.1@evil.com",
+            "ftp://127.0.0.1:11434",
+            "//127.0.0.1:11434",
+            "127.0.0.1:11434",
+            "file:///etc/passwd",
+            "http://127.0.0.2:11434",
+            "http://127.0.0.1.evil.com",
+            "http://localhost.evil.com",
+            "http://127.0.0.1:99999",
+            "http://127.0.0.1:11434\n",
+            "",
+        )
+        for u in yes:
+            self.assertTrue(P.is_loopback(u), u)
+        for u in no:
+            self.assertFalse(P.is_loopback(u), u)
+
+    def test_a_backslash_url_is_refused_by_resolve_without_the_opt_in(self):
+        self.env(ATLAS_WORKER_PROVIDER="ollama", ATLAS_OLLAMA_MODEL="m:1b", ATLAS_OLLAMA_URL="http://evil.com\\@127.0.0.1:11434")
+        self.assertEqual(P.resolve("implementer", None, None)["fallback"], "remote_refused")
+
+    def test_loopback_calls_ignore_the_http_proxy(self):
+        import socket
+        import urllib.request
+
+        hits = []
+        lsock = socket.socket()
+        lsock.bind(("127.0.0.1", 0))
+        lsock.listen(5)
+
+        def serve():
+            while True:
+                try:
+                    c, _ = lsock.accept()
+                except OSError:
+                    return
+                hits.append(1)
+                c.sendall(b"HTTP/1.1 502 Bad Gateway\r\ncontent-length: 0\r\n\r\n")
+                c.close()
+
+        threading.Thread(target=serve, daemon=True).start()
+        self.addCleanup(lsock.close)
+        st = self.stub()
+        proxy = f"http://127.0.0.1:{lsock.getsockname()[1]}"
+        env = {k: v for k, v in os.environ.items() if k.lower() not in ("no_proxy", "http_proxy")}
+        with mock.patch.dict(os.environ, {**env, "http_proxy": proxy, "HTTP_PROXY": proxy}, clear=True):
+            urllib.request._opener = None  # a cached global opener would hide the proxy
+            h = P.health(st.url, "qwen3:8b", use_cache=False)
+        urllib.request._opener = None
+        self.assertTrue(h["ok"], h)
+        self.assertEqual(hits, [], "a loopback call went through the proxy")
+        self.assertTrue(st.requests)
+
+
+class RuntimeFailoverTests(Base):
+    """P1: an Ollama worker whose endpoint dies mid-run is relaunched once on Claude, and the record says why."""
+
+    FAKE = """#!/bin/sh
+echo "base=$ANTHROPIC_BASE_URL bedrock=$CLAUDE_CODE_USE_BEDROCK args=$(echo "$*" | tr '\\n' ' ')" >> "$FAKE_DIR/calls"
+if [ -n "$ANTHROPIC_BASE_URL" ]; then
+  %s
+else
+  echo '{"type":"result","is_error":false,"result":"ok"}'
+fi
+"""
+    RETRIES = (
+        "i=1; while [ $i -le 6 ]; do echo '{\"type\":\"system\",\"subtype\":\"api_retry\",\"attempt\":'$i',"
+        "\"max_retries\":300,\"retry_delay_ms\":1,\"error_status\":%s,\"error\":\"x\"}'; i=$((i+1)); done; sleep 60"
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = Path(self.home)
+        self.rundir = self.tmp / "run"
+        for d in ("prompts", "sid", "provider", "logs", "irc"):
+            (self.rundir / d).mkdir(parents=True)
+        (self.rundir / "prompts" / "a.md").write_text("P")
+        plan = {"workers": [{"name": "a", "owns": ["a.py"], "task": "t", "check": "true", "model": "sonnet"}]}
+        (self.rundir / "run.json").write_text(
+            json.dumps({"plan": plan, "root": str(self.tmp), "run_id": "crew-t", "settings": "/s.json", "model": "sonnet"})
+        )
+        (self.rundir / "provider" / "a.json").write_text(
+            json.dumps({"provider": "ollama", "model": "qwen3:8b", "fallback": None, "requested": "ollama", "url": closed_port_url()})
+        )
+        self.fake_dir = self.tmp / "fake"
+        (self.fake_dir / "bin").mkdir(parents=True)
+
+    def run_worker(self, body, limit="3"):
+        claude = self.fake_dir / "bin" / "claude"
+        claude.write_text(self.FAKE % body)
+        claude.chmod(0o755)
+        env = {
+            "PATH": f"{claude.parent}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_DIR": str(self.fake_dir),
+            "ATLAS_OLLAMA_RETRY_LIMIT": limit,
+            "CLAUDE_CODE_USE_BEDROCK": "1",
+        }
+        args = argparse.Namespace(rundir=str(self.rundir), name="a", round=0, no_hold=True, delay=0, nice=0)
+        t0 = time.time()
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(io.StringIO()):
+            code = atlas_crew.cmd_worker(args)
+        calls = (self.fake_dir / "calls").read_text().splitlines()
+        rec = json.loads((self.rundir / "provider" / "a.json").read_text())
+        exit_rec = json.loads((self.rundir / "exit" / "a.r0.json").read_text())
+        return code, calls, rec, exit_rec, time.time() - t0
+
+    def test_a_dead_endpoint_is_failed_over_to_claude_once(self):
+        keys = []
+        with mock.patch("atlas_analytics.record", side_effect=keys.append):
+            code, calls, rec, exit_rec, took = self.run_worker(self.RETRIES % "null")
+        self.assertEqual((code, exit_rec["exit"]), (0, 0))
+        self.assertEqual(len(calls), 2, calls)
+        self.assertIn("base=http://127.0.0.1:", calls[0])
+        self.assertTrue(calls[1].startswith("base= bedrock=1"), calls[1])
+        self.assertIn("--model sonnet", calls[1], "the relaunch uses the plan's Claude model")
+        self.assertNotIn("qwen3:8b", calls[1])
+        self.assertEqual((rec["provider"], rec["fallback"], rec["failed_model"]), ("claude", "runtime_down", "qwen3:8b"))
+        self.assertIn("provider.ollama.fallback.runtime_down", keys)
+        self.assertLess(took, 30, "the worker is not left retrying for the CLI's 300 attempts")
+        self.assertTrue((self.rundir / "logs" / "a.ollama.log").is_file(), "the Ollama attempt's log is kept")
+        self.assertIn("api_retry", (self.rundir / "logs" / "a.ollama.log").read_text())
+
+    def test_server_errors_are_runtime_5xx(self):
+        code, calls, rec, exit_rec, _ = self.run_worker(self.RETRIES % "500")
+        self.assertEqual((exit_rec["exit"], rec["fallback"], len(calls)), (0, "runtime_5xx", 2))
+
+    def test_a_model_not_found_result_is_runtime_model_missing(self):
+        body = (
+            "echo '{\"type\":\"result\",\"is_error\":true,\"api_error_status\":404,\"api_error_type\":\"not_found_error\","
+            "\"result\":\"There is an issue with the selected model\"}'; exit 1"
+        )
+        code, calls, rec, exit_rec, _ = self.run_worker(body)
+        self.assertEqual((exit_rec["exit"], rec["fallback"], len(calls)), (0, "runtime_model_missing", 2))
+
+    def test_an_ordinary_failure_is_not_failed_over(self):
+        body = "echo '{\"type\":\"result\",\"is_error\":true,\"api_error_status\":400,\"result\":\"bad request\"}'; exit 1"
+        code, calls, rec, exit_rec, _ = self.run_worker(body)
+        self.assertEqual((exit_rec["exit"], rec["provider"], len(calls)), (1, "ollama", 1))
+
+    def test_a_failure_after_the_failover_is_not_retried_again(self):
+        self.FAKE = self.FAKE.replace("else\n  echo '{\"type\":\"result\",\"is_error\":false,\"result\":\"ok\"}'", "else\n  exit 3")
+        code, calls, rec, exit_rec, _ = self.run_worker(self.RETRIES % "null")
+        self.assertEqual((exit_rec["exit"], len(calls)), (3, 2))
+
+    def test_the_summary_shows_the_runtime_fallback(self):
+        self.run_worker(self.RETRIES % "null")
+        (self.rundir / "exit").mkdir(exist_ok=True)
+        meta = {"run_id": "run", "started": time.time() - 5, "plan": {"workers": [{"name": "a", "owns": ["a.py"]}], "check": "true"}}
+        with (
+            mock.patch.object(atlas_crew.atlas_irc, "history", return_value=[]),
+            mock.patch.object(atlas_crew.atlas_irc, "has_done", return_value=True),
+        ):
+            out = atlas_crew.summarize(self.rundir, meta, [], 0, "")
+        row = out["workers"][0]
+        self.assertEqual((row["provider"], row["fallback"]), ("claude", "runtime_down"))
+        self.assertNotIn("local", row)
+
+    def test_runtime_error_kind_reads_the_real_cli_event_shapes(self):
+        k = P.runtime_error_kind
+        self.assertEqual(k({"type": "system", "subtype": "api_retry", "attempt": 3, "error_status": None}), "down")
+        self.assertEqual(k({"type": "system", "subtype": "api_retry", "attempt": 3, "error_status": 503}), "5xx")
+        self.assertIsNone(k({"type": "system", "subtype": "api_retry", "attempt": 3, "error_status": 429}))
+        self.assertEqual(k({"type": "result", "is_error": True, "api_error_status": 404}), "model_missing")
+        self.assertEqual(k({"type": "result", "is_error": True, "api_error_status": 502}), "5xx")
+        self.assertIsNone(k({"type": "result", "is_error": False, "api_error_status": 500}))
+        self.assertIsNone(k({"type": "assistant"}))
+        self.assertEqual(P.retry_limit(), 3)
+        os.environ["ATLAS_OLLAMA_RETRY_LIMIT"] = "5"
+        self.assertEqual(P.retry_limit(), 5)
+
 
 
 @unittest.skipUnless(shutil.which("claude"), "claude CLI not on PATH")
@@ -974,6 +1523,23 @@ class BenchTests(Base):
         self.assertTrue(table.isascii())
         self.assertIn("| claude:m | warm | 2 | 0 | 7.0 | 6.0-8.0 | 100 | 40 | 10 | 0.1500 | 1/2 |", table)
         self.assertIn("| ollama:m | warm | 1 | 1 | 20.0 | 20.0-20.0 | 100 | 40 | 10 | 0.0000 | 1/1 |", table)
+
+    def test_unknown_claude_cost_is_n_a_in_the_table_and_null_in_the_rows(self):
+        def r(prov, run, cost):
+            return {"provider": prov, "model": "m", "run": run, "phase": "cold" if run == 1 else "warm", "wall_s": 5.0,
+                    "tokens_in": 1, "tokens_out": 1, "tokens_cache_read": 1, "cost_usd": cost, "pass": True, "fallback": None}  # fmt: skip
+
+        rows = {x["provider"]: x for x in P.aggregate([r("claude", 2, None), r("ollama", 2, 0.0)])}
+        self.assertIsNone(rows["claude"]["cost_usd"])
+        self.assertEqual(rows["ollama"]["cost_usd"], 0.0)
+        table = P.render_table(list(rows.values()))
+        self.assertIn("| claude:m | warm | 1 | 0 | 5.0 | 5.0-5.0 | 1 | 1 | 1 | n/a | 1/1 |", table)
+        self.assertIn("| ollama:m | warm | 1 | 0 | 5.0 | 5.0-5.0 | 1 | 1 | 1 | 0.0000 | 1/1 |", table)
+
+    def test_crew_runner_cost_is_none_when_the_summary_says_incomplete(self):
+        self.assertIsNone(P._summary_cost({"cost_usd": None, "cost_complete": False}))
+        self.assertEqual(P._summary_cost({"cost_usd": 0.25, "cost_complete": True}), 0.25)
+        self.assertEqual(P._summary_cost({"cost_usd": 0.25}), 0.25)
 
     def test_unhealthy_ollama_refuses_with_exit_2_and_runs_nothing(self):
         for st_kw, url in (({"models": ["other:1b"]}, None), ({}, closed_port_url())):
@@ -1080,6 +1646,14 @@ class RealCliWiringTests(Base):
             any(b and b.get("model") == "stub-model" for _, _, b in posts), report
         )
         self.assertIn(STUB_TEXT, proc.stdout, report)
+
+
+class StateIsolationTests(unittest.TestCase):
+    """The health cache must never be the real ~/.atlas/provider-health.json."""
+
+    def test_health_cache_is_not_under_the_real_home(self):
+        real = os.path.realpath(os.path.join(os.environ["_ATLAS_TEST_REAL_HOME"], ".atlas"))
+        self.assertFalse(os.path.realpath(str(P._cache_path())).startswith(real + os.sep))
 
 
 if __name__ == "__main__":

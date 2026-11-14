@@ -2730,7 +2730,7 @@ class UsageAndSummary(unittest.TestCase):
         return json.dumps(base)
 
     def test_usage_of_empty_and_missing_logs_are_all_zero(self):
-        zero = {"input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "cost_usd": 0.0, "turns": 0, "results": 0, "total": 0}
+        zero = {"input": 0, "cache_write": 0, "cache_read": 0, "output": 0, "cost_usd": 0.0, "turns": 0, "results": 0, "total": 0, "cost_known": False}
         log = self.root / "empty.log"
         log.write_text("")
         self.assertEqual(atlas_crew.usage_of(log), zero)
@@ -2752,8 +2752,42 @@ class UsageAndSummary(unittest.TestCase):
         got = atlas_crew.usage_of(log)
         self.assertEqual(
             got,
-            {"input": 11, "cache_write": 2, "cache_read": 4, "output": 28, "cost_usd": 0.5, "turns": 3, "results": 2, "total": 45},
+            {"input": 11, "cache_write": 2, "cache_read": 4, "output": 28, "cost_usd": 0.5, "turns": 3, "results": 2, "total": 45, "cost_known": True},
         )
+
+    def _assistant(self, mid, **usage):
+        u = {"input_tokens": 3, "output_tokens": 5, "cache_read_input_tokens": 7, "cache_creation_input_tokens": 1}
+        u.update(usage)
+        return json.dumps({"type": "assistant", "message": {"id": mid, "usage": u}})
+
+    def test_usage_of_no_result_event_has_unknown_cost(self):
+        log = self.root / "stopped.log"
+        log.write_text(self._assistant("m1") + "\n" + self._assistant("m2") + "\n")
+        got = atlas_crew.usage_of(log)
+        self.assertEqual((got["results"], got["turns"], got["total"], got["cost_usd"]), (0, 2, 32, 0.0))
+        self.assertIs(got["cost_known"], False)
+
+    def test_usage_of_result_event_has_known_cost(self):
+        log = self.root / "done.log"
+        log.write_text(self._assistant("m1") + "\n" + self._result(total_cost_usd=0.012) + "\n")
+        got = atlas_crew.usage_of(log)
+        self.assertEqual(got["cost_usd"], 0.012)
+        self.assertIs(got["cost_known"], True)
+
+    def test_summarize_flags_incomplete_cost_when_a_claude_worker_has_no_result(self):
+        rundir, meta = self._summary_setup()
+        for f in (rundir / "logs").glob("*.log"):
+            f.unlink()
+        (rundir / "logs" / "a.log").write_text(self._result(total_cost_usd=0.25, num_turns=1) + "\n")
+        (rundir / "logs" / "b.log").write_text(self._assistant("m1") + "\n")
+        with mock.patch.object(atlas_crew.atlas_irc, "history", return_value=[]):
+            out = atlas_crew.summarize(rundir, meta, 2, 0, "")
+        a, b = out["workers"]
+        self.assertEqual((a["cost_usd"], a["cost_known"]), (0.25, True))
+        self.assertEqual((b["cost_usd"], b["cost_known"]), (None, False))
+        self.assertIs(out["tokens_workers"]["cost_complete"], False)
+        self.assertIsNone(out["tokens_workers"]["cost_usd"])
+        self.assertGreater(b["tokens"], 0)
 
     def test_usage_of_tolerates_null_fields_and_rounds_cost(self):
         log = self.root / "w.log"
@@ -2815,7 +2849,7 @@ class UsageAndSummary(unittest.TestCase):
             (b["name"], b["exit"], b["wall_s"], b["turns"], b["tokens"], b["cost_usd"], b["gate_refusals"], b["own_check_passed"]),
             ("b", None, None, 0, 0, 0.0, None, None),
         )
-        self.assertEqual(out["tokens_workers"], {"total": 135, "cost_usd": 1.25})
+        self.assertEqual(out["tokens_workers"], {"total": 135, "cost_usd": 1.25, "cost_complete": True})
         self.assertEqual(out["transcripts"], str(rundir / "logs"))
         self.assertEqual(out["channel_log"], str(rundir / "irc" / "log.jsonl"))
         self.assertEqual(out["irc"]["messages"], 0)

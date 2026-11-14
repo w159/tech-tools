@@ -112,6 +112,37 @@ def _seed_report_notes(root, owners=("worker-a", "worker-b"), session_id="sess-o
         )
 
 
+class DecisionVerifyNegativeCacheTest(unittest.TestCase):
+    """The verify check runs on every fresh Stop (the decision endpoint defaults to loopback), so a machine
+    without Ollama must pay the refused connection at most once a minute."""
+
+    def test_refused_endpoint_is_not_retried_within_a_minute(self):
+        import socket
+
+        import completion_gate_core as cgc
+        import prompt_decision
+
+        with socket.socket() as sk:
+            sk.bind(("127.0.0.1", 0))
+            dead = "http://127.0.0.1:%d" % sk.getsockname()[1]
+        data = {"last_assistant_message": "All done, the fix is in and everything is working now. " * 4}
+        calls = []
+        real = prompt_decision._urlopen
+
+        def counting(req, timeout):
+            calls.append(1)
+            return real(req, timeout)
+
+        prompt_decision.reset_cache()
+        env = {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": dead}
+        with mock.patch.dict(os.environ, env, clear=False), mock.patch.object(prompt_decision, "_urlopen", counting):
+            self.assertEqual(cgc._decision_verify_reason(data, False), "")
+            self.assertEqual(cgc._decision_verify_reason(data, False), "")
+            self.assertEqual(cgc._decision_verify_reason(data, False), "")
+        prompt_decision.reset_cache()
+        self.assertEqual(len(calls), 1, "one refused connection, then 60 s of skipping")
+
+
 class DocsDriftTest(unittest.TestCase):
     def test_non_docs_only_returns_true(self):
         """Non-docs changes with no docs changes -> drift detected."""

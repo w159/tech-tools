@@ -183,6 +183,16 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.22.0 follow-ups (added 2026-11-14)
+
+Shipped in `plugins/atlas/CHANGELOG.md` (17.22.0); evidence: `docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md`.
+
+- [planned] Calibrate the done-claim check (completion gate letter `v`) from the `decision.verify.*` counters before `ATLAS_DECISION_VERIFY=block` becomes the default; today it only records.
+- [planned] Run the real Ollama benchmark (`atlas_provider.py bench`, commands in the audit) on Jerry's machine; no real Ollama model ran in development.
+- [planned] Add the Claude Platform on AWS and Bedrock Mantle env names to the Ollama worker strip list once the Claude Code docs name them.
+- [planned] Mux failover for a worker that authenticates only through `ATLAS_WORKER_FORWARD_ENV`: the pane unsets the token, so the relaunch on Claude cannot authenticate.
+- [planned] Check the first runs of the `atlas-mod-gate`, `atlas-mod-gate-latest` and `mod-gate` CI jobs and the `oven-sh/setup-bun` SHA mapping.
+
 ### Atlas 17.15.0 follow-ups (added 2026-11-13)
 
 The shipped change is in `plugins/atlas/CHANGELOG.md` (17.15.0).
@@ -199,7 +209,7 @@ The shipped change is in `plugins/atlas/CHANGELOG.md` (17.15.0).
 The shipped change is in `plugins/atlas/CHANGELOG.md` (17.4.3, unreleased); plan: `docs/plans/2026-11-10_colony-routing-enforcement.md`.
 
 - [planned] Live terminal check after reinstall: the `dispatch_denied:team` deny on a 2nd in-process working dispatch, the arming nudge text, and the ROUTE pane (`route: class/effort -> seats -> model`, transport per row, `no team this session`). Covered so far only by hook and mod unit tests.
-- [planned] Move `classify_scope` (`hooks/prompt_optimizer_core.py`) from the first-match keyword heuristic to the local decision model, keeping the heuristic as the fallback. Known miss: "do not audit, just implement x" classifies as audit.
+- [done 2026-11-14, atlas 17.22.0] Move `classify_scope` (`hooks/prompt_optimizer_core.py`) to the local decision model with the keyword heuristic as the fallback; "do not audit, just implement x" now classifies as implement (`docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md`).
 - [planned] Prune `.atlas/.run/atlas-scope/*.json`: one file is stored per session by the arming nudge and nothing removes old ones.
 - [planned] `NO_COLOR` support is not built (see also the ANSI-without-TTY item below).
 

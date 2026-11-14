@@ -1594,6 +1594,49 @@ class RunWorkerTests(Base):
             _texts(recs),
         )
 
+    RETRY_LINE = (
+        "echo '{\"type\":\"system\",\"subtype\":\"api_retry\",\"attempt\":'$i',\"max_retries\":300,"
+        "\"retry_delay_ms\":1,\"error_status\":null,\"error\":\"unknown\"}'"
+    )
+    LOCAL_ENV = {
+        "ATLAS_PROVIDER_ACTIVE": "ollama",
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:1",
+        "ANTHROPIC_AUTH_TOKEN": "ollama",
+        "ANTHROPIC_API_KEY": "",
+        "ATLAS_OLLAMA_RETRY_LIMIT": "3",
+    }
+
+    def test_an_ollama_worker_whose_endpoint_dies_is_relaunched_once_on_claude(self):
+        override = (
+            'if [ -n "$ANTHROPIC_BASE_URL" ]; then i=1; while [ $i -le 5 ]; do '
+            + self.RETRY_LINE
+            + "; i=$((i+1)); done; exec sleep 60; "
+            'else echo "relaunched base=[$ANTHROPIC_BASE_URL] active=[$ATLAS_PROVIDER_ACTIVE]"; fi'
+        )
+        t0 = time.time()
+        rc, out, err = self.run_worker("--command-override", override, env_mut=self.LOCAL_ENV)
+        self.assertEqual(0, rc, err)
+        self.assertLess(time.time() - t0, 30)
+        self.assertIn("relaunched base=[] active=[]", out)
+        logs = pathlib.Path(self.root) / ".atlas/.run/logs"
+        self.assertIn("api_retry", (logs / "Zeta.ollama.log").read_text())
+        self.assertIn("provider failover: ollama down", (logs / "Zeta.ollama.log").read_text())
+        texts = _texts(_notes(self.root, "Zeta"))
+        self.assertEqual(texts[-1].splitlines()[-1], "exit 0")
+        self.assertEqual(len([t for t in texts if "\nexit " in t or t.startswith("exit ")]), 1, "one report for both attempts")
+
+    def test_an_ollama_worker_failing_for_another_reason_is_not_relaunched(self):
+        override = "echo '{\"type\":\"result\",\"is_error\":true,\"api_error_status\":400}'; exit 7"
+        rc, out, err = self.run_worker("--command-override", override, env_mut=self.LOCAL_ENV)
+        self.assertEqual(7, rc, err)
+        self.assertFalse((pathlib.Path(self.root) / ".atlas/.run/logs/Zeta.ollama.log").exists())
+
+    def test_a_claude_worker_is_never_relaunched(self):
+        override = "i=3; " + self.RETRY_LINE + "; exit 1"
+        rc, out, err = self.run_worker("--command-override", override)
+        self.assertEqual(1, rc, err)
+        self.assertFalse((pathlib.Path(self.root) / ".atlas/.run/logs/Zeta.ollama.log").exists())
+
     def test_run_worker_records_its_harness_pid_on_the_member_entry(self):
         _atlas_todo().register_member(self.root, "Zeta")
         rc, _, err = self.run_worker("--command-override", "echo hi")

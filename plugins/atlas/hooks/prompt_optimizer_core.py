@@ -334,6 +334,7 @@ _NUDGE_MAX_BYTES = 700
 # line), and it replaces the lead's planning turns, so it gets a larger budget than an advisory nudge.
 _CREW_NUDGE_MAX_BYTES = 900
 _WORD_RE = re.compile(r"[a-z][a-z-]*")
+_CUE_WORD_RE = re.compile(r"[a-z][a-z_-]*")
 _FILE_REF_RE = re.compile(
     r"[\w./-]+\.(?:py|ts|tsx|js|jsx|go|rs|java|rb|php|sql|json|ya?ml|toml|sh|"
     r"c|cc|cpp|h|hpp|css|scss|html|vue|svelte|md)\b",
@@ -371,37 +372,187 @@ _ACTION_VERBS = frozenset(
 )
 
 
-_NEGATORS = frozenset({"not", "no", "without", "skip", "dont", "never", "nor"})
-# A negation reaches this many following words, within one clause.
-_NEG_REACH = 3
-# Words that end a negation: "do not audit, just implement x" -> implement.
-_NEG_RESETS = frozenset({"just", "but", "rather", "only", "then", "and"})
+_NEGATORS = frozenset({"not", "no", "without", "skip", "never", "nor", "stop", "avoid", "ignore"})
+# "dont", "shouldnt" ... typed without the apostrophe; "n't" forms are split by _normalize.
+_NEG_CONTRACTIONS = frozenset(
+    "dont doesnt didnt shouldnt wouldnt couldnt wont cant isnt arent wasnt werent".split()
+)
+# Words a negator skips to reach the word it governs: "no need to test", "without a review",
+# "don't just review it", "not only audit".
+_NEG_FILLERS = frozenset(
+    "to need for of a an the any more further really even actually also be just only full "
+    "another".split()
+)
+# "has no tests" / "there is no review": existence, not a negation of a verb.
+_NO_EXISTENCE_BEFORE = frozenset("has have had having with there is are was were got getting".split())
+# After a negator a state word is the subject's condition, not a class verb: "login does not work".
+_STATE_WORDS = frozenset(
+    "work works working worked pass passes passing passed fail fails failing failed run runs "
+    "running start starts starting load loads loading compile compiles compiling".split()
+)
+# Words that open the positive half of "not X, just Y" / "not X but Y".
+_POSITIVE_MARKERS = frozenset({"just", "only", "but", "rather"})
+_NEG_REACH = 3  # a negated non-class verb ("break", "touch") shields the next few words of its clause
+_WRITE_VERBS = frozenset(
+    "fix add implement build change ship create drop alter update rename refactor".split()
+)
+_PHRASES = {
+    "double check": "double_check",
+    "make sure": "make_sure",
+    "check that": "check_that",
+    "look over": "look_over",
+    "read through": "read_through",
+    "go through": "go_through",
+    "what does": "what_does",
+    "how does": "how_does",
+    "what is": "what_is",
+    "should we": "should_we",
+    "click through": "click_through",
+    "walk through": "walk_through",
+    "real browser": "real_browser",
+    "migration guide": "migration_guide",
+    "release notes": "release_notes",
+    "stack trace": "stack_trace",
+    "does nothing": "does_nothing",
+    "sort it out": "sort_it_out",
+    "regression test": "regression_test",
+    "read only": "read_only",
+    "instead of": "instead_of",
+    "rather than": "rather_than",
+}
+# Cue words beyond the scope-matrix class names and aliases: word -> (class, weight). A class name or alias
+# not listed here counts 2.0 for its own class. The class with the highest total weight wins; ties go to the
+# earliest cue. Weights only need to order competing signals ("fix the audit script" is fix: both 2.0, fix
+# comes first; "add a changelog entry for the proxy fix" is docs: changelog 2.5 beats fix 2.0).
+_CUES: dict[str, tuple[str, float]] = {}
+
+
+def _cues(cls: str, weight: float, words: str) -> None:
+    for w in words.split():
+        _CUES[w] = (cls, weight)
+
+
+_cues("implement", 2.0, "implement build feature refactor")
+_cues("implement", 1.0, "add create rename port wire move tidy change update ship ship_it")
+_cues("implement", 0.8, "write make")
+_cues("fix", 2.0, "fix fixes fixed fixing repair crash crashes crashing crashed broken traceback stack_trace "
+      "does_nothing sort_it_out stabilise stabilize")
+_cues("fix", 1.8, "bug bugs wrong patch patches patched patching")
+_cues("fix", 1.5, "fails failing failed flaky")
+_cues("fix", 1.2, "exception exceptions")
+_cues("fix", 1.0, "regression error errors")
+_cues("verify", 2.2, "verify confirm validate double_check make_sure check_that")
+_cues("audit", 2.0, "audit review investigate explore research explain look_over read_through what_does "
+      "how_does what_is should_we recommendation")
+_cues("docs", 2.5, "readme changelog migration_guide")
+_cues("docs", 2.0, "doc docs documentation document")
+_cues("docs", 1.5, "guide release_notes")
+_cues("db", 2.0, "db migration query sql")
+_cues("db", 1.5, "column table tables index")
+_cues("db-audit", 3.5, "rls")
+_cues("db-audit", 2.5, "database")
+_cues("db-audit", 2.0, "schema roles privileges read_only")
+_cues("db-audit", 1.5, "drift")
+_cues("ui-test", 2.5, "ui uitest browser click_through real_browser")
+_cues("ui-test", 2.0, "drive walk_through")
+_cues("ui-test", 1.5, "keyboard screens")
+_cues("ui-test", 1.0, "form flow")
+_cues("test", 2.0, "test tests coverage")
+_cues("test", 3.0, "regression_test")
+_cues("test", 1.0, "pytest")
+
+
+def _normalize(text: str) -> str:
+    text = text.lower().replace("\u2019", "'")
+    text = re.sub(r"\bwon't\b", "will not", text)
+    text = re.sub(r"\bcan't\b", "can not", text)
+    text = re.sub(r"(\w+)n't\b", r"\1 not", text)
+    text = re.sub(r"\b(%s)\b" % "|".join(_NEG_CONTRACTIONS), "do not", text)
+    # "I don't think we need an audit": the negator governs what follows "think we need".
+    text = re.sub(
+        r"\bdo not (?:think|believe|reckon) (?:that )?(?:we|you|i|it)(?: really)? (?:need|have to|should)\b",
+        "do not",
+        text,
+    )
+    for phrase, token in _PHRASES.items():
+        text = re.sub(r"\b%s\b" % phrase.replace(" ", r"\s+"), token, text)
+    return text
+
+
+def _cue_of(word: str, vocab: dict) -> tuple[str, float] | None:
+    for form in (word, word[:-1] if word.endswith("s") else None):
+        if form is None:
+            continue
+        if form in _CUES:
+            return _CUES[form]
+        if form in vocab:
+            return vocab[form], 2.0
+    if word.endswith("error") and len(word) > 5:  # KeyError, TypeError ...
+        return "fix", 2.0
+    return None
 
 
 def _heuristic_class(words_text: str, vocab: dict) -> str:
-    """First class word in `words_text` that is not negated ("do not audit", "don't refactor",
-    "without review", "instead of review", "skip tests"). A negation covers the next few words of
-    its clause and ends at punctuation or a contrast word (just, but, rather, only, then, and)."""
-    for clause in re.split(r"[,.;:!?\n()]+", words_text):
-        words = [w.strip("-") for w in _WORD_RE.findall(clause)]
-        reach = 0
+    """Class of a prompt by weighted cue words, with negation that removes only the negated class verb.
+
+    A negator ("not", "don't", "shouldn't", "no need to", "without", "skip", "never", "stop", "instead of")
+    governs the next content word: a class cue there is dropped ("do not audit, just implement x" is
+    implement), a state word ("login does not work") is no negation at all and counts as a failure cue, and
+    any other verb ("don't break the build") shields the next few words. Cues after just/only/but/rather
+    once something was negated count 1.5x. A negation never turns a write ask into a read-only class."""
+    text = _normalize(words_text)
+    entries: list[tuple[int, str, float]] = []  # (position, class, weight)
+    write_present = False
+    negated_any = False
+    pos = 0
+    for clause in re.split(r"[,.;:!?\n()]+", text):
+        words = [w.strip("-") for w in _CUE_WORD_RE.findall(clause)]
+        dead: set[int] = set()
+        boost = False
         for i, word in enumerate(words):
-            nxt = words[i + 1] if i + 1 < len(words) else ""
-            if word in _NEG_RESETS:
-                reach = 0
+            if i in dead:
                 continue
-            if (
-                word in _NEGATORS
-                or (word == "t" and i and words[i - 1] in ("don", "doesn", "didn", "won", "can"))
-                or (word == "instead" and nxt == "of")
-            ):
-                reach = _NEG_REACH
+            if word in _POSITIVE_MARKERS and negated_any:
+                boost = True
                 continue
-            hit = vocab.get(word) or (vocab.get(word[:-1]) if word.endswith("s") else None)
-            if hit and reach <= 0:
-                return hit
-            reach = max(0, reach - 1)
-    return "implement"
+            is_neg = word in _NEGATORS or word in ("instead_of", "rather_than")
+            if word == "no" and i and words[i - 1] in _NO_EXISTENCE_BEFORE:
+                is_neg = False
+            if is_neg:
+                negated_any = True
+                j = i + 1
+                while j < len(words) and words[j] in _NEG_FILLERS:
+                    j += 1
+                if j >= len(words):
+                    continue
+                target = words[j]
+                if target in _STATE_WORDS:
+                    entries.append((pos + j, "fix", 2.0))
+                    dead.add(j)
+                elif _cue_of(target, vocab):
+                    dead.add(j)
+                    while j + 2 < len(words) and words[j + 1] in ("or", "nor") and _cue_of(words[j + 2], vocab):
+                        dead.add(j + 2)
+                        j += 2
+                else:
+                    dead.update(range(j, min(len(words), j + _NEG_REACH)))
+                continue
+            cue = _cue_of(word, vocab)
+            if cue:
+                entries.append((pos + i, cue[0], cue[1] * (1.5 if boost else 1.0)))
+            if word in _WRITE_VERBS or word.rstrip("s") in _WRITE_VERBS:
+                write_present = True
+        pos += len(words) + 1
+    if not entries:
+        return "implement"
+    totals: dict[str, list] = {}
+    for p, cls, weight in entries:
+        t = totals.setdefault(cls, [0.0, p])
+        t[0] += weight
+    best = max(totals, key=lambda c: (round(totals[c][0], 6), -totals[c][1]))
+    if negated_any and write_present and best in ("audit", "db-audit"):
+        best = "db" if best == "db-audit" else ("fix" if "fix" in totals else "implement")
+    return best
 
 
 def classify_scope(prompt: str) -> tuple[str, str]:
@@ -418,7 +569,7 @@ def classify_scope(prompt: str) -> tuple[str, str]:
     rest = _FILE_REF_RE.sub(" ", text)
     rest = _CODE_ANCHOR.sub(" ", rest)
     symbols = {m.lower() for m in _SYMBOL_REF_RE.findall(rest)}
-    words_text = _SYMBOL_REF_RE.sub(" ", rest).lower().replace("don't", "dont").replace("don\u2019t", "dont")
+    words_text = _SYMBOL_REF_RE.sub(" ", rest).lower()
     try:
         vocab = _scope_vocab()
     except Exception:
@@ -455,9 +606,104 @@ def route_scope(prompt: str) -> tuple[str, str]:
         import atlas_analytics
 
         atlas_analytics.record("decision.route.model" if used_model else "decision.route.fallback")
+        if model["task_class"]:  # the model answered a class: does it agree with the keyword router?
+            atlas_analytics.record(
+                "decision.route.agree" if model["task_class"] == task_class else "decision.route.disagree"
+            )
     except Exception:  # noqa: BLE001, S110 -- telemetry never changes a route
         pass
     return model["task_class"] or task_class, model["effort"] or effort
+
+
+ROUTING_CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routing_corpus.jsonl")
+
+
+def eval_routing(corpus_path: str | None = None, use_model: bool = False, url: str | None = None) -> dict:
+    """Score task-class routing on the labeled corpus (jsonl rows: prompt, class, effort).
+
+    {"total": n, "heuristic": {"correct", "accuracy", "misses": [(want, got, prompt)]}, "model": ...}.
+    "model" is None unless use_model; {"available": False} when no decision endpoint answered (no number
+    is made up); else {"available": True, "answered", "correct" (of answered), "accuracy" (of answered),
+    "combined_correct" (model class when confident, else the keyword class), "misses"}."""
+    with open(corpus_path or ROUTING_CORPUS, encoding="utf-8") as fh:
+        rows = [json.loads(line) for line in fh if line.strip()]
+    misses = []
+    for r in rows:
+        got = classify_scope(r["prompt"])[0]
+        if got != r["class"]:
+            misses.append((r["class"], got, r["prompt"]))
+    out: dict = {
+        "total": len(rows),
+        "heuristic": {
+            "correct": len(rows) - len(misses),
+            "accuracy": (len(rows) - len(misses)) / len(rows) if rows else None,
+            "misses": misses,
+        },
+        "model": None,
+    }
+    if not use_model:
+        return out
+    saved = os.environ.get("ATLAS_DECISION_URL")
+    if url:
+        os.environ["ATLAS_DECISION_URL"] = url
+    try:
+        prompt_decision.reset_cache()
+        probe = prompt_decision.task_class_question()
+        if not probe or prompt_decision.ask("probe", {"task_class": probe}) is None:
+            out["model"] = {"available": False}
+            return out
+        answered = correct = combined = 0
+        model_misses = []
+        for r in rows:
+            prompt_decision.reset_cache()
+            picked = prompt_decision.route_choice(r["prompt"])["task_class"]
+            fallback = classify_scope(r["prompt"])[0]
+            if picked:
+                answered += 1
+                if picked == r["class"]:
+                    correct += 1
+                else:
+                    model_misses.append((r["class"], picked, r["prompt"]))
+            combined += (picked or fallback) == r["class"]
+        out["model"] = {
+            "available": True,
+            "answered": answered,
+            "correct": correct,
+            "accuracy": correct / answered if answered else None,
+            "combined_correct": combined,
+            "misses": model_misses,
+        }
+        return out
+    finally:
+        if url:
+            if saved is None:
+                os.environ.pop("ATLAS_DECISION_URL", None)
+            else:
+                os.environ["ATLAS_DECISION_URL"] = saved
+
+
+def _eval_cli(argv: list[str]) -> int:
+    result = eval_routing(use_model="--model" in argv)
+    n, h = result["total"], result["heuristic"]
+    print("corpus: %d prompts (%s)" % (n, os.path.basename(ROUTING_CORPUS)))
+    print("heuristic: %d/%d = %.3f" % (h["correct"], n, h["accuracy"] or 0.0))
+    m = result["model"]
+    if m is None:
+        print("model: skipped (pass --model to score the decision endpoint)")
+    elif not m["available"]:
+        print("model: unavailable (no decision endpoint answered)")
+    else:
+        print(
+            "model: %d/%d = %.3f of the %d it answered with confidence >= %.1f; with keyword fallback %d/%d = %.3f"
+            % (m["correct"], m["answered"], m["accuracy"] or 0.0, m["answered"],
+               prompt_decision.ROUTE_CONFIDENCE_MIN, m["combined_correct"], n, m["combined_correct"] / n)
+        )
+    for label, misses in (("heuristic", h["misses"]), ("model", (m or {}).get("misses") or [])):
+        if misses:
+            print("%s confusions (want -> got):" % label)
+            for want, got, prompt in misses:
+                print("  %s -> %s | %s" % (want, got, prompt))
+    return 0
 
 
 def _working_seats(team: list) -> int:
@@ -1172,3 +1418,9 @@ def main() -> int:
 
 def _cli():
     raise SystemExit(atlas_hook_guard.run_hook("prompt_optimizer", main))
+
+
+if __name__ == "__main__":
+    if "--eval-routing" in sys.argv[1:]:
+        raise SystemExit(_eval_cli(sys.argv[1:]))
+    _cli()

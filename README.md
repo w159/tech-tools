@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.21.1, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.22.0, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -371,7 +371,7 @@ Worker pane transport: tmux when installed, else background `claude --bg` proces
 
 ## Releases
 
-Atlas 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, so the band, TODO, SUBAGENTS and side panel draw again ([audit](docs/audits/2026-11-14-mod-load.md)). Release notes are in each plugin's CHANGELOG ([atlas](plugins/atlas/CHANGELOG.md),
+Atlas 17.22.0 adds three things ([audit](docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). Decision models: a local model, when one answers on loopback, picks the prompt class and effort and judges whether a final reply claims done without showing a result, with the keyword router and the deterministic gate as fallback; the done-claim check only records until its thresholds are calibrated, and routing scores 84/86 on its own corpus (tuned on it) and 12/15 on an independent set. Ollama workers: crew and tmux team workers can run on a local Ollama model, with health checks, fallback to Claude and a `atlas_provider.py bench` command; no real Ollama model was run in development, and in-process Agent-tool subagents cannot move to it. Mod-load release gate: `atlas_mod_gate.py --live --require-live` boots the hooks module in the real host in CI and before each release. Atlas 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, so the band, TODO, SUBAGENTS and side panel draw again ([audit](docs/audits/2026-11-14-mod-load.md)). Release notes are in each plugin's CHANGELOG ([atlas](plugins/atlas/CHANGELOG.md),
 [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md))
 and on [GitHub Releases](https://github.com/w159/tech-tools/releases). The
 release workflow (`.github/workflows/release.yml`) publishes `<plugin> <version>`
