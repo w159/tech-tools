@@ -90,8 +90,8 @@ test('rebuilds when a watched file changes', async $ => {
 
 For UI tests, call the pure tree builders (`bandTree`, `sidebarTree`) with a recording
 elements object and handler stubs, as `mod/pane/sidebar.test.ts` does; pass
-`mock.clock(on)` when the component schedules work. Live key behavior (ctrl+x tab,
-Tab, arrows, Enter) is checked in a real session, not here.
+`mock.clock(on)` when the component schedules work. Live input behavior (mouse clicks
+on chips and `▸` toggles; the mods print no key hints) is checked in a real session, not here.
 
 ## Conventions
 

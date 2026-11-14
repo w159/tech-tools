@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.22.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.23.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -924,8 +924,8 @@ todo ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱ 3/7 · 43%         ctx ▰
 ```
 
 At rest, at 80 columns or wider and with room in the slot, rows under the bar show the last run, the
-contract verdicts, the gate checks and the key row (`r: status  t: team
-c: channel  g: gates  k: core  o: board`, then `ctrl+x tab` when it fits). Their
+contract verdicts and the gate checks. No row prints keys: the controls are the
+clickable chips and toggles described under *Idle health* below. Their
 text, from `contracts/band-golden.ts`:
 
 ```
@@ -933,6 +933,40 @@ text, from `contracts/band-golden.ts`:
  verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked
  checks  ● lint  ● test  △ doctor  2/3 green
 ```
+
+**Idle health.** An idle session shows what is healthy instead of an empty band
+(`mod/idle-health.ts`). The band reads the state, the gate count, the uptime and
+a `▸ health` toggle, and the uptime ticks every second:
+
+```
+◖ ◆ ATLAS ◗ ○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health
+```
+
+`context N%` joins the row once the host has measured it. At 110 columns with no
+side panel a second row adds `last run none · 1 event`; its phase row names the
+current stage and `n/5` (`◑ research 1/5`). With the side panel open
+the band is `◖ ◆ ATLAS ◗ ○ idle ▌ ▸ health` and drops its tab chips, because the
+panel already shows them. Click `▸ health` to open a HEALTH card above the prompt
+(per-gate state and pass counts, session tokens and the window); click `▾ health`
+to close it. The context figure is the last response's input tokens over the
+model window (the host's `session.measure`), not a session total, and the card
+says so. With no plan and no agents the TODO line reads `no plan yet · 0 agents`,
+the team tab reads `no workers yet`, and the phase chain is dim. The HEALTH card
+has one row schema at 150 and 110 columns: a check is `name state n/m pass`, its
+note sits on its own line, and the version is always shown.
+
+![Idle band at 150 columns with the side panel showing health rows](img/showcase/cc-idle-health-150.png)
+
+![Idle band at 110 columns with the last-run row and the tab chips](img/showcase/cc-idle-health-110.png)
+
+![The HEALTH card open above the prompt](img/showcase/cc-health-open.png)
+
+**Clickable controls, no key hints.** Every control is drawn to look clickable:
+tabs are chips on a raised tile with one cell between them, on the band and in the panel (the lit tab is filled), toggles use `▸` closed and `▾` open, and
+the message input is labelled `✎ to lead`. No surface prints key hints; the
+`r: status ...` rows, the band's `ctrl+x tab`, the tab hotkeys and the
+`Enter sends` placeholder were removed because the keys do not work in Claude
+Code. Click a chip to switch tabs and a `▸` row to expand it.
 
 **TODO and SUBAGENTS.** `mod/hud.ts` and `mod/hud-surface.ts` draw the HUD under
 the band as closed rounded boxes with one blank row between them. The slot above
@@ -1044,11 +1078,23 @@ with omp's own `todo` tool; when it never calls it, the extension draws a fallba
 TODO tree from the board until the first native todo result.
 
 **The side panel.** The panel is a ribbon (`◖ ◆ ATLAS ◗ ▸ SIDEPANEL`), a tab strip
-with the lit tab bold and ruled, and one view under it. The strip names six tabs
-and binds one key to each (`PANEL_TABS` and `STRIP_TABS` in
-`mod/panel-layout.ts`): `r` status, `t` team, `c` channel, `g` gates, `k` core and
-`o` board. The key hint (`r: status  t: team  c: channel  g: gates  k: core
-o: board  ctrl+x tab`) sits on the pane's last spare row, cut to the pane's width.
+of clickable chips with the lit tab filled, and one view under it. The strip names
+six tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/panel-layout.ts`): status, team,
+channel, gates, core and board. Click a chip to open that view; no key hint is
+printed; each tab is its own chip with one cell between chips, and no rule is
+drawn under the lit one. At idle with no workers the status view shows a dim
+phase chain, a `● waiting for first prompt` line that pulses with the idle redraw
+(about once a second), a `health` block (`hooks` event count, `gates`
+`4/4 green · 11 checks pass`, `session` `up 0:08`, `branch`, `last run`) and a
+`recent` list in words (`session started`, `prompt sent`, `tool call Bash`, `turn
+finished · 3 events`): events of the same second collapse into one row and the list
+shows at most three. A `checks` section has one row per gate, and a footer pinned
+to the last row reads `atlas <version> · hooks loaded`. Once the host has measured
+context, the `session` block gains a gauge row (`context ▕█░░░░░░░░░▏ 6%` over
+`64k of 1M tokens`). The run duration is said once: live as `phase ◒ working 0:01`,
+finished as `phase ● done` plus `last run 0:05 · ended 12s ago` (relative, no
+clock time). The `▸` rows expand to one to three detail lines. At 150 by 45 an
+idle panel leaves 10 blank rows above the footer, down from 19.
 The panel draws the snapshot as it is, with no hold: the Stop verdict is read on
 every frame beat, and the phase is never `done` while a dispatch row is open or a
 worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
@@ -1057,8 +1103,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
 ```
 ◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────
 
- status  team  channel  gates  core  board
- ━━━━━━
+ status   team   channel   gates   core   board
  phase  ◐ research
  gates  ● lint   ● test   △ doctor   2/3 green
  agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed
@@ -1105,8 +1150,7 @@ worker and a finished run:
 ```
 ◖ ◆ ATLAS ◗ ▸ SIDEPANEL ▸ BOARD ───────────────────────
 
- status  team  channel  gates  core  board
-                                     ━━━━━
+ status   team   channel   gates   core   board
   5 items                                      ▰▰▰▰▰▰▰▰
 
   ● T1 read alpha.py            done    alpha-explorer
@@ -1398,7 +1442,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.22.0
+|-- .claude-plugin/plugin.json   manifest, version 17.23.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1427,7 +1471,7 @@ atlas/
 
 ## Release notes and license
 
-Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
+Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
 for 16.0.0:
 [docs/audits/2026-10-27_atlas-16.0.0-evidence.md](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md).
 

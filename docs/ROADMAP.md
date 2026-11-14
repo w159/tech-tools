@@ -183,6 +183,21 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.23.0 follow-ups (added 2026-11-15)
+
+Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-14-idle-health.md`.
+
+- [done] Idle band, HUD and side panel show a live health summary (gates, uptime, context, last run, recent hook events) with a clickable `▸ health` expand and a HEALTH card; verified with real SGR mouse clicks in tmux on Claude Code 2.1.325.
+- [done] Key hints removed (`r: status ... ctrl+x tab` rows, band `ctrl+x tab`, tab hotkeys, `Enter sends` placeholder); tabs are clickable chips and toggles use `▸`/`▾`.
+- [done] No empty placeholder boxes at idle: `no plan yet · 0 agents`, `no workers yet`, dim one-separator phase chain.
+- [done] The side panel middle is no longer empty on a fresh session (cad6fe65): `● waiting for first prompt`, a `checks` section and a context gauge fill it; blank rows above the footer at 150 by 45 went from 19 to 10.
+- [done] `cc-health-open.png`, `cc-idle-health-150.png` and `cc-idle-health-110.png` recaptured from the final frames (the band no longer shows tab chips beside the open panel).
+- [done] Run facts are said once in the panel (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`), `recent` reads in words, and the `0 messages` orphan is removed.
+- [planned] The chat card `▸ run 0:05` and the band `done 0:05` still repeat the panel's run duration.
+- [planned] The `waiting for first prompt` pulse runs at about 1 Hz with the idle redraw; a faster pulse needs a timing change in `register.ts`.
+- [planned] The `ATLAS` pill on the band is kept as it was; whether it should say more at idle is undecided.
+- [planned] Host-drawn, not changeable from the plugin: tmux PgUp/PgDn scrolling and the weekly-limit line under the band.
+
 ### Atlas 17.22.0 follow-ups (added 2026-11-14)
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.22.0); evidence: `docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md`.

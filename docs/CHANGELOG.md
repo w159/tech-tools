@@ -1,8 +1,17 @@
 # Changelog
 
+## atlas 17.23.0 - 2026-11-15
+
+- atlas 17.23.0: the mods show a live health summary when idle. The band reads `○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health` and `▸ health` opens a HEALTH card (gate state and pass counts, session tokens and window); the side panel status view gets health rows (hooks, gates, session, last run), a `recent` hook-event list and a pinned `atlas <version> · hooks loaded` footer. Every control is a visible chip or `▸`/`▾` toggle; the printed key hints (`r: status ... ctrl+x tab`, `Enter sends`) and the dead tab hotkeys are gone. Empty states read `no plan yet · 0 agents` and `no workers yet` instead of blank boxes. The context figure is the last response's input tokens over the model window (host `session.measure`), not a session total. Real SGR mouse clicks in tmux verified. Audit: `docs/audits/2026-11-14-idle-health.md`.
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
+## marketplace 5.28.0 - 2026-11-15
+
+- marketplace 5.28.0: atlas 17.23.0. armada and programmer are unchanged.
+
 ## atlas 17.22.0 - 2026-11-14
 
-- atlas 17.22.0: decision models drive prompt routing and a shadow done-claim check; crew and tmux workers can run on a local Ollama model (`atlas_provider.py`, with `bench`); the mod-load release gate (`atlas_mod_gate.py --live --require-live`) runs in CI and before release. No real Ollama model was run in development. Audit: `docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md`.
+- atlas 17.23.0: the mods show a live health summary when idle. The band reads `○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health` and `▸ health` opens a HEALTH card (gate state and pass counts, session tokens and window); the side panel status view gets a `● waiting for first prompt` line, health rows (hooks, gates, session, branch, last run), a `recent` list in words (`session started`, `prompt sent`, `tool call Bash`, `turn finished · 3 events`; same-second events collapse, at most three), a `checks` section with one row per gate, a context gauge (`context ▕█░░░░░░░░░▏ 6%`) once the host has measured context, and a pinned `atlas <version> · hooks loaded` footer; the run duration is said once (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`) and an idle 150 by 45 panel has 10 blank rows above the footer instead of 19. Every control is a visible chip (one cell apart, no underline row) or `▸`/`▾` toggle; the printed key hints (`r: status ... ctrl+x tab`, `Enter sends`) and the dead tab hotkeys are gone. Empty states read `no plan yet · 0 agents` and `no workers yet` instead of blank boxes. The context figure is the last response's input tokens over the model window (host `session.measure`), not a session total. Real SGR mouse clicks in tmux verified. Audit: `docs/audits/2026-11-14-idle-health.md`.
 - Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
 
 ## marketplace 5.27.0 - 2026-11-14

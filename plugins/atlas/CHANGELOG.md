@@ -1,5 +1,40 @@
 # Changelog
 
+## 17.23.0 - 2026-11-15
+
+The mods show a live health summary when idle, every control looks and acts clickable, and no key hints are printed. Before this, an idle session drew an empty-looking band (`todo - | no agents`), an empty side panel and a row of `r: status  t: team ...` keys that do not work in Claude Code. Evidence: `docs/audits/2026-11-14-idle-health.md`.
+
+### Idle health
+
+- The band at idle reads `◖ ◆ ATLAS ◗ ○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health`. Uptime ticks every second; `context N%` appears once the host has measured it, and `last Ns ago` shows when the hooks last fired. At 110 columns with no pane open a second row adds `last run none · 1 event`.
+- `▸ health` opens a HEALTH card above the prompt with per-gate state and pass counts and the session's token and window detail; `▾ health` closes it.
+- The context figure is the host's `session.measure` value (`e.context.tokens`, `e.context.percent`): the last response's input tokens over the model window, not a session total. The card and the panel say so.
+- With no plan and no agents the TODO line reads `no plan yet · 0 agents`, the team tab reads `no workers yet`, and the phase chain is dim at idle with one separator. No empty placeholder boxes are drawn.
+
+### Clickable controls
+
+- Tabs are chips: every tab sits on a raised tile with one cell between chips (on the band footer too), the lit tab is filled and the `━━━━` rule under it is gone. Toggles use `▸` (closed) and `▾` (open). The input label is `✎ to lead`.
+- Real SGR mouse clicks in tmux on Claude Code 2.1.325 open and close the HEALTH card, switch tabs from the band and from the pane, and expand health rows in the panel (frames listed in the audit).
+
+### Key hints removed
+
+- Removed: the `r: status  t: team  c: channel  g: gates  k: core  o: board` rows, the band's `ctrl+x tab`, the tab hotkeys and the `message · Enter sends` input placeholder. The keys do not work in Claude Code, so the hints promised something that did not happen.
+
+### Side panel
+
+- The status view at idle and with no workers shows a `● waiting for first prompt` line (it pulses with the idle redraw, about once a second) and `health` rows: hooks (event count), gates (`4/4 green · 11 checks pass`), session (`up 0:08`), branch and last run. `▸` rows expand to one to three detail lines. A `recent` list shows hook events in words with ages (`session started`, `prompt sent`, `tool call Bash`, `turn finished · 3 events`); events in the same second collapse to one row and the list shows at most three. A `checks` section has one row per gate. A footer pinned to the last row reads `atlas <version> · hooks loaded`.
+- Once the host has measured context, the session block gets a gauge row, `context ▕█░░░░░░░░░▏ 6%`, over `64k of 1M tokens`.
+- The run duration is said once in the panel: live `phase ◒ working 0:01`, finished `phase ● done` plus `last run 0:05 · ended 12s ago` (a relative age, no clock time). At 110 columns the phase row names the current stage and `n/5` (`◑ research 1/5`).
+- With the side panel open the band is `◖ ◆ ATLAS ◗ ○ idle ▌ ▸ health` and drops its tab chips, because the panel shows them.
+
+### Fixes
+
+- No fact is drawn twice at idle (gates, uptime and event count each appear once per surface), and expanded rows show real detail instead of repeating the row.
+- Rows are fitted to the pane width; the panel is sized to its content instead of a fixed block of blank rows. At 150 by 45 an idle panel has 10 blank rows above its footer, down from 19.
+- The HEALTH card has one row schema at 150 and 110 columns: a check is `name state n/m pass`, its note is on its own line, and the version is always shown. The orphan `0 messages` row is gone.
+- Tests: new `idle-health.test.ts`, `no-key-hints.test.ts`, `idle-polish.test.ts`, `idle-polish2.test.ts` and `idle-polish3.test.ts` (17 tests for the items above); existing golden and layout tests updated for the key-hint removal. Counts are in the audit page.
+- Known gaps (see `docs/ROADMAP.md`): the chat card `▸ run 0:05` and the band `done 0:05` still repeat the panel's run duration, the idle pulse is about 1 Hz, the `ATLAS` pill is unchanged, and tmux PgUp/PgDn and the weekly-limit line are drawn by the host.
+
 ## 17.22.0 - 2026-11-14
 
 Round 3: decision models in routing and verification, Ollama as a worker provider with a benchmark command, and a mod-load release gate. Evidence: `docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md`. No real Ollama model was run in development; everything model-side was tested against a local stub endpoint and the real `claude` CLI.
