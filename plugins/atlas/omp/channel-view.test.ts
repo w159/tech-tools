@@ -375,7 +375,7 @@ test("panel idle: the band reads idle and the last run follows, the whole thing 
 test("long worker names and roles are cut with an ellipsis in their columns, never run together", () => {
 	const workers = [{ name: "completeness-critic-f08e", role: "completeness-critic", secs: 24, tool: { tool: "write", target: "x", active: false } }];
 	const out = plain(renderPanel(model({ workers, width: 160 })));
-	expect(out).toMatch(/completeness-cr\.\.\. running {2}thinking/);
+	expect(out).toMatch(/completeness-crit\u2026 running {2}thinking/); // critic fix 4: the HUD one-cell ellipsis
 });
 
 test("panel at 60 columns is the band alone", () => {
@@ -880,6 +880,27 @@ test("sessionTodos: this session's live rows only; archived and advisor rows and
 	expect(sessionTodos(root, "s1")).toEqual([]);
 	writeFileSync(join(run, "todos.json"), JSON.stringify({ version: 1 })); // no items key
 	expect(sessionTodos(root, "s1")).toEqual([]);
+});
+
+test("boardRoot: a stray .atlas in the temp root or home is no board root (atlas_paths._is_non_project)", () => {
+	// a .atlas left in /tmp by any earlier run made every project under /tmp write its lane logs there, and the
+	// suite's own fixtures (mkdtemp under tmpdir) then read and wrote that shared tree
+	const tree = realpathSync(mkdtempSync(join(tmpdir(), "board-temp-")));
+	const prev = process.env.TMPDIR;
+	process.env.TMPDIR = tree;
+	try {
+		mkdirSync(join(tree, ".atlas"), { recursive: true });
+		const bare = join(tree, "proj", "x");
+		mkdirSync(bare, { recursive: true });
+		expect(boardRoot(bare, {})).toBe(bare);
+		expect(boardRoot(tree, {})).toBe(tree); // the cwd itself still counts
+		mkdirSync(join(tree, "proj", ".atlas"));
+		expect(boardRoot(bare, {})).toBe(join(tree, "proj"));
+	} finally {
+		if (prev === undefined) delete process.env.TMPDIR;
+		else process.env.TMPDIR = prev;
+		rmSync(tree, { recursive: true, force: true });
+	}
 });
 
 test("boardRoot: ATLAS_PROJECT_ROOT wins, else the nearest ancestor with .atlas, a linked worktree maps to its main repo, else cwd", () => {

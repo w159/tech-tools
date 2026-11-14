@@ -101,6 +101,16 @@ class ShouldRunStopHookActiveTest(_GuardTestCase):
         self.assertTrue(guard.should_run(payload, "ingest_session", kind="capture"))
 
 
+    def test_stop_hook_active_recheck_continuation_runs(self):
+        """A gate re-checks the continuation Claude Code sends after its own
+        block; it owns its own loop cap. Other emit hooks stay silenced."""
+        payload = {"session_id": "s1-gate", "stop_hook_active": True}
+        self.assertTrue(
+            guard.should_run(payload, "completion_gate", recheck_continuation=True)
+        )
+        self.assertFalse(guard.should_run(payload, "nudge"))
+
+
 class ShouldRunThrottleTest(_GuardTestCase):
     def test_throttle_window_respected(self):
         payload = {"session_id": "s2"}

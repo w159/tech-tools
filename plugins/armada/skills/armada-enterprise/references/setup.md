@@ -20,10 +20,17 @@ Role needed to apply: Privileged Role Administrator or Global Administrator. Clo
 
 Licensing: assigning groups to app roles needs Microsoft Entra ID P1 or P2. Without it the group assignment writes fail; assign users individually in the portal instead. Nested groups are not supported for assignment, so use leaf groups. Also needed for infrastructure: rights to create resources and role assignments in the target subscription, and an existing Azure Container Registry.
 
-Build the admin tool:
+The admin tool and the gateway image build from the `mcp_servers/` tree of the tech-tools repository, which the installed plugin does not include. Work from a clone; every `mcp_servers/...` path below is relative to its root:
 
 ```bash
-cd mcp_servers/mcp-gateway && npm run build
+git clone https://github.com/w159/tech-tools.git
+cd tech-tools
+```
+
+Build the admin tool. Install dependencies first: without them `tsc` fails with `TS2307: Cannot find module 'jose'`.
+
+```bash
+cd mcp_servers/mcp-gateway && npm ci && npm run build
 ```
 
 ## Step 1: tenant
@@ -119,13 +126,15 @@ If it needs a client secret, create it in the Entra portal (App registrations > 
 Stage the build context. Never run `az acr build` on the repo root; it uploads the monorepo, including any `.env`.
 
 ```bash
-REPO=<repo root>
+REPO=<root of the tech-tools clone from Step 0>
 GW="$REPO/mcp_servers/mcp-gateway"
 STAGE=$(mktemp -d)
 mkdir -p "$STAGE/mcp_servers/mcp-gateway" "$STAGE/plugins/armada"
 cp "$GW/Dockerfile" "$GW/package.json" "$GW/package-lock.json" "$GW/tsconfig.json" "$STAGE/mcp_servers/mcp-gateway/"
 cp -R "$GW/src" "$STAGE/mcp_servers/mcp-gateway/src"
 cp -R "$GW/catalog" "$STAGE/mcp_servers/mcp-gateway/catalog"
+mkdir -p "$STAGE/mcp_servers/mcp-gateway/scripts"
+cp "$GW/scripts/gen-jwks.mjs" "$STAGE/mcp_servers/mcp-gateway/scripts/"
 cp -R "$REPO/plugins/armada/mcp" "$STAGE/plugins/armada/mcp"
 rm -rf "$STAGE/plugins/armada/mcp/falcon/.venv" "$STAGE/plugins/armada/mcp/falcon/.venv.nosync.noindex"
 find "$STAGE" \( -name ".env" -o -name ".env.*" \) -delete

@@ -315,5 +315,113 @@ class ScannerFixesRound2(Base):
         self.assertEqual(self.rules(src, "RES001"), [])
 
 
+class ScannerFixesRound3(Base):
+    def test_res_assigned_then_with_name_is_released(self):
+        for acquire in ("urlopen(url)", "open(url)"):
+            src = f"""
+                from urllib.request import urlopen
+                def f(url):
+                    resp = {acquire}
+                    with resp:
+                        return resp.read()
+            """
+            self.assertEqual(self.rules(src, "RES001"), [], acquire)
+
+    def test_res_with_on_other_name_still_flagged(self):
+        src = """
+            def f(path, other):
+                fh = open(path)
+                with other:
+                    return fh.read()
+        """
+        self.assertEqual(self.rules(src, "RES001"), ["RES001"])
+
+    def test_dry_nested_function_is_not_a_copy_of_its_enclosing_function(self):
+        src = """
+            def render_week(days, out):
+                def section(items, buf):
+                    for item in items:
+                        if item.visible and item.owner:
+                            buf.append(item.title.strip().upper())
+                            buf.append(item.owner.strip().lower())
+                            buf.append(str(item.count + item.extra))
+                    return buf
+                total = []
+                for day in days:
+                    total = section(day.items, total)
+                out.write("\\n".join(total))
+                return total
+        """
+        self.assertEqual(self.rules(src, "DRY001"), [])
+
+    def test_sec_placeholder_join_and_int_constant_are_safe(self):
+        src = """
+            SCHEMA_VERSION = 2
+            def f(conn, ids, n):
+                marks = ",".join("?" for _ in ids)
+                conn.execute(f"DELETE FROM t WHERE id IN ({marks})", ids)
+                conn.execute(f"DELETE FROM t WHERE id IN ({','.join('?' * n)})", ids)
+                conn.execute("DELETE FROM t WHERE id IN ({})".format(", ".join(["?"] * n)), ids)
+                conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        """
+        self.assertEqual(self.rules(src, "SEC001"), [])
+
+    def test_sec_str_variable_interpolation_still_flagged(self):
+        src = """
+            SCHEMA_VERSION = 2
+            def f(conn, table, ids):
+                marks = ",".join("?" for _ in ids)
+                conn.execute(f"DELETE FROM {table} WHERE id IN ({marks})", ids)
+        """
+        self.assertEqual(self.rules(src, "SEC001"), ["SEC001"])
+        self.assertEqual(self.rules('def f(conn, v):\n    conn.execute(f"PRAGMA user_version={v}")\n', "SEC001"), ["SEC001"])
+
+    def test_sec_unsafe_calls_flagged(self):
+        cases = {
+            'import os\ndef f(x):\n    os.system("ls " + x)\n': 1,
+            'import subprocess\ndef f(x):\n    subprocess.run(f"ls {x}", shell=True)\n': 1,
+            'def f(x):\n    return eval(x)\n': 1,
+            'import pickle\ndef f(b):\n    return pickle.loads(b)\n': 1,
+            'import yaml\ndef f(s):\n    return yaml.load(s)\n': 1,
+            'import yaml\ndef f(s):\n    return yaml.load(s, Loader=yaml.FullLoader)\n': 1,
+            'import requests\ndef f(u):\n    return requests.get(u, verify=False)\n': 1,
+        }
+        for src, n in cases.items():
+            self.assertEqual(self.rules(src, "SEC001"), ["SEC001"] * n, src)
+
+    def test_sec_safe_calls_not_flagged(self):
+        cases = [
+            'import os\ndef f():\n    os.system("ls -l")\n',
+            'import subprocess\ndef f(x):\n    subprocess.run(["ls", x])\n',
+            'import subprocess\ndef f(x):\n    subprocess.run(f"ls {x}")\n',
+            'import subprocess\ndef f():\n    subprocess.run("ls -l", shell=True)\n',
+            'def f():\n    return eval("1 + 2")\n',
+            'import ast\ndef f(x):\n    return ast.literal_eval(x)\n',
+            'def f(model):\n    return model.eval()\n',
+            'import yaml\ndef f(s):\n    return yaml.load(s, Loader=yaml.SafeLoader)\n',
+            'import yaml\ndef f(s):\n    return yaml.safe_load(s)\n',
+            'import requests\ndef f(u):\n    return requests.get(u, verify=True)\n',
+        ]
+        for src in cases:
+            self.assertEqual(self.rules(src, "SEC001"), [], src)
+
+    def test_state_mutable_default_argument_flagged(self):
+        for default in ("[]", "{}", "set()", "dict()", "list()", "{1, 2}", "[x for x in range(3)]"):
+            src = f"def f(a, b={default}):\n    return b\n"
+            self.assertEqual(self.rules(src, "STATE001"), ["STATE001"], default)
+        self.assertEqual(self.rules("def f(*, b=[]):\n    return b\n", "STATE001"), ["STATE001"])
+
+    def test_state_immutable_defaults_not_flagged(self):
+        for default in ("None", "()", "0", '"x"', "frozenset()", "(1, 2)"):
+            self.assertEqual(self.rules(f"def f(b={default}):\n    return b\n", "STATE001"), [], default)
+
+    def test_lit_octal_mode_mask_not_magic(self):
+        src = "import os\ndef f(p):\n    os.chmod(p, os.stat(p).st_mode & ~0o077)\n    return os.umask(0o022) & 0o777\n"
+        self.assertEqual(self.rules(src, "LIT001"), [])
+
+    def test_lit_decimal_still_magic(self):
+        self.assertEqual(self.rules("def f(x):\n    return x * 63\n", "LIT001"), ["LIT001"])
+
+
 if __name__ == "__main__":
     unittest.main()

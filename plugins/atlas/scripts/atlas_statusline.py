@@ -12,6 +12,7 @@ Flags: --width N, --settings PATH, --home PATH.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -260,40 +261,88 @@ def load_cfg():
 # ---------- fallow ----------
 
 
+FALLOW_CACHE_S = 60
+FALLOW_LOCK_S = 15  # no second refresh is spawned while one may still be running
+
+
+def _fallow_cache(home, cwd):
+    key = hashlib.sha256(cwd.encode("utf-8", "replace")).hexdigest()[:12]
+    return os.path.join(home, ".atlas", "statusline-fallow-%s.cache" % key)
+
+
 def fallow_line(cwd, home):
-    """Cached `fallow impact statusline` first line; never raises."""
+    """Cached `fallow impact statusline` first line for cwd; never raises, never blocks.
+
+    The render path only reads the per-cwd cache file. When it is missing or
+    stale a detached `--refresh-fallow` child rewrites it; the segment shows up
+    on a later tick (a stale line keeps showing until the refresh lands).
+    """
     try:
-        if not shutil.which("fallow") or not cwd:
+        if not cwd or not shutil.which("fallow"):
             return ""
-        cache = os.path.join(home, ".atlas", "statusline-fallow.cache")
+        cache = _fallow_cache(home, cwd)
+        line, fresh = "", False
         try:
             with open(cache, encoding="utf-8") as f:
                 c = json.load(f)
-            if c.get("cwd") == cwd and time.time() - float(c.get("at", 0)) < 60:
-                return str(c.get("line", ""))
+            line = str(c.get("line", ""))
+            fresh = time.time() - float(c.get("at", 0)) < FALLOW_CACHE_S
         except Exception:
             pass
-        line = ""
-        try:
-            out = subprocess.run(
-                ["fallow", "--root", cwd, "impact", "statusline"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            ).stdout
-            first = (out.splitlines() or [""])[0].strip()
-            line = first if first.startswith("fallow impact") else ""
-        except Exception:
-            line = ""
-        try:
-            os.makedirs(os.path.dirname(cache), exist_ok=True)
-            with open(cache, "w", encoding="utf-8") as f:
-                json.dump({"cwd": cwd, "at": time.time(), "line": line}, f)
-        except Exception:
-            pass
+        if not fresh:
+            _spawn_fallow_refresh(cwd, home, cache)
         return line
     except Exception:
         return ""
+
+
+def _spawn_fallow_refresh(cwd, home, cache):
+    try:
+        lock = cache + ".lock"
+        try:
+            if time.time() - os.path.getmtime(lock) < FALLOW_LOCK_S:
+                return
+        except OSError:
+            pass
+        os.makedirs(os.path.dirname(cache), exist_ok=True)
+        with open(lock, "w", encoding="utf-8"):
+            pass
+        subprocess.Popen(
+            [
+                sys.executable,
+                os.path.abspath(__file__),
+                "--refresh-fallow",
+                cwd,
+                "--home",
+                home,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception:
+        pass
+
+
+def refresh_fallow(cwd, home):
+    """Background half of fallow_line: run fallow (<= 5 s) and write the per-cwd cache."""
+    line = ""
+    try:
+        out = subprocess.run(
+            ["fallow", "--root", cwd, "impact", "statusline"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+        first = (out.splitlines() or [""])[0].strip()
+        line = first if first.startswith("fallow impact") else ""
+    except Exception:
+        line = ""
+    cache = _fallow_cache(home, cwd)
+    os.makedirs(os.path.dirname(cache), exist_ok=True)
+    with open(cache, "w", encoding="utf-8") as f:
+        json.dump({"cwd": cwd, "at": time.time(), "line": line}, f)
 
 
 # ---------- HUD row budget ----------
@@ -708,16 +757,36 @@ def uninstall(settings, home):
 
 
 def term_width(arg):
+    """--width, then COLUMNS (Claude Code sets it for the command), then the tty.
+
+    Claude Code pipes our stdout, so shutil.get_terminal_size (which asks fd 1)
+    never sees the terminal; ask stderr, then /dev/tty, then default to 120.
+    """
     if arg:
         return arg
     try:
-        return int(os.environ["COLUMNS"])
+        n = int(os.environ["COLUMNS"])
+        if n > 0:
+            return n
     except (KeyError, ValueError):
         pass
     try:
-        return shutil.get_terminal_size((120, 24)).columns
-    except Exception:
-        return 120
+        n = os.get_terminal_size(2).columns
+        if n > 0:
+            return n
+    except (OSError, ValueError):
+        pass
+    try:
+        fd = os.open("/dev/tty", os.O_RDONLY)
+        try:
+            n = os.get_terminal_size(fd).columns
+        finally:
+            os.close(fd)
+        if n > 0:
+            return n
+    except (OSError, ValueError):
+        pass
+    return 120
 
 
 def main(argv=None, stdin=None):
@@ -726,10 +795,16 @@ def main(argv=None, stdin=None):
     )
     ap.add_argument("cmd", nargs="?", choices=("install", "uninstall"))
     ap.add_argument("--width", type=int)
+    ap.add_argument("--refresh-fallow", metavar="CWD")
     ap.add_argument("--settings", default=os.path.expanduser("~/.claude/settings.json"))
     ap.add_argument("--home", default=os.path.expanduser("~"))
     a = ap.parse_args(argv)
-    if a.cmd == "install":
+    if a.refresh_fallow:
+        try:
+            refresh_fallow(a.refresh_fallow, a.home)
+        except Exception:
+            return 1
+    elif a.cmd == "install":
         print(install(a.settings, a.home))
     elif a.cmd == "uninstall":
         print(uninstall(a.settings, a.home))

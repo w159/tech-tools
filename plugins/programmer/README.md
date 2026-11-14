@@ -26,7 +26,7 @@ claude --plugin-dir ./plugins/programmer
 | Skill | `review` | Runs the scanner, then the judge, and writes a ranked report with `file:line`, principle, book and fix. |
 | Skill | `principles` | Advisor: names the 1-4 principles that apply to the code or decision in front of you. |
 | Agent | `principles-judge` | Read-only judge for one batch of files; returns strict JSON. |
-| Hook | `scan_on_edit.py` | Opt-in. After an Edit or Write to a `.py` file, reports error-level findings to Claude. |
+| Hook | `scan_on_edit.py` | Opt-in. After an Edit or Write to a `.py` file, reports the error-level findings the edit introduced to Claude. |
 | CLI | `scripts/principles` | The scanner. Python 3.9+ standard library only (config files need 3.11+). |
 
 ## The 20 detected rules
@@ -41,9 +41,9 @@ claude --plugin-dir ./plugins/programmer
 | FN005 | warning | High cyclomatic complexity |
 | ERR001 | error | Swallowed or over-broad exception |
 | DEM001 | warning | Message chain (Law of Demeter) |
-| STATE001 | warning | Mutable global state |
+| STATE001 | warning | Mutable global state, mutable default argument |
 | RES001 | warning | Resource not paired with release |
-| SEC001 | error | Query built from strings |
+| SEC001 | error | Query or command built from strings; unsafe call (shell, eval, unpickle, yaml.load, verify=False) |
 | SEC002 | error | Secret in source |
 | CFG001 | warning | Hardcoded endpoint |
 | ARCH001 | warning | Dependency rule violation |
@@ -117,7 +117,7 @@ cur.execute(sql)  # principles: ignore[SEC001] sql is a constant from queries.py
 
 ## Opt-in edit hook
 
-Set `PROGRAMMER_SCAN_ON_EDIT=1` before starting Claude Code. After each Edit or Write to a `.py` file, the hook scans that file and passes up to 5 error-level findings back to Claude. It never blocks a tool call and is silent when off, on clean files, and on files that do not parse.
+Set `PROGRAMMER_SCAN_ON_EDIT=1` before starting Claude Code. After each Edit or Write to a `.py` file, the hook scans that file and passes up to 5 error-level findings back to Claude. For Edit and MultiEdit it reports only findings the edit introduced; a Write, or an edit it cannot place, reports every error-level finding. It never blocks a tool call and is silent when off, on clean files, and on files that do not parse.
 
 ## Tests
 

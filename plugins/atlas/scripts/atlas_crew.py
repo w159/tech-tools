@@ -1372,7 +1372,7 @@ def cmd_run(a) -> int:
                 if bad:  # no point waiting out the budget: a signed summary is published whole
                     print(json.dumps({"ok": False, "error": f"run {run_id!r} summary refused: {bad}"}))
                     return 1
-                print(json.dumps(obj))
+                print(json.dumps(lead_view(obj, rundir)))
                 return 0 if obj.get("ok") is True else 1
             time.sleep(POLL_S)
     print(
@@ -2440,6 +2440,38 @@ def _load_summary(rundir: Path) -> tuple[dict | None, str | None]:
     return (None, bad) if bad else (obj, None)
 
 
+_LEAD_KEYS = ("ok", "run", "check", "check_exit", "check_tail", "wall_s")
+_LEAD_IF_SET = ("killed", "failed_workers", "late_exits", "pending_exits", "changelog")
+
+
+def lead_view(obj: dict, rundir: Path) -> dict:
+    """What `run --wait` and `wait` print for the lead: the verdict, the check, the workers by name, the files
+    they own, the token total and the path of the full summary. Every reason a run is not clean (killed, failed,
+    late or pending exits) and the changelog path appear when set. The per-worker rows, rounds, irc counters and
+    log paths stay in summary.json: on an 8-worker run they were over half the line, and a supervisor stop after a
+    verified DONE (exit 143) cost the lead a turn explaining a non-failure. The Stop gate's `_engine_json` still
+    matches this object (run id, a workers list, an int check_exit)."""
+    out = {k: obj[k] for k in _LEAD_KEYS if k in obj}
+    ws = obj.get("workers")
+    if isinstance(ws, list):
+        out["workers"] = [w.get("name") if isinstance(w, dict) else w for w in ws]
+    try:
+        plan = json.loads((rundir / "run.json").read_text(encoding="utf-8")).get("plan") or {}
+        files = [p for w in plan.get("workers") or [] for p in (w.get("owns") or [])]
+    except (OSError, ValueError, AttributeError, TypeError):
+        files = []
+    if files:
+        out["files"] = files
+    tw = obj.get("tokens_workers")
+    if isinstance(tw, dict) and isinstance(tw.get("total"), int):
+        out["tokens"] = tw["total"]
+    for k in _LEAD_IF_SET:
+        if obj.get(k):
+            out[k] = obj[k]
+    out["summary"] = str(rundir / "summary.json")
+    return out
+
+
 def _summary_line(path: Path) -> str:
     """summary.json as one JSON line: the file is indented for people, and `run --wait` / `wait` print it
     into the lead's context, where the indentation is about a third of the bytes. Same keys either way."""
@@ -2476,7 +2508,7 @@ def cmd_wait(a) -> int:
             if bad:
                 print(json.dumps({"ok": False, "error": f"run {a.run!r} summary refused: {bad}"}))
                 return 1
-            print(json.dumps(obj))
+            print(json.dumps(lead_view(obj, rundir)))
             return 0 if obj.get("ok") is True else 1
         time.sleep(POLL_S)
     print(

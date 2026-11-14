@@ -51,7 +51,7 @@ test("a worker row is `<glyph> <name>  <state word>  <last>  <time>` at every wi
 
 test("long names and roles are cut with an ellipsis to their columns, never run into the next one", () => {
 	const lane = laneOf(model({ workers: [worker("completeness-critic-f08e", { role: "completeness-critic" })] }), "edit");
-	expect(lane).toMatch(/^ ◐ completeness-cr\.\.\. running {2}edit a\.ts +0:30 $/);
+	expect(lane).toMatch(/^ ◐ completeness-crit\u2026 running {2}edit a\.ts +0:30 $/); // critic fix 4: the band cuts with the HUD one-cell ellipsis, never three dots
 });
 
 test("every row is exactly the width at 20..200 columns", () => {

@@ -73,6 +73,16 @@
             "async": true
           }
         ]
+      },
+      {
+        "matcher": "SubagentHandback",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/worker_report_gate.py\"",
+            "timeout": 15
+          }
+        ]
       }
     ],
     "Stop": [

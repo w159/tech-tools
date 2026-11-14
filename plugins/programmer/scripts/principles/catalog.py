@@ -101,7 +101,7 @@ RULES: tuple[Rule, ...] = (
         "Mutable global state",
         "Avoid global data; shared state is incorrect state",
         (f"{TPP}, Topic 28, Tip 47", f"{TPP}, Topic 34, Tip 57", "Refactoring (Fowler), ch.3 Global Data"),
-        "A global statement that rebinds a name, or a module-level dict/list/set mutated inside a function.",
+        "A global statement that rebinds a name, a module-level dict/list/set mutated inside a function, or a mutable (list/dict/set) default argument.",
         "warning",
     ),
     Rule(
@@ -117,7 +117,7 @@ RULES: tuple[Rule, ...] = (
         "Query built from strings",
         "Never build queries from untrusted strings",
         (f"{TPP}, Topic 43 Stay Safe Out There", "Software Architecture in Practice, 4th Ed., Security tactics"),
-        "An f-string, % format, .format() or string concatenation passed to execute/executemany/executescript/raw, directly or through one local variable.",
+        "An f-string, % format, .format() or string concatenation passed to execute/executemany/executescript/raw, directly or through one local variable (interpolated ints and '?' placeholder lists are safe). Also os.system/popen or subprocess(shell=True) with a non-constant command, eval/exec on a non-literal, pickle/marshal loads, yaml.load without a SafeLoader, and verify=False on HTTP calls.",
         "error",
     ),
     Rule(
@@ -196,7 +196,7 @@ RULES: tuple[Rule, ...] = (
         "Magic number",
         "Replace magic literals with named constants",
         ("Refactoring (Fowler), Replace Magic Literal", "Clean Code, ch.17 G25"),
-        "A numeric literal other than 0, 1 and -1 inside an expression (named constants, defaults, keyword arguments and subscripts are allowed).",
+        "A numeric literal other than 0, 1 and -1 inside an expression (named constants, defaults, keyword arguments, subscripts and octal 0o mode masks are allowed).",
         "note",
         skip_tests=True,
         options={"allowed": [0, 1, -1]},

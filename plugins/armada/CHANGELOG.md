@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.1 - 2026-11-14
+
+### Security
+
+- Auvik: the server no longer loads `.env` from the launch directory, which let any working directory set the credentials. The region is checked against the Auvik shard list (us1-us6, eu1, eu2, au1, ca1) wherever it comes from (env, the `x-auvik-region` header, the client), because it is part of the host that receives the Basic-auth header; an unknown value falls back to us1 and is reported by source name only. Region redirects are followed only to another Auvik API host over https. Bundle `mcp/auvik/server.mjs` rebuilt; the 39 tools are unchanged.
+- Falcon: the server no longer calls `load_dotenv`, and the base URL must be https (http only for loopback); a bad value shows as `INVALID_BASE_URL` in status.
+
+### Fixed
+
+- Enterprise setup guide: added the clone step (the installed plugin does not ship `mcp_servers/`), `npm ci` before the admin tool build (without it `tsc` fails with TS2307 on `jose`), and staging of `scripts/gen-jwks.mjs`, which the image build needs.
+- Tests: `tests/test_armada_security.py`, `mcp/falcon/tests/test_transport_security.py`, `auvik-mcp/tests/region.test.ts`. armada 39 passed, falcon 1498 passed, auvik vitest 40 passed, tool harness 574 tools pass.
+- Not changed: the shipped CIPP, Auvik and gateway bundles were built before the Oct 27 dependency bumps; a pinned esbuild/tsup/node rebuild and a CI bundle diff are still open.
+
 ## 2.3.0 - 2026-11-10
 
 ### Changed

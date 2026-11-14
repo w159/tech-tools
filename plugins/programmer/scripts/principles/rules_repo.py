@@ -127,6 +127,11 @@ def check_dry001(mods: list[Module], opts: dict) -> list[Finding]:
                 a, b = max(i, j), min(i, j)  # equal size: report the later one
             if (a, b) in reported:
                 continue
+            ma, na = funcs[a][0], funcs[a][1]
+            mb, nb = funcs[b][0], funcs[b][1]
+            if ma is mb and (na.lineno <= nb.lineno <= (nb.end_lineno or nb.lineno) <= (na.end_lineno or na.lineno)
+                             or nb.lineno <= na.lineno <= (na.end_lineno or na.lineno) <= (nb.end_lineno or nb.lineno)):
+                continue  # a nested function is part of its enclosing function, not a copy of it
             reported.add((a, b))
             smod, snode, _ = funcs[a]
             omod, onode, _ = funcs[b]

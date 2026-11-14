@@ -11,11 +11,10 @@ import sys
 from typing import TYPE_CHECKING, Any, Literal
 
 import uvicorn
-from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
 from falcon_mcp import registry
-from falcon_mcp.client import FalconClient, get_version
+from falcon_mcp.client import FalconClient, InsecureBaseURLError, get_version
 from falcon_mcp.common.auth import (
     ASGIApp,
     auth_middleware,
@@ -183,7 +182,12 @@ class FalconMCPServer:
             )
         except ValueError as err:
             self.mode = "inert"
-            self.auth_error = f"MISSING_CREDENTIALS: {err}"
+            code = (
+                "INVALID_BASE_URL"
+                if isinstance(err, InsecureBaseURLError)
+                else "MISSING_CREDENTIALS"
+            )
+            self.auth_error = f"{code}: {err}"
             logger.warning("%s", self.auth_error)
             self._bootstrap_inert_server()
             return
@@ -336,6 +340,8 @@ class FalconMCPServer:
         if self.mode == "inert":
             if self.auth_error and self.auth_error.startswith("MISSING_CREDENTIALS"):
                 state = "MISSING_CREDENTIALS"
+            elif self.auth_error and self.auth_error.startswith("INVALID_BASE_URL"):
+                state = "INVALID_BASE_URL"
             elif self.auth_error:
                 state = "AUTH_FAILED"
             else:
@@ -831,8 +837,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     """Main entry point for the Falcon MCP server."""
-    # Load environment variables
-    load_dotenv()
+    # No load_dotenv(): with no path it searches upward from this package for a
+    # .env (into ~/.claude, $HOME, ...). The launcher owns the env: the armada
+    # plugin's mcp/_env/load.py, the MCP host's env block, or the shell.
 
     # Parse command line arguments (includes environment variable defaults)
     args = parse_args()

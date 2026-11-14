@@ -37,6 +37,7 @@ import ast
 import datetime as _dt
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -120,11 +121,36 @@ def load_settings(path: Path) -> dict:
         )
 
 
+def runs_script(command: str, script: str) -> bool:
+    """True when `command` runs the plugin's own hooks/<script>: exactly the
+    command this script writes, or a token that resolves to that file. A
+    substring test also matched a user's my_completion_gate.py or
+    strict_bash_advisor.py.sh, and --uninstall then deleted them."""
+    if not command:
+        return False
+    if command == command_for(script):
+        return True
+    target = (HOOKS_DIR / script).resolve()
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+    for tok in tokens:
+        if not tok.endswith(script):
+            continue
+        try:
+            if Path(tok).expanduser().resolve() == target:
+                return True
+        except (OSError, RuntimeError, ValueError):
+            continue
+    return False
+
+
 def has_hook(settings: dict, event: str, script: str) -> bool:
     """True if any handler under `event` already runs this script."""
     for group in settings.get("hooks", {}).get(event, []):
         for h in group.get("hooks", []):
-            if script in (h.get("command") or ""):
+            if runs_script(h.get("command") or "", script):
                 return True
     return False
 
@@ -184,7 +210,7 @@ def apply_uninstall(settings: dict, selected: list[str]) -> int:
         new_groups = []
         for group in groups:
             orig = group.get("hooks", [])
-            kept = [h for h in orig if script not in (h.get("command") or "")]
+            kept = [h for h in orig if not runs_script(h.get("command") or "", script)]
             if len(kept) != len(orig):
                 changed += 1
             if kept:
@@ -217,7 +243,7 @@ def cmd_list(settings: dict) -> None:
         for group in groups:
             for h in group.get("hooks", []):
                 cmd = h.get("command", "")
-                if not any(s[2] in cmd for s in HOOK_SPECS.values()):
+                if not any(runs_script(cmd, s[2]) for s in HOOK_SPECS.values()):
                     others.setdefault(event, []).append(cmd)
     if others:
         print("\nother hooks already configured:")

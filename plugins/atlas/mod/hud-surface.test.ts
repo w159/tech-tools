@@ -5,6 +5,16 @@ import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_ric
 import { chipCount, elapsedClock, leadSpinnerGlyph, runsCells, runsString, type Run, type Ui } from './atlas-ui';
 import { COUNT_ORDER, type UiState } from './atlas-ui';
 import { textWidth } from './theme';
+import type { ClientElements } from 'claude-code';
+import { bandTree, hudPhases, type BandModel } from './band';
+import type { SquadAgent, TodoItem } from './contract';
+import { blockedText, STOP_REFUSED } from './data/runstate';
+import { liveWorkers, queuedMembers } from './data/live';
+import { ownTodos } from './data/todos';
+import { hudAgents, isRunning, type HudInput } from './hud';
+import { busySnap, NOW } from './live_fixture';
+import type { LiveSnapshot } from './orchestra-types';
+import { composeSlot } from './slot';
 import { agentRows, fitStack, padRows, rowSpinnerGlyph, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -410,5 +420,118 @@ describe('critique 11 C4: the TODO box', () => {
     expect(out.filter((l) => l.includes('queued')).length).toBe(5); // all five plan rows still show
     expect(out.filter((l) => /explorer +done/.test(l))).toHaveLength(3);
     expect(text(fitStack({ todos, agents }, opts(110), 14))).toHaveLength(13); // one more row: nothing returns, there is no blank to give back
+  });
+});
+
+// ---- critic round (fix 1-4): a blocked row's reason, the wide-emoji width, the SUBAGENTS partial table, one spinner and one ellipsis ----------------------
+// The whole slot (slot.ts composeSlot) from one LiveSnapshot, the way state38.test.ts renders it: six plan rows, T1 done, T2-T4 each owned by a running agent, T5 blocked with its reason, T6 queued.
+type FxNode = { kind: string; props: Record<string, unknown> };
+const fxMk = (kind: string) => (props: Record<string, unknown>): FxNode => ({ kind, props });
+const fxEls = { Box: fxMk('Box'), Text: fxMk('Text'), Button: fxMk('Button') } as unknown as ClientElements;
+const fxText = (n: unknown): string => { const node = n as FxNode; const c = node.props?.children; if (typeof c === 'string') return c; return (Array.isArray(c) ? c : c == null ? [] : [c]).map(fxText).join(''); };
+const fxRows = (n: FxNode): string[] => { const kids = (n.props.children ?? []) as FxNode[]; const boxes = (Array.isArray(kids) ? kids : [kids]).filter((k) => k && (k as FxNode).kind === 'Box'); return boxes.length === 0 ? [fxText(n)] : boxes.flatMap((b) => fxRows(b as FxNode)); };
+const PLAIN: Ui = { theme: 'mocha', ascii: false, color: 'none' };
+const FX_NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
+const BLOCK_WHY = 'needs your approval on the schema change';
+function fxSnap(o: { phase?: string; agents?: boolean; titles?: readonly string[] } = {}): LiveSnapshot {
+  const agents = o.agents !== false;
+  const squad: SquadAgent[] = agents ? FX_NAMES.map((name) => ({ name, persona: 'explorer', state: 'running', source: 'task', task: `${name}: read` }) as SquadAgent) : [];
+  const act = agents ? Object.fromEntries(FX_NAMES.map((n, i) => [n, { tool: 'Read', since: NOW - 4000, startedAt: NOW - 14_000 - i * 1000, toolCount: 1, tokens: 100, mood: 'working', lastLine: '', calls: [NOW - 9000] }])) : {};
+  const titles = o.titles ?? ['T1 map the schema', 'T2 read alpha.py', 'T3 read beta.py', 'T4 read gamma.py', 'T5 migrate the schema', 'T6 write the summary'];
+  const status = ['completed', 'in_progress', 'in_progress', 'in_progress', 'blocked', 'pending'];
+  const todos = titles.map((content, i) => ({ id: `t${i + 1}`, content, status: agents || i < 1 || i > 3 ? status[i] : 'completed', ...(agents && i >= 1 && i <= 3 ? { owner: FX_NAMES[i - 1] } : {}), ...(i === 4 ? { evidence: BLOCK_WHY } : {}) }) as TodoItem);
+  return busySnap({ sessionId: 's', phase: (o.phase ?? 'research') as never, phaseSource: 'header', contextPct: 7, squad, comms: [], activity: { lead: { tool: null, since: NOW, toolCount: 1, tokens: null, mood: agents ? 'working' : 'idle', lastLine: '' }, ...act } as never, todos, counts: { done: 1, total: titles.length, byPhase: {} }, todoGroups: [] });
+}
+function fxFrame(cols: number, o: Parameters<typeof fxSnap>[0] = {}, budget = 18): { band: string; hud: string[] } {
+  const snapshot = fxSnap(o);
+  const live = liveWorkers(snapshot, snapshot.now);
+  const agents = hudAgents(live, snapshot.squad, queuedMembers(snapshot));
+  const hudIn: HudInput = { todos: ownTodos(snapshot.todos ?? [], snapshot.sessionId), agents, root: snapshot.root, phases: hudPhases(snapshot, null) };
+  const working = o.agents !== false;
+  const bandIn = (_h: unknown, maxRows: number | undefined): BandModel => ({ snapshot, live, gates: [], working, workSecs: 72, ...(working ? {} : { ranSecs: 72 }), columns: cols, tick: 3, ui: PLAIN, rich: false, workersInHud: true, maxRows }) as BandModel;
+  const plan = composeSlot({ budget, hasSlot: true, hudOn: true, runOn: true, columns: cols, hudIn, hudView: { cols, tick: 3, ui: PLAIN, rich: false, now: snapshot.now }, running: agents.some(isRunning), agentsListed: agents.length > 0, orchestrated: true, now: snapshot.now, bandIn: bandIn as never, held: 0 } as never);
+  const band = fxRows(bandTree(fxEls, plan.band, { openView: () => undefined, toggleTodos: () => undefined }) as unknown as FxNode)[0]!;
+  return { band, hud: plan.hud.map((r) => r.map((x) => x.t).join('')) };
+}
+const ELLIPSIS = String.fromCharCode(0x2026);
+
+describe('fix 1: a blocked row says why', () => {
+  test('the blocked T5 row draws its reason at 110 and 200 columns, inside the row', () => {
+    for (const cols of [110, 200]) {
+      const { hud } = fxFrame(cols);
+      const row = hud.find((r) => r.includes('T5 migrate the schema'))!;
+      expect(row, hud.join('\n')).toContain('needs your approval');
+      expect(textWidth(row)).toBeLessThanOrEqual(cols);
+    }
+  });
+  test('at 56 columns the reason is cut with the HUD ellipsis and never overflows', () => {
+    for (const cols of [56, 64, 80]) {
+      const { hud } = fxFrame(cols);
+      const row = hud.find((r) => r.includes('T5'))!;
+      expect(row, hud.join('\n')).toMatch(new RegExp(`needs[^\\n]*${ELLIPSIS}|needs your approval on the schema change`));
+      for (const r of hud) expect(textWidth(r), r).toBeLessThanOrEqual(cols);
+    }
+  });
+  test('running and queued rows draw no detail text', () => {
+    const { hud } = fxFrame(110);
+    expect(hud.find((r) => r.includes('T2 read alpha.py'))!.trimEnd()).toMatch(/0:\d\d$/);
+    expect(hud.find((r) => r.includes('T6 write the summary'))!.trimEnd()).toMatch(/ -$/);
+  });
+  test('a lead-declared block names the blocked row reason on the band, not a bare `blocked 1:12`', () => {
+    const { band } = fxFrame(150, { phase: 'blocked', agents: false });
+    expect(band).toContain('▲ blocked');
+    expect(band).toContain('needs your approval');
+    expect(textWidth(band.trimEnd())).toBeLessThanOrEqual(150);
+  });
+  test('blockedText keeps its two reasons first and takes a declared reason only when neither holds', () => {
+    expect(blockedText({ refused: true, failed: 1, why: BLOCK_WHY })).toBe(STOP_REFUSED);
+    expect(blockedText({ refused: false, failed: 2, why: BLOCK_WHY })).toBe('2 failed');
+    expect(blockedText({ refused: false, failed: 0, why: BLOCK_WHY, secs: 72 })).toBe(`${BLOCK_WHY} 1:12`);
+    expect(blockedText({ refused: false, failed: 0 })).toBe('');
+  });
+});
+
+describe('fix 2: a title with emoji fits its row', () => {
+  // The terminal's own count (Bun.stringWidth: East Asian Width and Emoji_Presentation) is the oracle the row must fit; textWidth must agree with it, or a row overflows by a cell per emoji.
+  const TITLES = ['T1 map ✅ the schema', 'T2 ⚡ read alpha.py ❌', 'T3 ⏳ read beta.py ✨', 'T4 ⛔ read gamma.py ⬆', 'T5 ⭐ migrate the ⬛⬜⭕ schema 👍🏽', 'T6 write the summary ✅✅✅✅✅✅✅✅✅✅✅✅'];
+  test('every HUD row measures at most `cols` cells by the terminal count, at 110, 80 and 56 columns', () => {
+    for (const cols of [110, 80, 56]) {
+      const { hud } = fxFrame(cols, { titles: TITLES });
+      for (const r of hud) {
+        expect(textWidth(r), r).toBe(Bun.stringWidth(r));
+        expect(Bun.stringWidth(r), r).toBeLessThanOrEqual(cols);
+      }
+    }
+  });
+  test('a plan block of emoji titles keeps every row within cols in the plain surface too', () => {
+    const rows: TodoRow[] = TITLES.map((label, i) => ({ label, state: i === 0 ? 'done' : i < 4 ? 'running' : i === 4 ? 'blocked' : 'queued', detail: i === 4 ? BLOCK_WHY : '', focus: i === 1 }));
+    for (const cols of [120, 80, 40]) for (const r of text(todoRows(rows, opts(cols), full))) expect(Bun.stringWidth(r), r).toBeLessThanOrEqual(cols);
+  });
+});
+
+describe('fix 3: the SUBAGENTS table gives way row by row, never all at once', () => {
+  const NAMES5 = ['alpha', 'beta', 'gamma', 'delta', 'omega'].map((n) => `${n}-explorer`);
+  const todos = (): TodoRow[] => NAMES5.map((n, i) => ({ label: `T${i + 1} read ${n.split('-')[0]}.py`, owner: n, state: 'running', detail: '', focus: i === 0 }));
+  const agents = (): AgentRow[] => NAMES5.map((name, i) => ({ seq: i, name, state: 'running', model: 'sonnet', tasks: [i + 1], tool: 'Read', ctx: null, focus: false, elapsed: `0:1${i}` }));
+  const o = (cols: number): SurfaceOpts => ({ cols, ui: PLAIN, now: NOW });
+  test('five running agents and five running plan rows in 11 and 12 rows: at least one agent row and a `more running` row, inside the budget', () => {
+    for (const budget of [11, 12]) for (const cols of [110, 150]) {
+      const rows = text(fitStack({ todos: todos(), agents: agents() }, o(cols), budget));
+      const shown = rows.filter((r) => /^ {2}\S+-explorer +\S+ running/.test(r));
+      expect(rows.length, rows.join('\n')).toBeLessThanOrEqual(budget);
+      expect(shown.length, rows.join('\n')).toBeGreaterThanOrEqual(1);
+      expect(rows.join('\n')).toMatch(new RegExp(`${5 - shown.length} more running`));
+      for (const r of rows) expect(textWidth(r)).toBeLessThanOrEqual(cols);
+    }
+  });
+  test('in 10 rows the open plan rows still outrank agent rows (wave 38): SUBAGENTS folds to its title on the plan rule', () => {
+    const rows = text(fitStack({ todos: todos(), agents: agents() }, o(110), 10));
+    expect(rows.filter((r) => /^[ ▸] \S T\d .* running /.test(r))).toHaveLength(5);
+    expect(rows.at(-1)).toMatch(/SUBAGENTS .*5 running/);
+  });
+  test('with room for every agent the table draws them all and no summary row', () => {
+    const rows = text(fitStack({ todos: todos(), agents: agents() }, o(110), 20));
+    expect(rows.filter((r) => /^ {2}\S+-explorer +\S+ running/.test(r))).toHaveLength(5);
+    expect(rows.join('\n')).not.toMatch(/more running/);
   });
 });

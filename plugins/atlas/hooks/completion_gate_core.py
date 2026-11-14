@@ -102,10 +102,10 @@ failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
       contracts/operating-contract.json (`ATLAS | <glyph> <phase> | <state>`).
       Re-blocks every header-less Stop (subject to the loop cap below), not
       just the first, and like (r) is checked BEFORE the in-flight silence.
-      A stop_hook_active continuation is never blocked; a main-thread one
-      whose first line matches the header resets a loop count that names (n)
-      alone, so the cap only counts header-less Stops nobody corrected and a
-      mixed count such as `a,n` still reaches it. Kill switch
+      A stop_hook_active continuation is checked like a fresh Stop; only a
+      pass whose first line matches the header resets a loop count that
+      names (n), so the cap only counts header-less Stops nobody corrected
+      and a mixed count such as `a,n` still reaches it. Kill switch
       ATLAS_GATE_HEADER=off. Fails open on missing/empty text.
   (o) Phased todo: when THIS RUN shipped non-docs code, this session's board
       items (every status, non-manual) must cover each phase in the contract's
@@ -138,8 +138,8 @@ failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
       board, LEDGER) has open items, block. Checked BEFORE the in-flight
       silence and independent of shipped code; a header with any other phase
       keeps the old behavior. Re-blocks each Stop (subject to the loop cap).
-      Kill switch ATLAS_GATE_DONE=off. Skips sidechains, stop_hook_active,
-      and fails open on an unreadable contract or any error.
+      Kill switch ATLAS_GATE_DONE=off. Skips sidechains, and fails open on
+      an unreadable contract or any error.
 
 (o) and (p) ask the model to repair presentation, not to produce work, so
 each blocks AT MOST ONCE per session: an O_EXCL marker `<cond>-<session>` under
@@ -147,11 +147,14 @@ CONTRACT_GATE_MARKER_DIR (tmp dir `atlas-contract-gate`, overridable with
 ATLAS_CONTRACT_GATE_DIR) records the block, and a marked condition counts as
 satisfied. They are evaluated only for orchestrating sessions, never for a
 sidechain, and not while a dispatch is in flight. Conditions (a)-(n) re-block
-on every Stop until they hold. So a stuck run cannot wedge, the loop cap
-allows the Stop after BLOCK_LOOP_LIMIT identical consecutive blocks
-(default 3; tunable with ATLAS_GATE_BLOCK_LOOP, clamped to 1-7 -- the
-native Stop-hook block cap is 8, so this breaker must fire first) and
-records one gate_block_loop friction row.
+on every Stop until they hold, including the stop_hook_active continuation
+Claude Code sends after a block in the same turn. So a stuck run cannot
+wedge, the loop cap allows the Stop after BLOCK_LOOP_LIMIT identical
+consecutive blocks (default 3; tunable with ATLAS_GATE_BLOCK_LOOP, clamped to
+1-7 -- the native Stop-hook block cap is 8, so this breaker must fire first;
+within a continuation chain a letter set that overlaps the last one counts
+on), records one gate_block_loop friction row and tells the user in a
+systemMessage that it gave up.
 
 (a), (b), (f), and (g) all share one signal: whether THIS RUN shipped
 non-docs code (_nondocs_changed on the run-write signal from atlas_db). A
@@ -1041,7 +1044,15 @@ def _missing_delegation(session_id: str, transcript_path: str = "", root=None) -
             shell_code = []
         if run_code and _dispatched(False):
             run_code = []
-        return run_code + shell_code
+        # One file per absolute path: events log it relative, tool_calls
+        # absolute, and every edit of it is another row.
+        seen, out = set(), []
+        for p in run_code + shell_code:
+            key = _abs_path(p, root)
+            if key not in seen:
+                seen.add(key)
+                out.append(p)
+        return out
     except Exception:
         return []
     finally:
@@ -1662,6 +1673,9 @@ def main() -> int:
     try:
         return _main()
     finally:
+        if _STOP.get("gave_up"):
+            # The loop cap allowed this Stop and nothing else was printed.
+            _print_decision({})
         if "session" in _STOP:
             _write_stop_verdict(
                 _STOP["session"],
@@ -1694,9 +1708,13 @@ def _main() -> int:
     # line. F3: a run must not end with the gate disarmed and nothing saying so.
     data = atlas_hook_guard.load_payload("completion_gate", raw=_raw)
     if not _readable:
-        print(
-            "[atlas] completion-gate FAIL-OPEN: the Stop payload was unreadable, "
-            "so the done-conditions were NOT checked this Stop."
+        # systemMessage JSON, not plain text: plain Stop stdout on exit 0
+        # reaches only Claude Code's debug log (hooks docs, exit code output).
+        _print_decision(
+            {
+                "systemMessage": "[atlas] completion-gate FAIL-OPEN: the Stop payload "
+                "was unreadable, so the done-conditions were NOT checked this Stop."
+            }
         )
         return 0
     # Finalize the observability run regardless of gate outcome.
@@ -1708,27 +1726,23 @@ def _main() -> int:
             session=str(data.get("session_id") or ""),
             cwd=Path(data.get("cwd") or os.getcwd()),
         )
-        # stop_hook_active and the session circuit breaker. The breaker is a
-        # deliberate cap that ends a runaway Stop loop: more than
-        # atlas_hook_guard.STOP_BURST_LIMIT Stops within STOP_BURST_WINDOW
-        # seconds makes should_run() False for the rest of the session, i.e.
-        # THIS GATE STOPS ENFORCING. Every such bypass is therefore traced:
-        # atlas_hook_guard writes a hook-faults.jsonl row and a one-line stderr
-        # note each time (GATE_HOOKS). No throttle window, but should_run
-        # returns False while stop_hook_active is set (the standard anti-loop
-        # guard), so a failing gate blocks once per turn and re-blocks on the
-        # next fresh Stop until the conditions are met or the loop cap is hit.
-        # The reply a (n) block asked for arrives as that silenced
-        # continuation, so it never reaches the reset on the passing path
-        # below. Reset here, or the (n) count accrues across unrelated turns
-        # and the 4th header-less turn of a session is allowed unsaid. Only a
-        # continuation that PROVES the correction resets: header-less, empty,
-        # non-string or sidechain text leaves the count alone, or a chain
-        # nobody corrected would never reach the cap.
-        if data.get("stop_hook_active") and _reply_has_header(data):
-            _block_loop_reset(str(data.get("session_id") or ""), "n")
-        if not atlas_hook_guard.should_run(data, "completion_gate"):
+        # The session circuit breaker. The breaker is a deliberate cap that
+        # ends a runaway Stop loop: more than atlas_hook_guard.STOP_BURST_LIMIT
+        # Stops within STOP_BURST_WINDOW seconds makes should_run() False for
+        # the rest of the session, i.e. THIS GATE STOPS ENFORCING. Every such
+        # bypass is therefore traced: atlas_hook_guard writes a
+        # hook-faults.jsonl row and a one-line stderr note each time
+        # (GATE_HOOKS). No throttle window. A stop_hook_active continuation is
+        # re-checked (recheck_continuation): Claude Code sets the flag on
+        # every Stop after a block in the same turn, so silencing it let the
+        # model stop with nothing fixed. The gate's own loop cap
+        # (_block_loop_state, ATLAS_GATE_BLOCK_LOOP) ends the chain instead,
+        # below Claude Code's 8-continuation cap.
+        if not atlas_hook_guard.should_run(
+            data, "completion_gate", recheck_continuation=True
+        ):
             return 0
+        continuation = bool(data.get("stop_hook_active"))
         cwd = Path(data.get("cwd") or os.getcwd())
         # Armed like the dispatch tripwire (atlas_scope.gates_armed: a git /
         # .claude / .atlas / package.json project outside scratch roots), or by
@@ -1752,32 +1766,38 @@ def _main() -> int:
         )
         if not _session_is_orchestrating(session):
             if missing_delegation and not _has_in_flight_dispatch(data):
+                # Same loop cap as an orchestrating run: the continuation is
+                # re-checked, so without it an unfixable (m) never ends.
+                count, loop_exhausted = _block_loop_state(session, ["m"], continuation)
+                if loop_exhausted:
+                    _note_loop_allowed(count, ["m"])
+                    return 0
                 _record_gate_block(session, ["m"])
                 _STOP["letters"] = ["m"]
                 _record_analytics("gate.m.block")
-                print(
-                    json.dumps(
-                        {
-                            "decision": "block",
-                            "reason": _reason(
-                                False,
-                                False,
-                                False,
-                                missing_delegation=True,
-                                delegation_paths=delegation_paths,
-                            ),
-                        }
-                    )
+                m_reason = _reason(
+                    False,
+                    False,
+                    False,
+                    missing_delegation=True,
+                    delegation_paths=delegation_paths,
                 )
+                notice = _block_loop_notice(count, ["m"])
+                if notice:
+                    m_reason += "\n" + notice
+                _print_decision({"decision": "block", "reason": m_reason})
             elif not missing_delegation:
+                _block_loop_reset(session)  # the cap counts consecutive blocks only
                 _record_pass()
             return 0  # only (m) applies to unflagged runs
         # (r) runs before the in-flight silence: a `done` header is a
         # completion claim even while agents run. Same loop cap as the rest.
         done_reason = _done_claim_reason(data, root, session)
         if done_reason:
-            count, loop_exhausted = _block_loop_state(session, ["r"])
-            if not loop_exhausted:
+            count, loop_exhausted = _block_loop_state(session, ["r"], continuation)
+            if loop_exhausted:
+                _note_loop_allowed(count, ["r"])
+            else:
                 _record_gate_block(session, ["r"])
                 _STOP["letters"] = ["r"]
                 _STOP["why"] = _done_claim_why(done_reason)
@@ -1785,7 +1805,7 @@ def _main() -> int:
                 notice = _block_loop_notice(count, ["r"])
                 if notice:
                     done_reason += "\n" + notice
-                print(json.dumps({"decision": "block", "reason": done_reason}))
+                _print_decision({"decision": "block", "reason": done_reason})
                 return 0
         if _has_in_flight_dispatch(data):
             # Dispatched subagent/workflow/teammate still running: not a
@@ -1796,7 +1816,7 @@ def _main() -> int:
                 if _reply_has_header(data):  # a fail-open allow proves nothing
                     _block_loop_reset(session, "n")
                 return 0
-            count, loop_exhausted = _block_loop_state(session, ["n"])
+            count, loop_exhausted = _block_loop_state(session, ["n"], continuation)
             if loop_exhausted:
                 _note_loop_allowed(count, ["n"])
             else:
@@ -1811,7 +1831,7 @@ def _main() -> int:
                 notice = _block_loop_notice(count, ["n"])
                 if notice:
                     header_reason += "\n" + notice
-                print(json.dumps({"decision": "block", "reason": header_reason}))
+                _print_decision({"decision": "block", "reason": header_reason})
             return 0
         # (a)/(b)/(f)/(g) share one signal: did THIS RUN's own activity ship
         # non-docs code? Scoped to run_written_paths (atlas_db events +
@@ -1913,10 +1933,13 @@ def _main() -> int:
         failed = ev["failed"]
         if not failed:
             # Silence on pass is the contract: the gate speaks only when it blocks.
-            _block_loop_reset(session)  # the cap counts consecutive blocks only
+            # The cap counts consecutive blocks only. A pass whose (n) only
+            # failed open (empty, missing or sidechain text) proves no header,
+            # so it leaves a count that names (n) to accrue.
+            _block_loop_reset(session, keep="" if _reply_has_header(data) else "n")
             _record_pass()
             return 0
-        count, loop_exhausted = _block_loop_state(session, failed)
+        count, loop_exhausted = _block_loop_state(session, failed, continuation)
         if loop_exhausted:
             _note_loop_allowed(count, failed)
             return 0
@@ -1984,15 +2007,17 @@ def _main() -> int:
         notice = _block_loop_notice(count, failed)
         if notice:
             block_reason += "\n" + notice
-        print(json.dumps({"decision": "block", "reason": block_reason}))
+        _print_decision({"decision": "block", "reason": block_reason})
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session
         # Fail-open, but surface the swallowed crash on stderr so a silent
         # allow-through is at least observable in hook logs -- and (F3) state
-        # it in the model-visible stdout channel too, so a run cannot end with
-        # the gate silently disarmed.
-        print(
-            "[atlas] completion-gate FAIL-OPEN: an error disabled the gate for "
-            f"this Stop ({exc}); the done-conditions were NOT checked."
+        # it as a systemMessage the user sees (plain Stop stdout reaches only
+        # the debug log), so a run cannot end with the gate silently disarmed.
+        _print_decision(
+            {
+                "systemMessage": "[atlas] completion-gate FAIL-OPEN: an error disabled "
+                f"the gate for this Stop ({exc}); the done-conditions were NOT checked."
+            }
         )
         print(json.dumps({"decision": "fail-open", "error": str(exc)}), file=sys.stderr)
         atlas_hook_guard.fault("completion_gate", exc)
@@ -2109,22 +2134,25 @@ def _block_loop_limit() -> int:
         return BLOCK_LOOP_LIMIT
 
 
-def _block_loop_reset(session_id: str, letter: str = "") -> None:
+def _block_loop_reset(session_id: str, letter: str = "", keep: str = "") -> None:
     """Delete the `gate-loop-<session>` marker after a passing Stop so the cap
     counts consecutive blocks, not blocks across the whole session. With
     `letter`, only when the counted block named that letter and no other: a
     Stop that satisfies one condition without the others being evaluated must
     not restart their count. A signature such as `a,n` keeps accruing when
-    only the header is fixed, or (a) would never reach the cap. Never raises."""
+    only the header is fixed, or (a) would never reach the cap. With `keep`,
+    a count whose letters include it is left alone. Never raises."""
     try:
         path = os.path.join(
             atlas_hook_guard._state_dir(),
             "gate-loop-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session_id),
         )
-        if letter:
+        if letter or keep:
             with open(path, encoding="utf-8") as fh:
                 counted = fh.read().strip().rpartition(" ")[0].split(",")
-            if counted != [letter]:
+            if letter and counted != [letter]:
+                return
+            if keep and keep in counted:
                 return
         os.remove(path)
     except Exception:
@@ -2134,21 +2162,48 @@ def _block_loop_reset(session_id: str, letter: str = "") -> None:
 def _note_loop_allowed(count: int, failed: list) -> None:
     """F4: the Stop the loop cap allows is stated, not silent. The model-facing
     statement was the FINAL block notice; this stderr line keeps the bypass
-    observable in hook logs. Never raises."""
+    observable in hook logs, and the queued `systemMessage` (printed by
+    `_print_decision` or main()) tells the user the gate gave up: plain Stop
+    stdout reaches only the debug log. Never raises."""
     with contextlib.suppress(Exception):
+        snippet = _gate_block_snippet(failed)
         sys.stderr.write(
             "[atlas] completion-gate: allowed the Stop after "
-            f"{count} identical blocks; still open: "
-            f"{_gate_block_snippet(failed)}\n"
+            f"{count} identical blocks; still open: {snippet}\n"
         )
+        msg = (
+            f"[atlas] completion-gate gave up: it blocked {_block_loop_limit()} "
+            "times in a row on the same open conditions and allowed this Stop "
+            f"with them still open: {snippet}."
+        )
+        prior = _STOP.get("gave_up")
+        _STOP["gave_up"] = prior + " " + msg if prior else msg
 
 
-def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:
+def _print_decision(doc: dict) -> None:
+    """Print the one JSON object this Stop answers with, carrying any queued
+    gave-up notice as its `systemMessage` (one object: Claude Code parses the
+    whole stdout). Never raises."""
+    with contextlib.suppress(Exception):
+        msg = _STOP.pop("gave_up", None)
+        if msg:
+            prior = doc.get("systemMessage")
+            doc = dict(doc, systemMessage=prior + " " + msg if prior else msg)
+        print(json.dumps(doc))
+
+
+def _block_loop_state(
+    session_id: str, failed: list, continuation: bool = False
+) -> tuple[int, bool]:
     """Count the identical consecutive blocks and say when the cap is reached.
 
     Returns `(count, exhausted)`: `count` is how many times this exact `failed`
     letter set has blocked in a row for this session, `exhausted` True once
     that count exceeds BLOCK_LOOP_LIMIT -- the caller then ALLOWS the Stop.
+    On a `continuation` (stop_hook_active: the model is answering a block in
+    this same turn) a letter set that shares a letter with the last counted
+    one also counts on, so a chain whose header comes and goes while (a)
+    stays open still reaches the cap.
     State: `loop-<session>` marker holding `<letters> <count>`. Never raises;
     an unwritable marker means no cap, the lesser failure. The exhausted
     verdict is also recorded as one friction row (F4: the silent pass becomes
@@ -2173,7 +2228,9 @@ def _block_loop_state(session_id: str, failed: list) -> tuple[int, bool]:
         try:
             with open(path, encoding="utf-8") as fh:
                 last_sig, _, n = fh.read().strip().rpartition(" ")
-            if last_sig == sig:
+            if last_sig == sig or (
+                continuation and set(last_sig.split(",")) & set(failed)
+            ):
                 count = int(n) + 1
         except (OSError, ValueError):
             count = 1
@@ -2683,13 +2740,12 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
     status header. The text is `last_assistant_message` in the Stop payload
     (Claude Code supplies it; omp's stop bridge fills it from session_stop).
     Fails open (False) on: kill switch, unreadable contract, missing/empty
-    text, `stop_hook_active`, or any error."""
+    text, or any error. A `stop_hook_active` continuation is checked like a
+    fresh Stop; the loop cap ends an uncorrected chain."""
     try:
         if contract is None or _switch_off(
             _switch_name(contract, "header", _SWITCH_HEADER)
         ):
-            return False
-        if data.get("stop_hook_active"):
             return False
         text = data.get("last_assistant_message")
         if not isinstance(text, str):
@@ -2727,12 +2783,12 @@ def _run_paths_for(session: str, root: Path) -> list:
 
 
 def _reply_lacks_header(data: dict) -> bool:
-    """(n) on the reply text alone, for the two places main() decides before
-    evaluate(): the in-flight return and the stop_hook_active continuation.
-    True when a non-sidechain reply would fail the header check on a fresh
-    Stop. Fails open (False) exactly as `_status_header_would_block` does."""
+    """(n) on the reply text alone, for the place main() decides before
+    evaluate(): the in-flight return. True when a non-sidechain reply would
+    fail the header check. Fails open (False) exactly as
+    `_status_header_would_block` does."""
     return not _payload_is_sidechain(data) and _status_header_would_block(
-        dict(data, stop_hook_active=False), _contract_doc()
+        data, _contract_doc()
     )
 
 
@@ -2758,14 +2814,15 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
     forbids `done` while either holds. Unlike (i) this does not need shipped
     code, and unlike the in-flight silence it fires on the claim itself.
     Fails open ("") on the kill switch, an unreadable contract, a sidechain,
-    stop_hook_active, a non-string/headerless reply, or any error."""
+    a non-string/headerless reply, or any error. A stop_hook_active
+    continuation is checked like a fresh Stop (the loop cap ends a chain)."""
     try:
         contract = _contract_doc()
         if contract is None or _switch_off(
             _switch_name(contract, "doneClaim", _SWITCH_DONE)
         ):
             return ""
-        if data.get("stop_hook_active") or _payload_is_sidechain(data):
+        if _payload_is_sidechain(data):
             return ""
         text = data.get("last_assistant_message")
         if not isinstance(text, str):

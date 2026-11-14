@@ -21,6 +21,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 
@@ -47,12 +48,51 @@ def _json(path, default):
         return default
 
 
+def _read(path, kind):
+    """(value, ok). A missing file is ok (default); unreadable or wrong-shaped JSON is not."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            v = json.load(f)
+    except FileNotFoundError:
+        return kind(), True
+    except Exception:
+        return kind(), False
+    return (v, True) if isinstance(v, kind) else (kind(), False)
+
+
+def _sig(*paths):
+    """mtime_ns+size of each input file; any change to an input changes this."""
+    out = []
+    for p in paths:
+        try:
+            st = os.stat(p)
+            out.append([st.st_mtime_ns, st.st_size])
+        except OSError:
+            out.append(None)
+    return out
+
+
+def _bare_root(p):
+    """A system temp dir or the filesystem root: too broad to be a project on its own."""
+    temps = {os.path.realpath(t) for t in ("/tmp", "/var/folders", tempfile.gettempdir())}
+    return p in temps or os.path.dirname(p) == p
+
+
 def find_root(cwd, home=None):
-    """Nearest ancestor of cwd holding .atlas (never ~ itself: that is the global dir)."""
+    """Nearest ancestor of cwd holding .atlas; the search stops at ~ (the global dir).
+
+    A .atlas directly in the system temp dir or in / only counts when it is cwd
+    itself or the directory also holds .git (the marker atlas_paths uses), so a
+    stray /tmp/.atlas does not turn every project under /tmp into an atlas one.
+    """
     home = os.path.realpath(home or os.path.expanduser("~"))
-    p = os.path.realpath(cwd or os.getcwd())
+    start = p = os.path.realpath(cwd or os.getcwd())
     while True:
-        if p != home and os.path.isdir(os.path.join(p, ".atlas")):
+        if p == home:
+            return None
+        if os.path.isdir(os.path.join(p, ".atlas")) and (
+            p == start or not _bare_root(p) or os.path.exists(os.path.join(p, ".git"))
+        ):
             return p
         parent = os.path.dirname(p)
         if parent == p:
@@ -170,17 +210,24 @@ def segment(root, now=None, session=None, home=None):
     run = os.path.join(root, ".atlas", ".run")
     if not os.path.isdir(os.path.join(root, ".atlas")):
         return None
-    todos = _json(os.path.join(run, "todos.json"), {})
+    files = [os.path.join(run, n) for n in ("todos.json", "channels.json", "findings.json")]
+    todos, ok_t = _read(files[0], dict)
     session = session or todos.get("last_session_id")
     key = hashlib.sha256(("%s|%s" % (root, session)).encode()).hexdigest()[:12]
     cache = os.path.join(home, ".atlas", "status-segment-%s.json" % key)
+    sig = _sig(*files)
     c = _json(cache, {})
-    if now - float(c.get("at", 0)) < CACHE_S and isinstance(c.get("seg"), dict):
+    if (
+        now - float(c.get("at", 0)) < CACHE_S
+        and c.get("sig") == sig
+        and isinstance(c.get("seg"), dict)
+    ):
         return c["seg"]
 
+    raw_items = todos.get("items")
     items = [
         i
-        for i in todos.get("items", [])
+        for i in (raw_items if isinstance(raw_items, list) else [])
         if isinstance(i, dict)
         and not i.get("archived")
         and i.get("origin") != "advisor"
@@ -189,21 +236,27 @@ def segment(root, now=None, session=None, home=None):
     active = next((i for i in items if i.get("status") == "in_progress"), None)
     phase = (active or {}).get("phase") or "idle"
 
+    chans, ok_c = _read(files[1], dict)
+    chans = chans.get("channels")
+    if isinstance(chans, dict):
+        chans = list(chans.values())
     live = 0
-    for ch in (
-        _json(os.path.join(run, "channels.json"), {}).get("channels", {}).values()
-    ):
-        for m in ch.get("members", []):
-            if (
-                m.get("role") != "lead"
-                and not m.get("ended_at")
-                and now - float(m.get("joined", 0)) < LIVE_MAX_S
-            ):
+    for ch in chans if isinstance(chans, list) else []:
+        members = ch.get("members") if isinstance(ch, dict) else None
+        for m in members if isinstance(members, list) else []:
+            if not isinstance(m, dict) or m.get("role") == "lead" or m.get("ended_at"):
+                continue
+            try:
+                age = now - float(m.get("joined", 0))
+            except (TypeError, ValueError):
+                continue
+            if age < LIVE_MAX_S:
                 live += 1
 
+    found, ok_f = _read(files[2], list)
     stamps = [
         t
-        for f in _json(os.path.join(run, "findings.json"), [])
+        for f in found
         if isinstance(f, dict) and f.get("status") == "verified"
         for t in [_iso_epoch(f.get("verified_at"))]
         if t
@@ -219,12 +272,13 @@ def segment(root, now=None, session=None, home=None):
         scoring=state,
         scoring_detail=detail,
     )
-    try:
-        os.makedirs(os.path.dirname(cache), exist_ok=True)
-        with open(cache, "w", encoding="utf-8") as f:
-            json.dump({"at": now, "seg": seg}, f)
-    except Exception:
-        pass
+    if ok_t and ok_c and ok_f:  # never cache a parse failure
+        try:
+            os.makedirs(os.path.dirname(cache), exist_ok=True)
+            with open(cache, "w", encoding="utf-8") as f:
+                json.dump({"at": now, "sig": sig, "seg": seg}, f)
+        except Exception:
+            pass
     return seg
 
 

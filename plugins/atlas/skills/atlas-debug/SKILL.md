@@ -1,7 +1,7 @@
 ---
 name: atlas-debug
 description: "Finds and fixes the root cause of a reproducible bug, exception, stack trace or wrong output, with evidence. Use when a failure's cause is unknown."
-when_to_use: "stack trace, test failure, regression, why is this failing, root cause"
+when_to_use: "bug, wrong output, crash, find the cause, stack trace, test failure, regression, why is this failing, root cause"
 allowed-tools: Read, Glob, Grep, Bash
 argument-hint: '[context] [stack] [symptom] [paste error/log]'
 ---

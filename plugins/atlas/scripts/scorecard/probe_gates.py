@@ -39,9 +39,11 @@ class Gates:
     # -- plumbing ---------------------------------------------------------------
     def rec(self, gate, name, expect, r, note=""):
         d = core.hook_decision(r["out"])
-        # An allow that rewrites the call (updatedInput: injected name/channel) is still an allow.
+        # An allow that rewrites the call (updatedInput: injected name/channel) is still an allow, and so is an
+        # allow that only warns the user (systemMessage, e.g. the Stop gate giving up at its loop cap).
         allowed = d == "context" or (
-            d == "other" and '"permissionDecision": "allow"' in r["out"]
+            d == "other"
+            and ('"permissionDecision": "allow"' in r["out"] or '"systemMessage"' in r["out"])
         )
         ok = d == expect or (expect == "allow" and allowed)
         self.results.append(
@@ -755,7 +757,16 @@ class Gates:
             cg(stop(sA)),
         )
         self.rec(
-            G, "allow: stop_hook_active (block-once)", "allow", cg(stop(sA, sha=True))
+            G,
+            "deny: stop_hook_active continuation, nothing fixed (re-checked)",
+            "block",
+            cg(stop(sA, sha=True)),
+        )
+        self.rec(
+            G,
+            "allow: continuation past ATLAS_GATE_BLOCK_LOOP cap",
+            "allow",
+            cg(stop(sA, sha=True), {"ATLAS_GATE_BLOCK_LOOP": "1"}),
         )
         self.rec(
             G, "allow: ATLAS_GATE=off", "allow", cg(stop(sA), {"ATLAS_GATE": "off"})

@@ -216,8 +216,8 @@ def _is_stop_cycle(payload):
 def _answers_fresh_stop(state, payload, now):
     """True for the one forced continuation (stop_hook_active) that answers a
     fresh Stop. A blocked Stop always produces exactly that continuation, and
-    no atlas emit hook acts on it, so it belongs to the Stop cycle already
-    recorded: counting it made every blocked turn cost two burst events and
+    only the completion gate (recheck_continuation) acts on it, so it belongs
+    to the Stop cycle already recorded: counting it made every blocked turn cost two burst events and
     three blocked turns disarm the gate. A continuation that follows another
     continuation with no fresh Stop between is a chain (the incident's shape)
     and returns False, so it is counted like a fresh Stop.
@@ -366,7 +366,7 @@ def run_hook(hook_name, main):
         return 0
 
 
-def should_run(payload, hook_name, window_seconds=None, kind="emit"):
+def should_run(payload, hook_name, window_seconds=None, kind="emit", recheck_continuation=False):
     """False if this Stop hook must not act right now: a continuation it (or
     a sibling hook) forced, its own throttle window, or the session circuit
     breaker (main-session Stops only; it clears after a quiet window). True otherwise -- and on any internal error, since fail-open is
@@ -386,9 +386,16 @@ def should_run(payload, hook_name, window_seconds=None, kind="emit"):
     The circuit breaker and per-hook throttle window still apply to both
     kinds -- only the stop_hook_active short-circuit is kind-specific.
     Defaults to "emit" so any caller not yet updated keeps today's behavior.
+
+    `recheck_continuation=True` is for a GATE that must re-check the Stop
+    Claude Code sends after its own block: per the hooks docs, stop_hook_active
+    is true on every Stop while the turn continues because of a stop hook, so
+    silencing a gate there lets the model stop with nothing fixed. Such a
+    caller owns its own consecutive-block cap (completion_gate's
+    ATLAS_GATE_BLOCK_LOOP); the breaker and throttle still apply.
     """
     try:
-        if payload.get("stop_hook_active") and kind != "capture":
+        if payload.get("stop_hook_active") and kind != "capture" and not recheck_continuation:
             return False
 
         session_id = payload.get("session_id")

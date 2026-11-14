@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clip, contrast, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
@@ -51,6 +51,8 @@ export type MissionModel = {
   phase: string;
   /** The lead's last reply declared the blocked phase. */
   blocked?: boolean;
+  /** Why the lead declared it, when the snapshot says (the first blocked plan row's evidence): a declared block reads `blocked - needs your approval 1:12`, never a bare `blocked 1:12`. */
+  blockedWhy?: string;
   /** The gates that refused the session's last Stop (the completion gate's verdict, mod/data/runstate.ts); absent or empty: Stop did not block. Only this, or the lead's own declaration, makes the band BLOCKED. */
   stopGates?: readonly string[];
   done: number;
@@ -131,7 +133,9 @@ const r = (t: string, tone: Tone = 'text', bold = false): Run => (bold ? { t, to
 export const runsWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + textWidth(x.t), 0);
 /** Plain text of a row, for goldens and text surfaces. */
 export const runsText = (runs: readonly Run[]): string => runs.map((x) => x.t).join('');
-const padTo = (t: string, n: number): string => padEnd(clip(t, n), n);
+/** Cut to `n` cells with the HUD's one-cell ellipsis (atlas-ui clipEll; `~` in ASCII), never three dots. */
+const cut = (t: string, n: number, ui?: Pick<Ui, 'ascii'>): string => clipEll(t, n, ellOf(ui ?? { ascii: false }));
+const padTo = (t: string, n: number, ui?: Pick<Ui, 'ascii'>): string => padEnd(cut(t, n, ui), n);
 
 /** `left` then `right` flush to `cols`; right drops when both do not fit, then left is cut. */
 function spread(left: Run[], right: Run[], cols: number): Run[] {
@@ -140,12 +144,12 @@ function spread(left: Run[], right: Run[], cols: number): Run[] {
   return fitRuns(left, cols);
 }
 /** Cut runs to `cols` cells, the overflowing run clipped; pad to `cols`. */
-function fitRuns(runs: readonly Run[], cols: number): Run[] {
+function fitRuns(runs: readonly Run[], cols: number, ui?: Pick<Ui, 'ascii'>): Run[] {
   const out: Run[] = [];
   let left = cols;
   for (const x of runs) {
     if (left <= 0) break;
-    const t = clip(x.t, left);
+    const t = cut(x.t, left, ui);
     left -= textWidth(t);
     out.push({ ...x, t });
   }
@@ -261,6 +265,9 @@ const gatesToCheck = (failing: readonly string[]): string => `${failing.length} 
 export const dispatchHeld = (m: MissionModel): number => (!isAlive(m) && !m.busy ? Math.max(0, (m.openDispatch ?? 0) + (m.failedDispatch ?? 0)) : 0);
 /** The ONE blocked wording (state 38, data/runstate.ts blockedText): `▲ blocked · stop refused 0:37` or `▲ blocked · 1 failed 0:37`, on the band and on the transcript's blocked card alike. Two reasons only. */
 export const BLOCKED_TEXT = { stop: STOP_REFUSED, failed: (n: number): string => `${n} failed` } as const;
+/** The cells a declared blocked reason keeps on the band: the long form, then the short one the narrower forms draw. */
+const REASON_LONG = 40;
+const REASON_SHORT = 20;
 export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; flagged: boolean; idle: boolean; kind: BandKind; reason: { long: string; short: string }; refused: boolean } {
   const hold = !!m.holdBlocked; // wave 36: a blocked verdict the band has not confirmed yet (register.ts stepBlocked) is not shown
   const stopGates = hold ? [] : m.stopGates ?? [];
@@ -281,8 +288,10 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const kind: BandKind = computedKind === 'idle' && m.heldKind && m.heldKind !== 'idle' ? m.heldKind : computedKind;
   // State 38: two reasons only. The Stop hook refused (or the store holds a dispatch row Stop will refuse on): `stop refused`; otherwise the failed workers: `N failed` (a dead dispatch is a failure everywhere).
   const refused = blocked && (stopGates.length > 0 || held > 0);
-  const why = blockedText({ refused, failed: failedCount(m) });
-  const reason = { long: why, short: why };
+  // Neither reason and the lead declared the block: its own reason (the blocked plan row's evidence), cut with the one ellipsis; the short form keeps fewer cells of it.
+  const declared = m.blocked && !refused && failedCount(m) === 0 ? (m.blockedWhy ?? '').replace(/\s+/g, ' ').trim() : '';
+  const why = blockedText({ refused, failed: failedCount(m), why: clipEll(declared, REASON_LONG, ellOf(uiOf(m))) });
+  const reason = { long: why, short: declared ? blockedText({ refused, failed: 0, why: clipEll(declared, REASON_SHORT, ellOf(uiOf(m))) }) : why };
   return { blocked, ...(warn ? { warn } : {}), flagged: blocked || !!warn, idle: quiet && !warn, kind, reason, refused };
 }
 
@@ -404,7 +413,8 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
   const glue: Run = r(' · ', 'sub'); // critique 18 A3: always a middle dot between segments
   const seg = segmentedOn(m, ui); // wave 35: filled segments (state | plan | workers) instead of the dot-joined slab
   const blockedWords = blockedRuns(m, ui, true);
-  const lead = (o: LeadOpts): Run[] => (st.kind === 'done' && m.motion?.entry('band:lead')?.state === 'done' ? animateRow(leadRuns(m, ui, st, reason.long, o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, reason.long, o)); // wave 31: the done word fades 231, 151, 114; wave 34: only once the motion has seen `done` (an entry that still reads another state would mix a lead tint into the resting 114), so the fade steps down once and holds
+  const why = (o: LeadOpts): string => (o.reason === 'long' ? reason.long : reason.short); // the short and bare forms keep the short reason (one and the same for `stop refused` and `N failed`)
+  const lead = (o: LeadOpts): Run[] => (st.kind === 'done' && m.motion?.entry('band:lead')?.state === 'done' ? animateRow(leadRuns(m, ui, st, why(o), o), 'band:lead', 'done', m.motion, ui, BAND_OPTS) : leadRuns(m, ui, st, why(o), o)); // wave 31: the done word fades 231, 151, 114; wave 34: only once the motion has seen `done` (an entry that still reads another state would mix a lead tint into the resting 114), so the fade steps down once and holds
   // `phase n/m` only when no plan carries the progress (the lead's reply header and the plan's done count are two clocks).
   // The bar's label is `todo n/m` for the whole run (it read `phase 1/5` until the plan arrived, then flipped). With no plan items the bar says no count at all (`○ idle`, never `todo 0/0`). `word` false: `0/5`, the narrow form that keeps the clock.
   const todoSeg = (open: boolean, word = true): Run[] => (m.total ? [glue, r(`${word ? 'todo ' : ''}${fig.done}/${fig.total}${open ? openMore(m) : ''}`, 'sub')] : m.bar ? [] : [glue, r(`phase ${phaseNo}`, 'sub')]);
@@ -523,7 +533,7 @@ function richBand(m: MissionModel, ui: Ui): Line[] {
  * so the band draws none of its own (wave 33: `[-]  [-] │` showed two handles). */
 const roomFor = (m: MissionModel): number => m.cols;
 const withHandle = (m: MissionModel, runs: readonly Run[]): Run[] => {
-  const out = fitRuns(runs, m.cols);
+  const out = fitRuns(runs, m.cols, uiOf(m));
   const last = out[out.length - 1];
   const fill = [...runs].reverse().find((x) => x.bgHex !== undefined && x.t !== EDGE)?.bgHex;
   // Wave 35: a segmented bar's last fill runs on to the column's last cell (the pad fitRuns added takes that fill), so the host's `[-]` sits against the bar, not on the bare panel.
@@ -536,7 +546,7 @@ export function bandLines(m: MissionModel): Line[] {
   const ui = uiOf(m);
   if (m.rich && m.maxRows >= 3) {
     const rows = richBand(m, ui);
-    if (rows.every((l, i) => runsWidth(l.runs) <= (i === 0 ? roomFor(m) : m.cols))) return rows.map((l, i) => ({ ...l, runs: i === 0 ? withHandle(m, l.runs) : fitRuns(l.runs, m.cols) }));
+    if (rows.every((l, i) => runsWidth(l.runs) <= (i === 0 ? roomFor(m) : m.cols))) return rows.map((l, i) => ({ ...l, runs: i === 0 ? withHandle(m, l.runs) : fitRuns(l.runs, m.cols, uiOf(m)) }));
   }
   const forms = standardForms(m, ui);
   const room = roomFor(m);
@@ -579,13 +589,13 @@ function workerLine(w: MissionWorker, m: MissionModel, nameW: number): Line {
 }
 
 /** `+2 more · 1 waiting`: the hidden workers, with any that need attention named by state. */
-function moreLine(hidden: readonly MissionWorker[], cols: number): Line {
+function moreLine(hidden: readonly MissionWorker[], cols: number, ui?: Pick<Ui, 'ascii'>): Line {
   const waiting = hidden.filter((w) => w.state === 'waiting').length;
   const failed = hidden.filter((w) => w.state === 'failed').length;
   const runs: Run[] = [r(`   +${hidden.length} more`, 'sub')];
   if (waiting) runs.push(r(' · ', 'sub'), r(`${waiting} waiting`, 'text'));
   if (failed) runs.push(r(' · ', 'sub'), r(`${failed} failed`, 'text'));
-  return { runs: fitRuns(runs, cols) };
+  return { runs: fitRuns(runs, cols, ui) };
 }
 
 // ---- compact worker rows (the HUD lists the workers) ------------------------------------
@@ -637,12 +647,12 @@ function compactLine(w: MissionWorker, m: MissionModel, nameW: number): Line {
   const ui = uiOf(m);
   const st = uiStateOf(w.state);
   const ended = endedState(w);
-  const head = [r(' '), mark(w, m, ui), r(' '), r(padTo(w.name, nameW) + ' ', ended ? 'sub' : 'text', !ended), r(padTo(st, WORD_W), rowWordTone(st), st === 'failed')];
+  const head = [r(' '), mark(w, m, ui), r(' '), r(padTo(w.name, nameW, ui) + ' ', ended ? 'sub' : 'text', !ended), r(padTo(st, WORD_W, ui), rowWordTone(st), st === 'failed')];
   const clockText = clock(w.secs);
   const timeW = Math.max(TIME_W, clockText.length + 1); // `150:01:32` is the whole run, never cut to `150...`
-  const time = r(clip(clockText, timeW - 1).padStart(timeW - 1) + ' ', 'sub');
+  const time = r(cut(clockText, timeW - 1, ui).padStart(timeW - 1) + ' ', 'sub');
   const room = Math.max(0, m.cols - runsWidth(head) - timeW);
-  return { runs: [...head, ...fitRuns([r(compactDetail(w), 'sub')], room), time] };
+  return { runs: [...head, ...fitRuns([r(compactDetail(w), 'sub')], room, ui), time] };
 }
 
 /** The compact rows that follow the band's own row while the HUD lists the workers: `band` the rows they sit under, `rows` the worker rows, `after` what a running band keeps beneath them (the message, the footer);
@@ -653,7 +663,7 @@ function hudWorkerRows(m: MissionModel, running: boolean): { band: Line[]; rows:
   const foot = footerLines(m);
   // The message and the footer keep the rows the counts-only band gave them (planRows with no workers); the worker rows take what is left, in place of the breathing blanks.
   const plan = running ? planRows(m.maxRows - (band.length - 2), 0, !!m.note, foot.length) : { ticker: false, footerRows: 0 };
-  const extras: Line[] = plan.ticker && m.note ? [noteLine(m.note, m.cols)] : [];
+  const extras: Line[] = plan.ticker && m.note ? [noteLine(m.note, m.cols, uiOf(m))] : [];
   const tail: Line[] = foot.slice(foot.length - plan.footerRows);
   const slots = m.maxRows - band.length - extras.length - tail.length;
   if (slots < 1) return null;
@@ -671,11 +681,11 @@ function hudWorkerRows(m: MissionModel, running: boolean): { band: Line[]; rows:
 const NOTE_STATE: Record<string, string> = { dispatch: 'dispatched work', report: 'reported', say: 'sent a message' };
 export const noteState = (kind?: string): string => (kind ? NOTE_STATE[kind] : undefined) ?? 'sent a message';
 
-function noteLine(n: MissionNote, cols: number): Line {
+function noteLine(n: MissionNote, cols: number, ui?: Pick<Ui, 'ascii'>): Line {
   const left: Run[] = [r(' '), r(displayName(n.from), 'text', true), r(' to ', 'muted'), r(displayName(n.to), 'sub'), r('   ')];
   const right = n.at ? [r(` ${n.at} `, 'muted')] : [r(' ')];
   const room = cols - runsWidth(left) - runsWidth(right);
-  return { runs: [...left, ...fitRuns([r(noteState(n.kind), 'text')], Math.max(0, room)), ...right] };
+  return { runs: [...left, ...fitRuns([r(noteState(n.kind), 'text')], Math.max(0, room), ui), ...right] };
 }
 
 /** `checks  ● completion  ■ tripwire  ● routing  2/3 green`; when that does not fit, `checks  ■ tripwire  2/3 green` (failures only) or
@@ -706,7 +716,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
 function footerLines(m: MissionModel): Line[] {
   const keys = m.keysWidth ?? 0;
   const checks = checkRuns(m.checks, m.cols, uiOf(m));
-  return [...(checks.length ? [{ runs: fitRuns(checks, m.cols) }] : []), ...(keys > 0 ? [{ runs: [], keys: true }] : [])];
+  return [...(checks.length ? [{ runs: fitRuns(checks, m.cols, uiOf(m)) }] : []), ...(keys > 0 ? [{ runs: [], keys: true }] : [])];
 }
 
 // ---- row budget -----------------------------------------------------------------------
@@ -748,7 +758,7 @@ function idleLines(m: MissionModel): Line[] {
     const lastRow: Line[] = withLast && !joined.length && last.length && m.maxRows > band.length ? [{ runs: last }] : [];
     const head = [...band, ...lastRow];
     const footRows = foot.length && m.maxRows >= head.length + 1 ? Math.min(foot.length, m.maxRows - head.length) : 0;  // two footer rows when both show; the key row outlasts the checks row
-    const core = m.core?.length && m.maxRows >= head.length + 1 + footRows ? [{ runs: fitRuns(withLast && joined.length ? joined : m.core, m.cols) }] : [];
+    const core = m.core?.length && m.maxRows >= head.length + 1 + footRows ? [{ runs: fitRuns(withLast && joined.length ? joined : m.core, m.cols, uiOf(m)) }] : [];
     return { head, footRows, core };
   };
   // The contract row outranks the last-run row: when only one fits, the band keeps the same rows at every width (critique 9, the 110 band had no contract row).
@@ -769,7 +779,7 @@ function runningLines(m: MissionModel): Line[] {
   const nameW = workerNameW(m);
   const head: Line[] = [...band, ...(board ? [{ runs: [], board }] : [])];
   const rows: Line[] = shown.slice(0, plan.lanes).map((w) => workerLine(w, m, nameW));
-  const extras: Line[] = [...(plan.more ? [moreLine(shown.slice(plan.lanes), m.cols)] : []), ...(plan.ticker && m.note ? [noteLine(m.note, m.cols)] : [])];
+  const extras: Line[] = [...(plan.more ? [moreLine(shown.slice(plan.lanes), m.cols, uiOf(m))] : []), ...(plan.ticker && m.note ? [noteLine(m.note, m.cols, uiOf(m))] : [])];
   const tail: Line[] = foot.slice(foot.length - plan.footerRows); // the key row outlasts the checks row
   // Spare rows breathe: one blank under the band, then one between the workers and the message; the first to go.
   const spare = m.maxRows - (head.length - (board ? 1 : 0) + board) - rows.length - extras.length - tail.length;
@@ -786,11 +796,11 @@ export function missionLines(m: MissionModel): Line[] {
     // The worker rows sit directly under the band row (no breathing blank between them); an idle band keeps its core row and footer under them.
     const lines = running || m.cols < MID ? [...hud.band, ...hud.rows, ...hud.after] : (() => { const idle = idleLines({ ...m, rich: false }); return [...idle.slice(0, hud.band.length), ...hud.rows, ...idle.slice(hud.band.length)]; })();
     let used = 0;
-    return lines.filter((l) => (used += l.board ?? 1) <= m.maxRows).map((l) => (l.board || l.keys ? l : { ...l, runs: fitRuns(l.runs, m.cols) }));
+    return lines.filter((l) => (used += l.board ?? 1) <= m.maxRows).map((l) => (l.board || l.keys ? l : { ...l, runs: fitRuns(l.runs, m.cols, uiOf(m)) }));
   }
   if ((running && (m.cols < MID || m.maxRows < 3)) || (!running && m.cols < MID)) return bandLines({ ...m, rich: false });
   const lines = running ? runningLines(m) : idleLines(m);
   let used = 0;
   const kept = lines.filter((l) => (used += l.board ?? 1) <= m.maxRows); // a board slot counts as the rows it holds
-  return kept.map((l) => (l.board || l.keys ? l : { ...l, runs: fitRuns(l.runs, m.cols) }));
+  return kept.map((l) => (l.board || l.keys ? l : { ...l, runs: fitRuns(l.runs, m.cols, uiOf(m)) }));
 }

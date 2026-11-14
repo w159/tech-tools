@@ -75,8 +75,10 @@ optional on inventory endpoints (omit to span every accessible tenant).
 ```bash
 AUVIK_USERNAME=your_auvik_username
 AUVIK_API_KEY=your_auvik_api_key
-AUVIK_REGION=us1  # Optional: us1, us2, us3, us4, eu1, eu2, au1, ca1
+AUVIK_REGION=us1  # Optional: us1-us6, eu1, eu2, au1, ca1
 ```
+
+Set these in the environment of the process that launches the server. The server does not read a `.env` file. An `AUVIK_REGION` (or `x-auvik-region` header) that is not one of the regions below is ignored with a warning on stderr, and `us1` is used.
 
 #### Gateway mode (HTTP):
 Credentials are provided via request headers:
@@ -141,6 +143,7 @@ Auvik operates in multiple regions. Set the appropriate region:
 - `us2` - US West
 - `us3` - US Central
 - `us4` - US South
+- `us5`, `us6` - US
 - `eu1` - Europe West
 - `eu2` - Europe Central
 - `au1` - Australia

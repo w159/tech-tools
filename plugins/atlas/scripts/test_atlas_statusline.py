@@ -299,5 +299,97 @@ class PureHelperTests(unittest.TestCase):
         self.assertEqual(rgb(sl.heat_color(-1)), sl.HEAT[0])
 
 
+class TermWidth(unittest.TestCase):
+    def _env(self):
+        return mock.patch.dict(os.environ, {}, clear=False)
+
+    def test_arg_wins(self):
+        self.assertEqual(sl.term_width(77), 77)
+
+    def test_columns_env(self):
+        with mock.patch.dict(os.environ, {"COLUMNS": "91"}):
+            self.assertEqual(sl.term_width(None), 91)
+
+    def test_stderr_fallback_when_columns_unset(self):
+        env = {k: v for k, v in os.environ.items() if k != "COLUMNS"}
+        calls = []
+
+        def gts(fd):
+            calls.append(fd)
+            return os.terminal_size((80, 24))
+
+        with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(os, "get_terminal_size", gts):
+            self.assertEqual(sl.term_width(None), 80)
+        self.assertEqual(calls, [2])
+
+    def test_dev_tty_fallback_when_stderr_not_a_tty(self):
+        env = {k: v for k, v in os.environ.items() if k != "COLUMNS"}
+        opened, closed = [], []
+
+        def gts(fd):
+            if fd == 2:
+                raise OSError("not a tty")
+            return os.terminal_size((66, 24))
+
+        def fake_open(path, flags, *a, **k):
+            opened.append((path, flags))
+            return 99
+
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(os, "get_terminal_size", gts), \
+                mock.patch.object(os, "open", fake_open), \
+                mock.patch.object(os, "close", closed.append):
+            self.assertEqual(sl.term_width(None), 66)
+        self.assertEqual(opened, [("/dev/tty", os.O_RDONLY)])
+        self.assertEqual(closed, [99])
+
+    def test_default_120_when_nothing_answers(self):
+        env = {k: v for k, v in os.environ.items() if k != "COLUMNS"}
+        with mock.patch.dict(os.environ, env, clear=True), \
+                mock.patch.object(os, "get_terminal_size", side_effect=OSError), \
+                mock.patch.object(os, "open", side_effect=OSError):
+            self.assertEqual(sl.term_width(None), 120)
+
+
+class FallowOffRenderPath(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.home = os.path.join(self.tmp, "home")
+        os.makedirs(self.home)
+        self.bindir = os.path.join(self.tmp, "bin")
+        os.makedirs(self.bindir)
+        stub = os.path.join(self.bindir, "fallow")
+        with open(stub, "w") as f:
+            f.write('#!/bin/sh\nsleep 2\necho "fallow impact: 3 findings"\n')
+        os.chmod(stub, 0o755)
+        patcher = mock.patch.dict(os.environ, {"PATH": self.bindir + os.pathsep + os.environ["PATH"]})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.a = os.path.join(self.tmp, "a")
+        self.b = os.path.join(self.tmp, "b")
+        os.makedirs(self.a)
+        os.makedirs(self.b)
+
+    def test_cold_cwds_never_block_and_segment_appears_after_refresh(self):
+        for cwd in (self.a, self.b):
+            t = time.time()
+            self.assertEqual(sl.fallow_line(cwd, self.home), "")
+            self.assertLess(time.time() - t, 1.0)
+        deadline = time.time() + 15
+        got = {}
+        while time.time() < deadline and len(got) < 2:
+            for cwd in (self.a, self.b):
+                line = sl.fallow_line(cwd, self.home)
+                if line:
+                    got[cwd] = line
+            time.sleep(0.2)
+        self.assertEqual(got, {self.a: "fallow impact: 3 findings", self.b: "fallow impact: 3 findings"})
+
+    def test_refresh_fallow_cli_writes_per_cwd_cache(self):
+        sl.main(["--refresh-fallow", self.a, "--home", self.home])
+        self.assertEqual(sl.fallow_line(self.a, self.home), "fallow impact: 3 findings")
+
+
 if __name__ == "__main__":
     unittest.main()

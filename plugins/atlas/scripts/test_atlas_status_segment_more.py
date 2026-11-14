@@ -104,6 +104,93 @@ class FindRoot(TmpCase):
         self.assertIsNone(m.find_root(str(self.tmp / "h" / "sub"), str(self.tmp / "h")))
 
 
+class FindRootBounds(TmpCase):
+    def test_stray_atlas_in_system_temp_is_not_a_root(self):
+        tmpd = self.tmp / "systmp"
+        (tmpd / ".atlas").mkdir(parents=True)
+        (tmpd / "proj").mkdir()
+        with mock.patch("tempfile.gettempdir", return_value=str(tmpd)):
+            self.assertIsNone(m.find_root(str(tmpd / "proj"), str(self.tmp / "h")))
+
+    def test_system_temp_is_a_root_when_it_is_the_cwd(self):
+        tmpd = self.tmp / "systmp"
+        (tmpd / ".atlas").mkdir(parents=True)
+        with mock.patch("tempfile.gettempdir", return_value=str(tmpd)):
+            self.assertEqual(m.find_root(str(tmpd), str(self.tmp / "h")), str(tmpd.resolve()))
+
+    def test_system_temp_with_git_marker_is_a_root(self):
+        tmpd = self.tmp / "systmp"
+        (tmpd / ".atlas").mkdir(parents=True)
+        (tmpd / ".git").mkdir()
+        (tmpd / "proj").mkdir()
+        with mock.patch("tempfile.gettempdir", return_value=str(tmpd)):
+            self.assertEqual(m.find_root(str(tmpd / "proj"), str(self.tmp / "h")), str(tmpd.resolve()))
+
+    def test_search_stops_at_home(self):
+        # a .atlas ABOVE home must not be found from a cwd under home
+        (self.tmp / ".atlas").mkdir()
+        (self.tmp / "h" / "proj").mkdir(parents=True)
+        self.assertIsNone(m.find_root(str(self.tmp / "h" / "proj"), str(self.tmp / "h")))
+
+
+class SegmentShapes(TmpCase):
+    def proj(self, **files):
+        root, home = self.tmp / "proj", self.tmp / "home"
+        run = root / ".atlas" / ".run"
+        run.mkdir(parents=True)
+        (home / ".atlas").mkdir(parents=True)
+        for name, raw in files.items():
+            (run / name).write_text(raw if isinstance(raw, str) else json.dumps(raw))
+        return str(root), str(home), run
+
+    def line(self, root, home, now=NOW):
+        return m.line_for(root, home=home, color=False, now=now)
+
+    def test_todos_list(self):
+        root, home, _ = self.proj(**{"todos.json": []})
+        self.assertTrue(self.line(root, home).startswith("atlas  idle"))
+
+    def test_channels_empty_list(self):
+        root, home, _ = self.proj(**{"channels.json": []})
+        self.assertIn("0 live", self.line(root, home))
+
+    def test_channels_list_valued(self):
+        root, home, _ = self.proj(**{"channels.json": {"channels": []}})
+        self.assertIn("0 live", self.line(root, home))
+
+    def test_members_null_and_joined_garbage(self):
+        chans = {"channels": {"a": {"members": None},
+                              "b": {"members": [{"role": "w", "joined": "abc"},
+                                                {"role": "w", "joined": NOW - 5}]},
+                              "c": None}}
+        root, home, _ = self.proj(**{"channels.json": chans})
+        self.assertIn("1 live", self.line(root, home))
+
+    def test_findings_not_a_list(self):
+        root, home, _ = self.proj(**{"findings.json": {"x": 1}})
+        self.assertIn("verified never", self.line(root, home))
+
+    def test_items_not_a_list(self):
+        root, home, _ = self.proj(**{"todos.json": {"items": 5}})
+        self.assertTrue(self.line(root, home).startswith("atlas  idle"))
+
+    def test_truncated_todos_not_cached(self):
+        root, home, run = self.proj(**{"todos.json": '{"last_session_id": "s1", "items": [{"sta'})
+        self.assertTrue(self.line(root, home).startswith("atlas  idle"))
+        good = {"items": [{"status": "in_progress", "phase": "implement"}]}
+        (run / "todos.json").write_text(json.dumps(good))
+        self.assertTrue(self.line(root, home, NOW + 1).startswith("atlas  implement"))
+
+    def test_cache_invalidated_when_progress_changes(self):
+        def todos(done):
+            items = [{"status": "completed" if i < done else "pending", "session_id": "s1"} for i in range(2)]
+            return {"last_session_id": "s1", "items": items}
+        root, home, run = self.proj(**{"todos.json": todos(1)})
+        self.assertIn("1/2", self.line(root, home))
+        (run / "todos.json").write_text(json.dumps(todos(2)))
+        self.assertIn("2/2", self.line(root, home, NOW + 1))
+
+
 class IsoEpoch(unittest.TestCase):
     def test_parse_and_bad(self):
         self.assertEqual(m._iso_epoch("1970-01-01T00:00:10+00:00"), 10.0)
@@ -216,14 +303,18 @@ class SegmentCache(TmpCase):
             (run / "findings.json").write_text(json.dumps(findings))
         return str(self.tmp / "proj"), str(self.tmp / "home")
 
-    def test_cache_hit_returns_cached_seg_within_60s(self):
+    def test_cache_hit_returns_cached_seg_within_60s_when_inputs_unchanged(self):
         root, home = self.project()
         first = m.segment(root, NOW, home=home)
+        with mock.patch.object(m, "_scoring", side_effect=AssertionError("recomputed")):
+            self.assertEqual(m.segment(root, NOW + 59, home=home), first)
+
+    def test_changed_input_invalidates_cache_within_60s(self):
+        root, home = self.project()
+        m.segment(root, NOW, home=home)
         (Path(root) / ".atlas" / ".run" / "todos.json").write_text(json.dumps(
             {"last_session_id": "s1", "items": [{"status": "completed", "session_id": "s1"}]}))
-        again = m.segment(root, NOW + 59, home=home)
-        self.assertEqual(again, first)
-        self.assertEqual(again["total"], 0)
+        self.assertEqual(m.segment(root, NOW + 59, home=home)["total"], 1)
 
     def test_cache_expires_at_60s(self):
         root, home = self.project()
@@ -237,7 +328,9 @@ class SegmentCache(TmpCase):
         s = m.segment(root, NOW, home=home)
         key = hashlib.sha256(("%s|s1" % root).encode()).hexdigest()[:12]
         data = json.loads((Path(home) / ".atlas" / ("status-segment-%s.json" % key)).read_text())
-        self.assertEqual(data, {"at": NOW, "seg": s})
+        self.assertEqual(data["at"], NOW)
+        self.assertEqual(data["seg"], s)
+        self.assertIn("sig", data)
 
     def test_unwritable_cache_does_not_raise(self):
         root, home = self.project()

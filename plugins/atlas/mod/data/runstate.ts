@@ -128,11 +128,11 @@ const OPEN_GATE = /\bopen\b|todos? drained/;
 /** Every refusing gate is about open work (`1 dispatch row open`, `todos drained`) or has no words (`stop refused`, `retry stop`): the open rows themselves are the reason (wave 33), named by the band as `1 dispatch open`. */
 export const openWorkOnly = (stopGates: readonly string[]): boolean => stopGates.every((g) => OPEN_GATE.test(g) || g === 'stop refused' || g === 'retry stop');
 
-/** The ONE blocked wording (state 38): a blocked band and a blocked card print exactly this and nothing else. Only two reasons exist: `stop refused` (the Stop hook refused, or the store holds an open dispatch row that Stop will refuse on) and, otherwise,
- * `N failed`. `secs` (the run clock) rides after it (`stop refused 0:37`). Neither reason: '' (a bare `blocked`). */
+/** The ONE blocked wording (state 38): a blocked band and a blocked card print exactly this and nothing else. Two reasons come first: `stop refused` (the Stop hook refused, or the store holds an open dispatch row that Stop will refuse on) and, otherwise,
+ * `N failed`. Neither: the lead's own declared reason (`why`, a blocked plan row's evidence: `needs your approval on the schema change`), else '' (a bare `blocked`). `secs` (the run clock) rides after it (`stop refused 0:37`). */
 export const STOP_REFUSED = 'stop refused';
-export function blockedText(o: { refused: boolean; failed: number; secs?: number | undefined }): string {
-	const why = o.refused ? STOP_REFUSED : o.failed > 0 ? `${o.failed} failed` : '';
+export function blockedText(o: { refused: boolean; failed: number; secs?: number | undefined; why?: string | undefined }): string {
+	const why = o.refused ? STOP_REFUSED : o.failed > 0 ? `${o.failed} failed` : (o.why ?? '').replace(/\s+/g, ' ').trim();
 	return why !== '' && o.secs !== undefined && Number.isFinite(o.secs) ? `${why} ${elapsedClock(o.secs)}` : why;
 }
 

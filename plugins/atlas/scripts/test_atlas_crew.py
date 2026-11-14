@@ -2335,7 +2335,61 @@ class RunDirHelpers(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
         out = json.loads(buf.getvalue())
-        self.assertEqual((code, out.pop("sig") != "", out), (0, True, {"ok": True}))
+        self.assertEqual((code, out), (0, {"ok": True, "summary": str(rundir / "summary.json")}))
+
+    def _full_summary(self, **over):
+        """A summary shaped like the engine's: 8 workers, one stopped by the supervisor after its verified DONE."""
+        names = [f"w{i}" for i in range(8)]
+        body = {
+            "ok": True, "killed": False, "failed_workers": [], "late_exits": {}, "pending_exits": [], "run": "r1",
+            "check": "python3 -m pytest -q", "check_exit": 0, "check_tail": "434 passed", "wall_s": 18.3,
+            "rounds": [{"round": 0, "all_exited": True, "check_exit": 0, "check_cached": [f"tests/test_{n}.py" for n in names], "t": 18.3}],
+            "workers": [
+                {"name": n, "exit": 143 if n == "w7" else 0, "wall_s": 10.1, "turns": 3, "tokens": 6000, "cost_usd": 0.02,
+                 **({"stopped_after_done": True} if n == "w7" else {}), "gate_refusals": 0, "own_check_passed": True}
+                for n in names
+            ],
+            "tokens_workers": {"total": 48000, "cost_usd": 0.16},
+            "irc": {"messages": 9, "from_workers": 0},
+            "transcripts": "/x/logs", "channel_log": "/x/irc/log.jsonl", "changelog": None,
+        }
+        body.update(over)
+        return names, body
+
+    def test_cmd_wait_prints_the_lead_view_not_the_whole_summary(self):
+        # the lead reads this line and answers from it: the per-worker rows, rounds, irc counters and paths cost it
+        # bytes and a turn spent explaining a supervisor stop (exit 143) that is no failure. summary.json keeps all.
+        names, body = self._full_summary()
+        rundir, _ = self._run(names=names, plan={"workers": [{"name": n, "owns": [f"kit/{n}.py"]} for n in names]})
+        (rundir / "supervisor.pid").write_text("1")
+        self._seal(rundir, body)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
+        out = json.loads(buf.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(out, {
+            "ok": True, "run": "r1", "check": "python3 -m pytest -q", "check_exit": 0, "check_tail": "434 passed",
+            "wall_s": 18.3, "workers": names, "files": [f"kit/{n}.py" for n in names], "tokens": 48000,
+            "summary": str(rundir / "summary.json"),
+        })
+        self.assertNotIn("143", buf.getvalue())
+        self.assertLess(len(buf.getvalue()), len(json.dumps(body)) / 2)
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
+        import gate_rerun
+
+        self.assertTrue(gate_rerun._engine_json(buf.getvalue(), "r1"))  # the Stop gate still credits the run
+
+    def test_the_lead_view_keeps_every_reason_a_run_is_not_clean(self):
+        names, body = self._full_summary(
+            ok=False, killed=True, failed_workers=[{"name": "w1", "exit": 1, "why": "exited 1"}],
+            late_exits={"w2": 137}, pending_exits=["w3"], check_exit=1, check_tail="1 failed", changelog="CHANGELOG.md",
+        )
+        rundir, _ = self._run(names=names)
+        view = atlas_crew.lead_view(body, rundir)
+        for k in ("killed", "failed_workers", "late_exits", "pending_exits", "changelog"):
+            self.assertEqual(view[k], body[k], k)
+        self.assertEqual((view["ok"], view["check_exit"], view["check_tail"]), (False, 1, "1 failed"))
 
     def test_cmd_wait_exit_code_follows_the_summary(self):
         rundir, _ = self._run()
@@ -2356,7 +2410,7 @@ class RunDirHelpers(unittest.TestCase):
         with contextlib.redirect_stdout(buf):
             atlas_crew.cmd_wait(types.SimpleNamespace(root=str(self.root), run="r1", timeout=5))
         self.assertEqual(1, len(buf.getvalue().splitlines()))
-        self.assertEqual(summary, {k: v for k, v in json.loads(buf.getvalue()).items() if k != "sig"})
+        self.assertEqual({"ok": True, "run": "r1", "workers": ["a"], "summary": str(rundir / "summary.json")}, json.loads(buf.getvalue()))
 
     def _wait_cli(self, run="r1", timeout="1"):
         r = subprocess.run([sys.executable, str(Path(atlas_crew.__file__).resolve()), "wait", "--run", run, "--root", str(self.root),
@@ -3317,11 +3371,12 @@ class SealedRunLiveTests(unittest.TestCase):
             self.assertEqual(code, 0, out)
             summary = json.loads(out)
             self.assertIs(summary["ok"], True)
-            self.assertTrue(summary["sig"])
+            rundir = atlas_crew._run_dir(Path(tmp, "proj"), "crew-live")
+            self.assertTrue(json.loads((rundir / "summary.json").read_text())["sig"])
+            self.assertEqual(summary["summary"], str(rundir / "summary.json"))
             code, out = self._engine(tmp, "wait", "--run", "crew-live", "--root", str(Path(tmp, "proj")), "--timeout", "5")
             self.assertEqual(code, 0, out)
             self.assertEqual(json.loads(out), summary)
-            rundir = atlas_crew._run_dir(Path(tmp, "proj"), "crew-live")
             self.assertIsNone(atlas_crew_seal.verify(rundir))
 
     def test_a_real_summary_edited_after_signing_is_refused(self):

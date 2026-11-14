@@ -8,9 +8,9 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.19.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.20.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 11 JSON contracts                                              |
+| Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
@@ -311,6 +311,11 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
   run was not killed. It also lists `failed_workers`, `late_exits`,
   `pending_exits` and `killed`. A worker whose files changed after its DONE has
   its unit check re-run and fails the crew if it is red.
+- `run --wait` and `wait` print a short verdict line for the lead: `ok`, the
+  check, `check_exit`, `check_tail`, `wall_s`, the worker names, the files they
+  own, the token total and the path of the full `summary.json`. The failure
+  fields above appear only when set. Per-worker rows, rounds and IRC counters
+  stay in `summary.json`.
 - Dead workers are noticed: each launch writes a pid file, and a dead pid is
   recorded within 0.5 s as exit 137 `died` (no pid after 60 s is `died` too). A
   failed `tmux new-window` is exit 126 `launch_error`. The supervisor no longer
@@ -376,6 +381,13 @@ both sizes. 1/4 of the wall time is not met: the floor is the slowest worker's o
 about 11 s of lead time. Crew time stayed flat from 8 to 16 modules while plain time grew; that is a trend from
 two sizes, not a measured 1/4. Method and trials that did not help:
 [2026-11-14_atlas-17.18.0-crew-time.md](../../docs/audits/2026-11-14_atlas-17.18.0-crew-time.md).
+
+Atlas 17.20.0 (n=3 per cell, same model and harness, 4 CPUs). 8 modules (434 tests): cold mean 27.5 s (52% of
+plain), warm mean 23.0 s (47%), about 148k tokens (45% of plain cold). 16 modules (869 tests): cold mean 31.2 s
+(26%), warm mean 28.8 s (24%), about 215k tokens (33-36%). Plain one prompt on that box: 53.0 s and 118.5 s cold.
+1/4 of the wall time is met warm at 16 modules and not at 8. 17.18.0 on the same box is within noise of these
+numbers, so the gain over the earlier 29% comes from the slower plain run here, not a faster crew. Tables:
+[2026-11-14_atlas-17.20.0-expert-audit.md](../../docs/audits/2026-11-14_atlas-17.20.0-expert-audit.md).
 
 A cold crew costs more dollars than one prompt (about $0.26 against $0.19 on 17.16.0): each worker pays its own
 cache creation.
@@ -554,10 +566,10 @@ fork, so their judgment starts clean.
 
 ## Hooks
 
-19 hook programs / 23 bindings. `hooks/hooks.json` holds 14 commands on 9 events
+19 hook programs / 24 bindings. `hooks/hooks.json` holds 15 commands on 9 events
 (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStart,
 SubagentStop, SessionEnd, PreCompact); two of them are `event_dispatch.py`, which
-runs the other hooks in-process, and the count of bindings is the 12 other commands
+runs the other hooks in-process, and the count of bindings is the 13 other commands
 plus the 11 hooks the dispatcher runs. `hooks/event_dispatch.py` runs the PreToolUse and PostToolUse hooks in
 one process per tool event, each with its original matcher and a time slice;
 `hooks/stop_tail.py` does the same for four Stop hooks. Measured on 16.0.0,
@@ -1205,7 +1217,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.19.0
+|-- .claude-plugin/plugin.json   manifest, version 17.20.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

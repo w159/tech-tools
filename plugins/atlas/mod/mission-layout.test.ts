@@ -260,3 +260,15 @@ describe('mission-layout: a full plan with open store work never reads as all do
     expect(band(model({ cols: 150, done: 5, total: 5, openWork: 1, openDispatch: 1 }))).toContain('blocked · stop refused');
   });
 });
+
+describe('mission-layout: one ellipsis with the HUD (critic fix 4)', () => {
+  const ELLIPSIS = String.fromCharCode(0x2026);
+  test('a cut worker name ends in the HUD ellipsis, never three dots', () => {
+    const lines = rows(model({ cols: 100, workers: [w('a-very-long-worker-name-indeed', 'running', { tool: 'Grep' })] }));
+    const row = lines.find((r) => r.includes('a-very-long'))!;
+    expect(row).toContain(`a-very-long-worke${ELLIPSIS}`);
+    expect(lines.join('\n')).not.toContain('...');
+    const ascii = missionLines(model({ cols: 100, ui: { ...ui, ascii: true }, workers: [w('a-very-long-worker-name-indeed', 'running', { tool: 'Grep' })] })).map((l) => runsText(l.runs));
+    expect(ascii.find((r) => r.includes('a-very-long'))!).toContain('a-very-long-worke~');
+  });
+});

@@ -355,11 +355,29 @@ def _module_mutables(mod: Module) -> dict[str, int]:
     return names
 
 
+MUTABLE_FACTORIES = {"dict", "list", "set", "bytearray", "defaultdict", "OrderedDict", "deque", "Counter", "collections.defaultdict",
+                     "collections.OrderedDict", "collections.deque", "collections.Counter"}
+
+
+def _mutable_defaults(mod: Module, func: ast.AST) -> list[Finding]:
+    """A list/dict/set default is built once and shared by every call."""
+    a = func.args
+    pairs = list(zip(reversed(list(getattr(a, "posonlyargs", [])) + a.args), reversed(a.defaults))) + [(p, d) for p, d in zip(a.kwonlyargs, a.kw_defaults) if d is not None]
+    out = []
+    for param, default in pairs:
+        literal = isinstance(default, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp))
+        factory = isinstance(default, ast.Call) and (mod.dotted(default.func) or "") in MUTABLE_FACTORIES
+        if literal or factory:
+            out.append(mod.finding("STATE001", default, f"Mutable default for '{param.arg}' in '{func.name}' is shared across calls; default to None and create it inside.", end_line=default.lineno))
+    return out
+
+
 def check_state001(mod: Module, opts: dict) -> list[Finding]:
     out = []
     mutables = _module_mutables(mod)
     for func in _functions(mod):
         fa = func.args
+        out.extend(_mutable_defaults(mod, func))
         local = {a.arg for a in fa.posonlyargs + fa.args + fa.kwonlyargs}
         local |= {a.arg for a in (fa.vararg, fa.kwarg) if a is not None}
         declared_global = {n for g in _own_nodes(func) if isinstance(g, ast.Global) for n in g.names}
@@ -419,6 +437,9 @@ def _released_in_finally(mod: Module, node: ast.AST) -> bool:
     # acquired then released by a later try/finally in the same function; close() must be called on the bound name
     bound = _bound_names(mod, node)
     for n in _own_nodes(func):
+        if isinstance(n, (ast.With, ast.AsyncWith)) and n.lineno > node.lineno \
+                and any(isinstance(i.context_expr, ast.Name) and i.context_expr.id in bound for i in n.items):
+            return True  # resp = urlopen(..); with resp: ...
         if isinstance(n, ast.Try) and n.finalbody and n.lineno > node.lineno:
             for m in ast.walk(ast.Module(body=n.finalbody, type_ignores=[])):
                 if isinstance(m, ast.Call) and isinstance(m.func, ast.Attribute) and m.func.attr == "close" \
@@ -481,38 +502,171 @@ def _sql_like(segments: list[str]) -> bool:
     return any(SQL_START.match(seg) for seg in segments) or bool(SQL_STRUCTURE.search(" ".join(segments)))
 
 
-def _tainted(expr: ast.AST) -> bool:
-    return _formatted(expr) and _sql_like(_segments(expr))
+ANY_LINE = 10 ** 9  # "before" bound that admits every module-level assignment
+PLACEHOLDER_SEP = re.compile(r"[\s,]*")
 
 
-def _concat_tainted(parts: list[ast.AST]) -> bool:
+def _is_placeholder_text(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value.strip(" ,") != "" \
+        and set(node.value) <= set("?, ")
+
+
+def _is_placeholder_join(node: ast.AST) -> bool:
+    """`",".join("?" for _ in xs)`, `",".join("?" * n)`, `", ".join(["?"] * n)`: only '?' and commas."""
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "join"
+            and isinstance(node.func.value, ast.Constant) and isinstance(node.func.value.value, str)
+            and PLACEHOLDER_SEP.fullmatch(node.func.value.value) and len(node.args) == 1):
+        return False
+    arg = node.args[0]
+    if isinstance(arg, (ast.GeneratorExp, ast.ListComp)):
+        return _is_placeholder_text(arg.elt)
+    if isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Mult):
+        parts = (arg.left, arg.right)
+        return any(_is_placeholder_text(p) or (isinstance(p, ast.List) and len(p.elts) == 1 and _is_placeholder_text(p.elts[0])) for p in parts)
+    return False
+
+
+def _is_int_const(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool)
+
+
+def _assignments(scope_nodes, name: str, before: int):
+    out = []
+    for n in scope_nodes:
+        if isinstance(n, ast.Assign) and n.lineno < before and any(isinstance(t, ast.Name) and t.id == name for t in n.targets):
+            out.append(n)
+        elif isinstance(n, ast.AnnAssign) and n.lineno < before and isinstance(n.target, ast.Name) and n.target.id == name and n.value is not None:
+            out.append(n)
+    return out
+
+
+def _safe_name(mod: Module, name: ast.Name) -> bool:
+    """A Name that is provably an int or a '?'-placeholder list: a local/module assignment, or an `int` parameter."""
+    func = mod.enclosing(name, FUNC)
+    if func is not None:
+        local = _assignments(list(_own_nodes(func)), name.id, name.lineno)
+        if local:
+            return _safe_value(mod, max(local, key=lambda n: n.lineno).value)
+        a = func.args
+        for arg in list(getattr(a, "posonlyargs", [])) + a.args + a.kwonlyargs:
+            if arg.arg == name.id:
+                return isinstance(arg.annotation, ast.Name) and arg.annotation.id == "int"
+    top = _assignments(mod.tree.body, name.id, ANY_LINE)
+    return bool(top) and all(t.value is not None and _is_int_const(t.value) for t in top)
+
+
+def _safe_value(mod: Module, node: ast.AST) -> bool:
+    """Interpolating this value cannot inject SQL: an int, or a string made only of '?' and commas."""
+    if _is_int_const(node) or _is_placeholder_join(node):
+        return True
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ("int", "len") and not mod.imports.get(node.func.id):
+        return True
+    if isinstance(node, ast.Name):
+        return _safe_name(mod, node)
+    return False
+
+
+def _tainted(mod: Module, expr: ast.AST) -> bool:
+    return _formatted(mod, expr) and _sql_like(_segments(expr))
+
+
+def _concat_tainted(mod: Module, parts: list[ast.AST]) -> bool:
     """Query text built from a base assignment plus later `+=` pieces, at least one of them dynamic."""
-    dynamic = any(_formatted(p) or any(not isinstance(n, ast.Constant) for n in ast.walk(p)) for p in parts)
+    dynamic = any(_formatted(mod, p) or any(not isinstance(n, ast.Constant) for n in ast.walk(p)) for p in parts)
     return dynamic and _sql_like([seg for p in parts for seg in _segments(p)])
 
 
-def _formatted(expr: ast.AST) -> bool:
+def _format_args(expr: ast.AST) -> list[ast.AST]:
+    if isinstance(expr, ast.Call):
+        return list(expr.args) + [k.value for k in expr.keywords]
+    right = expr.right
+    return list(right.elts) if isinstance(right, ast.Tuple) else list(right.values) if isinstance(right, ast.Dict) else [right]
+
+
+def _formatted(mod: Module, expr: ast.AST) -> bool:
     if isinstance(expr, ast.JoinedStr):
-        return any(isinstance(v, ast.FormattedValue) for v in expr.values)
+        return any(isinstance(v, ast.FormattedValue) and not _safe_value(mod, v.value) for v in expr.values)
     if isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.Mod):
-        return isinstance(expr.left, (ast.Constant, ast.JoinedStr)) and not isinstance(getattr(expr.left, "value", ""), (int, float))
+        if not (isinstance(expr.left, (ast.Constant, ast.JoinedStr)) and not isinstance(getattr(expr.left, "value", ""), (int, float))):
+            return False
+        return not all(_safe_value(mod, a) for a in _format_args(expr))
     if isinstance(expr, ast.BinOp) and isinstance(expr.op, ast.Add):
         sides = (expr.left, expr.right)
-        has_str = any(isinstance(s, ast.Constant) and isinstance(s.value, str) for s in sides) or any(_formatted(s) for s in sides)
-        has_dyn = any(not isinstance(s, ast.Constant) for s in sides)
+        has_str = any(isinstance(s, ast.Constant) and isinstance(s.value, str) for s in sides) or any(_formatted(mod, s) for s in sides)
+        has_dyn = any(not isinstance(s, ast.Constant) and not _safe_value(mod, s) for s in sides)
         return has_str and has_dyn
     if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute) and expr.func.attr == "format":
-        return isinstance(expr.func.value, ast.Constant) and isinstance(expr.func.value.value, str)
+        if not (isinstance(expr.func.value, ast.Constant) and isinstance(expr.func.value.value, str)):
+            return False
+        return not all(_safe_value(mod, a) for a in _format_args(expr))
     return False
+
+
+SHELL_CALLS = {"os.system", "os.popen", "subprocess.getoutput", "subprocess.getstatusoutput"}
+SUBPROCESS_CALLS = {"subprocess.run", "subprocess.call", "subprocess.check_call", "subprocess.check_output", "subprocess.Popen"}
+UNPICKLE_CALLS = {"pickle.load", "pickle.loads", "_pickle.load", "_pickle.loads", "cPickle.load", "cPickle.loads",
+                  "dill.load", "dill.loads", "marshal.load", "marshal.loads", "yaml.unsafe_load", "yaml.unsafe_load_all"}
+YAML_LOADS = {"yaml.load", "yaml.load_all"}
+SAFE_LOADERS = ("SafeLoader", "CSafeLoader", "BaseLoader", "CBaseLoader")
+HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "options", "request", "send", "stream", "Client", "AsyncClient", "Session"}
+
+
+def _literal_string(mod: Module, node: ast.AST) -> bool:
+    if isinstance(node, ast.Constant):
+        return True
+    if isinstance(node, ast.Name):
+        func = mod.enclosing(node, FUNC)
+        scope = list(_own_nodes(func)) if func is not None else []
+        found = _assignments(scope, node.id, node.lineno) or _assignments(mod.tree.body, node.id, ANY_LINE)
+        return bool(found) and all(isinstance(t.value, ast.Constant) for t in found)
+    return False
+
+
+def _kw(node: ast.Call, name: str):
+    return next((k.value for k in node.keywords if k.arg == name), None)
+
+
+def _unsafe_call(mod: Module, node: ast.Call) -> str | None:
+    """Message for a call that hands untrusted text to a shell/interpreter/unpickler or turns TLS checks off."""
+    name = mod.dotted(node.func) or ""
+    first = node.args[0] if node.args else None
+    if name in SHELL_CALLS and first is not None and not _literal_string(mod, first):
+        return f"'{name}()' runs a non-constant command through the shell; pass an argument list to subprocess without shell=True."
+    if name in SUBPROCESS_CALLS and first is not None and not _literal_string(mod, first):
+        shell = _kw(node, "shell")
+        if isinstance(shell, ast.Constant) and shell.value is True:
+            return f"'{name}(shell=True)' with a non-constant command allows shell injection; pass an argument list."
+    if name in ("eval", "exec") and first is not None and not isinstance(first, ast.Constant):
+        return f"'{name}()' on a non-literal value executes arbitrary code; use ast.literal_eval or a parser."
+    if name in UNPICKLE_CALLS and not (first is not None and isinstance(first, ast.Constant)):
+        return f"'{name}()' deserializes untrusted data into objects and can run code; use JSON or a safe loader."
+    if name in YAML_LOADS:
+        loader = _kw(node, "Loader") or (node.args[1] if len(node.args) > 1 else None)
+        loader_name = (mod.dotted(loader) or "") if loader is not None else ""
+        if not loader_name.endswith(SAFE_LOADERS):
+            return f"'{name}()' without a SafeLoader can construct arbitrary objects; use yaml.safe_load."
+    verify = _kw(node, "verify")
+    if isinstance(verify, ast.Constant) and verify.value is False:
+        attr = node.func.attr if isinstance(node.func, ast.Attribute) else name
+        if name.split(".")[0] in ("requests", "httpx", "urllib3") or attr in HTTP_VERBS:
+            return f"'{name or attr}(verify=False)' turns off TLS certificate checks; keep verification on."
+    if name == "ssl._create_unverified_context":
+        return "'ssl._create_unverified_context()' turns off TLS certificate checks; keep verification on."
+    return None
 
 
 def check_sec001(mod: Module, opts: dict) -> list[Finding]:
     out = []
     for node in ast.walk(mod.tree):
+        if isinstance(node, ast.Call):
+            msg = _unsafe_call(mod, node)
+            if msg:
+                out.append(mod.finding("SEC001", node, msg, end_line=node.lineno))
+                continue
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in SQL_SINKS and node.args):
             continue
         arg = node.args[0]
-        if _tainted(arg):
+        if _tainted(mod, arg):
             out.append(mod.finding("SEC001", node, f"Query passed to '{node.func.attr}()' is built by string formatting; use bound parameters.", end_line=node.lineno))
             continue
         if isinstance(arg, ast.Name):
@@ -524,9 +678,9 @@ def check_sec001(mod: Module, opts: dict) -> list[Finding]:
             augs = [n for n in scope if isinstance(n, ast.AugAssign) and isinstance(n.op, ast.Add) and isinstance(n.target, ast.Name)
                     and n.target.id == arg.id and n.lineno < node.lineno and (src is None or n.lineno > src.lineno)]
             augs.sort(key=lambda n: n.lineno)
-            if src is not None and _tainted(src.value):
+            if src is not None and _tainted(mod, src.value):
                 out.append(mod.finding("SEC001", node, f"'{arg.id}' (built by string formatting on line {src.lineno}) is passed to '{node.func.attr}()'; use bound parameters.", end_line=node.lineno))
-            elif augs and _concat_tainted(([src.value] if src is not None else []) + [a.value for a in augs]):
+            elif augs and _concat_tainted(mod, ([src.value] if src is not None else []) + [a.value for a in augs]):
                 first = src or augs[0]
                 out.append(mod.finding("SEC001", node, f"'{arg.id}' (built by string concatenation from line {first.lineno}) is passed to '{node.func.attr}()'; use bound parameters.", end_line=node.lineno))
     return out
@@ -755,6 +909,8 @@ def check_lit001(mod: Module, opts: dict) -> list[Finding]:
         if not (isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool)):
             continue
         value = node.value
+        if isinstance(value, int) and (ast.get_source_segment(mod.source, node) or "")[:2].lower() == "0o":
+            continue  # file-mode masks and permissions are written in octal on purpose
         parent = mod.parents.get(node)
         if isinstance(parent, ast.UnaryOp) and isinstance(parent.op, ast.USub):
             value, node_for_parent = -value, parent

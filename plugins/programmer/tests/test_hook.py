@@ -57,6 +57,47 @@ class Hook(unittest.TestCase):
         r = run_hook(self.event)
         self.assertEqual((r.returncode, r.stdout), (0, ""))
 
+    def edit_event(self, old, new, **extra):
+        ti = {"file_path": str(self.file), "old_string": old, "new_string": new, **extra}
+        return json.dumps({"hook_event_name": "PostToolUse", "tool_name": "Edit", "tool_input": ti})
+
+    def test_edit_reports_only_findings_it_introduced(self):
+        old = "def other(x):\n    return x\n"
+        self.file.write_text(BAD + old)
+        added = "def other(x):\n    return x + 1\n"
+        self.file.write_text(BAD + added)
+        r = run_hook(self.edit_event(old, added))
+        self.assertEqual((r.returncode, r.stdout), (0, ""))
+
+    def test_edit_reports_the_new_finding_not_the_old_one(self):
+        new_bad = "def run2(cur, name):\n    cur.execute(f\"SELECT * FROM t WHERE n = {name}\")\n"
+        old = "def other(x):\n    return x\n"
+        self.file.write_text(BAD + new_bad)
+        r = run_hook(self.edit_event(old, new_bad))
+        ctx = json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("bad.py:4 SEC001", ctx)
+        self.assertNotIn("bad.py:2 SEC001", ctx)
+
+    def test_multiedit_baseline_is_rebuilt_in_reverse(self):
+        edits = [{"old_string": "return a", "new_string": "return a + 1"}, {"old_string": "return b", "new_string": "return b + 2"}]
+        self.file.write_text(BAD + "def fa(a):\n    return a + 1\ndef fb(b):\n    return b + 2\n")
+        event = json.dumps({"tool_name": "MultiEdit", "tool_input": {"file_path": str(self.file), "edits": edits}})
+        r = run_hook(event)
+        self.assertEqual((r.returncode, r.stdout), (0, ""))
+
+    def test_write_reports_all_findings(self):
+        event = json.dumps({"tool_name": "Write", "tool_input": {"file_path": str(self.file), "content": BAD}})
+        r = run_hook(event)
+        self.assertIn("bad.py:2 SEC001", json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"])
+
+    def test_failure_prints_class_and_message_to_stderr(self):
+        r = run_hook(json.dumps({"tool_input": {}}))
+        self.assertEqual((r.returncode, r.stdout), (0, ""))
+        self.assertEqual(r.stderr.strip(), "principles hook skipped: KeyError: 'file_path'")
+        r = run_hook("not json")
+        self.assertRegex(r.stderr.strip(), r"^principles hook skipped: JSONDecodeError: .+")
+        self.assertEqual(len(r.stderr.strip().splitlines()), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

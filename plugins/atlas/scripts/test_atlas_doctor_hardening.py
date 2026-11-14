@@ -71,6 +71,33 @@ class HooksWiredBindingsTest(Tmp):
         self.assertFalse(wired[1], wired)
         self.assertIn("git_guard.py missing", wired[2])
 
+    def _wired_with(self, broken):
+        """hooks-wired on a copy of the real plugin with each file in
+        `broken` (hooks/ relative) replaced by one that does not parse."""
+        root = os.path.join(self.tmp, "plugin")
+        shutil.copytree(REAL_ROOT, root, ignore=shutil.ignore_patterns("node_modules", "__pycache__", ".git", "*.db"))
+        for rel in broken:
+            with open(os.path.join(root, "hooks", rel), "w") as f:
+                f.write("def (:\n")
+        rows = []
+        d._content_checks(lambda c, ok, det, severity="fail": rows.append((c, ok, det)), {}, root, "", "atlas")
+        return [r for r in rows if r[0] == "hooks-wired"][0]
+
+    def test_a_core_that_does_not_parse_fails_hooks_wired(self):
+        """hooks.json names completion_gate.py, a thin entry: a broken
+        completion_gate_core.py disarms the Stop gate, so doctor must say so."""
+        wired = self._wired_with(["completion_gate_core.py"])
+        self.assertFalse(wired[1], wired)
+        self.assertIn("hooks/completion_gate_core.py does not parse", wired[2])
+
+    def test_a_named_entry_that_does_not_parse_fails_hooks_wired(self):
+        wired = self._wired_with(["worker_report_gate.py"])
+        self.assertFalse(wired[1], wired)
+        self.assertIn("hooks/worker_report_gate.py does not parse", wired[2])
+
+    def test_the_real_plugin_entries_all_parse(self):
+        self.assertEqual(d.entry_parse_problems(REAL_ROOT), [])
+
 
 class RemedyTest(Tmp):
     def test_fix_command_is_absolute_and_shell_quoted(self):

@@ -1998,3 +1998,29 @@ class ModTypesContractSync(unittest.TestCase):
         a, b = self._block("mod/contract.ts"), self._block("types/index.d.ts")
         self.assertTrue(a, "shared block is empty")
         self.assertEqual(a, b, "mod/contract.ts and types/index.d.ts shared snapshot blocks drifted; edit both")
+
+
+class SkillTriggerPhrasing(unittest.TestCase):
+    """The plain ways people ask for a skill's job must appear in its trigger text. Live probes (17.18.0, Sonnet,
+    two runs each) loaded no skill for "Write unit tests for the parser module", "Commit my work" and "There's a
+    bug: parse returns wrong output, find the root cause": the model did the job ad hoc without the skill's
+    evidence gates. Claude Code matches on description + when_to_use, so the phrases live there."""
+
+    PHRASES = {
+        "atlas-testing": ("write tests", "unit test"),
+        "atlas-ship": ("commit my work", "commit my changes"),
+        "atlas-debug": ("bug", "wrong output", "crash"),
+    }
+
+    def test_plain_phrasings_are_in_the_trigger_text(self):
+        missing = []
+        for skill, phrases in self.PHRASES.items():
+            fm = _frontmatter(PLUGIN_ROOT / "skills" / skill / "SKILL.md")
+            when = fm.get("when_to_use", "").lower()
+            missing += [f"{skill}: {p!r}" for p in phrases if p not in when]
+        self.assertEqual(missing, [])
+
+    def test_trigger_text_stays_under_the_listing_cap(self):
+        for skill in self.PHRASES:
+            fm = _frontmatter(PLUGIN_ROOT / "skills" / skill / "SKILL.md")
+            self.assertLessEqual(len(fm.get("description", "")) + len(fm.get("when_to_use", "")), 1536, skill)

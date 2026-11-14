@@ -74,3 +74,18 @@ test('contractGlyph maps every contract emoji to one cell', () => {
   expect(contractGlyph('🦄')).toBe('·');
   expect(contractGlyph('※')).toBe('※');
 });
+
+test('textWidth: Emoji_Presentation (East Asian Width W) code points in the BMP are two cells, their text-style neighbours one', () => {
+  for (const ch of ['✅', '⚡', '❌', '⏳', '✨', '⛔', '⌚', '⏩', '☔', '♈', '♿', '⚓', '⚪', '⚽', '⛄', '⛎', '⛪', '⛲', '⛵', '⛺', '⛽', '✊', '❎', '❓', '❗', '➕', '➰', '➿', '⬛', '⬜', '⭐', '⭕']) expect(textWidth(ch), ch).toBe(2);
+  for (const ch of ['⬆', '⬅', '⬇', '⬡', '☀', '✓', '✗', '❯', '▲', '◐', '⠸', '▰']) expect(textWidth(ch), ch).toBe(1);
+});
+test('textWidth: a skin tone after an emoji, variation selectors, combining marks for symbols and Thai vowel marks take no cell', () => {
+  expect(textWidth('👍🏽')).toBe(2);
+  expect(textWidth('👍🏻👍🏿')).toBe(4);
+  expect(textWidth('🏽')).toBe(2); // a swatch alone is a picture of its own
+  expect(textWidth('e⃗')).toBe(1);
+  expect(textWidth('a︎')).toBe(1);
+  expect(textWidth('a︀')).toBe(1);
+  expect(textWidth('ก้ำ')).toBe(2); // U+0E01 U+0E49 (mark) U+0E33 (spacing vowel)
+  expect(textWidth('กัิฺ็๎')).toBe(1);
+});

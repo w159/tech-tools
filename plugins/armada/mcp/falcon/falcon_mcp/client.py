@@ -11,6 +11,7 @@ import sys
 import threading
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
+from urllib.parse import urlsplit
 
 import anyio
 
@@ -20,6 +21,33 @@ from falconpy import APIHarnessV2  # type: ignore[import-untyped]
 from falcon_mcp.common.logging import get_logger
 
 logger = get_logger(__name__)
+
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+class InsecureBaseURLError(ValueError):
+    """FALCON_BASE_URL names a scheme other than https (non-loopback)."""
+
+
+def _require_https_base_url(base_url: str | None) -> None:
+    """Refuse a base URL that would send the OAuth client secret in plain text.
+
+    A value with no scheme is a region name or bare host, which FalconPy turns
+    into https://; None leaves FalconPy's own https default. An explicit scheme must be https; plain http is allowed only
+    for a loopback host (local test stubs). The URL itself is never echoed.
+    """
+    if not isinstance(base_url, str) or "://" not in base_url:
+        return
+    parts = urlsplit(base_url)
+    scheme = parts.scheme.lower()
+    if scheme == "https":
+        return
+    if scheme == "http" and (parts.hostname or "") in _LOOPBACK_HOSTS:
+        return
+    raise InsecureBaseURLError(
+        "FALCON_BASE_URL must use https:// (plain http is allowed only for 127.0.0.1, "
+        "localhost or ::1); refusing to send the Falcon API client secret unencrypted."
+    )
 
 
 class FalconClient:
@@ -53,6 +81,7 @@ class FalconClient:
         self.base_url = base_url or os.environ.get(
             "FALCON_BASE_URL", "https://api.crowdstrike.com"
         )
+        _require_https_base_url(self.base_url)
         self.debug = debug
         self.user_agent_comment = user_agent_comment or os.environ.get(
             "FALCON_MCP_USER_AGENT_COMMENT"

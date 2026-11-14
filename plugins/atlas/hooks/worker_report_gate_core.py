@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
-"""SubagentStop gate: block an atlas:* subagent whose final message is not the
+"""SubagentStop gate: block an atlas:* subagent whose report is not the
 fixed report container (contracts/worker-protocol.json) or whose container is
 objectively empty or false.
+
+The report is the subagent's final message, unless it delivered one through
+the SubagentHandback tool: then `last_assistant_message` holds only closing
+text and the report is that call's `tool_input.message` (Claude Code hooks
+docs, SubagentStop input). A PostToolUse hook matched on SubagentHandback
+runs this same entry, which stores the message per agent_id; SubagentStop
+reads it first.
 
 Guarantees, each pinned by a unit test in test_worker_report_gate.py:
 - a valid report produces empty stdout and exit 0 (test_compliant_is_silent);
@@ -61,11 +68,55 @@ def has_failing(text):
 GONE_RE = re.compile(r"delet|remov|throwaway|scratch|temp|not committed", re.I)
 
 
-def marker_claimed(agent_id):
-    """True when this call created the marker (first block for agent_id)."""
-    d = os.environ.get("ATLAS_REPORT_GATE_DIR") or os.path.join(
+def _gate_dir():
+    return os.environ.get("ATLAS_REPORT_GATE_DIR") or os.path.join(
         tempfile.gettempdir(), "atlas-report-gate"
     )
+
+
+def _handback_path(agent_id):
+    name = re.sub(r"[^A-Za-z0-9_.-]", "_", str(agent_id))
+    return os.path.join(_gate_dir(), "handback", name)
+
+
+def store_handback(p):
+    """PostToolUse on SubagentHandback: keep `tool_input.message` for this
+    agent's SubagentStop. A later handback by the same agent replaces it."""
+    agent_id = p.get("agent_id")
+    msg = (p.get("tool_input") or {}).get("message")
+    if not agent_id or not isinstance(msg, str):
+        return
+    path = _handback_path(agent_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(msg)
+    os.replace(tmp, path)
+
+
+def handback_report(p):
+    """The report this agent delivered through SubagentHandback, or None."""
+    agent_id = p.get("agent_id")
+    if not agent_id:
+        return None
+    try:
+        with open(_handback_path(agent_id), encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def drop_handback(p):
+    if p.get("agent_id"):
+        try:
+            os.remove(_handback_path(p["agent_id"]))
+        except OSError:
+            pass
+
+
+def marker_claimed(agent_id):
+    """True when this call created the marker (first block for agent_id)."""
+    d = _gate_dir()
     os.makedirs(d, exist_ok=True)
     name = re.sub(r"[^A-Za-z0-9_.-]", "_", str(agent_id))
     try:
@@ -347,10 +398,24 @@ def main():
     ):
         return
     p = json.loads(sys.stdin.read(), strict=False)
-    if not isinstance(p, dict) or p.get("hook_event_name") != "SubagentStop":
+    if not isinstance(p, dict):
         return
+    if p.get("hook_event_name") == "PostToolUse":
+        if p.get("tool_name") == "SubagentHandback":
+            store_handback(p)
+        return
+    if p.get("hook_event_name") != "SubagentStop":
+        return
+    handed = handback_report(p)
+    blocked = _stop(p, handed)
+    if not blocked:
+        drop_handback(p)  # the agent is settled: its stored report is spent
+
+
+def _stop(p, handed):
+    """The SubagentStop decision. True when it printed a block."""
     agent_type = str(p.get("agent_type") or "")
-    msg = p.get("last_assistant_message")
+    msg = handed if handed and handed.strip() else p.get("last_assistant_message")
     if p.get("stop_hook_active"):
         # The retry stop after a block never blocks again, but it still ends the agent:
         # settle its member and dispatch row (valid report completes, else blocked).
@@ -361,7 +426,7 @@ def main():
             if check_report(msg, agent_type, p.get("cwd"), report):
                 report = None
         finish_member(p, msg if report else None, report)
-        return
+        return False
     if (
         not agent_type.startswith("atlas:")
         or not isinstance(msg, str)
@@ -371,18 +436,18 @@ def main():
         # agents' real SubagentStop carries no last_assistant_message). finish_member
         # is a no-op for an agent that is not a registered member.
         finish_member(p)
-        return
+        return False
     with open(PROTOCOL, encoding="utf-8") as f:
         report = json.load(f)["report"]
     problems = check_report(msg, agent_type, p.get("cwd"), report)
     if not problems:
         finish_member(p, msg, report)
-        return
+        return False
     # No agent_id: key on the message so one malformed report does not exempt every later one.
     key = p.get("agent_id") or "unknown-" + hashlib.sha1(msg.encode()).hexdigest()[:12]
     if not marker_claimed(key):
         finish_member(p)  # blocked once already: this is the final report
-        return
+        return False
     reason = (
         "Your final message is not the atlas report container ("
         + "; ".join(problems)
@@ -395,6 +460,7 @@ def main():
         "NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>"
     )
     print(json.dumps({"decision": "block", "reason": reason}))
+    return True
 
 
 def _cli():

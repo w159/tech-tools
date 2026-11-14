@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.4 - 2026-11-14
+
+### Fixed
+
+- The edit hook reports only the error-level findings an Edit or MultiEdit introduced; before, every finding already in the file was sent back after each edit. A Write, or an edit the hook cannot place, still reports all of them. A crash in the hook now prints its error instead of failing silently.
+- SEC001 no longer flags interpolated ints or `?` placeholder lists, and now also flags `os.system`/`os.popen` and `subprocess(..., shell=True)` with a non-constant command, `eval`/`exec` on a non-literal, `pickle`/`marshal` loads, `yaml.load` without a SafeLoader, and `verify=False` on HTTP calls.
+- STATE001 flags mutable (list, dict, set) default arguments.
+- RES001 accepts a resource assigned to a name and then entered with `with name:`.
+- LIT001 skips octal `0o` mode masks. DRY001 no longer reports a block nested inside another reported duplicate.
+- Still 20 rules; no rule id added or removed. Tests: 108 passed, 83 subtests (was 92).
+
 ## 1.0.3 - 2026-11-03
 
 ### Fixed

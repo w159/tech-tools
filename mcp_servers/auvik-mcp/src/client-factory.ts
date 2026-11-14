@@ -1,4 +1,4 @@
-import type { AuvikCredentials } from './credentials.js';
+import { isValidRegion, resolveRegion, type AuvikCredentials } from './credentials.js';
 
 // JSON:API response shapes
 export interface JsonApiResource {
@@ -98,7 +98,8 @@ class AuvikHttpClient {
   private readonly maxRetries = 4;
 
   constructor(credentials: AuvikCredentials) {
-    this.region = credentials.region || 'us1';
+    // Re-checked here: credentials can come from env, a gateway header or a caller.
+    this.region = resolveRegion(credentials.region, 'region');
     this.auth = Buffer.from(`${credentials.username}:${credentials.apiKey}`).toString('base64');
   }
 
@@ -127,9 +128,15 @@ class AuvikHttpClient {
         if (redirects++ > 5) throw makeError(resp.status, 'too many region redirects');
         const location = resp.headers.get('location');
         if (!location) throw makeError(resp.status, await resp.text());
-        const match = location.match(/auvikapi\.([a-z0-9]+)\.my\.auvik\.com/);
-        if (match) this.region = match[1];
-        url = location;
+        // The Basic-auth header is re-sent to the target, so follow only to
+        // another Auvik API shard over https.
+        const target = new URL(location, url);
+        const shard = /^auvikapi\.([a-z0-9]+)\.my\.auvik\.com$/.exec(target.hostname);
+        if (target.protocol !== 'https:' || target.port || !shard || !isValidRegion(shard[1])) {
+          throw makeError(resp.status, `refusing redirect to non-Auvik host ${target.host}`);
+        }
+        this.region = shard[1];
+        url = target.toString();
         continue;
       }
 

@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.19.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.20.0, armada 2.3.1, programmer 1.0.4 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -22,7 +22,7 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 |---|---|---|
 | Skills | 40 (3 manual) | `plugins/atlas/skills/` |
 | Role agents (`atlas:*`) | 11 | `plugins/atlas/agents/` |
-| Hooks | 19 programs, 23 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
+| Hooks | 19 programs, 24 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 77 non-test Python files | `plugins/atlas/scripts/` |
 | MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
 | omp agents | 11, generated | `plugins/atlas/omp/agents/` |
@@ -146,7 +146,7 @@ This picture is from an earlier build.
 
 ## What it changes on your machine
 
-- **Hooks.** The plugin registers 23 hook bindings (19 programs; `plugins/atlas/hooks/hooks.json` holds 14 commands, two of them the in-process dispatcher) for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas:atlas-setup` step you approve.
+- **Hooks.** The plugin registers 24 hook bindings (19 programs; `plugins/atlas/hooks/hooks.json` holds 15 commands, two of them the in-process dispatcher) for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas:atlas-setup` step you approve.
 - **Project files.** `/atlas:atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Parallel implementers share the one tree under file leases; the `atlas-worktree` skill still puts a worktree you ask for under `.atlas/wt/`.
 - **State in `~/.atlas/`.** `atlas.db` (SQLite telemetry), `memory/` (lessons saved at Stop and reloaded at boot), `dashboard-prefs.json`, and self-fix worktrees.
 - **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.

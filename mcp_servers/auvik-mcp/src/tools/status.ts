@@ -33,7 +33,9 @@ export async function handleStatus() {
   // Build a custom base-url override string so describeBaseUrl can show the
   // active endpoint. The region env var controls the URL, not AUVIK_BASE_URL.
   const activeUrl = `https://auvikapi.${region}.my.auvik.com/v1`;
-  const urlDesc = describeBaseUrl('auvik', process.env.AUVIK_REGION ? activeUrl : undefined, 'AUVIK_REGION');
+  // Credit AUVIK_REGION only when it is the region in use (an invalid value falls back to us1).
+  const fromEnv = (process.env.AUVIK_REGION ?? '').trim() === region;
+  const urlDesc = describeBaseUrl('auvik', fromEnv ? activeUrl : undefined, 'AUVIK_REGION');
 
   const started = Date.now();
   let timer: NodeJS.Timeout | undefined;

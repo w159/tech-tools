@@ -34,8 +34,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run --plan plan.json --wai
 # Codex: add --harness codex to either run command
 ```
 
-Set the Bash timeout to 600000. `--wait` prints the final JSON summary on one line; if it
-prints only the start line, run `atlas_crew.py wait --run <id>` until it does.
+Set the Bash timeout to 600000. `--wait` prints the run's verdict as one JSON line (`ok`,
+`check_exit`, `check_tail`, worker names, owned files, tokens, and the path of the full
+`summary.json`); if it prints only the start line, run `atlas_crew.py wait --run <id>` until it does.
 Do not read worker logs while it runs. If `check_exit` is 0 the build is done;
 otherwise read `check_tail` and route what remains.
 

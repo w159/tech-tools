@@ -40,7 +40,7 @@ advisory tier: `ATLAS_TRIPWIRE=off` silences drift coaching only (the nested-dis
 policy are unaffected; the latter is switched by `ATLAS_TRIPWIRE_HARD=off`, which disables only
 the deny tier and leaves the advisory nag in place). `hooks/validate-readonly-query.sh` is
 not wired in hooks.json; it is a read-only SQL guard available for the DB-audit
-subagents to invoke during read-only audits. In total 19 hook programs / 23 bindings are wired.
+subagents to invoke during read-only audits. In total 19 hook programs / 24 bindings are wired.
 
 ## Install (gated, idempotent)
 
@@ -218,11 +218,12 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     the `atlas_mux.py spawn-team` command. Skipped when tmux is not on PATH and in worker sessions.
     `ATLAS_TEAM_GATE=off` turns the block into a stderr advisory; `ATLAS_GATE_COLONY=off` skips it.
   - (q) Unmerged worker branches: `worker/*` branches that still hold commits not merged into the base, or a dirty worker worktree (`atlas_wt.py status`), must be verified and merged (`atlas_wt.py merge <agent>`) before the run is done. Not limited to code-shipping runs; sidechains are exempt. Kill switch `ATLAS_WT_GATE=off`. Fails open on a read error.
-  - (r) Done claim: when the final reply's header phase is `done` and a dispatched subagent/workflow/teammate is still running, or any todo surface (TodoWrite, board, LEDGER) has open items, block, whether or not code shipped. Runs before the in-flight silence; any other header phase keeps that silence. Kill switch `ATLAS_GATE_DONE=off`. Sidechains and `stop_hook_active` are skipped; fails open.
+  - (r) Done claim: when the final reply's header phase is `done` and a dispatched subagent/workflow/teammate is still running, or any todo surface (TodoWrite, board, LEDGER) has open items, block, whether or not code shipped. Runs before the in-flight silence; any other header phase keeps that silence. Kill switch `ATLAS_GATE_DONE=off`. Sidechains are skipped; a `stop_hook_active` continuation is re-checked; fails open.
   (o), (p) and (s) ask for a presentation repair, so each blocks at most once per session; (n) re-blocks every header-less Stop. All three fail open.
   The block message names exactly which condition(s) are missing and, for (p), the one fix command.
-- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(n), (q) and (r) hold, except: a Stop that is already a
-  forced continuation (`stop_hook_active`) is allowed, and after >5 Stop events in 120 s the circuit
+- **Re-blocks, never a wedge.** Blocks every Stop until (a)-(n), (q) and (r) hold. A forced continuation
+  (`stop_hook_active`) is re-checked too; `ATLAS_GATE_BLOCK_LOOP` (1-7) consecutive blocks on overlapping
+  conditions end the chain, and a `systemMessage` tells the user the gate gave up and what is still open. After >5 Stop events in 120 s the circuit
   breaker silences the gate for the session (the one forced continuation that answers a fresh Stop
   is not counted; a chain of continuations is). On omp the bridge additionally allows at most 3
   consecutive blocks (`MAX_STOP_BLOCKS` in `omp/stop-bridge.ts`). Fail-open on any error. Disable

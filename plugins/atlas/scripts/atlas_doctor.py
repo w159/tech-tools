@@ -2010,6 +2010,35 @@ def binding_problems(ip):
     return problems
 
 
+def entry_parse_problems(ip, rels=None):
+    """Python hook scripts hooks.json names, plus each one's `<name>_core.py`
+    sibling, that do not parse. A thin entry (completion_gate.py ...) imports
+    its core unguarded at run time, so a core with a syntax error disarms
+    that hook while every file still exists. Read statically (ast), never
+    imported. `rels` are plugin-relative paths; None reads hooks.json."""
+    import ast
+
+    if rels is None:
+        blob = json.dumps(_load_json(os.path.join(ip, "hooks", "hooks.json")))
+        rels = re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob)
+    problems, seen = [], set()
+    for rel in rels:
+        if not rel.endswith(".py"):
+            continue
+        for cand in (rel, rel[: -len(".py")] + "_core.py"):
+            if cand in seen:
+                continue
+            seen.add(cand)
+            try:
+                with open(os.path.join(ip, cand), encoding="utf-8") as fh:
+                    ast.parse(fh.read())
+            except OSError:
+                continue  # a missing named file is the `missing:` part's report
+            except (SyntaxError, ValueError) as e:
+                problems.append(f"{cand} does not parse ({getattr(e, 'msg', e)})")
+    return problems
+
+
 def _content_checks(add, ctx, ip, clone, plugin_name):
     """C6-C13: checks on the plugin tree at `ip` that need no marketplace."""
     # C5b: the mod reads this file; unusable => thin band, no stepper/pill
@@ -2021,18 +2050,21 @@ def _content_checks(add, ctx, ip, clone, plugin_name):
     if os.path.exists(hooks_file):
         missing = []
         blob = json.dumps(_load_json(hooks_file))
-        for rel in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob):
+        rels = re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob)
+        for rel in rels:
             if not os.path.exists(os.path.join(ip, rel)):
                 missing.append(rel)
         broken = binding_problems(ip)
+        unparsed = entry_parse_problems(ip, rels)
         add(
             "hooks-wired",
-            not missing and not broken,
+            not missing and not broken and not unparsed,
             "; ".join(
                 part
                 for part in (
                     f"missing: {missing}" if missing else "",
                     f"event_dispatch bindings: {broken}" if broken else "",
+                    f"hook scripts: {unparsed}" if unparsed else "",
                 )
                 if part
             )

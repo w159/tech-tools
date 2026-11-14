@@ -8,6 +8,7 @@ _iso_sys.path.insert(
     ),
 )
 import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
+import contextlib
 import io
 import json
 import os
@@ -1103,18 +1104,15 @@ class InProcessMainTest(unittest.TestCase):
         self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertTrue(self._verdict()["blocked"])
 
-    def test_stop_hook_active_continuation_records_allowed(self):
+    def test_stop_hook_active_continuation_is_rechecked(self):
         self._satisfy_all()
         self._log_run_write("src/app.py")
         os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
         self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertTrue(self._verdict()["blocked"])
-        self._invoke(
-            {"session_id": "sess-orch", "cwd": self.tmp, "stop_hook_active": True}
-        )
-        self.assertFalse(
-            self._verdict()["blocked"]
-        )  # the continuation was let through: Stop did not block
+        cont = {"session_id": "sess-orch", "cwd": self.tmp, "stop_hook_active": True}
+        self._invoke(cont)
+        self.assertTrue(self._verdict()["blocked"])  # nothing fixed: still blocked
 
     def test_verdicts_are_kept_per_session(self):
         self._satisfy_all()
@@ -3100,9 +3098,9 @@ class DoneHeaderClaimTest(GateOrchestrationTest):
         )
         self.assertEqual(r.stdout.strip(), "", r.stdout)
 
-    def test_stop_hook_active_fails_open(self):
+    def test_stop_hook_active_continuation_still_blocks(self):
         r = self._stop(self.DONE, background_tasks=self.RUNNING, stop_hook_active=True)
-        self.assertEqual(r.stdout.strip(), "", r.stdout)
+        self.assertIn('"decision": "block"', r.stdout)
 
     def test_kill_switch_allows(self):
         env = dict(self.env, ATLAS_GATE_DONE="off")
@@ -3224,6 +3222,36 @@ class DelegationMandateTest(unittest.TestCase):
         atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
         self.assertEqual(self.gate(), "")
 
+    def test_unflagged_m_continuation_chain_ends_at_the_loop_cap(self):
+        """An unflagged run's (m) is re-checked on the stop_hook_active
+        continuation and ends at ATLAS_GATE_BLOCK_LOOP like every letter."""
+        self.write()
+        self.assertIn("(m) Delegation mandate", self.gate())
+        for _ in range(2):  # BLOCK_LOOP_LIMIT default is 3
+            self.assertIn("(m) Delegation mandate", self.gate(stop_hook_active=True))
+        doc = json.loads(self.gate(stop_hook_active=True))
+        self.assertNotIn("decision", doc)
+        self.assertIn("gave up", doc["systemMessage"])
+
+    def test_m_names_each_file_once(self):
+        """The same file logged relative (events) and absolute (tool_calls),
+        and edited twice, is one file in the (m) clause."""
+        self.write()
+        self.write()
+        self.conn.execute(
+            "INSERT INTO tool_calls(session_id,ts,tool_name,is_sidechain,input_summary) VALUES(?,?,?,0,?)",
+            (
+                "mandate",
+                datetime.now(timezone.utc).timestamp(),
+                "Edit",
+                json.dumps({"file_path": str(self.root / "src" / "app.py")}),
+            ),
+        )
+        self.conn.commit()
+        reason = json.loads(self.gate())["reason"]
+        self.assertIn("(m) Delegation mandate", reason)
+        self.assertEqual(reason.count("app.py"), 1, reason)
+
     def test_dispatch_table_and_tool_call_dispatch_clear_m(self):
         self.write()
         atlas_db.log_dispatch(self.conn, self.rid, "atlas:implementer")
@@ -3287,6 +3315,9 @@ class DelegationMandateTest(unittest.TestCase):
             with self.subTest(code=path):
                 self.conn.execute("DELETE FROM events")
                 self.conn.commit()
+                # Each case is its own first block, not a step in a loop.
+                with contextlib.suppress(FileNotFoundError):
+                    os.remove(self.root / "hookstate" / "gate-loop-mandate")
                 self.write(path)
                 self.assertIn("(m) Delegation mandate", self.gate())
 
@@ -3755,8 +3786,8 @@ class ContractVisibilityTest(unittest.TestCase):
     def test_n_fails_open_on_empty_text(self):
         self.assertEqual(self.say(""), "")
 
-    def test_n_fails_open_on_stop_hook_active(self):
-        self.assertEqual(self.say("All done.", stop_hook_active=True), "")
+    def test_n_checks_a_stop_hook_active_continuation(self):
+        self.assertIn("(n)", self.say("All done.", stop_hook_active=True))
 
     def test_n_sidechain_exempt(self):
         self.assertEqual(
@@ -3774,7 +3805,7 @@ class ContractVisibilityTest(unittest.TestCase):
     def test_n_loop_limit_allows_and_records_friction(self):
         for _ in range(3):  # BLOCK_LOOP_LIMIT default
             self.assertIn("(n)", self.say("All done."))
-        self.assertEqual(self.say("All done."), "")
+        self._gave_up(self.say("All done."))
         import sqlite3
 
         conn = sqlite3.connect(self.env["ATLAS_DB"])
@@ -3805,9 +3836,9 @@ class ContractVisibilityTest(unittest.TestCase):
         return rows
 
     def test_n_blocks_every_headerless_turn_after_a_corrected_continuation(self):
-        """The corrected re-send arrives as a stop_hook_active Stop. It must
-        reset the loop count, or the 4th header-less turn of a session slips
-        through with nothing said."""
+        """The corrected re-send arrives as a stop_hook_active Stop. Its pass
+        resets the loop count, or the 4th header-less turn of a session slips
+        through."""
         for turn in range(1, 6):
             self.assertIn("(n)", self.say("All done."), f"turn {turn} not blocked")
             self.assertEqual(self.say(stop_hook_active=True), "")
@@ -3815,38 +3846,37 @@ class ContractVisibilityTest(unittest.TestCase):
 
     def test_n_uncorrected_chain_blocks_to_the_limit_then_allows(self):
         """A model that never fixes the header still escapes: a header-less
-        continuation does not reset the count, and the loop row is written once."""
-        for _ in range(3):  # BLOCK_LOOP_LIMIT default
-            self.assertIn("(n)", self.say("All done."))
-            self.assertEqual(self.say("Still no header.", stop_hook_active=True), "")
-        self.assertEqual(self.say("All done."), "")
-        self.assertEqual(self.say("All done."), "")
+        continuation blocks and counts, and the loop row is written once."""
+        self.assertIn("(n)", self.say("All done."))
+        for _ in range(2):  # BLOCK_LOOP_LIMIT default is 3
+            self.assertIn("(n)", self.say("Still no header.", stop_hook_active=True))
+        self._gave_up(self.say("Still no header.", stop_hook_active=True))
+        self._gave_up(self.say("All done."))
         self.assertEqual(self._loop_friction_letters(), [("n",)])
 
     def test_valid_header_continuation_leaves_other_conditions_counting(self):
-        """The (n) reset is scoped to (n): a run stuck on (a) still reaches
-        the loop cap although every continuation carries a valid header."""
+        """A valid header is no pass: a run stuck on (a) blocks every
+        continuation that carries one and reaches the loop cap."""
         os.remove(os.path.join(self.tmp, ".atlas", "evidence", "run.txt"))
-        for _ in range(3):
-            self.assertIn("(a)", self.say())
-            self.assertEqual(self.say(stop_hook_active=True), "")
-        self.assertEqual(self.say(), "")
+        self.assertIn("(a)", self.say())
+        for _ in range(2):
+            self.assertIn("(a)", self.say(stop_hook_active=True))
+        self._gave_up(self.say(stop_hook_active=True))
 
     def test_mixed_signature_header_fix_keeps_the_count_accruing(self):
-        """Signature "a,n": (a) cannot be fixed, the header is dropped on every
-        fresh Stop and corrected in every continuation. The correction may
-        reset a count that is exactly "n", never one that also names (a), or
-        the cap is never reached and the session blocks on every turn."""
+        """Signature "a,n": (a) cannot be fixed, the header is dropped on the
+        fresh Stop and corrected in the continuation. "a" shares a letter with
+        "a,n", so the chain counts on and ends at the cap with one loop row."""
         os.remove(os.path.join(self.tmp, ".atlas", "evidence", "run.txt"))
-        outs = []
-        for _ in range(8):
-            outs.append(self.say("All done."))
-            self.assertEqual(self.say(stop_hook_active=True), "")
-        for out in outs[:3]:  # BLOCK_LOOP_LIMIT default
+        first = self.say("All done.")
+        self.assertIn("(a)", first)
+        self.assertIn("(n)", first)
+        for _ in range(2):  # BLOCK_LOOP_LIMIT default is 3
+            out = self.say(stop_hook_active=True)
             self.assertIn("(a)", out)
-            self.assertIn("(n)", out)
-        self.assertEqual(outs[3:], [""] * 5)
-        self.assertEqual(self._loop_friction_letters(), [("a,n",)])
+            self.assertNotIn("(n)", out)
+        self._gave_up(self.say(stop_hook_active=True))
+        self.assertEqual(self._loop_friction_letters(), [("a",)])
 
     def _drop_loop_marker(self):
         state_dir = self.env["ATLAS_HOOKSTATE_DIR"]
@@ -3880,12 +3910,12 @@ class ContractVisibilityTest(unittest.TestCase):
                 for _ in range(3):  # BLOCK_LOOP_LIMIT default
                     self.assertIn("(n)", self.say("All done."))
                     self.gate(dict(continuation, stop_hook_active=True))
-                self.assertEqual(self.say("All done."), "")
+                self._gave_up(self.say("All done."))
 
     def test_n_in_flight_reply_without_a_matched_header_does_not_reset_the_count(self):
         for text in ("Done.", "Done.", "", "Done."):
             self.say(text, background_tasks=self.RUNNING)
-        self.assertEqual(self.say("Done.", background_tasks=self.RUNNING), "")
+        self._gave_up(self.say("Done.", background_tasks=self.RUNNING))
 
     def test_n_in_flight_loop_limit_allow_is_stated_on_stderr(self):
         for _ in range(3):  # BLOCK_LOOP_LIMIT default
@@ -3893,16 +3923,63 @@ class ContractVisibilityTest(unittest.TestCase):
         r = self.gate(
             {"last_assistant_message": "Done.", "background_tasks": self.RUNNING}
         )
-        self.assertEqual(r.stdout, "")
+        self.assertIn("status header missing", self._gave_up(r.stdout))
         self.assertIn("completion-gate: allowed the Stop after", r.stderr)
         self.assertIn("status header missing", r.stderr)
 
     def test_n_fifth_and_later_identical_stop_allows(self):
         for _ in range(3):
             self.assertIn("(n)", self.say("All done."))
-        for nth in (4, 5, 6):
-            self.assertEqual(self.say("All done."), "", f"Stop {nth} not allowed")
+        for _nth in (4, 5, 6):
+            self._gave_up(self.say("All done."))
         self.assertEqual(self._loop_friction_letters(), [("n",)])
+
+    # -- in-turn re-check: a stop_hook_active continuation is checked too -----
+
+    def _gave_up(self, out):
+        """The loop cap's allowed Stop: no block decision, one systemMessage
+        that tells the user the gate gave up and what is still open."""
+        doc = json.loads(out)
+        self.assertNotIn("decision", doc)
+        self.assertIn("gave up", doc["systemMessage"])
+        return doc["systemMessage"]
+
+    def test_continuation_with_the_same_failure_still_blocks(self):
+        """Claude Code sends stop_hook_active=true on every Stop after a block
+        in the same turn, so the continuation must be re-checked."""
+        self.assertIn("(n)", self.say("All done."))
+        self.assertIn("(n)", self.say("Still no header.", stop_hook_active=True))
+
+    def test_continuation_rechecks_evaluated_conditions(self):
+        os.remove(os.path.join(self.tmp, ".atlas", "evidence", "run.txt"))
+        self.assertIn("(a)", self.say())
+        self.assertIn("(a)", self.say(stop_hook_active=True))
+
+    def test_continuation_chain_blocks_to_the_cap_then_gives_up(self):
+        self.assertIn("(n)", self.say("All done."))
+        for _ in range(2):  # BLOCK_LOOP_LIMIT default is 3
+            self.assertIn("(n)", self.say("All done.", stop_hook_active=True))
+        msg = self._gave_up(self.say("All done.", stop_hook_active=True))
+        self.assertIn("status header missing", msg)
+        self.assertEqual(self._loop_friction_letters(), [("n",)])
+
+    def test_continuation_cap_follows_atlas_gate_block_loop(self):
+        self.env = dict(self.env, ATLAS_GATE_BLOCK_LOOP="1")
+        self.assertIn("(n)", self.say("All done."))
+        self._gave_up(self.say("All done.", stop_hook_active=True))
+
+    def test_flip_flopping_header_in_a_chain_still_reaches_the_cap(self):
+        """(a) cannot be fixed and the header comes and goes: the letter
+        sets overlap, so the chain counts toward one cap and ends."""
+        os.remove(os.path.join(self.tmp, ".atlas", "evidence", "run.txt"))
+        self.assertIn("(a)", self.say("All done."))
+        self.assertIn("(a)", self.say(stop_hook_active=True))
+        self.assertIn("(a)", self.say("All done.", stop_hook_active=True))
+        self._gave_up(self.say(stop_hook_active=True))
+
+    def test_corrected_continuation_passes_silently(self):
+        self.assertIn("(n)", self.say("All done."))
+        self.assertEqual(self.say(stop_hook_active=True), "")
 
     def test_n_blocks_headerless_reply_while_subagent_in_flight(self):
         """(n) is a property of the reply text, so like (r) it is checked
@@ -3939,7 +4016,7 @@ class ContractVisibilityTest(unittest.TestCase):
     def test_n_in_flight_loop_limit_allows(self):
         for _ in range(3):
             self.assertIn("(n)", self.say("Done.", background_tasks=self.RUNNING))
-        self.assertEqual(self.say("Done.", background_tasks=self.RUNNING), "")
+        self._gave_up(self.say("Done.", background_tasks=self.RUNNING))
 
     def test_n_fails_open_on_non_string_last_assistant_message(self):
         for value in (5, None, ["All done."], {"text": "All done."}):
@@ -4886,6 +4963,70 @@ class FailOpenVisibleTest(InProcessMainTest):
         self.assertEqual(rc, 0)
         self.assertIn("FAIL-OPEN", out)
 
+    def test_fail_open_is_one_system_message_json(self):
+        """Plain Stop stdout reaches only Claude Code's debug log; the user
+        sees a fail-open only as a systemMessage in one JSON object."""
+        with mock.patch("completion_gate._find_root", side_effect=RuntimeError("boom")):
+            rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
+        self.assertEqual(rc, 0)
+        doc = json.loads(out)
+        self.assertIsInstance(doc, dict)
+        self.assertNotIn("decision", doc)
+        self.assertIn("FAIL-OPEN", doc["systemMessage"])
+        self.assertIn("boom", doc["systemMessage"])
+
+
+def _run_entry_with_broken_core(entry, hook):
+    """Copy the thin entry `entry` beside a core module that raises on import
+    (the real scripts/ dir symlinked next to it) and run it as Claude Code
+    does. Returns (completed process, hook-faults rows)."""
+    import shutil
+
+    tmp = tempfile.mkdtemp()
+    try:
+        hooks = os.path.join(tmp, "hooks")
+        os.makedirs(hooks)
+        shutil.copy(entry, hooks)
+        name = os.path.splitext(os.path.basename(entry))[0]
+        with open(os.path.join(hooks, name + "_core.py"), "w") as f:
+            f.write("raise ImportError('core boom')\n")
+        os.symlink(
+            os.path.realpath(os.path.join(os.path.dirname(entry), "..", "scripts")),
+            os.path.join(tmp, "scripts"),
+        )
+        home = os.path.join(tmp, "home")
+        env = dict(os.environ, ATLAS_HOME=home, ATLAS_HOOKSTATE_DIR=os.path.join(tmp, "hs"))
+        r = subprocess.run(
+            [sys.executable, "-S", os.path.join(hooks, os.path.basename(entry))],
+            input=json.dumps({"session_id": "s", "hook_event_name": hook}),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        rows = []
+        faults = os.path.join(home, "hook-faults.jsonl")
+        if os.path.exists(faults):
+            with open(faults) as f:
+                rows = [json.loads(line) for line in f if line.strip()]
+        return r, rows
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+class EntryImportCrashTest(unittest.TestCase):
+    """A crash importing completion_gate_core must not disarm the Stop gate
+    silently: the entry records a hook-faults row, tells the user in a
+    systemMessage and exits 0."""
+
+    def test_core_import_crash_is_a_visible_fail_open(self):
+        r, rows = _run_entry_with_broken_core(GATE, "Stop")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        doc = json.loads(r.stdout)
+        self.assertNotIn("decision", doc)
+        self.assertIn("FAIL-OPEN", doc["systemMessage"])
+        self.assertIn("core boom", doc["systemMessage"])
+        self.assertEqual([x["hook"] for x in rows], ["completion_gate"])
+        self.assertEqual(rows[0]["type"], "ImportError")
+
 
 class _BufferedStdin:
     """Minimal fake stdin: the hook reads raw bytes via sys.stdin.buffer."""
@@ -4933,6 +5074,13 @@ class FailOpenUnreadablePayloadTest(InProcessMainTest):
         rc, out = self._invoke_unreadable(b"\x00\x80\x81\xff\xfe")
         self.assertEqual(rc, 0)
         self.assertIn(self.FAIL_OPEN_LINE, out)
+
+    def test_unreadable_payload_is_one_system_message_json(self):
+        rc, out = self._invoke_unreadable('{"broken')
+        self.assertEqual(rc, 0)
+        doc = json.loads(out)
+        self.assertIsInstance(doc, dict)
+        self.assertIn(self.FAIL_OPEN_LINE, doc["systemMessage"])
 
     def test_empty_stdin_exits_zero_without_fail_open_line(self):
         # Documented current behavior: empty stdin is a readable no-op, so

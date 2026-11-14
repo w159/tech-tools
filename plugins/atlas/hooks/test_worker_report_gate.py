@@ -40,6 +40,52 @@ def payload(**kw):
     return p
 
 
+def _run_entry_with_broken_core(entry, hook):
+    """Copy the thin entry `entry` beside a core module that raises on import
+    (the real scripts/ dir symlinked next to it) and run it as Claude Code
+    does. Returns (completed process, hook-faults rows)."""
+    import shutil
+
+    tmp = tempfile.mkdtemp()
+    try:
+        hooks = os.path.join(tmp, "hooks")
+        os.makedirs(hooks)
+        shutil.copy(entry, hooks)
+        name = os.path.splitext(os.path.basename(entry))[0]
+        with open(os.path.join(hooks, name + "_core.py"), "w") as f:
+            f.write("raise ImportError('core boom')\n")
+        os.symlink(
+            os.path.realpath(os.path.join(os.path.dirname(entry), "..", "scripts")),
+            os.path.join(tmp, "scripts"),
+        )
+        home = os.path.join(tmp, "home")
+        env = dict(os.environ, ATLAS_HOME=home, ATLAS_HOOKSTATE_DIR=os.path.join(tmp, "hs"))
+        r = subprocess.run(
+            [sys.executable, "-S", os.path.join(hooks, os.path.basename(entry))],
+            input=json.dumps({"session_id": "s", "hook_event_name": hook}),
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        rows = []
+        faults = os.path.join(home, "hook-faults.jsonl")
+        if os.path.exists(faults):
+            with open(faults) as f:
+                rows = [json.loads(line) for line in f if line.strip()]
+        return r, rows
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+class EntryImportCrashTest(unittest.TestCase):
+    def test_core_import_crash_is_a_visible_fail_open(self):
+        r, rows = _run_entry_with_broken_core(HOOK, "SubagentStop")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        doc = json.loads(r.stdout)
+        self.assertNotIn("decision", doc)
+        self.assertIn("FAIL-OPEN", doc["systemMessage"])
+        self.assertEqual([x["hook"] for x in rows], ["worker_report_gate"])
+
+
 class WorkerReportGateTest(unittest.TestCase):
     def setUp(self):
         os.makedirs(WORK, exist_ok=True)
@@ -168,6 +214,65 @@ class WorkerReportGateTest(unittest.TestCase):
         item, mem = self._retry_after_block("still prose")
         self.assertEqual(item["status"], "blocked")
         self.assertEqual([m.get("exit_code") for m in mem], [0])
+
+    def _handback_then_stop(self, report, closing=""):
+        """SubagentHandback delivers the report as the tool call's `message`
+        input (Claude Code hooks docs, SubagentStop); `last_assistant_message`
+        then holds only the closing text. Returns (stop stdout, board item)."""
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["impl-1"])
+        todo.add(root, "do it", owner="impl-1", origin="dispatch")
+        todo.set_member_agent_id(root, "impl-1", "hb0123456789")
+        base = dict(agent_id="hb0123456789", agent_type="atlas:implementer", cwd=root)
+        post = self.run_hook(
+            dict(
+                base,
+                hook_event_name="PostToolUse",
+                tool_name="SubagentHandback",
+                tool_input={"message": report},
+                tool_response={},
+            )
+        )
+        self.assertEqual(post.stdout, "")
+        stop = self.run_hook(payload(last_assistant_message=closing, **base))
+        return stop.stdout, todo.load(root)["items"][0]
+
+    def test_handback_report_with_empty_last_message_settles_done(self):
+        out, item = self._handback_then_stop(COMPLIANT)
+        self.assertEqual(out, "")
+        self.assertEqual(item["status"], "completed")
+        self.assertIn("ls -> ok", item["evidence"])
+
+    def test_handback_report_wins_over_closing_text(self):
+        out, item = self._handback_then_stop(COMPLIANT, closing="Report delivered.")
+        self.assertEqual(out, "")
+        self.assertEqual(item["status"], "completed")
+
+    def test_handback_report_missing_labels_still_blocks(self):
+        out, item = self._handback_then_stop("STATUS: DONE\nall good, trust me")
+        self.assertIn('"decision": "block"', out)
+        self.assertIn("missing labels", out)
+        self.assertEqual(item["status"], "pending")
+
+    def test_hooks_json_routes_subagent_handback_to_this_gate(self):
+        """The handback store only runs when hooks.json matches PostToolUse on
+        SubagentHandback to worker_report_gate.py."""
+        import re
+
+        with open(os.path.join(os.path.dirname(HOOK), "hooks.json")) as f:
+            groups = json.load(f)["hooks"]["PostToolUse"]
+        routed = [
+            h["command"]
+            for g in groups
+            if re.fullmatch(g.get("matcher") or ".*", "SubagentHandback")
+            for h in g["hooks"]
+            if "worker_report_gate.py" in h["command"]
+        ]
+        self.assertEqual(len(routed), 1, groups)
 
     def test_member_finish_cli_with_done_report_reaps_like_claude(self):
         # omp path: `member-finish --message <final text>` settles item and member.

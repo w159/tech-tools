@@ -153,7 +153,7 @@ class TestHasHook(unittest.TestCase):
                         "hooks": [
                             {
                                 "type": "command",
-                                "command": 'python3 "x/completion_gate.py"',
+                                "command": install_hooks.command_for("completion_gate.py"),
                             }
                         ]
                     }
@@ -191,7 +191,7 @@ class TestPlan(unittest.TestCase):
         settings = {
             "hooks": {
                 "UserPromptSubmit": [
-                    {"hooks": [{"command": 'python3 "x/prompt_optimizer.py"'}]}
+                    {"hooks": [{"command": install_hooks.command_for("prompt_optimizer.py")}]}
                 ]
             }
         }
@@ -230,7 +230,7 @@ class TestApplyInstall(unittest.TestCase):
         settings = {
             "hooks": {
                 "UserPromptSubmit": [
-                    {"hooks": [{"command": 'python3 "x/prompt_optimizer.py"'}]}
+                    {"hooks": [{"command": install_hooks.command_for("prompt_optimizer.py")}]}
                 ]
             }
         }
@@ -243,7 +243,7 @@ class TestApplyInstall(unittest.TestCase):
         settings = {
             "hooks": {
                 "UserPromptSubmit": [
-                    {"hooks": [{"command": 'python3 "x/prompt_optimizer.py"'}]}
+                    {"hooks": [{"command": install_hooks.command_for("prompt_optimizer.py")}]}
                 ]
             }
         }
@@ -256,7 +256,7 @@ class TestApplyUninstall(unittest.TestCase):
     def test_removes_handler_and_drops_emptied_group(self) -> None:
         settings = {
             "hooks": {
-                "Stop": [{"hooks": [{"command": 'python3 "x/completion_gate.py"'}]}]
+                "Stop": [{"hooks": [{"command": install_hooks.command_for("completion_gate.py")}]}]
             }
         }
         n = install_hooks.apply_uninstall(settings, ["completion-gate"])
@@ -270,7 +270,7 @@ class TestApplyUninstall(unittest.TestCase):
                 "Stop": [
                     {
                         "hooks": [
-                            {"command": 'python3 "x/completion_gate.py"'},
+                            {"command": install_hooks.command_for("completion_gate.py")},
                             {"command": 'python3 "x/other.py"'},
                         ]
                     }
@@ -307,12 +307,78 @@ class TestApplyUninstall(unittest.TestCase):
         self.assertEqual(len(settings["hooks"]["UserPromptSubmit"][0]["hooks"]), 1)
 
 
+class TestUninstallLeavesLookalikes(unittest.TestCase):
+    """Only the exact command this script writes (or a path that resolves to
+    the plugin's own hook file) is ours: a user hook whose name merely
+    contains the script name survives --uninstall."""
+
+    MINE = "python3 /home/me/bin/my_completion_gate.py"
+    SEC = "/opt/sec/strict_bash_advisor.py.sh"
+
+    def _settings(self) -> dict:
+        return {
+            "hooks": {
+                "Stop": [
+                    {"hooks": [{"type": "command", "command": self.MINE}]},
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": install_hooks.command_for("completion_gate.py"),
+                            }
+                        ]
+                    },
+                ],
+                "PreToolUse": [
+                    {"matcher": "Bash", "hooks": [{"type": "command", "command": self.SEC}]}
+                ],
+            }
+        }
+
+    def _main(self, argv: list[str]) -> str:
+        buf = io.StringIO()
+        with mock.patch.object(sys, "argv", ["install_hooks.py", *argv]):
+            with redirect_stdout(buf):
+                install_hooks.main()
+        return buf.getvalue()
+
+    def test_uninstall_keeps_user_hooks_and_list_shows_them_as_others(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "settings.json"
+            p.write_text(json.dumps(self._settings()), encoding="utf-8")
+            sel = ["--select", "completion-gate", "--select", "guard"]
+            self._main(["--settings", str(p), "--uninstall", "--apply", *sel])
+            cmds = [
+                h["command"]
+                for groups in json.loads(p.read_text(encoding="utf-8"))["hooks"].values()
+                for g in groups
+                for h in g["hooks"]
+            ]
+            self.assertEqual(sorted(cmds), sorted([self.MINE, self.SEC]))
+            out = self._main(["--settings", str(p), "--list"])
+            self.assertNotIn("[x] installed", out)
+            self.assertIn("other hooks already configured:", out)
+            self.assertIn(self.MINE, out)
+            self.assertIn(self.SEC, out)
+
+    def test_has_hook_ignores_lookalikes(self) -> None:
+        settings = self._settings()
+        self.assertFalse(install_hooks.has_hook(settings, "PreToolUse", "bash_advisor.py"))
+        settings["hooks"]["Stop"].pop()  # only the lookalike is left
+        self.assertFalse(install_hooks.has_hook(settings, "Stop", "completion_gate.py"))
+
+    def test_resolved_path_to_the_plugin_hook_counts(self) -> None:
+        cmd = f"python3 -S {install_hooks.HOOKS_DIR / '..' / 'hooks' / 'completion_gate.py'}"
+        settings = {"hooks": {"Stop": [{"hooks": [{"command": cmd}]}]}}
+        self.assertTrue(install_hooks.has_hook(settings, "Stop", "completion_gate.py"))
+
+
 class TestCmdList(unittest.TestCase):
     def test_lists_installed_and_not(self) -> None:
         settings = {
             "hooks": {
                 "UserPromptSubmit": [
-                    {"hooks": [{"command": 'python3 "x/prompt_optimizer.py"'}]}
+                    {"hooks": [{"command": install_hooks.command_for("prompt_optimizer.py")}]}
                 ]
             }
         }

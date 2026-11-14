@@ -107,7 +107,7 @@ describe('band worker rows beside the Subagents block (live frame shape: band sl
     const rows = rowsOf(61, 2, [explorer(long)]);
     const got = parsed(rows);
     expect(got).toHaveLength(1);
-    expect(got[0]![2]!.endsWith('...')).toBe(true); // clip marks a cut with three dots; the scorer resolves a cut name
+    expect(got[0]![2]!.endsWith(String.fromCharCode(0x2026))).toBe(true); // critic fix 4: the band cuts with the HUD's one-cell ellipsis (the SUBAGENTS rows already cut names with U+2026), never three dots
     expect(textWidthOf(rows[1]!)).toBe(61);
   });
 

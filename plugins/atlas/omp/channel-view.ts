@@ -15,7 +15,8 @@
  * Rendering lives in mission-panel.ts: truecolor Mission Control panel, gates from a 10s-throttled async atlas_gates.py
  * cache; omp widget strings go through pi-tui Text, which is ANSI aware.
  */
-import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import type { PanelTodo } from "./todo-panel";
@@ -449,13 +450,28 @@ function worktreeMainRoot(dir: string): string | undefined {
 	}
 }
 
-/** Board root for a cwd: ATLAS_PROJECT_ROOT, else the nearest ancestor holding `.atlas` (a linked worktree maps to its main repo, like atlas_todo.find_root). */
+/** Home, ~/Downloads and the bare temp roots: a `.atlas` there is a leftover, not a project (mirror of
+ * scripts/atlas_paths.py _is_non_project). */
+function nonProject(dir: string): boolean {
+	const real = (p: string): string => {
+		try {
+			return realpathSync(p);
+		} catch {
+			return nodePath.resolve(p);
+		}
+	};
+	const home = real(homedir());
+	return new Set([home, nodePath.join(home, "Downloads"), real("/tmp"), real("/var/folders"), real(tmpdir())]).has(real(dir));
+}
+
+/** Board root for a cwd: ATLAS_PROJECT_ROOT, else the nearest ancestor holding `.atlas` that is the cwd or no
+ * non-project root (a linked worktree maps to its main repo, like atlas_todo.find_root), else cwd. */
 export function boardRoot(cwd: string, env: Record<string, string | undefined>): string {
 	if (env.ATLAS_PROJECT_ROOT) return env.ATLAS_PROJECT_ROOT;
 	for (let dir = cwd; ; dir = nodePath.dirname(dir)) {
 		const main = worktreeMainRoot(dir);
 		if (main) return main;
-		if (existsSync(nodePath.join(dir, ".atlas"))) return dir;
+		if (existsSync(nodePath.join(dir, ".atlas")) && (dir === cwd || !nonProject(dir))) return dir;
 		if (nodePath.dirname(dir) === dir) return cwd;
 	}
 }

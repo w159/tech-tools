@@ -102,16 +102,29 @@ export function rangeWidth(cp: number, zero: readonly Span[], wide: readonly Spa
  return wide.some(inSpan(cp)) ? 2 : 1;
 }
 
-const ZERO_WIDTH: readonly Span[] = [[0, 31], [0x7f, 0x9f], [0x300, 0x36f], [0x200b, 0x200f], [0xfe0f, 0xfe0f]];
+/** Zero-width: controls, combining diacritics, Thai above/below vowel and tone marks (U+0E31, U+0E34-0E3A, U+0E47-0E4E), zero-width spaces and joiners,
+ * combining marks for symbols (U+20D0-20FF) and the variation selectors (U+FE00-FE0F). */
+const ZERO_WIDTH: readonly Span[] = [[0, 31], [0x7f, 0x9f], [0x300, 0x36f], [0xe31, 0xe31], [0xe34, 0xe3a], [0xe47, 0xe4e], [0x200b, 0x200f], [0x20d0, 0x20ff], [0xfe00, 0xfe0f]];
+/** Two cells. U+2300-2BFF holds only the code points Unicode 15.1 EastAsianWidth.txt marks W, which are the Emoji_Presentation=Yes set of emoji-data.txt there plus the angle brackets
+ * U+2329-232A, listed one by one (never the whole block: U+2B06 is one cell, U+2B1B two). */
 const WIDE: readonly Span[] = [
- [0x1100, 0x115f], [0x2b00, 0x2bff], [0x2e80, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe30, 0xfe6f],
+ [0x1100, 0x115f],
+ [0x231a, 0x231b], [0x2329, 0x232a], [0x23e9, 0x23ec], [0x23f0, 0x23f0], [0x23f3, 0x23f3], [0x25fd, 0x25fe], [0x2614, 0x2615], [0x2648, 0x2653],
+ [0x267f, 0x267f], [0x2693, 0x2693], [0x26a1, 0x26a1], [0x26aa, 0x26ab], [0x26bd, 0x26be], [0x26c4, 0x26c5], [0x26ce, 0x26ce], [0x26d4, 0x26d4],
+ [0x26ea, 0x26ea], [0x26f2, 0x26f3], [0x26f5, 0x26f5], [0x26fa, 0x26fa], [0x26fd, 0x26fd], [0x2705, 0x2705], [0x270a, 0x270b], [0x2728, 0x2728],
+ [0x274c, 0x274c], [0x274e, 0x274e], [0x2753, 0x2755], [0x2757, 0x2757], [0x2795, 0x2797], [0x27b0, 0x27b0], [0x27bf, 0x27bf],
+ [0x2b1b, 0x2b1c], [0x2b50, 0x2b50], [0x2b55, 0x2b55],
+ [0x2e80, 0xa4cf], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe30, 0xfe6f],
  [0xff00, 0xff60], [0xffe0, 0xffe6], [0x1f300, 0x1faff], [0x20000, 0x3fffd],
 ];
+/** The emoji skin-tone modifiers: no cell of their own after a two-cell emoji (U+1F44D U+1F3FD is one picture), two cells alone (a swatch). */
+const isSkinTone = (cp: number): boolean => cp >= 0x1f3fb && cp <= 0x1f3ff;
 
 /** Display width of one code point: 0 control/combining/zero-width, 2 East Asian Wide/emoji, else 1 (ambiguous = 1). */
 const cpWidth = (cp: number): number => rangeWidth(cp, ZERO_WIDTH, WIDE);
 
-const charWidth = (ch: string): number => cpWidth(ch.codePointAt(0) ?? 0);
+/** Width of `cp` after a code point `prev` cells wide: a skin tone that follows a two-cell emoji takes none. */
+const cpWidthAfter = (cp: number, prev: number): number => (prev === 2 && isSkinTone(cp) ? 0 : cpWidth(cp));
 
 /** A host agent id shown raw (`aa42eb`, `a529730494759bac3`): 6-32 hex chars with a digit; never a worker's display name. */
 export const isRawId = (s: string): boolean => /^a?[0-9a-f]{6,32}$/i.test(s) && /\d/.test(s);
@@ -119,17 +132,20 @@ export const isRawId = (s: string): boolean => /^a?[0-9a-f]{6,32}$/i.test(s) && 
 /** Terminal cell width of a string (East Asian Wide = 2, ambiguous = 1). */
 export function textWidth(text: string): number {
  let n = 0;
- for (const ch of text) n += charWidth(ch);
+ let prev = 0;
+ for (const ch of text) {
+  const w = cpWidthAfter(ch.codePointAt(0) ?? 0, prev);
+  n += w;
+  if (w > 0) prev = w;
+ }
  return n;
 }
 
 /** Longest prefix of text (on code point boundaries) whose cell width stays within limit. */
 function prefixWithin(text: string, limit: number): string {
  let out = '';
- let used = 0;
  for (const ch of text) {
-  used += charWidth(ch);
-  if (used > limit) break;
+  if (textWidth(out + ch) > limit) break; // measured on the prefix, so a skin tone after its emoji costs nothing
   out += ch;
  }
  return out;

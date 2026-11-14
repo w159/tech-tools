@@ -137,7 +137,7 @@ describe('3. SUBAGENTS draws every running agent', () => {
       const at = f.rows.findIndex((r) => r.includes('▸ SUBAGENTS'));
       expect(at).toBeGreaterThan(-1);
       const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[⠀-⣿] running/.test(r)); // wave 36: one table row per agent under the plan's closed box
-      const more = Number(f.rows.map((r) => /^ {2}\+(\d+) more/.exec(r)).find((m) => m)?.[1] ?? 0); // wave 36: a slot too short for the table counts the agents it cannot draw on a `+N more` row
+      const more = Number(f.rows.map((r) => /^ {2}(?:\+|\S )(\d+) more/.exec(r)).find((m) => m)?.[1] ?? 0); // wave 36: a slot too short for the table counts the agents it cannot draw on a `+N more` row (state 39: the one summary row, `2 more running`)
       if (agentRows.length + more === 0) {
         // Wave 38 (live-110 f0030-f0045): a slot too short for the plan's three running rows AND the table folds SUBAGENTS to its one closed title row; the running plan rows keep theirs.
         expect(f.rows[at]!).toMatch(/3 running/);

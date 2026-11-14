@@ -6,7 +6,7 @@ import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFram
 import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
-import { cells, CHIP_W, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
@@ -37,10 +37,6 @@ const METER_ON = GLYPH5.meterOn;
 const METER_OFF = GLYPH5.meterOff;
 const METER_W = 8;
 const RULE = '─';
-/** The ellipsis of a cut cell: one cell, never three dots (critique 21: `(alpha-expl...` beside a whole `(beta-explorer)`). */
-const ELL = String.fromCharCode(0x2026); // built, not typed: omp/glyph-guard.test.ts bans a literal ellipsis in source (ASCII and NO_COLOR modes swap it)
-const ELL_ASCII = '~';
-const ellOf = (ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? ELL_ASCII : ELL);
 /** A quiet run of the box chrome: the 240 neutral (PALETTE5.dim), the rule, the corners and the brand. The exact grey rides `fg` except in the light theme, where the tone's own muted grey is already the dark one. */
 const dimRun = (text: string, ui: Pick<Ui, 'theme'>): Run => ({ t: text, tone: 'dim', ...(ui.theme === 'latte' ? {} : { fg: PALETTE5.dim }) });
 /** The brand the scorer locates a block by (the ribbon text then `> TODO`, live_capture.py is_block_header :510): the same text as atlas-ui's wordmark, drawn quiet (no fill, 240); the band alone carries the solid chip. ASCII: `[ATLAS]`. */
@@ -311,17 +307,8 @@ function detailCells(rows: readonly TodoRow[], o: SurfaceOpts, metaAt: number, t
   return rows.map((r) => { const d = flat(detailOf(r, rich)); return d === '' ? undefined : clipEll(d, room, ellOf(o.ui)); });
 }
 
-/** `text` in `n` cells: whole, else cut with a one-cell `…`. */
-export function clipEll(text: string, n: number, ell: string = ELL): string {
-  if (n <= 0) return '';
-  if (cells(text) <= n) return text;
-  let out = '';
-  for (const c of [...text]) {
-    if (cells(out) + cells(c) > n - 1) break;
-    out += c;
-  }
-  return `${out.trimEnd()}${ell}`;
-}
+/** `text` in `n` cells: whole, else cut with a one-cell ellipsis, U+2026 (atlas-ui clipEll, the one cut the band and the board share). */
+export { clipEll };
 
 /** The state column: just past the longest title, so every title shows whole; never past the last cell a state word (or chip) still fits,
  * and, where a detail column follows (100 columns and up), never so far that the detail has under 16 cells. Every width has it; only a
@@ -358,9 +345,21 @@ export function todoGrid(cols: number): Grid | undefined {
 /** The state word as the 8-cell column holds it: `done` too (every row has one), `failed` for a doubted done or a pending row whose worker died, `retried` for a retried done. */
 const gridWord = (r: Pick<TodoRow, 'state' | 'word'>): string => (isDoubt(r) || r.word === WORKER_DOWN ? KILLED : r.word === DONE_RETRIED ? 'retried' : r.word ?? r.state);
 
+/** The fewest cells a row's reason is drawn in past the grid's last column (two blank cells before it); with less room the reason takes the owner and clock cells instead. */
+const REASON_MIN = 16;
+const REASON_STATES: ReadonlySet<UiState> = new Set<UiState>(['blocked', 'failed', 'waiting']);
+/** Why a blocked, failed or waiting row is stuck (its plan row's evidence or detail: `needs your approval on the schema change`); '' for any other row, a `returned` hand-back, or a detail that only names the row's owner. */
+export const reasonOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word' | 'agent' | 'owner'>): string => {
+  if (!REASON_STATES.has(r.state) || r.word === RETURNED) return '';
+  const d = flat(detailOf(r));
+  return d === '' || d === flat(r.agent ?? '') || d === flat(r.owner ?? '') ? '' : d;
+};
+
 function todoGridRow(r: TodoRow, o: SurfaceOpts, g: Grid): Run[] {
   const { ui } = o;
   const ell = ellOf(ui);
+  const why = reasonOf(r);
+  const tailRoom = o.cols - 1 - (g.timeAt + TIME_W) - 2; // the cells past the clock, less the two blank cells before the reason
   const finished = r.state === 'done' && markOf(r.state, r.word) !== 'doubt';
   const head: Run[] = [focusMark(r.focus && r.state !== 'queued', ui), t(' '), markRun(markOf(r.state, r.word), o), t(' ')];
   const title = t(clipEll(flat(r.label), g.titleW, ell), finished || r.state === 'queued' ? 'sub' : 'text', { bold: r.focus && !finished }); // a finished row is quiet text beside its green `●`, never struck through; bold marks the selected row only
@@ -368,7 +367,9 @@ function todoGridRow(r: TodoRow, o: SurfaceOpts, g: Grid): Run[] {
   const time = flat(r.agentTime ?? '') || NONE;
   const withState = [...toCol([...head, title], g.stateAt), finished ? t(word, 'sub') : wordRun(r, word)];
   const withOwner = [...toCol(withState, g.ownerAt), calmRun(t(clipEll(flat(r.agent ?? '') || NONE, g.ownerW, ell), 'sub'))]; // the owner never changes with the row's state: the motion leaves it be
-  const row = [...toCol(withOwner, g.timeAt), calmRun(t(' '.repeat(Math.max(0, TIME_W - cells(time))) + clipEll(time, TIME_W, ell), 'sub'))];
+  const timed = [...toCol(withOwner, g.timeAt), calmRun(t(' '.repeat(Math.max(0, TIME_W - cells(time))) + clipEll(time, TIME_W, ell), 'sub'))];
+  // A blocked, failed or waiting row says why past its clock; where the pane leaves under REASON_MIN cells there, the reason takes the owner and clock cells (the stuck row's reason outranks its owner), cut with the one ellipsis.
+  const row = why === '' ? timed : tailRoom >= REASON_MIN ? [...timed, t('  '), t(clipEll(why, tailRoom, ell), 'sub')] : [...toCol(withState, g.ownerAt), t(clipEll(why, o.cols - 1 - g.ownerAt, ell), 'sub')];
   const moved = r.key === undefined ? row : animateRow(row, r.key, markOf(r.state, r.word), o.motion, o.ui, { pop: false });
   return r.focus && r.state !== 'queued' ? barRow(moved, o.cols, o.ui) : moved;
 }
@@ -396,7 +397,10 @@ function todoRowResting(r: TodoRow, o: SurfaceOpts, tier: Tier, rich: boolean, s
   if (stateAt === 0) return [...head, label];
   if (quiet) return right !== undefined && rightAt !== undefined ? [...toCol([...head, label], rightAt), calmRun(t(right, 'sub'))] : [...head, label];
   const row = [...toCol([...head, label], stateAt + flex), rich ? (r.word ? chip(wordOf(r, rich), markToken(markOf(r.state, r.word)), ui) : stateChip(r.state, ui)) : wordRun(r, wordOf(r, rich))];
-  if (right !== undefined && rightAt !== undefined) return [...toCol(row, rightAt), calmRun(t(right, 'sub'))]; // merged: the agent and its clock, right-aligned
+  const why = merged ? reasonOf(r) : ''; // the merged block has no detail column: a stuck row says why where its agent and clock would sit (as the grid's narrow form does), else past its state word
+  if (right !== undefined && rightAt !== undefined) return [...toCol(row, rightAt), why ? t(clipEll(why, o.cols - 1 - rightAt, ellOf(ui)), 'sub') : calmRun(t(right, 'sub'))]; // merged: the agent and its clock, right-aligned
+  const whyRoom = o.cols - 1 - runsCells(row) - 2;
+  if (why && whyRoom >= REASON_MIN) return [...row, t('  '), t(clipEll(why, whyRoom, ellOf(ui)), 'sub')];
   if (tier !== 'full' || detail === undefined) return row;
   const meta = t(detail, finished ? 'muted' : 'sub');
   return [...toCol(row, metaAt), flat(detailOf(r, rich)) === flat(r.owner ?? '') ? calmRun(meta) : meta]; // the owner never changes with the row's state: the motion leaves it be (critique 18: it flashed 231 at 0 ms)
@@ -797,6 +801,8 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
       if (runningN > 0) {
         for (let cap = total - 1; cap >= keep; cap--) tries.push({ ...flatBox, table: true, tableHeader: false, todoCap: cap });
         for (let ac = k - 1; ac >= runningN; ac--) for (let cap = total - 1; cap >= keep; cap--) tries.push({ ...flatBox, table: true, tableHeader: false, todoCap: cap, agentCap: ac });
+        // Then the running agents give way one row at a time behind the one summary row (`4 more running`) before the whole table folds to its title: a table that only folds all at once left rows of the budget unused.
+        for (let ac = Math.min(k, runningN) - 1; ac >= 1; ac--) for (let cap = total; cap >= keep; cap--) tries.push({ ...flatBox, table: true, tableHeader: false, todoCap: cap, agentCap: ac });
       }
       if (keep > 1) for (let cap = total; cap >= keep; cap--) tries.push({ ...flatBox, table: true, todoCap: cap, agentCap: 0 });
       for (let cap = keep - 1; cap >= 1; cap--) tries.push({ ...flatBox, table: true, todoCap: cap });

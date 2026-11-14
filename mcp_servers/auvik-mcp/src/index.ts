@@ -1,9 +1,9 @@
-import { config } from 'dotenv';
 import { startHttpTransport } from './http-transport.js';
 import { startStdioTransport } from './stdio-transport.js';
 
-// Load environment variables
-config();
+// No dotenv: reading <cwd>/.env would let any launch directory set the
+// credentials and region. Env comes from the launcher (the armada plugin's
+// mcp/_env/load.mjs, an MCP host's env block, or the shell).
 
 const transport = process.env.MCP_TRANSPORT || (process.argv.includes('--stdio') ? 'stdio' : 'http');
 

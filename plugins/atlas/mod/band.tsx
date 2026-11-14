@@ -119,6 +119,12 @@ function openRows(s: LiveSnapshot, owners: ReadonlyMap<string, UiState>): { open
   return { openWork: planOpen + openWork(rows.filter((it) => !isPlanItem(it)), s.sessionId), openDispatch: shown.length, ...(failedOpen > 0 ? { failedDispatch: failedOpen } : {}), ...(title ? { openDispatchTitle: title } : {}) };
 }
 
+/** A declared block's reason, when the plan holds one: the evidence of its first blocked row (`needs your approval on the schema change`); none when no blocked row says why. */
+const blockedWhyOf = (plan: readonly { status: string; evidence?: string | null }[]): { blockedWhy?: string } => {
+  const why = plan.find((t) => t.status === 'blocked' && (t.evidence ?? '').trim() !== '')?.evidence?.replace(/\s+/g, ' ').trim();
+  return why ? { blockedWhy: why } : {};
+};
+
 function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   const s = b.snapshot;
   const now = s.now;
@@ -143,7 +149,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   return {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now: spinClock(now, b.tick), // the one spinner clock: the band turns the frame the HUD and the panel turn (critique 19)
     project: boardOf(s), scope: b.team,
-    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
+    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(s.phase === 'blocked' ? blockedWhyOf(plan) : {}), ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
     done, total, ...openRows(s, owners), todoBlocked: blockedCount(plan, owners),
     // The host's own `isWorking: false` is the turn end: stale lead or plan marks do not keep the band working past it. An agent the host lists as running (a resumed native agent whose activity record still reads done)
     // or one the HUD draws running keeps it working at every width: the band never reads idle beside a turning spinner (wave 33).

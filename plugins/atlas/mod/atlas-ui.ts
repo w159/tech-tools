@@ -329,12 +329,27 @@ export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0, braille 
 export const cells = (s: string): number => textWidth(s);
 export const runsCells = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
 export const runsString = (runs: readonly Run[]): string => runs.map((x) => x.t).join('');
+/** The ellipsis of a cut cell: one cell, never three dots (critique 21: `(alpha-expl...` beside a whole `(beta-explorer)`). The HUD, the board and the band cut with it (one idiom). */
+export const ELL = String.fromCharCode(0x2026); // built, not typed: omp/glyph-guard.test.ts bans a literal ellipsis in source (ASCII and NO_COLOR modes swap it)
+export const ELL_ASCII = '~';
+export const ellOf = (ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? ELL_ASCII : ELL);
+/** `text` in `n` cells: whole, else cut with a one-cell `ell`. Widths are measured on the growing prefix, so a zero-width mark (a skin tone, a combining mark) never costs a cell of its own. */
+export function clipEll(text: string, n: number, ell: string = ELL): string {
+  if (n <= 0) return '';
+  if (cells(text) <= n) return text;
+  let out = '';
+  for (const c of [...text]) {
+    if (cells(out + c) > n - 1) break;
+    out += c;
+  }
+  return `${out.trimEnd()}${ell}`;
+}
 /** The longest prefix of `cs` (code points) within `n` cells, and its width. */
 function prefixCells(cs: readonly string[], n: number): { text: string; width: number } {
   let width = 0;
   let text = '';
   for (const c of cs) {
-    const w = cells(c);
+    const w = cells(text + c) - width; // on the prefix: a skin tone after its emoji costs no cell
     if (width + w > n) break;
     width += w;
     text += c;
@@ -343,9 +358,8 @@ function prefixCells(cs: readonly string[], n: number): { text: string; width: n
 }
 /** The longest suffix of `cs` within `n` cells. */
 function suffixCells(cs: readonly string[], n: number): string {
-  let width = 0;
   let at = cs.length;
-  while (at > 0 && width + cells(cs[at - 1]!) <= n) width += cells(cs[--at]!);
+  while (at > 0 && cells(cs.slice(at - 1).join('')) <= n) at--; // on the suffix: a skin tone after its emoji costs no cell
   return cs.slice(at).join('');
 }
 /** Cut to n cells, `...` marking a cut (the ellipsis character is outside the one-cell allowlist). */

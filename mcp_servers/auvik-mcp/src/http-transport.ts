@@ -1,7 +1,7 @@
 import fastify from 'fastify';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createServer } from './server.js';
-import { credentialsStorage, type AuvikCredentials } from './credentials.js';
+import { credentialsStorage, resolveRegion, type AuvikCredentials } from './credentials.js';
 
 const port = parseInt(process.env.MCP_HTTP_PORT || '8080', 10);
 const host = process.env.MCP_HTTP_HOST || '0.0.0.0';
@@ -25,7 +25,7 @@ export async function startHttpTransport(): Promise<void> {
       const credentials: AuvikCredentials = {
         username,
         apiKey,
-        region,
+        region: resolveRegion(region, 'x-auvik-region header'),
       };
 
       // Run the MCP handler within AsyncLocalStorage context
