@@ -493,19 +493,20 @@ describe('fix 1: a blocked row says why', () => {
 
 describe('fix 2: a title with emoji fits its row', () => {
   // The terminal's own count (Bun.stringWidth: East Asian Width and Emoji_Presentation) is the oracle the row must fit; textWidth must agree with it, or a row overflows by a cell per emoji.
+  const stringWidth = (s: string): number => (globalThis as unknown as { Bun: { stringWidth: (s: string) => number } }).Bun.stringWidth(s);
   const TITLES = ['T1 map ✅ the schema', 'T2 ⚡ read alpha.py ❌', 'T3 ⏳ read beta.py ✨', 'T4 ⛔ read gamma.py ⬆', 'T5 ⭐ migrate the ⬛⬜⭕ schema 👍🏽', 'T6 write the summary ✅✅✅✅✅✅✅✅✅✅✅✅'];
   test('every HUD row measures at most `cols` cells by the terminal count, at 110, 80 and 56 columns', () => {
     for (const cols of [110, 80, 56]) {
       const { hud } = fxFrame(cols, { titles: TITLES });
       for (const r of hud) {
-        expect(textWidth(r), r).toBe(Bun.stringWidth(r));
-        expect(Bun.stringWidth(r), r).toBeLessThanOrEqual(cols);
+        expect(textWidth(r), r).toBe(stringWidth(r));
+        expect(stringWidth(r), r).toBeLessThanOrEqual(cols);
       }
     }
   });
   test('a plan block of emoji titles keeps every row within cols in the plain surface too', () => {
     const rows: TodoRow[] = TITLES.map((label, i) => ({ label, state: i === 0 ? 'done' : i < 4 ? 'running' : i === 4 ? 'blocked' : 'queued', detail: i === 4 ? BLOCK_WHY : '', focus: i === 1 }));
-    for (const cols of [120, 80, 40]) for (const r of text(todoRows(rows, opts(cols), full))) expect(Bun.stringWidth(r), r).toBeLessThanOrEqual(cols);
+    for (const cols of [120, 80, 40]) for (const r of text(todoRows(rows, opts(cols), full))) expect(stringWidth(r), r).toBeLessThanOrEqual(cols);
   });
 });
 

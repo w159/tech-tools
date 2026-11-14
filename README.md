@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.21.0, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.21.1, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -371,7 +371,7 @@ Worker pane transport: tmux when installed, else background `claude --bg` proces
 
 ## Releases
 
-Release notes are in each plugin's CHANGELOG ([atlas](plugins/atlas/CHANGELOG.md),
+Atlas 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, so the band, TODO, SUBAGENTS and side panel draw again ([audit](docs/audits/2026-11-14-mod-load.md)). Release notes are in each plugin's CHANGELOG ([atlas](plugins/atlas/CHANGELOG.md),
 [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md))
 and on [GitHub Releases](https://github.com/w159/tech-tools/releases). The
 release workflow (`.github/workflows/release.yml`) publishes `<plugin> <version>`

@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.21.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.21.1 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -1214,7 +1214,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.21.0
+|-- .claude-plugin/plugin.json   manifest, version 17.21.1
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1233,7 +1233,7 @@ atlas/
 
 ## Release notes and license
 
-Changes by version: [CHANGELOG.md](CHANGELOG.md). Before and after measurements
+Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
 for 16.0.0:
 [docs/audits/2026-10-27_atlas-16.0.0-evidence.md](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md).
 

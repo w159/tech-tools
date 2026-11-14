@@ -1,5 +1,14 @@
 # Changelog
 
+## 17.21.1 - 2026-11-14
+
+Fix: the Atlas hooks module did not load in 17.19.0, 17.20.0 and 17.21.0, so no mod surface drew (no band, TODO, SUBAGENTS or side panel). Startup printed `atlas: hooks module did not load: .../mod/usage.ts ...`. Evidence: `docs/audits/2026-11-14-mod-load.md`.
+
+- Cause: `mod/usage.ts` (added in 17.19.0) broke two host loader rules. `$.env.get(name)` passed a variable name where the host needs a quoted literal at each call site, and `typeof $.clock.after` read a `$` member as a value instead of calling it.
+- Fix: `envGet` now spells every variable out as a literal `$.env.get('NAME')` call, and the `typeof $.clock.after` guard is gone, so `$.clock.after(...)` is only called. No other behavior changed.
+- Two new static checks in `mod/host-load-rules.test.ts` (rules 5 and 6) scan every mod and omp source file: rule 5 requires a literal first argument on `$.env.get`, rule 6 requires every `$.noun.event` member to be called where it is spelled.
+- `bunx tsc -p mod/tsconfig.json --noEmit` is clean again: test-only typing fixes for `Bun`, `setTimeout` and the `ThemeName` literal. No product code changed.
+
 ## 17.21.0 - 2026-11-14
 
 Round 2 of the expert audit: closes what 17.20.0 left open, then new critic passes over atlas, armada and programmer. Evidence: `docs/audits/2026-11-14_atlas-round2-expert-audit.md`.
