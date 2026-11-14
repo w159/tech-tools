@@ -1,7 +1,7 @@
 // Idle polish, round 2: what the second hostile critic found in the idle and empty states at 110 and 150. One describe per defect.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandTree, type BandHandlers, type BandModel } from './band';
+import { bandRowCount, bandTree, type BandHandlers, type BandModel } from './band';
 import { busySnap, NOW } from './live_fixture';
 import { uiFromEnv } from './atlas-ui';
 import { healthCardRows } from './hud-surface';
@@ -71,6 +71,21 @@ describe('2: the idle band at 110 says more than one line of figures when no pan
     expect(rows[0]).toContain('▸ health');
     expect(rows.join('\n')).not.toMatch(/gates 4\/4|up 12:04|context|last run|events/);
   });
+});
+
+describe('2b: the band drops its tab chips while the side panel shows its own strip', () => {
+  const chipRow = (rows: string[]) => rows.filter((r) => /status\s+team\s+channel/.test(r));
+  for (const cols of [110, 150]) {
+    test(`at ${cols} with the panel open: no chip row and no blank row left`, () => {
+      const open = rowsOf(model(cols, { panel: true }));
+      expect(chipRow(open)).toEqual([]);
+      expect(open.at(-1)?.trim()).not.toBe('');
+      expect(bandRowCount(model(cols, { panel: true }), true)).toBe(1); // the health row alone: the chip row is gone and no blank stands in for it
+    });
+    test(`at ${cols} with the panel closed: the chip row is drawn`, () => {
+      expect(chipRow(rowsOf(model(cols))).length).toBe(1);
+    });
+  }
 });
 
 describe('3: the idle panel is one finished card: rule and footer pinned to the last body row', () => {

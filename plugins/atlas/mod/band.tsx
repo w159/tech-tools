@@ -304,7 +304,8 @@ function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: Mission
   const m0 = missionModel({ ...b, maxRows, ui });
   const m: MissionModel = m0.health ? { ...m0, health: { ...m0.health, ...(on ? { button: true } : {}) } } : m0;
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
-  const keys = on && idle; // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
+  const keys = on && idle && !m.health?.panel; // wave 44: with the side panel up its own tab strip is the chips; the band draws none and keeps no blank row for them
+  // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   // The narrow form (one band row, no footer) still ends in the key row, blank under 80 columns: an idle band is as tall at 79 columns as at 80, so it never moves when the pane docks.
   if (keys && !lines.some((l) => l.keys) && lines.reduce((n, l) => n + (l.board ?? 1), 0) < maxRows) lines.push({ runs: [], keys: true });
