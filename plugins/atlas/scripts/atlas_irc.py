@@ -222,17 +222,14 @@ def drain(d, nick: str, limit: int = 20) -> list:
     """Unread messages for `nick` (oldest first, at most `limit`); advances its cursor past them."""
     m = members(d)
     cur = cursor(d, nick)
-    recs = [
-        r for r in history(d, cur) if visible_to(r, nick, m.get("channel", "#team"))
-    ]
+    seen = history(d, cur)  # one read: the cursor never passes what this read returned
+    recs = [r for r in seen if visible_to(r, nick, m.get("channel", "#team"))]
     recs = recs[:limit]
     if recs:
         set_cursor(d, nick, int(recs[-1]["seq"]))
-    else:
+    elif seen:
         # skip past own/irrelevant traffic so the next scan starts later
-        tail = history(d, cur)
-        if tail:
-            set_cursor(d, nick, int(tail[-1]["seq"]))
+        set_cursor(d, nick, int(seen[-1]["seq"]))
     return recs
 
 
@@ -993,11 +990,13 @@ def _install_from_env() -> list:
 def _announce_done(d, nick: str, text: str, peer_digests: dict | None = None) -> None:
     """Post DONE with the own-files digest and test_digest (test files + shared pytest inputs); `peer_digests` ({peer: digest} of the closure bytes the passing unit
     check ran against) rides along when given, so the supervisor can skip re-running this worker's tests."""
-    if has_done(d, nick):
+    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
+    digest = _owned_digest(root, _env_owns())
+    prev = latest_done_record(d, nick)
+    if prev is not None and prev.get("digest") == digest:
         print(f"already announced DONE for {nick}")
         return
-    root = os.environ.get("ATLAS_CREW_ROOT") or os.getcwd()
-    extra = {"digest": _owned_digest(root, _env_owns()), "test_digest": test_inputs_digest(root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or "")}
+    extra = {"digest": digest, "test_digest": test_inputs_digest(root, os.environ.get("ATLAS_CREW_UNIT_CHECK") or "")}
     if peer_digests is not None:
         extra["peer_digests"] = peer_digests
     n = passed_count(_LAST_UNIT.get("tail", "")) if _LAST_UNIT.get("code") == 0 else None

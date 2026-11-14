@@ -54,6 +54,12 @@ STOP_BURST_WINDOW = 120  # seconds
 # actual Stop cycles, not how many hooks happen to be wired to Stop.
 STOP_EVENT_DEDUP_SECONDS = 2
 
+# Only a main-session Stop is a Stop cycle. ingest_session is also wired to
+# SubagentStop, PreCompact and SessionEnd; counting those under the parent
+# session_id tripped the breaker during ordinary crew work. A payload with no
+# hook_event_name is treated as Stop (older harnesses, tests).
+_NON_STOP_EVENTS = ("SubagentStop", "PreCompact", "SessionEnd")
+
 STALE_SESSION_SECONDS = 7 * 86400  # prune session state files older than 7 days
 MAX_EMITTED_HASHES = 50  # cap per-session emitted-message memory
 
@@ -203,6 +209,10 @@ def _record_stop_event(state, now):
     state["stop_events"] = [t for t in events if t >= cutoff]
 
 
+def _is_stop_cycle(payload):
+    return str(payload.get("hook_event_name") or "Stop") not in _NON_STOP_EVENTS
+
+
 def _answers_fresh_stop(state, payload, now):
     """True for the one forced continuation (stop_hook_active) that answers a
     fresh Stop. A blocked Stop always produces exactly that continuation, and
@@ -252,11 +262,14 @@ def fault(hook, message, cwd=None):
         atlas_faults.record(hook, exc, cwd)
 
 
-def _note_bypass(hook_name, session_id, first_trip):
-    """Make a breaker bypass visible on stderr (every bypassed gate, the first
-    trip for other hooks). No hook-faults row: a deliberate bypass is not a crash;
-    the durable record is the session's hookstate (breaker_tripped), which the
-    dashboard reads as a hook_burst_tripped event. Never raises."""
+class BreakerBypass(Exception):
+    """Marks a hook-faults row as a deliberate breaker bypass, not a crash."""
+
+
+def _note_bypass(hook_name, session_id, first_trip, cwd=None):
+    """Make a breaker bypass visible: stderr line plus a hook-faults row of
+    type BreakerBypass (every bypassed gate, the first trip for other hooks).
+    Never raises."""
     with contextlib.suppress(Exception):
         gate = hook_name in GATE_HOOKS
         if first_trip or gate:
@@ -264,12 +277,14 @@ def _note_bypass(hook_name, session_id, first_trip):
             tail = (
                 f"{hook_name} BYPASSED (gate not enforced this Stop)"
                 if gate
-                else "silencing all atlas Stop hooks for the rest of this session"
+                else "silencing all atlas Stop hooks until the burst window passes"
             )
-            sys.stderr.write(
+            msg = (
                 f"[atlas] hook_guard: circuit breaker {state} for session {session_id} -- "
-                f"Stop fired more than {STOP_BURST_LIMIT} times within {STOP_BURST_WINDOW}s; {tail}\n"
+                f"Stop fired more than {STOP_BURST_LIMIT} times within {STOP_BURST_WINDOW}s; {tail}"
             )
+            sys.stderr.write(msg + "\n")
+            fault(hook_name, BreakerBypass(msg), cwd)
 
 
 _STR_FIELDS = (
@@ -354,7 +369,7 @@ def run_hook(hook_name, main):
 def should_run(payload, hook_name, window_seconds=None, kind="emit"):
     """False if this Stop hook must not act right now: a continuation it (or
     a sibling hook) forced, its own throttle window, or the session circuit
-    breaker. True otherwise -- and on any internal error, since fail-open is
+    breaker (main-session Stops only; it clears after a quiet window). True otherwise -- and on any internal error, since fail-open is
     absolute here: a hook must never be blocked by a guard bug.
 
     `kind` distinguishes two hook shapes that stop_hook_active must treat
@@ -386,7 +401,26 @@ def should_run(payload, hook_name, window_seconds=None, kind="emit"):
         with _locked(session_id):
             state = _load_state(session_id)
             now = _now()
-            if _answers_fresh_stop(state, payload, now):
+            # A tripped breaker is not forever: once a full window passes with
+            # no Stop event, the burst is over and the gate enforces again.
+            cutoff = now - STOP_BURST_WINDOW
+            recent = [t for t in state.get("stop_events", []) if t >= cutoff]
+            tripped_at = state.get("breaker_tripped_at")
+            if state.get("breaker_tripped") and not isinstance(tripped_at, (int, float)):
+                # A file written before breaker_tripped_at existed: adopt it now, so it clears after
+                # one quiet window like any other trip instead of latching forever.
+                tripped_at = state["breaker_tripped_at"] = now
+            if (
+                state.get("breaker_tripped")
+                and isinstance(tripped_at, (int, float))
+                and not recent
+                and now - tripped_at >= STOP_BURST_WINDOW
+            ):
+                state.pop("breaker_tripped", None)
+                state.pop("breaker_tripped_at", None)
+            if not _is_stop_cycle(payload):
+                state["stop_events"] = recent
+            elif _answers_fresh_stop(state, payload, now):
                 state.setdefault("stop_events", [])
             else:
                 _record_stop_event(state, now)
@@ -397,8 +431,9 @@ def should_run(payload, hook_name, window_seconds=None, kind="emit"):
             ):
                 first_trip = not state.get("breaker_tripped")
                 state["breaker_tripped"] = True
+                state.setdefault("breaker_tripped_at", now)
                 _save_state(session_id, state)
-                _note_bypass(hook_name, session_id, first_trip)
+                _note_bypass(hook_name, session_id, first_trip, payload.get("cwd"))
                 return False
 
             if window_seconds:

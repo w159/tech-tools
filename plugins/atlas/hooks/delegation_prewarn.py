@@ -20,9 +20,11 @@ import atlas_env  # noqa: E402
 atlas_env.apply_store_env()
 
 MSG = (
-    "[atlas] This inline edit of non-docs code will trip the completion gate's "
-    "(m) delegation mandate at Stop. Dispatch an atlas:implementer for it now "
-    "(TOOLS block with ToolSearch + a code-nav tool), or the gate will block."
+    "[atlas] This inline edit of non-docs code is covered by the completion gate's "
+    "(m) delegation mandate at Stop. Cheapest path: run the project's tests once "
+    "with Bash before you stop; the gate re-runs that command itself and a green "
+    "exit satisfies (m). Otherwise dispatch an atlas:implementer for the edit "
+    "(TOOLS block with ToolSearch + a code-nav tool)."
 )
 
 
@@ -58,10 +60,24 @@ def _cheap_reject(payload: dict) -> bool:
     return payload.get("tool_name") not in {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
 
+def _armed(cg, payload: dict) -> bool:
+    """Same arming as the gate itself (completion_gate_core._main): a docs/ SSOT root, or
+    atlas_scope.gates_armed. Where the gate never runs, the warning is noise."""
+    cwd = str(payload.get("cwd") or os.getcwd())
+    if cg._find_root(Path(cwd)) is not None:
+        return True
+    import atlas_scope
+
+    return bool(atlas_scope.gates_armed(cwd))
+
+
 def should_warn(payload: dict) -> bool:
     if _cheap_reject(payload):
         return False
     import completion_gate as cg
+
+    if not _armed(cg, payload):
+        return False
 
     if cg._solo_mode():
         return False

@@ -43,8 +43,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_git.py" status            # branche
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_git.py" branch <slug>     # reuse or create the ONE working branch
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_git.py" clean [--remote] [--dry-run]
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_git.py" allow <branch> --reason "<why>" [--minutes N]
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_git.py" check <commit|push|branch|worktree|pr> [--branch B] [--target T]
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_wt.py" add|status|merge|prune <name>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_git.py" check <action> [--branch B] [--target T]   # action: commit, push, branch, worktree or pr
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_wt.py" <subcommand> <name>   # subcommand: add, status, merge or prune
 ```
 
 `check` exits 0 allow, 3 ask, 4 deny. A guard denial is final for that action: switch branch with `atlas_git.py branch`, do not retry around it.

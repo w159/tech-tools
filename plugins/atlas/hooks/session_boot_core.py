@@ -386,7 +386,8 @@ _STATUS_GLYPHS = _status_glyphs()
 def read_output_style(settings_path=None):
     """Return settings.json outputStyle or '' if unset/unreadable."""
     path = settings_path or os.path.join(
-        os.path.expanduser("~"), ".claude", "settings.json"
+        os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude"),
+        "settings.json",
     )
     try:
         with open(path, encoding="utf-8") as fh:
@@ -553,7 +554,12 @@ def write_dirty_snapshot(cwd, session_id):
         paths = dirty_map(root)
         if paths is None:
             return None
-        os.makedirs(os.path.dirname(target), exist_ok=True)
+        run_dir = os.path.dirname(target)
+        os.makedirs(run_dir, exist_ok=True)
+        gitignore = os.path.join(run_dir, ".gitignore")
+        if not os.path.exists(gitignore):  # runtime state must not show up as untracked files
+            with open(gitignore, "w", encoding="utf-8") as fh:
+                fh.write("*\n!findings.json\n")
         tmp = target + ".tmp"
         with open(tmp, "w") as fh:
             json.dump({"session": session_id, "paths": paths}, fh)
@@ -1036,6 +1042,7 @@ def git_hygiene_boot(cwd, now=None):
         and now - float(stamp.get("at") or 0) >= hours * 3600
     )
     if due:
+        import pathlib
         import subprocess
 
         subprocess.Popen(
@@ -1052,9 +1059,8 @@ def git_hygiene_boot(cwd, now=None):
             start_new_session=True,
         )
         # claim the slot so a burst of sessions does not each start one; the clean rewrites the stamp
-        os.makedirs(os.path.dirname(stamp_path), exist_ok=True)
-        with open(stamp_path, "w", encoding="utf-8") as fh:
-            json.dump({**stamp, "at": int(now)}, fh)
+        # through _write_json so the .run dir gets its .gitignore before the stamp lands
+        atlas_git._write_json(pathlib.Path(stamp_path), {**stamp, "at": int(now)})
     over = []
     for key, noun in (("worktrees", "worktrees"), ("branches", "branches")):
         n, cap = stamp.get(key), stamp.get("max_" + key)
@@ -1265,24 +1271,27 @@ def main():
             import atlas_todo
 
             _todo_root = atlas_todo.find_root(payload.get("cwd") or os.getcwd())
-            # Never create .atlas/.run in a non-project dir (plain dir, $HOME, ~/Downloads).
-            if atlas_db.not_a_project_root(_todo_root) or not (
-                atlas_todo.is_project(_todo_root)
-                or os.path.exists(os.path.join(_todo_root, ".git"))
-            ):
-                carry = {}
-            else:
-                carry = atlas_todo.carry_over(_todo_root, payload.get("session_id", ""))
-                with contextlib.suppress(
-                    Exception
-                ):  # fail-open: dead lead channels must never block boot
-                    try:
-                        import atlas_seats
+            # Never create .atlas/.run (or its lock files) in a plain dir or a plain git repo:
+            # carry over only where a board already exists; the first dispatch creates it.
+            carry = {}
+            if not atlas_db.not_a_project_root(_todo_root):
+                if atlas_todo.board_path(_todo_root).is_file():
+                    carry = atlas_todo.carry_over(
+                        _todo_root, payload.get("session_id", "")
+                    )
+                if atlas_todo.is_project(_todo_root) or os.path.exists(
+                    os.path.join(_todo_root, ".git")
+                ):
+                    with contextlib.suppress(
+                        Exception
+                    ):  # fail-open: dead lead channels must never block boot
+                        try:
+                            import atlas_seats
 
-                        _seat_live = atlas_seats.pane_live
-                    except Exception:  # fail-open: pid/TTL rules only
-                        _seat_live = None
-                    atlas_todo.reap_channels(_todo_root, pane_live=_seat_live)
+                            _seat_live = atlas_seats.pane_live
+                        except Exception:  # fail-open: pid/TTL rules only
+                            _seat_live = None
+                        atlas_todo.reap_channels(_todo_root, pane_live=_seat_live)
             c = carry.get("counts") or {}
             if c.get("needed") or carry.get("carried"):
                 todo_line = (
@@ -1344,8 +1353,8 @@ def main():
                     )
             else:
                 docs_line = (
-                    "docs SSOT absent: no docs/ tree here - run the "
-                    "`atlas-setup` skill to scaffold it. (Not created "
+                    "docs SSOT absent: no docs/ tree here - ask the user to run "
+                    "/atlas:atlas-setup to scaffold it. (Not created "
                     "automatically: onboarding a project that never asked for "
                     "one is intrusive. ATLAS_DOCS_REPAIR=off silences this.)"
                 )
@@ -1398,23 +1407,40 @@ def main():
     if os.environ.get("ATLAS_GATE", "").lower() != "off" and payload.get("session_id"):
         with contextlib.suppress(Exception):
             import subprocess
+            from pathlib import Path
 
-            subprocess.Popen(
-                [
-                    sys.executable,
-                    # the shim is the CLI entry (this module has no __main__ block)
-                    os.path.abspath(__file__).replace(
-                        "session_boot_core.py", "session_boot.py"
-                    ),
-                    "--snapshot",
-                    payload.get("cwd") or os.getcwd(),
-                    payload["session_id"],
-                ],
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
+            from docs_drift import find_root as _snap_docs_root
+
+            sys.path.insert(
+                0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
             )
+            import atlas_scope
+
+            # Only the Stop gate reads the snapshot, and only where it acts: a docs/ SSOT root or armed
+            # gates (same rule as completion_gate_core.main()). Elsewhere it is wasted work that leaves
+            # .atlas/.run behind. Any error here spawns, like the gate's fail-toward-enforcing.
+            snap_cwd = payload.get("cwd") or os.getcwd()
+            try:
+                snap_armed = _snap_docs_root(Path(snap_cwd)) is not None or atlas_scope.gates_armed(snap_cwd)
+            except Exception:  # noqa: BLE001
+                snap_armed = True
+            if snap_armed:
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        # the shim is the CLI entry (this module has no __main__ block)
+                        os.path.abspath(__file__).replace(
+                            "session_boot_core.py", "session_boot.py"
+                        ),
+                        "--snapshot",
+                        snap_cwd,
+                        payload["session_id"],
+                    ],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
 
     boot_root = payload.get("cwd") or os.getcwd()
     mem_plugin = plugin_enabled("claude-mem", boot_root)
@@ -1486,7 +1512,7 @@ def main():
     ]
     if absent:
         lines.append(
-            f"Setup gap: {', '.join(absent)} absent - run the `atlas-setup` skill to install."
+            f"Setup gap: {', '.join(absent)} absent - ask the user to run /atlas:atlas-setup to install."
         )
     if fallow:
         lines.append(
@@ -1539,13 +1565,13 @@ def main():
             )
             parts = ", ".join(f"{n} {name}" for name, n in groups if n)
             docs_line = (
-                f"docs SSOT absent: project not scaffolded (missing {len(missing)}: {parts}) - run the "
-                "`atlas-setup` skill to scaffold it; nothing is created automatically "
+                f"docs SSOT absent: project not scaffolded (missing {len(missing)}: {parts}) - ask the user to "
+                "run /atlas:atlas-setup to scaffold it; nothing is scaffolded automatically "
                 "(ATLAS_DOCS_REPAIR=off silences this)."
             )
         elif missing:
             lines.append(
-                f"atlas: project structure incomplete (missing: {', '.join(missing)}) - run /atlas-setup to scaffold/repair"
+                f"atlas: project structure incomplete (missing: {', '.join(missing)}) - ask the user to run /atlas:atlas-setup to scaffold/repair"
             )
 
     if todo_line:
@@ -1592,7 +1618,7 @@ def main():
             lines.append(colony + COLONY_OFF_HINT)
     sys_msg = "Atlas ready"
     if not (mem and ctx):
-        sys_msg += " (run the `atlas-setup` skill to complete setup)"
+        sys_msg += " (run /atlas:atlas-setup to complete setup)"
     if active_style and active_style != ATLAS_OUTPUT_STYLE:
         sys_msg += (
             f" | outputStyle={active_style!r} (docs: plugin style should still win; "

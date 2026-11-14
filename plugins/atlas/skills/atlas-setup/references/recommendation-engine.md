@@ -22,7 +22,7 @@ Check: does `.atlas/` exist? Does `docs/CHANGELOG.md` exist? Are hooks
 wired? Is claude-mem installed? Is context-mode installed?
 
 If any are missing: recommend atlas-setup (boot and configure).
-Command: `/atlas-setup install`.
+Command: tell the user to run `/atlas:atlas-setup install`.
 
 ### 2. Structural completeness (confidence: high)
 
@@ -122,7 +122,7 @@ signals but no NinjaOne connector)? Does atlas-setup show disabled connectors?
 
 If vendor signals present but connector not configured: recommend
 atlas-setup (connector setup).
-Command: invoke the atlas-setup skill.
+Command: tell the user to run `/atlas:atlas-setup` (it is user-invoked only).
 Reason: "Your stack suggests you use <vendor> but the connector is not
 configured."
 

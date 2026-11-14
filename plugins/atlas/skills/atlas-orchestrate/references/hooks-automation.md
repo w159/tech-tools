@@ -47,11 +47,15 @@ subagents to invoke during read-only audits. In total 19 hook programs / 23 bind
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --list            # current coverage
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py                   # plan (dry-run)
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --apply           # install the DEFAULT set (optimizer, format, guard); add --select completion-gate for the Stop gate
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --select completion-gate --apply   # opt into the Stop gate
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --select optimizer --apply
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --apply           # install the DEFAULT set: only hooks the plugin does not already run (currently none)
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py --uninstall --apply
 ```
+
+The plugin already runs prompt_optimizer, format_after_edit, bash_advisor and completion_gate through
+`hooks/hooks.json` or `event_dispatch.BINDINGS`, so the default selection excludes every script wired
+there (computed at run time) and `--apply` refuses to add one to settings.json: a second copy would run
+the hook twice (double latency and context, and a Stop gate with the wrong timeout). Run it only to
+inspect coverage (`--list`) or to install a hook the plugin does not wire.
 
 It MERGES into the target settings file (default `~/.claude/settings.json`), never clobbering
 existing hooks, and backs the file up before writing. Per law 6, present the plan and get the
@@ -226,8 +230,8 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   `ATLAS_GATE_BLOCK_LOOP`, clamped to 1-7); after N identical consecutive blocks every later
   identical Stop is allowed, until a Stop passes or the failing letters change, and
   `gate_block_loop` friction is recorded.
-- **On by default when docs/ exists** (via the plugin's hooks.json; a plain `install_hooks.py --apply`
-  does not install it, add `--select completion-gate`). Disable with `ATLAS_GATE=off`. (Note: it coexists with codebase-brain's
+- **On by default when docs/ exists** (via the plugin's hooks.json; `install_hooks.py` refuses to add
+  a second copy to settings.json). Disable with `ATLAS_GATE=off`. (Note: it coexists with codebase-brain's
   `validate_gate.py` Stop hook -- that one is message-text based, this one is artifact based;
   complementary.)
 

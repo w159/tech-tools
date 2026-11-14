@@ -60,13 +60,13 @@ The completion gate reads `.atlas/.run/findings.json`, not your chat text. NEVER
 
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
       --id <stage-or-finding-id> \
-      --status verified|rejected|needs-evidence \
+      --status verified \
       --title "<one line>" \
       --evidence "<file:line, test id, or .atlas/evidence/... path>" \
       --reproduction "<the exact command you ran>" \
       --by atlas:verifier
 
-If `${CLAUDE_PLUGIN_ROOT}` is unset (always under omp), use the absolute script path from your dispatch, and pass `--root <project-root>` if the root cannot be detected. Use `--status verified` only for a claim you personally reproduced; `needs-evidence` is the honest status for a plausible but unproven claim, and writing it is still required. A verdict returned as prose with no findings.json row is an incomplete run and forces a redundant re-dispatch.
+If `${CLAUDE_PLUGIN_ROOT}` is unset (always under omp), use the absolute script path from your dispatch, and pass `--root <project-root>` if the root cannot be detected. Status is one of `verified`, `rejected` or `needs-evidence`; use `--status verified` only for a claim you personally reproduced; `needs-evidence` is the honest status for a plausible but unproven claim, and writing it is still required. A verdict returned as prose with no findings.json row is an incomplete run and forces a redundant re-dispatch.
 
 ## Report back (final message only)
 

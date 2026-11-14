@@ -101,6 +101,19 @@ def stop_verdict_line(session: str, root: Path):
     return _line("stop-verdict", "Last Stop allowed", True)
 
 
+def _find_transcript(session: str) -> str:
+    """~/.claude/projects/*/<session>.jsonl when it exists, else "". Cheap: one glob, no reads."""
+    try:
+        if not session or not session.replace("-", "").replace("_", "").isalnum():
+            return ""
+        import glob
+
+        hits = glob.glob(os.path.join(os.path.expanduser("~"), ".claude", "projects", "*", session + ".jsonl"))
+        return max(hits, key=os.path.getmtime) if hits else ""
+    except Exception:  # noqa: BLE001 -- display only
+        return ""
+
+
 def completion_group(session: str, root: Path, transcript: str) -> dict:
     g = _completion_group(session, root, transcript)
     line = stop_verdict_line(session, root)
@@ -116,7 +129,10 @@ def _completion_group(session: str, root: Path, transcript: str) -> dict:
     if os.environ.get("ATLAS_GATE", "").lower() == "off":
         g["error"] = "gate is off"
         return g
-    data = {"session_id": session, "cwd": str(root), "transcript_path": transcript}
+    transcript = transcript or _find_transcript(session)
+    # display_only: this view waives nothing, so with no transcript a crew proof is judged on the engine's
+    # own files (marked launch_checked False); the Stop gate always checks the transcript.
+    data = {"session_id": session, "cwd": str(root), "transcript_path": transcript, "display_only": True}
     missing_delegation, _paths, _note = cg._delegation_state(data, root)
     if not cg._session_is_orchestrating(session):
         g["lines"].append(

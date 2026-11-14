@@ -351,6 +351,28 @@ def not_a_project_root(path):
     return real in temps
 
 
+_PROJECT_MARKERS = (
+    ".git",
+    ".claude",
+    ".atlas",
+    "package.json",
+    "pyproject.toml",
+    "Cargo.toml",
+    "go.mod",
+    "CLAUDE.md",
+    "AGENTS.md",
+)
+
+
+def is_existing_project(path):
+    """True when `path` already carries a project marker (.git, .atlas, package.json ...) and is not
+    a non-project root. Hooks use it before creating .atlas/ so a plain directory is never turned
+    into a project (.atlas is itself a marker, so a stray write arms gates and channels there)."""
+    if not path or not_a_project_root(path):
+        return False
+    return any(os.path.exists(os.path.join(path, m)) for m in _PROJECT_MARKERS)
+
+
 def register_project(conn, root_path, name=None, stack=None):
     """Register a project root; returns its id, or None (no-op) for non-project roots."""
     if not_a_project_root(root_path):
@@ -469,7 +491,7 @@ def _write_orchestration_sentinel(cwd):
     """Advisory only. Never read for gating; a stale file must not enable a gate."""
     try:
         root = _project_root_for_sentinel(cwd)
-        if not_a_project_root(root):
+        if not is_existing_project(root):
             return
         run_dir = os.path.join(root, ".atlas", ".run")
         os.makedirs(run_dir, exist_ok=True)
@@ -1166,17 +1188,27 @@ def upsert_finding(conn, fingerprint, **fields):
     ).fetchone()[0]
 
 
+# Every value a writer stores: the doctor CLI, selffix and the dashboard
+# (wontfix is its own state there; resolved is read back as fixed).
+FINDING_STATUSES = ("open", "accepted", "rejected", "applied", "verified", "regressed", "wontfix", "resolved")
+
+
 def set_finding_status(conn, finding_id, status, decided_at=None, applied_at=None):
-    """Transition a finding's status (open|accepted|rejected|applied|
-    verified|regressed). decided_at/applied_at are only overwritten when a
-    caller passes them explicitly."""
-    conn.execute(
+    """Transition a finding's status (one of FINDING_STATUSES). decided_at/applied_at are only overwritten when a
+    caller passes them explicitly. ValueError for an unknown status; returns
+    False when no finding has that id (nothing was updated)."""
+    if status not in FINDING_STATUSES:
+        raise ValueError(
+            "unknown finding status %r (expected one of %s)" % (status, ", ".join(FINDING_STATUSES))
+        )
+    cur = conn.execute(
         "UPDATE findings SET status=?, "
         "decided_at=COALESCE(?,decided_at), applied_at=COALESCE(?,applied_at) "
         "WHERE id=?",
         (status, decided_at, applied_at, finding_id),
     )
     conn.commit()
+    return cur.rowcount > 0
 
 
 def get_finding(conn, finding_id):

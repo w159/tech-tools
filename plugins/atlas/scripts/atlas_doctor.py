@@ -80,6 +80,7 @@ import argparse  # noqa: E402 -- after the stamp fast path on purpose
 import ast  # noqa: E402
 import hashlib  # noqa: E402
 import re  # noqa: E402
+import shlex  # noqa: E402
 import shutil  # noqa: E402
 import subprocess  # noqa: E402
 from datetime import datetime, timezone  # noqa: E402
@@ -90,7 +91,7 @@ import atlas_paths  # noqa: E402
 import doctor_layout  # noqa: E402
 
 
-def _hook_stamp_write(plugin, ok):
+def _hook_stamp_write(plugin, ok, warned_sig=None, warned_t=None):
     try:
         try:
             with open(_hook_stamp_path()) as f:
@@ -99,12 +100,29 @@ def _hook_stamp_write(plugin, ok):
                 stamps = {}
         except (OSError, ValueError):
             stamps = {}
-        stamps[_hook_stamp_key(plugin)] = {"t": time.time(), "ok": bool(ok)}
+        entry = {"t": time.time(), "ok": bool(ok)}
+        if warned_sig:
+            entry.update(warned_sig=warned_sig, warned_t=warned_t or entry["t"])
+        stamps[_hook_stamp_key(plugin)] = entry
         # keep the file bounded: newest 50 keys
         keep = sorted(stamps, key=lambda k: stamps[k].get("t", 0))[-50:]
         _save_json(_hook_stamp_path(), {k: stamps[k] for k in keep})
     except (OSError, ValueError, TypeError, AttributeError):
         pass  # the stamp is an optimization; losing it only costs one full check
+
+
+def _hook_warn_due(plugin, sig):
+    """(due, previous warned_t). A failure already warned about within a day is not repeated;
+    a different failure, or the same one a day later, warns again."""
+    try:
+        with open(_hook_stamp_path()) as f:
+            entry = json.load(f).get(_hook_stamp_key(plugin)) or {}
+        warned_t = float(entry.get("warned_t", 0))
+        if entry.get("warned_sig") == sig and 0 <= time.time() - warned_t < 86400:
+            return False, warned_t
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return True, None
 
 
 # --- maintenance caps (keep the plugin's own footprint bounded across runs) ---
@@ -231,7 +249,19 @@ def detect_load_source(plugin_name="atlas"):
         os.path.join(repo, ".claude-plugin", "marketplace.json")
     ):
         return "plugin-dir", root
+    # --plugin-dir at any other path: Claude Code exports CLAUDE_PLUGIN_ROOT, and a root outside the
+    # plugins cache/marketplace dirs is not an installed copy, so it has no installed_plugins.json entry.
+    if os.environ.get("CLAUDE_PLUGIN_ROOT") and not any(
+        _path_under(root, os.path.join(PLUGINS_DIR, sub)) for sub in ("cache", "marketplaces")
+    ):
+        return "plugin-dir", root
     return None, root
+
+
+def _path_under(path, base):
+    base = os.path.realpath(base)
+    path = os.path.realpath(path)
+    return path == base or path.startswith(base.rstrip(os.sep) + os.sep)
 
 
 def find_registration(installed, plugin_name):
@@ -348,6 +378,40 @@ def update_probe(clone, plugin_name):
     except Exception:  # the check must never crash the doctor or a hook chain
         out["state"] = "skipped"
     return out
+
+
+def fix_command():
+    """The runnable --fix command: absolute, shell-quoted script path."""
+    return shlex.join(["python3", os.path.abspath(__file__), "--fix"])
+
+
+# Failures apply_fixes cannot repair: they need an update or a reinstall.
+_NOT_FIXABLE = frozenset(
+    {"self-manifest", "config-readable", "registered", "hooks-wired", "operating-contract", "output-style"}
+)
+_NEEDS_CLONE = frozenset({"clone-remote", "version-sync", "clone-fresh", "rollback", "install-path"})
+
+
+def recommended_remedy(failed, ctx, plugin_name="atlas"):
+    """'Run: <command>' for the failures --fix can repair, else the real remedy (the update command)."""
+    clone = (ctx or {}).get("clone")
+    has_clone = bool(clone and os.path.isdir(os.path.join(clone, ".git")))
+    ids = {r["check"] for r in failed}
+    unfixable = ids & _NOT_FIXABLE
+    if not has_clone:
+        unfixable |= ids & _NEEDS_CLONE
+    fixable = ids - unfixable
+    mkt = (ctx or {}).get("mkt_name")
+    update = (
+        update_commands(mkt, plugin_name).replace(", then restart Claude Code", "")
+        if mkt
+        else f"/plugin update {plugin_name}"
+    )
+    if fixable and unfixable:
+        return f"Run: {fix_command()} (repairs {', '.join(sorted(fixable))}); for {', '.join(sorted(unfixable))} run: {update}"
+    if fixable:
+        return f"Run: {fix_command()}"
+    return f"--fix cannot repair this; run: {update}"
 
 
 def update_commands(mkt_name, plugin_name):
@@ -652,14 +716,17 @@ def check_output_style(settings_path=None):
     value is still reported as a risk rather than a confirmed break.
     """
     path = settings_path or os.path.join(
-        os.path.expanduser("~"), ".claude", "settings.json"
+        os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude"),
+        "settings.json",
     )
     try:
         data = _load_json(path) if os.path.isfile(path) else {}
     except Exception as e:
+        # the user's style is unknown: that is not a pass (boot still injects the header contract)
         return (
-            True,
-            f"settings unreadable ({e}); boot will still inject header contract",
+            False,
+            f"settings unreadable ({e}); cannot tell whether an outputStyle overrides Atlas's; "
+            "boot still injects the header contract",
         )
     style = ""
     if isinstance(data, dict):
@@ -812,7 +879,7 @@ def check_context_tooling(root_path=None):
     root = root_path or _repo_root(os.getcwd())
     path = os.path.join(root, "AGENTS.md")
     if not os.path.isfile(path):
-        return False, f"{path} does not exist; run atlas-setup to scaffold it"
+        return False, f"{path} does not exist; ask the user to run /atlas:atlas-setup to scaffold it"
     try:
         with open(path, encoding="utf-8") as f:
             body = f.read()
@@ -822,8 +889,8 @@ def check_context_tooling(root_path=None):
         return True, "AGENTS.md carries the atlas-tooling routing block"
     return (
         False,
-        "AGENTS.md lacks the atlas-tooling routing block; re-run atlas-setup's "
-        "scaffold_docs.py to insert it",
+        "AGENTS.md lacks the atlas-tooling routing block; ask the user to run /atlas:atlas-setup "
+        "(scaffold_docs.py) to insert it",
     )
 
 
@@ -837,7 +904,7 @@ def fix_context_tooling(root_path=None):
     if atlas_db.not_a_project_root(root):
         return f"SKIP tooling block: {root} is not a project root"
     if not os.path.isfile(path):
-        return f"SKIP tooling block: {path} does not exist (run atlas-setup)"
+        return f"SKIP tooling block: {path} does not exist (ask the user to run /atlas:atlas-setup)"
     try:
         with open(path, encoding="utf-8") as f:
             has_marker = "atlas-tooling" in f.read()
@@ -949,6 +1016,10 @@ def _atlas_statusline_script(plugin_root):
 def _atlas_statusline_command(plugin_root):
     # Same form atlas_statusline.py install writes.
     return 'python3 "%s"' % _atlas_statusline_script(plugin_root)
+
+
+def _same_file(a, b):
+    return os.path.realpath(a) == os.path.realpath(b)
 
 
 def _statusline_script_path(cfg):
@@ -1234,6 +1305,10 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
         elif script and not os.path.isfile(script):
             add("display-statusline", False, f"statusLine points at missing {script}; `atlas_doctor.py --fix` "
                 f"repoints it to {_atlas_statusline_command(root)}")
+        elif script and not _same_file(script, _atlas_statusline_script(root)):
+            add("display-statusline", False, f"statusLine runs {script}, not this plugin's "
+                f"{_atlas_statusline_script(root)} (another install or an old version); `atlas_doctor.py --fix` "
+                f"repoints it to {_atlas_statusline_command(root)}")
         elif script:
             add("display-statusline", True, f"statusLine runs {script}")
         else:
@@ -1398,7 +1473,9 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     cfg = data.get("statusLine")
     script = _statusline_script_path(cfg)
     if os.path.isfile(_atlas_statusline_script(root)) and (
-        cfg in (None, {}, "") or (script and not os.path.isfile(script))
+        cfg in (None, {}, "")
+        or (script and not os.path.isfile(script))
+        or (script and not _same_file(script, _atlas_statusline_script(root)))
     ):
         data["statusLine"] = dict(cfg if isinstance(cfg, dict) else {}, type="command", command=_atlas_statusline_command(root), refreshInterval=5)
         notes.append(f"set statusLine to {_atlas_statusline_command(root)} (refreshInterval 5) in {path}")
@@ -1675,6 +1752,26 @@ def _live_faults(faults, version):
     return atlas_faults.live_faults(faults, version)
 
 
+def _dir_creatable(directory):
+    """(ok, reason): `directory` exists and is writable, or can be created under its nearest existing
+    ancestor. Proven by creating and removing a scratch dir, because os.access lies for root and /proc."""
+    import tempfile
+
+    cur = os.path.abspath(directory)
+    while not os.path.exists(cur):
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    if not os.path.isdir(cur):
+        return False, f"{cur} is not a directory"
+    try:
+        os.rmdir(tempfile.mkdtemp(dir=cur, prefix=".atlas-doctor-probe-"))
+    except OSError as e:
+        return False, f"cannot create under {cur}: {e.strerror or e}"
+    return True, ""
+
+
 def behaviour_checks(add, plugin_name, version, now=None):
     """Runtime checks: is enforcement actually live, not merely installed?
     Each is read-only and bounded (one DB open, two indexed-ish scans)."""
@@ -1686,17 +1783,19 @@ def behaviour_checks(add, plugin_name, version, now=None):
     faults = _live_faults(loaded, atlas_faults._plugin_version())
     n, ignored = len(faults), len(loaded) - len(faults)
     last = faults[-1] if faults else {}
+    faults_dir_ok, faults_dir_why = _dir_creatable(os.path.dirname(atlas_faults._path()))
     add(
         "hook-faults",
-        n == 0,
-        f"{n} hook fault(s) in 24h"
+        n == 0 and faults_dir_ok,
+        (f"hook faults cannot be recorded: {faults_dir_why}; " if not faults_dir_ok else "")
+        + f"{n} hook fault(s) in 24h"
         + (f"; last {last.get('hook')}: {last.get('error', '')[:80]}" if n else "")
         + (
-            f" ({ignored} ignored: formatter skips or other installs)"
+            f" ({ignored} ignored: formatter skips, breaker bypasses or other installs)"
             if ignored
             else ""
         ),
-        severity="fail" if n >= FAULT_FAIL_24H else "warn",
+        severity="fail" if n >= FAULT_FAIL_24H or not faults_dir_ok else "warn",
     )
     # B2: env kill switches / scope make the gates inert
     off = [
@@ -1736,7 +1835,12 @@ def behaviour_checks(add, plugin_name, version, now=None):
     # B4/B5/B6: the DB the hooks write to
     path = atlas_db.db_path()
     if not os.path.isfile(path):
-        add("db-writable", True, f"no atlas.db yet at {path}")
+        dir_ok, dir_why = _dir_creatable(os.path.dirname(path))
+        add(
+            "db-writable",
+            dir_ok,
+            f"no atlas.db yet at {path}" if dir_ok else f"no atlas.db at {path} and it cannot be created: {dir_why}",
+        )
         return
     writable = os.access(path, os.W_OK) and os.access(os.path.dirname(path), os.W_OK)
     add(
@@ -1864,6 +1968,48 @@ def run_checks(plugin_name="atlas"):
     return results, ctx
 
 
+def binding_problems(ip):
+    """Hook modules event_dispatch.BINDINGS runs that are missing, unparseable or without main().
+
+    hooks.json only names event_dispatch.py, so a deleted hook module (git_guard.py ...) would
+    otherwise fail silently inside the dispatcher. Read statically (ast), never imported."""
+    import ast
+
+    path = os.path.join(ip, "hooks", "event_dispatch.py")
+    if not os.path.exists(path):
+        return []  # the hooks.json file check already reports event_dispatch.py itself
+    try:
+        with open(path, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        names, remap = set(), {}
+        for node in tree.body:
+            target = getattr(node, "targets", [None])[0] if isinstance(node, ast.Assign) else None
+            if isinstance(target, ast.Name) and target.id == "BINDINGS":
+                for sub in ast.walk(node.value):
+                    if isinstance(sub, ast.Tuple) and sub.elts and isinstance(sub.elts[0], ast.Constant) and isinstance(sub.elts[0].value, str) and len(sub.elts) == 3:
+                        names.add(sub.elts[0].value)
+            if isinstance(target, ast.Name) and target.id == "_MODULES":
+                remap = ast.literal_eval(node.value)
+    except Exception as e:  # unreadable bindings must not read as healthy
+        return [f"cannot read event_dispatch.py ({e})"]
+    problems = []
+    for name in sorted(names):
+        module = remap.get(name, name)
+        mod_path = os.path.join(ip, "hooks", module + ".py")
+        try:
+            with open(mod_path, encoding="utf-8") as fh:
+                mod = ast.parse(fh.read())
+        except OSError:
+            problems.append(f"{module}.py missing")
+            continue
+        except SyntaxError as e:
+            problems.append(f"{module}.py does not parse ({e.msg})")
+            continue
+        if not any(isinstance(n, ast.FunctionDef) and n.name == "main" for n in mod.body):
+            problems.append(f"{module}.py defines no main()")
+    return problems
+
+
 def _content_checks(add, ctx, ip, clone, plugin_name):
     """C6-C13: checks on the plugin tree at `ip` that need no marketplace."""
     # C5b: the mod reads this file; unusable => thin band, no stepper/pill
@@ -1878,10 +2024,19 @@ def _content_checks(add, ctx, ip, clone, plugin_name):
         for rel in re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\"\\ ]+)", blob):
             if not os.path.exists(os.path.join(ip, rel)):
                 missing.append(rel)
+        broken = binding_problems(ip)
         add(
             "hooks-wired",
-            not missing,
-            f"missing: {missing}" if missing else "all hook files present",
+            not missing and not broken,
+            "; ".join(
+                part
+                for part in (
+                    f"missing: {missing}" if missing else "",
+                    f"event_dispatch bindings: {broken}" if broken else "",
+                )
+                if part
+            )
+            or "all hook files present",
         )
     else:
         add("hooks-wired", False, "hooks/hooks.json absent from installed copy")
@@ -3983,8 +4138,8 @@ def layout_checks(root):
     project-identity counts. Never writes."""
     out = []
 
-    def add(cid, ok, detail):
-        out.append({"check": cid, "ok": ok, "detail": detail, "severity": "warn"})
+    def add(cid, ok, detail, severity="warn"):
+        out.append({"check": cid, "ok": ok, "detail": detail, "severity": severity})
 
     # A non-project root (HOME, Downloads, temp) is never walked and --fix
     # refuses it: report both checks as not applicable, never as passed or
@@ -4003,14 +4158,17 @@ def layout_checks(root):
             else f"{len(found)} misplaced (--fix archives, never deletes):\n      "
             + "\n      ".join(doctor_layout.layout_summary(found)),
         )
-        bad = doctor_layout.docs_naming_violations(root)
-        add(
-            "docs-naming",
-            not bad,
-            "docs names conform"
-            if not bad
-            else f"{len(bad)} file(s) need renaming; run atlas_doctor.py --fix",
-        )
+        bad, naming_err = doctor_layout.docs_naming_status(root)
+        if naming_err:
+            add("docs-naming", False, f"docs naming lint could not run: {naming_err}", severity="warn")
+        else:
+            add(
+                "docs-naming",
+                not bad,
+                "docs names conform"
+                if not bad
+                else f"{len(bad)} file(s) need renaming; run {fix_command()}",
+            )
     missing, tagged = doctor_layout.project_memory_status(root)
     add(
         "project-memory",
@@ -4027,7 +4185,7 @@ def layout_checks(root):
     try:
         counts, _rows = doctor_layout.check_project_identity(conn)
     except Exception as e:  # missing table on a very old DB
-        add("project-identity", True, f"unreadable: {e}")
+        add("project-identity", False, f"cannot inspect project identity: {e}", severity="warn")
         return out
     finally:
         conn.close()
@@ -4054,13 +4212,13 @@ def hook_layout_notes(cwd):
         n = 0 if refused else len(doctor_layout.docs_naming_violations(cwd))
         if n:
             lines.append(
-                f"docs naming: {n} files need renaming; run atlas_doctor.py --fix"
+                f"docs naming: {n} files need renaming; run {fix_command()}"
             )
         miss, tagged = doctor_layout.project_memory_status(cwd)
         if miss or tagged:
             lines.append(
                 f"project memory: {miss} finding(s) unrecorded, {tagged} global "
-                "memory entr(ies) to migrate; run atlas_doctor.py --fix"
+                f"memory entr(ies) to migrate; run {fix_command()}"
             )
     except Exception as e:  # a hook never breaks the session
         import atlas_faults
@@ -4326,7 +4484,7 @@ def main(argv=None):
         "--set-status",
         nargs=2,
         metavar=("FINDING_ID", "STATUS"),
-        help="transition a finding: open|accepted|rejected|applied|verified|regressed",
+        help="transition a finding: " + "|".join(atlas_db.FINDING_STATUSES),
     )
     ap.add_argument(
         "--baseline",
@@ -4442,11 +4600,21 @@ def main(argv=None):
         return 0
 
     if args.set_status:
-        finding_id, status = int(args.set_status[0]), args.set_status[1]
+        try:
+            finding_id, status = int(args.set_status[0]), args.set_status[1]
+        except ValueError:
+            print(f"--set-status: finding id must be an integer, got {args.set_status[0]!r}")
+            return 2
+        if status not in atlas_db.FINDING_STATUSES:
+            print(
+                f"--set-status: unknown status {status!r}; expected one of "
+                + ", ".join(atlas_db.FINDING_STATUSES)
+            )
+            return 2
         conn = atlas_db.connect()
         atlas_db.init(conn)
         now = time.time()
-        atlas_db.set_finding_status(
+        updated = atlas_db.set_finding_status(
             conn,
             finding_id,
             status,
@@ -4454,6 +4622,9 @@ def main(argv=None):
             applied_at=now if status == "applied" else None,
         )
         conn.close()
+        if not updated:
+            print(f"--set-status: no finding with id {finding_id}")
+            return 1
         print(f"finding {finding_id} -> {status}")
         return 0
 
@@ -4600,12 +4771,15 @@ def main(argv=None):
         for line in hook_layout_notes(_project_dir()):
             print(line)
         record_hook_verdict(args.plugin, failed)
-        _hook_stamp_write(args.plugin, not failed)
-        if failed:
+        detail = "; ".join(f"{r['check']}: {r['detail']}" for r in failed)
+        sig = hashlib.sha256(detail.encode()).hexdigest()[:16] if failed else None
+        due, prev_t = _hook_warn_due(args.plugin, sig) if failed else (False, None)
+        _hook_stamp_write(args.plugin, not failed, sig, prev_t)
+        if failed and due:
             print(
                 f"ATLAS-DOCTOR WARNING: {args.plugin} plugin is unhealthy - "
-                + "; ".join(f"{r['check']}: {r['detail']}" for r in failed)
-                + ". Run: python3 <plugin>/scripts/atlas_doctor.py --fix"
+                + detail
+                + f". {recommended_remedy(failed, ctx, args.plugin)}"
                 + (", then /reload-plugins." if _harness() == "claude" else ".")
             )
         return 0

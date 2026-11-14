@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install the atlas-orchestrate skill's automation hooks into a settings.json (GATED).
 
-The atlas-orchestrate skill ships three hooks (under ../hooks/). This wires them into a Claude
+The atlas-orchestrate skill ships hooks (under ../hooks/). This wires them into a Claude
 Code settings file by MERGING - it never clobbers existing hooks, and it is idempotent
 (re-running is a no-op once installed). Dry-run by default; only --apply writes, and it
 backs the settings file up first.
@@ -12,14 +12,16 @@ Hooks:
   guard            PreToolUse  Bash            bash_advisor.py
   completion-gate  Stop                        completion_gate.py     (opt-out; on by default when docs/ exists)
 
-The completion gate enforces the atlas "Definition of done" (no stopping a run
-until evidence is captured). It is intrusive, so it is OFF by default: a plain --apply
-installs the first three only. Install it explicitly with --select completion-gate.
+The plugin already runs all four hooks through hooks/hooks.json or event_dispatch.BINDINGS
+(the completion gate is on by default when docs/ exists). A settings.json copy would run them
+twice, so the default selection excludes every wired script (computed at run time) and
+--apply refuses to add one. This script now only matters for hooks the plugin does not wire;
+--list shows each hook as installed, "wired by the plugin" or not installed.
 
 Usage:
   python3 install_hooks.py --list                              # coverage in the default settings file
   python3 install_hooks.py                                     # plan (dry-run) for ~/.claude/settings.json
-  python3 install_hooks.py --apply                             # install the default set (NOT the gate)
+  python3 install_hooks.py --apply                             # install the default set (hooks the plugin does not already wire)
   python3 install_hooks.py --select completion-gate --apply    # opt into the completion gate
   python3 install_hooks.py --select optimizer --apply          # just the prompt optimizer
   python3 install_hooks.py --settings PATH [--apply]           # target a specific settings file
@@ -31,8 +33,11 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as _dt
 import json
+import re
+import sys
 from pathlib import Path
 
 HOOKS_DIR = Path(__file__).resolve().parent.parent / "hooks"
@@ -55,8 +60,44 @@ HOOK_SPECS = {
 OPT_IN = {"completion-gate"}
 
 
+def wired_scripts() -> set[str]:
+    """Script filenames the plugin already runs: hooks.json commands plus event_dispatch.BINDINGS.
+
+    Computed, never hardcoded. Installing one of these into settings.json would run it twice.
+    """
+    names: set[str] = set()
+    try:
+        data = json.loads((HOOKS_DIR / "hooks.json").read_text(encoding="utf-8"))
+        for groups in data.get("hooks", {}).values():
+            for group in groups:
+                for h in group.get("hooks", []):
+                    names.update(re.findall(r"([A-Za-z0-9_]+\.py)", h.get("command", "")))
+    except (OSError, ValueError):
+        pass
+    try:
+        tree = ast.parse((HOOKS_DIR / "event_dispatch.py").read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            targets = (
+                [node.target]
+                if isinstance(node, ast.AnnAssign)
+                else getattr(node, "targets", [])
+            )
+            if any(getattr(t, "id", "") == "BINDINGS" for t in targets):
+                bindings = ast.literal_eval(node.value)
+                for rows in bindings.values():
+                    names.update(row[0] + ".py" for row in rows)
+    except (OSError, SyntaxError, ValueError):
+        pass
+    return names
+
+
+def is_wired(hid: str) -> bool:
+    return HOOK_SPECS[hid][2] in wired_scripts()
+
+
 def default_selection() -> list[str]:
-    return [h for h in HOOK_SPECS if h not in OPT_IN]
+    wired = wired_scripts()
+    return [h for h, spec in HOOK_SPECS.items() if h not in OPT_IN and spec[2] not in wired]
 
 
 def command_for(script: str) -> str:
@@ -90,6 +131,7 @@ def has_hook(settings: dict, event: str, script: str) -> bool:
 
 def plan(settings: dict, selected: list[str]) -> list[dict]:
     out = []
+    wired = wired_scripts()
     for hid in selected:
         event, matcher, script, _extra = HOOK_SPECS[hid]
         out.append(
@@ -97,7 +139,11 @@ def plan(settings: dict, selected: list[str]) -> list[dict]:
                 "id": hid,
                 "event": event,
                 "script": script,
-                "action": "present" if has_hook(settings, event, script) else "install",
+                "action": "present"
+                if has_hook(settings, event, script)
+                else "wired"
+                if script in wired
+                else "install",
             }
         )
     return out
@@ -106,9 +152,16 @@ def plan(settings: dict, selected: list[str]) -> list[dict]:
 def apply_install(settings: dict, selected: list[str]) -> int:
     changed = 0
     hooks = settings.setdefault("hooks", {})
+    wired = wired_scripts()
     for hid in selected:
         event, matcher, script, extra = HOOK_SPECS[hid]
         if has_hook(settings, event, script):
+            continue
+        if script in wired:
+            sys.stderr.write(
+                f"refusing to add {hid} ({script}): the plugin already runs it via "
+                "hooks.json or event_dispatch; a settings.json copy would run it twice.\n"
+            )
             continue
         entry: dict = {
             "hooks": [{"type": "command", "command": command_for(script), **extra}]
@@ -147,12 +200,17 @@ def apply_uninstall(settings: dict, selected: list[str]) -> int:
 
 def cmd_list(settings: dict) -> None:
     print("atlas hook coverage:")
+    wired = wired_scripts()
     for hid, (event, matcher, script, _e) in HOOK_SPECS.items():
         state = (
-            "[x] installed" if has_hook(settings, event, script) else "- not installed"
+            "[x] installed"
+            if has_hook(settings, event, script)
+            else "[w] wired by the plugin"
+            if script in wired
+            else "- not installed"
         )
         m = f" [{matcher}]" if matcher else ""
-        print(f"  {state:16} {hid:9} -> {event}{m}")
+        print(f"  {state:24} {hid:15} -> {event}{m}")
     # surface any OTHER hooks present so the user sees the whole picture
     others = {}
     for event, groups in settings.get("hooks", {}).items():
@@ -220,7 +278,7 @@ def main() -> int:
         return 0
 
     for p in plan(settings, selected):
-        tag = "INSTALL" if p["action"] == "install" else "present"
+        tag = {"install": "INSTALL", "wired": "wired"}.get(p["action"], "present")
         print(f"  {tag:8} {p['id']:9} -> {p['event']}  ({command_for(p['script'])})")
 
     if args.apply:
@@ -231,7 +289,20 @@ def main() -> int:
                 f"\ninstalled {n} hook(s). Restart Claude Code or start a new session to load them."
             )
         else:
-            print("\nall selected hooks already installed - no change.")
+            wired = wired_scripts()
+            refused = [
+                h
+                for h in selected
+                if HOOK_SPECS[h][2] in wired
+                and not has_hook(settings, HOOK_SPECS[h][0], HOOK_SPECS[h][2])
+            ]
+            if refused:
+                print(
+                    f"\nnothing installed: the plugin already runs {', '.join(refused)} "
+                    "(hooks.json / event_dispatch); a settings.json copy would run it twice."
+                )
+            else:
+                print("\nall selected hooks already installed - no change.")
     else:
         print("\n(dry-run) re-run with --apply to install.")
     return 0

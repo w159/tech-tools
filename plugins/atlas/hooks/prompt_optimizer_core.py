@@ -52,6 +52,7 @@ Stdlib only, so the skill stays portable.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -434,13 +435,26 @@ def _scope_file(session_id: str, root: str) -> str:
     return os.path.join(root, ".atlas", ".run", "atlas-scope", safe + ".json")
 
 
+def _root_is_project(root: str) -> bool:
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        return atlas_db.is_existing_project(root)
+    except Exception:
+        return False
+
+
 def _store_scope(session_id: str, cwd, record: dict | None) -> None:
     try:
-        path = _scope_file(session_id, _scope_root(cwd))
+        root = _scope_root(cwd)
+        path = _scope_file(session_id, root)
         if record is None:
             if os.path.exists(path):
                 os.remove(path)
             return
+        if not _root_is_project(root):
+            return  # .atlas is a project marker: never turn a plain dir into one
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = path + ".tmp"
         with open(tmp, "w") as f:
@@ -572,10 +586,11 @@ def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None 
             "stop. Exit 3: run the `wait` it prints. Exit 1: fix from check_tail." % crew_cmd
         )
     elif n >= 2:
+        # No spec/files/check to build a runnable crew command from: never print one with
+        # <placeholders> (crew_command must not reach the lead as a guess), name the route instead.
         nxt = (
-            'Next: python3 "%s/atlas_crew.py" run '
-            "--spec <spec.md> --files '<glob>' --check '<test cmd>' --wait 110 "
-            "(tmux crew in this tree; not in-process atlas:* calls)." % _scripts_dir()
+            "Next: dispatch the %d working seats as atlas:* calls, each with SCOPE: %s; "
+            "write a spec .md first to run them as a tmux crew with atlas_crew.py." % (n, scope)
         )
     else:
         role = (working or team)[0]["role"]
@@ -599,6 +614,59 @@ def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None 
     return msg
 
 
+_MULTI_WORD_RE = re.compile(r"\b(?:files|modules|packages|across|every|each|all)\b", re.IGNORECASE)
+
+
+def _names_one_file(prompt: str) -> bool:
+    """True when the prompt names exactly one (non-markdown) file and no plural/sweeping scope word."""
+    files = {
+        m.lower()
+        for m in _FILE_REF_RE.findall(prompt or "")
+        if not m.lower().endswith(".md")
+    }
+    return len(files) == 1 and not _MULTI_WORD_RE.search(prompt or "")
+
+
+def _single_worker_team(team: list) -> list:
+    """The team with exactly one working seat (count 1); closing roles are kept."""
+    out, kept = [], False
+    for seat in team:
+        if seat.get("role") in _CLOSING_ROLES:
+            out.append(seat)
+        elif not kept:
+            out.append(dict(seat, count=1))
+            kept = True
+    return out
+
+
+def _once_per_session(data: dict, nudge: str) -> str | None:
+    """The nudge, or None when this session already received identical text."""
+    try:
+        session = (data.get("session_id") or "").strip()
+        if not session:
+            return nudge
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+        import hashlib
+
+        state = os.path.join(os.path.dirname(atlas_db.db_path()), "hookstate")
+        os.makedirs(state, exist_ok=True)
+        safe = re.sub(r"[^A-Za-z0-9_-]", "_", session)[:100]
+        path = os.path.join(state, "routenudge-" + safe)
+        digest = hashlib.sha1(nudge.encode()).hexdigest()  # noqa: S324 -- dedupe key, not security
+        seen = []
+        with contextlib.suppress(OSError):
+            with open(path, encoding="utf-8") as fh:
+                seen = fh.read().split()
+        if digest in seen:
+            return None
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join((seen + [digest])[-20:]))
+        return nudge
+    except Exception:
+        return nudge  # dedupe is an optimization; never lose the nudge over it
+
+
 def _routed_nudge(data: dict, prompt: str) -> str:
     session = (data.get("session_id") or "").strip()
     cwd = data.get("cwd")
@@ -609,6 +677,8 @@ def _routed_nudge(data: dict, prompt: str) -> str:
         res = atlas_resolve.resolve(task_class, effort)
         team = list(res["team"])
         task_class, effort = res["task_class"], res["effort"]
+        if task_class not in _READ_ONLY_CLASSES and _names_one_file(prompt):
+            team = _single_worker_team(team)  # one named file: one worker, not a crew
         crew_cmd = (
             crew_command(cwd, prompt, session)
             if task_class not in _READ_ONLY_CLASSES and _working_seats(team) >= 2
@@ -840,7 +910,8 @@ def arm_orchestration(data: dict, prompt: str) -> str | None:
                 _store_scope(session, data.get("cwd"), None)
         except Exception:
             pass
-    return nudge
+        return None
+    return _once_per_session(data, nudge)  # armed and scoped; identical text is said once
 
 
 def _arm_orchestration(data: dict, prompt: str) -> str | None:

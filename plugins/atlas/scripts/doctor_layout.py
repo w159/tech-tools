@@ -335,11 +335,19 @@ def hook_layout(cwd):
     more = f" (+{len(found) - 5} more)" if len(found) > 5 else ""
     return (
         f"atlas layout: {len(found)} misplaced .atlas path(s): "
-        f"{', '.join(shown)}{more}; run atlas_doctor.py --fix to archive them"
+        f"{', '.join(shown)}{more}; run {_fix_command()} to archive them"
     )
 
 
 # --- project memory (findings records, global memory tagged with the project) --
+
+
+def _fix_command():
+    """The runnable `atlas_doctor.py --fix` command: absolute, shell-quoted script path."""
+    import shlex
+
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "atlas_doctor.py")
+    return shlex.join(["python3", script, "--fix"])
 
 
 def project_memory_status(root):
@@ -401,17 +409,24 @@ def fix_project_memory(root):
 # --- docs naming (read-only; renames only under --fix) -----------------------
 
 
-def docs_naming_violations(root):
-    """[(path, reason)] from lint_docs_names, or [] when unavailable."""
+def docs_naming_status(root):
+    """([(path, reason)], error): lint_docs_names' violations, and the error text when the lint itself
+    could not run (an exception must never read as "no violations")."""
     try:
         from pathlib import Path
 
         import lint_docs_names
 
         p = Path(root)
-        return lint_docs_names.violations(lint_docs_names.all_artifact_paths(p))
-    except Exception:  # advisory check: never break the doctor
-        return []
+        return lint_docs_names.violations(lint_docs_names.all_artifact_paths(p)), None
+    except Exception as e:  # advisory check: never break the doctor, but never pass silently either
+        return [], f"{type(e).__name__}: {e}"
+
+
+def docs_naming_violations(root):
+    """[(path, reason)] from lint_docs_names; [] when none or when the lint could not run
+    (use docs_naming_status to tell those apart)."""
+    return docs_naming_status(root)[0]
 
 
 def fix_docs_naming(root):

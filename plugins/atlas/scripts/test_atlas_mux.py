@@ -3566,7 +3566,7 @@ class TeamFlowFixTests(unittest.TestCase):
         buf = io.StringIO()
         # the verifier launched and has finished; the two implementers' worktrees failed and never will
         with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "claude-bg"}), contextlib.redirect_stdout(buf), \
-                mock.patch.object(atlas_mux, "_exited", lambda root, name: name.startswith("verifier")):
+                mock.patch.object(atlas_mux, "_exited", lambda root, name, since=None: name.startswith("verifier")):
             wcode = atlas_mux.main(["wait", "--json", "--team", out["team_id"], "--root", self.repo, "--timeout", "30", "--poll", "0.05"])
         got = json.loads(buf.getvalue().strip().splitlines()[-1])
         self.assertLess(got["elapsed_s"], 5, got)
@@ -4294,7 +4294,7 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
         buf = io.StringIO()
         with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "claude-bg"}), \
                 mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=notes), \
-                mock.patch.object(atlas_mux, "_exited", lambda root, name: exit_of(name) is not None), \
+                mock.patch.object(atlas_mux, "_exited", lambda root, name, since=None: exit_of(name) is not None), \
                 contextlib.redirect_stdout(buf):
             wcode = atlas_mux.main(["wait", "--json", "--team", team, "--root", self.repo, "--timeout", timeout, "--poll", "0.01"])
         return wcode, json.loads(buf.getvalue().strip().splitlines()[-1])
@@ -4359,7 +4359,7 @@ class BriefOutputTests(unittest.TestCase):
         buf = io.StringIO()
         with mock.patch.object(atlas_mux, "_load_team", return_value=rec), \
                 mock.patch.object(atlas_mux, "_team_panes", return_value=[]), \
-                mock.patch.object(atlas_mux, "_exited", lambda root, n: n == "a"), \
+                mock.patch.object(atlas_mux, "_exited", lambda root, n, since=None: n == "a"), \
                 mock.patch.object(atlas_mux, "_record_wait"), \
                 mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=notes), \
                 contextlib.redirect_stdout(buf):

@@ -629,11 +629,49 @@ class ArmOrchestrationTest(unittest.TestCase):
             )
 
 
+class PlainDirNoAtlasTest(unittest.TestCase):
+    """A substantive prompt in a directory that is not a project must not create .atlas/."""
+
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, {}, clear=False)
+        self.env.start()
+        self.tmp = tempfile.mkdtemp()
+        os.environ["ATLAS_DB"] = os.path.join(self.tmp, "atlas.db")
+        os.environ["ATLAS_DECISION"] = "off"
+        self.plain = os.path.join(self.tmp, "plain")
+        os.makedirs(self.plain)
+
+    def tearDown(self):
+        self.env.stop()
+
+    def test_substantive_prompt_creates_no_atlas_dir(self):
+        nudge = po.arm_orchestration(
+            {"session_id": "plain1", "cwd": self.plain},
+            "refactor the db module now please",
+        )
+        self.assertIsNotNone(nudge)
+        self.assertFalse(os.path.exists(os.path.join(self.plain, ".atlas")))
+
+    def test_git_repo_still_gets_scope_and_sentinel(self):
+        os.makedirs(os.path.join(self.plain, ".git"))
+        po.arm_orchestration(
+            {"session_id": "plain2", "cwd": self.plain},
+            "refactor the db module now please",
+        )
+        self.assertTrue(
+            os.path.exists(
+                os.path.join(self.plain, ".atlas", ".run", "atlas-orchestrate.active")
+            )
+        )
+        self.assertIsNotNone(po.resolved_scope("plain2", self.plain))
+
+
 class RouteScopeTest(unittest.TestCase):
     def setUp(self):
         self.env = mock.patch.dict(os.environ, {}, clear=False)
         self.env.start()
         self.tmp = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmp, ".git"))  # scope is only stored in a real project
         os.environ["ATLAS_DB"] = os.path.join(self.tmp, "atlas.db")
         os.environ["ATLAS_DECISION"] = "off"
 
@@ -649,7 +687,8 @@ class RouteScopeTest(unittest.TestCase):
             "build the export flow across plugins/atlas/hooks/a.py, "
             "plugins/atlas/scripts/b.py and plugins/atlas/mod/c.ts",
         )
-        self.assertIn('atlas_crew.py" run', nudge)
+        self.assertNotIn("<", nudge)  # no placeholder command: this repo has no spec/dir/check to fill one
+        self.assertIn("working seats", nudge)
         self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", nudge)
         self.assertIn("implement/", nudge)
         self.assertLess(len(nudge.encode()), 700)
@@ -667,6 +706,32 @@ class RouteScopeTest(unittest.TestCase):
             po.resolved_scope("l1", self.tmp),
             {"task_class": "audit", "effort": "low", "working_seats": 1},
         )
+
+    def test_single_named_file_routes_to_one_worker_not_a_crew(self):
+        nudge = self._arm(
+            "f1", "refactor src/a.py to add type hints and run the tests"
+        )
+        self.assertIn("one in-process atlas:", nudge)
+        self.assertNotIn("atlas_crew.py", nudge)
+        self.assertNotIn("<", nudge)
+        self.assertEqual(po.resolved_scope("f1", self.tmp)["working_seats"], 1)
+
+    def test_several_named_files_still_route_to_a_crew(self):
+        nudge = self._arm("f2", "refactor src/a.py and src/b.py to add type hints")
+        self.assertNotIn("one in-process atlas:", nudge)
+        self.assertGreaterEqual(po.resolved_scope("f2", self.tmp)["working_seats"], 2)
+
+    def test_identical_routing_text_is_injected_once_per_session(self):
+        prompt = "refactor src/a.py to add type hints and run the tests"
+        first = self._arm("rep1", prompt)
+        self.assertTrue(first)
+        for _ in range(3):
+            self.assertIsNone(self._arm("rep1", prompt))
+        # the stored scope survives the suppressed repeats (gates still read it)
+        self.assertIsNotNone(po.resolved_scope("rep1", self.tmp))
+        # another session, and a different route, still get theirs
+        self.assertEqual(self._arm("rep2", prompt), first)
+        self.assertTrue(self._arm("rep1", "audit every hook across the whole repo for leaks"))
 
     def test_read_only_team_uses_spawn_team(self):
         nudge = self._arm("r1", "audit every hook across the whole repo for leaks")
@@ -737,7 +802,9 @@ class RouteScopeTest(unittest.TestCase):
         (root / "SPEC.md").unlink()
         self.assertIsNone(po.crew_command(self.tmp, self.PROMPT, ""))
         nudge = self._arm("c2", self.PROMPT)
-        self.assertIn("--spec <spec.md>", nudge)  # placeholders only when the repo cannot fill them
+        self.assertNotIn("<", nudge)  # never a command with placeholders the repo could not fill
+        self.assertNotIn("atlas_crew.py\" run", nudge)
+        self.assertIn("working seats", nudge)
 
     def test_every_module_is_high_effort(self):
         self.assertEqual(po.classify_scope("implement every module in kit/")[1], "high")

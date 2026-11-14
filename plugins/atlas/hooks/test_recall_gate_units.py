@@ -79,6 +79,8 @@ class IsRecallTest(unittest.TestCase):
 
 
 class PluginMcpFilesTest(unittest.TestCase):
+    """Only the CURRENT install of the claude-mem plugin (installed_plugins.json) counts."""
+
     def setUp(self):
         self.root = tempfile.mkdtemp()
 
@@ -90,25 +92,38 @@ class PluginMcpFilesTest(unittest.TestCase):
             f.write("{}")
         return path
 
-    def test_yields_mcp_json_only_inside_a_claude_mem_directory(self):
-        want = self._touch("cache", "claude-mem", "1.0", ".mcp.json")
-        self._touch("cache", "other-plugin", ".mcp.json")
-        self._touch("cache", "claude-mem", "1.0", "README.md")
-        self._touch("cache", "claude_mem2", "x", "package.json")
-        also = self._touch("cache", "Claude_Mem", ".mcp.json")
-        got = sorted(recall_gate._plugin_mcp_files(self.root))
-        self.assertEqual(got, sorted([want, also]))
+    def _installed(self, mapping):
+        with open(os.path.join(self.root, "installed_plugins.json"), "w") as f:
+            json.dump({"version": 2, "plugins": mapping}, f)
 
-    def test_node_modules_and_git_are_not_walked(self):
-        self._touch("claude-mem", "node_modules", "dep", ".mcp.json")
-        self._touch("claude-mem", ".git", ".mcp.json")
+    def test_yields_only_the_installed_claude_mem_install_path(self):
+        want = self._touch("cache", "thedotmack", "claude-mem", "2.0", ".mcp.json")
+        self._touch("cache", "thedotmack", "claude-mem", "1.0", ".mcp.json")  # stale version cache
+        other = self._touch("cache", "m", "other-plugin", "1", ".mcp.json")
+        self._installed(
+            {
+                "claude-mem@thedotmack": [{"installPath": os.path.dirname(want)}],
+                "other-plugin@m": [{"installPath": os.path.dirname(other)}],
+            }
+        )
+        self.assertEqual(list(recall_gate._plugin_mcp_files(self.root)), [want])
+
+    def test_stale_cache_without_an_install_record_yields_nothing(self):
+        self._touch("cache", "thedotmack", "claude-mem", "1.0", ".mcp.json")
+        self._installed({})
+        self.assertEqual(list(recall_gate._plugin_mcp_files(self.root)), [])
+        os.remove(os.path.join(self.root, "installed_plugins.json"))
         self.assertEqual(list(recall_gate._plugin_mcp_files(self.root)), [])
 
-    def test_walk_is_bounded_in_depth(self):
-        deep_ok = self._touch("claude-mem", "a", "b", "c", "d", "e", ".mcp.json")
-        self._touch("claude-mem", "a", "b", "c", "d", "e", "f", "g", "h", ".mcp.json")
-        got = list(recall_gate._plugin_mcp_files(self.root))
-        self.assertEqual(got, [deep_ok])
+    def test_install_without_an_mcp_json_yields_nothing(self):
+        d = os.path.join(self.root, "cache", "claude-mem", "2.0")
+        os.makedirs(d)
+        self._installed({"claude-mem@thedotmack": [{"installPath": d}]})
+        self.assertEqual(list(recall_gate._plugin_mcp_files(self.root)), [])
+
+    def test_malformed_install_records_are_ignored(self):
+        self._installed({"claude-mem@t": "nope", "claude-mem@u": [None, {"installPath": 5}]})
+        self.assertEqual(list(recall_gate._plugin_mcp_files(self.root)), [])
 
     def test_missing_dir_yields_nothing(self):
         self.assertEqual(

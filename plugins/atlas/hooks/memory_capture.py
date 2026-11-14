@@ -375,7 +375,9 @@ def main():
     ):
         sys.exit(0)
 
-    db_path = os.environ.get("ATLAS_DB", os.path.expanduser("~/.atlas/atlas.db"))
+    import atlas_db
+
+    db_path = atlas_db.db_path()  # ATLAS_DB, then ATLAS_HOME, then ~/.atlas
     if not os.path.exists(db_path):
         sys.exit(0)  # no DB yet — nothing to learn from
 

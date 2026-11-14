@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.16.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.17.0, armada 2.3.0, programmer 1.0.3 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -37,7 +37,7 @@ The marketplace also carries `armada` (an optional organization layer: departmen
 - Python 3 (standard library only) for the hooks and scripts.
 - Node.js, only if you use armada's vendor connectors.
 - uv, only for the CrowdStrike Falcon connector.
-- Recommended: the claude-mem and context-mode plugins. `/atlas-setup` checks for them and offers to install them. Atlas runs without them, but the recall gate and the output-size protection depend on them.
+- Recommended: the claude-mem and context-mode plugins. `/atlas:atlas-setup` checks for them and offers to install them. Atlas runs without them, but the recall gate and the output-size protection depend on them.
 - Optional: tmux (to show worker panes), Bun (to run the omp tests).
 
 **Install** (Claude Code):
@@ -68,10 +68,10 @@ omp plugin upgrade atlas               # then upgrade (alone it reads the cached
 **Onboard a project once:**
 
 ```text
-/atlas-setup
+/atlas:atlas-setup
 ```
 
-`/atlas-setup` checks the companion plugins, scaffolds `docs/` and `.atlas/` in the project, wires hooks, and walks through connectors. It asks before it installs or changes anything.
+`/atlas:atlas-setup` checks the companion plugins, scaffolds `docs/` and `.atlas/` in the project, wires hooks, and walks through connectors. It asks before it installs or changes anything.
 
 **Then describe the work.** Skills trigger from plain language, or name one:
 
@@ -146,8 +146,8 @@ This picture is from an earlier build.
 
 ## What it changes on your machine
 
-- **Hooks.** The plugin registers 23 hook bindings (19 programs; `plugins/atlas/hooks/hooks.json` holds 14 commands, two of them the in-process dispatcher) for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas-setup` step you approve.
-- **Project files.** `/atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Parallel implementers share the one tree under file leases; the `atlas-worktree` skill still puts a worktree you ask for under `.atlas/wt/`.
+- **Hooks.** The plugin registers 23 hook bindings (19 programs; `plugins/atlas/hooks/hooks.json` holds 14 commands, two of them the in-process dispatcher) for nine lifecycle events, including SessionStart, PreToolUse, PostToolUse and Stop. They can deny tool calls (for example a dispatch missing its required blocks) and block a stop. Each has an off switch; see Configuration below. Atlas edits your `~/.claude/settings.json` only when you ask: the statusline `install` command, `scripts/install_hooks.py`, or an `/atlas:atlas-setup` step you approve.
+- **Project files.** `/atlas:atlas-setup` creates `docs/` and `.atlas/` in the project it onboards (evidence, the todo board at `.atlas/.run/`, findings). Parallel implementers share the one tree under file leases; the `atlas-worktree` skill still puts a worktree you ask for under `.atlas/wt/`.
 - **State in `~/.atlas/`.** `atlas.db` (SQLite telemetry), `memory/` (lessons saved at Stop and reloaded at boot), `dashboard-prefs.json`, and self-fix worktrees.
 - **Transcript storage.** At Stop, `ingest_session.py` copies the session transcript into `~/.atlas/atlas.db`. Text passes through one shared redactor first: credential-shaped strings and a few personal-identifier patterns (SSN, routing and account numbers, card numbers, dates of birth) are replaced with `[REDACTED]` placeholders. The redactor is pattern matching and best effort; it misses unlabeled values, names and addresses. `ATLAS_INGEST=off` turns ingest off.
 - **Local dashboard.** A daemon serves `http://127.0.0.1:7421/` (loopback only, shared by every open terminal, a per-start token guards writes). It is off by default; `ATLAS_DASHBOARD=on` starts it at session start.
@@ -247,6 +247,10 @@ something is missing it blocks the stop and says what to do:
       cover the required phase(s): implement, verify.
 ```
 
+Before it asks for paperwork the gate re-runs the session's own test command,
+and only one that actually executed (not a call a hook or you denied). A timeout
+or a missing pytest is inconclusive: it is recorded once and not retried.
+
 The full condition list and every kill switch are in the
 [reference](docs/reference/atlas-reference.md#the-operating-contract).
 
@@ -259,6 +263,10 @@ so prior work is found before it is re-derived:
 [atlas gate] REQUIRED once per session: your first tool call must be one
 claude-mem recall for this project.
 ```
+
+If the memory server comes from the plugin, or its recall tool is missing, the gate
+denies once and then releases. A mounted server is denied on every call until the
+recall happens.
 
 ### 6. Self-improvement with `/atlas-doctor`
 

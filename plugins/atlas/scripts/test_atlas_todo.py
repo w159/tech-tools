@@ -363,6 +363,35 @@ class BoardBasics(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(data["needed"], 0)
 
+    def test_cli_rejects_unknown_flag_instead_of_storing_it(self):
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            rc, _ = cli("note", "--root", self.root, "--owner", "w", "--bogus", "x", "t")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("unknown flag --bogus", err.getvalue())
+        self.assertFalse(os.path.exists(os.path.join(self.root, ".atlas")))
+
+    def test_cli_flag_lookalike_text_is_content(self):
+        for text in ("--- divider note", "--lead-idle is a flag", "--1 x"):
+            rc, data = cli("note", "--root", self.root, "--owner", "w", text)
+            self.assertEqual(rc, 0, text)
+            self.assertEqual(data["note"]["text"], text)
+
+    def test_cli_double_dash_ends_options(self):
+        rc, data = cli("note", "--root", self.root, "--owner", "w", "--", "--x")
+        self.assertEqual(rc, 0)
+        self.assertEqual(data["note"]["text"], "--x")
+        with contextlib.redirect_stderr(io.StringIO()):
+            rc, _ = cli("note", "--root", self.root, "--owner", "w", "--priority", "t")
+        self.assertEqual(rc, 2)
+
+    def test_cli_channel_reap_lead_idle_reaches_reap_channels(self):
+        with mock.patch.object(
+            atlas_todo, "reap_channels", return_value={"reaped": 0}
+        ) as m:
+            rc, _ = cli("channel-reap", "--root", self.root, "--lead-idle", "1", "--dry-run")
+        self.assertEqual(rc, 0)
+        self.assertEqual(m.call_args.kwargs["lead_idle"], 1.0)
+
     def test_cli_rejects_unknown_command(self):
         rc, data = cli("nonsense")
         self.assertEqual(rc, 1)
@@ -701,6 +730,62 @@ class NotesChannel(unittest.TestCase):
 
     def test_notes_missing_dir_returns_empty(self):
         self.assertEqual(atlas_todo.notes(self.root), [])
+
+
+class RegistryWriteTempTest(unittest.TestCase):
+    """channels.json is replaced through a per-write temp file, never a shared fixed name."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        os.makedirs(os.path.join(self.root, ".git"))
+        self.addCleanup(self._tmp.cleanup)
+
+    def test_each_write_uses_its_own_temp_name_and_leaves_none_behind(self):
+        seen = []
+        real = os.replace
+
+        def spy(src, dst):
+            seen.append(os.path.basename(str(src)))
+            return real(src, dst)
+
+        with mock.patch.object(atlas_todo.os, "replace", spy):
+            for i in range(3):
+                atlas_todo.open_lead_channel(self.root, f"lead-{i}", [])
+        self.assertEqual(len(set(seen)), len(seen), seen)
+        self.assertNotIn("channels.json.tmp", seen)
+        run = os.path.join(self.root, ".atlas", ".run")
+        self.assertEqual([f for f in os.listdir(run) if f.endswith(".tmp")], [])
+
+    def test_concurrent_unlocked_writers_neither_crash_nor_corrupt(self):
+        import contextlib as _cl
+        import threading
+
+        errors = []
+
+        @_cl.contextmanager
+        def no_lock(path, timeout=None):
+            yield
+
+        def work(n):
+            try:
+                for i in range(15):
+                    atlas_todo._reg_update(
+                        self.root, lambda reg, n=n, i=i: reg["channels"].setdefault(f"c{n}-{i}", {"members": []})
+                    )
+            except Exception as exc:  # noqa: BLE001
+                errors.append(repr(exc))
+
+        os.makedirs(os.path.join(self.root, ".atlas", ".run"))
+        with mock.patch.object(atlas_todo, "_file_lock", no_lock):
+            threads = [threading.Thread(target=work, args=(n,)) for n in range(6)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        self.assertEqual(errors, [])
+        with open(os.path.join(self.root, ".atlas", ".run", "channels.json"), encoding="utf-8") as fh:
+            self.assertIsInstance(json.load(fh)["channels"], dict)
 
 
 class BoardConcurrency(unittest.TestCase):

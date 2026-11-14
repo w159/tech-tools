@@ -336,9 +336,15 @@ class BreakerVisibilityTests(unittest.TestCase):
             self.assertEqual(allowed, [True] * 5 + [False] * 4)
             for ok, text in results[5:]:
                 self.assertIn("completion_gate BYPASSED", text)
-            # A deliberate bypass is not a crash: no hook-faults row (the dashboard
-            # would count it as hook_crash); the trip lives in hookstate instead.
-            self.assertFalse(os.path.exists(os.path.join(home, "hook-faults.jsonl")))
+            # Every gate bypass leaves a durable hook-faults row, typed BreakerBypass
+            # so it reads apart from a crash.
+            rows = [
+                json.loads(line)
+                for line in open(os.path.join(home, "hook-faults.jsonl"))
+            ]
+            self.assertEqual(len(rows), 4)
+            self.assertTrue(all(r["hook"] == "completion_gate" for r in rows))
+            self.assertTrue(all(r["type"] == "BreakerBypass" for r in rows))
             st = json.load(open(os.path.join(home, "hookstate", "brk.json")))
             self.assertTrue(st["breaker_tripped"])
         finally:
@@ -363,13 +369,80 @@ class BreakerVisibilityTests(unittest.TestCase):
                     atlas_hook_guard.should_run({"session_id": "brk2"}, "nudge")
             finally:
                 atlas_hook_guard._now = real_now
-            self.assertFalse(os.path.exists(os.path.join(home, "hook-faults.jsonl")))
+            rows = [
+                json.loads(line)
+                for line in open(os.path.join(home, "hook-faults.jsonl"))
+            ]
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["hook"], "nudge")
         finally:
             for k, v in old.items():
                 if v is None:
                     os.environ.pop(k, None)
                 else:
                     os.environ[k] = v
+
+
+class BreakerScopeTests(unittest.TestCase):
+    """Only main-session Stops feed the breaker, and a tripped breaker expires."""
+
+    def setUp(self):
+        home = tempfile.mkdtemp()
+        self._env = {
+            "ATLAS_HOME": home,
+            "ATLAS_HOOKSTATE_DIR": os.path.join(home, "hookstate"),
+        }
+        self._old = {k: os.environ.get(k) for k in self._env}
+        os.environ.update(self._env)
+        self.tick = [1000.0]
+        self._real_now = atlas_hook_guard._now
+        atlas_hook_guard._now = lambda: self.tick[0]
+
+    def tearDown(self):
+        atlas_hook_guard._now = self._real_now
+        for k, v in self._old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    def _fire(self, event, hook="completion_gate", kind="emit"):
+        self.tick[0] += 3
+        import io
+        from contextlib import redirect_stderr
+
+        with redirect_stderr(io.StringIO()):
+            return atlas_hook_guard.should_run(
+                {"session_id": "scope", "hook_event_name": event}, hook, kind=kind
+            )
+
+    def test_subagent_precompact_sessionend_do_not_trip(self):
+        for event in ("SubagentStop", "PreCompact", "SessionEnd") * 4:
+            self._fire(event, "ingest_session", kind="capture")
+        self.assertTrue(self._fire("Stop"))
+        st = json.load(open(os.path.join(self._env["ATLAS_HOOKSTATE_DIR"], "scope.json")))
+        self.assertFalse(st.get("breaker_tripped"))
+
+    def test_main_stop_burst_still_trips(self):
+        self.assertEqual([self._fire("Stop") for _ in range(8)], [True] * 5 + [False] * 3)
+
+    def test_tripped_breaker_clears_after_window(self):
+        for _ in range(8):
+            self._fire("Stop")
+        self.assertFalse(self._fire("Stop"))
+        self.tick[0] += atlas_hook_guard.STOP_BURST_WINDOW + 1
+        self.assertTrue(self._fire("Stop"))
+        st = json.load(open(os.path.join(self._env["ATLAS_HOOKSTATE_DIR"], "scope.json")))
+        self.assertFalse(st.get("breaker_tripped"))
+
+    def test_legacy_tripped_file_clears_after_one_quiet_window(self):
+        path = os.path.join(self._env["ATLAS_HOOKSTATE_DIR"], "scope.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        json.dump({"breaker_tripped": True}, open(path, "w"))  # pre-breaker_tripped_at format
+        self.assertFalse(self._fire("Stop"))  # first sight: still tripped, window starts
+        self.assertFalse(self._fire("Stop"))
+        self.tick[0] += atlas_hook_guard.STOP_BURST_WINDOW + 1
+        self.assertTrue(self._fire("Stop"))
 
 
 class DbUnusableTests(unittest.TestCase):

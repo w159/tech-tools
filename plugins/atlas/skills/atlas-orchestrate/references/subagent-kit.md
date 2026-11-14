@@ -194,7 +194,7 @@ before starting, so two agents never build the same thing:
   status and archived items: a repeat returns `{"ok": true, "duplicate": true,
   "item": <existing>}` and appends nothing (use it for imports that can replay).
 - Post a durable note instead of holding state in chat:
-  `atlas_todo.py note --owner <agent-name> [--to <owner|all>] [--item <id>] "<text>"`,
+  `atlas_todo.py note --owner <agent-name> [--to <owner-or-all>] [--item <id>] "<text>"`,
   and read what others left with `atlas_todo.py notes`.
 - Every `TodoWrite` call is mirrored into the board and keeps claims on matching
   content, and a completed claim now survives the mirror too: when the lead
@@ -219,7 +219,7 @@ effort/model tier and guardrails.
   `agent://<name>`) - one exchange, then move on; never wait twice on the
   same sibling.
 - Quick coordination goes by `SendMessage`; durable state goes on the board:
-    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name|all>] [--item <id>] "<text>"
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name> [--to <name-or-all>] [--item <id>] "<text>"
 - The sibling roster is a snapshot taken when you start [harness fact, unverified here]: a sibling spawned after
   you is not on it. Missing an expected sibling -> read `atlas_todo.py notes`
   and address it with `note --to <name>` instead.
@@ -242,7 +242,7 @@ scoped worker. Watch the panes in the herdr web UI (`http://127.0.0.1:7317`,
 the dashboard's Colony page); `ATLAS_COLONY=off` skips starting it at
 SessionStart.
 
-    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn --run <id> --harness claude|omp \
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn --run <id> --harness <harness> \
         --name <Name> --agent <role> --prompt-file <brief.md> [--model M] [--effort E | --thinking T]
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" status --run <id>
     python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" kill --run <id>     # idempotent

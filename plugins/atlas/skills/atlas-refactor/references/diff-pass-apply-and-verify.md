@@ -97,7 +97,7 @@ a fork; independence law) to adversarially confirm the pass:
 ```
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
   --id simplify-<YYYY-MM-DD>_<slug> \
-  --status verified|rejected|needs-evidence \
+  --status verified \
   --title "<one line: what was simplified and the gate result>" \
   --evidence "<gate command + output path or file:line>" \
   --reproduction "<the exact gate command>"

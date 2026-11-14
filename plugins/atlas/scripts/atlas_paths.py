@@ -83,7 +83,8 @@ def project_root(start=None):
     """Resolve the project root for `start` (default cwd).
 
     1. Cut at the first `.atlas` path component.
-    2. Nearest ancestor with `.git`; a `.git` file (linked worktree) maps to
+    2. Nearest ancestor with `.git` (a dotfiles $HOME or other non-project
+       root only counts when it is `start` itself); a `.git` file (linked worktree) maps to
        the main worktree root. No level cap.
     3. No git: nearest ancestor holding a `.atlas` directory that is not
        $HOME or another non-project root.
@@ -93,7 +94,7 @@ def project_root(start=None):
     cur = d
     while True:
         git = os.path.join(cur, ".git")
-        if os.path.exists(git):
+        if os.path.exists(git) and (cur == d or not _is_non_project(cur)):
             if os.path.isfile(git):
                 return worktree_main_root(cur) or cur
             return cur

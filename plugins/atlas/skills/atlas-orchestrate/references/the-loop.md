@@ -32,7 +32,7 @@ Flex the shape to the task; a quick fix may collapse to two waves, a full audit 
 
    **Mechanical rule: every `atlas:implementer` dispatch owes an independent check before any dependent stage starts - no exceptions, no "it's trivial."** What you owe is the *check*, not necessarily a second subagent. Two things satisfy it and they are interchangeable:
 
-   - **A deterministic test run (the default).** The implementer runs the project's gate; you record the outcome with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id <stage> --status verified --evidence "<test id>" --reproduction "<command>"`. A `verified` entry stamped during this run pairs an implementer exactly like a verifier dispatch does. A test cannot hallucinate, cannot be captured by a hook, and returns in seconds.
+   - **A deterministic test run (the default).** The implementer runs the project's gate; you record the outcome with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id <stage> --status verified --title "<one line>" --evidence "<test id>" --reproduction "<command>"`. A `verified` entry stamped during this run pairs an implementer exactly like a verifier dispatch does. A test cannot hallucinate, cannot be captured by a hook, and returns in seconds.
    - **An `atlas:verifier` dispatch (the exception).** Reach for it when no test can express the check - runtime behavior, a data claim, a security property, a docs-versus-code consistency question - and say in one line why.
 
    The completion gate blocks Stop on `max(0, unpaired_implementer_dispatches - verified_findings_stamped_this_run)`. A stage with neither a recorded test result nor a verifier dispatch is `pending`, not `verified`, and pending stages block dependents.

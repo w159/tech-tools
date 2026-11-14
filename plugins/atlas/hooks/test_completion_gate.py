@@ -2698,7 +2698,7 @@ class TodoBoardDrainTest(GateConditionIJTest):
         r = _run_gate(
             {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": t}, self.env
         )
-        self.assertIn("(k) No plan was ever made", r.stdout)
+        self.assertIn("(k) no plan; write the todo list now", r.stdout)
 
     def test_board_replan_blocks_after_drained_todowrite(self):
         """A CLI re-plan on the board after a drained TodoWrite is open work:
@@ -2733,7 +2733,7 @@ class GatePlanMandateTest(GateConditionIJTest):
         self._clear_plan()
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("(k) No plan was ever made", r.stdout)
+        self.assertIn("(k) no plan; write the todo list now", r.stdout)
 
     def test_drained_board_plan_satisfies_k(self):
         """A fully completed list still proves a plan existed."""
@@ -2774,7 +2774,7 @@ class GatePlanMandateTest(GateConditionIJTest):
         self._clear_plan()
         atlas_todo.add(self.tmp, "human note")
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
-        self.assertIn("(k) No plan was ever made", r.stdout)
+        self.assertIn("(k) no plan; write the todo list now", r.stdout)
 
     def test_run_that_shipped_no_code_needs_no_plan(self):
         """(k) is scoped to code-shipping runs: demanding a plan for a
@@ -3957,6 +3957,17 @@ class ContractVisibilityTest(unittest.TestCase):
     def test_n_accepts_count_form_header(self):
         self.assertEqual(self.say("ATLAS | 🔧 implement 2/9 | ok"), "")
 
+    def test_n_accepts_phase_first_header_on_a_fresh_stop(self):
+        """A phase-then-glyph header is harmless: it must not block in the first place."""
+        for header in (
+            "ATLAS | done 🏁 | all 8 modules implemented",
+            "ATLAS | implement 🔧 2/9 | ok",
+            "ATLAS | verify ✅ | suites green",
+        ):
+            with self.subTest(header=header):
+                self.assertEqual(self.say(header), "")
+        self.assertIn("(n)", self.say("ATLAS | done | no glyph"))
+
     def test_n_fails_open_when_the_header_check_raises(self):
         reply = {"last_assistant_message": "All done."}
         for contract in ({"switches": {}}, {"headerFirstLinePattern": "("}):
@@ -5035,7 +5046,7 @@ class StopGateArmingTest(unittest.TestCase):
         self.snapshot()
         self.sed_edit()
         out = self.gate()
-        self.assertIn("(m) Delegation mandate", out)
+        self.assertIn("(m) main-thread code writes with no dispatch", out)
         for frag in (
             "CHANGELOG.md is missing",
             "ROADMAP.md is missing",

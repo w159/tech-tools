@@ -138,7 +138,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
   --id <run-or-route-id> --status verified --title "<route>: <outcome>" \
   --evidence ".atlas/evidence/<YYYY-MM-DD>_<slug>/<file>.png" \
   --reproduction "<exact command / route load>" \
-  --surface "frontend" --category "smoke-test" --severity <high|med|low> \
+  --surface "frontend" --category "smoke-test" --severity <severity> \
   [--proposed-fix "handoff to atlas-dogfood for repair"]
 ```
 

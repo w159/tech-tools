@@ -578,6 +578,11 @@ def _codex_thread_id(log_path) -> str | None:
 def cmd_worker(a) -> int:
     """Pane command: run one worker (or one fix round), render it, log it, record the exit."""
     rundir = Path(a.rundir)
+    try:  # first thing: the supervisor treats a gone pid with no exit file as a dead worker
+        (rundir / "wpid").mkdir(exist_ok=True)
+        (rundir / "wpid" / f"{a.name}.r{a.round}").write_text(str(os.getpid()))
+    except OSError:
+        pass
     meta = json.loads((rundir / "run.json").read_text(encoding="utf-8"))
     plan = meta["plan"]
     w = next(x for x in plan["workers"] if x["name"] == a.name)
@@ -653,6 +658,7 @@ def cmd_worker(a) -> int:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                start_new_session=True,  # its own process group: the supervisor and `kill` stop claude with its children
             )
             (rundir / "pid").mkdir(exist_ok=True)
             (rundir / "pid" / a.name).write_text(str(proc.pid))
@@ -726,22 +732,38 @@ def _self_cmd(*args) -> str:
     )
 
 
-def _launch(meta: dict, rundir: Path, name: str, rnd: int, cmd: str) -> None:
+LAUNCH_GRACE_S = 60  # a wrapper that has written no pid this long after its launch never started
+
+
+def _launch(meta: dict, rundir: Path, name: str, rnd: int, cmd: str) -> str | None:
+    """Start one worker wrapper. Returns None, or the launch error after recording it as the worker's exit
+    (126) so the supervisor reports the worker as failed instead of waiting for it until the deadline."""
     session = meta["session"]
-    if meta["tmux"]:
-        wname = name if rnd == 0 else f"{name}.fix{rnd}"
-        _tmux("new-window", "-d", "-t", session, "-n", wname, cmd)
-    else:
-        logs = rundir / "logs"
-        logs.mkdir(exist_ok=True)
-        with open(logs / f"{name}.r{rnd}.pane", "w") as out:
-            subprocess.Popen(
-                shlex.split(cmd),
-                stdout=out,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+    (rundir / "launched").mkdir(parents=True, exist_ok=True)
+    (rundir / "launched" / f"{name}.r{rnd}").write_text(str(time.time()))
+    err = None
+    try:
+        if meta["tmux"]:
+            wname = name if rnd == 0 else f"{name}.fix{rnd}"
+            res = _tmux("new-window", "-d", "-t", session, "-n", wname, cmd)
+            if res.returncode != 0:
+                err = f"tmux new-window failed ({res.returncode}): {(res.stderr or '').strip()}"
+        else:
+            logs = rundir / "logs"
+            logs.mkdir(exist_ok=True)
+            with open(logs / f"{name}.r{rnd}.pane", "w") as out:
+                subprocess.Popen(
+                    shlex.split(cmd),
+                    stdout=out,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+    except (OSError, subprocess.SubprocessError) as exc:
+        err = f"launch failed: {exc}"
+    if err:
+        _write_exit(rundir, name, rnd, {"exit": 126, "wall_s": None, "sid": None, "launch_error": err})
+    return err
 
 
 def _heading_for(text: str, rel: str):
@@ -1066,13 +1088,23 @@ GREEN_CHECK_TIMEOUT = 300
 
 def green_check_guard(plan: dict, root, timeout=GREEN_CHECK_TIMEOUT) -> None:
     """Raise ValueError when a worker unit check already exits 0 before any work. crew_worker ends a worker as
-    soon as its check passes, so a check that is green at launch would end it mid-work and report DONE falsely."""
-    for w in plan["workers"]:
-        unit = (w.get("unit_check") or "").strip()
-        if not unit:
-            continue
-        code, _ = _run_check(unit, root, timeout=timeout)
-        if code == 0:
+    soon as its check passes, so a check that is green at launch would end it mid-work and report DONE falsely.
+    The checks run at once (one thread each): run one after another, 8 pytest start-ups held every worker back
+    about 4 s, and one hung check held the rest up to `timeout` each."""
+    units = [(w, (w.get("unit_check") or "").strip()) for w in plan["workers"]]
+    units = [(w, u) for w, u in units if u]
+    codes: dict = {}
+
+    def one(i, unit):
+        codes[i] = _run_check(unit, root, timeout=timeout)[0]
+
+    threads = [threading.Thread(target=one, args=(i, u), daemon=True) for i, (_, u) in enumerate(units)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    for i, (w, unit) in enumerate(units):
+        if codes.get(i) == 0:
             raise ValueError(
                 f"worker {w["name"]!r}: its check already passes before any work ({unit!r}), so the worker "
                 "would be ended at once and report DONE falsely; give it a check that fails until the task is "
@@ -1170,14 +1202,17 @@ def cmd_run(a) -> int:
             _self_cmd_irc(rundir, "serve"),
         )
     else:
-        subprocess.Popen(
+        gw = subprocess.Popen(
             shlex.split(_self_cmd_irc(rundir, "serve")),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
+        if isinstance(getattr(gw, "pid", None), int):  # the supervisor and `kill` stop it
+            (rundir / "gateway.pid").write_text(str(gw.pid))
+    launch_errors = {}
     for item in meta["launch"]:
-        _launch(
+        err = _launch(
             meta,
             rundir,
             item["name"],
@@ -1187,6 +1222,8 @@ def cmd_run(a) -> int:
                 "--delay", str(item.get("delay", 0)),
             ),
         )
+        if isinstance(err, str):
+            launch_errors[item["name"]] = err
     # the supervisor owns the run from here: global check, fix rounds, summary
     sup = _self_cmd("supervise", "--rundir", str(rundir))
     subprocess.Popen(
@@ -1213,7 +1250,8 @@ def cmd_run(a) -> int:
                 "tmux_session": meta["session"] if tmux else None,
                 "attach": f"tmux attach -t {meta['session']}" if tmux else None,
                 "irc": f"irc gateway: 127.0.0.1:$(cat {rundir / 'irc' / 'port'}) channel #{run_id}",
-                "next": f"atlas_crew.py wait --run {run_id} --root {root}",
+                "next": _self_cmd("wait", "--run", run_id, "--root", root),
+                **({"launch_errors": launch_errors} if launch_errors else {}),
                 **({"warning": "no lead session id: pass --session <id> or the completion gate will not credit this crew"} if not meta["lead_session"] else {}),
             }
         )
@@ -1244,9 +1282,62 @@ def _exited(rundir: Path, name: str, rnd: int):
         return None
 
 
+def _write_exit(rundir: Path, name: str, rnd: int, rec: dict) -> None:
+    """Record an exit the worker wrapper could not (dead, never started); never overwrites its own file."""
+    exit_dir = rundir / "exit"
+    exit_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(exit_dir / f"{name}.r{rnd}.json", "x", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec))
+    except FileExistsError:
+        pass
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    try:  # a zombie (dead, not yet reaped by its parent) is gone for our purposes
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return True
+
+
+def _worker_gone(rundir: Path, name: str, rnd: int) -> str | None:
+    """Why the worker's wrapper is dead with no exit file (its pid is gone, or it never wrote one), else None."""
+    try:
+        pid = int((rundir / "wpid" / f"{name}.r{rnd}").read_text())
+    except (OSError, ValueError):
+        try:
+            launched = float((rundir / "launched" / f"{name}.r{rnd}").read_text())
+        except (OSError, ValueError):
+            return None
+        return f"never started ({LAUNCH_GRACE_S:g}s after launch)" if time.time() - launched > LAUNCH_GRACE_S else None
+    return None if _pid_alive(pid) else f"worker process {pid} is gone with no exit recorded"
+
+
+def _settle(rundir: Path, name: str, rnd: int):
+    """The worker's exit record; a dead wrapper with none gets one (137, died) so every waiter sees it."""
+    ex = _exited(rundir, name, rnd)
+    if ex:
+        return ex
+    why = _worker_gone(rundir, name, rnd)
+    if not why:
+        return None
+    ex = _exited(rundir, name, rnd)  # the wrapper writes its exit just before it dies
+    if ex:
+        return ex
+    _write_exit(rundir, name, rnd, {"exit": 137, "wall_s": None, "sid": None, "died": True, "why": why})
+    _stop_pidfile(rundir / "pid" / name, rundir.name)  # the wrapper is gone; its claude must not keep writing files
+    return _exited(rundir, name, rnd)
+
+
 def _wait_round(rundir, names, rnd, deadline) -> bool:
     while time.time() < deadline:
-        if all(_exited(rundir, n, rnd) for n in names):
+        if all([_settle(rundir, n, rnd) for n in names]):
             return True
         time.sleep(0.5)
     return False
@@ -1255,7 +1346,7 @@ def _wait_round(rundir, names, rnd, deadline) -> bool:
 def _wait_ready(rundir, names, rnd, deadline) -> bool:
     """Until every worker has exited (round `rnd`) or holds a current verified DONE."""
     while time.time() < deadline:
-        if all(_exited(rundir, n, rnd) or atlas_irc.has_done(rundir / "irc", n) for n in names):
+        if all([_settle(rundir, n, rnd) or atlas_irc.has_done(rundir / "irc", n) for n in names]):
             return True
         time.sleep(0.5)
     return False
@@ -1460,6 +1551,7 @@ def verified_test_files(plan: dict, root, irc_dir, cmd, test_files, ncpu) -> lis
         return []
     by_name = {x["name"]: x for x in plan.get("workers") or []}
     known, ok = set(test_files or []), {}
+    owner = _file_owners(plan, irc_dir, root)
     for w in by_name.values():
         files = _worker_test_files(w, root) & known
         if not files:
@@ -1479,10 +1571,91 @@ def verified_test_files(plan: dict, root, irc_dir, cmd, test_files, ncpu) -> lis
                 p in by_name and pd.get(p) == atlas_irc._owned_digest(root, by_name[p].get("owns") or [])
                 for p in _needs_closure(plan, w)
             )
+            # a peer file the tests reach through imports must be in the DONE too: `needs` is optional on --plan
+            # plans, and 17.16.0 cached tests/test_a.py as green after peer b rewrote the kit/b.py it imports
+            and all(p in pd and pd.get(p) == atlas_irc._owned_digest(root, by_name[p].get("owns") or [])
+                    for p in _import_peers(w, root, files, owner))
         )
         for f in files:
             ok[f] = ok.get(f, True) and good and f in (toks or [])
     return sorted(f for f, v in ok.items() if v)
+
+
+def _file_owners(plan: dict, irc_dir, root=None) -> dict:
+    """{rel path: worker} over every plan `owns` entry (globs and directories expanded under root), with live
+    leases (irc give / claim) applied on top."""
+    owner = {}
+    for w in plan.get("workers") or []:
+        for p in (atlas_irc._owned_files(root, w.get("owns")) if root else (w.get("owns") or [])):
+            owner[p] = w["name"]
+    owner.update(atlas_irc.leases(irc_dir) if irc_dir else {})
+    return owner
+
+
+IMPORT_WALK_MAX = 500
+
+
+def _import_files(rel: str, root) -> list:
+    """Existing .py files (repo-relative posix paths) that `rel` imports, whoever owns them: each module, the
+    `__init__.py` of every package on its path, and for `from pkg import name` also pkg/name.py. An absolute name
+    is tried from the root, from the importing file's directory (pytest's rootdir-less sys.path entry) and
+    below src/."""
+    try:
+        tree = ast.parse((Path(root) / rel).read_text(encoding="utf-8", errors="replace"))
+    except (SyntaxError, OSError, ValueError):
+        return []
+    here = Path(rel).parent
+    out = []
+
+    def mod(parts, bases):
+        for base in bases:
+            cur = base
+            for i, part in enumerate(parts):
+                cur = cur / part
+                for cand in (cur / "__init__.py", Path(str(cur) + ".py") if i == len(parts) - 1 else None):
+                    if cand is not None and (Path(root) / cand).is_file():
+                        out.append(os.path.normpath(cand).replace(os.sep, "/"))
+            if not parts and (Path(root) / base / "__init__.py").is_file():
+                out.append(os.path.normpath(base / "__init__.py").replace(os.sep, "/"))
+
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            for a in n.names:
+                mod(a.name.split("."), [Path("."), here, Path("src")])
+        elif isinstance(n, ast.ImportFrom):
+            parts = n.module.split(".") if n.module else []
+            if n.level:
+                base = here
+                for _ in range(n.level - 1):
+                    base = base.parent
+                bases = [base]
+            else:
+                bases = [Path("."), here, Path("src")]
+            mod(parts, bases)
+            for a in n.names:
+                mod([*parts, a.name], bases)
+    return [f for f in dict.fromkeys(out) if f != rel]
+
+
+def _import_peers(w: dict, root, test_files, owner: dict) -> set:
+    """Workers other than `w` that own a file reachable by Python imports from `w`'s test files, its own files or
+    the conftest.py files above its tests. The walk opens every local .py file, owned or not: an unowned
+    conftest.py or package __init__.py that re-exports a peer's file still ties the test to it."""
+    start = [*test_files, *atlas_irc._owned_files(root, w.get("owns"))]
+    for t in test_files:
+        for d in Path(t).parents:
+            c = (d / "conftest.py").as_posix().removeprefix("./")
+            if (Path(root) / c).is_file():
+                start.append(c)
+    seen, todo = set(), start
+    while todo and len(seen) < IMPORT_WALK_MAX:
+        f = todo.pop()
+        if f in seen:
+            continue
+        seen.add(f)
+        if f.endswith(".py"):
+            todo.extend(_import_files(f, root))
+    return {owner[f] for f in seen if f in owner and owner[f] != w["name"]}
 
 
 def _global_check(plan: dict, root, rundir, check, tfiles, ncpu):
@@ -1534,6 +1707,90 @@ def route_failures(plan: dict, output: str, moved: dict | None = None) -> dict:
     return out
 
 
+def _killed(rundir: Path) -> bool:
+    return (rundir / "killed").exists()
+
+
+def _write_summary(rundir: Path, summary: dict) -> None:
+    tmp = rundir / f"summary.json.{os.getpid()}.tmp"
+    tmp.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    os.replace(tmp, rundir / "summary.json")
+
+
+def _pid_from(path: Path) -> int | None:
+    try:
+        return int(path.read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _group_of(pid: int, needle: str) -> int | None:
+    """pid's process group id when pid leads its own group and its command line holds `needle`, else None."""
+    try:
+        if os.getpgid(pid) != pid:
+            return None
+        if needle not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace"):
+            return None
+    except OSError:
+        return None
+    return pid
+
+
+def _stop_pidfile(path: Path, needle: str, wait_s: float = 3.0) -> int | None:
+    """SIGTERM (then SIGKILL) the process group whose pid `path` records, only while its command line still
+    holds `needle` (the run id), so a recycled pid is never signalled. Returns the pid stopped, else None."""
+    pid = _pid_from(path)
+    if not pid or pid == os.getpid() or not _pid_alive(pid):
+        return None
+    try:
+        if needle not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace"):
+            return None
+    except OSError:
+        pass  # no /proc: trust the file
+
+    def send(sig):
+        try:
+            if os.getpgid(pid) == pid:
+                os.killpg(pid, sig)
+            else:
+                os.kill(pid, sig)
+        except OSError:
+            pass
+
+    send(signal.SIGTERM)
+    end = time.time() + wait_s
+    while time.time() < end and _pid_alive(pid):
+        time.sleep(0.05)
+    if _pid_alive(pid):
+        send(signal.SIGKILL)
+    return pid
+
+
+def _stale_dones(plan: dict, root, rundir: Path, check, tfiles, ncpu, cached) -> dict:
+    """{worker: why} for workers whose standing DONE recorded a digest that no longer matches their owned files
+    (edited after the DONE, e.g. by a worker that was then stopped) and whose unit check does not pass now. The
+    DONE no longer describes the tree, so the check is re-run here; a worker with no check to re-run fails.
+    A DONE still current costs nothing, and so does a worker whose test files the sharded global check just ran
+    itself (none of them cached): that run already covers its unit check on the current files."""
+    bad = {}
+    sharded = bool(check) and bool(_shard_jobs(check, root, tfiles, ncpu))
+    for w in plan["workers"]:
+        rec = atlas_irc.latest_done_record(rundir / "irc", w["name"])
+        if not rec or not rec.get("digest") or rec["digest"] == atlas_irc._owned_digest(root, w.get("owns") or []):
+            continue
+        mine = _worker_test_files(w, root)
+        if sharded and mine and not (mine & set(cached or ())):
+            continue
+        cmd = (w.get("unit_check") or w.get("check") or "").strip()
+        if not cmd:
+            bad[w["name"]] = "files changed after its DONE and it has no check to re-run"
+        else:
+            c, _ = _run_check(cmd, root)
+            if c:
+                bad[w["name"]] = f"files changed after its DONE and its check now fails (exit {c})"
+    return bad
+
+
 def cmd_supervise(a) -> int:
     rundir = Path(a.rundir)
     meta = json.loads((rundir / "run.json").read_text(encoding="utf-8"))
@@ -1542,6 +1799,13 @@ def cmd_supervise(a) -> int:
     deadline = meta["started"] + float(meta.get("timeout") or 3600)
     rounds = []
     check = plan.get("check")
+    (rundir / "supervisor.pid").write_text(str(os.getpid()))  # `kill` stops this process
+
+    def finish_killed() -> int:
+        _write_summary(rundir, summarize(rundir, meta, rounds, 1, "killed", killed=True))
+        _stop_pidfile(rundir / "gateway.pid", meta["run_id"])
+        return 0
+
     # the global check needs every worker's files, not their processes' exit: exit tails run 1-8 s under
     # load. Wait until each worker has exited or holds a current verified DONE, check, then collect exits.
     _wait_ready(rundir, names, 0, deadline)
@@ -1550,11 +1814,12 @@ def cmd_supervise(a) -> int:
     tfiles, ncpu = _known_test_files(plan, root), os.cpu_count() or 1
     nsh = shard_count(check, root, tfiles, ncpu) if check else 1
     code, out, cached = (0, "", []) if not check else _global_check(plan, root, rundir, check, tfiles, ncpu)
-    finished = _wait_round(rundir, names, 0, min(deadline, time.time() + RESULT_GRACE_S + 10))
     if check and _owned_hashes(root, plan) != before:
         code, out, cached = _global_check(plan, root, rundir, check, tfiles, ncpu)  # a file changed while the check ran: its verdict is stale
-    rounds.append(
-        {
+        before = _owned_hashes(root, plan)
+
+    def row0(finished):
+        return {
             "round": 0,
             "all_exited": finished,
             "check_started_before_exit": check_before_exit,
@@ -1563,10 +1828,46 @@ def cmd_supervise(a) -> int:
             "check_cached": cached,
             "t": round(time.time() - meta["started"], 1),
         }
-    )
+
+    def publish():
+        summary = summarize(rundir, meta, rounds, code, out, stale=stale)
+        if code == 0 and meta.get("changelog"):
+            summary["changelog"] = write_changelog(root, meta["changelog"])
+        _write_summary(rundir, summary)
+
+    reap_s = RESULT_GRACE_S + 10
+    stale: dict = {}
+    green = code == 0 and not _killed(rundir)
+    if green:
+        # the first published ok-true must never flip: stop every worker still running (each holds a verified
+        # DONE), so nothing edits an owned file after the verdict; a change while they stopped re-checks
+        for n in names:
+            if not _exited(rundir, n, 0):
+                _stop_pidfile(rundir / "pid" / n, rundir.name)
+        if check and _owned_hashes(root, plan) != before:
+            code, out, cached = _global_check(plan, root, rundir, check, tfiles, ncpu)
+            before = _owned_hashes(root, plan)
+        green = code == 0
+        stale = _stale_dones(plan, root, rundir, check, tfiles, ncpu, cached)
+    if green:
+        # green and no fix round follows: the verdict does not depend on the exit tails (1-30 s of a
+        # lingering claude process), so publish it now and collect the exits after
+        rounds.append(row0(all([_settle(rundir, n, 0) for n in names])))
+        publish()
+        finished = _wait_round(rundir, names, 0, min(deadline, time.time() + reap_s))
+        if check and _owned_hashes(root, plan) != before:
+            code, out, cached = _global_check(plan, root, rundir, check, tfiles, ncpu)
+        rounds[0] = row0(finished)
+    else:
+        finished = _wait_round(rundir, names, 0, min(deadline, time.time() + reap_s))
+        if check and _owned_hashes(root, plan) != before:
+            code, out, cached = _global_check(plan, root, rundir, check, tfiles, ncpu)  # a file changed while the check ran: its verdict is stale
+        rounds.append(row0(finished))
     for rnd in range(1, int(meta.get("fix_rounds") or 0) + 1):
         if code == 0 or not finished:
             break
+        if _killed(rundir):
+            return finish_killed()
         routed = route_failures(plan, out, atlas_irc.leases(rundir / "irc"))
         if not routed:
             for w in plan["workers"]:
@@ -1622,12 +1923,9 @@ def cmd_supervise(a) -> int:
                 "t": round(time.time() - meta["started"], 1),
             }
         )
-    summary = summarize(rundir, meta, rounds, code, out)
-    if code == 0 and meta.get("changelog"):
-        summary["changelog"] = write_changelog(root, meta["changelog"])
-    (rundir / "summary.json").write_text(
-        json.dumps(summary, indent=1), encoding="utf-8"
-    )
+    if _killed(rundir):
+        return finish_killed()
+    publish()
     shutil.rmtree(Path(root) / ".atlas" / "tmp" / meta["run_id"], ignore_errors=True)  # staged copies
     atlas_irc.post(
         rundir / "irc",
@@ -1636,6 +1934,9 @@ def cmd_supervise(a) -> int:
         f"Crew finished: global check exit {code}.",
         kind="final",
     )
+    for n in names:  # a claude still alive is in its own session now: kill-session would not reach it
+        _stop_pidfile(rundir / "pid" / n, rundir.name)
+    _stop_pidfile(rundir / "gateway.pid", meta["run_id"])  # the no-tmux gateway `run` started
     if meta.get("tmux") and not os.environ.get("ATLAS_CREW_KEEP"):
         _tmux("kill-session", "-t", meta["session"])
     return 0
@@ -1711,9 +2012,24 @@ def irc_stats(d: Path, names) -> dict:
     }
 
 
-def summarize(rundir: Path, meta: dict, rounds, code, out) -> dict:
+def _final_exit(rundir: Path, name: str):
+    """(round, exit record) of the worker's latest round that has one, else None."""
+    best = None
+    for p in (rundir / "exit").glob(f"{name}.r*.json"):
+        m = re.fullmatch(rf"{re.escape(name)}\.r(\d+)\.json", p.name)
+        if m and (best is None or int(m.group(1)) > best):
+            best = int(m.group(1))
+    return None if best is None else _exited(rundir, name, best)
+
+
+def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False, stale=None) -> dict:
+    """Run verdict. ok needs a green check and no failed worker: one whose final exit is nonzero, or that left no
+    exit and holds no verified DONE. A worker whose DONE still stands under a green check is verified work; its
+    nonzero exit (the reaper, a crash after the result) is reported in late_exits and a missing one in
+    pending_exits (the supervisor publishes at once after a green check and collects exits after), neither red."""
     names = [w["name"] for w in meta["plan"]["workers"]]
     workers, tot = [], {"total": 0, "cost_usd": 0.0}
+    failed, late, pending = [], {}, []
     for n in names:
         u = {"total": 0, "cost_usd": 0.0, "turns": 0}
         for log in sorted((rundir / "logs").glob(f"{n}*.log")):
@@ -1725,7 +2041,21 @@ def summarize(rundir: Path, meta: dict, rounds, code, out) -> dict:
             gate = json.loads((rundir / "irc" / "stop" / f"{n}.json").read_text())
         except (OSError, ValueError):
             pass
-        ex = _exited(rundir, n, 0) or {}
+        ex = _final_exit(rundir, n) or {}
+        done = atlas_irc.has_done(rundir / "irc", n)
+        if n in (stale or {}):
+            failed.append({"name": n, "exit": ex.get("exit"), "why": stale[n]})
+        elif not ex:
+            if done:
+                pending.append(n)
+            else:
+                failed.append({"name": n, "exit": None, "why": "no exit recorded and no verified DONE"})
+        elif ex.get("exit") != 0:
+            if done and code == 0:
+                late[n] = ex.get("exit")
+            else:
+                why = ex.get("launch_error") or ex.get("why") or f"exited {ex.get('exit')}"
+                failed.append({"name": n, "exit": ex.get("exit"), "why": why})
         workers.append(
             {
                 "name": n,
@@ -1742,7 +2072,11 @@ def summarize(rundir: Path, meta: dict, rounds, code, out) -> dict:
         tot["cost_usd"] += u.get("cost_usd", 0)
     tot["cost_usd"] = round(tot["cost_usd"], 4)
     return {
-        "ok": code == 0,
+        "ok": code == 0 and not failed and not killed,
+        "killed": killed,
+        "failed_workers": failed,
+        "late_exits": late,
+        "pending_exits": pending,
         "run": meta["run_id"],
         "check": meta["plan"].get("check"),
         "check_exit": code,
@@ -1841,6 +2175,11 @@ def cmd_wait(a) -> int:
     while time.time() < end:
         s = rundir / "summary.json"
         if s.exists():
+            if not (rundir / "supervisor.pid").is_file():
+                # The supervisor writes supervisor.pid as it starts, before any summary. A summary without
+                # one was not written by the engine: print nothing it says.
+                print(json.dumps({"ok": False, "error": f"run {a.run!r} was never started by the crew engine (no supervisor.pid)"}))
+                return 1
             print(_summary_line(s))
             return _summary_rc(s)
         time.sleep(2)
@@ -1879,15 +2218,35 @@ def cmd_kill(a) -> int:
     if rundir is None:
         return 1
     meta = json.loads((rundir / "run.json").read_text(encoding="utf-8"))
+    finished = (rundir / "summary.json").exists() and not _killed(rundir)
+    if not finished:
+        (rundir / "killed").write_text(str(time.time()))  # the supervisor starts no fix round once this exists
+    _stop_pidfile(rundir / "supervisor.pid", meta["run_id"])
     killed = []
     for p in (rundir / "pid").glob("*"):
         try:
-            os.kill(int(p.read_text()), signal.SIGTERM)
+            pid = int(p.read_text())
+            group = _group_of(pid, rundir.name)
+            os.kill(pid, signal.SIGTERM)
             killed.append(p.name)
+            if group:  # claude's children share its group
+                os.killpg(group, signal.SIGTERM)
         except (OSError, ValueError):
             pass
+    for p in (rundir / "wpid").glob("*"):  # worker wrappers (a wrapper still in its --delay holds no claude pid)
+        try:
+            pid = int(p.read_text())
+            if pid != os.getpid():
+                os.kill(pid, signal.SIGTERM)
+        except (OSError, ValueError):
+            pass
+    _stop_pidfile(rundir / "gateway.pid", meta["run_id"])
     if meta.get("tmux"):
         _tmux("kill-session", "-t", meta["session"])
+    if finished:  # a finished run's summary is the record; a late kill must not turn it into ok false
+        print(json.dumps({"ok": True, "killed": killed, "already_finished": True}))
+        return 0
+    _write_summary(rundir, summarize(rundir, meta, [], 1, "killed", killed=True))
     print(json.dumps({"ok": True, "killed": killed}))
     return 0
 

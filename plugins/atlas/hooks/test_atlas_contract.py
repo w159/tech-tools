@@ -450,6 +450,26 @@ class HeaderFirstLinePatternContract(unittest.TestCase):
         self.assertTrue(pattern.match("ATLAS | 🔧 implement | x"))
         self.assertFalse(pattern.match("ATLAS | implement 3/5 x"))
 
+    def test_header_pattern_accepts_both_glyph_orders_with_phase_in_group_one(self):
+        contract = json.loads(
+            (PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        pattern = re.compile(contract["headerFirstLinePattern"])
+        for line, phase in (
+            ("ATLAS | 🏁 done | x", "done"),
+            ("ATLAS | done 🏁 | x", "done"),
+            ("ATLAS | implement 3/5 🔧 | x", "implement"),
+            ("ATLAS | implement 🔧 3/5 | x", "implement"),
+        ):
+            with self.subTest(line=line):
+                m = pattern.match(line)
+                self.assertTrue(m)
+                self.assertEqual(m.group(1), phase)
+        self.assertFalse(pattern.match("ATLAS | done | x"))
+        self.assertFalse(pattern.match("ATLAS | done 🏁 |"))
+
 
 class DocsDriftWatchContract(unittest.TestCase):
     """Drift is surfaced at edit time, not only at Stop."""
@@ -1224,6 +1244,98 @@ class ContextBudget(unittest.TestCase):
         ):
             body = (PLUGIN_ROOT / rel).read_text(encoding="utf-8")
             self.assertIn(self.TOOLS_PHRASE, body, rel)
+
+
+_CMD_SKIP_NAMES = {"CHANGELOG.md", "README.md"}
+
+
+def _plugin_markdown() -> list:
+    out = []
+    for p in sorted(PLUGIN_ROOT.rglob("*.md")):
+        rel = p.relative_to(PLUGIN_ROOT).parts
+        if p.name in _CMD_SKIP_NAMES or any(
+            x in ("node_modules", ".atlas", "design") for x in rel
+        ):
+            continue
+        out.append(p)
+    return out
+
+
+def _atlas_commands(text: str) -> list:
+    """Logical `python3 ...atlas_*.py ...` command lines in a markdown file.
+
+    Collects fenced and 4-space-indented code lines (joining backslash continuations) and inline code spans.
+    Returns (lineno, command) pairs.
+    """
+    found = []
+    lines = text.split("\n")
+    in_fence = False
+    i = 0
+    while i < len(lines):
+        ln = lines[i]
+        if ln.lstrip().startswith("```"):
+            in_fence = not in_fence
+            i += 1
+            continue
+        if in_fence:
+            if re.search(r"atlas_\w+\.py", ln):
+                start, cmd = i + 1, ln.strip()
+                while cmd.endswith("\\") and i + 1 < len(lines):
+                    i += 1
+                    cmd = cmd[:-1] + " " + lines[i].strip()
+                found.append((start, cmd))
+        elif re.match(r"^( {4,}|\t)python3 .*atlas_\w+\.py", ln):
+            start, cmd = i + 1, ln.strip()
+            while cmd.endswith("\\") and i + 1 < len(lines):
+                i += 1
+                cmd = cmd[:-1] + " " + lines[i].strip()
+            found.append((start, cmd))
+        else:
+            for m in re.finditer(r"`([^`\n]*atlas_\w+\.py[^`\n]*)`", ln):
+                found.append((i + 1, m.group(1)))
+        i += 1
+    return found
+
+
+def _unquoted_value_pipes(cmd: str) -> list:
+    """Unquoted `|` glued to a word (a template choice list), not a spaced shell pipe."""
+    bad, quote = [], None
+    for k, ch in enumerate(cmd):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "|":
+            before = cmd[k - 1] if k else " "
+            after = cmd[k + 1] if k + 1 < len(cmd) else " "
+            if before != " " or after != " ":
+                bad.append(k)
+    return bad
+
+
+class MarkdownCommandContract(unittest.TestCase):
+    """Commands the plugin's model-read markdown prints must run as written."""
+
+    def test_atlas_finding_commands_carry_required_title(self):
+        bad = []
+        for p in _plugin_markdown():
+            for lineno, cmd in _atlas_commands(p.read_text(encoding="utf-8")):
+                if "atlas_finding.py" not in cmd:
+                    continue
+                args = cmd.split("atlas_finding.py", 1)[1]
+                if "--id" in args and "--title" not in args:
+                    bad.append(f"{p.relative_to(PLUGIN_ROOT)}:{lineno}")
+        self.assertEqual(bad, [], "atlas_finding.py needs --title (rc=2 otherwise)")
+
+    def test_no_unquoted_pipe_in_atlas_command_arguments(self):
+        bad = []
+        for p in _plugin_markdown():
+            for lineno, cmd in _atlas_commands(p.read_text(encoding="utf-8")):
+                m = re.search(r"atlas_\w+\.py", cmd)
+                if m and _unquoted_value_pipes(cmd[m.end() :].lstrip("\"'")):
+                    bad.append(f"{p.relative_to(PLUGIN_ROOT)}:{lineno}")
+        self.assertEqual(bad, [], "unquoted | in a command argument breaks in a shell")
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ Each finding in report.md carries: dimension, severity (HIGH / MED / LOW), file:
 **Compliance mapping (optional, elicited):** when the user selected frameworks at elicitation time, each verified finding additionally carries a `compliance:` line mapping it to the specific control IDs from the chosen frameworks that the finding touches - e.g. FTC Safeguards section (9.x), GLBA 16 CFR 314.4(x), SOC 2 CC-series criterion, or an OWASP ASVS requirement ID. Map from the finding's dimension and described flaw; cite the control ID, never paraphrase it into a new numbering. If a verified finding touches no control in the selected frameworks, state that explicitly rather than forcing a tag. Frameworks were not selected: emit no `compliance:` lines at all. Each verified verdict is also appended to `.atlas/.run/findings.json` by the `atlas:verifier` via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py` (flat flags, no subcommands):
 
 ```
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id <finding-id> --status verified --title "<one line>" --evidence <file:line> --reproduction "<exact command>" --severity <HIGH|MED|LOW> --surface <dimension>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id <finding-id> --status verified --title "<one line>" --evidence <file:line> --reproduction "<exact command>" --severity <severity> --surface <dimension>
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id <finding-id> --status rejected --title "<one line>" --evidence <file:line>
 ```
 

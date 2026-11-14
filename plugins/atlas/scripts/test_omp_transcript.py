@@ -1168,13 +1168,13 @@ class GateConditionMatrixTest(GateEndToEndTest):
     def _letters(verdict):
         import re
 
-        return sorted(
-            set(
-                re.findall(
-                    r"^\s{2}\(([a-z])\)", (verdict or {}).get("reason", ""), re.M
-                )
-            )
-        )
+        reason = (verdict or {}).get("reason", "")
+        letters = set(re.findall(r"^\s{2}\(([a-z])\)", reason, re.M))
+        # Letters one green test run clears (a, b, ...) are named in the one-line "run the tests" reason
+        # ("Each of (a), (b) then needs its own proof") instead of the per-letter essay.
+        for group in re.findall(r"Each of ((?:\([a-z]\)(?:, )?)+) then needs", reason):
+            letters.update(re.findall(r"\(([a-z])\)", group))
+        return sorted(letters)
 
     def _write(self, rel, text):
         p = os.path.join(self.proj, rel)

@@ -2,6 +2,7 @@ import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import contextlib
 import io
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -302,7 +303,7 @@ class HookTest(LayoutBase):
         self.assertEqual(
             out,
             "atlas layout: 1 misplaced .atlas path(s): "
-            "plugins/x/.atlas; run atlas_doctor.py --fix to archive them\n",
+            f"plugins/x/.atlas; run {doctor_layout._fix_command()} to archive them\n",
         )
         self.assertTrue(os.path.exists(stray))
 
@@ -312,7 +313,8 @@ class HookTest(LayoutBase):
         out = self._quiet_hook()
         self.assertIn("7 misplaced", out)
         self.assertIn("p0/.atlas, p1/.atlas, p2/.atlas, p3/.atlas, p4/.atlas", out)
-        self.assertIn(" (+2 more); run atlas_doctor.py --fix", out)
+        self.assertIn(f" (+2 more); run {doctor_layout._fix_command()}", out)
+        self.assertTrue(os.path.isabs(doctor_layout._fix_command().split()[1].strip("'\"")))
         self.assertNotIn("p5/.atlas", out)
 
     def test_home_run_project_files_are_reported_not_moved(self):
@@ -366,7 +368,10 @@ class HookTest(LayoutBase):
         ):
             out = self.hook()
         self.assertEqual(
-            out, "docs naming: 3 files need renaming; run atlas_doctor.py --fix\n"
+            out,
+            "docs naming: 3 files need renaming; run "
+            + shlex.join(["python3", os.path.abspath(atlas_doctor.__file__), "--fix"])
+            + "\n",
         )
         fix.assert_not_called()
 

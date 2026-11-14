@@ -24,7 +24,7 @@ Dispatch shape - one verifier per finding, batched (~8 in flight; all P0/P1 alwa
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" \
   --id review-<run-id>-R-00N \
-  --status verified|rejected|needs-evidence \
+  --status verified \
   --title "<finding title>" \
   --evidence "<file:line or .atlas/evidence/... path>" \
   --reproduction "<the exact command or read that checked it>"

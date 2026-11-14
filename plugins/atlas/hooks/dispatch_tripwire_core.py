@@ -735,7 +735,37 @@ def _scope_gate(deny, tinput, root, session, run_key=None):
         _advisory(note)
 
 
-def _toolkit_gap(tinput):
+def _lean_ctx_reachable(root=None):
+    """True when the lean-ctx tools can actually be loaded: the binary is on PATH AND an MCP server
+    for it is configured for this project (the detection the native-tool policy uses). The omp
+    bridge always has its xd:// devices. Demanding a tool that is not installed only denies the
+    dispatch for something nobody can comply with."""
+    if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
+        return True
+    import shutil
+
+    with contextlib.suppress(Exception):
+        if not shutil.which("lean-ctx"):
+            return False
+        base = Path(root) if root else None
+        if base is None:
+            cwd = Path(_PAYLOAD_CWD[0] or os.getcwd())
+            base = find_root(cwd) or cwd
+        return bool(_lean_ctx_server_key(base))
+    return False
+
+
+def _plugin_enabled(fragment):
+    """True when ~/.claude/settings.json enabledPlugins has a truthy entry whose key contains `fragment`."""
+    with contextlib.suppress(Exception):
+        data = _read_json(Path.home() / ".claude" / "settings.json") or {}
+        plugins = data.get("enabledPlugins")
+        if isinstance(plugins, dict):
+            return any(fragment in str(k) and v for k, v in plugins.items())
+    return False
+
+
+def _toolkit_gap(tinput, root=None):
     """An atlas:* dispatch whose prompt never orders real code-nav tools.
 
     Measured: 3 of 12 recorded subagent runs got no TOOLS block and made 0 MCP calls,
@@ -747,6 +777,8 @@ def _toolkit_gap(tinput):
     agent = str(tinput.get("subagent_type") or "")
     if not agent.startswith("atlas:"):
         return None  # forks inherit the parent's loaded tools; non-atlas agents opt out
+    if not _lean_ctx_reachable(root):
+        return None  # lean-ctx is not installed/configured: nothing to demand
     # Docs-only roles still benefit from lean-ctx; keep the bar for all atlas:*.
     # The tools must be named inside a line-anchored TOOLS: block: the words "ToolSearch" and "lean-ctx" in prose
     # (or in a decoy sentence) are not an instruction the subagent can follow.
@@ -1147,7 +1179,7 @@ def _builtin_agent(tinput):
     return agent if agent in BUILTIN_ROLE else None
 
 
-def _role_block(agent):
+def _role_block(agent, root=None):
     """Ready-to-paste dispatch for `agent` (an atlas:* role): the call line plus
     every block the gate checks (TOOLS, the six spec blocks, STEPS for the runner)."""
     role = agent.split(":", 1)[-1]
@@ -1156,6 +1188,8 @@ def _role_block(agent):
             "TOOLS: use lean-ctx via its xd:// devices (write JSON to xd://mcp__lean_ctx_ctx_search, "
             "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute"
         )
+    elif not _lean_ctx_reachable(root):
+        tools = None  # lean-ctx is not installed here: do not paste a TOOLS line that cannot be followed
     else:
         tools = (
             "TOOLS: one batched ToolSearch select of lean-ctx (ctx_compose, ctx_search, ctx_read), "
@@ -1167,7 +1201,7 @@ def _role_block(agent):
         if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp"
         else f'Agent(subagent_type="{agent}", name="<slice>-{role}", description="<3-5 words>", prompt='
     )
-    lines = [call, tools]
+    lines = [call] + ([tools] if tools else [])
     lines.append(_spec_skeleton([b[0] for b in REQUIRED_SPEC_BLOCKS]))
     if role == _mechanical_tier()[0]:
         lines.append(
@@ -1646,7 +1680,7 @@ def _pre_tool_use(
                 "atlas:implementer; planning -> atlas:planner; verification -> "
                 "atlas:verifier; mechanical steps -> atlas:runner. For this call, "
                 "paste:\n{}\nSet ATLAS_BUILTIN_AGENT_NUDGE=off to disable this check.".format(
-                    tool, stock or "(default general-purpose)", _role_block(role)
+                    tool, stock or "(default general-purpose)", _role_block(role, root)
                 ),
             )
             return
@@ -1666,7 +1700,7 @@ def _pre_tool_use(
                     "and can SendMessage the others, its report stays attributable, and "
                     "board notes can be addressed to it. Re-issue the same call with the "
                     "Agent tool's `name` argument set (a tool argument, not prompt text): "
-                    f"name: <role>-<slice> (e.g. auth-explorer). Ready-to-paste call:\n{_role_block(unnamed)}",
+                    f"name: <role>-<slice> (e.g. auth-explorer). Ready-to-paste call:\n{_role_block(unnamed, root)}",
                 )
                 return
         # (c1) A per-call model override drifts the colony's cost/runtime tier.
@@ -1697,7 +1731,7 @@ def _pre_tool_use(
         # (c) A dispatch that never names the toolset gets a subagent that greps.
         # Toolkit, scope and spec problems are reported TOGETHER in one deny: they used to surface one per
         # re-dispatch (toolkit, then scope, then spec - 3-4 denied round-trips for one bad brief).
-        gap = _toolkit_gap(tinput or {})
+        gap = _toolkit_gap(tinput or {}, root)
         unbounded = _unbounded_dispatch(tinput or {})
         if (
             unbounded
@@ -1770,7 +1804,7 @@ def _pre_tool_use(
                 "\nALSO - " + t.removeprefix("DENY - ") for _, t in problems[1:]
             )
             if gap:
-                text += "\nPaste:\n" + _role_block(gap)
+                text += "\nPaste:\n" + _role_block(gap, root)
             deny(problems[0][0], text)
             return
         steps_problem = _runner_steps_problem(tinput or {})
@@ -1779,7 +1813,7 @@ def _pre_tool_use(
                 "steps",
                 steps_problem
                 + "\nPaste:\n"
-                + _role_block(str((tinput or {}).get("subagent_type"))),
+                + _role_block(str((tinput or {}).get("subagent_type")), root),
             )
         else:
             _scope_gate(deny, tinput or {}, root, session, _run_key(conn, run_id))
@@ -2287,15 +2321,29 @@ def _native_tool_policy(payload):
         marker = root / ".atlas" / ".run" / "native_nudges" / f"{key}-{tool}"
         if marker.exists():
             return False, None
+        lean = bool(shutil.which("lean-ctx") and _lean_ctx_server_key(root))
+        cmode = _plugin_enabled("context-mode")
         message = {
             "Read": (
                 "[atlas] Use lean-ctx `ctx_read` for exploration; native Read is still "
                 "fine right before an Edit."
+                if lean
+                else None
             ),
             "Bash": (
-                "[atlas] Use lean-ctx `ctx_shell` / context-mode `ctx_execute` for "
-                "anything that produces output over ~20 lines; native Bash remains "
+                "[atlas] Use "
+                + " / ".join(
+                    t
+                    for t in (
+                        "lean-ctx `ctx_shell`" if lean else "",
+                        "context-mode `ctx_execute`" if cmode else "",
+                    )
+                    if t
+                )
+                + " for anything that produces output over ~20 lines; native Bash remains "
                 "available for mutations and short fixed output."
+                if (lean or cmode)
+                else None
             ),
             "Grep": (
                 "[atlas] lean-ctx MCP is not configured for this project (no "
@@ -2310,6 +2358,8 @@ def _native_tool_policy(payload):
                 "projects where lean-ctx MCP is configured."
             ),
         }[tool]
+        if message is None:
+            return False, None  # no tool to recommend: say nothing
         return False, (marker, message)
     except Exception:
         return False, None  # policy failure must never turn into a deny
@@ -2683,9 +2733,10 @@ def _run(payload):
                                 "[atlas] verifier verdict not in findings.json - record it "
                                 "yourself (do not re-dispatch):\n"
                                 f'  python3 "{SCRIPTS_DIR / "atlas_finding.py"}" '
-                                "--id <stage> --status "
-                                "verified|rejected|needs-evidence --evidence "
-                                "'<path or test id>' --reproduction '<command>'"
+                                "--id '<stage>' --status verified "
+                                "--title '<one line: what was verified>' "
+                                "--evidence '<path or test id>' --reproduction '<command>'\n"
+                                "(--status takes verified, rejected or needs-evidence.)"
                             ),
                         }
                     }

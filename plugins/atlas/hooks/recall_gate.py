@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """PreToolUse hook -- claude-mem recall gate (REQUIRED once per session).
 
-Every main-thread tool call that is neither a claude-mem call, TodoWrite nor ToolSearch is
-denied (on EVERY attempt, no once-per-session fail-open), with the `recallGate` text from
+The first main-thread tool call that is neither a claude-mem call, TodoWrite nor ToolSearch is
+denied (once per session: the next call is allowed with a one-line note, because a server that failed
+to connect leaves no recall tool to satisfy the gate), with the `recallGate` text from
 contracts/mandates.json naming the claude-mem search tool and an example argument, until
 the session makes a real claude-mem call. Ignoring a denial does not satisfy the gate; only
 the recall itself does (it is allowed silently and writes the session's marker, even if
@@ -137,6 +138,41 @@ def _mark_recalled(session: str) -> None:
         os.close(os.open(_marker(session), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
 
 
+def _denied_marker(session: str) -> str:
+    return os.path.join(
+        GATE_MARKER_DIR, "denied-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+    )
+
+
+_NOTE: list = [None]  # one-line allow note main() prints (set by _release)
+_MISSING_TOOL = lre(r"No such tool available:\s*mcp__(?:plugin_)?(?:claude[-_]?mem|mcp[-_]?search)", re.I)
+
+
+def _recall_tool_missing(transcript_path) -> bool:
+    """True when the transcript tail shows a claude-mem tool call that failed because the tool does not exist."""
+    if not isinstance(transcript_path, str) or not transcript_path:
+        return False
+    try:
+        with open(transcript_path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - 262144))
+            tail = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return False
+    return bool(_MISSING_TOOL.search(tail))
+
+
+def _release(session: str, why: str) -> None:
+    """Stop gating this session (cheap marker for later calls) and queue a one-line note for the allowed call."""
+    with contextlib.suppress(OSError):
+        os.makedirs(GATE_MARKER_DIR, exist_ok=True)
+        os.close(os.open(_unarmed_marker(session), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    _NOTE[0] = (
+        "[atlas gate] Recall gate released for this session: %s. Continue without it; "
+        "ATLAS_MANDATES=off disables the gate." % why
+    )
+
+
 def _trace_unarmed(session: str, cwd: str) -> None:
     """claude-mem is enabled but no recall tool is mounted, so the gate cannot be satisfied: allow, and leave one trace per session."""
     os.makedirs(GATE_MARKER_DIR, exist_ok=True)
@@ -170,18 +206,33 @@ def _has_mem_server(servers) -> bool:
 
 
 def _plugin_mcp_files(plugins_dir: str):
-    """`.mcp.json` files under a claude-mem plugin dir in ~/.claude/plugins (bounded walk)."""
-    base_depth = plugins_dir.rstrip(os.sep).count(os.sep)
-    for dirpath, dirnames, filenames in os.walk(plugins_dir):
-        if dirpath.count(os.sep) - base_depth >= 7:
-            dirnames[:] = []
-        dirnames[:] = [d for d in dirnames if d not in ("node_modules", ".git")]
-        if ".mcp.json" in filenames and re.search(r"claude[-_]?mem", dirpath, re.I):
-            yield os.path.join(dirpath, ".mcp.json")
+    """`.mcp.json` files in the CURRENT install of the claude-mem plugin.
+
+    The install paths come from installed_plugins.json (entries named `claude-mem@...`), so
+    stale version caches and other marketplaces' leftovers under ~/.claude/plugins never count:
+    a server that only an old cache ships is not mounted in this session."""
+    try:
+        with open(os.path.join(plugins_dir, "installed_plugins.json"), encoding="utf-8") as fh:
+            installed = json.load(fh)
+    except (OSError, ValueError):
+        return
+    plugins = installed.get("plugins") if isinstance(installed, dict) else None
+    if not isinstance(plugins, dict):
+        return
+    for key, entries in plugins.items():
+        if str(key).split("@", 1)[0] != "claude-mem" or not isinstance(entries, list):
+            continue
+        for entry in entries:
+            path = entry.get("installPath") if isinstance(entry, dict) else None
+            if isinstance(path, str) and os.path.isfile(os.path.join(path, ".mcp.json")):
+                yield os.path.join(path, ".mcp.json")
 
 
-def _mem_server_mounted(cwd: str) -> bool:
-    """True when a claude-mem MCP server is configured anywhere Claude Code would read it.
+def _mem_server_mounted(cwd: str):
+    """Truthy when a claude-mem MCP server is configured anywhere Claude Code would read it:
+    True for a server named in a project/user config, "plugin" when only the enabled plugin's
+    current install ships it (a plugin server can still fail to connect, and a hook cannot see
+    the callable tool set, so the gate denies that case once and then lets the session through).
 
     Sources: project .mcp.json (cwd up to home), ~/.claude.json (global and projects[cwd]),
     a claude-mem plugin's .mcp.json under ~/.claude/plugins, and the settings files."""
@@ -217,7 +268,7 @@ def _mem_server_mounted(cwd: str) -> bool:
         entry = projects.get(cwd) if isinstance(projects, dict) else None
         if isinstance(entry, dict) and _has_mem_server(entry.get("mcpServers")):
             return True
-    # Enabled claude-mem plugin shipping its own .mcp.json (flat or under mcpServers).
+    # Enabled claude-mem plugin's current install shipping its own .mcp.json (flat or under mcpServers).
     for path in _plugin_mcp_files(os.path.join(home, ".claude", "plugins")):
         try:
             with open(path, encoding="utf-8") as fh:
@@ -225,7 +276,7 @@ def _mem_server_mounted(cwd: str) -> bool:
         except (OSError, ValueError):
             continue
         if isinstance(data, dict) and (data.get("mcpServers") or data):
-            return True
+            return "plugin"
     return False
 
 
@@ -246,6 +297,7 @@ def _record_fault(exc: BaseException, cwd) -> None:
 
 def _decide(data: dict) -> str | None:
     """The deny reason for this call, or None to allow (fail open)."""
+    _NOTE[0] = None
     try:
         tool_name = data.get("tool_name")
         session = data.get("session_id")
@@ -286,7 +338,8 @@ def _decide(data: dict) -> str | None:
             return None  # throwaway / non-project directory: gate never arms
         if not _claude_mem_enabled(cwd):
             return None
-        if not _mem_server_mounted(cwd):
+        mounted = _mem_server_mounted(cwd)
+        if not mounted:
             _trace_unarmed(session, cwd)
             return None  # enabled in settings but its MCP server is not mounted here: no deadlock
         contract = _contract()
@@ -300,6 +353,24 @@ def _decide(data: dict) -> str | None:
         os.makedirs(GATE_MARKER_DIR, exist_ok=True)
         if not os.access(GATE_MARKER_DIR, os.W_OK):
             raise PermissionError("recall marker dir not writable: gate unarmed")
+        if _recall_tool_missing(data.get("transcript_path")):
+            _release(session, "the claude-mem recall tool does not exist in this session")
+            return None
+        # A plugin-shipped server can have failed to connect, which would leave no recall tool and a
+        # hook cannot see the callable set: deny once per session, then never lock the session.
+        # A server from project or user config is deny-every-call (a missing tool is caught above).
+        if mounted != "plugin":
+            return (
+                contract["recallGate"]
+                .replace("{route}", CC_ROUTE)
+                .replace("{example}", contract["recallGateExample"])
+            )
+        first = _denied_marker(session)
+        try:
+            os.close(os.open(first, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        except FileExistsError:
+            _release(session, "the claude-mem recall was asked for once and did not happen")
+            return None
         return (
             contract["recallGate"]
             .replace("{route}", CC_ROUTE)
@@ -321,6 +392,17 @@ def main() -> int:
 
     reason = _decide(data)
     if reason is None:
+        if _NOTE[0]:
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PreToolUse",
+                            "additionalContext": _NOTE[0],
+                        }
+                    }
+                )
+            )
         return 0
     print(
         json.dumps(

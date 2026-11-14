@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.16.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.17.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -68,10 +68,10 @@ it Atlas falls back to `claude --bg` workers.
    a pointer to setup:
 
    ```
-   Atlas ready (run the `atlas-setup` skill to complete setup)
+   Atlas ready (ask the user to run `/atlas:atlas-setup` to complete setup)
    ```
 
-3. Run `atlas-setup` once per project. It is invoked by name, not
+3. Run `/atlas:atlas-setup` once per project. It is invoked by name, not
    loaded automatically. Onboard mode
    scaffolds `docs/` and `.atlas/`, install mode wires claude-mem and
    context-mode if you approve, and tour mode walks one dispatch and one gate
@@ -198,6 +198,31 @@ code edit after the re-run voids it; a docs edit does not. The docs letters
 still apply. `ATLAS_GATE_RERUN=off` restores the old behavior;
 `ATLAS_GATE_RERUN_TIMEOUT` caps the re-run (default 90 s).
 
+What the re-run trusts (17.17.0):
+
+- It re-runs only a command whose transcript result shows it executed (a
+  non-error result, or one Claude Code marks `Exit code N`), never one a hook or
+  you denied, or one that never ran. A project venv runner
+  (`.venv/bin/python -m pytest`) counts only when its realpath is inside the
+  project, or it is a symlink onto python3 or pytest under a standard prefix, and
+  only when the session ran that exact command.
+- A timeout (124), a missing pytest (127) and pytest usage or nothing collected
+  (4, 5) are inconclusive, not a test failure: they are recorded once and not
+  retried, and the gate takes the paperwork path. The cap is 100 s inside the
+  150 s hook.
+- A crew counts green or red only if this session ran the plugin's own
+  `atlas_crew.py run` or `wait` (checked by realpath) and that call printed the
+  engine's summary for that run id. A hand-written `summary.json` proves nothing.
+  `atlas_gates.py` and the omp panel have no transcript to check and show the
+  proof marked `launch_checked: false`.
+- A session that ends blocked, with a `blocked` header and an engine-verified red
+  re-run or crew, is not asked for the (a), (b), (g), (k), (m) and (o) paperwork.
+  A self-made red (pytest exit 4 or 5, a forged summary) does not count.
+- The circuit breaker counts the main Stop only, not SubagentStop, so workers
+  finishing cannot trip it, and it re-arms after a quiet window. Bypass rows are
+  kept as their own type and are not counted as hook crashes by the doctor or the
+  dashboard.
+
 The gate arms inside a project: a directory with `docs/`, or one under a
 project marker (`.git`, `.claude`, `.atlas`, `package.json`, `pyproject.toml`,
 `Cargo.toml`, `go.mod`, `CLAUDE.md`, `AGENTS.md`) found by walking up to
@@ -278,6 +303,22 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
 - A worker cannot stop until its own check passes: the Stop hook re-runs the
   check instead of taking the worker's word. After all workers exit, the
   global check runs and only the owners of failing tests are resumed.
+- The summary's `ok` means the global check is green, no worker failed and the
+  run was not killed. It also lists `failed_workers`, `late_exits`,
+  `pending_exits` and `killed`. A worker whose files changed after its DONE has
+  its unit check re-run and fails the crew if it is red.
+- Dead workers are noticed: each launch writes a pid file, and a dead pid is
+  recorded within 0.5 s as exit 137 `died` (no pid after 60 s is `died` too). A
+  failed `tmux new-window` is exit 126 `launch_error`. The supervisor no longer
+  waits out `--wait` for a worker that is gone.
+- `atlas_crew.py kill --run <id>` stops everything: the supervisor, every worker
+  process group, the wrappers and the IRC gateway, and it writes a killed summary
+  (`killed: true`). On a finished run it leaves the real summary alone and says
+  `already_finished`. Workers run in their own session, so Ctrl-C in a tmux pane
+  does not reach claude; use `kill`.
+- `wait` refuses a run directory the engine never started (no `supervisor.pid`).
+  On a green check the summary is published at once: workers that posted DONE are
+  stopped (SIGTERM, SIGKILL after 3 s) and late exits are recorded for up to 30 s.
 - Workers are lean: their own session id, no MCP servers, project settings
   only, tools `Bash,Edit`, a short system prompt. The lead's context gets one
   JSON summary (tokens, cost, wall time, gate refusals, channel counts).
@@ -291,18 +332,27 @@ passed every test. Numbers and method: [2026-10-28_atlas-16.4.0-crew-benchmark.m
 | 8 modules, 213 tests (3 runs each)     | 853k tokens, 144 s     | 137k tokens, 41 s   | 16% tokens, 28% time |
 | 18 modules, 469 tests (3 runs each)    | 2.29M tokens, 181 s    | 307k tokens, 55 s   | 13% tokens, 30% time |
 
-Routed from a plain prompt (17.16.0): the lead is told to start the crew and does it in one Bash call.
-Same model and flags, one task with 8 modules and 434 tests; cold is process start to exit, warm is a lead
-already running. Method and every run: [2026-11-14_atlas-17.16.0-team-performance.md](../../docs/audits/2026-11-14_atlas-17.16.0-team-performance.md).
+Routed from a plain prompt (17.17.0): the lead is told to start the crew and does it in one Bash call.
+Same model and flags, one task with 8 modules and 434 tests, two runs per cell with the 17.16.0 and 17.17.0
+arms alternated in one session; cold is process start to exit, warm is a lead already running. Method and
+every run: [2026-11-14_atlas-17.17.0-silent-failures.md](../../docs/audits/2026-11-14_atlas-17.17.0-silent-failures.md).
 
-| Run                         | Single prompt          | Atlas 17.16.0         | Atlas vs single      |
-| --------------------------- | ---------------------- | --------------------- | -------------------- |
-| cold, with a changelog      | 296k tokens, 49.4 s    | 157k tokens, 30.4 s   | 53% tokens, 62% time |
-| warm, with a changelog      | 354k tokens, 59.3 s    | 157k tokens, 26.5 s   | 44% tokens, 45% time |
-| cold, no docs               | 244k tokens, 50.1 s    | 155k tokens, 31.0 s   | 64% tokens, 62% time |
+| Run                                | Atlas 17.16.0                    | Atlas 17.17.0                     |
+| ---------------------------------- | -------------------------------- | --------------------------------- |
+| fixture-p cold                     | 29.2, 30.9 s / about 158k tokens | 27.2, 27.7 s / about 158k tokens  |
+| fixture-8b cold                    | 31.3, 34.0 s                     | 29.9, 28.3 s                      |
+| fixture-p warm                     | 27.8, 28.6 s                     | 26.3, 25.4 s                      |
+| fixture-red cold (one test fails)  | 86.3 s, 5 lead turns, 725k tokens | 71.6 s, 3 lead turns, 614k tokens |
 
-A cold crew costs more dollars than one prompt (about $0.26 against $0.19): each worker pays its own cache
-creation.
+On the green fixtures 17.17.0 is 1 to 3 s faster, within the run-to-run spread: read it as no regression, not
+a speedup. On the red fixture the blocked-report fix saves two lead turns (17% of wall time, 15% of tokens).
+Against one plain prompt on fixture-p (51.7 and 55.7 s, 307,662 and 364,959 tokens), 17.17.0 cold is 51% of
+the wall time and 47% of the tokens; warm it is 48% of the wall time. 1/4 of the single prompt's wall time is
+still not met. The 17.16.0 numbers (cold 62% of the wall time and 53% of the tokens against one prompt) are in
+[2026-11-14_atlas-17.16.0-team-performance.md](../../docs/audits/2026-11-14_atlas-17.16.0-team-performance.md).
+
+A cold crew costs more dollars than one prompt (about $0.26 against $0.19 on 17.16.0): each worker pays its own
+cache creation.
 
 Usage and the plan format: `skills/atlas-orchestrate/references/crew.md`.
 
@@ -352,7 +402,9 @@ next command). Add `--json` for the full JSON object.
 - Workers share one durable todo board at `<project>/.atlas/.run/todos.json`
   (file lock plus temp-file rename) and an append-only notes file per worker at
   `.atlas/.run/board/<name>.jsonl`. `scripts/atlas_todo.py` has the `note`,
-  `notes`, `inbox`, `claim` and channel commands.
+  `notes`, `inbox`, `claim` and channel commands. An unknown flag (for example
+  `--title` on `note`) exits 2 instead of becoming part of the note text; `--`
+  ends the options.
 
 A 2-member team run over tmux (both workers exit 0 in 26-27 s, report
 posted, `wait` ok, `reap` leaves no session) is recorded in
@@ -498,7 +550,7 @@ fail-open when the CLI is absent).
 | `atlas_doctor.py --hook`        | SessionStart                                                       | Warn-only health check: downgrade, forked marketplace, missing hooks or assets, misplaced `.atlas` paths (report only; `--fix` moves them)                                                                                                                                                                                                                                                                                                                                                               |
 | `prompt_optimizer.py`           | UserPromptSubmit                                                   | Optional prompt rewrite; arms orchestration for engineering prompts (see [Decision models](#decision-models))                                                                                                                                                                                                                                                                                                                                |
 | `event_dispatch.py`             | PreToolUse, PostToolUse                                            | One process per tool event that runs the hooks below in-process                                                                                                                                                                                                                                                                                                                                                                              |
-| `recall_gate.py`                | PreToolUse                                                         | With claude-mem enabled, denies tool calls until one real claude-mem recall happens (`ATLAS_MANDATES=off`)                                                                                                                                                                                                                                                                                                                                   |
+| `recall_gate.py`                | PreToolUse                                                         | With claude-mem enabled, denies tool calls until one real claude-mem recall happens (`ATLAS_MANDATES=off`). A configured memory server that comes from the plugin, or whose recall tool is missing, is denied once and then released; a mounted server is denied on every call until recall happens                                                                                                                                                                                                                                                                                                                                   |
 | `bash_advisor.py`               | PreToolUse (Bash)                                                  | Warns on catastrophic commands; never denies                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `git_guard.py`                  | PreToolUse (Bash, Write, Agent, Task, mcp__*)                      | Keeps commits and pushes off protected branches (the default branch, `production`, `release/*`, GitHub-protected) while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. Policy: `.atlas/git-policy.json`, `scripts/atlas_git.py policy` (`ATLAS_GIT_GUARD=off`)                                                                                         |
 | `edit_read_nudge.py`            | PreToolUse, PostToolUse                                            | Nudges when an edit targets a file read only through `ctx_read`                                                                                                                                                                                                                                                                                                                                                                              |
@@ -518,7 +570,8 @@ fail-open when the CLI is absent).
 `chronicle_facet.py` writes one facets row per session, `memory_capture.py`
 saves lessons to `<project>/.atlas/memory/MEMORY.md` (`ATLAS_MEMORY_CAPTURE=off`), and `nudge.py` prompts a lesson capture when
 none was written. For installs outside the plugin system,
-`scripts/install_hooks.py` wires the hooks into settings.
+`scripts/install_hooks.py` wires the hooks into settings. It skips hooks the plugin
+already wires, so they do not run twice; `--list` marks those `[w]`.
 
 ## Command Center, statusline and in-terminal mod
 
@@ -1008,7 +1061,9 @@ by `scripts/gen_codex_hooks.py` at the repository root, not under `plugins/atlas
   (`~/.atlas/atlas.db` unless `ATLAS_DB` or `ATLAS_HOME` is set).
 - `atlas_doctor.py --mine` turns that telemetry into findings, which the
   `atlas-doctor` skill walks through. `--baseline` and `--remeasure` prove a fix
-  against the same metric.
+  against the same metric. `--set-status <id> <status>` exits 2 for an unknown
+  status or a non-numeric id and 1 for an unknown id; its help lists the statuses
+  the database holds, `wontfix` and `resolved` included.
 - `atlas-audit` self mode reports verifier coverage, inline work and parallel
   waves from the same database.
 - `scripts/atlas_context_optimizer.py` disables skills and agents that real
@@ -1110,7 +1165,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.16.0
+|-- .claude-plugin/plugin.json   manifest, version 17.17.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

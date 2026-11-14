@@ -30,20 +30,35 @@ HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dispatch_tripwi
 _LEAVE_REAL_CWD = None
 
 
+_ENV_PIN = {
+    # Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed.
+    "ATLAS_GATES": "always",
+    # Fixtures fire dispatches back to back in one session; only ScopeGateTest wants the burst advisory.
+    "ATLAS_BURST_SECS": "0",
+}
+_ENV_SAVED: dict = {}
+
+
 def setUpModule():
     # Relative paths like src/app.py resolve against cwd, and the product treats anything under the system temp
     # dir as scratch, so run from a non-temp project dir regardless of where the checkout lives.
     global _LEAVE_REAL_CWD
     _LEAVE_REAL_CWD = _test_isolation.enter_real_project_cwd()
+    # Scoped to this module's tests: never leaked into the xdist worker's other modules.
+    for k, v in _ENV_PIN.items():
+        _ENV_SAVED[k] = os.environ.get(k)
+        os.environ.setdefault(k, v)
 
 
 def tearDownModule():
     if _LEAVE_REAL_CWD:
         _LEAVE_REAL_CWD()
-# Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed.
-os.environ.setdefault("ATLAS_GATES", "always")
-# Fixtures fire dispatches back to back in one session; only ScopeGateTest wants the burst advisory.
-os.environ.setdefault("ATLAS_BURST_SECS", "0")
+    for k, prior in _ENV_SAVED.items():
+        if prior is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = prior
+    _ENV_SAVED.clear()
 
 
 def run_hook(payload, env):
@@ -105,6 +120,21 @@ def _named(tinput):
     ):
         tinput["prompt"] = f"{prompt}\nSCOPE: {_scope_for(agent.split(':', 1)[1])}\n"
     return tinput
+
+
+
+def _fake_lean_ctx(env, cwd):
+    """Make lean-ctx plausibly reachable for a hook subprocess: a `lean-ctx` binary on PATH and an MCP
+    server for it in <cwd>/.mcp.json (the detection the tripwire shares with the native-tool policy)."""
+    bindir = tempfile.mkdtemp()
+    exe = os.path.join(bindir, "lean-ctx")
+    with open(exe, "w") as fh:
+        fh.write("#!/bin/sh\nexit 0\n")
+    os.chmod(exe, 0o755)
+    env["PATH"] = bindir + os.pathsep + env.get("PATH", "")
+    with open(os.path.join(cwd, ".mcp.json"), "w") as fh:
+        json.dump({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}, fh)
+    return env
 
 
 class TripwireTest(unittest.TestCase):
@@ -441,6 +471,7 @@ class TripwireTest(unittest.TestCase):
         Recorded: 3 of 12 subagent runs arrived with no TOOLS block and made zero
         MCP calls, reading the repo through Bash grep/cat instead.
         """
+        _fake_lean_ctx(self.env, self.tmp)
         r = run_hook(
             self._pre_payload(
                 "Agent",
@@ -1750,14 +1781,20 @@ class InProcessTest(unittest.TestCase):
         Read past the threshold is nudged (never denied) because reads are not
         counted."""
         self._docs_project()
+        (Path(self.tmp) / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
+        )
         for _ in range(8):
             self._run_main(self._post("Bash", {"command": "touch a.txt"}))
         denied = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
         self.assertIn('"permissionDecision": "deny"', denied)
-        first_read = self._run_main(self._pre("Read", {"file_path": "b.py"}))
-        self.assertNotIn("deny", first_read)
-        self.assertIn("ctx_read", first_read)
-        self.assertEqual(self._run_main(self._pre("Read", {"file_path": "c.py"})), "")
+        with patch.object(self.dt.shutil, "which", return_value="/usr/bin/lean-ctx"):
+            first_read = self._run_main(self._pre("Read", {"file_path": "b.py"}))
+            self.assertNotIn("deny", first_read)
+            self.assertIn("ctx_read", first_read)
+            self.assertEqual(
+                self._run_main(self._pre("Read", {"file_path": "c.py"})), ""
+            )
 
 
 class StringToolInputTest(unittest.TestCase):
@@ -1989,6 +2026,12 @@ class VerifierVerdictBracketTest(unittest.TestCase):
         self.assertIn("verifier verdict not in findings.json", post.stdout)
         self.assertIn("atlas_finding.py", post.stdout)
         self.assertIn("do not re-dispatch", post.stdout)
+        text = json.loads(post.stdout)["hookSpecificOutput"]["additionalContext"]
+        import shlex
+
+        cmd = shlex.split(next(l for l in text.splitlines() if "atlas_finding.py" in l))
+        self.assertIn("--title", cmd)  # required: rc 2 without it
+        self.assertEqual(cmd[cmd.index("--status") + 1], "verified")  # one literal status, no a|b|c pipe
 
     def test_hint_names_an_existing_absolute_script_path(self):
         """$CLAUDE_PLUGIN_ROOT is expanded only by the hook runner, never in a
@@ -2342,8 +2385,9 @@ class NativeToolPolicyTest(unittest.TestCase):
             self.assertEqual(self.call(tool), (False, ""))
 
     def test_read_and_bash_nudge_once_independently_with_hard_off(self):
+        self._mcp_json()
         with patch.dict(os.environ, {"ATLAS_TRIPWIRE_HARD": "off"}):
-            for tool, replacement in (("Read", "ctx_read"), ("Bash", "ctx_execute")):
+            for tool, replacement in (("Read", "ctx_read"), ("Bash", "ctx_shell")):
                 _, output = self.call(tool)
                 result = json.loads(output)["hookSpecificOutput"]
                 self.assertNotIn("permissionDecision", result)
@@ -2469,9 +2513,7 @@ class ExplorationShellDenyTest(unittest.TestCase):
                 "cat README.md", available=available, configured=configured
             )
             self.assertFalse(handled)
-            self.assertNotIn(
-                "permissionDecision", json.loads(output)["hookSpecificOutput"]
-            )
+            self.assertNotIn("permissionDecision", output)
             (self.root / ".mcp.json").unlink(missing_ok=True)
             shutil.rmtree(self.root / ".atlas", ignore_errors=True)
 
@@ -2534,9 +2576,11 @@ class ColonyDenyTest(unittest.TestCase):
     SPEC = TOOLS_BLOCK + SPEC_BLOCK
 
     def _pre(self, tinput):
+        _fake_lean_ctx(self.env, self.tmp)
         return run_hook(
             {
                 "session_id": "sess-1",
+                "cwd": self.tmp,
                 "hook_event_name": "PreToolUse",
                 "tool_name": "Agent",
                 "tool_input": tinput,
@@ -2634,6 +2678,7 @@ class ColonyDenyTest(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)  # project root
         env = dict(self.env if env is None else env)
         env.pop("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", None)
+        _fake_lean_ctx(env, self.tmp)
         tinput = {"subagent_type": "atlas:explorer", "prompt": self.SPEC, **extra}
         return run_hook(
             {
@@ -2965,9 +3010,11 @@ class ColonyDenyTest(unittest.TestCase):
             if k != "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"
         }
         env["ATLAS_AUTONAME"] = "off"
+        _fake_lean_ctx(env, self.tmp)
         r = run_hook(
             {
                 "session_id": "sess-1",
+                "cwd": self.tmp,
                 "hook_event_name": "PreToolUse",
                 "tool_name": "Agent",
                 "tool_input": {"subagent_type": "atlas:explorer", "prompt": self.SPEC},
@@ -3122,6 +3169,9 @@ class ToolkitGapOmpTest(unittest.TestCase):
         import dispatch_tripwire
 
         self.dt = dispatch_tripwire
+        reach = patch.object(self.dt, "_lean_ctx_reachable", return_value=True)
+        reach.start()
+        self.addCleanup(reach.stop)
         env = {k: v for k, v in os.environ.items() if k != "ATLAS_TOOLKIT_LOAD"}
         patcher = patch.dict(os.environ, env, clear=True)
         patcher.start()
@@ -4283,9 +4333,11 @@ class ToolsBlockParserTest(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _dispatch(self, prompt):
+        _fake_lean_ctx(self.env, self.tmp)
         return run_hook(
             {
                 "session_id": "sess-1",
+                "cwd": self.tmp,
                 "hook_event_name": "PreToolUse",
                 "tool_name": "Agent",
                 "tool_input": _named(
@@ -4705,6 +4757,7 @@ class ScopeGateTest(unittest.TestCase):
         self.assertIn("ADVISORY", note)
 
     def _raw(self, agent, prompt):
+        _fake_lean_ctx(self.env, self.tmp)
         payload = {
             "session_id": "sess-1",
             "cwd": self.tmp,
@@ -4757,6 +4810,9 @@ class BurstNoteUnitTest(unittest.TestCase):
         import dispatch_tripwire
 
         self.dt = dispatch_tripwire
+        reach = patch.object(self.dt, "_lean_ctx_reachable", return_value=True)
+        reach.start()
+        self.addCleanup(reach.stop)
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
@@ -4787,6 +4843,9 @@ class RoleBlockAndIsDenyUnitTest(unittest.TestCase):
         import dispatch_tripwire
 
         self.dt = dispatch_tripwire
+        reach = patch.object(self.dt, "_lean_ctx_reachable", return_value=True)
+        reach.start()
+        self.addCleanup(reach.stop)
 
     def test_role_block_lists_every_required_spec_label(self):
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": ""}):
@@ -5161,6 +5220,98 @@ class ShellTeamLaunchResetTest(unittest.TestCase):
         self._call("PostToolUse", "Bash", {"command": 'python3 "/x/atlas_crew.py" plan --spec s'})
         self.assertGreaterEqual(self._count(), 4)
 
+
+
+class ToolReachabilityTest(unittest.TestCase):
+    """Never demand or recommend a tool that is not installed: the toolkit-gap deny, the pasted TOOLS
+    line and the once-per-session Read/Bash nudges all follow the detection the Grep/Glob policy uses
+    (binary on PATH AND an MCP server configured for the project)."""
+
+    BARE = {"subagent_type": "atlas:implementer", "prompt": "GOAL: do it\n"}
+
+    def setUp(self):
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "docs").mkdir()
+        self.home = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_TOOLKIT_LOAD"}
+        env["HOME"] = str(self.home)
+        p = patch.dict(os.environ, env, clear=True)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _configure_lean(self):
+        (self.root / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}})
+        )
+
+    def _which(self, available):
+        return patch.object(
+            self.dt.shutil, "which", return_value="/bin/lean-ctx" if available else None
+        )
+
+    def test_gap_is_not_denied_when_lean_ctx_is_absent(self):
+        with self._which(False):
+            self.assertIsNone(self.dt._toolkit_gap(self.BARE, self.root))
+        self._configure_lean()
+        with self._which(False):  # configured but the binary is off PATH
+            self.assertIsNone(self.dt._toolkit_gap(self.BARE, self.root))
+
+    def test_gap_is_denied_when_lean_ctx_is_reachable(self):
+        self._configure_lean()
+        with self._which(True):
+            self.assertEqual(
+                self.dt._toolkit_gap(self.BARE, self.root), "atlas:implementer"
+            )
+
+    def test_role_block_pastes_a_tools_line_only_when_reachable(self):
+        with self._which(False):
+            self.assertNotIn("TOOLS:", self.dt._role_block("atlas:implementer", self.root))
+        self._configure_lean()
+        with self._which(True):
+            self.assertIn("TOOLS:", self.dt._role_block("atlas:implementer", self.root))
+
+    def _nudge(self, tool):
+        out = io.StringIO()
+        payload = dict(
+            hook_event_name="PreToolUse",
+            tool_name=tool,
+            session_id="reach-" + tool,
+            cwd=str(self.root),
+        )
+        with patch.dict(os.environ, {"ATLAS_TRIPWIRE_HARD": "off"}), contextlib.redirect_stdout(out):
+            handled, nudge = self.dt._native_tool_policy(payload)
+            self.dt._emit_nudge(nudge)
+        return out.getvalue()
+
+    def test_read_and_bash_nudges_are_silent_when_no_tool_is_available(self):
+        with self._which(False):
+            self.assertEqual(self._nudge("Read"), "")
+            self.assertEqual(self._nudge("Bash"), "")
+
+    def test_nudges_name_only_the_available_tools(self):
+        self._configure_lean()
+        with self._which(True):
+            self.assertIn("ctx_read", self._nudge("Read"))
+            bash = self._nudge("Bash")
+        self.assertIn("ctx_shell", bash)
+        self.assertNotIn("context-mode", bash)
+
+    def test_bash_nudge_names_context_mode_alone_when_only_it_is_enabled(self):
+        (self.home / ".claude").mkdir()
+        (self.home / ".claude" / "settings.json").write_text(
+            json.dumps({"enabledPlugins": {"context-mode@context-mode": True}})
+        )
+        with self._which(False):
+            self.assertEqual(self._nudge("Read"), "")
+            bash = self._nudge("Bash")
+        self.assertIn("ctx_execute", bash)
+        self.assertNotIn("lean-ctx", bash)
 
 if __name__ == "__main__":
     unittest.main()

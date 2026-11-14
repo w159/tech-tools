@@ -528,7 +528,7 @@ def probe_bash_advisor_scaling(ctx):
 
 
 def _tripped_sessions(state_dir):
-    """Sessions whose hookstate file has breaker_tripped (a bypass writes no hook-faults row)."""
+    """Sessions whose hookstate file has breaker_tripped (a bypass also writes a BreakerBypass hook-faults row, which atlas_faults.live_faults excludes)."""
     n = 0
     for f in state_dir.glob("*.json"):
         try:

@@ -46,6 +46,7 @@ import re
 import shutil
 import sys
 import subprocess
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -1483,9 +1484,17 @@ def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any
         out = fn(reg)
         if json.dumps(reg, sort_keys=True) == before:
             return out
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
-        os.replace(tmp, path)
+        # unique temp name in the same dir: two writers must never share one
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(reg, indent=2) + "\n")
+            os.replace(tmp, path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
         return out
 
 
@@ -2295,6 +2304,9 @@ def _cli(argv: Optional[List[str]] = None) -> int:
     i = 0
     while i < len(args):
         a = args[i]
+        if a == "--":
+            positional.extend(args[i + 1 :])
+            break
         if (
             a == "--root"
             or a == "--session"
@@ -2316,6 +2328,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--kind"
             or a == "--paths"
             or a == "--max-idle"
+            or a == "--lead-idle"
             or a == "--keep"
             or a == "--days"
             or a == "--message"
@@ -2334,6 +2347,10 @@ def _cli(argv: Optional[List[str]] = None) -> int:
         ):
             flags[a[2:]] = "1"
             i += 1
+        elif a != "--help" and re.match(r"^--[A-Za-z][A-Za-z0-9-]*(=.*)?$", a):
+            # An unknown flag is a typo, never content (it used to be stored as text).
+            sys.stderr.write("atlas_todo.py: unknown flag %s\n%s" % (a, _USAGE))
+            return 2
         else:
             positional.append(a)
             i += 1
@@ -2341,16 +2358,9 @@ def _cli(argv: Optional[List[str]] = None) -> int:
     root = flags.get("root")
     cmd = positional[0] if positional else "counts"
     if cmd == "add":
-        # `add` takes one content argument: a stray flag-shaped word is a typo, not content.
         if any(p in ("--help", "-h") for p in positional[1:]):
             print(_USAGE)
             return 0
-        stray = [p for p in positional[1:] if p.startswith("--")]
-        if stray:
-            sys.stderr.write(
-                "atlas_todo.py add: unknown flag %s\n%s" % (stray[0], _USAGE)
-            )
-            return 2
     out: Dict[str, Any]
     try:
         if cmd == "list":

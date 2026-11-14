@@ -502,5 +502,17 @@ class RunWorkerInProcess(TmpCase):
         self.assertEqual(self.notes()[-1]["text"], f"{os.path.realpath(sub)}\nexit 0")
 
 
+class ExitedIgnoresPreviousRun(unittest.TestCase):
+    def test_old_exit_note_does_not_count_after_respawn(self):
+        with tempfile.TemporaryDirectory() as root:
+            mux.atlas_todo.note(root, "implementer-bde8", "exit 1 [failed]", to="all")
+            spawned = mux.atlas_todo.notes(root)[-1]["ts"] + 1
+            self.assertTrue(mux._exited(root, "implementer-bde8"))  # no launch time: last note wins
+            self.assertFalse(mux._exited(root, "implementer-bde8", spawned))
+            with mock.patch.object(mux.time, "time", return_value=spawned + 1):
+                mux.atlas_todo.note(root, "implementer-bde8", "exit 0", to="all")
+            self.assertTrue(mux._exited(root, "implementer-bde8", spawned))
+
+
 if __name__ == "__main__":
     unittest.main()

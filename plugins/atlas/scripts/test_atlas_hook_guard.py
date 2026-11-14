@@ -146,8 +146,8 @@ class BreakerTest(_GuardTestCase):
             results = [guard.should_run(payload, "nudge") for _ in times]
         self.assertFalse(results[-1], "6th Stop within the burst window must trip")
 
-        # Subsequent calls, any hook name, must stay silenced for the session.
-        with mock.patch.object(guard, "_now", side_effect=[200.0, 300.0]):
+        # Subsequent calls inside the burst window, any hook name, stay silenced.
+        with mock.patch.object(guard, "_now", side_effect=[70.0, 80.0]):
             self.assertFalse(guard.should_run(payload, "memory_capture"))
             self.assertFalse(guard.should_run(payload, "auto_skill"))
 
@@ -161,11 +161,22 @@ class BreakerTest(_GuardTestCase):
             for _ in times:
                 guard.should_run(payload, "nudge", kind="emit")
 
-        with mock.patch.object(guard, "_now", side_effect=[200.0, 300.0]):
+        with mock.patch.object(guard, "_now", side_effect=[70.0, 80.0]):
             self.assertFalse(guard.should_run(payload, "nudge", kind="emit"))
             self.assertFalse(
                 guard.should_run(payload, "ingest_session", kind="capture")
             )
+
+    def test_breaker_clears_after_a_quiet_window(self):
+        """A tripped breaker is not forever: a full window with no Stop
+        event ends the burst and the hooks run again."""
+        payload = {"session_id": "burst-clears"}
+        times = [0.0, 13.0, 26.0, 39.0, 52.0, 65.0]
+        with mock.patch.object(guard, "_now", side_effect=times):
+            for _ in times:
+                guard.should_run(payload, "nudge")
+        with mock.patch.object(guard, "_now", side_effect=[200.0]):
+            self.assertTrue(guard.should_run(payload, "memory_capture"))
 
     def test_does_not_trip_on_slow_legitimate_cadence(self):
         """5 Stops spread over 10 minutes must never trip the breaker."""

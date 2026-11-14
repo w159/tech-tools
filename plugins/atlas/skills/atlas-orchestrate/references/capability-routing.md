@@ -36,9 +36,9 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 | Comprehensive quality + security + OWASP audit (full codebase sweep) | (orchestrator dispatches atlas-audit) | `atlas-audit` | lean-ctx, `context7`, `context-mode`; no browser needed | sonnet (multi-swarm) |
 | Architecture map / structural dedup / boundaries doc missing | (orchestrator dispatches atlas-audit) | `atlas-audit` | lean-ctx, LSP, `context-mode` | sonnet |
 | Recurring or iterative task / needs a reusable loop | (orchestrator dispatches atlas-loop) | `atlas-loop` | - | sonnet |
-| Vendor MCP connector setup / credentials to wire | (orchestrator dispatches atlas-setup) | `atlas-setup` | - | sonnet |
+| Vendor MCP connector setup / credentials to wire | (user runs `/atlas:atlas-setup`; skill is user-invoked only) | `atlas-setup` | - | sonnet |
 | Measure run health / self-improvement from observability data | (orchestrator dispatches atlas-audit) | `atlas-audit` | SQLite observability DB (`~/.atlas/atlas.db`) | sonnet |
-| Project boot / onboarding / configure tooling for a repo | (orchestrator dispatches atlas-setup) | `atlas-setup` | lean-ctx, hook/config wiring | sonnet |
+| Project boot / onboarding / configure tooling for a repo | (user runs `/atlas:atlas-setup`; skill is user-invoked only) | `atlas-setup` | lean-ctx, hook/config wiring | sonnet |
 | Multi-stage / multi-surface orchestration (build/fix/audit/refactor spanning several subagents) | (this skill is the orchestrator itself - normally entered via its own skill trigger, not routed to from within a session) | `atlas-orchestrate` | whatever Step 1 discovers live | sonnet |
 | Review a diff / PR | `code-reviewer`* | `code-review` (`--fix` to apply), `superpowers:requesting-code-review` | lean-ctx, LSP | sonnet |
 | Library / framework / SDK questions | (inline or any) | `openai-docs`, `claude-api`, `microsoft-foundry` | `context7` (general), `microsoft-docs` (Azure/.NET/M365/Entra) | - |

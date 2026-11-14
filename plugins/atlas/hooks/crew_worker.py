@@ -25,7 +25,9 @@ Stdlib only. Every failure path is fail-open: a broken hook must never wedge a w
 
 from __future__ import annotations
 
+import contextlib
 import fnmatch
+import io
 import json
 import os
 import re
@@ -78,12 +80,39 @@ def _out(obj) -> None:
     sys.stdout.write(json.dumps(obj))
 
 
+def _done_fresh(d: str, nick: str) -> bool:
+    """True when the worker's standing DONE is newer than the latest fix message sent to it: a round-0 DONE
+    must not end a fix-round worker."""
+    done = atlas_irc.latest_done_record(d, nick)
+    if done is None:
+        return False
+    fix = 0
+    for r in atlas_irc.history(d):
+        if r.get("kind") == "fix" and (r.get("to") == nick or str(r.get("to") or "").startswith("#")):
+            fix = max(fix, int(r.get("seq") or 0))
+    return int(done.get("seq") or 0) > fix
+
+
+def _done_stale(d: str, nick: str) -> bool:
+    """True when a DONE must be (re)posted: none stands, it predates the latest fix message, or it records an owned-file digest that no longer matches."""
+    if not _done_fresh(d, nick):
+        return True
+    rec = atlas_irc.latest_done_record(d, nick)
+    return bool(rec and rec.get("digest")) and not atlas_irc.done_current(d, nick)
+
+
+def _post_done(d: str, nick: str, text: str) -> None:
+    """DONE with the same fields `irc done` posts (digest, test_digest); its stdout line is silenced for the hook's JSON."""
+    with contextlib.redirect_stdout(io.StringIO()):
+        atlas_irc._announce_done(d, nick, text)
+
+
 def _early_exit(payload, d: str, nick: str) -> bool:
     """True when this Bash call posted the worker's DONE (its check ends in `irc done`) and the check,
     re-run here, still passes: the session can end now instead of spending a model turn on a reply.
     Never taken from the post alone: a worker could run `irc done` by hand."""
     cmd = os.environ.get("ATLAS_CREW_CHECK") or ""
-    if payload.get("tool_name") != "Bash" or not cmd or not atlas_irc.has_done(d, nick):
+    if payload.get("tool_name") != "Bash" or not cmd or not _done_fresh(d, nick):
         return False
     if atlas_irc.done_current(d, nick):  # owned files unchanged since the verified DONE: skip the 3-5 s re-run
         _set_blocks(_blocks(), passed=True)
@@ -275,7 +304,7 @@ def stop(payload) -> None:
         _out({"decision": "block", "reason": f"Unread team messages for you; answer them (irc say) before finishing:\n{lines}"})
         return
     # 2. a verified DONE whose owned-file digest still matches needs no re-run (worker exits 4.6-7.6 s after DONE otherwise)
-    if os.environ.get("ATLAS_CREW_CHECK") and atlas_irc.done_current(d, nick):
+    if os.environ.get("ATLAS_CREW_CHECK") and _done_fresh(d, nick) and atlas_irc.done_current(d, nick):
         _set_blocks(n, passed=True)
         return
     # 3. the worker's own check, re-run here: a claim of done is not evidence
@@ -298,15 +327,15 @@ def stop(payload) -> None:
             return
         _set_blocks(n, passed=code == 0)
         if code == 0:
-            if not atlas_irc.has_done(d, nick):  # the check's own `irc done` usually posted it already
-                atlas_irc.post(d, nick, atlas_irc.members(d).get("channel", "#team"), f"DONE {nick}: `{cmd}` passes", kind="done")
+            if _done_stale(d, nick):  # the check's own `irc done` usually posted it already
+                _post_done(d, nick, f"`{cmd}` passes")
         else:
             atlas_irc.post(
                 d, nick, atlas_irc.members(d).get("channel", "#team"),
                 f"GAVE UP {nick}: `{cmd}` still fails after {cap} refusals. Tail: {out[-600:]}", kind="failed",
             )
     else:
-        atlas_irc.post(d, nick, atlas_irc.members(d).get("channel", "#team"), f"DONE {nick}", kind="done")
+        _post_done(d, nick, "no check configured")
 
 
 def main() -> int:

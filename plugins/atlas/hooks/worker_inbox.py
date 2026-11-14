@@ -209,6 +209,12 @@ _QUIET_PING = lre(
     re.I,
 )
 _QUIET_KEEP = lre(r"\?|fail|error|block|stuck|cannot|can't|denied|conflict", re.I)
+# Words that may follow an ack word and still leave a pure ping; anything else is content to deliver.
+_QUIET_FILLER = frozenset(
+    "the a an it on up now again thanks thank you all good ready in progress started starting done "
+    "ok okay ack acknowledged joined working claimed".split()
+)
+_QUIET_WORD = lre(r"[A-Za-z0-9%']+")
 
 
 def _is_ping(rec):
@@ -218,6 +224,11 @@ def _is_ping(rec):
         and len(text) <= 80
         and bool(_QUIET_PING.match(text))
         and not _QUIET_KEEP.search(text)
+        and text.isascii()  # a non-ASCII letter is content (another language), never filler
+        and all(
+            w.lower() in _QUIET_FILLER or w.rstrip("%").isdigit()
+            for w in _QUIET_WORD.findall(text)
+        )
     )
 
 

@@ -7,7 +7,7 @@ import type { EngineInterface, On } from 'claude-code'
 import contract from '../../contracts/operating-contract.json'
 import type { AtlasSnapshot } from '../contract'
 import { assistantTree, forgetDrawnHeaders, forgetHeaderPattern, registerRestyle } from '../restyle'
-import { displayDelta, leadOf } from './leadheader'
+import { displayDelta, leadOf, partialLead } from './leadheader'
 
 type Flush = { index: number; final: boolean; delta: string }
 type Hook = (d: unknown, e: unknown, n: (x?: unknown) => unknown) => Promise<{ displayContent?: string } | undefined>
@@ -91,4 +91,13 @@ test('C23: with no pattern the display form is still a header and the contract f
   forgetHeaderPattern()
   expect(leadOf('▌ done · all finished', '')?.phase).toBe('done')
   expect(leadOf('ATLAS | 🏁 done | all finished', '')).toBeNull()
+})
+
+test('a phase-first header (`ATLAS | done 🏁 | ...`) parses like the glyph-first one, whole and streaming', () => {
+  expect(leadOf('ATLAS | done 🏁 | all finished', pattern)?.phase).toBe('done')
+  expect(leadOf('ATLAS | implement 🔧 3/5 | working', pattern)?.count).toBe('3/5')
+  expect(displayDelta('ATLAS | done 🏁 | all finished\nbody', pattern)).toBe('done · all finished\nbody')
+  const ui = { theme: 'dark', ascii: false, color: 'none' } as const
+  expect(flat(partialLead('ATLAS | done 🏁', ui)!)).toBe(flat(partialLead('ATLAS | 🏁 done', ui)!))
+  expect(flat(partialLead('ATLAS | done 🏁', ui)!)).toContain('done')
 })

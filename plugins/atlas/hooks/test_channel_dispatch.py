@@ -143,7 +143,7 @@ class ChannelDispatchHook(unittest.TestCase):
     def test_registry_failure_fails_open_with_recorded_fault_and_no_stderr(self):
         board = Path(self.root) / ".atlas/.run"
         board.mkdir(parents=True)
-        (board / "channels.json.tmp").mkdir()  # the registry's tmp-file write now fails
+        (board / "channels.json").mkdir()  # the registry file is a directory: read/replace fails
         faults = Path(self.env["ATLAS_HOME"]) / "hook-faults.jsonl"
         before = faults.read_text() if faults.exists() else ""
         p, _ = self.pre("A1")

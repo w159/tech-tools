@@ -73,6 +73,11 @@ class LiveFaultsTest(unittest.TestCase):
         crash = self.f("formatter skipped: crash for c")
         self.assertEqual(atlas_faults.live_faults(skips + [crash], None), [crash])
 
+    def test_breaker_bypass_rows_are_not_live_faults(self):
+        bypass = {"hook": "completion_gate", "type": "BreakerBypass", "error": "breaker open"}
+        crash = {"hook": "nudge", "type": "ValueError", "error": "boom"}
+        self.assertEqual(atlas_faults.live_faults([bypass] * 9 + [crash], None), [crash])
+
 
 if __name__ == "__main__":
     unittest.main()

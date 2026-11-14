@@ -154,7 +154,7 @@ and narrate the mechanics against real paths:
    Report, in `operating-contract.md`), header at 🏁 done.
 
 Keep the whole exercise under about ten minutes. If the project has no `docs/`
-tree yet, say so and offer `atlas-setup` (manual) as the next step rather than
+tree yet, say so and tell the user to run `/atlas:atlas-setup` (manual) as the next step rather than
 fabricating scaffolding mid-tour.
 
 ## Step 5 - Where to go next

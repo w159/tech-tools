@@ -103,7 +103,8 @@ export function partialLead(text: string, ui: Ui): RenderElement | null {
   if (text.includes('\n') || !text.startsWith('ATLAS |')) return null
   const pipes = text.split('|')
   if (pipes.length >= 3 && pipes.slice(2).join('|').trim() !== '') return null // the state has begun: the strict pattern decides
-  const word = (pipes[1] ?? '').trim().split(/\s+/).filter(Boolean)[1]
-  const phase = word !== undefined && (PHASES as readonly string[]).includes(word) ? (word as PhaseId) : null
+  const words = (pipes[1] ?? '').trim().split(/\s+/).filter(Boolean) // `<glyph> <phase>` or `<phase> <glyph>`
+  const word = words.slice(0, 2).find(w => (PHASES as readonly string[]).includes(w))
+  const phase = word !== undefined ? (word as PhaseId) : null
   return leadRow({ phase: phase ?? 'research', count: '', sentence: '', first: text, form: 'contract' }, { ui, columns: 0, ...(phase ? {} : { quiet: true }) })
 }

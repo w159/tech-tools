@@ -35,6 +35,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 import atlas_db  # noqa: E402
+# Bind atlas_todo to the real atlas_memory lock before any test swaps in a mock: a lazy first import
+# under the mock caches a fake _file_lock for the rest of the run (breaks test_dispatch_tripwire).
+import atlas_todo  # noqa: E402,F401
 import session_boot  # noqa: E402
 import testenv  # noqa: E402
 
@@ -120,6 +123,98 @@ class MainInProcessTest(unittest.TestCase):
         self.assertTrue(reap.called)
         self.assertIs(reap.call_args.kwargs.get("pane_live"), atlas_seats.pane_live)
 
+    def test_plain_git_repo_gets_no_lock_files_or_run_dir(self):
+        root = os.path.realpath(self.tmp)
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        with mock.patch.dict(sys.modules):
+            sys.modules.pop("atlas_memory", None)  # the board lock lives in the real module
+            # Pinned: a due clean claims its slot with a (gitignored) stamp, and an armed gate writes a dirty
+            # snapshot. test_recall_gate / test_dispatch_tripwire leak ATLAS_GATES=always into the worker.
+            run_main_inprocess(
+                {"session_id": "s-plain-git", "cwd": root},
+                dict(self.env, ATLAS_GIT_AUTOCLEAN="off", ATLAS_GATES=""),
+            )
+        locks = [
+            os.path.join(d, f)
+            for d, _, files in os.walk(root)
+            for f in files
+            if f.endswith(".lock") and ".git" not in d.split(os.sep)
+        ]
+        self.assertEqual(locks, [])
+        self.assertFalse(os.path.exists(os.path.join(root, ".atlas", ".run")))
+
+    def _snapshot_launches(self, root, gates, docs=False):
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        if docs:
+            os.makedirs(os.path.join(root, "docs"))
+        real_popen = subprocess.Popen
+        launches = []
+
+        def spy(args, *a, **kw):
+            if "--snapshot" in args:
+                launches.append(args)
+                return mock.MagicMock()
+            return real_popen(args, *a, **kw)
+
+        with mock.patch.dict(sys.modules):
+            sys.modules.pop("atlas_memory", None)
+            with mock.patch.object(subprocess, "Popen", side_effect=spy):
+                run_main_inprocess(
+                    {"session_id": "s-snap", "cwd": root},
+                    dict(self.env, ATLAS_GIT_AUTOCLEAN="off", ATLAS_GATES=gates),
+                )
+        return launches
+
+    def test_dirty_snapshot_spawns_only_where_the_stop_gate_acts(self):
+        root = os.path.realpath(self.tmp)
+        self.assertEqual(self._snapshot_launches(root, ""), [], "unarmed scratch dir")
+        for name, gates, docs in (("armed", "always", False), ("docs", "", True)):
+            sub = os.path.join(root, name)
+            os.makedirs(sub)
+            with self.subTest(name):
+                self.assertEqual(len(self._snapshot_launches(sub, gates, docs)), 1)
+
+    def test_plain_git_repo_real_session_start_leaves_git_status_clean(self):
+        """The real SessionStart entry point (subprocess) in a plain git repo: nothing untracked."""
+        root = os.path.realpath(self.tmp)
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        hooks = os.path.dirname(os.path.abspath(__file__))
+        env = dict(
+            self.env,
+            HOME=root + "-home",
+            ATLAS_DB=os.path.join(root + "-home", "atlas.db"),
+            ATLAS_GIT_AUTOCLEAN="on",  # the due-clean path claims its slot with a stamp file
+            ATLAS_HOME=os.path.join(root + "-home", ".atlas"),
+            CLAUDE_PLUGIN_ROOT=os.path.dirname(hooks),
+        )
+        os.makedirs(env["HOME"], exist_ok=True)
+        self.addCleanup(shutil.rmtree, env["HOME"], True)
+        payload = json.dumps(
+            {"session_id": "s-real", "cwd": root, "hook_event_name": "SessionStart", "source": "startup"}
+        )
+        r = subprocess.run(
+            [sys.executable, os.path.join(hooks, "session_boot.py")],
+            input=payload, text=True, env=env, capture_output=True, timeout=60, check=False,
+        )
+        status = subprocess.run(
+            ["git", "-C", root, "status", "--porcelain", "--untracked-files=all"],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        self.assertEqual(status, "", r.stdout[:300] + r.stderr[-500:])
+
+    def test_existing_board_still_carries_over(self):
+        import atlas_todo
+
+        root = os.path.realpath(self.tmp)
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        atlas_todo.add(root, "carry me", session_id="old-sess")
+        with mock.patch.dict(sys.modules), mock.patch.object(
+            atlas_todo, "carry_over", wraps=atlas_todo.carry_over
+        ) as co:
+            sys.modules.pop("atlas_memory", None)
+            run_main_inprocess({"session_id": "s-new", "cwd": root}, self.env)
+        self.assertTrue(co.called)
+
     # --- additionalContext + systemMessage emission -----------------------
 
     def test_context_carries_absolute_team_flow_commands(self):
@@ -169,7 +264,7 @@ class MainInProcessTest(unittest.TestCase):
         )
         self.assertEqual(
             data["systemMessage"],
-            "Atlas ready (run the `atlas-setup` skill to complete setup)",
+            "Atlas ready (run /atlas:atlas-setup to complete setup)",
         )
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
 
@@ -888,7 +983,7 @@ class DocsStructureRepairTest(unittest.TestCase):
         self.assertEqual(len(notices), 1, notices)
         note = notices[0]
         self.assertLessEqual(len(note), 260)
-        for needed in ("atlas-setup", "ATLAS_DOCS_REPAIR=off", "nothing is created"):
+        for needed in ("/atlas:atlas-setup", "ATLAS_DOCS_REPAIR=off", "nothing is scaffolded"):
             self.assertIn(needed, note)
         self.assertRegex(note, r"missing \d+")
         self.assertFalse(os.path.isdir(os.path.join(self.tmp, "docs")))

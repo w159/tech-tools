@@ -36,8 +36,22 @@ REASON = (
     .replace("{route}", CC_ROUTE)
     .replace("{example}", CONTRACT["recallGateExample"])
 )
-# Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed.
-os.environ.setdefault("ATLAS_GATES", "always")
+_GATES_PRIOR = None
+
+
+def setUpModule():
+    # Fixtures use throwaway temp dirs as cwd, where the scope check leaves gates unarmed. Scoped to this
+    # module's tests: never leaked into the xdist worker's other modules.
+    global _GATES_PRIOR
+    _GATES_PRIOR = os.environ.get("ATLAS_GATES")
+    os.environ.setdefault("ATLAS_GATES", "always")
+
+
+def tearDownModule():
+    if _GATES_PRIOR is None:
+        os.environ.pop("ATLAS_GATES", None)
+    else:
+        os.environ["ATLAS_GATES"] = _GATES_PRIOR
 
 
 def _run_main(payload) -> tuple[int, str]:
@@ -54,7 +68,7 @@ def _denied(out: str) -> bool:
         return False
     spec = json.loads(out)["hookSpecificOutput"]
     return (
-        spec["hookEventName"] == "PreToolUse" and spec["permissionDecision"] == "deny"
+        spec["hookEventName"] == "PreToolUse" and spec.get("permissionDecision") == "deny"
     )
 
 
@@ -101,21 +115,14 @@ class RecallGateTest(unittest.TestCase):
         self.assertTrue(CASES["block"])
         for i, case in enumerate(CASES["block"]):
             sid = f"block-{i}"
-            for attempt in range(
-                4
-            ):  # denied on EVERY attempt, never fail-open after one
+            for attempt in range(4):  # denied on EVERY attempt for a config-mounted server
                 code, out = _run_main(self._payload(case, session_id=sid))
                 self.assertEqual(code, 0)
                 self.assertTrue(_denied(out), (case["name"], attempt))
                 self.assertEqual(
-                    json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"],
-                    REASON,
+                    json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"], REASON
                 )
-                self.assertEqual(
-                    self._markers(),
-                    [],
-                    "a denial must never write the satisfied marker",
-                )
+                self.assertEqual(self._markers(), [], "a denial must never write the satisfied marker")
 
     def test_scripted_sequences_match_the_contract(self):
         sat, blk, ex = CASES["satisfy"][0], CASES["block"][0], CASES["exempt"][0]
@@ -222,6 +229,81 @@ class RecallGateTest(unittest.TestCase):
                 code, out = _run_main(self._payload(blk, session_id="cached"))
                 self.assertEqual((code, out), (0, ""))
         self.assertEqual(mounted.call_count, 1)
+
+    # --- the lock scenario: enabled in settings, server cache on disk, no live server ---
+
+    def _lock_home(self, install=False):
+        """~/.claude with claude-mem enabled and a plugin cache .mcp.json; install=True also records
+        it in installed_plugins.json (the plugin's current install)."""
+        home = os.path.join(self.tmp, "lockhome")
+        cache = os.path.join(home, ".claude", "plugins", "cache", "thedotmack", "claude-mem", "1.0")
+        os.makedirs(cache)
+        with open(os.path.join(cache, ".mcp.json"), "w", encoding="utf-8") as fh:
+            json.dump({"mcpServers": {"mcp-search": {"command": "x"}}}, fh)
+        with open(os.path.join(home, ".claude", "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"enabledPlugins": {"claude-mem@thedotmack": True}}, fh)
+        if install:
+            with open(
+                os.path.join(home, ".claude", "plugins", "installed_plugins.json"), "w", encoding="utf-8"
+            ) as fh:
+                json.dump({"version": 2, "plugins": {"claude-mem@thedotmack": [{"installPath": cache}]}}, fh)
+        return home
+
+    def _sequence(self, home, sid, n=4, **extra):
+        blk = CASES["block"][0]
+        outs = []
+        with patch.dict(os.environ, {"HOME": home}), patch.object(
+            recall_gate, "_mem_server_mounted", _REAL_MOUNTED
+        ):
+            for _ in range(n):
+                outs.append(_run_main(self._payload(blk, session_id=sid, **extra))[1])
+        return outs
+
+    def test_stale_cache_without_an_install_never_denies(self):
+        outs = self._sequence(self._lock_home(install=False), "stale-cache")
+        self.assertEqual(sum(_denied(o) for o in outs), 0, outs)
+
+    def test_plugin_only_server_denies_at_most_once_then_notes_and_lets_through(self):
+        outs = self._sequence(self._lock_home(install=True), "plugin-only", n=5)
+        self.assertEqual([_denied(o) for o in outs], [True, False, False, False, False])
+        self.assertIn("released", json.loads(outs[1])["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(outs[2:], ["", "", ""])  # the note is said once
+
+    def test_a_recall_after_the_one_deny_still_satisfies(self):
+        home = self._lock_home(install=True)
+        self.assertTrue(_denied(self._sequence(home, "plugin-recall", n=1)[0]))
+        with patch.dict(os.environ, {"HOME": home}):
+            _run_main(self._payload(CASES["satisfy"][0], session_id="plugin-recall"))
+        self.assertIn("recall-plugin-recall", self._markers())
+
+    def test_a_missing_recall_tool_in_the_transcript_releases_the_gate(self):
+        home = self._lock_home(install=True)
+        tr = os.path.join(self.tmp, "t.jsonl")
+        with open(tr, "w", encoding="utf-8") as fh:
+            fh.write('{"content":"Error: No such tool available: mcp__plugin_claude-mem_mcp-search__search"}\n')
+        outs = self._sequence(home, "tool-missing", n=2, transcript_path=tr)
+        self.assertEqual([_denied(o) for o in outs], [False, False])
+        self.assertIn("does not exist", json.loads(outs[0])["hookSpecificOutput"]["additionalContext"])
+
+    def test_configured_server_denies_every_call_until_recall(self):
+        home = self._lock_home(install=False)
+        with open(os.path.join(home, ".claude.json"), "w", encoding="utf-8") as fh:
+            json.dump({"mcpServers": {"claude-mem": {"command": "x"}}}, fh)
+        outs = self._sequence(home, "configured", n=4)
+        self.assertEqual([_denied(o) for o in outs], [True, True, True, True])
+        with patch.dict(os.environ, {"HOME": home}):
+            _run_main(self._payload(CASES["satisfy"][0], session_id="configured"))
+        self.assertFalse(_denied(self._sequence(home, "configured", n=1)[0]))
+
+    def test_configured_server_with_missing_recall_tool_is_released(self):
+        home = self._lock_home(install=False)
+        with open(os.path.join(home, ".claude.json"), "w", encoding="utf-8") as fh:
+            json.dump({"mcpServers": {"claude-mem": {"command": "x"}}}, fh)
+        tr = os.path.join(self.tmp, "t2.jsonl")
+        with open(tr, "w", encoding="utf-8") as fh:
+            fh.write('{"content":"Error: No such tool available: mcp__plugin_claude-mem_mcp-search__search"}\n')
+        outs = self._sequence(home, "cfg-missing", n=2, transcript_path=tr)
+        self.assertEqual([_denied(o) for o in outs], [False, False])
 
     def test_mem_server_mounted_reads_project_mcp_json(self):
         home = os.path.join(self.tmp, "home")
@@ -340,8 +422,9 @@ class RecallGateTest(unittest.TestCase):
             _run_main(self._payload(CASES["satisfy"][0], session_id="one")), (0, "")
         )
         self.assertEqual(_run_main(self._payload(case, session_id="one")), (0, ""))
-        # session two has no recall marker: still denied, independent of session one
+        # session two has no recall marker; session one's recall is not its
         self.assertTrue(_denied(_run_main(self._payload(case, session_id="two"))[1]))
+        self.assertTrue(_denied(_run_main(self._payload(case, session_id="three"))[1]))
         self.assertEqual(self._markers(), ["recall-one"])
 
     def test_subagent_transcripts_are_skipped_and_leave_the_main_gate_intact(self):

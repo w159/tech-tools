@@ -1129,7 +1129,7 @@ class CliModes(_Tree):
         self.assertEqual(rc, 1)
         self.assertIn("docs structure gaps (1):", out)
         self.assertIn("  docs/ -- no docs/ tree", out)
-        self.assertIn('-> run atlas-setup, or python3 "', out)
+        self.assertIn('-> ask the user to run /atlas:atlas-setup, or python3 "', out)
         self.assertIn("scaffold_docs.py", out)
         self.assertIn("docs naming OK", out)
         with mock.patch.object(lint_docs_names, "structure_gaps", return_value=[]):

@@ -23,6 +23,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import install_hooks  # noqa: E402
 
+_REAL_WIRED = install_hooks.wired_scripts
+_wired_patch = mock.patch.object(install_hooks, "wired_scripts", lambda: set())
+
+
+def setUpModule() -> None:
+    # Legacy tests below exercise the install mechanics in isolation; the real
+    # wiring is covered by TestPluginWiredHooks.
+    _wired_patch.start()
+
+
+def tearDownModule() -> None:
+    _wired_patch.stop()
+
 
 class TestDefaultsAndSpecs(unittest.TestCase):
     def test_default_selection_excludes_opt_in(self) -> None:
@@ -49,6 +62,49 @@ class TestDefaultsAndSpecs(unittest.TestCase):
 
     def test_opt_in_subset_of_specs(self) -> None:
         self.assertTrue(install_hooks.OPT_IN.issubset(install_hooks.HOOK_SPECS))
+
+
+class TestPluginWiredHooks(unittest.TestCase):
+    def setUp(self) -> None:
+        _wired_patch.stop()
+        self.addCleanup(_wired_patch.start)
+
+    def test_default_install_adds_nothing_plugin_already_runs(self) -> None:
+        wired = _REAL_WIRED()
+        settings: dict = {}
+        install_hooks.apply_install(settings, install_hooks.default_selection())
+        added = json.dumps(settings)
+        for script in wired:
+            self.assertNotIn(script, added)
+        for hid, spec in install_hooks.HOOK_SPECS.items():
+            if spec[2] in wired:
+                self.assertNotIn(hid, install_hooks.default_selection())
+
+    def test_list_marks_wired_hooks(self) -> None:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            install_hooks.cmd_list({})
+        self.assertIn("wired by the plugin", buf.getvalue())
+        self.assertNotIn("not installed", buf.getvalue())
+
+    def test_main_apply_reports_refusal_not_already_installed(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            sp = Path(d) / "settings.json"
+            sp.write_text("{}", encoding="utf-8")
+            buf = io.StringIO()
+            with redirect_stdout(buf), mock.patch("sys.stderr", new=io.StringIO()):
+                with mock.patch("sys.argv", ["x", "--settings", str(sp), "--select", "optimizer", "--apply"]):
+                    install_hooks.main()
+        self.assertNotIn("already installed", buf.getvalue())
+        self.assertIn("plugin already runs", buf.getvalue())
+
+    def test_explicit_select_of_wired_hook_is_refused(self) -> None:
+        settings: dict = {}
+        with mock.patch("sys.stderr", new=io.StringIO()) as err:
+            n = install_hooks.apply_install(settings, ["completion-gate"])
+        self.assertEqual(n, 0)
+        self.assertEqual(settings.get("hooks", {}), {})
+        self.assertIn("already runs", err.getvalue())
 
 
 class TestLoadSettings(unittest.TestCase):

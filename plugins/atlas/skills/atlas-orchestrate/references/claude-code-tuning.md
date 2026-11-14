@@ -26,8 +26,8 @@ Sometimes the root cause is not the code: it's that Claude Code is missing a too
 - `PreCompact`/`PostCompact` -> preserve key state across compaction.
 
 **This skill already ships ready-made implementations** of the first two plus an automatic
-prompt-optimizer (`UserPromptSubmit`), install them with `scripts/install_hooks.py` rather
-than hand-writing handlers. Details: `references/hooks-automation.md`.
+prompt-optimizer (`UserPromptSubmit`); the plugin's hooks.json already runs them, so do not
+hand-write handlers or copy them into settings.json. Details: `references/hooks-automation.md`.
 
 ### Capability coverage
 - **Specialist agents** present for the project's surfaces (FE/BE/DB/security/test). Each agent file has required `name` + `description` and an explicit `model`.

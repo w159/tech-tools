@@ -6,8 +6,10 @@ import _test_isolation  # noqa: F401
 HOOK = os.path.join(HERE, "delegation_prewarn.py")
 
 
-def run(path, sid, tp="/x/session.jsonl", env=None, tool="Edit"):
+def run(path, sid, tp="/x/session.jsonl", env=None, tool="Edit", cwd=None):
     p = {"session_id": sid, "tool_name": tool, "transcript_path": tp, "tool_input": {"file_path": path}}
+    if cwd:
+        p["cwd"] = cwd
     r = subprocess.run([sys.executable, HOOK], input=json.dumps(p), capture_output=True, text=True,
                        env={**os.environ, **(env or {})})
     return r.stdout
@@ -18,6 +20,15 @@ class T(unittest.TestCase):
         sid = uuid.uuid4().hex
         self.assertIn("(m) delegation mandate", run("plugins/a.py", sid))
         self.assertEqual(run("plugins/b.py", sid), "")
+
+    def test_message_names_the_test_rerun_as_the_cheap_path(self):
+        out = run("plugins/a.py", uuid.uuid4().hex)
+        self.assertIn("run the project's tests once", out)
+        self.assertNotIn("or the gate will block", out)
+
+    def test_silent_where_gates_are_not_armed(self):
+        with tempfile.TemporaryDirectory() as bare:  # under the system temp root: a scratch dir, never armed
+            self.assertEqual(run("plugins/a.py", uuid.uuid4().hex, cwd=bare, env={"ATLAS_GATES": ""}), "")  # sibling modules leak ATLAS_GATES=always into os.environ
 
     def test_exempt_and_docs(self):
         sid = uuid.uuid4().hex
@@ -44,9 +55,18 @@ def _fake_gate(solo=False, exempt=((), ()), uri=False, code=True):
 
 
 class ShouldWarnTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(dp, "_armed", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def sw(self, payload, **gate):
         with mock.patch.dict(sys.modules, {"completion_gate": _fake_gate(**gate)}):
             return dp.should_warn(payload)
+
+    def test_unarmed_project_never_warns(self):
+        with mock.patch.object(dp, "_armed", return_value=False):
+            self.assertIs(self.sw(self.EDIT), False)
 
     EDIT = {"tool_name": "Edit", "tool_input": {"file_path": "plugins/a.py"}}
 
@@ -128,7 +148,8 @@ class MainTest(unittest.TestCase):
 
         sid = uuid.uuid4().hex
         edit = json.dumps({"session_id": sid, "tool_name": "Edit", "tool_input": {"file_path": "p/a.py"}})
-        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ, {"TMPDIR": td, "ATLAS_GATE": ""}):
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ, {"TMPDIR": td, "ATLAS_GATE": ""}), \
+                mock.patch.object(dp, "_armed", return_value=True):
             self.assertEqual(call("not json"), 0)
             self.assertEqual(call(json.dumps({"tool_name": "Read"})), 0)
             self.assertEqual(call(edit, solo=True), 0)

@@ -117,12 +117,18 @@ QUIET_SKIP = re.compile(r"^formatter skipped: (missing|parse)\b")
 _INSTALL_VER = re.compile(r"atlas(?:___|/)(\d+\.\d+\.\d+)")
 
 
+BREAKER_TYPE = "BreakerBypass"  # atlas_hook_guard's deliberate-bypass rows: visible, but not crashes
+
+
 def live_faults(faults, version):
-    """Faults that describe this install: drop quiet formatter skips and rows tagged
+    """Faults that describe this install: drop quiet formatter skips, breaker-bypass rows (a deliberate
+    gate bypass is reported as its own breaker item, hook_burst_tripped, never as a crash) and rows tagged
     (plugin_version, else an install path in the error) with another atlas version.
     Untagged rows still count: their origin is unknown. Shared by the doctor and the dashboard."""
     out = []
     for f in faults:
+        if f.get("type") == BREAKER_TYPE:
+            continue
         err = str(f.get("error", ""))
         if QUIET_SKIP.match(err):
             continue

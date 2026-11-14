@@ -64,6 +64,18 @@ class ProjectRootTests(unittest.TestCase):
             fh.write("gitdir: %s\n" % gitdir)
         self.assertEqual(atlas_paths.project_root(mk(wt, "pkg")), main)
 
+    def test_dotfiles_home_git_is_not_project_for_subdir(self):
+        mk(self.home, ".git")
+        scratch = mk(self.home, "a", "b")
+        self.assertNotEqual(atlas_paths.project_root(scratch), self.home)
+        self.assertEqual(atlas_paths.project_root(scratch), scratch)
+
+    def test_project_inside_dotfiles_home_still_wins(self):
+        mk(self.home, ".git")
+        proj = mk(self.home, "proj")
+        mk(proj, ".git")
+        self.assertEqual(atlas_paths.project_root(mk(proj, "src")), proj)
+
     def test_non_git_dir_with_own_atlas(self):
         proj = mk(self.home, "plain")
         mk(proj, ".atlas")

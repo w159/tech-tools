@@ -401,6 +401,25 @@ class MemoryCaptureMainPathTest(unittest.TestCase):
         err, out = self._run_main(json.dumps({"session_id": "s", "cwd": "/r"}))
         self.assertEqual(out, "")
 
+    def test_db_path_honours_atlas_home(self):
+        home = os.path.join(self.tmp, "ahome")
+        os.makedirs(home)
+        want = os.path.join(home, "atlas.db")
+        open(want, "w").close()
+        os.environ.pop("ATLAS_DB", None)
+        patcher = mock.patch.dict(os.environ, {"ATLAS_HOME": home})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        opened = []
+
+        def fake_connect(target, *a, **kw):
+            opened.append(target)
+            raise memory_capture.sqlite3.Error("stop here")
+
+        with mock.patch.object(memory_capture.sqlite3, "connect", fake_connect):
+            self._run_main(json.dumps({"session_id": "s", "cwd": "/r"}))
+        self.assertEqual(opened, ["file:%s?mode=ro" % want])
+
     def test_connect_error_skips(self):
         # ATLAS_DB points at a directory: exists, but sqlite3 cannot open it.
         os.environ["ATLAS_DB"] = self.tmp

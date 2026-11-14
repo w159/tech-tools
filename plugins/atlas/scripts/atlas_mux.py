@@ -1858,9 +1858,10 @@ def cmd_status(args) -> int:
     )
 
 
-def _exited(root: str, name: str) -> bool:
-    """True when the worker's own last board note is an exit note."""
-    mine = [r for r in atlas_todo.notes(root) if str(r.get("owner")) == name]
+def _exited(root: str, name: str, since: float | None = None) -> bool:
+    """True when the worker's own last board note is an exit note. `since` (the spawn time) ignores
+    notes older than this launch: a retry reuses member names, so the previous run's exit must not count."""
+    mine = [r for r in atlas_todo.notes(root, since=since) if str(r.get("owner")) == name]
     return bool(mine) and bool(EXIT_NOTE_RE.search(str(mine[-1].get("text") or "")))
 
 
@@ -2559,7 +2560,7 @@ def cmd_spawn_team(args) -> int:
             out["worktree"] = wt
         return out
 
-    results = supervise(rec, spawn, lambda n: _exited(root, n), poll_s=args.poll)
+    results = supervise(rec, spawn, lambda n: _exited(root, n, rec["created"]), poll_s=args.poll)
     wave_logged = _log_wave(
         rec, run_id, results
     )  # after spawn: each member's resolved model is known
@@ -2602,6 +2603,7 @@ def cmd_wait(args) -> int:
         return _emit({"ok": False, "error": f"no team record for {args.team}"}, 1)
     names = [m["name"] for m in rec["members"]]
     t0 = time.time()
+    since = rec.get("created")  # the latest spawn-team launch; older exit notes belong to a previous run
 
     never_launched = set(rec.get("failed_members") or {})
 
@@ -2613,16 +2615,16 @@ def cmd_wait(args) -> int:
         return never_launched | {
             p["name"]
             for p in _team_panes(_session(rec["team_id"]))
-            if p["dead"] and not _exited(root, p["name"])
+            if p["dead"] and not _exited(root, p["name"], since)
         }
 
     while time.time() - t0 < args.timeout:
         silent = dead_silent()
-        if all(_exited(root, n) or n in silent for n in names):
+        if all(_exited(root, n, since) or n in silent for n in names):
             break
         time.sleep(args.poll)
     silent = dead_silent()
-    timed_out = not all(_exited(root, n) or n in silent for n in names)
+    timed_out = not all(_exited(root, n, since) or n in silent for n in names)
     killed_on_timeout = False
     if timed_out and (args.kill_on_timeout or os.environ.get("ATLAS_WAIT_KILL") == "1"):
         # opt-in: a worker that outlived --timeout keeps costing; close its panes (reap still archives the team)

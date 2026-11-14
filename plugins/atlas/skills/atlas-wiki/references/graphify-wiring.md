@@ -115,4 +115,4 @@ update without a plugin release.
   moves on.
 - the onboard mode does not edit graphify. If graphify is missing or broken, the
   freshness check reports N/A and the onboard mode recommends installing graphify
-  or running atlas-setup if the install is the problem.
+  or telling the user to run `/atlas:atlas-setup` if the install is the problem.

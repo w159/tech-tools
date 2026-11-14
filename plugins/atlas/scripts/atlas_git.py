@@ -256,6 +256,10 @@ def _cache(root) -> dict:
 
 def _write_json(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.parent.name == ".run":
+        gi = path.parent / ".gitignore"  # runtime state must not show up as untracked files
+        if not gi.exists():
+            gi.write_text("*\n!findings.json\n", encoding="utf-8")
     tmp = path.with_name(path.name + ".%d.tmp" % os.getpid())
     tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, path)

@@ -1401,7 +1401,11 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     if code_changed and not gate_rerun.switched_off():
         proof = gate_rerun.valid_proof(
             root, session, started_early, run_paths
-        ) or gate_rerun.crew_proof(root, session, started_early, run_paths)
+        ) or gate_rerun.crew_proof(
+            root, session, started_early, run_paths, str(data.get("transcript_path") or ""),
+            display=bool(data.get("display_only")),  # set by atlas_gates.py, never by a Stop payload
+            cwd=str(data.get("cwd") or ""),
+        )
     if proof:
         missing_delegation = False
     # (c)-(f) and (h) are docs-currency checks: they need a docs/ SSOT to
@@ -1820,31 +1824,74 @@ def _main() -> int:
         # (evidence, findings, verifier, plan, phases, delegation), re-run the session's last test command
         # here, in the hook, and let its exit code decide. Never inside evaluate(): the band polls that.
         rerun_note = ""
+        shortcut_note = False  # no test command found: the one-line "run the tests" reason replaces the essay
+        skip_shortcut = False  # a timed-out command: the re-run shortcut note would mislead
+        red_signal = False  # an independent red: the crew's global check or this gate's own re-run
+        # An honest `blocked` report backed by a red signal owes no paperwork: with one in hand the
+        # re-run is skipped entirely (it could only repeat what the engine already saw).
+        blocked_reply = _reply_is_blocked(data)
         if (
             set(ev["failed"]) & _RERUN_LETTERS
             and not ev.get("proof")
             and not gate_rerun.switched_off()
         ):
-            cmd = gate_rerun.last_test_command(
-                str(data.get("transcript_path") or ""), ev.get("started"), root
-            )
-            result = gate_rerun.rerun(cmd, root) if cmd else None
-            if result and result["exit"] == 0:
-                gate_rerun.write_proof(root, session, result)
-                ev = evaluate(data, root, missing_delegation)
-            elif result:
-                rerun_note = (
-                    f"[atlas] The gate re-ran `{result['command']}` in {result['cwd']} itself: "
-                    f"exit {result['exit']}. Fix the failure; the next Stop re-runs it.\n"
-                    + "\n".join(result["tail"].strip().splitlines()[-12:])
-                    + "\n"
-                )
+            if blocked_reply and gate_rerun.crew_red(
+                root, session, ev.get("started"), _run_paths_for(session, root),
+                str(data.get("transcript_path") or ""), str(data.get("cwd") or ""),
+            ):
+                red_signal = True
             else:
-                rerun_note = (
-                    "[atlas] Shortcut: the gate re-runs this run's last plain test command itself "
-                    "(e.g. `python3 -m pytest -q`, `npm test`, `go test ./...`) and a green exit "
-                    "satisfies the letters a, b, g, k, m and o. Run it with Bash, then Stop again; no evidence "
-                    "file, findings row, plan or verifier is needed.\n"
+                cmd = gate_rerun.last_test_command(
+                    str(data.get("transcript_path") or ""), ev.get("started"), root
+                )
+                if cmd and gate_rerun.timed_out_before(root, session, cmd):
+                    cmd = None  # it timed out once this session: never pay that wait again
+                    skip_shortcut = True
+                result = gate_rerun.rerun(cmd, root, ran=True) if cmd else None
+                if result and result["exit"] == 0 and not result.get("inconclusive"):
+                    gate_rerun.write_proof(root, session, result)
+                    ev = evaluate(data, root, missing_delegation)
+                elif result and result.get("inconclusive"):
+                    # A timeout, a missing runner or no interpreter that can import pytest says nothing
+                    # about the code: no "fix the failure", no repeat of the same wait next Stop.
+                    gate_rerun.note_timed_out(root, session, result["command"])  # 124, 127, pytest 4/5
+                    rerun_note = (
+                        f"[atlas] The gate could not re-run `{result['command']}` ({result['tail'].strip()}); "
+                        "that is inconclusive, not a failure, and it will not retry this command this session.\n"
+                    )
+                elif result:
+                    red_signal = True
+                    rerun_note = (
+                        f"[atlas] The gate re-ran `{result['command']}` in {result['cwd']} itself: "
+                        f"exit {result['exit']}. Fix the failure; the next Stop re-runs it.\n"
+                        + "\n".join(result["tail"].strip().splitlines()[-12:])
+                        + "\n"
+                    )
+                elif not skip_shortcut:
+                    shortcut_note = True
+                    rerun_note = (
+                        "[atlas] Run the project's tests once with Bash (e.g. `python3 -m pytest -q`, "
+                        "`npm test`, `go test ./...`), then Stop again. Shortcut: the gate re-runs this run's "
+                        "last plain test command itself and a green exit satisfies the letters a, b, g, k, m "
+                        "and o; no evidence file, findings row, plan or verifier is needed.\n"
+                    )
+        if red_signal and blocked_reply:
+            # Honest blocked report with an independent red: the stop is allowed without the paperwork
+            # letters (evidence file, findings row, plan, verifier, phases, delegation). Other letters
+            # (docs currency, open todos, ...) still apply.
+            ev = dict(ev, failed=[x for x in ev["failed"] if x not in _RERUN_LETTERS])
+            for letter in _RERUN_LETTERS:
+                if letter in ("a", "b"):
+                    ev["ok_" + letter] = True
+            ev["unverified"] = 0
+            ev["missing_plan"] = False
+            ev["missing_delegation"] = False
+            ev["phases_missing"] = []
+            rerun_note = ""
+            with contextlib.suppress(Exception):
+                sys.stderr.write(
+                    "[atlas] completion-gate: honest `blocked` report with a red check; "
+                    "evidence/plan/verifier paperwork not demanded.\n"
                 )
         missing_delegation = ev["missing_delegation"]  # a valid proof clears (m)
         (ok_a, ok_b, ok_c, ok_d, ok_e, ok_h) = (
@@ -1883,6 +1930,11 @@ def _main() -> int:
         # semantics -- a marked letter never blocks again. (n) re-blocks, with
         # the template-only short clause after its first full one.
         repeat = _repeat_letters(failed, session, root)
+        # (g) and (o) keep their full clauses: (g) names how many implementer dispatches went unchecked,
+        # (o) which phases are missing.
+        cleared_by_tests = (
+            [x for x in failed if x in _RERUN_LETTERS and x not in "go"] if shortcut_note else []
+        )
         for letter in failed:
             if letter in ("o", "p", "s"):
                 _mark_contract_block(
@@ -1912,11 +1964,22 @@ def _main() -> int:
             session_id=session,
             colony_workers=colony_workers,
             team_inprocess=team_inprocess,
-            repeat=repeat,
+            repeat=list(repeat or []) + cleared_by_tests,
             delegation_paths=delegation_paths,
             solo_delegation_note=solo_delegation_note,
         )
-        if rerun_note and set(failed) & _RERUN_LETTERS:
+        if cleared_by_tests and set(failed) <= set(cleared_by_tests):
+            # Only letters one green test run clears: the first line says run the tests; the fallback is
+            # one short line, not the dispatch-a-specialist essay.
+            block_reason = (
+                rerun_note
+                + "No test command to run? Each of "
+                + ", ".join(f"({x})" for x in cleared_by_tests)
+                + " then needs its own proof: "
+                + "; ".join(f"({x}) {_GISTS[x]}" for x in cleared_by_tests)
+                + "."
+            )
+        elif rerun_note and set(failed) & _RERUN_LETTERS:
             block_reason = rerun_note + block_reason
         notice = _block_loop_notice(count, failed)
         if notice:
@@ -2639,6 +2702,30 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
         return False
 
 
+def _reply_is_blocked(data: dict) -> bool:
+    """True when the main-thread reply's status header says `blocked` (phase word, or the blocked glyph).
+    Never raises; False for a sidechain, a missing/non-string reply or a headerless one."""
+    try:
+        text = data.get("last_assistant_message")
+        if _payload_is_sidechain(data) or not isinstance(text, str):
+            return False
+        contract = _contract_doc()
+        first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
+        m = re.match(contract["headerFirstLinePattern"], first)
+        return bool(m) and m.group(1) == "blocked"
+    except Exception:
+        return False
+
+
+def _run_paths_for(session: str, root: Path) -> list:
+    """The files this run wrote, as `evaluate` computes them (events + shell-changed code)."""
+    try:
+        paths = _run_written_paths(session, root)
+        return paths + [p for p in _shell_changed_code(root, session) if p not in paths]
+    except Exception:
+        return []
+
+
 def _reply_lacks_header(data: dict) -> bool:
     """(n) on the reply text alone, for the two places main() decides before
     evaluate(): the in-flight return and the stop_hook_active continuation.
@@ -2685,8 +2772,8 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
             return ""
         first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
         m = re.match(contract["headerFirstLinePattern"], first)
-        # Phase is the first of the pattern's phase words after the glyph.
-        if not m or first.split()[3] != "done":
+        # Group 1 is the phase word, glyph-first or phase-first.
+        if not m or m.group(1) != "done":
             return ""
         running = sum(
             1

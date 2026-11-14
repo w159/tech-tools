@@ -726,7 +726,7 @@ def _cli(argv=None) -> int:
             for path, reason in gaps:
                 print("  %s -- %s" % (path, reason))
             print(
-                "  -> run atlas-setup, or "
+                "  -> ask the user to run /atlas:atlas-setup, or "
                 'python3 "%s" <repo-root> (idempotent)'
                 % (
                     Path(__file__).resolve().parent.parent

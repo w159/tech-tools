@@ -682,16 +682,13 @@ class UncoveredPathsTest(unittest.TestCase):
         self.assertTrue(os.path.exists(sentinel))
         self.assertFalse(os.path.exists(os.path.join(deep, ".atlas")))
 
-    def test_sentinel_stays_at_cwd_without_any_marker(self):
-        # No .git/.atlas/docs ancestor: fail open to the cwd as before.
+    def test_sentinel_not_written_without_any_marker(self):
+        # A plain directory is not a project: .atlas is itself a project marker, so
+        # writing the sentinel there would turn it into one.
         deep = os.path.join(self.tmp, "nomarker", "x")
         os.makedirs(deep)
         atlas_db._write_orchestration_sentinel(deep)
-        self.assertTrue(
-            os.path.exists(
-                os.path.join(deep, ".atlas", ".run", "atlas-orchestrate.active")
-            )
-        )
+        self.assertFalse(os.path.exists(os.path.join(deep, ".atlas")))
 
     def test_run_metrics_empty_for_missing_run(self):
         # No metrics row -> {} (line 337).

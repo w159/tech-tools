@@ -312,7 +312,7 @@ def test_note_bypass_first_trip_message(capsys):
     err = capsys.readouterr().err
     assert err == (
         "[atlas] hook_guard: circuit breaker tripped for session sess1 -- Stop fired more than 5 "
-        "times within 120s; silencing all atlas Stop hooks for the rest of this session\n"
+        "times within 120s; silencing all atlas Stop hooks until the burst window passes\n"
     )
 
 

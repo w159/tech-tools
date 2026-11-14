@@ -366,7 +366,7 @@ class QuietModeTest(_Root):
         return worker_inbox.drain(self.root, "Alpha")
 
     def test_acknowledgements_and_progress_are_not_injected(self):
-        for text in ("starting", "done", "joined the channel", "ok, on it"):
+        for text in ("starting", "done", "joined", "ok, on it"):
             self.note("Beta", "Alpha", text)
         self.assertEqual(self.drain(), "")
 

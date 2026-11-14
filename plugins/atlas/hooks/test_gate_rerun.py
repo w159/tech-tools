@@ -21,6 +21,7 @@ from pathlib import Path  # noqa: E402
 from unittest import mock  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import gate_rerun  # noqa: E402
 from test_completion_gate import GateOrchestrationTest, _run_gate  # noqa: E402
 
@@ -28,19 +29,59 @@ PASSING = "def test_ok():\n    assert 1 + 1 == 2\n"
 FAILING = "def test_bad():\n    assert 1 + 1 == 3\n"
 
 
+def _venv_python(root):
+    """root/.venv/bin/python: a wrapper around this interpreter, so the tests need no system pytest
+    (and exercise the project-local runner rule). Returns the relative command prefix."""
+    bindir = Path(root) / ".venv" / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    wrapper = bindir / "python"
+    wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    wrapper.chmod(0o755)
+    return ".venv/bin/python"
+
+
 def _iso(epoch=None):
     return datetime.fromtimestamp(epoch or time.time(), timezone.utc).isoformat()
 
 
-def _bash_line(cmd, ts=None, sidechain=False):
-    return json.dumps(
+_SEQ = [0]
+CREW_SCRIPT = sorted(gate_rerun._crew_scripts())[0]
+LAUNCH_OUT = json.dumps({"ok": True, "run": "r1", "workers": ["a"], "next": "atlas_crew.py wait --run r1"})
+SUMMARY_OUT = json.dumps({"ok": True, "run": "r1", "check": "pytest", "check_exit": 0, "workers": [{"name": "a"}]})
+REFUSAL_OUT = json.dumps({"ok": False, "error": "run 'r1' was never started by the crew engine (no supervisor.pid)"})
+CREW_RUN = f"python3 {CREW_SCRIPT} run --plan plan.json --no-tmux --session sess-1"
+
+
+def _bash_line(cmd, ts=None, sidechain=False, result="ok", is_error=False, output="1 passed"):
+    """A Bash tool_use line, plus its tool_result line unless `result` is None (a call that never ran)."""
+    _SEQ[0] += 1
+    tid = f"toolu_{_SEQ[0]}"
+    when = ts or _iso()
+    use = json.dumps(
         {
             "type": "assistant",
             "isSidechain": sidechain,
-            "timestamp": ts or _iso(),
-            "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": cmd}}]},
+            "timestamp": when,
+            "message": {
+                "content": [{"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": cmd}}]
+            },
         }
     )
+    if result is None:
+        return use
+    res = json.dumps(
+        {
+            "type": "user",
+            "isSidechain": sidechain,
+            "timestamp": when,
+            "message": {
+                "content": [
+                    {"type": "tool_result", "tool_use_id": tid, "is_error": is_error, "content": output}
+                ]
+            },
+        }
+    )
+    return use + "\n" + res
 
 
 class NormalizeTest(unittest.TestCase):
@@ -68,6 +109,54 @@ class NormalizeTest(unittest.TestCase):
         self.assertEqual(cwd, (self.root / "pkg").resolve())
         argv, cwd = gate_rerun.normalize("cd pkg && pytest", self.root)
         self.assertEqual(cwd, (self.root / "pkg").resolve())
+
+    def test_accepts_project_local_runners(self):
+        for cmd in (
+            ".venv/bin/python -m pytest -q",
+            "./.venv/bin/python3 -m pytest -x tests",
+            "venv/bin/python3.12 -m pytest -q 2>&1 | tail -5",
+            ".venv/bin/pytest -q",
+            f"{self.root}/.venv/bin/python -m pytest -q",
+            "cd pkg && ../.venv/bin/python -m pytest -q",
+        ):
+            norm = gate_rerun.normalize(cmd, self.root, ran=True)
+            self.assertIsNotNone(norm, cmd)
+            self.assertTrue(os.path.isabs(norm[0][0]), norm)
+            # a real file in the repo is never run on the allowlist alone, only when the session ran it
+            self.assertIsNone(gate_rerun.normalize(cmd, self.root), cmd)
+
+    def test_rejects_foreign_local_runners(self):
+        for cmd in (
+            ".venv/bin/python script.py",
+            ".venv/bin/python -c 'import os'",
+            ".venv/bin/python -m pytest; id",
+            ".venv/bin/bash -m pytest",
+            ".venv/bin/pip install x",
+            "../outside/.venv/bin/python -m pytest",
+            "/usr/bin/python3 -m pytest",
+            "/opt/venv/bin/pytest",
+            f"{self.root}/../x/bin/python -m pytest",
+        ):  # (rejected even when the session ran it: not inside the repo)
+            self.assertIsNone(gate_rerun.normalize(cmd, self.root, ran=True), cmd)
+
+    def test_symlink_runner_must_land_on_a_real_system_interpreter(self):
+        out = Path(tempfile.mkdtemp())
+        evil = out / "evilpy"
+        evil.write_text("#!/bin/sh\nexit 0\n")
+        evil.chmod(0o755)
+        (self.root / ".venv/bin").mkdir(parents=True)
+        link = self.root / ".venv/bin/python"
+        os.symlink(evil, link)  # target is a script outside the repo, not an interpreter
+        self.assertIsNone(gate_rerun.normalize(".venv/bin/python -m pytest -q", self.root, ran=True))
+        link.unlink()
+        os.symlink("/usr/bin/env", link)  # a real system file, but not python3*/pytest
+        self.assertIsNone(gate_rerun.normalize(".venv/bin/python -m pytest -q", self.root, ran=True))
+        link.unlink()
+        real = os.path.realpath(sys.executable)
+        with mock.patch.object(gate_rerun, "_STD_PREFIXES", (os.path.dirname(real) + "/",)):
+            if gate_rerun._REAL_INTERPRETER.match(os.path.basename(real)):
+                os.symlink(real, link)
+                self.assertIsNotNone(gate_rerun.normalize(".venv/bin/python -m pytest -q", self.root))
 
     def test_rejects_unsafe_or_foreign(self):
         for cmd in (
@@ -137,9 +226,10 @@ class RerunProofTest(unittest.TestCase):
     def test_green_rerun_writes_evidence_finding_and_valid_proof(self):
         (self.root / "test_ok.py").write_text(PASSING)
         result = gate_rerun.rerun(f"{sys.executable} -m pytest -q -p no:cacheprovider", self.root)
-        # sys.executable is an absolute path, not an allowlisted runner name
+        # sys.executable is an absolute path outside the project, not an allowlisted runner
         self.assertIsNone(result)
-        result = gate_rerun.rerun("python3 -m pytest -q -p no:cacheprovider", self.root)
+        py = _venv_python(self.root)
+        result = gate_rerun.rerun(f"{py} -m pytest -q -p no:cacheprovider", self.root, ran=True)
         self.assertEqual(result["exit"], 0, result["tail"])
         started = time.time() - 60
         proof = gate_rerun.write_proof(self.root, "sess-1", result)
@@ -162,9 +252,291 @@ class RerunProofTest(unittest.TestCase):
 
     def test_red_rerun_reports_exit_and_tail(self):
         (self.root / "test_bad.py").write_text(FAILING)
-        result = gate_rerun.rerun("python3 -m pytest -q -p no:cacheprovider", self.root)
+        py = _venv_python(self.root)
+        result = gate_rerun.rerun(f"{py} -m pytest -q -p no:cacheprovider", self.root, ran=True)
         self.assertNotEqual(result["exit"], 0)
+        self.assertFalse(result["inconclusive"])
         self.assertIn("1 failed", result["tail"])
+
+    def test_timeout_is_inconclusive_not_red(self):
+        (self.root / "test_slow.py").write_text("import time\n\ndef test_slow():\n    time.sleep(60)\n")
+        py = _venv_python(self.root)
+        with mock.patch.dict(os.environ, {"ATLAS_GATE_RERUN_TIMEOUT": "5"}):
+            result = gate_rerun.rerun(f"{py} -m pytest -q -p no:cacheprovider", self.root, ran=True)
+        self.assertEqual(result["exit"], 124)
+        self.assertTrue(result["inconclusive"])
+        self.assertLess(result["seconds"], 15)
+
+    def test_timeout_is_clamped_under_the_stop_hook_timeout(self):
+        hooks = json.loads((Path(__file__).parent / "hooks.json").read_text())
+        gate_timeouts = [
+            h["timeout"]
+            for group in hooks["hooks"]["Stop"]
+            for h in group["hooks"]
+            if h["command"].endswith('completion_gate.py"')
+        ]
+        self.assertEqual(len(gate_timeouts), 1)
+        with mock.patch.dict(os.environ, {"ATLAS_GATE_RERUN_TIMEOUT": "9999"}):
+            self.assertLessEqual(gate_rerun._timeout(), gate_timeouts[0] - 30)
+        with mock.patch.dict(os.environ, {"ATLAS_GATE_RERUN_TIMEOUT": "nan"}):
+            self.assertEqual(gate_rerun._timeout(), gate_rerun.DEFAULT_TIMEOUT)
+
+    def test_timed_out_command_is_remembered_per_session(self):
+        self.assertFalse(gate_rerun.timed_out_before(self.root, "s1", "pytest -q"))
+        gate_rerun.note_timed_out(self.root, "s1", "pytest -q")
+        self.assertTrue(gate_rerun.timed_out_before(self.root, "s1", "pytest -q"))
+        self.assertFalse(gate_rerun.timed_out_before(self.root, "s2", "pytest -q"))
+        self.assertFalse(gate_rerun.timed_out_before(self.root, "s1", "pytest -x"))
+
+    def _path_without_pytest(self):
+        fake = Path(tempfile.mkdtemp())
+        stub = fake / "python3"
+        stub.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        stub.chmod(0o755)
+        return str(fake)
+
+    def test_hook_python_without_pytest_falls_back_to_project_venv(self):
+        (self.root / "test_ok.py").write_text(PASSING)
+        # .venv/bin/python is a symlink to a real interpreter (here a wrapper named python3 that sits in a
+        # directory the test declares a standard prefix), as a real venv's is
+        tools = Path(tempfile.mkdtemp())
+        _venv_python(tools)
+        os.rename(tools / ".venv/bin/python", tools / "python3")
+        (self.root / ".venv/bin").mkdir(parents=True)
+        os.symlink(tools / "python3", self.root / ".venv/bin/python")
+        with mock.patch.dict(os.environ, {"PATH": self._path_without_pytest()}), mock.patch.object(
+            gate_rerun, "_STD_PREFIXES", (os.path.realpath(tools) + "/",)
+        ):
+            result = gate_rerun.rerun("python3 -m pytest -q -p no:cacheprovider", self.root)
+        self.assertEqual(result["exit"], 0, result["tail"])
+        self.assertFalse(result["inconclusive"])
+        self.assertTrue(result["argv"][0].endswith(".venv/bin/python"), result["argv"])
+
+    def test_fallback_never_probe_runs_a_file_the_repo_planted(self):
+        out = Path(tempfile.mkdtemp())
+        planted = self.root / ".venv/bin/python"
+        planted.parent.mkdir(parents=True)
+        planted.write_text(f'#!/bin/sh\necho ran >> {out}/PWNED\nexit 1\n')
+        planted.chmod(0o755)
+        with mock.patch.dict(os.environ, {"PATH": self._path_without_pytest()}):
+            result = gate_rerun.rerun("python3 -m pytest -q", self.root)
+        self.assertTrue(result["inconclusive"])
+        self.assertFalse((out / "PWNED").exists())
+
+    def test_in_repo_file_named_pytest_is_not_run_unless_the_session_ran_it(self):
+        out = Path(tempfile.mkdtemp())
+        tool = self.root / "tools/pytest"
+        tool.parent.mkdir()
+        tool.write_text(f"#!/bin/sh\necho ran >> {out}/PWNED\nexit 0\n")
+        tool.chmod(0o755)
+        self.assertIsNone(gate_rerun.rerun("./tools/pytest -q", self.root))
+        self.assertFalse((out / "PWNED").exists())
+
+    def test_pytest_usage_error_and_nothing_collected_are_inconclusive(self):
+        (self.root / "test_ok.py").write_text(PASSING)
+        py = _venv_python(self.root)
+        none_selected = gate_rerun.rerun(f"{py} -m pytest -q -p no:cacheprovider -k zzz_nomatch", self.root, ran=True)
+        self.assertEqual(none_selected["exit"], 5)
+        self.assertTrue(none_selected["inconclusive"])
+        bad_flag = gate_rerun.rerun(f"{py} -m pytest -q --no-such-flag", self.root, ran=True)
+        self.assertEqual(bad_flag["exit"], 4)
+        self.assertTrue(bad_flag["inconclusive"])
+
+    def test_hook_denials_and_tool_errors_are_not_executed(self):
+        tx = self.root / "t.jsonl"
+        denials = (
+            "PreToolUse:Bash hook error: DENY - 6 inline ops since your last dispatch.",
+            "<tool_use_error>Blocked: this command is not allowed</tool_use_error>",
+            "Permission to use Bash has been denied.",
+            "Error: something else broke",
+        )
+        tx.write_text("\n".join(
+            _bash_line(f"pytest -q d{i}", is_error=True, output=text) for i, text in enumerate(denials)
+        ) + "\n")
+        self.assertEqual(gate_rerun.executed_bash(str(tx), None), [])
+        tx.write_text(_bash_line("pytest -q x", is_error=True, output="Exit code 1\n2 failed") + "\n")
+        self.assertEqual([c for c, _ in gate_rerun.executed_bash(str(tx), None)], ["pytest -q x"])
+
+    def test_crew_launch_must_invoke_the_engine_itself(self):
+        started = time.time() - 60
+        green = {"ok": True, "check_exit": 0, "check": "pytest", "run": "r1"}
+        for cmd in (
+            "echo atlas_crew r1",
+            f"echo {CREW_SCRIPT} run r1",
+            f"echo 'python3 {CREW_SCRIPT} run r1'",
+            f"python3 /tmp/elsewhere/atlas_crew.py run r1",
+            f"python3 {CREW_SCRIPT} status --run r1",
+            f"cat {CREW_SCRIPT}",
+        ):
+            tx = self._crew_run(green)
+            Path(tx).write_text(_bash_line(cmd, output=LAUNCH_OUT) + "\n")
+            self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx), cmd)
+        tx = self._crew_run(green)
+        Path(tx).write_text(_bash_line(f"python3 {CREW_SCRIPT} wait --run r1 --root .", output=SUMMARY_OUT) + "\n")
+        self.assertIsNotNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
+
+    def test_crew_launch_forms_a_lead_really_types(self):
+        script = CREW_SCRIPT
+        plugin = os.path.dirname(os.path.dirname(script))
+        repo = os.path.dirname(os.path.dirname(plugin))  # .../tech-tools when run from the repo
+        rel = os.path.relpath(script, repo)
+        with mock.patch.dict(os.environ, {"CLAUDE_PLUGIN_ROOT": plugin}):
+            accepted = {
+                "absolute": f"python3 {script} run --plan p.json",
+                "braced var, quoted": 'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run --plan p.json',
+                "bare var": "python3 $CLAUDE_PLUGIN_ROOT/scripts/atlas_crew.py wait --run r1",
+                "quoted var then path": 'python3 "$CLAUDE_PLUGIN_ROOT"/scripts/atlas_crew.py run',
+                "-S": f"python3 -S {script} run",
+                "-u": f"python3 -u {script} wait --run r1",
+                "-S -u": f"python3 -S -u {script} run",
+                "/usr/bin/python3": f"/usr/bin/python3 {script} run",
+                "python3.12": f"python3.12 {script} run",
+                "uv run python": f"uv run python {script} run",
+                "uv run --quiet python": f"uv run --quiet python {script} run",
+                "cd then abs": f"cd /tmp && python3 {script} run",
+                "VAR=x prefix": f"ATLAS_X=1 python3 {script} run",
+                "two env prefixes": f"A=1 B=2 python3 {script} run",
+                "after other commands": f"cd {repo} && echo hi; python3 {script} run --no-tmux",
+                "piped": f"python3 {script} run --plan p.json 2>&1 | tail -5",
+            }
+            for name, cmd in accepted.items():
+                self.assertTrue(gate_rerun._invokes_crew(cmd, ""), name)
+            # relative path: against the session cwd, or a preceding cd
+            self.assertTrue(gate_rerun._invokes_crew(f"python3 {rel} run", repo))
+            self.assertTrue(gate_rerun._invokes_crew(f"cd {repo} && python3 {rel} run", "/elsewhere"))
+            self.assertTrue(gate_rerun._invokes_crew(f"cd {os.path.dirname(repo)} && cd {os.path.basename(repo)} && python3 {rel} wait --run r", ""))
+            self.assertFalse(gate_rerun._invokes_crew(f"python3 {rel} run", ""), "relative with no cwd")
+            self.assertFalse(gate_rerun._invokes_crew(f"python3 {rel} run", "/elsewhere"))
+            refused = {
+                "other variable": 'python3 "${HOME}/x/atlas_crew.py" run',
+                "var expanded to nothing else": 'python3 "$EVIL/scripts/atlas_crew.py" run',
+                "command substitution": f"python3 $(echo {script}) run",
+                "-m": f"python3 -m {script} run",
+                "-c": f"python3 -c {script} run",
+                "echo": f"echo python3 {script} run",
+                "echo env prefix": f"X=1 echo {script} run",
+                "uv no run": f"uv python {script} run",
+                "uv non-python": f"uv run cat {script} run",
+                "wrong subcommand": f"python3 {script} status",
+                "no subcommand": f"python3 {script}",
+                "other tree": "python3 /tmp/elsewhere/atlas_crew.py run",
+                "not an interpreter": f"bash {script} run",
+            }
+            for name, cmd in refused.items():
+                self.assertFalse(gate_rerun._invokes_crew(cmd, ""), name)
+        env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertFalse(gate_rerun._invokes_crew('python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_crew.py" run', ""))
+
+    def test_transcript_cwd_resolves_a_relative_launch(self):
+        started = time.time() - 60
+        green = {"ok": True, "check_exit": 0, "check": "pytest", "run": "r1"}
+        tx = self._crew_run(green)
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(CREW_SCRIPT))))
+        rel = os.path.relpath(CREW_SCRIPT, repo)
+        lines = _bash_line(f"python3 {rel} run --plan p.json", output=LAUNCH_OUT).splitlines()
+        rec = [json.loads(x) for x in lines]
+        rec[0]["cwd"] = repo
+        Path(tx).write_text("\n".join(json.dumps(r) for r in rec) + "\n")
+        self.assertIsNotNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
+        rec[0]["cwd"] = "/elsewhere"
+        Path(tx).write_text("\n".join(json.dumps(r) for r in rec) + "\n")
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
+        # no cwd in the record: the Stop payload's cwd stands in
+        for r in rec:
+            r.pop("cwd", None)
+        Path(tx).write_text("\n".join(json.dumps(r) for r in rec) + "\n")
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
+        self.assertIsNotNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx, cwd=repo))
+
+    def test_a_wait_refusal_on_a_forged_dir_credits_neither_green_nor_red(self):
+        started = time.time() - 60
+        wait = f"python3 {CREW_SCRIPT} wait --run r1 --root ."
+        for summary in (
+            {"ok": True, "check_exit": 0, "check": "pytest", "run": "r1"},
+            {"ok": False, "check_exit": 1, "check": "pytest", "run": "r1"},
+        ):
+            tx = self._crew_run(summary)
+            Path(tx).write_text(
+                _bash_line(wait, is_error=True, output="Exit code 1\n" + REFUSAL_OUT) + "\n"
+            )
+            self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx), summary)
+            self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx), summary)
+
+    def test_engine_json_shapes(self):
+        ej = gate_rerun._engine_json
+        self.assertTrue(ej(SUMMARY_OUT, "r1"))
+        self.assertTrue(ej("noise before\n" + LAUNCH_OUT + "\nnoise after", "r1"))
+        self.assertTrue(ej("Exit code 1\n" + json.dumps({"run": "r1", "check_exit": 1, "ok": False, "workers": []}), "r1"))
+        self.assertFalse(ej(REFUSAL_OUT, "r1"))
+        self.assertFalse(ej(SUMMARY_OUT, "other"))
+        self.assertFalse(ej(json.dumps({"run": "r1", "check_exit": 0, "workers": [], "error": "x"}), "r1"))
+        self.assertFalse(ej(json.dumps({"run": "r1", "check_exit": 0}), "r1"))  # no workers list
+        self.assertFalse(ej(json.dumps({"run": "r1", "check_exit": "0", "workers": []}), "r1"))
+        self.assertFalse(ej(json.dumps({"ok": True, "run": "r1", "workers": []}), "r1"))  # not a launch object
+        self.assertFalse(ej("r1", "r1"))
+        self.assertFalse(ej('{"run": "r1", "workers": [', "r1"))
+
+    def test_display_callers_without_a_transcript_use_the_engine_files(self):
+        started = time.time() - 60
+        green = {"ok": True, "check_exit": 0, "check": "pytest", "run": "r1"}
+        self._crew_run(green)
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started))
+        shown = gate_rerun.crew_proof(self.root, "sess-1", started, display=True)
+        self.assertEqual(shown["crew_run"], "r1")
+        self.assertFalse(shown["launch_checked"])
+        self._crew_run(green, engine_made=False)  # a hand-made dir still shows nothing
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, display=True))
+
+    def test_evaluate_passes_display_only_through_and_never_trusts_a_stop_payload_without_it(self):
+        import completion_gate_core as cg
+
+        seen = []
+
+        def fake(root, session, started, run_paths=(), transcript_path="", display=False, cwd=""):
+            seen.append((transcript_path, display))
+
+        (self.root / "app.py").write_text("x = 1\n")
+        for extra in ({}, {"display_only": True}):
+            data = {"session_id": "s", "cwd": str(self.root), "transcript_path": "", **extra}
+            with mock.patch.object(cg.gate_rerun, "crew_proof", fake), mock.patch.object(
+                cg, "_run_written_paths", return_value=[str(self.root / "app.py")]
+            ):
+                cg.evaluate(data, self.root)
+        self.assertEqual(seen, [("", False), ("", True)])
+
+    def test_atlas_gates_finds_the_session_transcript(self):
+        import atlas_gates
+
+        home = Path(tempfile.mkdtemp())
+        (home / ".claude/projects/p1").mkdir(parents=True)
+        t = home / ".claude/projects/p1/abc-123.jsonl"
+        t.write_text("")
+        with mock.patch.dict(os.environ, {"HOME": str(home)}):
+            self.assertEqual(atlas_gates._find_transcript("abc-123"), str(t))
+            self.assertEqual(atlas_gates._find_transcript("nope"), "")
+            self.assertEqual(atlas_gates._find_transcript("../x"), "")
+
+    def test_only_executed_commands_are_returned_from_the_transcript(self):
+        tx = self.root / "t.jsonl"
+        denied = _bash_line("pytest -q denied", result="x", is_error=True,
+                            output="The user doesn't want to proceed with this tool use.")
+        tx.write_text("\n".join([
+            _bash_line("pytest -q ran"),
+            _bash_line("pytest -q never-ran", result=None),
+            denied,
+        ]) + "\n")
+        self.assertEqual(gate_rerun.last_test_command(str(tx), None, self.root), "pytest -q ran")
+        failing = _bash_line("pytest -q failing", result="x", is_error=True, output="Exit code 1\n1 failed")
+        tx.write_text(failing + "\n")
+        self.assertEqual(gate_rerun.last_test_command(str(tx), None, self.root), "pytest -q failing")
+
+    def test_no_interpreter_with_pytest_is_inconclusive(self):
+        (self.root / "test_ok.py").write_text(PASSING)
+        with mock.patch.dict(os.environ, {"PATH": self._path_without_pytest()}):
+            result = gate_rerun.rerun("python3 -m pytest -q -p no:cacheprovider", self.root)
+        self.assertTrue(result["inconclusive"])
+        self.assertNotEqual(result["exit"], 0)
 
     def test_findings_dict_shape_is_preserved(self):
         (self.root / ".atlas/.run").mkdir(parents=True)
@@ -178,22 +550,77 @@ class RerunProofTest(unittest.TestCase):
         self.assertEqual(len(data["findings"]), 2)
 
     def test_crew_proof_needs_this_session_and_green_check(self):
-        run = self.root / ".atlas/.run/crew/r1"
-        run.mkdir(parents=True)
-        (run / "run.json").write_text(json.dumps({"lead_session": "sess-1"}))
-        (run / "summary.json").write_text(json.dumps({"ok": True, "check_exit": 0, "check": "pytest", "run": "r1"}))
         started = time.time() - 60
-        self.assertEqual(gate_rerun.crew_proof(self.root, "sess-1", started)["crew_run"], "r1")
-        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-2", started))
-        (run / "summary.json").write_text(json.dumps({"ok": False, "check_exit": 1, "check": "pytest"}))
+        green = {"ok": True, "check_exit": 0, "check": "pytest", "run": "r1"}
+        tx = self._crew_run(green)
+        self.assertEqual(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx)["crew_run"], "r1")
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-2", started, (), tx))
+        self._crew_run({"ok": False, "check_exit": 1, "check": "pytest"})
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx))
+
+    def test_crew_proof_is_not_credited_for_a_forged_green_summary(self):
+        started = time.time() - 60
+        green = {"ok": True, "check_exit": 0, "check": "pytest", "run": "r1"}
+        for kwargs in ({"launched": False}, {"engine_made": False}):
+            tx = self._crew_run(green, **kwargs)
+            self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx), kwargs)
+        tx = self._crew_run(green)
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started), "no transcript")
+        Path(tx).write_text(_bash_line(CREW_RUN, result=None) + "\n")
+        self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started, (), tx), "launch never ran")
+
+    def _crew_run(self, summary, launched=True, engine_made=True):
+        run = self.root / ".atlas/.run/crew/r1"
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "run.json").write_text(json.dumps({"lead_session": "sess-1", "run_id": "r1"}))
+        (run / "summary.json").write_text(json.dumps(summary))
+        (run / "supervisor.log").unlink(missing_ok=True)
+        if engine_made:
+            (run / "supervisor.log").write_text("")
+        tx = self.root / "crew-t.jsonl"
+        tx.write_text(
+            (_bash_line(CREW_RUN, output=LAUNCH_OUT) if launched else "")
+            + "\n"
+        )
+        return str(tx)
+
+    def test_crew_red_needs_this_session_and_a_red_check(self):
+        started = time.time() - 60
+        red = {"ok": False, "check_exit": 1, "check": "pytest", "run": "r1"}
+        tx = self._crew_run(red)
+        self.assertEqual(gate_rerun.crew_red(self.root, "sess-1", started, (), tx)["crew_run"], "r1")
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-2", started, (), tx))
         self.assertIsNone(gate_rerun.crew_proof(self.root, "sess-1", started))
+        self._crew_run({"ok": True, "check_exit": 0, "check": "pytest"})
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
+        self._crew_run({"ok": False, "check_exit": None})
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
+
+    def test_crew_red_is_not_credited_for_a_forged_summary(self):
+        started = time.time() - 60
+        red = {"ok": False, "check_exit": 1, "check": "pytest", "run": "r1"}
+        # hand-written files, the crew was never launched from this session
+        tx = self._crew_run(red, launched=False)
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
+        # launched, but the run dir is not one the engine made (no supervisor.log)
+        tx = self._crew_run(red, engine_made=False)
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
+        # a launch whose output never names this run
+        tx = self._crew_run(red)
+        Path(tx).write_text(_bash_line(CREW_RUN, output="{}") + "\n")
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
+        # a denied launch is not a launch
+        tx = self._crew_run(red)
+        Path(tx).write_text(_bash_line(CREW_RUN, is_error=True, output="The user doesn't want to proceed r1") + "\n")
+        self.assertIsNone(gate_rerun.crew_red(self.root, "sess-1", started, (), tx))
 
 
 class GateWiringTest(GateOrchestrationTest):
     """End to end through completion_gate.py: a green re-run clears (a)(b)(g)(k)(m), a red one blocks
     with the gate's own output; nothing else changes."""
 
-    def _transcript(self, cmd="python3 -m pytest -q -p no:cacheprovider"):
+    def _transcript(self, cmd=".venv/bin/python -m pytest -q -p no:cacheprovider"):
+        _venv_python(self.tmp)
         path = os.path.join(self.tmp, "transcript.jsonl")
         with open(path, "w") as f:
             f.write(_bash_line(cmd) + "\n")
@@ -229,8 +656,136 @@ class GateWiringTest(GateOrchestrationTest):
         self._shared_setup(FAILING)
         r = self._run(self._transcript())
         self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("The gate re-ran `python3 -m pytest -q -p no:cacheprovider`", r.stdout)
+        self.assertIn("The gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider`", r.stdout)
         self.assertFalse(os.path.isfile(os.path.join(self.tmp, ".atlas", ".run", "gate-proof.json")))
+
+    def test_timeout_is_inconclusive_and_not_repeated(self):
+        self._shared_setup("import time\n\ndef test_slow():\n    time.sleep(60)\n")
+        transcript = self._transcript()
+        env = dict(
+            self.env, ATLAS_GATE_COLONY="off", ATLAS_GATE_HEADER="off", ATLAS_GATE_DONE="off",
+            ATLAS_GATE_RERUN_TIMEOUT="5",
+        )
+        payload = {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": transcript}
+        first = _run_gate(payload, env)
+        self.assertIn('"decision": "block"', first.stdout)
+        self.assertNotIn("Fix the failure", first.stdout)
+        self.assertIn("inconclusive", first.stdout)
+        marks = os.path.join(self.tmp, ".atlas", ".run", "gate-rerun-timeouts.json")
+        self.assertIn(".venv/bin/python -m pytest", open(marks).read())
+        t0 = time.time()
+        second = _run_gate(payload, env)
+        self.assertLess(time.time() - t0, 4.5, "the timed-out command must not be re-run")
+        self.assertNotIn("Fix the failure", second.stdout)
+        self.assertNotIn("Shortcut", second.stdout)
+
+    def _crew_summary(self, ok, check_exit):
+        run = os.path.join(self.tmp, ".atlas", ".run", "crew", "r1")
+        os.makedirs(run, exist_ok=True)
+        with open(os.path.join(run, "run.json"), "w") as f:
+            json.dump({"lead_session": "sess-orch", "run_id": "r1"}, f)
+        open(os.path.join(run, "supervisor.log"), "w").close()
+        with open(os.path.join(run, "summary.json"), "w") as f:
+            json.dump({"ok": ok, "check_exit": check_exit, "check": "pytest -q", "run": "r1"}, f)
+
+    def _run_reply(self, reply, launched=True):
+        env = dict(self.env, ATLAS_GATE_COLONY="off", ATLAS_GATE_DONE="off")
+        tp = os.path.join(self.tmp, "crew-transcript.jsonl")
+        with open(tp, "w") as f:
+            if launched:
+                f.write(_bash_line(CREW_RUN, output=LAUNCH_OUT) + "\n")
+        return _run_gate(
+            {"session_id": "sess-orch", "cwd": self.tmp, "transcript_path": tp, "last_assistant_message": reply},
+            env,
+        )
+
+    BLOCKED = "ATLAS | \u26d4 blocked | global check red: 2 failures in test_app"
+    VERIFY = "ATLAS | \u2705 verify | all checks run"
+
+    def test_blocked_report_with_red_crew_check_owes_no_paperwork(self):
+        self._shared_setup(PASSING)
+        self._crew_summary(False, 1)
+        r = self._run_reply(self.BLOCKED)
+        for letter in ("(a)", "(b)", "(g)", "(k)", "(m)", "(o)"):
+            self.assertNotIn(f"\\n  {letter}", r.stdout, r.stdout)
+        self.assertNotIn("Shortcut", r.stdout)
+
+    def test_blocked_report_with_forged_crew_summary_still_owes_paperwork(self):
+        self._shared_setup(PASSING)
+        self._crew_summary(False, 1)
+        r = self._run_reply(self.BLOCKED, launched=False)  # files exist, no crew launch in the transcript
+        self.assertIn("\\n  (a)", r.stdout)
+
+    def test_blocked_report_with_a_passing_suite_and_nothing_collected_is_not_red(self):
+        self._shared_setup(PASSING)
+        env = dict(self.env, ATLAS_GATE_COLONY="off", ATLAS_GATE_DONE="off")
+        r = _run_gate(
+            {
+                "session_id": "sess-orch", "cwd": self.tmp,
+                "transcript_path": self._transcript(".venv/bin/python -m pytest -q -p no:cacheprovider -k zzz_nomatch"),
+                "last_assistant_message": self.BLOCKED,
+            },
+            env,
+        )
+        self.assertIn("\\n  (a)", r.stdout)
+        self.assertNotIn("Fix the failure", r.stdout)
+
+    def test_a_denied_test_command_is_never_rerun(self):
+        self._shared_setup(PASSING)
+        tp = os.path.join(self.tmp, "denied.jsonl")
+        _venv_python(self.tmp)
+        with open(tp, "w") as f:
+            f.write(_bash_line(".venv/bin/python -m pytest -q -p no:cacheprovider", is_error=True,
+                               output="The user doesn't want to proceed with this tool use.") + "\n")
+        r = self._run(tp)
+        self.assertFalse(os.path.isfile(os.path.join(self.tmp, ".atlas", ".run", "gate-proof.json")))
+        self.assertIn("\\n  (a)", r.stdout)
+
+    def test_blocked_claim_without_a_red_signal_changes_nothing(self):
+        self._shared_setup(PASSING)
+        r = self._run_reply(self.BLOCKED)
+        self.assertIn("\\n  (a)", r.stdout)
+        self.assertIn("Shortcut", r.stdout)
+
+    def test_red_crew_check_without_blocked_report_still_blocks(self):
+        self._shared_setup(PASSING)
+        self._crew_summary(False, 1)
+        r = self._run_reply(self.VERIFY)
+        self.assertIn("\\n  (a)", r.stdout)
+
+    def test_blocked_report_with_green_crew_check_is_not_a_red_signal(self):
+        self._shared_setup(PASSING)
+        self._crew_summary(True, 0)
+        r = self._run_reply(self.BLOCKED)
+        self.assertNotIn("\\n  (a)", r.stdout)  # the green crew proof satisfies it the usual way
+
+    def test_blocked_report_with_red_rerun_owes_no_paperwork(self):
+        self._shared_setup(FAILING)
+        env = dict(self.env, ATLAS_GATE_COLONY="off", ATLAS_GATE_DONE="off")
+        r = _run_gate(
+            {
+                "session_id": "sess-orch", "cwd": self.tmp, "transcript_path": self._transcript(),
+                "last_assistant_message": self.BLOCKED,
+            },
+            env,
+        )
+        for letter in ("(a)", "(b)", "(g)", "(k)", "(m)", "(o)"):
+            self.assertNotIn(f"\\n  {letter}", r.stdout, r.stdout)
+        self.assertNotIn("Fix the failure", r.stdout)
+
+    def test_no_test_command_reason_is_short_and_leads_with_run_the_tests(self):
+        self._shared_setup(PASSING)
+        for rel in ("docs/CHANGELOG.md", "docs/ROADMAP.md", "README.md"):  # docs letters met
+            Path(self.tmp, rel).write_text("# x\n\n- entry\n", encoding="utf-8")
+        r = self._run("")
+        reason = json.loads(r.stdout.strip().splitlines()[-1])["reason"]
+        self.assertTrue(reason.startswith("[atlas] Run the project's tests once"), reason[:120])
+        # the letters one test run clears are one-liners, not the dispatch-a-specialist clauses
+        for line in ("(a) still open", "(b) still open", "(k) still open", "(m) still open"):
+            self.assertIn(line, reason)
+        for essay in ("Capture observed-behavior proof", "Dispatch atlas:implementer", "No plan was ever made"):
+            self.assertNotIn(essay, reason)
+        self.assertLess(len(reason.encode()), 2500, len(reason))
 
     def test_kill_switch_restores_old_behavior(self):
         self._shared_setup(PASSING)

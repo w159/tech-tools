@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -71,7 +72,7 @@ class AtlasDoctorTest(unittest.TestCase):
         self.clone = os.path.join(self.plugins, "marketplaces", "tech-tools")
 
         # the plugin the doctor ships inside of (defines the canonical repo)
-        self.self_root = os.path.join(self.tmp, "selfplugin")
+        self.self_root = os.path.join(self.plugins, "cache", "selfplugin")  # an installed copy, not a --plugin-dir load
         write_json(
             os.path.join(self.self_root, ".claude-plugin", "plugin.json"),
             {
@@ -559,12 +560,45 @@ class AtlasDoctorTest(unittest.TestCase):
                     self.assertEqual(rc.call_count, 1)
             with mock.patch.object(atlas_doctor, "run_checks", return_value=sick) as rc:
                 os.remove(atlas_doctor._hook_stamp_path())
-                for _ in range(2):  # unhealthy: warns on every session
+                outs = []
+                for _ in range(2):  # unhealthy: re-checked every session, warned once
                     out = io.StringIO()
                     with contextlib.redirect_stdout(out):
                         atlas_doctor.main(["--hook"])
-                    self.assertIn("ATLAS-DOCTOR WARNING", out.getvalue())
+                    outs.append(out.getvalue())
+                self.assertIn("ATLAS-DOCTOR WARNING", outs[0])
+                self.assertEqual(outs[1], "")
                 self.assertEqual(rc.call_count, 2)
+
+    def _hook_run(self, results):
+        out = io.StringIO()
+        with mock.patch.object(
+            atlas_doctor, "run_checks", return_value=(results, {})
+        ), contextlib.redirect_stdout(out):
+            atlas_doctor.main(["--hook"])
+        return out.getvalue()
+
+    def test_hook_warning_prints_a_runnable_quoted_command(self):
+        sick = [{"check": "x", "ok": False, "detail": "boom"}]
+        if os.path.exists(atlas_doctor._hook_stamp_path()):
+            os.remove(atlas_doctor._hook_stamp_path())
+        out = self._hook_run(sick)
+        self.assertNotIn("<plugin>", out)
+        script = os.path.abspath(atlas_doctor.__file__)
+        self.assertIn("Run: " + shlex.join(["python3", script, "--fix"]), out)
+
+    def test_hook_warns_once_per_distinct_failure_per_day(self):
+        a = [{"check": "x", "ok": False, "detail": "boom"}]
+        b = [{"check": "y", "ok": False, "detail": "bang"}]
+        if os.path.exists(atlas_doctor._hook_stamp_path()):
+            os.remove(atlas_doctor._hook_stamp_path())
+        self.assertIn("boom", self._hook_run(a))
+        self.assertEqual(self._hook_run(a), "")  # same failure, same day
+        self.assertIn("bang", self._hook_run(b))  # a different failure warns
+        self.assertIn("boom", self._hook_run(a))  # and a changed one comes back
+        later = time.time() + 25 * 3600
+        with mock.patch.object(atlas_doctor.time, "time", return_value=later):
+            self.assertIn("boom", self._hook_run(a))  # a day later
 
     def test_context_tooling_missing_marker_fails(self):
         root = tempfile.mkdtemp()
@@ -3075,6 +3109,20 @@ class NonMarketplaceLoadTest(unittest.TestCase):
         by = self._run(self.pdir_root, {"version": 2, "plugins": {}})
         self._assert_registered(by, "plugin-dir")
         self.assertEqual(self._hook_output(self.pdir_root), "")
+
+    def test_plugin_dir_at_any_path_is_not_flagged_unregistered(self):
+        # --plugin-dir at a path that is neither the plugins cache nor a marketplace source checkout
+        root = os.path.join(self.tmp, "elsewhere", "atlas")
+        self._make_plugin(root)
+        by = self._run(root, {"version": 2, "plugins": {}})
+        self._assert_registered(by, "plugin-dir")
+        self.assertEqual(self._hook_output(root), "")
+
+    def test_installed_copy_under_the_cache_but_unregistered_still_fails(self):
+        root = os.path.join(self.plugins, "cache", "m", "atlas", "1.0.0")
+        self._make_plugin(root)
+        by = self._run(root, {"version": 2, "plugins": {}})
+        self.assertFalse(by["registered"]["ok"])
 
     def test_installed_plugins_json_missing(self):
         self.assertFalse(

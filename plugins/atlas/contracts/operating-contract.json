@@ -11,7 +11,7 @@
     { "id": "blocked", "glyph": "⛔" }
   ],
   "headerTemplate": "ATLAS | <glyph> <phase> | <state>",
-  "headerFirstLinePattern": "^ATLAS \\| \\S+ (research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\| \\S",
+  "headerFirstLinePattern": "^ATLAS \\| (?=(?:\\S+ )?(research|theory|test|validate|implement|verify|done|blocked)\\b)(?:\\S+ (?:research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)?|(?:research|theory|test|validate|implement|verify|done|blocked)( \\d+/\\d+)? \\S+( \\d+/\\d+)?) \\| \\S",
   "todoPhases": ["research", "theory", "test", "validate", "implement", "verify"],
   "requiredTodoPhasesWhenCodeShipped": ["implement", "verify"],
   "itemPhasePrefix": "[<phase>] ",
