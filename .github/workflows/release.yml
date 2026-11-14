@@ -29,6 +29,15 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Release gate - the atlas mod's hooks module loads and the band renders
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.325
+          python3 plugins/atlas/scripts/atlas_mod_gate.py --live
+
       - name: Release each plugin whose tag is missing
         run: |
           set -euo pipefail

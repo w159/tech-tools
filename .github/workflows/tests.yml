@@ -50,6 +50,20 @@ jobs:
       - run: bun test omp mod
         working-directory: plugins/atlas
 
+  # Release gate: the mod's hooks module must load the way a Claude Code session loads it and the band must render
+  # (plugins/atlas/scripts/atlas_mod_gate.py; --live adds the real host via the pinned CLI, isolated HOME).
+  atlas-mod-gate:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: npm install -g @anthropic-ai/claude-code@2.1.325
+      - run: python3 plugins/atlas/scripts/atlas_mod_gate.py --live
+
   # The owner does not want Claude credited in commits or listed as a contributor.
   # Checks only the commits this push or PR adds; a force push or new branch checks all of HEAD.
   attribution:
