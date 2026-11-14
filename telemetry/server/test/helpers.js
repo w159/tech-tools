@@ -6,10 +6,11 @@ export const PAST_WEEK = "2026-W44";
 
 /** @type {import("../lib/validate.js").AllowedKeys} */
 export const ALLOWED = {
-  schema: 2,
+  schema: 3,
+  schemas: [2, 3],
   max_count: 10000,
   min_installs_published: 3,
-  keys: ["skill.atlas-plan", "skill.atlas-review", "agent.planner", "gate.a.block"],
+  keys: ["agent.planner", "gate.a.block", "skill.atlas-plan", "skill.atlas-review"],
 };
 
 /**

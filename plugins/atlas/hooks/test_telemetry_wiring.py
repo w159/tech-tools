@@ -199,7 +199,7 @@ class HookSlowAndFaultTest(_Home):
                 self.assertTrue(atlas_analytics.valid_key("hook.%s.%s" % (n, d)), n)
 
 
-class PromptSkillTest(_Home):
+class PromptCommandTest(_Home):
     def _prompt(self, text):
         r = self.run_hook(
             "hooks/prompt_optimizer.py",
@@ -212,18 +212,18 @@ class PromptSkillTest(_Home):
             ATLAS_ENGINE_ARM="off",
         )
         self.assertEqual(r.returncode, 0, r.stderr)
-        return {k: v for k, v in self.counts().items() if k.startswith("skill.")}
+        return {k: v for k, v in self.counts().items() if k.startswith("command.")}
 
-    def test_namespaced_and_bare_slash_forms_record_the_skill(self):
+    def test_namespaced_and_bare_slash_forms_record_the_command(self):
         self.assertEqual(
-            self._prompt("/atlas:atlas-plan do the thing"), {"skill.atlas-plan": 1}
+            self._prompt("/atlas:atlas-plan do the thing"), {"command.atlas-plan": 1}
         )
         self.assertEqual(
-            self._prompt("/atlas-plan do the thing"), {"skill.atlas-plan": 2}
+            self._prompt("/atlas-plan do the thing"), {"command.atlas-plan": 2}
         )
         self.assertEqual(
             self._prompt("  /atlas:atlas-ship"),
-            {"skill.atlas-plan": 2, "skill.atlas-ship": 1},
+            {"command.atlas-plan": 2, "command.atlas-ship": 1},
         )
 
     def test_non_skill_prompts_record_nothing(self):
@@ -245,10 +245,10 @@ class PromptSkillTest(_Home):
         self.assertNotIn("SECRET-ARGUMENT-VALUE", open(path, encoding="utf-8").read())
 
     def test_key_helper(self):
-        self.assertEqual(ed.prompt_skill_key("/atlas:atlas-plan x"), "skill.atlas-plan")
-        self.assertEqual(ed.prompt_skill_key("/atlas-plan"), "skill.atlas-plan")
-        self.assertIsNone(ed.prompt_skill_key("hello"))
-        self.assertIsNone(ed.prompt_skill_key(None))
+        self.assertEqual(ed.prompt_command_key("/atlas:atlas-plan x"), "command.atlas-plan")
+        self.assertEqual(ed.prompt_command_key("/atlas-plan"), "command.atlas-plan")
+        self.assertIsNone(ed.prompt_command_key("hello"))
+        self.assertIsNone(ed.prompt_command_key(None))
 
 
 class SessionStartWiringTest(_Home):

@@ -1,70 +1,351 @@
 {
-  "_doc": "Allowlist for Atlas anonymous analytics (scripts/atlas_analytics.py), on by default with DO_NOT_TRACK=1, ATLAS_ANALYTICS=off or `atlas_analytics.py disable` to turn it off. A counter key is accepted only if it fully matches one pattern below. Placeholders {name} expand to the closed enums in 'enums'; 'source' enums are derived at runtime from files SHIPPED in this plugin, so a user's own skill, repo, path or project name can never match. Every family states in 'purpose' which part of Atlas it improves and how. Adding a family or enum here is the only way to collect anything new; the ingest server accepts only telemetry/allowed-keys.json, generated from this file.",
-  "schema": 2,
+  "_doc": "Allowlist for Atlas anonymous analytics (scripts/atlas_analytics.py), on by default with DO_NOT_TRACK=1, ATLAS_ANALYTICS=off or `atlas_analytics.py disable` to turn it off. A counter key is accepted only if it fully matches one pattern below. Placeholders {name} expand to the closed enums in 'enums'; 'source' enums are derived at runtime from files SHIPPED in this plugin, so a user's own skill, repo, path or project name can never match. Every family states in 'purpose' which part of Atlas it improves and how. Adding a family or enum here is the only way to collect anything new; the ingest server stores only keys in telemetry/allowed-keys.json (generated from this file and append-only across versions) and drops any other key instead of rejecting the payload.",
+  "schema": 3,
   "max_count": 10000,
   "min_installs_published": 3,
   "endpoint": "https://atlas-telemetry.vercel.app/api/ingest",
   "enums": {
-    "hook": {"source": "hooks"},
-    "skill": {"source": "skills"},
-    "role": {"source": "agents"},
-    "class": {"source": "scope_classes"},
-    "effort": {"source": "scope_efforts"},
-    "event": {"source": "hook_events"},
-    "harness": {"values": ["claude", "omp", "codex", "unknown"]},
-    "decision": {"values": ["deny", "ask", "context", "fault", "slow"]},
-    "reason": {"values": ["protected", "cap", "pr", "branch", "worktree", "force", "unread", "other"]},
-    "size": {"values": ["1", "2", "3-4", "5-8", "9+"]},
-    "ms": {"values": ["lt50", "50to200", "200to1000", "ge1000"]},
-    "wall": {"values": ["lt1m", "1to5m", "5to15m", "15to60m", "ge60m"]},
-    "outcome": {"values": ["done", "failed", "timeout"]},
-    "letter": {"values": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]},
-    "cleaned": {"values": ["worktrees", "branches", "remote"]},
-    "branchop": {"values": ["created", "reused"]},
-    "alertkind": {"values": ["dependabot", "code", "secret"]},
-    "severity": {"values": ["low", "medium", "high", "critical"]}
+    "hook": {
+      "source": "hooks"
+    },
+    "skill": {
+      "source": "skills"
+    },
+    "role": {
+      "source": "agents"
+    },
+    "class": {
+      "source": "scope_classes"
+    },
+    "effort": {
+      "source": "scope_efforts"
+    },
+    "event": {
+      "source": "hook_events"
+    },
+    "harness": {
+      "values": [
+        "claude",
+        "omp",
+        "codex",
+        "unknown"
+      ]
+    },
+    "decision": {
+      "values": [
+        "deny",
+        "ask",
+        "context",
+        "fault",
+        "slow"
+      ]
+    },
+    "reason": {
+      "values": [
+        "protected",
+        "cap",
+        "pr",
+        "branch",
+        "worktree",
+        "force",
+        "unread",
+        "other"
+      ]
+    },
+    "size": {
+      "values": [
+        "1",
+        "2",
+        "3-4",
+        "5-8",
+        "9+"
+      ]
+    },
+    "ms": {
+      "values": [
+        "lt50",
+        "50to200",
+        "200to1000",
+        "ge1000"
+      ]
+    },
+    "wall": {
+      "values": [
+        "lt1m",
+        "1to5m",
+        "5to15m",
+        "15to60m",
+        "ge60m"
+      ]
+    },
+    "outcome": {
+      "values": [
+        "done",
+        "failed",
+        "timeout"
+      ]
+    },
+    "letter": {
+      "values": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+        "i",
+        "j",
+        "k",
+        "l",
+        "m",
+        "n",
+        "o",
+        "p",
+        "q",
+        "r",
+        "s",
+        "t",
+        "u",
+        "v",
+        "w",
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "cleaned": {
+      "values": [
+        "worktrees",
+        "branches",
+        "remote"
+      ]
+    },
+    "branchop": {
+      "values": [
+        "created",
+        "reused"
+      ]
+    },
+    "alertkind": {
+      "values": [
+        "dependabot",
+        "code",
+        "secret"
+      ]
+    },
+    "severity": {
+      "values": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "component": {
+      "source": "components"
+    },
+    "errclass": {
+      "values": [
+        "timeout",
+        "oserror",
+        "permission",
+        "notfound",
+        "json",
+        "import",
+        "subprocess",
+        "value",
+        "key",
+        "type",
+        "attribute",
+        "runtime",
+        "other"
+      ]
+    },
+    "surface": {
+      "values": [
+        "dock",
+        "ondemand",
+        "board"
+      ]
+    },
+    "modcmd": {
+      "values": [
+        "atlas-cc",
+        "atlas-say",
+        "atlas-core",
+        "atlas-todo"
+      ]
+    },
+    "moderr": {
+      "values": [
+        "boot",
+        "rebuild",
+        "fault",
+        "other"
+      ]
+    },
+    "crewoutcome": {
+      "values": [
+        "done",
+        "failed",
+        "timeout",
+        "killed"
+      ]
+    },
+    "rounds": {
+      "values": [
+        "0",
+        "1",
+        "2",
+        "3+"
+      ]
+    },
+    "check": {
+      "values": [
+        "pass",
+        "fail",
+        "none"
+      ]
+    },
+    "weekday": {
+      "values": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri",
+        "sat",
+        "sun"
+      ]
+    },
+    "sendfail": {
+      "values": [
+        "ssl",
+        "timeout",
+        "network",
+        "http4xx",
+        "http5xx",
+        "refused",
+        "other"
+      ]
+    },
+    "transport": {
+      "values": [
+        "urllib",
+        "curl"
+      ]
+    }
   },
   "families": {
     "session": {
-      "patterns": ["session.{harness}"],
+      "patterns": [
+        "session.{harness}"
+      ],
       "purpose": "Denominator and harness mix: how many sessions ran under Claude Code, omp and Codex, so every other counter can be read as a rate per session and parity work goes to the harness people actually use."
     },
     "hook": {
-      "patterns": ["hook.{hook}.{decision}", "hook.{hook}.{decision}.{reason}"],
+      "patterns": [
+        "hook.{hook}.{decision}",
+        "hook.{hook}.{decision}.{reason}"
+      ],
       "purpose": "Hooks improved: shows which shipped hooks deny, ask, inject context, fault or run slower than one second in practice, and for what class of reason, so noisy or over-strict hooks get loosened, slow ones get faster and faulting ones get fixed first."
     },
     "dispatch": {
-      "patterns": ["dispatch.{event}.ms.{ms}"],
+      "patterns": [
+        "dispatch.{event}.ms.{ms}"
+      ],
       "purpose": "Hook latency: how long the whole Atlas hook pass takes per event, bucketed, so the per-tool-call overhead Atlas adds stays small on real machines and regressions show up."
     },
     "skill": {
-      "patterns": ["skill.{skill}"],
+      "patterns": [
+        "skill.{skill}"
+      ],
       "purpose": "Skills improved: shows which shipped skills are actually used, so unused ones can be merged or retired, descriptions tuned where a skill never triggers, and effort put into the ones people rely on."
     },
     "agent": {
-      "patterns": ["agent.{role}"],
+      "patterns": [
+        "agent.{role}"
+      ],
       "purpose": "Subagent roster improved: shows which shipped subagent roles get dispatched, so roles nobody uses are cut and busy ones are tuned."
     },
     "team": {
-      "patterns": ["team.{class}.{effort}", "team.size.{size}", "team.outcome.{outcome}", "team.wall.{wall}"],
+      "patterns": [
+        "team.{class}.{effort}",
+        "team.size.{size}",
+        "team.outcome.{outcome}",
+        "team.wall.{wall}"
+      ],
       "purpose": "Team runs improved: which task classes and effort levels are chosen, how large teams get, whether runs finish, fail or time out and how long they take, so the scope matrix defaults match real work and failing or slow team shapes get fixed."
     },
     "gate": {
-      "patterns": ["gate.{letter}.block", "gate.pass"],
+      "patterns": [
+        "gate.{letter}.block",
+        "gate.pass"
+      ],
       "purpose": "Completion gate improved: which checks block a finish most often against how often a finish passes cleanly, so false positives are removed and the checks that catch real problems are made clearer."
     },
     "git": {
-      "patterns": ["git.clean.{cleaned}", "git.branch.{branchop}"],
+      "patterns": [
+        "git.clean.{cleaned}",
+        "git.branch.{branchop}"
+      ],
       "purpose": "Git hygiene improved: shows whether automatic cleanup of worktrees, local and remote branches runs and whether branches are reused instead of multiplied, so branch and worktree sprawl is tuned out."
     },
     "security": {
-      "patterns": ["security.alerts.{alertkind}.{severity}"],
+      "patterns": [
+        "security.alerts.{alertkind}.{severity}"
+      ],
       "purpose": "Security automation improved: shows how many GitHub dependabot, code scanning and secret alerts of each severity Atlas handles, so triage and auto-fix effort go where alerts actually occur."
+    },
+    "command": {
+      "patterns": [
+        "command.{skill}"
+      ],
+      "purpose": "Slash commands improved: which shipped skills people type themselves (/atlas-plan) as opposed to skills the model picks (skill.*), so discoverability, names and descriptions are tuned for the path people actually use."
+    },
+    "fault": {
+      "patterns": [
+        "fault.{component}.{errclass}"
+      ],
+      "purpose": "Silent failures found: which shipped hook or component swallowed an exception and of which broad class (timeout, permission, json, import, ...), so failures that only reach the local fault log get fixed first. Never the message, path or traceback."
+    },
+    "mod": {
+      "patterns": [
+        "mod.open.{surface}",
+        "mod.command.{modcmd}",
+        "mod.error.{moderr}"
+      ],
+      "purpose": "The Claude Code mod improved: which Atlas panes (docked sidebar, on-demand pane, board) and mod commands get opened, and where the mod fails (boot, rebuild, render fault), so effort goes to the surfaces people look at and blank panes get fixed."
+    },
+    "crew": {
+      "patterns": [
+        "crew.workers.{size}",
+        "crew.outcome.{crewoutcome}",
+        "crew.wall.{wall}",
+        "crew.rounds.{rounds}",
+        "crew.check.{check}"
+      ],
+      "purpose": "Crew runs improved: how many workers a tmux+IRC crew run uses, whether it finishes, fails, times out or is killed, how long it takes, how many fix rounds it needs and whether its check passes, so the crew's speed and reliability claims are measured on real machines."
+    },
+    "active": {
+      "patterns": [
+        "active.day.{weekday}"
+      ],
+      "purpose": "Retention read: on how many days of a week Atlas ran on an install (one key per weekday that had a session, never a date or time), so a release that drives people away shows up."
+    },
+    "delivery": {
+      "patterns": [
+        "delivery.fail.{sendfail}",
+        "delivery.ok.{transport}"
+      ],
+      "purpose": "Telemetry delivery checked: when a send fails and why (SSL, timeout, network, HTTP 4xx/5xx, refused by the local anonymity check), counted locally and reported with the next send that works, so a broken receiver or a certificate problem is seen instead of silently losing weeks."
     }
   },
   "never_collected": [
-    "install, session, user or machine identifiers (each weekly payload has a fresh random nonce used only to drop a duplicate retry)",
-    "timestamps finer than the ISO week",
+    "install, session, user or machine identifiers (each week has a fresh random nonce, reused only for that week's snapshots so the server can replace the last one, and never for another week)",
+    "timestamps finer than the ISO week (active days are weekday names only)",
     "usernames, hostnames, IP addresses, home or working directories, file names or paths",
     "repository, organisation, branch, project or user-defined skill names",
     "prompts, model output, code, commit messages, error messages or file contents"

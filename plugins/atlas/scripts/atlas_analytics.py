@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """Anonymous Atlas usage counters: on by default, easy to see, easy to turn off.
 
-What it is. Whole-number counters of which shipped Atlas skills, hooks, gates and team sizes fire, summed per
-ISO week, plus how long hook dispatch takes and how team runs end. Once a week has ended, its totals are sent
-in one small JSON payload to the endpoint named in contracts/analytics-schema.json. The weekly reports land in
-the tech-tools repository (telemetry/reports/) through a scheduled GitHub workflow.
+What it is. Whole-number counters of which shipped Atlas skills, commands, agents, hooks, gates, mod surfaces
+and team or crew runs fire, summed per ISO week, plus how long hook dispatch takes, how runs end, which error
+class each component's faults fall in, and whether sends get through. The current week goes out as a
+week-to-date snapshot (partial: true, replaced by later snapshots of the same week) at session start, at most
+once an hour, and each finished week goes out once as final (partial: false), to the endpoint named in
+contracts/analytics-schema.json. A failed send keeps the week and is counted under delivery.fail.<kind>.
+The owner reads the totals on the telemetry dashboard (telemetry/server, /dashboard); public weekly reports
+land in the tech-tools repository (telemetry/reports/) through a scheduled GitHub workflow.
 
 What it is not. Only counter keys that fully match contracts/analytics-schema.json are ever stored or sent;
 the names in that schema come from files shipped with this plugin, so a user's own skill, repo, branch, path
-or project name can never match. There is no install, session, user or machine identifier. Each weekly
-payload carries a fresh random nonce so a retried send is not counted twice; it is never reused and links
-nothing across weeks. Timestamps are no finer than the ISO week.
+or project name can never match. There is no install, session, user or machine identifier. Each week
+gets one fresh random nonce so a retried or updated send replaces itself instead of counting twice; it is
+never reused and links nothing across weeks. Timestamps are no finer than the ISO week.
 
 Turn it off (any one is enough; the first that applies wins):
     DO_NOT_TRACK=1                         the cross-tool convention (consoledonottrack.com)
@@ -22,13 +26,15 @@ Hot path (hooks):  from atlas_analytics import record;  record("hook.git_guard.d
 Off cost is one cached check per process. On cost is one validated append to events.jsonl.
 
 CLI:  status | explain | preview [--week W] | prove [--week W] | export [--out FILE] | enable | disable [--keep]
-      | delete | send [--week W] [--auto] | allowed-keys
+      | delete | send [--week W] [--auto] [--test] | allowed-keys [--merge]
+      (--test on send, preview and prove marks the payload test: true; the dashboard hides it by default)
 State: $ATLAS_HOME/analytics/ (ATLAS_HOME defaults to ~/.atlas): consent.json, events.jsonl, outbox.json,
-sent.jsonl, notice.json, last_send.json.
+sent.jsonl, notice.json, last_send.json, .lock (a cross-process lock; weeks are ISO weeks in UTC).
 """
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import json
 import os
@@ -39,10 +45,11 @@ from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = PLUGIN_ROOT / "contracts" / "analytics-schema.json"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+SERVER_SCHEMAS = (2, 3)  # what telemetry/allowed-keys.json tells the server to accept
 LOCAL_HOSTS = ("127.0.0.1", "localhost")
 HARNESSES = ("claude", "omp", "codex", "unknown")
-OFF_VALUES = ("off", "0", "false", "no", "disabled")
+OFF_VALUES = ("off", "0", "false", "no", "disabled", "disable")
 ON_VALUES = ("on", "1", "true", "yes", "enabled")
 # CI and test runners: counting them would measure Atlas's own test suite, not people using it.
 AUTOMATION_VARS = (
@@ -57,7 +64,8 @@ AUTOMATION_VARS = (
     "PYTEST_CURRENT_TEST",
 )
 MAX_WEEKS_KEPT = 8  # unsent weeks older than this are dropped, never sent late
-SEND_RETRY_S = 6 * 3600  # background send attempts at most this often
+SEND_RETRY_S = 3600  # background send attempts (finished weeks + a week-to-date snapshot) at most this often
+SENT_LOG_MAX = 512 * 1024  # sent.jsonl above this keeps only its newest lines
 COMPACT_BYTES = 256 * 1024  # events.jsonl above this is collapsed to one line per (week, key)
 
 # --- hot-path state -------------------------------------------------------------------------------
@@ -69,7 +77,8 @@ _VALID_CAP = 4096
 
 
 def _now() -> _dt.date:
-    return _dt.date.today()
+    # The server validates ISO weeks in UTC, so every week (recorded and sent) comes from the UTC date.
+    return _dt.datetime.now(_dt.timezone.utc).date()
 
 
 def _week_of(d: _dt.date) -> str:
@@ -83,6 +92,65 @@ def home() -> Path:
 
 def adir() -> Path:
     return home() / "analytics"
+
+
+try:
+    import fcntl as _fcntl
+except ImportError:  # Windows
+    _fcntl = None
+try:
+    import msvcrt as _msvcrt
+except ImportError:  # POSIX
+    _msvcrt = None
+_LOCK_DEPTH = 0
+_LOCK_FH = None
+
+
+@contextlib.contextmanager
+def _locked():
+    """Cross-process lock on <analytics>/.lock (flock, or msvcrt.locking on Windows), re-entrant in one process.
+    When no lock can be taken (neither module imports, the directory is read-only) it proceeds unlocked."""
+    global _LOCK_DEPTH, _LOCK_FH
+    if _LOCK_DEPTH:
+        _LOCK_DEPTH += 1
+        try:
+            yield
+        finally:
+            _LOCK_DEPTH -= 1
+        return
+    fh = None
+    try:
+        if _fcntl or _msvcrt:
+            d = adir()
+            d.mkdir(parents=True, exist_ok=True)
+            fh = open(d / ".lock", "a+b")
+            if _fcntl:
+                _fcntl.flock(fh, _fcntl.LOCK_EX)
+            else:
+                fh.seek(0)
+                _msvcrt.locking(fh.fileno(), _msvcrt.LK_LOCK, 1)
+    except Exception:
+        if fh is not None:
+            try:
+                fh.close()
+            except Exception:
+                pass
+        fh = None
+    _LOCK_DEPTH, _LOCK_FH = 1, fh
+    try:
+        yield
+    finally:
+        _LOCK_DEPTH, _LOCK_FH = 0, None
+        if fh is not None:
+            try:
+                if _fcntl:
+                    _fcntl.flock(fh, _fcntl.LOCK_UN)
+                else:
+                    fh.seek(0)
+                    _msvcrt.locking(fh.fileno(), _msvcrt.LK_UNLCK, 1)
+            except Exception:
+                pass
+            fh.close()
 
 
 def _store_knob(name: str) -> str:
@@ -186,6 +254,9 @@ def _source_values(source: str) -> list[str]:
             )
         except Exception:
             return []
+    if source == "components":
+        # Fault components: every shipped hook plus the long-running parts that are not hooks.
+        return sorted(set(_source_values("hooks")) | {"analytics", "boot", "crew", "mod", "mux"})
     if source in ("scope_classes", "scope_efforts"):
         classes = json.loads(
             (PLUGIN_ROOT / "contracts" / "scope-matrix.json").read_text(encoding="utf-8")
@@ -332,10 +403,9 @@ def _read_lines() -> list[str]:
         return []
 
 
-def read_events() -> list[dict]:
-    """Stored events that still validate (a hand-edited or old line that does not is ignored)."""
+def _parse_events(lines: list[str]) -> list[dict]:
     out = []
-    for ln in _read_lines():
+    for ln in lines:
         try:
             e = json.loads(ln)
             w, k, n = e["w"], e["k"], _clamp(e["n"])
@@ -346,14 +416,39 @@ def read_events() -> list[dict]:
     return out
 
 
-def _rewrite_events(events: list[dict]) -> None:
+def read_events() -> list[dict]:
+    """Stored events that still validate (a hand-edited or old line that does not is ignored)."""
+    return _parse_events(_read_lines())
+
+
+def _transform_events(keep) -> None:
+    """Replace events.jsonl by keep(events) without losing lines that hooks append meanwhile. Hooks append by
+    path, so the file is first renamed to a side file (an append then creates a fresh events.jsonl), the side
+    file is processed, and the kept lines are appended behind whatever arrived. Call under _locked()."""
     p = adir() / "events.jsonl"
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    tmp.write_text(
-        "".join(json.dumps(e, separators=(",", ":")) + "\n" for e in events), encoding="utf-8"
-    )
-    os.replace(tmp, p)
+    side = p.with_name(f"events.{os.getpid()}.{uuid.uuid4().hex[:8]}.side")
+    try:
+        os.rename(p, side)
+        raw = side.read_bytes()
+    except FileNotFoundError:
+        side, raw = None, b""
+    kept = keep(_parse_events(raw.decode("utf-8", "replace").splitlines()))
+    with open(p, "a", encoding="utf-8") as f:
+        f.write("".join(json.dumps(e, separators=(",", ":")) + "\n" for e in kept))
+    if side is not None:
+        # A hook that opened events.jsonl before the rename may still have written into the side file since
+        # it was read; pick those lines up before the side file goes.
+        late = side.read_bytes()[len(raw):]
+        if late:
+            with open(p, "a", encoding="utf-8") as f:
+                f.write(
+                    "".join(
+                        json.dumps(e, separators=(",", ":")) + "\n"
+                        for e in keep(_parse_events(late.decode("utf-8", "replace").splitlines()))
+                    )
+                )
+        side.unlink()
 
 
 def compact(force: bool = False) -> bool:
@@ -367,12 +462,17 @@ def compact(force: bool = False) -> bool:
         return False
     cutoff = _week_of(_now() - _dt.timedelta(weeks=MAX_WEEKS_KEPT))
     cap = load_schema().get("max_count", 10000)
-    tot: dict[tuple[str, str], int] = {}
-    for e in read_events():
-        if e["w"] >= cutoff:
-            key = (e["w"], e["k"])
-            tot[key] = min(tot.get(key, 0) + e["n"], cap)
-    _rewrite_events([{"w": w, "k": k, "n": n} for (w, k), n in sorted(tot.items())])
+
+    def collapse(events: list[dict]) -> list[dict]:
+        tot: dict[tuple[str, str], int] = {}
+        for e in events:
+            if e["w"] >= cutoff:
+                key = (e["w"], e["k"])
+                tot[key] = min(tot.get(key, 0) + e["n"], cap)
+        return [{"w": w, "k": k, "n": n} for (w, k), n in sorted(tot.items())]
+
+    with _locked():
+        _transform_events(collapse)
     return True
 
 
@@ -393,7 +493,8 @@ def atlas_version() -> str:
         v = json.loads(
             (PLUGIN_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
         ).get("version", "")
-        return v if re.fullmatch(r"\d+\.\d+\.\d+", v or "") else "unknown"
+        m = re.fullmatch(r"(\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.+-]*)?", v or "")
+        return m.group(1) if m else "unknown"  # a prerelease goes as its X.Y.Z core
     except Exception:
         return "unknown"
 
@@ -405,7 +506,7 @@ def finished_weeks(events: list[dict] | None = None) -> list[str]:
 
 
 def pending_week(events: list[dict] | None = None) -> str:
-    """Oldest finished week that has events; else the current week (not yet sendable)."""
+    """Oldest finished week that has events; else the current week (sent as a week-to-date snapshot)."""
     done = finished_weeks(events)
     return done[0] if done else _week_of(_now())
 
@@ -433,21 +534,24 @@ def _is_uuid4(s: object) -> bool:
 
 def nonce_for(week: str, persist: bool = True) -> str:
     """The random idempotency nonce for one week's payload (kept so a retry reuses it). Fresh per week."""
-    ob = _read_json(adir() / "outbox.json")
-    n = ob.get(week)
-    if _is_uuid4(n):
-        return n
-    n = str(uuid.uuid4())
-    if persist:
+    if not persist:
+        n = _read_json(adir() / "outbox.json").get(week)
+        return n if _is_uuid4(n) else str(uuid.uuid4())
+    with _locked():  # read-modify-write: concurrent processes must settle on one nonce per week
+        ob = _read_json(adir() / "outbox.json")
+        n = ob.get(week)
+        if _is_uuid4(n):
+            return n
+        n = str(uuid.uuid4())
         ob[week] = n
         try:
             _write_json(adir() / "outbox.json", ob)
         except Exception:
             pass
-    return n
+        return n
 
 
-def build_payload(week: str | None = None, persist_nonce: bool = False) -> dict:
+def build_payload(week: str | None = None, persist_nonce: bool = False, test: bool = False) -> dict:
     """The exact payload `send` would POST. Re-validates every key and count (defence in depth)."""
     events = read_events()
     week = week or pending_week(events)
@@ -456,7 +560,7 @@ def build_payload(week: str | None = None, persist_nonce: bool = False) -> dict:
     for e in events:
         if e["w"] == week and valid_key(e["k"]):
             counts[e["k"]] = min(counts.get(e["k"], 0) + e["n"], cap)
-    return {
+    out = {
         "schema": SCHEMA_VERSION,
         "atlas_version": atlas_version(),
         "os": _os_name(),
@@ -464,7 +568,16 @@ def build_payload(week: str | None = None, persist_nonce: bool = False) -> dict:
         "week": week,
         "nonce": nonce_for(week, persist=persist_nonce),
         "counts": dict(sorted(counts.items())),
+        # A week that has not ended yet goes as a week-to-date snapshot the server replaces.
+        "partial": week >= _week_of(_now()),
     }
+    if test or _truthy(os.environ.get("ATLAS_ANALYTICS_TEST")):
+        out["test"] = True  # kept out of every published total; removable from the dashboard
+    return out
+
+
+def _truthy(v: object) -> bool:
+    return isinstance(v, str) and v.strip().lower() in ON_VALUES
 
 
 def payload_json(payload: dict) -> str:
@@ -472,7 +585,8 @@ def payload_json(payload: dict) -> str:
 
 
 # --- anonymity checks (prove) ---------------------------------------------------------------------
-_ENVELOPE = {"schema", "atlas_version", "os", "python", "week", "nonce", "counts"}
+_ENVELOPE = {"schema", "atlas_version", "os", "python", "week", "nonce", "counts", "partial"}
+_ENVELOPE_OPTIONAL = {"test"}
 from atlas_lazyre import lre  # noqa: E402
 _RX_EMAIL = lre(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _RX_IPV4 = lre(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
@@ -544,6 +658,24 @@ def gather_identities() -> list[tuple[str, str]]:
     return uniq
 
 
+def _public_vocab(payload: dict) -> list[str]:
+    """Lowercase strings the schema itself defines: allowlisted keys, enum values, envelope names and values."""
+    vocab = {k.lower() for k in allowed_keys()}
+    for name in load_schema()["enums"]:
+        vocab.update(v.lower() for v in enum_values(name))
+    vocab.update(_ENVELOPE | _ENVELOPE_OPTIONAL)
+    vocab.update(("linux", "darwin", "windows", "other", *HARNESSES))
+    vocab.add(str(payload.get("atlas_version", "")).lower())
+    return sorted(vocab)
+
+
+def _benign_basename(name: str, vocab: list[str]) -> bool:
+    """A short directory name ("linux", "true", "lin") or one that is part of the schema's own vocabulary says
+    nothing about the user; a longer name found anywhere else in the payload is still refused."""
+    n = name.strip().lower()
+    return len(n) < 8 or any(n in v for v in vocab)
+
+
 def _sent_nonces() -> dict[str, str]:
     out: dict[str, str] = {}
     try:
@@ -566,11 +698,17 @@ def check_payload(
     res: list[tuple[str, bool, str]] = []
     ok_shape = (
         isinstance(payload, dict)
-        and set(payload) == _ENVELOPE
+        and _ENVELOPE <= set(payload) <= _ENVELOPE | _ENVELOPE_OPTIONAL
         and isinstance(payload.get("counts"), dict)
+        and type(payload.get("partial")) is bool
+        and payload.get("test", True) is True
     )
     if not ok_shape:
-        extra = sorted(set(payload) ^ _ENVELOPE) if isinstance(payload, dict) else ["not an object"]
+        extra = (
+            sorted((set(payload) ^ _ENVELOPE) - _ENVELOPE_OPTIONAL) or ["partial/test value"]
+            if isinstance(payload, dict)
+            else ["not an object"]
+        )
         return [("envelope has exactly the schema fields", False, f"mismatch: {extra}")]
     res.append(("envelope has exactly the schema fields", True, ", ".join(sorted(_ENVELOPE))))
     env_bad = []
@@ -618,10 +756,19 @@ def check_payload(
     masked = payload_json(payload)
     if _is_uuid4(nonce):
         masked = masked.replace(f'"{nonce}"', '""')
-    for k in set(_ENVELOPE) | {k for k in counts if valid_key(k)}:
+    for k in set(_ENVELOPE) | _ENVELOPE_OPTIONAL | {k for k in counts if valid_key(k)}:
         masked = masked.replace(f'"{k}"', '""')
     low = masked.lower()
-    hits = [f"{lab} ({v[:3]}...)" for lab, v in ident if v.lower() in low]
+    public: list[str] | None = None
+    hits = []
+    for lab, v in ident:
+        if v.lower() not in low:
+            continue
+        if lab == "cwd basename":
+            public = _public_vocab(payload) if public is None else public
+            if _benign_basename(v, public):
+                continue
+        hits.append(f"{lab} ({v[:3]}...)")
     res.append(
         (
             "no username, hostname, home dir, cwd, repo identifiers",
@@ -674,8 +821,9 @@ def notice_text() -> str:
     s = _script_path()
     return (
         "Atlas collects anonymous usage counts to see how well it works for people (which Atlas skills, hooks "
-        "and gates fire, summed per week; never code, prompts, paths, names or IDs). Totals are sent once a week "
-        "after it ends and published in the tech-tools repo. "
+        "and gates fire, how crew runs end, which errors hooks swallow, summed per week; never code, prompts, "
+        "paths, names, messages or IDs). A week-to-date total is sent at session start, at most once an hour; "
+        "weekly totals are published in the tech-tools repo. "
         f"See exactly what would be sent: python3 {s} preview | turn off: ATLAS_ANALYTICS=off, DO_NOT_TRACK=1, "
         f"or python3 {s} disable | details: python3 {s} explain"
     )
@@ -703,7 +851,8 @@ def _notice_shown() -> bool:
 
 def maybe_send_in_background() -> bool:
     """Called at session boot. Starts a detached `send --auto` when analytics is on, the notice has been shown,
-    an endpoint exists, a finished week is pending and no attempt ran in the last SEND_RETRY_S. Never blocks:
+    an endpoint exists, anything is counted and no attempt ran in the last SEND_RETRY_S. `send --auto` sends
+    finished weeks, then a week-to-date snapshot of the current week, so data shows up the same day. Never blocks:
     the child is detached with its output discarded. Returns True when a child was started. Never raises."""
     try:
         if not is_enabled() or not _notice_shown():
@@ -711,14 +860,15 @@ def maybe_send_in_background() -> bool:
         ep = endpoint()
         if not ep or valid_endpoint(ep):
             return False
-        if not finished_weeks():
-            return False
+        if not read_events():
+            return False  # nothing counted: nothing to send
         import time
 
-        last = _read_json(adir() / "last_send.json").get("at")
-        if isinstance(last, (int, float)) and time.time() - last < SEND_RETRY_S:
-            return False
-        _write_json(adir() / "last_send.json", {"at": time.time()})
+        with _locked():  # check-and-stamp is atomic: concurrent session starts start one send between them
+            last = _read_json(adir() / "last_send.json").get("at")
+            if isinstance(last, (int, float)) and time.time() - last < SEND_RETRY_S:
+                return False
+            _write_json(adir() / "last_send.json", {"at": time.time()})
         import subprocess
 
         subprocess.Popen(
@@ -734,11 +884,56 @@ def maybe_send_in_background() -> bool:
         return False
 
 
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+MOD_FOLD_AGE_S = 1800  # a mod usage file untouched this long belongs to a session that has ended
+
+
+def fold_mod_usage() -> int:
+    """Fold the counts the Claude Code mod wrote under analytics/mod/ into events.jsonl, then delete the file.
+    v2 files (<session>-<seq>-<rand>.json, {"v":2,"counts":{...}}) are immutable deltas written via .tmp then
+    rename, so they fold at any age. v1 files (<session>.json, cumulative per session) fold only once the
+    session has gone quiet (MOD_FOLD_AGE_S). The counts are recorded before the file is deleted: a crash in
+    between may count one file twice, never lose it. Only allowlisted mod.* keys count; with analytics off the
+    files are deleted uncounted. Returns the number of files folded. Never raises."""
+    import time
+
+    folded = 0
+    try:
+        d = adir() / "mod"
+        if not d.is_dir():
+            return 0
+        on = is_enabled()
+        for f in sorted(d.glob("*.json")):
+            try:
+                with _locked():  # two session starts must not both fold (and count) the same file
+                    if not f.exists():
+                        continue
+                    doc = _read_json(f)
+                    v = doc.get("v")
+                    if v != 2 and time.time() - f.stat().st_mtime < MOD_FOLD_AGE_S:
+                        continue  # a live session may still rewrite a cumulative file
+                    counts = doc.get("counts")
+                    if on and v in (1, 2) and isinstance(counts, dict):
+                        for k, n in counts.items():
+                            if isinstance(k, str) and k.startswith("mod.") and valid_key(k):
+                                record(k, n)
+                    f.unlink()
+                    folded += 1
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return folded
+
+
 def on_session_start(payload: dict | None = None) -> None:
-    """Session boot hook point: count the session by harness, compact the event log, kick a background send."""
+    """Session boot hook point: count the session by harness and weekday, fold mod usage, compact the event
+    log, kick a background send."""
     try:
         record("session." + detect_harness(payload))
+        record("active.day." + WEEKDAYS[_now().weekday()])
         if is_enabled():
+            fold_mod_usage()
             compact()
             maybe_send_in_background()
     except Exception:
@@ -761,7 +956,13 @@ def cmd_status(args) -> int:
         _p(f"  {n}: {'present' if (adir() / n).exists() else 'absent'}")
     _p(f"events:     {len(ev)} lines, {sum(e['n'] for e in ev)} counts")
     _p(f"weeks:      {weeks[0] + ' .. ' + weeks[-1] if weeks else 'none'}")
-    _p(f"sendable:   {', '.join(finished_weeks(ev)) or 'none (a week is sent after it ends)'}")
+    _p(f"sendable:   {', '.join(finished_weeks(ev)) or 'none finished'}; current week goes as a week-to-date snapshot")
+    last = _read_json(adir() / "last_send.json")
+    if last.get("result"):
+        import time
+
+        ago = int(time.time() - last.get("done_at", last.get("at", 0)))
+        _p(f"last send:  {last['result']} ({ago // 60} min ago)")
     return 0
 
 
@@ -775,15 +976,16 @@ def cmd_explain(args) -> int:
     for fam, spec in sch["families"].items():
         _p(f"  {fam:9} e.g. {spec['patterns'][0]}")
         _p(f"            why: {spec['purpose']}")
-    _p("\nEach weekly payload also carries: schema version, Atlas version, OS family (linux/darwin/windows/other),")
-    _p("Python minor version, the ISO week, and a random nonce used only to drop a duplicate retry.\n")
+    _p("\nEach payload also carries: schema version, Atlas version, OS family (linux/darwin/windows/other),")
+    _p("Python minor version, the ISO week, whether the week is still in progress (partial), and a random nonce")
+    _p("for that week only, so the server can replace the week's last snapshot. It links nothing across weeks.\n")
     _p("NEVER COLLECTED")
     for n in sch["never_collected"]:
         _p(f"  - {n}")
     _p("\nHOW IT IS KEPT HONEST")
     _p("  - Names allowed in counters are read from files shipped with Atlas, so your own skills, repos,")
     _p("    branches and paths can never match. Unknown keys are dropped when recorded, when sent, and")
-    _p("    again by the server, which accepts only the same fixed key list.")
+    _p("    again by the server, which stores only the same fixed key list.")
     _p("  - The server keeps no IP address and publishes only weekly totals, hiding any counter that fewer")
     _p(f"    than {sch.get('min_installs_published', 3)} installs reported.")
     _p("  - `prove` checks the real payload against the anonymity rules on your machine and exits 1 on any failure.")
@@ -828,12 +1030,12 @@ def cmd_disable(args) -> int:
 
 
 def cmd_preview(args) -> int:
-    _p(payload_json(build_payload(args.week)))
+    _p(payload_json(build_payload(args.week, test=getattr(args, "test", False))))
     return 0
 
 
 def cmd_prove(args) -> int:
-    payload = build_payload(args.week)
+    payload = build_payload(args.week, test=getattr(args, "test", False))
     results = check_payload(payload)
     _p(f"payload: {payload_json(payload)}")
     for name, ok, detail in results:
@@ -865,74 +1067,184 @@ def cmd_delete(args) -> int:
 
 
 def cmd_allowed_keys(args) -> int:
+    """Print the server allowlist. With --merge FILE the keys of an earlier allowlist are kept too: the server
+    must keep accepting what older installs send, so the list only ever grows."""
     sch = load_schema()
+    keys = set(allowed_keys())
+    if getattr(args, "merge", None):
+        try:
+            prior = json.loads(Path(args.merge).read_text(encoding="utf-8")).get("keys", [])
+            keys |= {k for k in prior if isinstance(k, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]{0,95}", k)}
+        except FileNotFoundError:
+            pass
     doc = {
         "schema": SCHEMA_VERSION,
+        "schemas": list(SERVER_SCHEMAS),
         "max_count": sch.get("max_count", 10000),
         "min_installs_published": sch.get("min_installs_published", 3),
-        "keys": allowed_keys(),
+        "keys": sorted(keys),
     }
     sys.stdout.write(json.dumps(doc, indent=1) + "\n")
     return 0
 
 
 def _drop_week(week: str) -> None:
-    _rewrite_events([e for e in read_events() if e["w"] != week])
-    ob = _read_json(adir() / "outbox.json")
-    if week in ob:
-        ob.pop(week)
-        _write_json(adir() / "outbox.json", ob)
+    with _locked():
+        _transform_events(lambda events: [e for e in events if e["w"] != week])
+        ob = _read_json(adir() / "outbox.json")
+        if week in ob:
+            ob.pop(week)
+            _write_json(adir() / "outbox.json", ob)
 
 
-def _post(ep: str, body: str) -> int:
+class SendError(Exception):
+    """A failed POST, with the delivery.fail.* class it is counted under (never the message)."""
+
+    def __init__(self, kind: str, status: int | None = None):
+        super().__init__(kind)
+        self.kind = kind
+        self.status = status
+
+
+def _classify(exc: BaseException) -> str:
+    import socket
+    import ssl
+
+    code = getattr(exc, "code", None)
+    if isinstance(code, int):
+        return "http4xx" if 400 <= code < 500 else "http5xx" if code >= 500 else "other"
+    reason = getattr(exc, "reason", exc)
+    if isinstance(reason, ssl.SSLError) or isinstance(exc, ssl.SSLError) or "CERTIFICATE_VERIFY" in str(exc):
+        return "ssl"
+    if isinstance(reason, (socket.timeout, TimeoutError)) or isinstance(exc, (socket.timeout, TimeoutError)):
+        return "timeout"
+    if isinstance(reason, OSError) or isinstance(exc, OSError):
+        return "network"
+    return "other"
+
+
+def _post_curl(ep: str, body: str) -> int:
+    """POST through curl, which uses the OS trust store. Covers the python.org macOS build, whose urllib has no
+    CA bundle until 'Install Certificates.command' runs and fails every HTTPS send with CERTIFICATE_VERIFY_FAILED."""
+    import shutil
+    import subprocess
+
+    curl = shutil.which("curl")
+    if not curl:
+        raise SendError("ssl")
+    try:
+        r = subprocess.run(
+            [curl, "-sS", "-o", os.devnull, "-w", "%{http_code}", "--max-time", "10", "--max-redirs", "0", "-X", "POST",
+             "-H", "Content-Type: application/json", "-H", "User-Agent: atlas-analytics/3",
+             "--data-binary", "@-", ep],
+            input=body.encode("utf-8"), capture_output=True, timeout=15,
+        )
+    except subprocess.TimeoutExpired:
+        raise SendError("timeout") from None
+    code = int(r.stdout.decode("ascii", "replace").strip() or 0) if r.stdout.strip().isdigit() else 0
+    if code == 0:
+        raise SendError("ssl" if r.returncode in (35, 51, 58, 59, 60, 77, 83) else "network")
+    return code
+
+
+def _post(ep: str, body: str) -> tuple[int, str]:
+    """POST once. Returns (HTTP status, transport). Raises SendError on any failure that has no status."""
+    import urllib.error
     import urllib.request
     from urllib.parse import urlsplit
+
+    class _NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *a, **k):
+            return None  # surfaces the 3xx as an HTTPError instead of following it
 
     req = urllib.request.Request(
         ep,
         data=body.encode("utf-8"),
         method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "atlas-analytics/2"},
+        headers={"Content-Type": "application/json", "User-Agent": "atlas-analytics/3"},
     )
+    handlers: list = [_NoRedirect]  # a 3xx on POST must not be replayed as a GET that "succeeds"
     if urlsplit(ep).hostname in LOCAL_HOSTS:
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        resp = opener.open(req, timeout=5)
-    else:
-        resp = urllib.request.urlopen(req, timeout=5)
-    with resp:
-        return resp.status
+        handlers.append(urllib.request.ProxyHandler({}))
+    try:
+        with urllib.request.build_opener(*handlers).open(req, timeout=5) as resp:
+            return resp.status, "urllib"
+    except urllib.error.HTTPError as e:
+        return e.code, "urllib"
+    except Exception as e:
+        kind = _classify(e)
+        if kind == "ssl":
+            return _post_curl(ep, body), "curl"
+        raise SendError(kind) from None
 
 
-def _send_week(ep: str, week: str, quiet: bool) -> int:
-    payload = build_payload(week, persist_nonce=True)
+def _log_sent(body: str) -> None:
+    d = adir()
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / "sent.jsonl"
+    with open(p, "a", encoding="utf-8") as f:
+        f.write(body + "\n")
+    try:
+        if p.stat().st_size > SENT_LOG_MAX:
+            keep = p.read_text(encoding="utf-8").splitlines()[-200:]
+            p.write_text("\n".join(keep) + "\n", encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _note_result(result: str) -> None:
+    import time
+
+    try:
+        with _locked():
+            cur = _read_json(adir() / "last_send.json")
+            cur.update({"result": result, "done_at": time.time()})
+            _write_json(adir() / "last_send.json", cur)
+    except Exception:
+        pass
+
+
+def _send_week(ep: str, week: str, quiet: bool, test: bool = False) -> int:
+    payload = build_payload(week, persist_nonce=True, test=test)
+    partial = payload["partial"]
     if not payload["counts"]:
-        _drop_week(week)
+        if not partial:
+            _drop_week(week)
         if not quiet:
             _p(f"nothing to send for week {week}.")
         return 0
     failed = [r for r in check_payload(payload) if not r[1]]
     if failed:
+        record("delivery.fail.refused")
+        _note_result(f"refused by the anonymity check '{failed[0][0]}'")
         if not quiet:
             _p(f"refused: payload for {week} failed anonymity check '{failed[0][0]}'; nothing sent.")
         return 1
     body = payload_json(payload)
-    d = adir()
-    d.mkdir(parents=True, exist_ok=True)
-    with open(d / "sent.jsonl", "a", encoding="utf-8") as f:
-        f.write(body + "\n")
+    _log_sent(body)
     try:
-        status = _post(ep, body)
-    except Exception as e:
-        status = getattr(e, "code", None)
-        if status != 409:  # 409 = the server already has this nonce: a retry of a send that landed
-            if not quiet:
-                _p(f"send failed ({type(e).__name__}); pending counts kept, payload logged in sent.jsonl.")
-            return 1
+        status, transport = _post(ep, body)
+    except SendError as e:
+        record("delivery.fail." + e.kind)  # reported with the next send that works
+        _note_result(f"failed ({e.kind})")
+        if not quiet:
+            _p(f"send failed ({e.kind}); pending counts kept, payload logged in sent.jsonl.")
+        return 1
+    # 409 = already stored: a schema 2 retry that landed, or a week the server already has as final.
     if not (200 <= status < 300 or status == 409):
+        record("delivery.fail." + ("http4xx" if 400 <= status < 500 else "http5xx" if status >= 500 else "other"))
+        _note_result(f"failed (HTTP {status})")
         if not quiet:
             _p(f"send failed (HTTP {status}); pending counts kept.")
         return 1
+    _note_result(f"ok (HTTP {status}, {'snapshot' if partial else 'final'} {week} via {transport})")
+    if partial:
+        # The server replaces this week's snapshot each time; the counts stay here until the week ends.
+        if not quiet:
+            _p(f"sent week-to-date snapshot {week} ({len(payload['counts'])} counters); counts kept until the week ends.")
+        return 0
     _drop_week(week)
+    record("delivery.ok." + transport)  # lands in the next week sent, so delivery health is visible
     if not quiet:
         _p(f"sent week {week} ({len(payload['counts'])} counters); those events were removed from events.jsonl.")
     return 0
@@ -941,6 +1253,7 @@ def _send_week(ep: str, week: str, quiet: bool) -> int:
 def cmd_send(args) -> int:
     on, why = state()
     quiet = bool(getattr(args, "auto", False))
+    test = bool(getattr(args, "test", False))
     if not on:
         if not quiet:
             _p(f"refused: analytics is off ({why}).")
@@ -956,21 +1269,19 @@ def cmd_send(args) -> int:
             _p(f"refused: {why_ep}")
         return 2
     if args.week:
-        return _send_week(ep, args.week, quiet)
-    weeks = finished_weeks()
-    if not weeks:
-        if not quiet:
-            _p(f"nothing to send yet: week {_week_of(_now())} is still in progress (a week is sent once it has ended).")
-        return 0
+        return _send_week(ep, args.week, quiet, test)
     cutoff = _week_of(_now() - _dt.timedelta(weeks=MAX_WEEKS_KEPT))
     rc = 0
-    for w in weeks:
+    for w in finished_weeks():
         if w < cutoff:
             _drop_week(w)
             continue
-        rc = max(rc, _send_week(ep, w, quiet))
-        if rc:
-            break  # keep the rest for the next attempt
+        rc = max(rc, _send_week(ep, w, quiet, test))  # a failed week is kept; later weeks still go
+    cur = _week_of(_now())
+    if any(e["w"] == cur for e in read_events()):
+        rc = max(rc, _send_week(ep, cur, quiet, test))
+    elif not quiet and not finished_weeks():
+        _p(f"nothing counted yet in week {cur}.")
     return rc
 
 
@@ -999,10 +1310,14 @@ def main(argv: list[str] | None = None) -> int:
         if name == "export":
             s.add_argument("--out")
         if name == "send":
-            s.add_argument("--auto", action="store_true", help="quiet; every finished week (session boot uses this)")
+            s.add_argument("--auto", action="store_true", help="quiet; finished weeks, then a week-to-date snapshot (session boot uses this)")
+        if name in ("send", "preview", "prove"):
+            s.add_argument("--test", action="store_true", help="mark the payload test:true (kept out of every total; removable)")
         s.set_defaults(fn=fn)
     sub.add_parser("delete").set_defaults(fn=cmd_delete)
-    sub.add_parser("allowed-keys").set_defaults(fn=cmd_allowed_keys)
+    ak = sub.add_parser("allowed-keys")
+    ak.add_argument("--merge", help="earlier allowed-keys.json whose keys are kept (the server list only grows)")
+    ak.set_defaults(fn=cmd_allowed_keys)
     args = ap.parse_args(argv)
     return args.fn(args)
 

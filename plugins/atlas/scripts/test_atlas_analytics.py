@@ -15,8 +15,14 @@ import json
 import os
 import random
 import re
+import shutil
+import socket
+import ssl
 import string
+import subprocess
 import sys
+import time
+import types
 import urllib.error
 import urllib.request
 import uuid
@@ -27,6 +33,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_analytics as A  # noqa: E402
 
 PLUGIN = A.PLUGIN_ROOT
+_REAL_NOW = A._now
 REAL_AUTOMATION_VARS = A.AUTOMATION_VARS
 VALID = [
     "skill.atlas-setup",
@@ -93,6 +100,11 @@ def disable(*extra):
 def events_text(h):
     p = h / "analytics" / "events.jsonl"
     return p.read_text() if p.exists() else ""
+
+
+def events_lines(h):
+    """[(week, key), ...] in file order, so tests can assert what stayed queued."""
+    return [(e["w"], e["k"]) for e in map(json.loads, events_text(h).splitlines())]
 
 
 def write_events(h, rows):
@@ -405,8 +417,12 @@ def test_payload_envelope_has_no_harness_or_identifier_fields(home):
         "week",
         "nonce",
         "counts",
+        "partial",
     }
-    assert p["schema"] == 2 == A.SCHEMA_VERSION
+    assert p["schema"] == 3 == A.SCHEMA_VERSION
+    assert p["partial"] is True  # the current week is a week-to-date snapshot
+    assert A.build_payload("2026-W44")["partial"] is False
+    assert "test" not in p and A.build_payload(test=True)["test"] is True
 
 
 def test_nonce_is_uuid4_stable_per_week_and_unique_across_weeks(home):
@@ -565,7 +581,7 @@ def test_prove_command_exits_nonzero_on_path_hostname_or_username(
 ):
     p = _good_payload(home)
     p.update(planted)
-    monkeypatch.setattr(A, "build_payload", lambda week=None, persist_nonce=False: p)
+    monkeypatch.setattr(A, "build_payload", lambda week=None, persist_nonce=False, test=False: p)
     monkeypatch.setattr(
         A,
         "gather_identities",
@@ -667,7 +683,8 @@ def test_allowed_keys_command_prints_the_same_list(home, capsys):
     doc = json.loads(capsys.readouterr().out)
     assert doc["keys"] == A.allowed_keys()
     assert (
-        doc["schema"] == 2
+        doc["schema"] == 3
+        and doc["schemas"] == [2, 3]
         and doc["max_count"] == 10000
         and doc["min_installs_published"] == 3
     )
@@ -743,7 +760,7 @@ def test_on_session_start_records_session_harness(home, monkeypatch):
     monkeypatch.setenv("ATLAS_HARNESS", "omp")
     A.on_session_start()
     A.on_session_start({"turn_id": "x"})  # ATLAS_HARNESS still wins
-    assert A.build_payload()["counts"] == {"session.omp": 2}
+    assert A.build_payload()["counts"] == {"session.omp": 2, "active.day.tue": 2}
 
 
 def test_on_session_start_compacts_and_tries_background_send_only_when_on(
@@ -754,7 +771,7 @@ def test_on_session_start_compacts_and_tries_background_send_only_when_on(
     monkeypatch.setattr(A, "compact", lambda force=False: calls.append("compact"))
     A.on_session_start({"turn_id": "x"})
     assert calls == ["compact", "send"]
-    assert A.build_payload()["counts"] == {"session.codex": 1}
+    assert A.build_payload()["counts"] == {"session.codex": 1, "active.day.tue": 1}
     disable()
     calls.clear()
     A.on_session_start()
@@ -804,11 +821,11 @@ def test_compact_caps_the_file_size_and_skips_small_or_missing(home, monkeypatch
 def test_enable_and_disable_persist_to_consent_json(home):
     enable()
     c = json.loads((home / "analytics" / "consent.json").read_text())
-    assert c == {"enabled": True, "decided": "2026-11-03", "schema": 2}
+    assert c == {"enabled": True, "decided": "2026-11-03", "schema": 3}
     assert A.is_decided() and A.state() == (True, "turned on with `enable`")
     disable()
     c = json.loads((home / "analytics" / "consent.json").read_text())
-    assert c["enabled"] is False and c["decided"] == "2026-11-03" and c["schema"] == 2
+    assert c["enabled"] is False and c["decided"] == "2026-11-03" and c["schema"] == 3
     assert A.state() == (False, "turned off with `disable`")
     enable()
     assert A.state() == (True, "turned on with `enable`")
@@ -895,8 +912,8 @@ def test_boot_notice_once_per_schema_version_while_undecided(home, monkeypatch):
     assert n and "preview" in n and "ATLAS_ANALYTICS=off" in n and "DO_NOT_TRACK" in n
     assert "disable" in n and "explain" in n and "atlas_analytics.py" in n
     assert A.boot_notice() is None
-    assert json.loads((home / "analytics" / "notice.json").read_text())["schema"] == 2
-    monkeypatch.setattr(A, "SCHEMA_VERSION", 3)
+    assert json.loads((home / "analytics" / "notice.json").read_text())["schema"] == 3
+    monkeypatch.setattr(A, "SCHEMA_VERSION", 4)
     assert A.boot_notice() is not None  # a new schema version shows it again
     assert A.boot_notice() is None
 
@@ -1092,7 +1109,7 @@ def test_send_posts_exact_previewed_bytes_logs_first_then_truncates(home, net, c
     assert body == A.payload_json(sent)
     assert net.had_it == [True], "payload must be in sent.jsonl before the POST"
     assert (home / "analytics" / "sent.jsonl").read_text().splitlines() == [body]
-    assert events_text(home) == ""
+    assert events_lines(home) == [("2026-W45", "delivery.ok.urllib")]  # delivery health, sent next time
     assert not json.loads(
         (home / "analytics" / "outbox.json").read_text()
     )  # the nonce entry is dropped too
@@ -1110,16 +1127,17 @@ def test_send_posts_every_finished_week_oldest_first_and_waits_for_current(
         ],
     )
     assert A.main(["send"]) == 0
-    assert [json.loads(b)["week"] for _, b, _, _ in net.posts] == [
-        "2026-W43",
-        "2026-W44",
+    posts = [json.loads(b) for _, b, _, _ in net.posts]
+    assert [(p["week"], p["partial"]) for p in posts] == [
+        ("2026-W43", False),
+        ("2026-W44", False),
+        ("2026-W45", True),  # the current week goes as a week-to-date snapshot, the same day
     ]
-    assert [json.loads(ln)["w"] for ln in events_text(home).splitlines()] == [
-        "2026-W45"
-    ]
-    capsys.readouterr()
+    assert posts[2]["counts"] == {"delivery.ok.urllib": 2, "gate.a.block": 1}
+    assert {w for w, _ in events_lines(home)} == {"2026-W45"}  # a snapshot keeps its counts
     assert A.main(["send"]) == 0
-    assert "in progress" in capsys.readouterr().out and len(net.posts) == 2
+    again = json.loads(net.posts[3][1])
+    assert again["week"] == "2026-W45" and again["nonce"] == posts[2]["nonce"]  # same nonce: the server replaces it
 
 
 def test_send_drops_weeks_older_than_retention_unsent(home, net):
@@ -1132,16 +1150,15 @@ def test_send_drops_weeks_older_than_retention_unsent(home, net):
         ],
     )
     assert A.main(["send", "--auto"]) == 0
-    assert [json.loads(b)["week"] for _, b, _, _ in net.posts] == ["2026-W44"]
-    assert (
-        events_text(home) == ""
-    )  # W30 and W36 (more than 8 weeks old) were dropped, never sent late
+    assert [json.loads(b)["week"] for _, b, _, _ in net.posts] == ["2026-W44", "2026-W45"]
+    # W30 and W36 (more than 8 weeks old) were dropped, never sent late
+    assert {w for w, _ in events_lines(home)} == {"2026-W45"}
 
 
 def test_retention_keeps_exactly_eight_weeks(home, net):
     write_events(home, [("2026-W37", "gate.a.block", 1)])  # cutoff week: still sent
     assert A.main(["send", "--auto"]) == 0
-    assert [json.loads(b)["week"] for _, b, _, _ in net.posts] == ["2026-W37"]
+    assert [json.loads(b)["week"] for _, b, _, _ in net.posts] == ["2026-W37", "2026-W45"]
 
 
 def test_send_treats_409_as_already_delivered(home, monkeypatch, capsys):
@@ -1149,11 +1166,12 @@ def test_send_treats_409_as_already_delivered(home, monkeypatch, capsys):
     monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", ENDPOINT)
     write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
     assert A.main(["send", "--week", "2026-W44"]) == 0
-    assert events_text(home) == ""
+    assert {w for w, _ in events_lines(home)} == {"2026-W45"}  # only the delivery.ok counter is left
     assert "sent week 2026-W44" in capsys.readouterr().out
 
 
-def test_send_failure_keeps_events_and_stops_at_first_failed_week(home, monkeypatch):
+def test_send_failure_keeps_the_week_and_moves_on_to_later_weeks(home, monkeypatch):
+    # One poison week must not block every later finished week or the current snapshot.
     fake = FakeNet(monkeypatch, statuses=[500])
     monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", ENDPOINT)
     write_events(
@@ -1161,15 +1179,20 @@ def test_send_failure_keeps_events_and_stops_at_first_failed_week(home, monkeypa
         [("2026-W43", "skill.atlas-setup", 1), ("2026-W44", "skill.atlas-setup", 1)],
     )
     assert A.main(["send"]) == 1
-    assert len(fake.posts) == 1  # the later week waits for the next attempt
-    assert len(events_text(home).splitlines()) == 2
+    sent = [(json.loads(b)["week"], json.loads(b)["partial"]) for _, b, _, _ in fake.posts]
+    assert sent == [("2026-W43", False), ("2026-W44", False), ("2026-W45", True)]
+    assert events_lines(home) == [
+        ("2026-W43", "skill.atlas-setup"),  # the failed week is kept
+        ("2026-W45", "delivery.fail.http5xx"),  # why it failed is counted and sent later
+        ("2026-W45", "delivery.ok.urllib"),
+    ]
     assert (
         home / "analytics" / "sent.jsonl"
     ).exists()  # the attempted payload stays logged
-    fake.statuses[:] = [200, 200]
     assert A.main(["send"]) == 0  # the retry reuses the persisted nonce
     nonces = [json.loads(b)["nonce"] for _, b, _, _ in fake.posts]
-    assert nonces[0] == nonces[1] and events_text(home) == ""
+    assert nonces[0] == nonces[3]
+    assert {w for w, _ in events_lines(home)} == {"2026-W45"}
 
 
 def test_send_network_error_keeps_events(home, monkeypatch):
@@ -1189,8 +1212,8 @@ def test_send_auto_prints_nothing_on_every_path(home, monkeypatch, capsys):
         home,
         [("2026-W43", "skill.atlas-setup", 1), ("2026-W44", "skill.atlas-setup", 1)],
     )
-    assert A.main(["send", "--auto"]) == 1  # first week sent, second failed
-    assert len(fake.posts) == 2
+    assert A.main(["send", "--auto"]) == 1  # first week sent, second failed, snapshot still tried
+    assert len(fake.posts) == 3
     assert capsys.readouterr().out == ""
 
 
@@ -1213,25 +1236,23 @@ def test_send_week_without_counts_posts_nothing(home, net, capsys):
     assert "nothing to send" in capsys.readouterr().out and net.posts == []
 
 
-def test_post_uses_a_direct_opener_for_localhost_and_urlopen_otherwise(
-    home, monkeypatch
-):
+def test_post_uses_a_proxy_free_opener_for_localhost_only(home, monkeypatch):
     seen = []
-    monkeypatch.setattr(
-        urllib.request,
-        "urlopen",
-        lambda req, timeout=None: seen.append("urlopen") or _Resp(200),
-    )
 
     class _O:
         def open(self, req, timeout=None):
-            seen.append("opener")
+            seen.append("open")
             return _Resp(204)
 
-    monkeypatch.setattr(urllib.request, "build_opener", lambda *a: _O())
-    assert A._post(ENDPOINT, "{}") == 200
-    assert A._post("http://127.0.0.1:9/x", "{}") == 204
-    assert seen == ["urlopen", "opener"]
+    def build(*handlers):
+        seen.append(any(isinstance(h, urllib.request.ProxyHandler) for h in handlers))
+        return _O()
+
+    monkeypatch.setattr(urllib.request, "build_opener", build)
+    assert A._post(ENDPOINT, "{}") == (204, "urllib")
+    assert A._post("http://127.0.0.1:9/x", "{}") == (204, "urllib")
+    assert seen == [False, "open", True, "open"]
+
 
 
 # --- background send ---------------------------------------------------------------------------------------------
@@ -1303,10 +1324,16 @@ def test_background_send_false_until_notice_shown(home, bg):
     assert A.maybe_send_in_background() is True
 
 
-def test_background_send_false_without_a_finished_week(home, bg):
+def test_background_send_false_with_nothing_counted(home, bg):
+    (home / "analytics" / "events.jsonl").write_text("")
+    assert A.maybe_send_in_background() is False and bg == []
+
+
+def test_background_send_fires_for_the_current_week_alone(home, bg):
+    """Before 17.19 nothing left the machine until the week ended: a new install showed nothing for days."""
     (home / "analytics" / "events.jsonl").write_text("")
     write_events(home, [("2026-W45", "skill.atlas-setup", 1)])  # current week only
-    assert A.maybe_send_in_background() is False and bg == []
+    assert A.maybe_send_in_background() is True and len(bg) == 1
 
 
 def test_background_send_never_raises(home, bg, monkeypatch):
@@ -1344,3 +1371,492 @@ def test_record_timing_reported(home, capsys):
     assert (
         off < 500 and on < 20000
     )  # loose: flake-proof guard against pathological regressions only
+
+
+# --- schema 3 client behaviours ---------------------------------------------------------------------------------
+def _raiser(exc):
+    def _f(*a, **k):
+        raise exc
+
+    return _f
+
+
+def _opener_raising(monkeypatch, exc):
+    """_post always sends through build_opener (no redirect handler); make its opener raise exc."""
+    monkeypatch.setattr(
+        urllib.request, "build_opener", lambda *a, **k: types.SimpleNamespace(open=_raiser(exc))
+    )
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ssl.SSLError("CERTIFICATE_VERIFY_FAILED"),
+        urllib.error.URLError(ssl.SSLCertVerificationError("unable to get local issuer certificate")),
+    ],
+)
+def test_post_falls_back_to_curl_on_ssl_failure(monkeypatch, exc):
+    # python.org macOS builds ship no CA bundle: urllib fails every HTTPS send, curl uses the OS store.
+    calls = []
+    _opener_raising(monkeypatch, exc)
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/curl")
+
+    def fake_run(cmd, **kw):
+        calls.append((cmd, kw))
+        return types.SimpleNamespace(stdout=b"204", returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert A._post(ENDPOINT, '{"a":1}') == (204, "curl")
+    assert calls[0][0][0] == "/usr/bin/curl" and calls[0][1]["input"] == b'{"a":1}'
+
+
+def test_post_ssl_failure_without_curl_is_a_send_error(monkeypatch):
+    _opener_raising(monkeypatch, ssl.SSLError("x"))
+    monkeypatch.setattr(shutil, "which", lambda name: None)
+    with pytest.raises(A.SendError) as ei:
+        A._post(ENDPOINT, "{}")
+    assert ei.value.kind == "ssl"
+
+
+def test_post_returns_the_http_error_code(monkeypatch):
+    err = urllib.error.HTTPError(ENDPOINT, 409, "x", {}, io.BytesIO(b""))
+    _opener_raising(monkeypatch, err)
+    assert A._post(ENDPOINT, "{}") == (409, "urllib")
+
+
+@pytest.mark.parametrize(
+    "exc,kind",
+    [
+        (urllib.error.URLError(socket.timeout()), "timeout"),
+        (urllib.error.URLError(ConnectionRefusedError()), "network"),
+    ],
+)
+def test_send_failure_is_counted_by_kind_and_keeps_the_week(home, net, exc, kind):
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    net.statuses[:] = [exc]
+    assert A.main(["send", "--week", "2026-W44"]) == 1
+    assert ("2026-W44", "skill.atlas-setup") in events_lines(home)  # nothing dropped
+    assert ("2026-W45", "delivery.fail." + kind) in events_lines(home)
+    assert json.loads((home / "analytics" / "last_send.json").read_text())["result"] == f"failed ({kind})"
+
+
+def test_refused_anonymity_check_is_counted(home, net, monkeypatch):
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    monkeypatch.setattr(A, "check_payload", lambda p, ident=None: [("no paths", False, "x")])
+    assert A.main(["send"]) == 1
+    assert net.posts == []  # nothing left the machine
+    assert ("2026-W45", "delivery.fail.refused") in events_lines(home)
+
+
+@pytest.mark.parametrize("how", ["flag", "env"])
+def test_send_test_marks_the_payload_test_true(home, net, monkeypatch, how):
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    if how == "env":
+        monkeypatch.setenv("ATLAS_ANALYTICS_TEST", "1")
+        assert A.main(["send"]) == 0
+    else:
+        assert A.main(["send", "--test"]) == 0
+    sent = [json.loads(b) for _, b, _, _ in net.posts]
+    assert sent and all(p["test"] is True for p in sent)
+    assert all(ok for _, ok, _ in A.check_payload(sent[0], []))  # prove accepts a test payload
+    monkeypatch.delenv("ATLAS_ANALYTICS_TEST", raising=False)
+    assert "test" not in A.build_payload("2026-W44")  # off unless asked
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda p: p.update(extra=1),
+        lambda p: p.update(partial="yes"),
+        lambda p: p.update(partial=1),  # 1 == True, but not a bool
+        lambda p: p.update(test=False),
+    ],
+)
+def test_check_payload_rejects_bad_envelope_fields(home, mutate):
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    p = A.build_payload("2026-W44")
+    assert p["partial"] is False  # a finished week is final; schema 3 carries the flag
+    assert all(ok for _, ok, _ in A.check_payload(p, []))
+    mutate(p)
+    res = A.check_payload(p, [])
+    assert len(res) == 1 and res[0][1] is False
+
+
+def _mod_file(home, name, doc, age_s):
+    d = home / "analytics" / "mod"
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / name
+    f.write_text(doc if isinstance(doc, str) else json.dumps(doc))
+    t = time.time() - age_s
+    os.utime(f, (t, t))
+    return f
+
+
+def test_fold_mod_usage_folds_old_files_and_skips_fresh_ones(home):
+    old = _mod_file(home, "a.json", {"v": 1, "counts": {
+        "mod.open.dock": 3,
+        "mod.bogus.key": 5,  # not allowlisted
+        "skill.atlas-setup": 9,  # not a mod.* key
+    }}, 3600)
+    fresh_f = _mod_file(home, "b.json", {"v": 1, "counts": {"mod.open.dock": 7}}, 0)
+    assert A.fold_mod_usage() == 1
+    assert not old.exists() and fresh_f.exists()  # a live session may still rewrite its file
+    assert A.build_payload("2026-W45")["counts"] == {"mod.open.dock": 3}
+
+
+def test_fold_mod_usage_survives_a_corrupt_file(home):
+    bad = _mod_file(home, "bad.json", "{not json", 3600)
+    good = _mod_file(home, "good.json", {"v": 1, "counts": {"mod.open.dock": 1}}, 3600)
+    assert A.fold_mod_usage() >= 1
+    assert not good.exists() and A.build_payload("2026-W45")["counts"] == {"mod.open.dock": 1}
+    assert not bad.exists()  # a broken file must not be retried forever
+
+
+def test_fold_mod_usage_deletes_without_counting_when_disabled(home):
+    f = _mod_file(home, "a.json", {"v": 1, "counts": {"mod.open.dock": 3}}, 3600)
+    disable()
+    assert A.fold_mod_usage() == 1 and not f.exists()
+    assert events_lines(home) == []
+
+
+def test_session_start_records_active_day_and_folds_mod_usage(home):
+    f = _mod_file(home, "a.json", {"v": 1, "counts": {"mod.open.dock": 2}}, 3600)
+    A.on_session_start({})
+    assert not f.exists()
+    c = A.build_payload("2026-W45")["counts"]
+    assert c["active.day.tue"] == 1 and c["mod.open.dock"] == 2  # NOW is a Tuesday
+
+
+def test_status_shows_the_last_send_result(home, net, capsys):
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    assert A.main(["send"]) == 0
+    capsys.readouterr()
+    assert A.main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert "last send:" in out and "ok (HTTP 200" in out and "via urllib" in out
+
+
+def test_allowed_keys_merge_keeps_old_keys_and_drops_malformed(home, tmp_path, capsys):
+    prior = tmp_path / "prior.json"
+    prior.write_text(json.dumps({"keys": ["skill.retired-skill", "bad key!", 7, "../x"]}))
+    assert A.main(["allowed-keys", "--merge", str(prior)]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert "skill.retired-skill" in doc["keys"]  # older installs still send it
+    assert not {"bad key!", 7, "../x"} & set(doc["keys"])
+    assert "skill.atlas-setup" in doc["keys"] and doc["schemas"] == [2, 3]
+    assert A.main(["allowed-keys", "--merge", str(tmp_path / "missing.json")]) == 0  # no file: just the current keys
+
+
+def test_sent_log_is_trimmed_to_its_newest_200_lines(home, monkeypatch):
+    monkeypatch.setattr(A, "SENT_LOG_MAX", 2000)
+    for i in range(300):
+        A._log_sent(json.dumps({"i": i, "pad": "x" * 20}))
+    lines = (home / "analytics" / "sent.jsonl").read_text().splitlines()
+    assert len(lines) <= 200 and json.loads(lines[-1])["i"] == 299
+    assert json.loads(lines[0])["i"] >= 100  # oldest lines went first
+
+
+# --- client review fixes: UTC weeks, locking, concurrent appends, redirects, versions, vocab, mod deltas -----------------
+import http.server  # noqa: E402
+import multiprocessing  # noqa: E402
+import threading  # noqa: E402
+
+import atlas_analytics_hot as H  # noqa: E402
+
+_FORK = multiprocessing.get_context("fork")
+
+
+def _fake_clock(monkeypatch, modules):
+    """Instant = Sun 2026-11-08 23:00 UTC = Mon 2026-11-09 in UTC+13: local date W46, UTC date W45."""
+    inst = datetime.datetime(2026, 11, 8, 23, 0, tzinfo=datetime.timezone.utc)
+
+    class FakeDT(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is not None:
+                return inst.astimezone(tz)
+            return inst.astimezone(datetime.timezone(datetime.timedelta(hours=13))).replace(tzinfo=None)
+
+    class FakeDate(datetime.date):
+        @classmethod
+        def today(cls):
+            return datetime.date(2026, 11, 9)
+
+    for mod, attrs in modules:
+        for name, val in attrs(FakeDT, FakeDate).items():
+            monkeypatch.setattr(mod, name, val, raising=False)
+
+
+def test_week_comes_from_the_utc_date_not_the_local_date(home, monkeypatch):
+    real_now = _REAL_NOW
+    ns = lambda dt, d: {"_dt": types.SimpleNamespace(date=d, datetime=dt, timezone=datetime.timezone, timedelta=datetime.timedelta)}  # noqa: E731
+    _fake_clock(monkeypatch, [(A, ns), (H, lambda dt, d: {"datetime": dt, "date": d})])
+    monkeypatch.setattr(A, "_now", real_now)
+    assert A._week_of(A._now()) == "2026-W45"  # the server rejects W46 as "in the future"
+    monkeypatch.setenv("ATLAS_ANALYTICS", "on")
+    A._reset()
+    A.record("gate.pass")
+    H.record(["gate.pass"])
+    assert {e["w"] for e in A.read_events()} == {"2026-W45"}
+
+
+def _nonce_worker(barrier, weeks, q):
+    out = []
+    for w in weeks:
+        barrier.wait()
+        out.append(A.nonce_for(w, persist=True))
+    q.put(out)
+
+
+def test_four_processes_settle_on_one_nonce_per_week(home):
+    weeks = [f"2026-W{n:02d}" for n in range(1, 41)]
+    barrier, q = _FORK.Barrier(4), _FORK.Queue()
+    procs = [_FORK.Process(target=_nonce_worker, args=(barrier, weeks, q)) for _ in range(4)]
+    for p in procs:
+        p.start()
+    results = [q.get(timeout=60) for _ in procs]
+    for p in procs:
+        p.join(10)
+    split = [w for i, w in enumerate(weeks) if len({r[i] for r in results}) != 1]
+    assert split == []
+    assert json.loads((home / "analytics" / "outbox.json").read_text()).keys() == set(weeks)
+
+
+def test_nonce_and_gate_still_work_when_no_lock_module_imports(home, monkeypatch):
+    monkeypatch.setattr(A, "_fcntl", None)
+    monkeypatch.setattr(A, "_msvcrt", None)
+    n = A.nonce_for("2026-W44", persist=True)
+    assert A.nonce_for("2026-W44", persist=True) == n
+
+
+def _gate_worker(barrier, trials, marker_dir, q):
+    import subprocess as sp
+
+    sp.Popen = lambda *a, **k: open(os.path.join(marker_dir, f"{os.getpid()}-{time.time_ns()}"), "w").close()
+    out = []
+    for _ in range(trials):
+        barrier.wait()
+        out.append(A.maybe_send_in_background())
+        barrier.wait()
+    q.put(out)
+
+
+def test_background_send_gate_starts_one_send_across_processes(home, monkeypatch, tmp_path):
+    monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", ENDPOINT)
+    enable()
+    A.record("skill.atlas-setup")
+    stamp = home / "analytics" / "last_send.json"
+    marks = tmp_path / "marks"
+    marks.mkdir()
+    trials = 30
+    barrier, q = _FORK.Barrier(5), _FORK.Queue()  # 4 workers + this test stepping the trials
+    procs = [_FORK.Process(target=_gate_worker, args=(barrier, trials, str(marks), q)) for _ in range(4)]
+    for p in procs:
+        p.start()
+    for _ in range(trials):
+        stamp.unlink(missing_ok=True)
+        barrier.wait()
+        barrier.wait()
+    results = [q.get(timeout=60) for _ in procs]
+    for p in procs:
+        p.join(10)
+    per_trial = [sum(r[t] for r in results) for t in range(trials)]
+    assert per_trial == [1] * trials
+    assert len(list(marks.iterdir())) == trials
+
+
+@pytest.mark.parametrize("op", ["compact", "drop_week"])
+def test_lines_a_hook_appends_during_a_rewrite_are_kept(home, monkeypatch, op):
+    # Hooks append by path. Inject an append at the worst moment: after the old file has been read and just
+    # before it is swapped out (old code), or right after it was renamed away (new code).
+    monkeypatch.setenv("ATLAS_ANALYTICS", "on")
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1), ("2026-W45", "gate.pass", 2)])
+    real_replace, real_rename = os.replace, os.rename
+
+    def inject():
+        H.record(["session.claude"])
+
+    def replace(src, dst, *a, **k):
+        if str(dst).endswith("events.jsonl"):
+            inject()
+        return real_replace(src, dst, *a, **k)
+
+    def rename(src, dst, *a, **k):
+        r = real_rename(src, dst, *a, **k)
+        if str(src).endswith("events.jsonl"):
+            inject()
+        return r
+
+    monkeypatch.setattr(os, "replace", replace)
+    monkeypatch.setattr(os, "rename", rename)
+    if op == "compact":
+        assert A.compact(force=True)
+        assert ("2026-W44", "skill.atlas-setup") in events_lines(home)
+    else:
+        A._drop_week("2026-W44")
+        assert ("2026-W44", "skill.atlas-setup") not in events_lines(home)
+    assert [k for _, k in events_lines(home)].count("session.claude") == 1
+    assert ("2026-W45", "gate.pass") in events_lines(home)
+    assert not list((home / "analytics").glob("events.*.side"))
+
+
+class _Redirector(http.server.BaseHTTPRequestHandler):
+    hits: list = []
+
+    def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        if self.path == "/ingest":
+            self.send_response(302)
+            self.send_header("Location", "/final")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            type(self).hits.append(self.path)
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+    do_GET = do_POST
+
+    def log_message(self, *a):
+        pass
+
+
+@pytest.fixture
+def redirector():
+    _Redirector.hits = []
+    srv = http.server.HTTPServer(("127.0.0.1", 0), _Redirector)
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+    yield f"http://127.0.0.1:{srv.server_port}/ingest"
+    srv.shutdown()
+    srv.server_close()
+
+
+def test_a_redirect_is_a_failed_send_and_is_never_followed(home, monkeypatch, redirector):
+    assert A._post(redirector, "{}") == (302, "urllib")
+    assert _Redirector.hits == []
+    monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", redirector)
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    assert A.main(["send", "--week", "2026-W44"]) == 1
+    assert ("2026-W44", "skill.atlas-setup") in events_lines(home)  # the week is kept, not dropped
+    assert ("2026-W45", "delivery.fail.other") in events_lines(home)
+    assert _Redirector.hits == []
+
+
+def test_curl_fallback_never_follows_redirects_and_a_3xx_is_a_failure(home, monkeypatch):
+    calls = []
+    _opener_raising(monkeypatch, ssl.SSLError("CERTIFICATE_VERIFY_FAILED"))
+    monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/curl")
+    monkeypatch.setattr(
+        subprocess, "run", lambda cmd, **kw: calls.append(cmd) or types.SimpleNamespace(stdout=b"301", returncode=0)
+    )
+    assert A._post(ENDPOINT, "{}") == (301, "curl")
+    assert "-L" not in calls[0] and "--location" not in calls[0]
+    monkeypatch.setenv("ATLAS_ANALYTICS_ENDPOINT", ENDPOINT)
+    write_events(home, [("2026-W44", "skill.atlas-setup", 1)])
+    assert A.main(["send", "--week", "2026-W44"]) == 1
+    assert ("2026-W44", "skill.atlas-setup") in events_lines(home)
+    assert ("2026-W45", "delivery.fail.other") in events_lines(home)
+
+
+@pytest.mark.parametrize(
+    "version,expected",
+    [("17.19.0", "17.19.0"), ("17.19.0-rc.1", "17.19.0"), ("17.19.0+build5", "17.19.0"), ("v17", "unknown"), ("", "unknown")],
+)
+def test_atlas_version_sends_the_core_of_a_prerelease(tmp_path, monkeypatch, version, expected):
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text(json.dumps({"version": version}))
+    monkeypatch.setattr(A, "PLUGIN_ROOT", tmp_path)
+    assert A.atlas_version() == expected
+
+
+def test_atlas_version_unknown_when_no_manifest(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "PLUGIN_ROOT", tmp_path)
+    assert A.atlas_version() == "unknown"
+
+
+def test_atlas_analytics_disable_is_an_opt_out_for_client_and_hot_path(home, monkeypatch):
+    monkeypatch.setenv("ATLAS_ANALYTICS", "disable")
+    A._reset()
+    assert A.state()[0] is False and H.enabled() is False
+    A.record("gate.pass")
+    H.record(["gate.pass"])
+    assert events_text(home) == ""
+    assert "disable" in A.OFF_VALUES and "disable" in H.OFF_VALUES
+
+
+@pytest.mark.parametrize("base", ["linux", "lin", "true", "abc"])
+def test_short_or_schema_word_directory_names_do_not_block_sending(home, monkeypatch, tmp_path, base):
+    p = _good_payload(home)
+    p["os"] = "linux"
+    assert "no username, hostname, home dir, cwd, repo identifiers" not in _failed(
+        A.check_payload(p, identities=[("cwd basename", base)])
+    )
+    d = tmp_path / base
+    d.mkdir()
+    monkeypatch.chdir(d)
+    assert "no username, hostname, home dir, cwd, repo identifiers" not in _failed(
+        A.check_payload(p, identities=[i for i in A.gather_identities() if i[0] == "cwd basename"])
+    )
+
+
+def test_a_long_unique_directory_name_planted_in_a_value_is_still_refused(home):
+    p = _good_payload(home)
+    p["os"] = "acme-billing"
+    ids = [("cwd basename", "acme-billing")]
+    assert "no username, hostname, home dir, cwd, repo identifiers" in _failed(A.check_payload(p, identities=ids))
+
+
+def test_a_short_basename_that_is_not_schema_text_is_skipped_but_other_identities_still_count(home):
+    p = _good_payload(home)
+    p["os"] = "alice"
+    ids = [("cwd basename", "alice"), ("username", "alice")]
+    assert "no username, hostname, home dir, cwd, repo identifiers" in _failed(A.check_payload(p, identities=ids))
+
+
+def _delta(home, name, counts, age_s=0, v=2):
+    return _mod_file(home, name, {"v": v, "counts": counts}, age_s)
+
+
+def test_fold_v2_delta_files_at_any_age_and_ignore_tmp_and_foreign_keys(home):
+    a = _delta(home, "s1-1-aaaa.json", {"mod.open.dock": 2, "skill.atlas-setup": 9, "mod.bogus.x": 4})
+    b = _delta(home, "s1-2-bbbb.json", {"mod.open.dock": 3})
+    tmp = _mod_file(home, "s1-3-cccc.json.tmp", {"v": 2, "counts": {"mod.open.dock": 100}}, 7200)
+    assert A.fold_mod_usage() == 2
+    assert not a.exists() and not b.exists() and tmp.exists()
+    assert A.build_payload("2026-W45")["counts"] == {"mod.open.dock": 5}
+
+
+def test_fold_v1_cumulative_files_only_once_the_session_is_quiet(home):
+    fresh_v1 = _delta(home, "live.json", {"mod.open.dock": 7}, 0, v=1)
+    old_v1 = _delta(home, "done.json", {"mod.open.dock": 3}, 3600, v=1)
+    v2 = _delta(home, "s9-1-zzzz.json", {"mod.open.dock": 1})
+    assert A.fold_mod_usage() == 2
+    assert fresh_v1.exists() and not old_v1.exists() and not v2.exists()
+    assert A.build_payload("2026-W45")["counts"] == {"mod.open.dock": 4}
+
+
+def test_fold_records_the_counts_before_it_deletes_the_file(home, monkeypatch):
+    f = _delta(home, "s1-1-aaaa.json", {"mod.open.dock": 2})
+    seen = []
+    real = A.record
+    monkeypatch.setattr(A, "record", lambda k, n=1: seen.append(f.exists()) or real(k, n))
+    assert A.fold_mod_usage() == 1
+    assert seen == [True] and not f.exists()
+
+
+def test_fold_deletes_v2_deltas_uncounted_when_analytics_is_off(home):
+    f = _delta(home, "s1-1-aaaa.json", {"mod.open.dock": 2})
+    disable()
+    assert A.fold_mod_usage() == 1 and not f.exists()
+    assert events_lines(home) == []
+
+
+def test_snapshot_timing_wording_says_session_start_not_while_atlas_runs(home, capsys):
+    notice = A.notice_text()
+    assert "at session start, at most once an hour" in notice and "while Atlas runs" not in notice
+    assert "at session start, at most once an hour" in " ".join(A.__doc__.split())
+    assert "while Atlas runs" not in A.__doc__
+    A.main(["explain"])
+    assert "while Atlas runs" not in capsys.readouterr().out

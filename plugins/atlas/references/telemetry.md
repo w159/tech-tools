@@ -10,9 +10,10 @@ tech-tools repository, and it accepts only the keys in `telemetry/allowed-keys.j
 
 ## What it is
 
-Whole-number counters, summed per ISO week. Nothing is sent while the week is running. After the week ends, one small
-JSON payload is posted: the counters plus the Atlas version, OS family (linux, darwin, windows, other), Python minor
-version, the ISO week and a random nonce. A counter is only ever a name from the list below and an integer.
+Whole-number counters, summed per ISO week. The payload (schema 3) is the counters plus the Atlas version, OS family
+(linux, darwin, windows, other), Python minor version, the ISO week, a random nonce and a `partial` flag. The running
+week is sent as a week-to-date snapshot (`partial: true`) that replaces its earlier snapshot on the server; each finished
+week is sent once as final (`partial: false`). A counter is only ever a name from the list below and an integer.
 
 ## Turn it off
 
@@ -39,8 +40,10 @@ notice for good.
 python3 scripts/atlas_analytics.py explain   # what and why, in plain language
 python3 scripts/atlas_analytics.py preview   # the exact payload for the pending week
 python3 scripts/atlas_analytics.py prove     # check that payload against the anonymity rules (exit 1 on any failure)
-python3 scripts/atlas_analytics.py status    # state, files, event count, week range
+python3 scripts/atlas_analytics.py status    # state, files, event count, week range, last send result
 python3 scripts/atlas_analytics.py export --out atlas-counts.json   # the same payload, written to a file
+python3 scripts/atlas_analytics.py preview --test   # same, marked test: true (also send --test, prove --test, or ATLAS_ANALYTICS_TEST=1)
+python3 scripts/atlas_analytics.py allowed-keys --merge   # regenerate the allowlist, keeping every key an earlier release shipped
 python3 scripts/atlas_analytics.py delete    # remove ~/.atlas/analytics entirely
 ```
 
@@ -64,6 +67,12 @@ Each family exists for one purpose. Keys are fully expanded in `telemetry/allowe
 | `gate` | `gate.<letter>.block`, `gate.pass` | The completion gate blocks a Stop on a condition letter, or allows a Stop with every applicable condition met. | Shows which checks block a finish most often against how often a finish passes cleanly, so false positives are removed. |
 | `git` | `git.clean.<worktrees\|branches\|remote>`, `git.branch.<created\|reused>` | Automatic cleanup runs, or a branch is created or reused. | Shows whether cleanup runs and branches are reused instead of multiplied. |
 | `security` | `security.alerts.<dependabot\|code\|secret>.<low\|medium\|high\|critical>` | A security refresh tallies open alerts. | Shows where alert triage and auto-fix effort should go. |
+| `command` | `command.<skill>` | A shipped Atlas slash command is invoked. | Separates typed commands from model-chosen skill runs. |
+| `fault` | `fault.<component>.<errclass>` | A component fails; the class is a closed enum, never the message. | Shows what breaks in the field, by component. |
+| `mod` | `mod.open.<dock\|ondemand\|board>`, `mod.command.<atlas-cc\|atlas-say\|atlas-core\|atlas-todo>`, `mod.error.<boot\|rebuild\|fault\|other>` | A mod panel opens, a mod command runs or the mod errors. The mod writes counts to `$ATLAS_HOME/analytics/mod-usage/<session>.json`; the client folds files older than 30 minutes at session start. Nothing is written when opted out. | Shows whether the mod is used and where it fails. |
+| `crew` | `crew.workers.<size>`, `crew.outcome.<done\|failed\|timeout\|killed>`, `crew.wall.<bucket>`, `crew.rounds.<0\|1\|2\|3+>`, `crew.check.<pass\|fail\|none>` | A crew run ends. | Shows crew size, outcome, duration, fix rounds and unit check result. |
+| `active` | `active.day.<mon..sun>` | Once per session start, on the weekday. | Shows which days installs are used. |
+| `delivery` | `delivery.ok.<urllib\|curl>`, `delivery.fail.<ssl\|timeout\|network\|http4xx\|http5xx\|refused\|other>` | A send succeeds or fails. | Makes send failures visible in the data instead of silent. |
 
 Names inside a key (hook, skill, agent, class, effort, event) come from files shipped with Atlas, so a skill, repo,
 branch, path or project name of your own can never match.
@@ -77,18 +86,35 @@ branch, path or project name of your own can never match.
 - Repository, organisation, branch, project or user-defined skill names.
 - Prompts, model output, code, commit messages, error messages or file contents.
 
-Unknown keys are dropped when recorded, again when the payload is built, and again by the server.
+Unknown keys are dropped when recorded and again when the payload is built. The server drops unknown but well-formed keys
+and counts them (`dropped`) instead of rejecting the payload; a malformed key still gets 400.
 
 ## Where the data goes
 
-The client posts once per finished week, in the background, only after the notice has been shown and only when an
+The client posts in the background at session start, at most once an hour, only after the notice has been shown and only when an
 endpoint is configured (`endpoint` in the schema, or `ATLAS_ANALYTICS_ENDPOINT`; https only, plain http only for
-localhost). Installs send to `https://atlas-telemetry.vercel.app/api/ingest`, the endpoint shipped in the schema.
+localhost). It sends the current week as a week-to-date snapshot and each finished week once as final. A failed send keeps
+the week and counts `delivery.fail.<kind>`; a success counts `delivery.ok.<urllib|curl>`. On a TLS failure the client
+retries with curl, which fixes macOS Python without a CA bundle. `status` shows the last send result. Payloads marked
+`--test` (or `ATLAS_ANALYTICS_TEST=1`) carry `test: true` and are left out of the public aggregate. Installs send to
+`https://atlas-telemetry.vercel.app/api/ingest`, the endpoint shipped in the schema.
 To stop sending, turn telemetry off (see "Turn it off" above: `DO_NOT_TRACK=1`, `ATLAS_ANALYTICS=off`, or
-`python3 scripts/atlas_analytics.py disable`). The server stores the validated body and nothing else. It publishes weekly totals only: a counter appears
-only once **at least 3 installs** reported it, and version, OS and Python buckets below that threshold fold into
-`other`. Published reports land in the tech-tools repository under `telemetry/reports/`, with the latest summary in
-[`telemetry/REPORT.md`](../../../telemetry/REPORT.md) (regenerated weekly by `scripts/telemetry_report.py`).
+`python3 scripts/atlas_analytics.py disable`). The server stores the validated body and nothing else. It publishes weekly
+totals only: a counter appears only once **at least 3 installs** reported it, and version, OS and Python buckets below
+that threshold fold into `other`. Published reports land in the tech-tools repository under `telemetry/reports/`, with
+the latest summary in [`telemetry/REPORT.md`](../../../telemetry/REPORT.md) (regenerated weekly by
+`scripts/telemetry_report.py`).
+
+## The owner dashboard
+
+The telemetry server also serves a private view for the project owner: `/dashboard` (HTML) and `GET /api/admin?weeks=N`
+(JSON), both behind the secret in the Vercel project env var `ATLAS_DASHBOARD_TOKEN` (at least 24 characters; admin
+answers 503 when it is unset or shorter, 401 on a wrong secret). `GET /api/health` is open and shows storage kind,
+accepted schemas, allowlist key count and sha256, whether the secret is configured and recent submission counts. The
+dashboard shows totals, the weekly trend, top and never-used features, failures, versions and a per-week table, and can
+download or copy the JSON. Test data is hidden unless `include_test=1`. Setup, rotation and routes:
+[telemetry/server/README.md](../../../telemetry/server/README.md). The allowlist only grows: `allowed-keys --merge` keeps
+every key an earlier release shipped (2126 keys in 17.19.0).
 
 Honest caveat: the server code never reads or stores IP addresses, headers or request bodies in logs, but the hosting
 platform may keep its own request logs (including IP addresses) under its own retention. The code never reads them.

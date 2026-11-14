@@ -80,7 +80,7 @@ class BucketTest(unittest.TestCase):
             self.assertEqual(ed._bucket(ms), want, ms)
 
 
-class PromptSkillKeyTest(unittest.TestCase):
+class PromptCommandKeyTest(unittest.TestCase):
     def test_real_skill_forms(self):
         for p in (
             "/atlas:atlas-ship",
@@ -88,26 +88,26 @@ class PromptSkillKeyTest(unittest.TestCase):
             "  /atlas-ship now",
             "\n/atlas:atlas-ship\n",
         ):
-            self.assertEqual(ed.prompt_skill_key(p), "skill.atlas-ship", p)
+            self.assertEqual(ed.prompt_command_key(p), "command.atlas-ship", p)
 
     def test_non_skill_directory_is_dropped(self):
-        self.assertIsNone(ed.prompt_skill_key("/atlas-does-not-exist"))
-        self.assertIsNone(ed.prompt_skill_key("/atlas:atlas-nope args"))
+        self.assertIsNone(ed.prompt_command_key("/atlas-does-not-exist"))
+        self.assertIsNone(ed.prompt_command_key("/atlas:atlas-nope args"))
 
     def test_longer_name_is_not_a_prefix_match(self):
-        self.assertIsNone(ed.prompt_skill_key("/atlas-shipx"))
-        self.assertIsNone(ed.prompt_skill_key("/atlas-ship.md"))
+        self.assertIsNone(ed.prompt_command_key("/atlas-shipx"))
+        self.assertIsNone(ed.prompt_command_key("/atlas-ship.md"))
 
     def test_must_start_with_slash_command(self):
         for p in ("hello", "run /atlas-ship", "atlas-ship", "", "/", "/other-skill"):
-            self.assertIsNone(ed.prompt_skill_key(p), p)
+            self.assertIsNone(ed.prompt_command_key(p), p)
 
     def test_non_string(self):
         for p in (None, 5, ["/atlas-ship"], {"prompt": "/atlas-ship"}):
-            self.assertIsNone(ed.prompt_skill_key(p))
+            self.assertIsNone(ed.prompt_command_key(p))
 
     def test_leading_whitespace_of_any_length_and_trailing_text_are_ignored(self):
-        self.assertEqual(ed.prompt_skill_key(" " * 500 + "/atlas-ship" + " x" * 500), "skill.atlas-ship")
+        self.assertEqual(ed.prompt_command_key(" " * 500 + "/atlas-ship" + " x" * 500), "command.atlas-ship")
 
 
 class RecordPromptTest(unittest.TestCase):
@@ -119,7 +119,7 @@ class RecordPromptTest(unittest.TestCase):
         hot, ctx = self._hot()
         with ctx:
             ed.record_prompt({"prompt": "/atlas:atlas-ship please"})
-        hot.record.assert_called_once_with(["skill.atlas-ship"])
+        hot.record.assert_called_once_with(["command.atlas-ship"])
 
     def test_ignores_everything_else(self):
         hot, ctx = self._hot()

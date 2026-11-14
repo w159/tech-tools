@@ -384,8 +384,8 @@ def _record_analytics(event, payload, results, elapsed_ms=None, slow=(), faults=
 _SLASH_SKILL = re.compile(r"/(?:atlas:)?(atlas-[a-z0-9-]{1,60})(?=\s|$)")
 
 
-def prompt_skill_key(prompt):
-    """skill.<dir> when `prompt` starts with /atlas:<skill> or /<skill> naming a shipped atlas skill
+def prompt_command_key(prompt):
+    """command.<dir> when `prompt` starts with /atlas:<skill> or /<skill> naming a shipped atlas skill
     (a directory under skills/), else None. Nothing after the command is read. A directory that is not a
     real skill is dropped later: atlas_analytics validates every stored key against its skill list."""
     if not isinstance(prompt, str):
@@ -396,17 +396,19 @@ def prompt_skill_key(prompt):
     skill = m.group(1)
     if not os.path.isdir(os.path.join(_HERE, "..", "skills", skill)):
         return None
-    return "skill." + skill
+    # command.*, not skill.*: a typed slash command is a person's choice, while skill.* (PostToolUse Skill
+    # tool) is the model's, and the two answer different questions about what gets used.
+    return "command." + skill
 
 
 def record_prompt(payload):
-    """UserPromptSubmit telemetry, called by prompt_optimizer: skill.<dir> for a leading atlas slash
+    """UserPromptSubmit telemetry, called by prompt_optimizer: command.<dir> for a leading atlas slash
     command. A prompt that does not start with '/' costs one string test. Never raises."""
     try:
         prompt = payload.get("prompt") if isinstance(payload, dict) else None
         if not isinstance(prompt, str) or not prompt.lstrip().startswith("/"):
             return
-        key = prompt_skill_key(prompt)
+        key = prompt_command_key(prompt)
         if key is None:
             return
         import atlas_analytics_hot

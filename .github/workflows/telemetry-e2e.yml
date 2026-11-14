@@ -1,0 +1,73 @@
+name: telemetry-e2e
+
+# On demand: prove the deployed telemetry server and the shipped client work together. Checks /api/health
+# (accepted schemas and that the deployed allowlist is the one in this commit), then has the real client
+# record a few counters and send them with --test, so the submission is marked test: true and stays out of
+# the public aggregate and the default dashboard view. Remove the test data afterwards with
+# DELETE /api/admin?purge=test (needs the dashboard secret, which this workflow never holds).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telemetry-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - name: Health matches this commit
+        run: |
+          base=$(python3 -c 'import json; e = json.load(open("plugins/atlas/contracts/analytics-schema.json"))["endpoint"].rstrip("/"); print(e[: -len("/api/ingest")])')
+          echo "ATLAS_TELEMETRY_URL=$base" >> "$GITHUB_ENV"
+          curl -fsS "$base/api/health" -o health.json
+          cat health.json
+          python3 - <<'EOF'
+          import hashlib, json, sys
+          h = json.load(open("health.json"))
+          keys = json.load(open("telemetry/allowed-keys.json"))["keys"]
+          want = hashlib.sha256("\n".join(sorted(keys)).encode()).hexdigest()
+          got = h["allowlist"]["sha256"]
+          print(f"allowlist deployed={got} commit={want} keys={h['allowlist']['keys']}/{len(keys)}")
+          if got != want:
+              sys.exit("deployed allowlist differs from this commit: redeploy telemetry/server")
+          if 3 not in h["schemas"]:
+              sys.exit("deployed server does not accept schema 3")
+          EOF
+      - name: Real client sends a test submission
+        env:
+          ATLAS_ANALYTICS: "on"
+          ATLAS_ANALYTICS_TEST: "1"
+        run: |
+          export ATLAS_HOME="$RUNNER_TEMP/atlas-home"
+          export ATLAS_ANALYTICS_ENDPOINT="$ATLAS_TELEMETRY_URL/api/ingest"
+          # Health is edge-cached for 60 s and may hold test rows from earlier runs: take the test count
+          # before the send, and require it to rise after it.
+          test_count='import json, sys; w = json.load(sys.stdin)["weeks"]; print(sum(v["test"] for v in w.values()))'
+          before=$(curl -fsS "$ATLAS_TELEMETRY_URL/api/health" | python3 -c "$test_count")
+          echo "test submissions held before send: $before"
+          cd plugins/atlas/scripts
+          python3 -c 'import atlas_analytics as a; [a.record(k) for k in ("skill.atlas-plan", "agent.planner", "delivery.ok.urllib")]'
+          python3 atlas_analytics.py preview --test
+          python3 atlas_analytics.py send --test
+          python3 atlas_analytics.py status
+          cat "$ATLAS_HOME/analytics/last_send.json"; echo
+          # sent.jsonl holds the payload body, not the HTTP status; the client records the outcome in last_send.json.
+          python3 - <<'EOF'
+          import json, os, re, sys
+          r = json.load(open(os.path.join(os.environ["ATLAS_HOME"], "analytics", "last_send.json"))).get("result", "")
+          print("last send result:", r)
+          if not re.match(r"ok \(HTTP 20[01],", r):
+              sys.exit("server did not accept the test submission (want HTTP 200/201): " + r)
+          EOF
+          # And the server stored it as a test submission (health counts them separately from real ones).
+          # Health is cached at the edge for 60 s, so wait it out before reading the count again.
+          sleep 65
+          after=$(curl -fsS "$ATLAS_TELEMETRY_URL/api/health" | python3 -c "$test_count")
+          echo "test submissions held after send: $after (before: $before)"
+          [ "$after" -gt "$before" ] || { echo "server did not store a new test submission"; exit 1; }

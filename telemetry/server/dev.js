@@ -1,9 +1,12 @@
 // @ts-check
-// Local server: POST /api/ingest and GET /api/aggregate on the filesystem store.
+// Local server: the same routes as Vercel (ingest, aggregate, health, admin, dashboard) on the filesystem store.
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { join } from "node:path";
+import { handle as admin } from "./api/admin.js";
 import { handle as aggregate } from "./api/aggregate.js";
+import { handle as dashboard } from "./api/dashboard.js";
+import { handle as health } from "./api/health.js";
 import { handle as ingest } from "./api/ingest.js";
 import { createFsStore } from "./lib/store.js";
 
@@ -23,6 +26,9 @@ const server = createServer(async (req, res) => {
   let response;
   if (url.pathname === "/api/ingest") response = await ingest(request, { store });
   else if (url.pathname === "/api/aggregate") response = await aggregate(request, { store });
+  else if (url.pathname === "/api/health") response = await health(request, { store });
+  else if (url.pathname === "/api/admin") response = await admin(request, { store });
+  else if (url.pathname === "/" || url.pathname === "/dashboard") response = await dashboard(request, { store });
   else response = new Response('{"error":"not found"}', { status: 404, headers: { "content-type": "application/json" } });
   res.writeHead(response.status, Object.fromEntries(response.headers));
   res.end(Buffer.from(await response.arrayBuffer()));

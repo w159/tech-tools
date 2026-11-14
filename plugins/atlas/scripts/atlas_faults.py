@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
+import subprocess
 import time
 
 MAX_BYTES = 1 << 20  # 1 MiB; on overflow keep the newest half
@@ -62,6 +64,53 @@ def _plugin_version() -> str | None:
         return None
 
 
+def errclass(exc: BaseException) -> str:
+    """Closed-set class of an exception for the anonymous fault counter. Most specific first: several of
+    these overlap (JSONDecodeError is a ValueError, ModuleNotFoundError an ImportError, FileNotFoundError
+    and PermissionError OSErrors)."""
+    if isinstance(exc, (TimeoutError, socket.timeout, subprocess.TimeoutExpired)):
+        return "timeout"
+    if isinstance(exc, PermissionError):
+        return "permission"
+    if isinstance(exc, FileNotFoundError):
+        return "notfound"
+    if isinstance(exc, json.JSONDecodeError):
+        return "json"
+    if isinstance(exc, ImportError):
+        return "import"
+    if isinstance(exc, subprocess.SubprocessError):
+        return "subprocess"
+    if isinstance(exc, OSError):
+        return "oserror"
+    for cls, name in (
+        (ValueError, "value"),
+        (KeyError, "key"),
+        (TypeError, "type"),
+        (AttributeError, "attribute"),
+        (RuntimeError, "runtime"),
+    ):
+        if isinstance(exc, cls):
+            return name
+    return "other"
+
+
+_COMPONENT = re.compile(r"^[a-z0-9_]+$")
+
+
+def _count(hook: str, exc: BaseException) -> None:
+    """fault.<component>.<errclass>: component is the hook name before the first dot, errclass a closed
+    set, so no message, path or project name can reach a key. Hot-path writer: no atlas_analytics import."""
+    try:
+        component = str(hook).split(".", 1)[0]
+        if not _COMPONENT.match(component):
+            return
+        import atlas_analytics_hot
+
+        atlas_analytics_hot.record(["fault." + component + "." + errclass(exc)])
+    except Exception:  # noqa: BLE001 -- counting must never become the fault
+        pass
+
+
 def record(hook: str, exc: BaseException, cwd: str | None = None) -> None:
     """Append one JSON fault line. Never raises."""
     try:
@@ -90,6 +139,7 @@ def record(hook: str, exc: BaseException, cwd: str | None = None) -> None:
             f.write(line + "\n")
         if os.path.getsize(path) > MAX_BYTES:
             _truncate(path)
+        _count(hook, exc)
     except Exception:  # noqa: BLE001 -- the recorder must never become the fault
         pass
 

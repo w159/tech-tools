@@ -1890,10 +1890,56 @@ def _killed(rundir: Path) -> bool:
     return (rundir / "killed").exists()
 
 
+def _bucket_size(n: int) -> str:
+    return "1" if n <= 1 else "2" if n == 2 else "3-4" if n <= 4 else "5-8" if n <= 8 else "9+"
+
+
+def _bucket_wall(s: float) -> str:
+    return "lt1m" if s < 60 else "1to5m" if s < 300 else "5to15m" if s < 900 else "15to60m" if s < 3600 else "ge60m"
+
+
+def _count_run(rundir: Path, summary: dict) -> None:
+    """Anonymous crew.* counters for one finished run (closed-set buckets only, never a name or path).
+    Never raises; atlas_analytics validates the keys and is off when the user opted out."""
+    try:
+        import atlas_analytics
+
+        wall = float(summary.get("wall_s") or 0)
+        if summary.get("killed"):
+            outcome = "killed"
+        elif summary.get("ok"):
+            outcome = "done"
+        else:
+            # the summary has no timeout flag: the supervisor's deadline is run.json started+timeout, so a
+            # red run that used its whole budget is a timeout, any other red run a failure
+            try:
+                limit = float(json.loads((rundir / "run.json").read_text(encoding="utf-8")).get("timeout") or 3600)
+            except (OSError, ValueError, TypeError, AttributeError):
+                limit = None
+            outcome = "timeout" if limit is not None and wall >= limit else "failed"
+        # rounds[0] is the first attempt (round 0), not a fix round: count only the fix rounds after it
+        fix = max(0, len(summary.get("rounds") or []) - 1)
+        ce = summary.get("check_exit")
+        check = "none" if ce is None else "pass" if ce == 0 else "fail"
+        for key in (
+            "crew.workers." + _bucket_size(len(summary.get("workers") or [])),
+            "crew.outcome." + outcome,
+            "crew.wall." + _bucket_wall(wall),
+            "crew.rounds." + ("3+" if fix >= 3 else str(fix)),
+            "crew.check." + check,
+        ):
+            atlas_analytics.record(key)
+    except Exception:  # noqa: BLE001 -- telemetry never changes a run
+        pass
+
+
 def _write_summary(rundir: Path, summary: dict) -> None:
+    first = not (rundir / "summary.json").exists()  # a second write for the same run must not count twice
     tmp = rundir / f"summary.json.{os.getpid()}.tmp"
     tmp.write_text(json.dumps(atlas_crew_seal.sign(rundir, summary), indent=1), encoding="utf-8")
     os.replace(tmp, rundir / "summary.json")
+    if first:
+        _count_run(rundir, summary)
 
 
 def _pid_from(path: Path) -> int | None:

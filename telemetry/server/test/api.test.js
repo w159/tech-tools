@@ -31,9 +31,14 @@ test("ingest: 405, 413, 400, 201, 409", async () => {
     assert.equal((await ingest(post("", "GET"), ctx)).status, 405);
     assert.equal((await ingest(post("x".repeat(70 * 1024)), ctx)).status, 413);
 
-    const bad = await ingest(post(submission({ counts: { "skill.unknown": 1 } })), ctx);
+    const bad = await ingest(post(submission({ counts: { "skill.atlas-plan": 1, "skill.unknown": "1" } })), ctx);
     assert.equal(bad.status, 400);
-    assert.match((await bad.json()).errors[0], /not allowed/);
+    assert.match((await bad.json()).errors[0], /out of range/);
+
+    // a key this server does not know is dropped, not fatal
+    const newer = await ingest(post(submission({ counts: { "skill.atlas-plan": 1, "skill.unknown": 1 } })), ctx);
+    assert.equal(newer.status, 201);
+    assert.deepEqual(await newer.json(), { ok: true, kept: 1, dropped: 1 });
 
     const good = submission();
     assert.equal((await ingest(post(good), ctx)).status, 201);
@@ -41,9 +46,11 @@ test("ingest: 405, 413, 400, 201, 409", async () => {
 
     // stored file is exactly the validated body, nothing else
     const files = await readdir(join(dir, PAST_WEEK));
-    assert.equal(files.length, 1);
-    const stored = JSON.parse(await readFile(join(dir, PAST_WEEK, files[0]), "utf8"));
-    assert.deepEqual(Object.keys(stored).sort(), ["atlas_version", "counts", "nonce", "os", "python", "schema", "week"]);
+    assert.equal(files.length, 2);
+    const stored = await Promise.all(files.map(async (f) => JSON.parse(await readFile(join(dir, PAST_WEEK, f), "utf8"))));
+    const plain = stored.find((s) => !s.dropped);
+    assert.deepEqual(Object.keys(plain).sort(), ["atlas_version", "counts", "nonce", "os", "python", "schema", "week"]);
+    assert.deepEqual(stored.find((s) => s.dropped).counts, { "skill.atlas-plan": 1 }); // the unknown key is not stored
   } finally {
     await done();
   }

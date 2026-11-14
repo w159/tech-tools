@@ -21,9 +21,9 @@ Never raises; writes nothing when off.
 
 import json
 import os
-from datetime import date
+from datetime import datetime, timezone
 
-OFF_VALUES = ("off", "0", "false", "no", "disabled")
+OFF_VALUES = ("off", "0", "false", "no", "disabled", "disable")
 ON_VALUES = ("on", "1", "true", "yes", "enabled")
 AUTOMATION_VARS = (
     "CI",
@@ -36,7 +36,7 @@ AUTOMATION_VARS = (
     "TF_BUILD",
     "PYTEST_CURRENT_TEST",
 )
-_KEY_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-")
+_KEY_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-+")  # "+" for crew.rounds.3+ and team.size.9+
 
 
 def _dir():
@@ -82,7 +82,7 @@ def record(keys, n=1):
     try:
         if not keys or type(n) is not int or n < 1 or not enabled():
             return
-        y, w, _ = date.today().isocalendar()
+        y, w, _ = datetime.now(timezone.utc).date().isocalendar()  # the server validates ISO weeks in UTC
         week = f"{y}-W{w:02d}"
         lines = [
             json.dumps({"w": week, "k": k, "n": min(n, 10000)}, separators=(",", ":")) + "\n"

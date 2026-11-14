@@ -23,7 +23,10 @@ import atlas_analytics as A
 
 PLUGIN = Path(__file__).resolve().parent.parent
 ALLOWED = PLUGIN.parent.parent / "telemetry" / "allowed-keys.json"
-REGEN = "python3 plugins/atlas/scripts/atlas_analytics.py allowed-keys > telemetry/allowed-keys.json"
+REGEN = (
+    "python3 plugins/atlas/scripts/atlas_analytics.py allowed-keys --merge telemetry/allowed-keys.json > /tmp/ak.json"
+    " && mv /tmp/ak.json telemetry/allowed-keys.json"
+)
 
 # pattern -> [(file under plugins/atlas, needle that must appear in it)]. The file is the one that records.
 CALL_SITES = {
@@ -43,10 +46,20 @@ CALL_SITES = {
         ("hooks/edit_read_nudge.py", '"hook.edit_read_nudge.context.unread"'),
     ],
     "dispatch.{event}.ms.{ms}": [("hooks/event_dispatch.py", '"dispatch.%s.ms.%s"')],
-    "skill.{skill}": [
-        ("hooks/event_dispatch.py", '"skill." +'),
-        ("hooks/event_dispatch.py", "def prompt_skill_key"),
-    ],
+    "skill.{skill}": [("hooks/event_dispatch.py", '"skill." +')],
+    "command.{skill}": [("hooks/event_dispatch.py", '"command." +')],
+    "fault.{component}.{errclass}": [("scripts/atlas_faults.py", '"fault.')],
+    "mod.open.{surface}": [("mod/usage.ts", "'mod.open.dock'"), ("scripts/atlas_analytics.py", 'k.startswith("mod.")')],
+    "mod.command.{modcmd}": [("mod/usage.ts", "'mod.command.atlas-cc'")],
+    "mod.error.{moderr}": [("mod/usage.ts", "'mod.error.rebuild'")],
+    "crew.workers.{size}": [("scripts/atlas_crew.py", "crew.workers.")],
+    "crew.outcome.{crewoutcome}": [("scripts/atlas_crew.py", "crew.outcome.")],
+    "crew.wall.{wall}": [("scripts/atlas_crew.py", "crew.wall.")],
+    "crew.rounds.{rounds}": [("scripts/atlas_crew.py", "crew.rounds.")],
+    "crew.check.{check}": [("scripts/atlas_crew.py", "crew.check.")],
+    "active.day.{weekday}": [("scripts/atlas_analytics.py", '"active.day." + WEEKDAYS')],
+    "delivery.fail.{sendfail}": [("scripts/atlas_analytics.py", 'record("delivery.fail." + e.kind)')],
+    "delivery.ok.{transport}": [("scripts/atlas_analytics.py", 'record("delivery.ok." + transport)')],
     "agent.{role}": [("hooks/event_dispatch.py", '"agent." +')],
     "team.{class}.{effort}": [
         ("scripts/atlas_mux.py", "f\"team.{rec['class']}.{rec['effort']}\"")
@@ -81,7 +94,7 @@ def _patterns() -> set[str]:
 @pytest.mark.skipif(
     not ALLOWED.parent.is_dir(), reason="telemetry/ is not part of this checkout"
 )
-def test_allowed_keys_file_equals_current_client_output():
+def test_allowed_keys_file_covers_current_client_output_and_only_grows():
     cli = subprocess.run(
         [
             sys.executable,
@@ -95,16 +108,34 @@ def test_allowed_keys_file_equals_current_client_output():
     want = json.loads(cli.stdout)
     have = json.loads(ALLOWED.read_text(encoding="utf-8"))
     missing = sorted(set(want["keys"]) - set(have["keys"]))
-    extra = sorted(set(have["keys"]) - set(want["keys"]))
-    assert not missing and not extra, (
+    # Extra keys are allowed: older installs still send them, so the server list only ever grows
+    # (the Nov 5 server lacked 45 keys 17.16.0 added and rejected every such week).
+    assert not missing, (
         f"telemetry/allowed-keys.json is stale: {len(missing)} key(s) the client can send are missing "
-        f"({missing[:5]}), {len(extra)} are no longer sent ({extra[:5]}). Regenerate: {REGEN}"
+        f"({missing[:5]}). Regenerate: {REGEN}"
     )
-    assert have == want, f"envelope differs from the client output; regenerate: {REGEN}"
+    assert {k: v for k, v in have.items() if k != "keys"} == {k: v for k, v in want.items() if k != "keys"}, (
+        f"envelope differs from the client output; regenerate: {REGEN}"
+    )
     assert have["keys"] == sorted(have["keys"])
-    assert ALLOWED.read_text(encoding="utf-8") == cli.stdout, (
-        f"formatting differs; regenerate: {REGEN}"
+    merged = subprocess.run(
+        [sys.executable, str(PLUGIN / "scripts" / "atlas_analytics.py"), "allowed-keys", "--merge", str(ALLOWED)],
+        capture_output=True, text=True, check=True,
     )
+    assert ALLOWED.read_text(encoding="utf-8") == merged.stdout, f"formatting differs; regenerate: {REGEN}"
+
+
+@pytest.mark.skipif(not ALLOWED.parent.is_dir(), reason="telemetry/ is not part of this checkout")
+def test_allowed_keys_never_lose_a_key_an_earlier_release_shipped():
+    out = subprocess.run(
+        ["git", "-C", str(PLUGIN), "show", "atlas-v17.18.0:telemetry/allowed-keys.json"],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        pytest.skip("release tag not available in this checkout")
+    old = set(json.loads(out.stdout)["keys"])
+    have = set(json.loads(ALLOWED.read_text(encoding="utf-8"))["keys"])
+    assert old <= have, f"keys dropped from the server allowlist: {sorted(old - have)[:5]}"
 
 
 def test_allowed_keys_match_in_process_expansion():

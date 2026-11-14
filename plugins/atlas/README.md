@@ -8,7 +8,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.18.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.19.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 23 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -1105,7 +1105,7 @@ No hook creates a skill or a slash command. Learned knowledge goes to findings,
 ## Telemetry
 
 On by default: anonymous whole-number counters (which skills, hooks and gates fire, how long the hook pass takes, how
-team runs end), summed per ISO week and sent once the week has ended (when an endpoint is configured). No install id, no prompts, code, paths or names
+team runs end), summed per ISO week and sent as a week-to-date snapshot, then once more when the week has ended (when an endpoint is configured). No install id, no prompts, code, paths or names
 of yours. A counter is published only once at least 3 installs reported it. A one-time notice is shown the first time
 (Claude Code and Codex: the SessionStart message; omp: a toast). Full detail, every counter and its purpose, and the
 hosting caveat: [references/telemetry.md](references/telemetry.md).
@@ -1121,6 +1121,20 @@ python3 scripts/atlas_analytics.py status     # state, files, event count, week 
 python3 scripts/atlas_analytics.py export --out atlas-counts.json   # share by hand instead
 python3 scripts/atlas_analytics.py delete     # remove ~/.atlas/analytics entirely
 ```
+
+New in 17.19.0: the client sends the current week as a week-to-date snapshot (`partial: true`, schema 3) and each finished
+week once as final, in the background at session start, at most once an hour. A failed send keeps the week and is counted; `status` shows the
+last send result. `send --test`, `preview --test`, `prove --test` or `ATLAS_ANALYTICS_TEST=1` mark a payload as a test, which
+the public report ignores. The owner reads the data on a dashboard at `/dashboard` of the telemetry server, behind a secret
+(`telemetry/server/README.md`).
+
+| New counters | Meaning |
+|---|---|
+| `delivery.ok.<urllib\|curl>`, `delivery.fail.<ssl\|timeout\|network\|http4xx\|http5xx\|refused\|other>` | Send results; a TLS failure retries with curl. |
+| `command.<skill>`, `active.day.<mon..sun>` | Slash commands used; weekdays with activity. |
+| `fault.<component>.<errclass>` | Component faults by closed error class. |
+| `mod.open.*`, `mod.command.*`, `mod.error.*` | Mod panels opened, mod commands run, mod errors. |
+| `crew.workers.*`, `crew.outcome.*`, `crew.wall.*`, `crew.rounds.*`, `crew.check.*` | Crew size, outcome, wall time, fix rounds, unit check result. |
 
 Installs send to `https://atlas-telemetry.vercel.app/api/ingest`; turn telemetry off with any option above and nothing
 is sent. Reports land in `telemetry/REPORT.md` and `telemetry/reports/` of the tech-tools repository. The hosting platform may
@@ -1191,7 +1205,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.18.0
+|-- .claude-plugin/plugin.json   manifest, version 17.19.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

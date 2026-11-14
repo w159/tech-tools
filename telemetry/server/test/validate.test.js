@@ -52,7 +52,7 @@ test("rejects extra and missing envelope keys", () => {
   assert.match(check(missing).errors.join(), /missing envelope key: os/);
 });
 
-rejects("wrong schema", { schema: 1 }, /schema must be 2/);
+rejects("wrong schema", { schema: 1 }, /schema must be one of 2, 3/);
 rejects("non-semver atlas_version", { atlas_version: "v16" }, /atlas_version/);
 rejects("non-string atlas_version", { atlas_version: 16 }, /atlas_version/);
 rejects("unknown os", { os: "freebsd" }, /os must be/);
@@ -68,7 +68,7 @@ rejects("uuid v1 nonce", { nonce: "6ba7b810-9dad-11d1-80b4-00c04fd430c8" }, /non
 rejects("uppercase nonce", { nonce: "6BA7B810-9DAD-41D1-80B4-00C04FD430C8" }, /nonce/);
 rejects("empty counts", { counts: {} }, /must not be empty/);
 rejects("array counts", { counts: [1] }, /counts must be an object/);
-rejects("unknown count key", { counts: { "skill.nope": 1 } }, /not allowed/);
+rejects("malformed count key", { counts: { "Skill Nope/../x": 1 } }, /malformed/);
 rejects("zero count", { counts: { "skill.atlas-plan": 0 } }, /out of range/);
 rejects("negative count", { counts: { "skill.atlas-plan": -1 } }, /out of range/);
 rejects("fractional count", { counts: { "skill.atlas-plan": 1.5 } }, /out of range/);

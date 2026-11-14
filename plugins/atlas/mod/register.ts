@@ -28,6 +28,7 @@ import { asksUser, gateTally, leadBusy, planBusy, stepBlocked, stopRefusal, with
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
 import { coreReport } from './core-row';
+import { noteUsage, type UsageKey } from './usage';
 import { registerRouting, registerCompletion } from './routing';
 import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDeps } from './discipline';
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './restyle';
@@ -80,8 +81,9 @@ const shownFailures = new Set<string>();
 const MAX_FAILURE_CHARS = 200;
 
 /** Debug-log a failure and toast it once per distinct message. Module level (a `$` closure inside register() is refused by the host); never throws. */
-function reportFailure($: EngineInterface, message: string): void {
+function reportFailure($: EngineInterface, message: string, key: UsageKey = 'mod.error.other'): void {
 	try {
+		void noteUsage($, key); // counted before the once-per-message toast filter: a repeat is still a failure
 		$.ui.log(message, { to: 'debug' });
 		if (shownFailures.has(message)) return;
 		shownFailures.add(message);
@@ -575,7 +577,7 @@ async function rebuildOnce($: EngineInterface): Promise<void> {
 		// The board keeps its last good rows; say why they may be stale.
 		if (builder.todoError !== undefined) reportFailure($, `atlas: todos.json is ${builder.todoError}, showing the last good board`);
 	} catch (err) {
-		reportFailure($, `atlas: rebuild failed: ${String(err)}`);
+		reportFailure($, `atlas: rebuild failed: ${String(err)}`, 'mod.error.rebuild');
 		lastFingerprint = ''; // the poll recorded this build's fingerprint before it ran: forget it so the next tick retries instead of waiting for another file change
 		// keep the last good snapshot
 	}
@@ -587,6 +589,7 @@ export async function dockTick($: EngineInterface): Promise<void> {
 	dockWanted = false;
 	await update($, paneOpenedState, () => true);
 	void $.ui.open(PANE_DOCK).then(toastUnplaced($));
+	void noteUsage($, 'mod.open.dock');
 }
 
 /** Signature of what atlas_gates.py reads: the board files under <root>/.atlas/.run and the gate DB (ATLAS_DB, else
@@ -842,7 +845,9 @@ export async function openBoard($: EngineInterface): Promise<void> {
 		void rebuild($);
 		return;
 	}
-	toastUnplaced($)(await $.ui.open(PANE_BOARD));
+	const boardOpen = $.ui.open(PANE_BOARD);
+	void noteUsage($, 'mod.open.board');
+	toastUnplaced($)(await boardOpen);
 	void rebuild($); // the board draws the snapshot; refresh it so a press never shows a stale list
 }
 
@@ -854,6 +859,7 @@ function bandHandlers($: EngineInterface): BandHandlers {
 			guarded(async () => {
 				// Open first, before any await: the engine counts the open as asked (placed at any width) only while the press is behind it.
 				const opened = $.ui.open(PANE_ON_DEMAND);
+				void noteUsage($, 'mod.open.ondemand');
 				await update($, viewState, () => v);
 				await update($, paneOpenedState, () => true);
 				toastUnplaced($)(await opened);
@@ -1226,7 +1232,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		}
 	} catch (err) {
 		// a failed boot must not block the session
-		reportFailure($, `atlas: boot failed: ${String(err)}`);
+		reportFailure($, `atlas: boot failed: ${String(err)}`, 'mod.error.boot');
 	}
 }
 
@@ -1240,6 +1246,7 @@ async function dockOnPrompt($: EngineInterface): Promise<void> {
 	if (booted?.interactive === true && modOnNow && !promptDockDone && !paneClosedByPerson && !paneChecked && shouldDockAsked(lastViewport)) {
 		promptDockDone = true;
 		const opened = $.ui.open(PANE_DOCK);
+		void noteUsage($, 'mod.open.dock');
 		try {
 			await update($, paneOpenedState, () => true);
 			toastUnplaced($)(await opened);
@@ -1500,20 +1507,24 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// A tree this plugin drew was refused: surface it in the debug log and once as a toast.
 	on('ui.fault', ($, e, next) => {
-		reportFailure($, `atlas: ${e.component} ${e.module} ${e.phase}: ${e.reason}`);
+		reportFailure($, `atlas: ${e.component} ${e.module} ${e.phase}: ${e.reason}`, 'mod.error.fault');
 		return next(e);
 	});
 
 	// /atlas-cc — open the sidebar and give it the keyboard; it stays until the person closes it.
 	on('command.run', { command: 'atlas-cc' }, async ($) => {
+		void noteUsage($, 'mod.command.atlas-cc');
 		await update($, paneOpenedState, () => true);
-		toastUnplaced($)(await $.ui.open(PANE_ON_DEMAND));
+		const opened = $.ui.open(PANE_ON_DEMAND);
+		void noteUsage($, 'mod.open.ondemand');
+		toastUnplaced($)(await opened);
 		void rebuild($);
 		return {};
 	});
 
 	// /atlas-core — the four pillars as text; computed fresh, no UI needed.
 	on('command.run', { command: 'atlas-core' }, async ($) => {
+		void noteUsage($, 'mod.command.atlas-core');
 		const model = await buildCore($).catch(() => null);
 		return { text: coreReport(hasCore(model) ? model : null) };
 	});
@@ -1549,6 +1560,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// /atlas-say <message> — post a note to the lead channel.
 	on('command.run', { command: 'atlas-say' }, async ($, e) => {
+		void noteUsage($, 'mod.command.atlas-say');
 		const text = e.args.trim();
 		if (text === '') return { text: 'usage: /atlas-say <message>' };
 		const snapshot = await read($, snapshotState);
@@ -1564,6 +1576,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// /atlas-todo <text> — add a todo at the current phase.
 	on('command.run', { command: 'atlas-todo' }, async ($, e) => {
+		void noteUsage($, 'mod.command.atlas-todo');
 		const text = e.args.trim();
 		if (text === '') return { text: 'usage: /atlas-todo <text>' };
 		const snapshot = await read($, snapshotState);

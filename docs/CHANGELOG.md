@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 17.19.0 - 2026-11-14
+
+- atlas 17.19.0: Root cause of no data: the production ingest server was last deployed from commit 2865bb94 (Nov 5) with a 1525-key allowlist; clients since 17.16.0 send 45 `hook.gate_rerun.*` keys it did not know, and it rejected the whole week on one unknown key (`counts key not allowed`) while the client retried every 6 h forever. Also only finished weeks were sent, the public report hides keys seen by fewer than 3 installs, there was no owner dashboard and send failures were silent. Server (schema 3 next to 2): unknown but well-formed keys are dropped and counted (`dropped`) instead of rejecting the payload, malformed keys still get 400, and ingest answers `{ok, kept, dropped}`. Schema 3 adds required `partial` and optional `test`, is a week-to-date snapshot that upserts per week nonce (200 replaced, 201 created), and a final week cannot be replaced by a partial one (409). New `GET /api/health`, `GET /api/admin` (JSON summary), `DELETE /api/admin?purge=test` and an HTML `/dashboard`, all admin routes behind the `ATLAS_DASHBOARD_TOKEN` Vercel env var (503 when unset or shorter than 24 characters, 401 on a wrong secret). Test submissions stay out of the public aggregate. Client (schema 3): sends the current week as a snapshot plus each finished week once as final, at session start at most once an hour; a failed send keeps the week and counts `delivery.fail.<kind>`, a success counts `delivery.ok.<urllib|curl>`, a TLS failure retries with curl, `status` shows the last send, and `--test` marks a payload test. New counters: `command.<skill>`, `fault.<component>.<errclass>`, `mod.open.*`, `mod.command.*`, `mod.error.*`, `crew.*` and `active.day.<mon..sun>`. The allowlist is 2126 keys and only grows (`allowed-keys --merge`). Still anonymous, opt-out unchanged. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-14_telemetry-dashboard.md](audits/2026-11-14_telemetry-dashboard.md).
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
+## marketplace 5.24.0 - 2026-11-14
+
+- marketplace 5.24.0: atlas 17.19.0. armada and programmer are unchanged.
+
 ## atlas 17.18.0 - 2026-11-14
 
 - atlas 17.18.0: Ctrl-C in a tmux pane reaches the worker claude again; crew summaries are HMAC-sealed and the Stop gate credits a crew only for this plugin's own `atlas_crew.py run` plus a verified seal; the lead no longer re-verifies after a green crew; the crew engine polls every 0.05 s. On the benchmark the crew is 48% (8 modules) and 29% (16 modules) of one prompt's cold wall time and 43% and 49% of its tokens; 1/4 of the wall time is not met. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-14_atlas-17.18.0-crew-time.md](audits/2026-11-14_atlas-17.18.0-crew-time.md).

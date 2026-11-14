@@ -140,5 +140,70 @@ class FaultsTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.path + ".tmp"))
 
 
+class FaultCounterTest(unittest.TestCase):
+    """fault.<component>.<errclass> goes through atlas_analytics_hot; only closed-set text reaches a key."""
+
+    def _record(self, hook, exc):
+        hot = mock.MagicMock()
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(
+            sys.modules, {"atlas_analytics_hot": hot}
+        ), mock.patch.dict(os.environ, {"ATLAS_HOME": home}):
+            atlas_faults.record(hook, exc, "/x")
+        return [c.args[0] for c in hot.record.call_args_list]
+
+    def test_errclass_table(self):
+        import socket
+        import subprocess
+
+        cases = [
+            (TimeoutError("t"), "timeout"),
+            (socket.timeout("t"), "timeout"),
+            (subprocess.TimeoutExpired("c", 1), "timeout"),
+            (PermissionError("p"), "permission"),
+            (FileNotFoundError("f"), "notfound"),
+            (json.JSONDecodeError("m", "d", 0), "json"),
+            (ModuleNotFoundError("m"), "import"),
+            (ImportError("i"), "import"),
+            (subprocess.CalledProcessError(1, "c"), "subprocess"),
+            (OSError("o"), "oserror"),
+            (ValueError("v"), "value"),
+            (KeyError("k"), "key"),
+            (TypeError("t"), "type"),
+            (AttributeError("a"), "attribute"),
+            (RuntimeError("r"), "runtime"),
+            (Exception("e"), "other"),
+        ]
+        for exc, want in cases:
+            self.assertEqual(atlas_faults.errclass(exc), want, repr(exc))
+
+    def test_record_counts_component_before_first_dot(self):
+        self.assertEqual(
+            self._record("worker_report_gate.finish_member", ValueError("secret /home/u/proj")),
+            [["fault.worker_report_gate.value"]],
+        )
+
+    def test_component_with_other_chars_is_dropped(self):
+        for hook in ("Bad-Name.x", "has space", "/home/u/proj", ""):
+            self.assertEqual(self._record(hook, ValueError("v")), [], hook)
+
+    def test_counter_failure_never_raises(self):
+        hot = mock.MagicMock()
+        hot.record.side_effect = RuntimeError("boom")
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(
+            sys.modules, {"atlas_analytics_hot": hot}
+        ), mock.patch.dict(os.environ, {"ATLAS_HOME": home}):
+            atlas_faults.record("h", ValueError("v"), "/x")
+            self.assertEqual(len(atlas_faults.load(0)), 1)  # the local log is still written
+        hot.record.assert_called_once()
+
+    def test_hot_writer_lands_a_line_when_enabled(self):
+        with tempfile.TemporaryDirectory() as home:
+            env = {"ATLAS_HOME": home, "ATLAS_ANALYTICS": "on"}
+            with mock.patch.dict(os.environ, env):
+                atlas_faults.record("event_dispatch.run", KeyError("k"), "/x")
+            lines = open(os.path.join(home, "analytics", "events.jsonl")).read().splitlines()
+        self.assertEqual([json.loads(x)["k"] for x in lines], ["fault.event_dispatch.key"])
+
+
 if __name__ == "__main__":
     unittest.main()
