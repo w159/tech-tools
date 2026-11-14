@@ -476,7 +476,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 79 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 80 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -938,7 +938,7 @@ tech-tools/
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 79 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 80 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator
