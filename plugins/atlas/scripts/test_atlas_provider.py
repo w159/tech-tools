@@ -917,6 +917,132 @@ class MuxWiringTests(Base):
 
 
 @unittest.skipUnless(shutil.which("claude"), "claude CLI not on PATH")
+class BenchTests(Base):
+    """The bench harness on recorded fake runs: math, table, refusal on an unhealthy stub, fallback exclusion."""
+
+    def fake(self, wall, tin=100, tout=50, cost=0.1, fallback=None, provider=None, ok=True):
+        def runner(spec, root, plan_path, timeout):
+            self.roots.append(root)
+            self.stubs_seen.append(Path(root, "slug.py").read_text())
+            plan = json.loads(Path(plan_path).read_text())
+            self.plans.append(plan)
+            w = wall.pop(0) if isinstance(wall, list) else wall
+            return {
+                "ok": ok, "wall_s": w, "tokens_in": tin, "tokens_out": tout, "tokens_cache_read": 7, "cost_usd": cost,
+                "workers": [{"provider": provider or spec["provider"], "model": spec["model"],
+                             "fallback": fallback.pop(0) if isinstance(fallback, list) else fallback}],
+            }  # fmt: skip
+
+        return runner
+
+    def setUp(self):
+        super().setUp()
+        self.roots, self.stubs_seen, self.plans = [], [], []
+
+    def args(self, models, runs=3, out=None):
+        return argparse.Namespace(models=models, runs=runs, task=None, check=None, timeout=60, out=out)
+
+    def run_bench(self, args, runner, checker=lambda root, check: True):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = P.cmd_bench(args, runner=runner, checker=checker)
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_parse_models(self):
+        self.assertEqual(P.parse_models("claude:sonnet, ollama:qwen3:8b"), [("claude", "sonnet"), ("ollama", "qwen3:8b")])
+        for bad in ("", "gpt:x", "claude", "ollama:", "claude:a b"):
+            with self.assertRaises(ValueError):
+                P.parse_models(bad)
+
+    def test_aggregate_math_cold_warm_and_fallback_exclusion(self):
+        def r(prov, run, wall, **kw):
+            return {"provider": prov, "model": "m", "run": run, "phase": "cold" if run == 1 else "warm", "wall_s": wall,
+                    "tokens_in": 100, "tokens_out": 40, "tokens_cache_read": 10, "cost_usd": kw.get("cost", 0.2),
+                    "pass": kw.get("ok", True), "fallback": kw.get("fb")}  # fmt: skip
+
+        runs = [r("claude", 1, 12.0, cost=0.30), r("claude", 2, 8.0), r("claude", 3, 6.0, cost=0.10, ok=False),
+                r("ollama", 1, 40.0, cost=0.0), r("ollama", 2, 99.0, cost=0.0, fb="down"), r("ollama", 3, 20.0, cost=0.0)]  # fmt: skip
+        rows = {(x["provider"], x["phase"]): x for x in P.aggregate(runs)}
+        c = rows[("claude", "warm")]
+        self.assertEqual((c["n"], c["excluded"], c["wall_mean_s"], c["wall_min_s"], c["wall_max_s"], c["passed"]), (2, 0, 7.0, 6.0, 8.0, 1))
+        self.assertAlmostEqual(c["cost_usd"], 0.15)
+        self.assertEqual(rows[("claude", "cold")]["wall_mean_s"], 12.0)
+        o = rows[("ollama", "warm")]
+        self.assertEqual((o["n"], o["excluded"], o["wall_mean_s"]), (1, 1, 20.0))  # the 99 s fallback run is not in it
+        self.assertEqual(rows[("ollama", "cold")]["wall_mean_s"], 40.0)
+        table = P.render_table(list(rows.values()))
+        self.assertTrue(table.isascii())
+        self.assertIn("| claude:m | warm | 2 | 0 | 7.0 | 6.0-8.0 | 100 | 40 | 10 | 0.1500 | 1/2 |", table)
+        self.assertIn("| ollama:m | warm | 1 | 1 | 20.0 | 20.0-20.0 | 100 | 40 | 10 | 0.0000 | 1/1 |", table)
+
+    def test_unhealthy_ollama_refuses_with_exit_2_and_runs_nothing(self):
+        for st_kw, url in (({"models": ["other:1b"]}, None), ({}, closed_port_url())):
+            st = self.stub(**st_kw)
+            self.env(ATLAS_OLLAMA_URL=url or st.url)
+            rc, out, err = self.run_bench(self.args("claude:sonnet,ollama:qwen3:8b"), self.fake(1.0))
+            self.assertEqual(rc, 2)
+            self.assertIn("not healthy", err)
+            self.assertIn("ollama pull qwen3:8b", err)
+            self.assertFalse(json.loads(out)["ok"])
+            self.assertEqual(self.roots, [])  # no run, no fallback benchmarked
+
+    def test_remote_url_is_refused_without_opt_in(self):
+        self.env(ATLAS_OLLAMA_URL="http://192.0.2.1:11434")
+        rc, _, err = self.run_bench(self.args("ollama:qwen3:8b"), self.fake(1.0))
+        self.assertEqual(rc, 2)
+        self.assertIn("remote_refused", err)
+
+    def test_healthy_run_fresh_repo_per_run_json_and_zero_local_cost(self):
+        st = self.stub()
+        self.env(ATLAS_OLLAMA_URL=st.url)
+        out_path = Path(self.home, "bench.json")
+        runner = self.fake([10.0, 8.0, 6.0, 30.0, 20.0, 18.0], cost=0.25)
+        rc, out, _ = self.run_bench(self.args("claude:sonnet,ollama:qwen3:8b", out=str(out_path)), runner)
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(set(self.roots)), 6)  # a fresh temp repo per run
+        self.assertTrue(all("NotImplementedError" in x for x in self.stubs_seen))
+        self.assertTrue(all(not Path(x).exists() for x in self.roots))  # cleaned up
+        self.assertTrue(all(pl["workers"][0]["owns"] == ["slug.py"] and len(pl["workers"]) == 1 for pl in self.plans))
+        rep = json.loads(out_path.read_text())
+        phases = [(r["provider"], r["phase"]) for r in rep["runs"]]
+        self.assertEqual(phases.count(("claude", "cold")), 1)
+        self.assertEqual(phases.count(("ollama", "warm")), 2)
+        self.assertTrue(all(r["cost_usd"] == 0.0 for r in rep["runs"] if r["provider"] == "ollama"))
+        self.assertTrue(all(r["cost_usd"] == 0.25 for r in rep["runs"] if r["provider"] == "claude"))
+        self.assertIn("| ollama:qwen3:8b | cold | 1 | 0 | 30.0 |", out)
+
+    def test_fallback_run_is_marked_and_excluded_from_the_ollama_column(self):
+        st = self.stub()
+        self.env(ATLAS_OLLAMA_URL=st.url)
+        out_path = Path(self.home, "bench.json")
+        runner = self.fake([30.0, 5.0, 20.0], fallback=[None, "down", None])
+        rc, out, _ = self.run_bench(self.args("ollama:qwen3:8b", out=str(out_path)), runner)
+        self.assertEqual(rc, 0)
+        rep = json.loads(out_path.read_text())
+        self.assertEqual([r["fallback"] for r in rep["runs"]], [None, "down", None])
+        warm = [x for x in rep["summary"] if x["phase"] == "warm"][0]
+        self.assertEqual((warm["n"], warm["excluded"], warm["wall_mean_s"]), (1, 1, 20.0))
+
+    def test_provider_mismatch_counts_as_fallback_and_failed_check_is_a_fail(self):
+        st = self.stub()
+        self.env(ATLAS_OLLAMA_URL=st.url)
+        out_path = Path(self.home, "bench.json")
+        rc, _, _ = self.run_bench(self.args("ollama:qwen3:8b", runs=1, out=str(out_path)), self.fake(9.0, provider="claude"))
+        rep = json.loads(out_path.read_text())
+        self.assertEqual(rep["runs"][0]["fallback"], "provider_mismatch")
+        rc, _, _ = self.run_bench(self.args("ollama:qwen3:8b", runs=1, out=str(out_path)), self.fake(9.0), checker=lambda r, c: False)
+        rep = json.loads(out_path.read_text())
+        self.assertEqual((rep["runs"][0]["pass"], rep["summary"][0]["passed"]), (False, 0))
+
+    def test_main_bench_unhealthy_exit_2(self):
+        self.env(ATLAS_OLLAMA_URL=closed_port_url())
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            rc = P.main(["bench", "--models", "ollama:qwen3:8b"])
+        self.assertEqual(rc, 2)
+        self.assertIn("not healthy", err.getvalue())
+
+
 class RealCliWiringTests(Base):
     def test_claude_p_reaches_the_stub_with_the_resolved_env(self):
         st = self.stub(models=("stub-model",))

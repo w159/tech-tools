@@ -43,3 +43,5 @@ Assumption to avoid (tech-tools): cause `git add`, `git commit` and `bunx tsc` a
 Assumption to avoid (tech-tools): . I used Read, Grep and Bash instead. DELIVERABLE: board note for lead-104043. I assumed A = implementer-51c5, B = implementer-d2cf and C = implementer-bbcd, from the peer order.
 §
 Assumption to avoid (tech-tools): - I never ran these tests on the untouched baseline, so `[unverified]` that they were already failing without COLORTERM.
+§
+Assumption to avoid (tech-tools): SKIP exits 0, so CI cannot tell "live ran" from "live never ran".

@@ -552,6 +552,37 @@ python3 scripts/atlas_provider.py doctor --role runner    # resolution + health,
   context on every turn and is slower per token than the cache-backed Claude path.
   Model quality decides what a local worker can do: start with read-only roles.
 
+### Benchmark local models
+
+`atlas_provider.py bench` runs the same one-worker crew task through the real
+`atlas_crew.py run` on Claude and on Ollama and prints wall time, tokens and Claude
+cost side by side. The default task is a small slugify function in a fresh temp git
+repo with a unittest that must pass; the harness runs that test itself after the
+crew, so pass or fail is checked, not claimed. On your machine:
+
+```
+ollama pull qwen3:8b
+ollama serve                      # skip if the Ollama app is already running
+python3 plugins/atlas/scripts/atlas_provider.py doctor --provider ollama --model qwen3:8b   # exit 0 = healthy
+python3 plugins/atlas/scripts/atlas_provider.py bench \
+  --models claude:claude-sonnet-5-5,ollama:qwen3:8b --runs 3 --out /tmp/atlas-bench.json
+```
+
+- The first run per model is cold, the rest warm; the table reports them separately.
+  `wall s` is the crew engine's own clock (run start to sealed summary), so the lead's
+  CLI start and exit are excluded, the same way the crew benchmarks in `docs/audits/`
+  count warm runs.
+- Per run it records wall seconds, input and output tokens (input includes cache
+  writes; cache reads are a separate column), Claude cost in USD (0 for local), the
+  fixture test's pass or fail, and any provider fallback reason.
+- It refuses with exit 2 before any run when a requested Ollama model is not healthy
+  (not running, model not pulled, no Anthropic API) or the URL is not loopback. A run
+  where a worker still ended up on another provider is marked and left out of that
+  column, never counted as Ollama.
+- `--task "..."` replaces the worker's task text and `--check "<cmd>"` the pass or fail
+  command; the repo is always the fixture. `--timeout` is seconds per run (default 900).
+  Needs the `claude` CLI on PATH.
+
 Tested here against a local stub endpoint and the real `claude` CLI; no real model
 ran in the test container. `claude --bg` workers get the provider env at spawn, but
 whether the background daemon honours it was not verified.
