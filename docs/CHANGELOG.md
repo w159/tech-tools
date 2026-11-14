@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.17.1 - 2026-11-14
+
+- atlas 17.17.1: a new session resets the worktree status throttle in the mod. The `tests` workflow had failed on every push since 17.15.0 on `atlas_wt.py status runs at most every 5 s of the clock`, because the throttle survived into the next session. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-14_atlas-17.17.0-silent-failures.md](audits/2026-11-14_atlas-17.17.0-silent-failures.md).
+
+## marketplace 5.22.1 - 2026-11-14
+
+- marketplace 5.22.1: atlas 17.17.1. armada and programmer are unchanged.
+
 ## atlas 17.17.0 - 2026-11-14
 
 - atlas 17.17.0: silent failures after 17.16.0 fixed at the cause, each with a test and an adversarial check. A crew summary is ok only with a green check, no failed worker and no kill; dead workers are detected (exit 137 `died`, 126 `launch_error`); `atlas_crew.py kill` stops everything; `wait` refuses a run the engine never started; the Stop gate re-runs only commands that executed, treats timeouts and a missing pytest as inconclusive, and takes crew proof only from an engine launch in the session; the circuit breaker counts the main Stop only and re-arms. The session hooks stop writing `.atlas/` into non-projects, the doctor and `atlas_todo.py` exit non-zero on bad input, and `install_hooks.py` skips hooks the plugin already wires. On the benchmark 17.17.0 is no slower than 17.16.0 (cold 27.2 and 27.7 s against 29.2 and 30.9 s) and a red crew needs 3 lead turns instead of 5. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-14_atlas-17.17.0-silent-failures.md](audits/2026-11-14_atlas-17.17.0-silent-failures.md).

@@ -876,6 +876,8 @@ export function resetCore(): void {
 	coreFiles = {};
 	coreTouched = new Set();
 	coreFindingsOk = true;
+	wtAt = -Infinity;
+	wtRows = [];
 }
 
 /** `<path>` text, re-read only when its size or mtime moved; null when missing or unreadable. */

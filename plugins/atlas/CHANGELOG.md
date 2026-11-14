@@ -1,5 +1,11 @@
 # Changelog
 
+## 17.17.1 - 2026-11-14
+
+The GitHub `tests` workflow had been red on every push since 17.15.0, on one test, and that is fixed at the cause.
+
+- Worktree status throttle: `resetCore()` in `mod/register.ts` reset the core file state at session start but not the module-level throttle of the `atlas_wt.py status` call (`wtAt`, `wtRows`), so a new session inherited the previous session's throttle. When a test file that ran earlier left a later fake clock behind, the throttle never fired and `session boot and rebuild > atlas_wt.py status runs at most every 5 s of the clock` in `mod/register-edges.test.ts` got 0 calls instead of 1 (the atlas-bun and full jobs, runs 43553056724 and 43580485215). `resetCore()` now resets both. Reproduced with `bun test mod --randomize --seed 2` and `--seed 3` (1 fail before, 0 after). `bun test omp mod`: 4090 pass, 0 fail; `bun test`: 5731 pass, 0 fail. Evidence: finding 49 in `docs/audits/2026-11-14_atlas-17.17.0-silent-failures.md`.
+
 ## 17.17.0 - 2026-11-14
 
 17.16.0 left silent failures in the crew, the IRC bus, tmux, the Stop gate, the session hooks, the doctor and the CLIs: a crew with a crashed worker read ok, a dead worker was waited for until the budget ran out, the gate could be talked into green, and several hooks wrote files into directories that are not projects. Each finding was reproduced first, fixed at the cause and given a test, then an adversarial `atlas:verifier` with no part in the fix tried to refute it against the real hook entry points, real `atlas_crew.py` runs with a fake `claude` and real Claude Code transcripts. Evidence: `docs/audits/2026-11-14_atlas-17.17.0-silent-failures.md`. Full suite: 8803 passed, 5 skipped, under `-n 16` and serially (the 17.16.0 baseline in the same container: 10 failed, 8638 passed); root CI command 249 passed.
