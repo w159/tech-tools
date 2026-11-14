@@ -12083,5 +12083,158 @@
     "status": "verified",
     "verified_at": "2026-11-14T19:14:50+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-c1-decision",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "prompt_decision: one shared call, 10s in-process cache, loopback, route_choice >=0.8 + valid values",
+    "evidence": [
+      "plugins/atlas/hooks/prompt_decision.py:118-268; stub-server probe: both>=0.8 -> (fix,high); 0.79 -> fallback; invalid class -> None"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 stub-server probe route_scope/route_choice; pytest plugins/atlas/hooks 3053 passed",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:18:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-c2-negation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "classify_scope negation + per-field fallback work for the stated cases (but see r3-d3 regression)",
+    "evidence": [
+      "plugins/atlas/hooks/prompt_optimizer_core.py:374-441,442-460; 'do not audit, just implement x' -> implement"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -c classify_scope probes on 22 prompts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:18:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-c3-gate-v",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "completion_gate _decision_verify_reason: shadow never blocks, block at 0.95/0.1, stop_hook_active skips, off makes 0 calls",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate_core.py:2873-2929; probe output: default shadow blocked=False calls=1; block blocked=True; block+stop_hook_active calls=0; off calls=0"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 stub-server probe of _decision_verify_reason (8 env cases)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:18:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-c4-provider",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_provider resolve/health/fallback/strict/OAuth-strip/cache verified against a stub; real Ollama never exercised; pairing re-resolves at spawn (TOCTOU)",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_provider.py:258-306; atlas_mux.py:2064-2092,2617; stub probe: healthy/model_missing/no_anthropic_api/down/remote_refused/strict rc=2"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 atlas_provider.py resolve ...; stub HTTP server probe; pytest test_atlas_provider/crew/mod_gate 294 passed",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-14T22:18:16+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-c5-modgate",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_mod_gate.py offline passes (3 pass); --live correctly detects a real host load failure; workflows parse",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_mod_gate.py; .github/workflows/tests.yml:53-65, release.yml:32-39; offline output 'mod gate: PASS (3 pass, 0 fail, 0 skip)'"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_mod_gate.py; python3 -c yaml.safe_load both workflows",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-14T22:18:17+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-d1-proxy",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "P1 loopback-only guarantee bypassed by http_proxy: prompt/reply text goes to the proxy",
+    "evidence": [
+      "plugins/atlas/hooks/prompt_decision.py:132-138 (urlopen honors env proxies); probe: proxy listener received 'POST http://127.0.0.1:11434/v1/systemone'"
+    ],
+    "doc_refs": [],
+    "reproduction": "http_proxy=http://127.0.0.1:<p> python3 -c prompt_decision.ask(...) with no no_proxy",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-14T22:18:17+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-d2-httpexc",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "P2 ask() 'never raise' false: http.client.HTTPException (BadStatusLine/IncompleteRead) escapes",
+    "evidence": [
+      "plugins/atlas/hooks/prompt_decision.py:140; probe: garbage/badstatus/trunc/chunkbad servers -> RAISED BadStatusLine/IncompleteRead"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 raw-socket server returning 'garbage\\r\\n\\r\\n' then pd.verify_reply('x'*200)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-14T22:18:17+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-d3-negation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "P1 classify_scope regression: 'login does not work fix it' / 'this is not working please fix' now implement (HEAD: fix); 'Don't audit the db schema, add a column' -> db-audit; 'don't just review it, fix it' -> audit",
+    "evidence": [
+      "plugins/atlas/hooks/prompt_optimizer_core.py:374-400 (_NEG_REACH=3 swallows the fix verb; 'just' resets before negated word)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 classify_scope on those prompts vs git show HEAD:plugins/atlas/hooks/prompt_optimizer_core.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-14T22:18:17+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r3-d4-livegate",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "P0-for-release: atlas_mod_gate.py --live FAILS on the current tree: mod/usage.ts non-literal $.env.get(name); release.yml and tests.yml atlas-mod-gate will be red",
+    "evidence": [
+      "output: FAIL live claude plugin test: exit 1: HooksError: atlas: hooks module did not load: .../mod/usage.ts, compiled line 26 return $.env.get(name).catch"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_mod_gate.py --live",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-14T22:18:17+00:00",
+    "verified_by": "atlas:verifier"
   }
 ]

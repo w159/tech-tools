@@ -53,6 +53,7 @@ PLUGIN_ROOT = SCRIPTS.parent
 sys.path.insert(0, str(SCRIPTS))
 import atlas_crew_seal  # noqa: E402
 import atlas_irc  # noqa: E402
+import atlas_provider  # noqa: E402
 
 CREW_REL = Path(".atlas") / ".run" / "crew"
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
@@ -364,7 +365,7 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
 # ---------------------------------------------------------------- worker process
 
 
-def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
+def worker_env(rundir: Path, plan: dict, w: dict, root: str, provider: dict | None = None) -> dict:
     env = {
         k: v
         for k, v in os.environ.items()
@@ -408,6 +409,9 @@ def worker_env(rundir: Path, plan: dict, w: dict, root: str) -> dict:
             "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
         }
     )
+    if provider and provider.get("provider") == "ollama":
+        # the worker talks to the local Anthropic-compatible endpoint and cannot fall back to the account token
+        env = atlas_provider.apply_env(env, provider)
     return env
 
 
@@ -471,9 +475,53 @@ def worker_effort(w: dict, meta: dict):
 
 
 def worker_model(w: dict, meta: dict):
-    """ATLAS_CREW_WORKER_MODEL ([A-Za-z0-9._-]+) replaces the worker/plan model; unset or invalid: unchanged."""
+    """ATLAS_CREW_WORKER_MODEL ([A-Za-z0-9._:/-]+) replaces the worker/plan model; unset or invalid: unchanged."""
     env = os.environ.get("ATLAS_CREW_WORKER_MODEL", "").strip()
-    return env if re.fullmatch(r"[A-Za-z0-9._-]+", env) else (w.get("model") or meta.get("model"))
+    return env if re.fullmatch(r"[A-Za-z0-9._:/-]+", env) else (w.get("model") or meta.get("model"))
+
+
+def worker_provider(w: dict, meta: dict, model) -> dict:
+    """Resolution of the provider that launches this worker: the worker's `provider`, else the plan's (with its
+    `model` when that is "ollama"), else ATLAS_WORKER_PROVIDER. A Claude resolution keeps the Claude `model`."""
+    prov = w.get("provider") or meta.get("provider") or None
+    role = w.get("role") or "implementer"
+    if prov:
+        res = atlas_provider.resolve(role, model if prov == "ollama" else None, prov)
+    else:
+        res = atlas_provider.resolve(role, None, None)
+    if res["provider"] == "claude" and not res.get("model"):
+        res["model"] = model if prov != "ollama" else None
+    return res
+
+
+def provider_record_path(rundir: Path, name: str) -> Path:
+    return rundir / "provider" / f"{name}.json"
+
+
+def assign_providers(rundir: Path, plan: dict, meta: dict) -> dict:
+    """Resolve every worker's provider once, at run start (the lead's env: a tmux pane inherits the tmux server's,
+    not the lead's), and record it under provider/<name>.json. Raises ProviderRefused under ATLAS_OLLAMA_STRICT=1."""
+    out = {}
+    for w in plan["workers"]:
+        res = worker_provider(w, meta, worker_model(w, meta))
+        rec = {**atlas_provider.public(res), "url": res.get("url")}
+        d = provider_record_path(rundir, w["name"])
+        d.parent.mkdir(parents=True, exist_ok=True)
+        d.write_text(json.dumps(rec), encoding="utf-8")
+        atlas_provider.record_launch(res)
+        out[w["name"]] = rec
+    return out
+
+
+def load_provider(rundir: Path, name: str):
+    """The worker's recorded resolution with its env rebuilt, or None when no record exists."""
+    try:
+        rec = json.loads(provider_record_path(rundir, name).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if rec.get("provider") == "ollama" and rec.get("url"):
+        return {**rec, "env": atlas_provider.provider_env(rec["url"]), "unset": list(atlas_provider.UNSET_ENV)}
+    return {**rec, "env": {}, "unset": []}
 
 
 def worker_argv(model, effort, settings, sid, prompt, resume=None, name=None, harness="claude") -> list:
@@ -637,6 +685,16 @@ def cmd_worker(a) -> int:
         )
         resume = sid
     model = worker_model(w, meta)
+    prov = None
+    if harness == "claude":
+        prov = load_provider(rundir, a.name)
+        if prov is None:  # a worker started without a run record (direct call): resolve here
+            try:
+                prov = worker_provider(w, meta, model)
+            except atlas_provider.ProviderRefused as exc:
+                _write_exit(rundir, a.name, rnd, {"exit": 2, "wall_s": None, "sid": None, "launch_error": str(exc)})
+                return 2
+        model = prov["model"] if prov["provider"] == "ollama" else (prov.get("model") or model)
     effort = worker_effort(w, meta)
     argv = worker_argv(
         model,
@@ -648,7 +706,7 @@ def cmd_worker(a) -> int:
         name=f"{meta['run_id']}-{a.name}",
         harness=harness,
     )
-    env = worker_env(rundir, plan, w, root)
+    env = worker_env(rundir, plan, w, root, prov)
     if rnd:
         # a fix round gets a fresh gate budget
         (rundir / "irc" / "stop" / f"{a.name}.json").unlink(missing_ok=True)
@@ -1280,6 +1338,16 @@ def cmd_run(a) -> int:
     nicks = [w["name"] for w in plan["workers"]]
     atlas_irc.init_bus(rundir / "irc", f"#{run_id}", nicks, lead="lead")
     tmux = _use_tmux(not a.no_tmux)
+    try:
+        assign_providers(
+            rundir,
+            plan,
+            {"model": worker_model({}, {"model": a.model}), "provider": plan.get("provider") or getattr(a, "provider", None)},
+        )
+    except atlas_provider.ProviderRefused as exc:
+        shutil.rmtree(rundir, ignore_errors=True)
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 2
     meta = {
         "run_id": run_id,
         "root": root,
@@ -1287,6 +1355,7 @@ def cmd_run(a) -> int:
         "model": worker_model({}, {"model": a.model}),
         "effort": a.effort,
         "harness": getattr(a, "harness", None) or "claude",
+        "provider": plan.get("provider") or getattr(a, "provider", None),
         "settings": worker_settings(rundir),
         "session": f"atlas-{run_id}",
         "lead_session": lead_session(getattr(a, "session", None)),
@@ -1970,7 +2039,7 @@ def _group_of(pid: int, needle: str) -> int | None:
     try:
         if os.getpgid(pid) != pid:
             return None
-        if needle not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace"):
+        if not _argv_is_ours(_read_argv(pid), needle):
             return None
     except OSError:
         return None
@@ -2019,7 +2088,7 @@ def _stop_pidfile(path: Path, needle: str, wait_s: float = 3.0) -> int | None:
     if not pid or pid == os.getpid() or not _pid_alive(pid):
         return None
     try:
-        if needle not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace"):
+        if not _argv_is_ours(_read_argv(pid), needle):
             return None
     except OSError:
         pass  # no /proc: trust the file
@@ -2388,6 +2457,10 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
             else:
                 why = ex.get("launch_error") or ex.get("why") or f"exited {ex.get('exit')}"
                 failed.append({"name": n, "exit": ex.get("exit"), "why": why})
+        prec = load_provider(rundir, n) or {}
+        local = prec.get("provider") == "ollama"
+        if local:
+            u["cost_usd"] = 0.0  # a local model has no API bill: tokens are counted, dollars are not
         workers.append(
             {
                 "name": n,
@@ -2396,6 +2469,9 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
                 "turns": u.get("turns"),
                 "tokens": u.get("total"),
                 "cost_usd": round(u.get("cost_usd", 0), 4),
+                **({"provider": prec.get("provider"), "model": prec.get("model")} if prec else {}),
+                **({"local": True} if local else {}),
+                **({"fallback": prec["fallback"]} if prec.get("fallback") else {}),
                 **({"stopped_after_done": True} if n in stopped else {}),
                 "gate_refusals": gate.get("blocks"),
                 "own_check_passed": gate.get("passed"),
@@ -2403,6 +2479,8 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
         )
         tot["total"] += u.get("total", 0)
         tot["cost_usd"] += u.get("cost_usd", 0)
+        if local:
+            tot["tokens_local"] = tot.get("tokens_local", 0) + u.get("total", 0)
     tot["cost_usd"] = round(tot["cost_usd"], 4)
     return {
         "ok": code == 0 and not failed and not killed,
@@ -2516,6 +2594,8 @@ def lead_view(obj: dict, rundir: Path) -> dict:
     tw = obj.get("tokens_workers")
     if isinstance(tw, dict) and isinstance(tw.get("total"), int):
         out["tokens"] = tw["total"]
+        if tw.get("tokens_local"):
+            out["tokens_local"] = tw["tokens_local"]  # of those, run on a local model (no API cost)
     for k in _LEAD_IF_SET:
         if obj.get(k):
             out[k] = obj[k]
@@ -2628,7 +2708,13 @@ def status(rundir: Path) -> dict:
     meta = json.loads((rundir / "run.json").read_text(encoding="utf-8"))
     names = [w["name"] for w in meta["plan"]["workers"]]
     recs = atlas_irc.history(rundir / "irc")
+    provs = {}
+    for n in names:
+        rec = load_provider(rundir, n)
+        if rec:
+            provs[n] = {k: rec[k] for k in ("provider", "model", "fallback") if rec.get(k)}
     return {
+        **({"providers": provs} if provs else {}),
         "run": meta["run_id"],
         "elapsed_s": round(time.time() - meta["started"], 1),
         "exited": [n for n in names if _exited(rundir, n, 0)],
@@ -2705,6 +2791,7 @@ def parser():
     r.add_argument("--model")
     r.add_argument("--effort")
     r.add_argument("--harness", choices=("claude", "codex"), default="claude")
+    r.add_argument("--provider", choices=atlas_provider.PROVIDERS, default=None, help="claude | ollama | auto (default: ATLAS_WORKER_PROVIDER)")
     r.add_argument("--run-id")
     r.add_argument("--session", help="lead session id stamped into run.json as lead_session")
     r.add_argument("--changelog", help="one-line CHANGELOG entry the supervisor adds under ## Unreleased once the check is green")

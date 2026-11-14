@@ -14,6 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
 import prompt_decision  # noqa: E402
+from _decision_stub import StubDecisionServer, choice, free_port, noul  # noqa: E402
 
 
 class _Resp:
@@ -124,6 +125,117 @@ class DecisionTests(unittest.TestCase):
             )
         )
         self.assertFalse(prompt_decision.apply_verdict(False, ("defect", 0.9)))
+
+
+def _env(url, **extra):
+    env = {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": url}
+    env.update(extra)
+    return mock.patch.dict(os.environ, env, clear=False)
+
+
+class AskTests(unittest.TestCase):
+    """The generic call and the routing/verify questions, against a loopback stub (no real model)."""
+
+    def setUp(self):
+        prompt_decision.reset_cache()
+
+    def test_ask_returns_answers_for_several_questions_in_one_request(self):
+        qs = {"a": {"type": "noul", "instructions": "x"}, "b": {"type": "noul", "instructions": "y"}}
+        with StubDecisionServer(lambda body: {k: noul(0.5) for k in body["questions"]}) as srv:
+            with _env(srv.url):
+                answers = prompt_decision.ask("state text", qs, 2.0)
+        self.assertEqual(set(answers), {"a", "b"})
+        self.assertEqual(len(srv.requests), 1)
+        self.assertEqual(srv.requests[0]["state"], "state text")
+
+    def test_ask_refused_connection_is_none_and_fast(self):
+        import time
+
+        with _env("http://127.0.0.1:%d" % free_port()):
+            t0 = time.monotonic()
+            self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}, 1.5))
+        self.assertLess(time.monotonic() - t0, 0.5)
+
+    def test_ask_refuses_remote_unless_allowed(self):
+        with _env("https://example.com:8443"):
+            os.environ.pop("ATLAS_DECISION_ALLOW_REMOTE", None)
+            with mock.patch.object(prompt_decision.urllib.request, "urlopen") as op:
+                self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
+            op.assert_not_called()
+
+    def test_ask_malformed_body_is_none(self):
+        class Bad:
+            def read(self):
+                return b"[1, 2]"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with _env("http://127.0.0.1:9"):
+            with mock.patch.object(prompt_decision.urllib.request, "urlopen", lambda *a, **k: Bad()):
+                self.assertIsNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
+
+    def test_prompt_questions_ride_one_request_with_string_criteria(self):
+        def respond(body):
+            return {
+                "prompt_class": choice("code_change", 0.9),
+                "task_class": choice("fix", 0.95),
+                "effort": choice("low", 0.9),
+            }
+
+        with StubDecisionServer(respond) as srv:
+            with _env(srv.url):
+                self.assertEqual(prompt_decision.local_decision("fix the crash in a.py"), ("code_change", 0.9))
+                routed = prompt_decision.route_choice("fix the crash in a.py")
+        self.assertEqual(routed, {"task_class": "fix", "effort": "low"})
+        self.assertEqual(len(srv.requests), 1, "one round trip per hook run")
+        qs = srv.requests[0]["questions"]
+        self.assertEqual(set(qs), {"prompt_class", "task_class", "effort"})
+        self.assertEqual(set(qs["task_class"]["criteria"]), set(prompt_decision.scope_classes()))
+        for q in qs.values():
+            for value in q["criteria"].values():
+                self.assertIsInstance(value, str)
+
+    def test_route_choice_ignores_low_confidence_and_invalid_values(self):
+        cases = [
+            ({"task_class": choice("fix", 0.79), "effort": choice("high", 0.79)}, None, None),
+            ({"task_class": choice("bogus", 0.99), "effort": choice("huge", 0.99)}, None, None),
+            ({"task_class": choice("audit", 0.8), "effort": choice("medium", 0.8)}, "audit", "medium"),
+            ({}, None, None),
+        ]
+        for answers, want_class, want_effort in cases:
+            prompt_decision.reset_cache()
+            with StubDecisionServer(lambda body, a=answers: a) as srv:
+                with _env(srv.url):
+                    got = prompt_decision.route_choice("p")
+            self.assertEqual((got["task_class"], got["effort"]), (want_class, want_effort), answers)
+
+    def test_verify_reply_reads_two_nouls_in_one_request(self):
+        with StubDecisionServer(
+            lambda body: {"asserts_success": noul(0.95), "names_observed_result": noul(0.1)}
+        ) as srv:
+            with _env(srv.url):
+                self.assertEqual(prompt_decision.verify_reply("All fixed."), (0.95, 0.1))
+        self.assertEqual(len(srv.requests), 1)
+        self.assertEqual(set(srv.requests[0]["questions"]), {"asserts_success", "names_observed_result"})
+
+    def test_verify_reply_none_when_an_answer_is_missing(self):
+        with StubDecisionServer(lambda body: {"asserts_success": noul(0.9)}) as srv:
+            with _env(srv.url):
+                self.assertIsNone(prompt_decision.verify_reply("All fixed."))
+
+    def test_verify_reply_times_out_inside_the_budget(self):
+        import time
+
+        with StubDecisionServer(lambda body: {}, delay=3.0) as srv:
+            with _env(srv.url):
+                t0 = time.monotonic()
+                self.assertIsNone(prompt_decision.verify_reply("All fixed."))
+                took = time.monotonic() - t0
+        self.assertLess(took, prompt_decision.VERIFY_TIMEOUT_S + 0.6)
 
 
 if __name__ == "__main__":

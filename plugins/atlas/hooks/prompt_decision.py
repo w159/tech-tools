@@ -115,40 +115,191 @@ def decision_url() -> str | None:
     return DEFAULT_URL
 
 
-def local_decision(prompt: str) -> tuple[str, float] | None:
-    """Return (choice, confidence) or None. None means keep the regex answer."""
+def ask(state: str, questions: dict, timeout: float = TIMEOUT_S) -> dict | None:
+    """POST one request carrying `questions` about `state` and return the `answers` dict, or None.
+
+    The shared transport for every decision call: loopback guard (decision_url), lazy urllib, and
+    fail-open (a refused connection, a timeout, a non-JSON or malformed body all return None, never
+    raise). Several questions belong in ONE call so a hook pays one round trip."""
     base = decision_url()
-    if not base:
+    if not base or not questions:
         return None
     model = os.environ.get("ATLAS_DECISION_MODEL", "nimble").strip() or "nimble"
-    body = json.dumps(
-        {
-            "model": model,
-            "state": prompt[:4000],
-            "questions": {"prompt_class": PROMPT_CLASS},
-        }
-    ).encode("utf-8")
-    req = urllib.request.Request(
-        base + "/v1/systemone",
-        data=body,
-        method="POST",
-        headers={"Content-Type": "application/json"},
-    )
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
+        body = json.dumps(
+            {"model": model, "state": state, "questions": questions}
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            base + "/v1/systemone",
+            data=body,
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
         return None
     if not isinstance(payload, dict):
         return None
-    answer = (payload.get("answers") or {}).get("prompt_class") or {}
+    answers = payload.get("answers")
+    return answers if isinstance(answers, dict) else None
+
+
+def choice_of(answers: dict | None, qid: str) -> tuple[str, float] | None:
+    """(choice, confidence) of choice question `qid`, or None when absent or malformed."""
+    answer = (answers or {}).get(qid)
     if not isinstance(answer, dict):
         return None
-    choice = answer.get("choice")
-    confidence = answer.get("confidence")
+    choice, confidence = answer.get("choice"), answer.get("confidence")
     if not isinstance(choice, str) or not isinstance(confidence, (int, float)):
         return None
     return choice, float(confidence)
+
+
+def noul_of(answers: dict | None, qid: str) -> float | None:
+    """Probability of noul question `qid` (0..1), or None when absent or malformed."""
+    answer = (answers or {}).get(qid)
+    value = answer.get("noul") if isinstance(answer, dict) else None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return min(1.0, max(0.0, float(value)))
+
+
+# One-line class descriptions for the routing question. The class NAMES come from
+# contracts/scope-matrix.json at call time; a class added there without a line here still gets a
+# generic description, so the question never lists a class the resolver cannot route.
+_CLASS_HELP = {
+    "implement": "Build or change behavior: a feature, a refactor, a rename, new code.",
+    "fix": "Repair a reported defect, crash, failing test or wrong output.",
+    "verify": "Run checks and confirm that finished work holds. No new code.",
+    "audit": "Read-only review, investigation or research of existing code. No edits.",
+    "docs": "Write or update documentation, a README or a changelog.",
+    "db": "Change a database schema, migration or query.",
+    "ui-test": "Drive a user interface in a browser and report what breaks.",
+    "test": "Write or update automated tests.",
+    "db-audit": "Read-only review of a live database schema or privileges.",
+}
+EFFORT_QUESTION = {
+    "type": "choice",
+    "instructions": "How much work is this request?",
+    "criteria": {
+        "low": "One small change in one place.",
+        "medium": "A few related changes or a few files.",
+        "high": "Many files, a whole subsystem, or several separate jobs.",
+    },
+}
+_MATRIX_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "scope-matrix.json"
+)
+
+
+def scope_classes() -> list[str]:
+    """Routable class names, read from the scope matrix. Empty when it cannot be read."""
+    try:
+        with open(_MATRIX_PATH, encoding="utf-8") as fh:
+            return list((json.load(fh).get("classes") or {}).keys())
+    except (OSError, ValueError):
+        return []
+
+
+def task_class_question(classes: list[str] | None = None) -> dict | None:
+    names = scope_classes() if classes is None else classes
+    if not names:
+        return None
+    return {
+        "type": "choice",
+        "instructions": "Which kind of work does this request ask for? Ignore a kind the user says not to do.",
+        "criteria": {c: _CLASS_HELP.get(c, "Work of class %s." % c) for c in names},
+    }
+
+
+_PROMPT_CACHE: dict = {"key": None, "at": 0.0, "answers": None}
+_PROMPT_CACHE_TTL_S = 10.0
+
+
+def reset_cache() -> None:
+    _PROMPT_CACHE.update(key=None, at=0.0, answers=None)
+
+
+def prompt_answers(prompt: str) -> dict | None:
+    """Answers for prompt_class, task_class and effort from ONE request.
+
+    Cached for a few seconds per (prompt, endpoint, model), failures included, so the arming band and
+    the routing step of the same hook run share a single round trip (and a dead endpoint costs one
+    attempt, not two)."""
+    import time
+
+    base = decision_url()
+    if not base:
+        return None
+    key = (prompt, base, os.environ.get("ATLAS_DECISION_MODEL", ""))
+    now = time.monotonic()
+    if _PROMPT_CACHE["key"] == key and now - _PROMPT_CACHE["at"] < _PROMPT_CACHE_TTL_S:
+        return _PROMPT_CACHE["answers"]
+    questions = {"prompt_class": PROMPT_CLASS, "effort": EFFORT_QUESTION}
+    tc = task_class_question()
+    if tc:
+        questions["task_class"] = tc
+    answers = ask(prompt[:4000], questions, TIMEOUT_S)
+    _PROMPT_CACHE.update(key=key, at=now, answers=answers)
+    return answers
+
+
+def local_decision(prompt: str) -> tuple[str, float] | None:
+    """Return (choice, confidence) or None. None means keep the regex answer."""
+    return choice_of(prompt_answers(prompt), "prompt_class")
+
+
+ROUTE_CONFIDENCE_MIN = 0.8
+
+
+def route_choice(prompt: str) -> dict:
+    """The model's routing answer: {"task_class": str|None, "effort": str|None}, each set only when
+    its confidence is at least ROUTE_CONFIDENCE_MIN and the value is valid. Empty values mean
+    "use the keyword heuristic"."""
+    out: dict = {"task_class": None, "effort": None}
+    answers = prompt_answers(prompt)
+    picked = choice_of(answers, "task_class")
+    if picked and picked[1] >= ROUTE_CONFIDENCE_MIN and picked[0] in scope_classes():
+        out["task_class"] = picked[0]
+    picked = choice_of(answers, "effort")
+    if picked and picked[1] >= ROUTE_CONFIDENCE_MIN and picked[0] in EFFORT_QUESTION["criteria"]:
+        out["effort"] = picked[0]
+    return out
+
+
+VERIFY_TIMEOUT_S = 1.5
+VERIFY_CLAIMS_MIN = 0.8
+VERIFY_OBSERVED_MAX = 0.3
+VERIFY_QUESTIONS = {
+    "asserts_success": {
+        "type": "noul",
+        "instructions": "The reply states that the work is done, fixed, or passing.",
+        "criteria": {
+            "true": "Says done, fixed, passing, or verified.",
+            "false": "No success claim, or it says the check was not run.",
+        },
+    },
+    "names_observed_result": {
+        "type": "noul",
+        "instructions": "The reply quotes a command result, a test count, a file and line, or query rows.",
+        "criteria": {
+            "true": "Quotes command output, a test count, a file:line, or query rows.",
+            "false": "Quotes none of these.",
+        },
+    },
+}
+
+
+def verify_reply(reply: str) -> tuple[float, float] | None:
+    """(claims, observed) noul probabilities for a final reply, from one request within
+    VERIFY_TIMEOUT_S, or None (endpoint off, slow, down or malformed)."""
+    answers = ask(reply[-4000:], VERIFY_QUESTIONS, VERIFY_TIMEOUT_S)
+    claims = noul_of(answers, "asserts_success")
+    observed = noul_of(answers, "names_observed_result")
+    if claims is None or observed is None:
+        return None
+    return claims, observed
 
 
 def apply_verdict(

@@ -70,6 +70,14 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-14 | tele-3 | verified | _flush stamps before spawn, hourly, no spawn under pytest/off; status does not claim a send | [2026-11-14_tele-3.md](2026-11-14_tele-3.md) |
 | 2026-11-14 | tele-2 | verified | telemetry server node --test 69 pass 0 fail | [2026-11-14_tele-2.md](2026-11-14_tele-2.md) |
 | 2026-11-14 | tele-1 | verified | analytics pytest suites 256 passed | [2026-11-14_tele-1.md](2026-11-14_tele-1.md) |
+| 2026-11-14 | r3-d4-livegate | rejected | P0-for-release: atlas_mod_gate.py --live FAILS on the current tree: mod/usage.ts non-literal $.env.get(name); release.yml and tests.yml atlas-mod-gate will be red | [2026-11-14_r3-d4-livegate.md](2026-11-14_r3-d4-livegate.md) |
+| 2026-11-14 | r3-d3-negation | rejected | P1 classify_scope regression: 'login does not work fix it' / 'this is not working please fix' now implement (HEAD: fix); 'Don't audit the db schema, add a column' -> db-audit; 'don't just review it, fix it' -> audit | [2026-11-14_r3-d3-negation.md](2026-11-14_r3-d3-negation.md) |
+| 2026-11-14 | r3-d2-httpexc | rejected | P2 ask() 'never raise' false: http.client.HTTPException (BadStatusLine/IncompleteRead) escapes | [2026-11-14_r3-d2-httpexc.md](2026-11-14_r3-d2-httpexc.md) |
+| 2026-11-14 | r3-d1-proxy | rejected | P1 loopback-only guarantee bypassed by http_proxy: prompt/reply text goes to the proxy | [2026-11-14_r3-d1-proxy.md](2026-11-14_r3-d1-proxy.md) |
+| 2026-11-14 | r3-c5-modgate | verified | atlas_mod_gate.py offline passes (3 pass); --live correctly detects a real host load failure; workflows parse | [2026-11-14_r3-c5-modgate.md](2026-11-14_r3-c5-modgate.md) |
+| 2026-11-14 | r3-c3-gate-v | verified | completion_gate _decision_verify_reason: shadow never blocks, block at 0.95/0.1, stop_hook_active skips, off makes 0 calls | [2026-11-14_r3-c3-gate-v.md](2026-11-14_r3-c3-gate-v.md) |
+| 2026-11-14 | r3-c2-negation | verified | classify_scope negation + per-field fallback work for the stated cases (but see r3-d3 regression) | [2026-11-14_r3-c2-negation.md](2026-11-14_r3-c2-negation.md) |
+| 2026-11-14 | r3-c1-decision | verified | prompt_decision: one shared call, 10s in-process cache, loopback, route_choice >=0.8 + valid values | [2026-11-14_r3-c1-decision.md](2026-11-14_r3-c1-decision.md) |
 | 2026-11-14 | crew-c6 | verified | warm lead stop-during-recycle fix; stop_lead re-reads latest lead_pid; test passes | [2026-11-14_crew-c6.md](2026-11-14_crew-c6.md) |
 | 2026-11-14 | crew-c5 | verified | abs/.. owns and bad run ids exit 2 with message; normal run works | [2026-11-14_crew-c5.md](2026-11-14_crew-c5.md) |
 | 2026-11-14 | crew-c4 | verified | atlas_irc diff: AST changes only run_shell/_kill_group/stop_checks_on_signal/handler + _early_check/_run_unit_check | [2026-11-14_crew-c4.md](2026-11-14_crew-c4.md) |

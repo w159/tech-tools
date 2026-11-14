@@ -371,32 +371,59 @@ _ACTION_VERBS = frozenset(
 )
 
 
+_NEGATORS = frozenset({"not", "no", "without", "skip", "dont", "never", "nor"})
+# A negation reaches this many following words, within one clause.
+_NEG_REACH = 3
+# Words that end a negation: "do not audit, just implement x" -> implement.
+_NEG_RESETS = frozenset({"just", "but", "rather", "only", "then", "and"})
+
+
+def _heuristic_class(words_text: str, vocab: dict) -> str:
+    """First class word in `words_text` that is not negated ("do not audit", "don't refactor",
+    "without review", "instead of review", "skip tests"). A negation covers the next few words of
+    its clause and ends at punctuation or a contrast word (just, but, rather, only, then, and)."""
+    for clause in re.split(r"[,.;:!?\n()]+", words_text):
+        words = [w.strip("-") for w in _WORD_RE.findall(clause)]
+        reach = 0
+        for i, word in enumerate(words):
+            nxt = words[i + 1] if i + 1 < len(words) else ""
+            if word in _NEG_RESETS:
+                reach = 0
+                continue
+            if (
+                word in _NEGATORS
+                or (word == "t" and i and words[i - 1] in ("don", "doesn", "didn", "won", "can"))
+                or (word == "instead" and nxt == "of")
+            ):
+                reach = _NEG_REACH
+                continue
+            hit = vocab.get(word) or (vocab.get(word[:-1]) if word.endswith("s") else None)
+            if hit and reach <= 0:
+                return hit
+            reach = max(0, reach - 1)
+    return "implement"
+
+
 def classify_scope(prompt: str) -> tuple[str, str]:
     """Keyword (task_class, effort) for a prompt.
 
-    ponytail: keyword heuristic over scope-matrix class names and aliases, and
+    ponytail: keyword heuristic over scope-matrix class names and aliases, with
+    clause-local negation ("do not audit, just implement x" is implement), and
     a count of distinct action verbs (2+ jobs is never low); the ceiling is
-    word matching (no intent, no negation). Upgrade path: ask the
-    local decision model (prompt_decision) for class/effort and keep this as the
-    fallback when it is off, slow or unsure.
+    word matching (no deeper intent). route_scope asks the decision model first
+    and falls back to this when it is off, slow or unsure.
     """
     text = prompt or ""
     files = {m.lower() for m in _FILE_REF_RE.findall(text)}
     rest = _FILE_REF_RE.sub(" ", text)
     rest = _CODE_ANCHOR.sub(" ", rest)
     symbols = {m.lower() for m in _SYMBOL_REF_RE.findall(rest)}
-    words_text = _SYMBOL_REF_RE.sub(" ", rest).lower()
-    task_class = "implement"
+    words_text = _SYMBOL_REF_RE.sub(" ", rest).lower().replace("don't", "dont").replace("don\u2019t", "dont")
     try:
         vocab = _scope_vocab()
     except Exception:
         vocab = {}
-    for word in _WORD_RE.findall(words_text):
-        word = word.strip("-")
-        hit = vocab.get(word) or (vocab.get(word[:-1]) if word.endswith("s") else None)
-        if hit:
-            task_class = hit
-            break
+    task_class = _heuristic_class(words_text, vocab)
     if _HIGH_EFFORT_RE.search(text) or len(files) >= 4:
         effort = "high"
     elif (
@@ -410,6 +437,27 @@ def classify_scope(prompt: str) -> tuple[str, str]:
     else:
         effort = "medium"
     return task_class, effort
+
+
+def route_scope(prompt: str) -> tuple[str, str]:
+    """(task_class, effort): the decision model's answer when it is confident (>= 0.8) and valid,
+    else classify_scope for whichever of the two it did not settle. One request serves this and the
+    arming band (prompt_decision.prompt_answers). ATLAS_DECISION=off skips the model."""
+    task_class, effort = classify_scope(prompt)
+    model = {"task_class": None, "effort": None}
+    if os.environ.get("ATLAS_DECISION", "on").strip().lower() != "off":
+        try:
+            model = prompt_decision.route_choice(prompt)
+        except Exception:
+            pass
+    used_model = bool(model["task_class"] or model["effort"])
+    try:
+        import atlas_analytics
+
+        atlas_analytics.record("decision.route.model" if used_model else "decision.route.fallback")
+    except Exception:  # noqa: BLE001, S110 -- telemetry never changes a route
+        pass
+    return model["task_class"] or task_class, model["effort"] or effort
 
 
 def _working_seats(team: list) -> int:
@@ -674,7 +722,7 @@ def _routed_nudge(data: dict, prompt: str) -> str:
     try:
         import atlas_resolve
 
-        task_class, effort = classify_scope(prompt)
+        task_class, effort = route_scope(prompt)
         res = atlas_resolve.resolve(task_class, effort)
         team = list(res["team"])
         task_class, effort = res["task_class"], res["effort"]

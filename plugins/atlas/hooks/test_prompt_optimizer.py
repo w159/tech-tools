@@ -24,7 +24,9 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+import prompt_decision  # noqa: E402
 import prompt_optimizer as po  # noqa: E402
+from _decision_stub import StubDecisionServer, choice, free_port  # noqa: E402
 
 HOOK = os.path.join(os.path.dirname(__file__), "prompt_optimizer.py")
 
@@ -834,6 +836,88 @@ class RouteScopeTest(unittest.TestCase):
         self.assertEqual(
             po.classify_scope("rename foo in plugins/x/test_a.py")[0], "implement"
         )
+
+
+
+class ScopeNegationTest(unittest.TestCase):
+    def test_negated_class_word_is_ignored(self):
+        cases = {
+            "do not audit, just implement x": "implement",
+            "do not audit just implement the parser": "implement",
+            "don't refactor, just fix the crash in a.py": "fix",
+            "dont review anything, fix the crash in a.py": "fix",
+            "skip the audit and implement the cache": "implement",
+            "instead of review, fix the crash in a.py": "fix",
+            "without a review, fix the crash in a.py": "fix",
+            "audit the auth module": "audit",
+            "review the whole codebase": "audit",
+            "do not touch the tests, fix the crash in a.py": "fix",
+        }
+        for prompt, want in cases.items():
+            self.assertEqual(po.classify_scope(prompt)[0], want, prompt)
+
+
+class RouteScopeDecisionTest(unittest.TestCase):
+    PROMPT = "do not audit, just implement the retry logic in client.py"
+
+    def setUp(self):
+        prompt_decision.reset_cache()
+
+    def _answers(self, task_class, tc_conf, effort="low", ef_conf=0.9):
+        return lambda body: {
+            "prompt_class": choice("code_change", 0.95),
+            "task_class": choice(task_class, tc_conf),
+            "effort": choice(effort, ef_conf),
+        }
+
+    def _route(self, srv, prompt=None, **env):
+        with mock.patch.dict(
+            os.environ, dict({"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": srv.url}, **env), clear=False
+        ):
+            return po.route_scope(prompt or self.PROMPT)
+
+    def test_confident_model_answer_wins_over_keywords(self):
+        # Keywords say implement/low; the model says audit/high with confidence >= 0.8.
+        with StubDecisionServer(self._answers("audit", 0.9, "high", 0.85)) as srv:
+            self.assertEqual(self._route(srv, "fix the bug in foo.py"), ("audit", "high"))
+
+    def test_low_confidence_falls_back_to_keywords(self):
+        with StubDecisionServer(self._answers("audit", 0.79, "high", 0.5)) as srv:
+            self.assertEqual(self._route(srv, "fix the bug in foo.py"), ("fix", "low"))
+
+    def test_invalid_class_falls_back(self):
+        with StubDecisionServer(self._answers("bogus", 0.99)) as srv:
+            self.assertEqual(self._route(srv, "fix the bug in foo.py")[0], "fix")
+
+    def test_unreachable_endpoint_falls_back(self):
+        with mock.patch.dict(
+            os.environ, {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": "http://127.0.0.1:%d" % free_port()}
+        ):
+            self.assertEqual(po.route_scope("fix the bug in foo.py"), ("fix", "low"))
+
+    def test_decision_off_never_calls_the_model(self):
+        with StubDecisionServer(self._answers("audit", 0.99, "high", 0.99)) as srv:
+            got = self._route(srv, "fix the bug in foo.py", ATLAS_DECISION="off")
+        self.assertEqual(got, ("fix", "low"))
+        self.assertEqual(srv.requests, [])
+
+    def test_one_request_serves_arming_and_routing(self):
+        prompt = "explain how the completion gate decides what to block today"
+        with StubDecisionServer(self._answers("audit", 0.9, "low", 0.9)) as srv:
+            with mock.patch.dict(
+                os.environ, {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": srv.url}, clear=False
+            ):
+                po.resolve_substantive(prompt)
+                po.route_scope(prompt)
+        self.assertEqual(len(srv.requests), 1)
+
+    def test_routed_nudge_uses_the_model_class(self):
+        with StubDecisionServer(self._answers("audit", 0.95, "high", 0.9)) as srv:
+            with mock.patch.dict(
+                os.environ, {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": srv.url}, clear=False
+            ):
+                nudge = po._routed_nudge({"session_id": "", "cwd": os.getcwd()}, "fix the bug in foo.py")
+        self.assertIn("audit/high", nudge)
 
 
 class FramingEmitSkipTest(unittest.TestCase):

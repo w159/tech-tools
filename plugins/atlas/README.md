@@ -24,6 +24,7 @@ session, so your context window holds reports instead of raw output.
 - [Adversarial verification](#adversarial-verification)
 - [Context offload to tmux workers](#context-offload-to-tmux-workers)
 - [Decision models](#decision-models)
+- [Local models (Ollama)](#local-models-ollama)
 - [Skills](#skills)
 - [Agents](#agents)
 - [Hooks](#hooks)
@@ -462,11 +463,27 @@ judgment:
    label can arm a regex miss; a confident conversation label vetoes a regex
    arm, and only when the prompt also names an engineering object. Timeout, low
    confidence or `ATLAS_DECISION=off` keeps the regex answer. The default
-   endpoint is local; `ATLAS_DECISION_URL` and `ATLAS_DECISION_MODEL` change it. The class and
-   effort in the arming nudge do not come from this model: `classify_scope` in
-   `hooks/prompt_optimizer_core.py` is a first-match keyword heuristic over the
-   scope-matrix class names and aliases (so "do not audit, just implement x"
-   classifies as audit). Moving it onto the decision model is open work.
+   endpoint is local; `ATLAS_DECISION_URL` and `ATLAS_DECISION_MODEL` change it.
+   The class and effort in the arming nudge come from the same model:
+   `route_scope` in `hooks/prompt_optimizer_core.py` asks `task_class` (a
+   choice over the scope-matrix classes) and `effort` (low, medium, high) in
+   the same request as the arming question, so a prompt costs one round trip.
+   It uses an answer only when its confidence is at least 0.8 and the value is
+   valid; otherwise the `classify_scope` keyword heuristic answers, which
+   ignores a class word after a negation ("do not audit, just implement x" is
+   implement). Counters `decision.route.model` and `decision.route.fallback`.
+   Verify check: the completion gate (`hooks/completion_gate_core.py`, letter
+   `v`) sends the final reply to the same endpoint as two noul questions (the
+   reply claims the work is done or fixed; the reply quotes an observed result
+   such as command output, a test count, a file:line or query rows). By default
+   it runs in shadow: it asks the model and records `decision.verify.block-would`
+   when the claim is at least 0.8 and the observed result at most 0.3, but never
+   blocks, because those thresholds are uncalibrated. With
+   `ATLAS_DECISION_VERIFY=block` it blocks on that verdict, at most once per turn (the continuation Stop passes), and only after the
+   deterministic checks pass. The call has a 1.5 second budget; an endpoint
+   that is off, slow, refused or answers badly never blocks.
+   `ATLAS_DECISION_VERIFY=off` turns the check off. Counters
+   `decision.verify.block`, `.block-would`, `.pass` and `.skip`.
 2. Which team, at what cost. `scripts/atlas_resolve.py <class> <effort>` reads
    `contracts/scope-matrix.json` and returns the roles, counts, model tier,
    effort and isolation for the task. It is deterministic: the same input gives
@@ -485,6 +502,90 @@ judgment:
 
 3. Which option wins. `atlas-bakeoff` compares 2 or 3 approaches against named
    criteria, or grades one option Adopt, Trial, Hold or Reject.
+
+## Local models (Ollama)
+
+Crew and tmux team workers can run on a local Ollama model through Ollama's
+Anthropic-compatible API (`POST /v1/messages`). Claude Code is pointed at it with
+`ANTHROPIC_BASE_URL=<ollama url>`, `ANTHROPIC_AUTH_TOKEN=ollama` and an empty
+`ANTHROPIC_API_KEY`; `scripts/atlas_provider.py` decides, per worker, which
+provider launches it and applies exactly that env to that worker. Claude stays
+the default.
+
+```
+export ATLAS_WORKER_PROVIDER=auto            # claude (default) | ollama | auto
+export ATLAS_OLLAMA_MODEL=qwen3:8b           # default model for every role
+export ATLAS_OLLAMA_ROLE_MODELS="explorer=qwen3:8b,runner=qwen3:8b"
+python3 scripts/atlas_provider.py doctor --role runner    # resolution + health, exit 0 healthy / 1 fallback
+```
+
+- Per-role models: `ATLAS_OLLAMA_ROLE_MODELS` beats `ATLAS_OLLAMA_MODEL`. A crew
+  plan may set `"provider": "ollama"` on the plan or on a worker (with the worker's
+  or plan's `"model"` as the Ollama model); `atlas_crew.py run --provider` and
+  `atlas_mux.py spawn --provider` do the same for one run or worker.
+- Health and fallback: before a launch the provider checks `/api/version`, that the
+  model is in `/api/tags`, and that `POST /v1/messages` exists (a 404 means no
+  Anthropic API). The answer is cached 30 seconds in `$ATLAS_HOME/provider-health.json`.
+  `auto` uses Ollama when healthy, else Claude. An explicit `ollama` request that is
+  unhealthy also falls back to Claude and records the reason (`down`, `model_missing`,
+  `no_anthropic_api`, `timeout`, `no_model`, `remote_refused`); the run never fails
+  for it. `ATLAS_OLLAMA_STRICT=1` refuses instead (exit 2).
+- Loopback only: a non-loopback `ATLAS_OLLAMA_URL` is refused (`remote_refused`)
+  unless `ATLAS_OLLAMA_ALLOW_REMOTE=1`.
+- A worker on Ollama keeps the operating contract: same system prompt, IRC env and
+  `--agent atlas:<role>`. Only the model and the provider env differ, and the Claude
+  account token (`CLAUDE_CODE_OAUTH_TOKEN`) is removed from that worker.
+- Cross-family pairing (`ATLAS_ADVERSARIAL_PAIRING`, default on): when a team's
+  implementers run on Ollama, the verifier and completeness-critic seats run on
+  Claude. When implementers run on Claude and a healthy Ollama model is listed for the
+  verifier role in `ATLAS_OLLAMA_ROLE_MODELS`, that verifier may run on Ollama.
+  `ATLAS_OLLAMA_MODEL` alone never moves a verifier. Never the same provider and
+  model on both sides when a different healthy option is configured.
+- Cost: a worker on Ollama reports `cost_usd` 0 and `local: true`; its tokens are
+  still counted. The crew summary keeps Claude dollars in `tokens_workers.cost_usd`
+  and the local share in `tokens_workers.tokens_local`. `crew status` and the summary
+  list each worker's provider, model and any fallback reason. Counters
+  `provider.claude.used`, `provider.ollama.used`, `provider.ollama.fallback.<reason>`.
+- Not supported: in-process Claude Code subagents (the Agent tool) share the main
+  session's API endpoint and cannot be moved to Ollama. Ollama has no prompt caching,
+  `tool_choice`, `metadata`, `count_tokens` or batches, so a local worker re-reads its
+  context on every turn and is slower per token than the cache-backed Claude path.
+  Model quality decides what a local worker can do: start with read-only roles.
+
+### Benchmark local models
+
+`atlas_provider.py bench` runs the same one-worker crew task through the real
+`atlas_crew.py run` on Claude and on Ollama and prints wall time, tokens and Claude
+cost side by side. The default task is a small slugify function in a fresh temp git
+repo with a unittest that must pass; the harness runs that test itself after the
+crew, so pass or fail is checked, not claimed. On your machine:
+
+```
+ollama pull qwen3:8b
+ollama serve                      # skip if the Ollama app is already running
+python3 plugins/atlas/scripts/atlas_provider.py doctor --provider ollama --model qwen3:8b   # exit 0 = healthy
+python3 plugins/atlas/scripts/atlas_provider.py bench \
+  --models claude:claude-sonnet-5-5,ollama:qwen3:8b --runs 3 --out /tmp/atlas-bench.json
+```
+
+- The first run per model is cold, the rest warm; the table reports them separately.
+  `wall s` is the crew engine's own clock (run start to sealed summary), so the lead's
+  CLI start and exit are excluded, the same way the crew benchmarks in `docs/audits/`
+  count warm runs.
+- Per run it records wall seconds, input and output tokens (input includes cache
+  writes; cache reads are a separate column), Claude cost in USD (0 for local), the
+  fixture test's pass or fail, and any provider fallback reason.
+- It refuses with exit 2 before any run when a requested Ollama model is not healthy
+  (not running, model not pulled, no Anthropic API) or the URL is not loopback. A run
+  where a worker still ended up on another provider is marked and left out of that
+  column, never counted as Ollama.
+- `--task "..."` replaces the worker's task text and `--check "<cmd>"` the pass or fail
+  command; the repo is always the fixture. `--timeout` is seconds per run (default 900).
+  Needs the `claude` CLI on PATH.
+
+Tested here against a local stub endpoint and the real `claude` CLI; no real model
+ran in the test container. `claude --bg` workers get the provider env at spawn, but
+whether the background daemon honours it was not verified.
 
 ## Skills
 
@@ -1179,6 +1280,9 @@ switches:
 | `ATLAS_TRIPWIRE`, `ATLAS_TRIPWIRE_HARD`                        | on                       | `off` disables the tripwire, or only its deny tier            |
 | `ATLAS_ENGINE_ARM`                                             | on                       | `off` stops prompts from arming orchestration                 |
 | `ATLAS_DECISION`, `ATLAS_DECISION_URL`, `ATLAS_DECISION_MODEL` | on, loopback, `nimble`   | Local decision model                                          |
+| `ATLAS_DECISION_VERIFY`                                        | shadow                   | `block` lets gate v block, `off` disables it                  |
+| `ATLAS_WORKER_PROVIDER`, `ATLAS_OLLAMA_MODEL`, `ATLAS_OLLAMA_ROLE_MODELS`                 | claude, none, none       | Local Ollama workers (see Local models)                       |
+| `ATLAS_OLLAMA_URL`, `ATLAS_OLLAMA_STRICT`, `ATLAS_ADVERSARIAL_PAIRING`                        | loopback, off, on        | Ollama endpoint, refuse instead of falling back, verifier pairing |
 | `ATLAS_MANDATES`                                               | on                       | `off` drops the recall gate and companion nudges              |
 | `ATLAS_MUX`, `ATLAS_COLONY_TRANSPORT`                          | on, auto                 | Colony mode and transport                                     |
 | `ATLAS_DASHBOARD`                                              | off                      | `on` starts the Command Center at session start               |
@@ -1230,6 +1334,10 @@ atlas/
 |-- colony/                      herdr transport and its web UI
 `-- package.json                 omp extension entry for marketplace installs
 ```
+
+### Release gate: mod load
+
+`scripts/atlas_mod_gate.py` loads the mod's hooks module (every `hooks.json` `"modules"` entry) the way a session does and fails unless the band renders. It checks that the entries exist, bundles each with bun, imports the bundle against a `claude-code` stub, calls `register(on, options)` on a recording host (it must register handlers), and renders the band for a fixture snapshot (no empty output). `--live` adds the authoritative check: the module booted in the real host through `claude plugin test`, on a trimmed temp copy under an isolated `HOME` and `CLAUDE_CONFIG_DIR`, because the host refuses code the offline load accepts (for example `$.env.get(<variable>)`). `--live` reports SKIP with the reason when the CLI is missing or cannot run headless. `--root` points the gate at another plugin copy. Run it from the repo root: `python3 plugins/atlas/scripts/atlas_mod_gate.py --live`. CI runs it as the `atlas-mod-gate` job in `tests.yml` and again before packaging in `release.yml`.
 
 ## Release notes and license
 

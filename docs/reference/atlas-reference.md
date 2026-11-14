@@ -319,7 +319,8 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_CONNECTOR_WATCH=off` | stale connector credential detection |
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
-| `ATLAS_DECISION=off` | model-based prompt-arm decision (regex answer stays) |
+| `ATLAS_DECISION=off` | model-based prompt-arm decision and scope routing (regex and keyword answers stay), and the done-claim check |
+| `ATLAS_DECISION_VERIFY=block\|off` | decision-model done-claim check at Stop (letter v). Default shadow: records `decision.verify.block-would`, never blocks; `block` blocks once per turn on a done claim with no observed result; `off` skips the call |
 | `ATLAS_MUX` | unset = mux mode on (default); `ATLAS_MUX=off` disables it (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
 | `ATLAS_COLONY_TRANSPORT` | `herdr` (the pane transport label), `tmux` or `claude-bg` forces that transport; unset = managed seats whenever the seat backend is up, else `claude-bg` for claude workers and tmux for omp workers |
 | `ATLAS_SEAT_BACKEND` | `rig` (OpenRig, default when Node 22/24 is present), `herdr`, or `off`; the agent runtime starts itself on first use (a spawn that finds it down launches it detached and runs on tmux that once), nothing is launched by hand (see `docs/architecture/atlas-colony.md`, "Seat backend") |
@@ -332,6 +333,13 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_MAX_TEAM` | most workers one `atlas_mux.py spawn` team may start (default 6); a larger team is refused with a JSON error |
 | `ATLAS_WAIT_KILL=1` | `atlas_mux.py wait` kills the team's tmux session when its timeout expires, same as `wait --kill-on-timeout` (default off; not applied to claude-bg or herdr teams) |
 | `ATLAS_DECISION_ALLOW_REMOTE=1` | lets `ATLAS_DECISION_URL` name a non-loopback host; otherwise a remote URL is refused and the regex result is kept (default off) |
+| `ATLAS_WORKER_PROVIDER` | `claude` (default), `ollama` or `auto`: which provider launches crew and team workers; `auto` uses Ollama only while it is healthy |
+| `ATLAS_OLLAMA_MODEL` | default Ollama model for every worker role (a worker with no model resolves to claude with fallback `no_model`) |
+| `ATLAS_OLLAMA_ROLE_MODELS` | per-role Ollama models, `explorer=qwen3:8b,runner=qwen3:8b`; an explicit `verifier=` entry also lets pairing put the verifier on Ollama |
+| `ATLAS_OLLAMA_URL` | Ollama endpoint (default `http://127.0.0.1:11434`); loopback only unless `ATLAS_OLLAMA_ALLOW_REMOTE=1` |
+| `ATLAS_OLLAMA_ALLOW_REMOTE=1` | lets `ATLAS_OLLAMA_URL` name a non-loopback host; otherwise fallback `remote_refused` (default off) |
+| `ATLAS_OLLAMA_STRICT=1` | an unhealthy or unconfigured Ollama refuses the worker (exit 2) instead of falling back to claude (default off) |
+| `ATLAS_ADVERSARIAL_PAIRING` | `on` (default) or `off`: cross-family verifier pairing in `spawn-team` (ollama implementers get claude verifiers; claude implementers may get a configured ollama verifier) |
 | `ATLAS_NOTE_MAX_BYTES` | largest board note body accepted (default 8192 bytes); longer notes are refused with `body_too_large` |
 | `ATLAS_NOTE_ARCHIVE_BYTES` | size an owner's note file may reach before notes older than 14 days move to `board/archive` (default 2097152 bytes) |
 | `ATLAS_CHECK_INSTALL_PARITY=1` | opt in to the two contract tests that compare the repo with the installed plugin cache (default off, so a suite run never depends on the install) |
@@ -468,13 +476,14 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 78 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 80 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
 | Script | Purpose |
 |---|---|
 | `atlas_db.py` | Observability store: the SQLite SSOT for run health. |
+| `atlas_provider.py` | Worker provider selection: claude or a local Ollama model (per-role models, health check with a 30 s cache, fallback reasons, cross-family verifier pairing); `doctor` and `resolve` print the result. |
 | `session_ingest.py` | Mirrors session transcripts into the DB (omp workers ingest as lead sidechains). |
 | `omp_transcript.py` | Converts an omp session file to the Claude transcript shape for the bridge. |
 | `omp_runstate.py` | Writes the omp run/dispatch/edit state Claude hooks would have written. |
@@ -929,7 +938,7 @@ tech-tools/
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 78 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 80 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator

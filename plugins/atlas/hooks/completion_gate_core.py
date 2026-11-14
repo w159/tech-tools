@@ -1787,6 +1787,10 @@ def _main() -> int:
                     m_reason += "\n" + notice
                 _print_decision({"decision": "block", "reason": m_reason})
             elif not missing_delegation:
+                verify_reason = _decision_verify_reason(data, continuation)
+                if verify_reason:
+                    _print_decision({"decision": "block", "reason": verify_reason})
+                    return 0
                 _block_loop_reset(session)  # the cap counts consecutive blocks only
                 _record_pass()
             return 0  # only (m) applies to unflagged runs
@@ -1936,6 +1940,10 @@ def _main() -> int:
             # The cap counts consecutive blocks only. A pass whose (n) only
             # failed open (empty, missing or sidechain text) proves no header,
             # so it leaves a count that names (n) to accrue.
+            verify_reason = _decision_verify_reason(data, continuation)
+            if verify_reason:
+                _print_decision({"decision": "block", "reason": verify_reason})
+                return 0
             _block_loop_reset(session, keep="" if _reply_has_header(data) else "n")
             _record_pass()
             return 0
@@ -2855,6 +2863,67 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
             "`verify`, `implement` or `blocked`, or wait for the agents and "
             "finish or close the todo items, then retry Stop."
         )
+    except Exception:
+        return ""
+
+
+_SWITCH_DECISION_VERIFY = "ATLAS_DECISION_VERIFY"
+_VERIFY_MIN_CHARS = 80
+
+
+def _decision_verify_reason(data: dict, continuation: bool) -> str:
+    """Block text when the decision model says the final reply claims the work is done or fixed AND
+    quotes no observed result (command output, a test count, a file:line, query rows); "" otherwise.
+
+    Advisory by construction: it runs only on a Stop the deterministic checks already allowed, only on
+    a fresh Stop (a stop_hook_active continuation always passes, so it can block at most once per
+    turn and never loops), only when a decision endpoint is configured, and the call is capped at
+    prompt_decision.VERIFY_TIMEOUT_S. Any error, timeout, refused connection, unreadable answer, a
+    sidechain, a short reply or ATLAS_DECISION_VERIFY=off fails open. Counters: decision.verify.*.
+
+    The 0.8/0.3 thresholds are uncalibrated, so the default is shadow: ask the model and record
+    decision.verify.block-would, never block. ATLAS_DECISION_VERIFY=block restores the block."""
+    try:
+        if _switch_off(_SWITCH_DECISION_VERIFY):
+            return ""
+        blocking = (
+            os.environ.get(_SWITCH_DECISION_VERIFY, "").strip().lower() == "block"
+        )
+        text = data.get("last_assistant_message")
+        if (
+            continuation
+            or _payload_is_sidechain(data)
+            or not isinstance(text, str)
+            or len(text.strip()) < _VERIFY_MIN_CHARS
+            or os.environ.get("ATLAS_DECISION", "on").strip().lower() == "off"
+        ):
+            _record_analytics("decision.verify.skip")
+            return ""
+        import prompt_decision
+
+        verdict = prompt_decision.verify_reply(text)
+        if verdict is None:
+            _record_analytics("decision.verify.skip")
+            return ""
+        claims, observed = verdict
+        if (
+            claims >= prompt_decision.VERIFY_CLAIMS_MIN
+            and observed <= prompt_decision.VERIFY_OBSERVED_MAX
+        ):
+            if not blocking:
+                _record_analytics("decision.verify.block-would")
+                return ""
+            _record_analytics("decision.verify.block")
+            return (
+                "  (v) Done claimed without evidence: the decision model reads this reply as "
+                f"claiming the work is finished or fixed (p={claims:.2f}) while quoting no observed "
+                f"result (p={observed:.2f}). -> Re-send the final reply with the proof inline: the "
+                "command you ran and its output, the test count, the file:line, or the query rows. "
+                "This check blocks once per turn; if the claim is already backed, state it and "
+                "stop again."
+            )
+        _record_analytics("decision.verify.pass")
+        return ""
     except Exception:
         return ""
 

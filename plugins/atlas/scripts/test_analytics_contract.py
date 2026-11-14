@@ -71,6 +71,18 @@ CALL_SITES = {
         ("hooks/completion_gate_core.py", 'f"gate.{letter.lower()}.block"')
     ],
     "gate.pass": [("hooks/completion_gate_core.py", '["gate.pass"]')],
+    "provider.{provname}.used": [("scripts/atlas_provider.py", 'f"provider.{res[\'provider\']}.used"')],
+    "provider.ollama.fallback.{fallbackreason}": [("scripts/atlas_provider.py", 'f"provider.ollama.fallback.{res[\'fallback\']}"')],
+    "decision.route.{routesrc}": [
+        ("hooks/prompt_optimizer_core.py", '"decision.route.model"'),
+        ("hooks/prompt_optimizer_core.py", '"decision.route.fallback"'),
+    ],
+    "decision.verify.{verifyres}": [
+        ("hooks/completion_gate_core.py", '"decision.verify.block"'),
+        ("hooks/completion_gate_core.py", '"decision.verify.block-would"'),
+        ("hooks/completion_gate_core.py", '"decision.verify.pass"'),
+        ("hooks/completion_gate_core.py", '"decision.verify.skip"'),
+    ],
     "git.clean.{cleaned}": [
         ("scripts/atlas_git.py", '"git.clean.worktrees"'),
         ("scripts/atlas_git.py", '"git.clean.remote"'),

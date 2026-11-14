@@ -3068,7 +3068,7 @@ class SupervisorFailureTests(unittest.TestCase):
             self._exit(rundir, "a", 0)
             # b's "claude": still alive after its DONE, edits its owned file 2 s later
             code = f"import time; time.sleep(2); open({str(Path(tmp, 'b.py'))!r}, 'w').write('late edit'); time.sleep(60)"
-            proc = subprocess.Popen([sys.executable, "-c", code, "crew-t"], start_new_session=True)
+            proc = subprocess.Popen([sys.executable, "-c", code, "--name", "crew-t-b"], start_new_session=True)
             (rundir / "pid").mkdir()
             (rundir / "pid" / "b").write_text(str(proc.pid))
             t = threading.Thread(target=atlas_crew.cmd_supervise, args=(types.SimpleNamespace(rundir=str(rundir)),))
