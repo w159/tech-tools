@@ -413,7 +413,7 @@ const METER_CELLS = /^[▰!]+$/u;
 
 /** A run as a Segment: the theme's tone colour on the run's own fill or the rev 4 panel; with NO_COLOR only bold and strike remain. */
 export function segmentOf(x: Run, ui: Ui): Segment {
-  const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}) };
+  const style = { ...(x.bold ? { bold: true } : {}), ...(x.strike ? { strike: true } : {}), ...(x.press ? { press: x.press, ...(x.hover ? { hover: true as const } : {}) } : {}) }; // a clickable run keeps its key: the card's `▾ hide` chip is pressed through it
   return ui.color === 'none' ? { t: x.t, ...style } : { t: x.t, color: runHex(x, ui.theme, ui.color), bg: fillHex(x, ui), ...style };
 }
 

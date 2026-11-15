@@ -11,6 +11,8 @@ export type HookStats = {
   recent: { label: string; ageSecs: number }[];
   /** Age of the newest event that is not the session's own start (the figure `last event 12s ago`); absent when none. */
   lastEventSecs?: number;
+  /** Tool calls seen since the run began (`hookStats`'s `since`, the run clock's start); absent when no run is open. The band's `N tools` is this, not the session's total. */
+  runTools?: number;
 };
 
 const KEEP = 64;
@@ -19,6 +21,7 @@ const STAMP_SPAN_MS = 300_000;
 const STAMP_CAP = 4096;
 let log: HookEvent[] = [];
 let stamps: number[] = [];
+let toolStamps: number[] = [];
 let newest = -Infinity;
 const counts = new Map<string, number>();
 
@@ -26,6 +29,7 @@ const counts = new Map<string, number>();
 export function resetHookLog(): void {
   log = [];
   stamps = [];
+  toolStamps = [];
   newest = -Infinity;
   counts.clear();
 }
@@ -39,6 +43,7 @@ export function noteHook(label: string, at: number | undefined): void {
   if (stamps[0]! < newest - STAMP_SPAN_MS || stamps.length > STAMP_CAP) stamps = stamps.filter((t) => t >= newest - STAMP_SPAN_MS).slice(-STAMP_CAP);
   if (log.length > KEEP) log = log.slice(-KEEP);
   const kind = label.split(' ')[0]!;
+  if (kind === 'tool.call') toolStamps = [...toolStamps, at].slice(-STAMP_CAP);
   counts.set(kind, (counts.get(kind) ?? 0) + 1);
 }
 
@@ -47,7 +52,7 @@ export async function hookStamp($: EngineInterface): Promise<number | undefined>
   try { return await $.clock.now(); } catch { return undefined; }
 }
 
-export function hookStats(now: number, max = 8): HookStats {
+export function hookStats(now: number, max = 8, since?: number): HookStats {
   const recent = [...log].reverse().slice(0, max).map((e) => ({ label: e.label, ageSecs: Math.max(0, Math.floor((now - e.at) / 1000)) }));
   const last = [...log].reverse().find((e) => e.label !== 'session.start');
   return {
@@ -55,6 +60,7 @@ export function hookStats(now: number, max = 8): HookStats {
     byLabel: [...counts].map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label)),
     recent,
     ...(last ? { lastEventSecs: Math.max(0, Math.floor((now - last.at) / 1000)) } : {}),
+    ...(since !== undefined ? { runTools: toolStamps.filter((t) => t >= since).length } : {}),
   };
 }
 

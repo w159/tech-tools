@@ -17,6 +17,7 @@ import { composeSlot } from './slot';
 import { healthCardRows } from './hud-surface';
 import { healthLine, type HealthIn } from './idle-health';
 import { hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
+import { noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
@@ -40,6 +41,7 @@ import { cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placeFinished } from
 import { EASE_FRAMES, EASE_MS, holdSpinFrame, sharedSpinFrame, type Ui } from './atlas-ui';
 import { IDLE_AFTER_SECS } from './mission-layout';
 import { clearLook, lookOf } from './look';
+import { hoverStyle } from './clickable';
 import { Motion, MotionDriver, reducedMotion } from './motion';
 import { motionFeed } from './motion-feed';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
@@ -123,7 +125,9 @@ let pluginVersion: string | undefined; // read from plugin.json at boot
 let branchName: string | undefined; // the git branch at boot; absent when git said nothing
 let usageWindow: number | null = null; // the model's context window from the last session.measure (the figure ctx % is a share of)
 let healthOpenNow = false; // wave 42: the band's `▸ health` button; the HUD draws the card while it is true (a toggle redraws through the spinner tick)
-let lastIdleSecond = -1; // the idle uptime ticks once a second
+let bandDrawnMs = -Infinity; // the engine clock of the band's last render: the idle beat runs only while the band is on screen (a redraw each 200 ms is what keeps this fresh)
+let beatN = 0; // beats since boot: the idle redraw rides every 2nd one (5 Hz)
+const BAND_SHOWN_MS = 2000; // a band drawn within this long is on screen
 const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
 const gaugeState = atom({ plugin: 'atlas', key: 'bandGauges' } as const, null as GaugeMoves | null); // the band gauges' glide, retargeted by the tick when a figure moves
 const easeTickState = atom({ plugin: 'atlas', key: 'easeTick' } as const, 0); // bumped by the ease timer so the band redraws each frame of a glide
@@ -832,6 +836,7 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
 		setView: (v) => guarded(() => update($, viewState, () => v)),
 		toggleTodos: () => guarded(() => openBoard($)),
+		close: () => guarded(() => $.ui.close({ id: PANE_ID })),
 		expand: (key) =>
 			guarded(async () => {
 				await update($, expandedState, () => key);
@@ -871,7 +876,8 @@ async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthI
 		...(branchName ? { branch: branchName } : {}),
 		...(typeof usage.tokens === 'number' ? { tokens: usage.tokens } : {}),
 		...(typeof usageWindow === 'number' ? { window: usageWindow } : {}),
-		hooks: hookStats(clockNow),
+		hooks: hookStats(clockNow, 8, runClock.startMs ?? undefined),
+		pulse: pulseOf(clockNow),
 		open: healthOpenNow,
 		...((await read($, paneOpenedState)) ? { panel: true } : {}), // the side panel is up: it says the gates, the uptime, the context and the events; the band and the card say only what it does not
 	};
@@ -1154,7 +1160,10 @@ async function frameBeat($: EngineInterface): Promise<void> {
 		verdictBusy = true;
 		try { await verdictFast($, snap as LiveSnapshot); } finally { verdictBusy = false; }
 	}
-	if (beatDue({ working, shown: shownKind, open: runClock.startMs !== null, ended, flip })) await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; });
+	if (ended) noteRunEnd(Math.floor((runClock.ranMs ?? now - before.startMs!) / 1000), !stopRefused, now); // the run's own seconds and verdict join the pulse's `runs` row
+	beatN++;
+	const idleLive = !working && now - bandDrawnMs <= BAND_SHOWN_MS; // the band is on screen and nothing works: it breathes and its `up` clock ticks on every 2nd beat (5 Hz)
+	if (beatDue({ working, shown: shownKind, open: runClock.startMs !== null, ended, flip, idleLive, idleBeat: beatN })) await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; });
 	await observeBlocked($); // after the bump: the band's redraw is already asked for when the panel's clock starts
 	if (cardsDue()) await placeFinished($, snap as LiveSnapshot, snap as LiveSnapshot); // the run card and the blocked card, on the beat after the band drew the state they name
 }
@@ -1207,8 +1216,11 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		builder = new SnapshotBuilder(engineFs($), $.plugin.root);
 		sessionStartMs = await $.clock.now(); // wave 42: the idle health's uptime counts from here
 		resetHookLog();
+		resetPulse();
 		noteHook('session.start', sessionStartMs);
-		lastIdleSecond = -1;
+		healthOpenNow = false;
+		bandDrawnMs = -Infinity;
+		beatN = 0;
 		pluginVersion = await $.fs.read(`${$.plugin.root.replace(/\/+$/, '')}/.claude-plugin/plugin.json`).then((text) => { const v = (JSON.parse(text) as { version?: unknown }).version; return typeof v === 'string' ? v : undefined; }).catch(() => undefined);
 		const sessionId = await $.session.id();
 		sessionUuid = sessionId;
@@ -1260,9 +1272,6 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					await easeTick($, snap as LiveSnapshot);
 					await motionTick($, snap as LiveSnapshot);
 					if (isWorkingNow(snap as LiveSnapshot, hostWorking)) await verdictFast($, snap as LiveSnapshot); // the Stop hook runs inside a busy turn: read its write on this tick
-					// Wave 42: the idle health's `up 12:04` ticks once a second (a working session redraws on the frame loop already).
-					const second = Math.floor((await $.clock.now()) / 1000);
-					if (second !== lastIdleSecond && !isWorkingNow(snap as LiveSnapshot, hostWorking)) { lastIdleSecond = second; await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; }); }
 				})().catch(() => undefined);
 			});
 		}
@@ -1378,7 +1387,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// Usage figures (tokens / context fill), pushed after each turn.
 	on('session.measure', async ($, e, next) => {
-		noteHook('session.measure', await hookStamp($));
+		const at = await hookStamp($);
+		noteHook('session.measure', at);
+		if (at !== undefined) noteMeasure(e, at);
 		if (typeof e.context.window === 'number') usageWindow = e.context.window;
 		if (await read($, isModOn)) {
 			await update($, usageState, (usage) => ({
@@ -1495,12 +1506,15 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			shown: hud.length,
 			fullscreen: e.viewport?.isFullscreen === true,
 		});
-		const band = bandTree(els, plan.band, bandHandlers($));
+		const handlers = bandHandlers($);
+		const hudPress = { press: (key: string): void => { if (key === 'band:health') handlers.toggleHealth?.(); }, hover: (key: string): object => hoverStyle(look.ui, key) }; // the card's `▾ hide` chip toggles the card like the band's `▸ health`
+		bandDrawnMs = clockNow;
+		const band = bandTree(els, plan.band, handlers);
 		// One blank row between the band and the HUD (A3), in the HUD's own panel fill.
 		const blankRow = (): RenderElement => rowOf(els, [segmentOf({ t: ' '.repeat(columns), tone: 'text' }, look.ui)], columns);
 		const gapRow = Array.from({ length: plan.gap }, blankRow);
 		const pad = plan.pad > 0 ? [els.Box({ height: plan.pad, flexShrink: 0, children: [] })] : []; // rows the HUD does not use: empty and unfilled, under the block (never a 234 slab)
-		return atlasSlot(els, { band, gapRow, hud: hud.map((r) => rowOf(els, r, columns)), pad, lead: plan.lead, below: await next(e) });
+		return atlasSlot(els, { band, gapRow, hud: hud.map((r) => rowOf(els, r, columns, hudPress)), pad, lead: plan.lead, below: await next(e) });
 		} finally {
 			release();
 		}

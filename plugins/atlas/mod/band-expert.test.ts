@@ -27,7 +27,7 @@ const handlers: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth()
 const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
 const GATES = ['completion', 'tripwire', 'routing', 'header'].map(green);
 const PULSE: Pulse = { events: [0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1], ctx: [], runs: [] };
-const HEALTH = { upSecs: 9, version: '17.24.0', branch: 'master', tokens: 64_000, window: 1_000_000, hooks: { total: 3, byLabel: [{ label: 'tool.call', n: 3 }], recent: [], lastEventSecs: 2 }, pulse: PULSE, open: false };
+const HEALTH = { upSecs: 9, version: '17.24.0', branch: 'master', tokens: 64_000, window: 1_000_000, hooks: { total: 3, byLabel: [{ label: 'tool.call', n: 3 }], recent: [], lastEventSecs: 2, runTools: 3 }, pulse: PULSE, open: false };
 const snap = (over: Record<string, unknown> = {}) => busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 6, ...over } as never);
 type Kind = 'idle' | 'working' | 'done';
 const model = (kind: Kind, columns: number, panel: boolean, over: Partial<BandModel> = {}): BandModel => ({

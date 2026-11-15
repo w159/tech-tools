@@ -25,7 +25,7 @@ export type SegOpts = { working?: boolean; ramp?: string | undefined };
 export const BAND_SPARK_W = 8;
 
 const r = (t: string, tone: Run['tone'] = 'text', o: Partial<Run> = {}): Run => ({ t, tone, ...o });
-const toolsOf = (h: Health): number => h.hooks?.byLabel.find((e) => e.label === 'tool.call')?.n ?? 0;
+const toolsOf = (h: Health): number => h.hooks?.runTools ?? 0; // the tool calls of THIS run (hook-log hookStats `since`), never the session's total
 
 export function bandSegments(h: Health, ui: Ui, o: SegOpts = {}): BandSeg[] {
   const out: BandSeg[] = [];
