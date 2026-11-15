@@ -14,12 +14,19 @@ export type HookStats = {
 };
 
 const KEEP = 64;
+/** Every event's clock reading for the pulse series; only the last STAMP_SPAN_MS before the newest is kept (the 64-entry log would drop a busy minute). */
+const STAMP_SPAN_MS = 300_000;
+const STAMP_CAP = 4096;
 let log: HookEvent[] = [];
+let stamps: number[] = [];
+let newest = -Infinity;
 const counts = new Map<string, number>();
 
 /** A new session starts an empty log. */
 export function resetHookLog(): void {
   log = [];
+  stamps = [];
+  newest = -Infinity;
   counts.clear();
 }
 
@@ -27,6 +34,9 @@ export function resetHookLog(): void {
 export function noteHook(label: string, at: number | undefined): void {
   if (at === undefined || !Number.isFinite(at)) return;
   log.push({ label, at });
+  stamps.push(at);
+  newest = Math.max(newest, at);
+  if (stamps[0]! < newest - STAMP_SPAN_MS || stamps.length > STAMP_CAP) stamps = stamps.filter((t) => t >= newest - STAMP_SPAN_MS).slice(-STAMP_CAP);
   if (log.length > KEEP) log = log.slice(-KEEP);
   const kind = label.split(' ')[0]!;
   counts.set(kind, (counts.get(kind) ?? 0) + 1);
@@ -46,4 +56,18 @@ export function hookStats(now: number, max = 8): HookStats {
     recent,
     ...(last ? { lastEventSecs: Math.max(0, Math.floor((now - last.at) / 1000)) } : {}),
   };
+}
+
+/**
+ * Events per bucket as the handlers really saw them: `buckets` slots of `bucketMs`, OLDEST FIRST, the last slot ending at `now`
+ * (age 0 to under `bucketMs`). An event older than the whole span is not counted; one stamped after `now` counts in the newest slot.
+ * Before any event every slot is 0.
+ */
+export function eventBuckets(now: number, buckets = 20, bucketMs = 15_000): number[] {
+  const out = new Array<number>(buckets).fill(0);
+  for (const at of stamps) {
+    const slot = buckets - 1 - Math.floor(Math.max(0, now - at) / bucketMs);
+    if (slot >= 0) out[slot]!++;
+  }
+  return out;
 }
