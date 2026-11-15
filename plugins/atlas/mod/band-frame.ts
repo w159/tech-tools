@@ -53,7 +53,7 @@ export type BandFrameIn = {
   health: Health;
 };
 
-const look = (ui: Ui) => ui.theme === 'latte'
+export const bandLook = (ui: Ui) => ui.theme === 'latte'
   ? { fill: PALETTES.latte.base, text: PALETTES.latte.text, dim: xtermHex(241), rule: xtermHex(250), chipBg: xtermHex(253), chipFg: xtermHex(54), alertBg: xtermHex(224), alertFg: xtermHex(124), ok: PALETTES.latte.ok, warn: PALETTES.latte.warn, bad: PALETTES.latte.bad, work: xtermHex(54), ramp: [xtermHex(97), xtermHex(98), xtermHex(54)] as const }
   : { fill: xtermHex(235), text: xtermHex(252), dim: xtermHex(244), rule: xtermHex(238), chipBg: xtermHex(239), chipFg: xtermHex(183), alertBg: xtermHex(52), alertFg: xtermHex(210), ok: xtermHex(78), warn: xtermHex(214), bad: xtermHex(203), work: xtermHex(183), ramp: [xtermHex(97), xtermHex(141), xtermHex(183)] as const };
 
@@ -63,7 +63,7 @@ const pad3 = (n: number): string => String(Math.max(0, Math.min(999, Math.round(
 /** The frame's text pieces: `fg` the colour, `dim`/`text` shorthand; every piece sits on the band fill unless it is a chip. */
 export function bandFrameRuns(a: BandFrameIn): Run[] {
   const { ui, cols, health: h } = a;
-  const k = look(ui);
+  const k = bandLook(ui);
   const ascii = ui.ascii;
   const capW = a.cap.reduce((n, x) => n + textWidth(x.t), 0);
   const on = (t: string, fg: string, o: Partial<Run> = {}): Run => ({ t, tone: 'text', fg, bgHex: k.fill, ...o });

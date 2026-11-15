@@ -2,13 +2,13 @@
 // the `last event` figure, the side panel's recent-activity list. Only what a handler really saw is stored; nothing is made up, and it is empty after a reset.
 import type { EngineInterface } from 'claude-code';
 
-export type HookEvent = { label: string; at: number };
+export type HookEvent = { label: string; at: number; /** The handler's own latency in whole ms (N1), set when its hook handed the event on. */ ms?: number };
 export type HookStats = {
   total: number;
   /** Events seen this session by kind (the label's first word: `tool.call` for `tool.call Bash`), most frequent first. */
   byLabel: { label: string; n: number }[];
   /** The newest events, newest first, with their age at `now` in whole seconds. */
-  recent: { label: string; ageSecs: number }[];
+  recent: { label: string; ageSecs: number; /** The mod's own handler time for this event in whole ms (N1); absent while it is unmeasured (a boot, an event whose hook stamped no exit). */ ms?: number }[];
   /** Age of the newest event that is not the session's own start (the figure `last event 12s ago`); absent when none. */
   lastEventSecs?: number;
   /** Tool calls seen since the run began (`hookStats`'s `since`, the run clock's start); absent when no run is open. The band's `N tools` is this, not the session's total. */
@@ -18,6 +18,9 @@ export type HookStats = {
   /** How long the mod's own handlers held an event before handing it on (N1): the median and p95 over every sample of the session, `n` samples; absent before the first. */
   latency?: { n: number; p50: number; p95: number };
 };
+
+/** N2: the hooks the mod wires and stamps (`6 hooks` armed on the status tab): session start, prompt, tool call, Stop, measure, turn end. */
+export const WIRED_HOOKS: readonly string[] = ['session.start', 'prompt.submit', 'tool.call', 'classic.Stop', 'session.measure', 'turn.complete'];
 
 const KEEP = 64;
 /** Every event's clock reading for the pulse series; only the last STAMP_SPAN_MS before the newest is kept (the 64-entry log would drop a busy minute). */
@@ -67,9 +70,14 @@ export function noteHook(label: string, at: number | undefined): void {
 export function noteHookMs(label: string, startAt: number | undefined, endAt: number | undefined): void {
   if (startAt === undefined || endAt === undefined || !Number.isFinite(startAt) || !Number.isFinite(endAt)) return;
   const ring = latencies.get(label) ?? [];
-  ring.push(Math.max(0, Math.round(endAt - startAt)));
+  const ms = Math.max(0, Math.round(endAt - startAt));
+  ring.push(ms);
   if (ring.length > KEEP) ring.shift();
   latencies.set(label, ring);
+  for (let i = log.length - 1; i >= 0; i--) { // the event this handler stamped: the newest one of this label at its entry reading
+    const e = log[i]!;
+    if (e.label === label && e.at === startAt) { if (e.ms === undefined) e.ms = ms; break; }
+  }
 }
 
 /** `noteHookMs` with the exit stamp read here; call it right before `next(e)`. */
@@ -86,7 +94,7 @@ const rank = (sorted: readonly number[], p: number): number => sorted[Math.min(s
 
 export function hookStats(now: number, max = 8, since?: number): HookStats {
   const samples = [...latencies.values()].flat().sort((a, b) => a - b);
-  const recent = [...log].reverse().slice(0, max).map((e) => ({ label: e.label, ageSecs: Math.max(0, Math.floor((now - e.at) / 1000)) }));
+  const recent = [...log].reverse().slice(0, max).map((e) => ({ label: e.label, ageSecs: Math.max(0, Math.floor((now - e.at) / 1000)), ...(e.ms !== undefined ? { ms: e.ms } : {}) }));
   const last = [...log].reverse().find((e) => e.label !== 'session.start');
   return {
     total: [...counts.values()].reduce((n, x) => n + x, 0),

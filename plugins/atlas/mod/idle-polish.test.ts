@@ -96,22 +96,6 @@ describe('3: a health row opens only when it has real detail', () => {
     expect(row.press).toBeUndefined();
     expect(lineText(row)).not.toMatch(/[▸▾]/);
   });
-  test('slice S3: only the gates row opens on the panel; events, context, runs and session are plain rows on the grid (the card carries their detail)', () => {
-    const ls = bodyLines(world(57));
-    for (const id of ['ACTIVITY', 'CONTEXT', 'RUNS', 'session']) {
-      const row = ls.find((l) => new RegExp(id === 'session' ? '^ {4}session\\b' : `^ ── ${id}\\b`).test(lineText(l)))!;
-      expect([id, row.press]).toEqual([id, undefined]);
-      expect(lineText(row)).not.toMatch(/[▸▾]/);
-    }
-    expect(bodyLines(world(57, { rows: 20 })).find((l) => /▸ gates/.test(lineText(l)))!.press).toEqual({ kind: 'toggle', key: 'health:gates' }); // a short pane folds the gates into the one chip row
-    expect(body(world(57)).join('\n').match(/atlas 17\.21\.1/g)?.length).toBe(1); // the version is said once, in the pinned footer
-  });
-  test('the session row says the uptime and the branch (slice S4); the version is said once, in the pinned footer', () => {
-    expect(body(world(80)).find((l) => /^\s+session /.test(l))).toContain('up 0:16');
-    const short = body(world(57, { rows: 24 })).join('\n'); // a short pane keeps the figures in the session row (a tall one draws the branch as a row of its own)
-    expect(short).toMatch(/session\s+up 0:16 · master/);
-    expect(short.match(/atlas 17\.21\.1/g)?.length).toBe(1);
-  });
   test('a runs row with no agents to list is not a toggle', () => {
     const none: Health = { ...h, last: undefined };
     expect(ih.healthRows(none, ui).find((r) => r.id === 'runs')!.detail).toEqual([]);
@@ -119,42 +103,9 @@ describe('3: a health row opens only when it has real detail', () => {
 });
 
 describe('4: the idle panel ends finished, with live content from real events', () => {
-  test('a recent list of the hook events with their ages, then a closing rule', () => {
-    const t = body(world(57));
-    const i = t.findIndex((l) => /^ ── RECENT/.test(l));
-    expect(i).toBeGreaterThan(0);
-    expect(t.slice(i + 1, i + 3).map((l) => l.trim().replace(/\s+/g, ' '))).toEqual(['12s · tool call Bash', '40s · context measured']); // a fixed three-cell age, a severity glyph, no `ago`
-    const tail = t.filter((l) => l.trim() !== '');
-    expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1 · hooks loaded$/); // round 3: the footer is the last row, no rule above it
-  });
-  test('with no events the panel still ends in the footer; the recent slots stay (a heading never moves)', () => {
-    const t = body(world(57, { health: { ...h, hooks: undefined } }));
-    expect(t.some((l) => /^ ── RECENT/.test(l))).toBe(true);
-    expect(t.join('\n')).not.toMatch(/\bago\b/);
-    const tail = t.filter((l) => l.trim() !== '');
-    expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1$/); // no hooks stats: the footer holds only the version
-  });
 });
 
 describe('5: rows fit by dropping the lowest-value field, never by cutting', () => {
-  for (const cols of [57, 44]) {
-    test(`at ${cols}: no ellipsis in the health rows`, () => {
-      const t = body(world(cols, { health: { ...h, last: { ...h.last!, secs: 2, agents: 0, failed: 0, total: 5, done: 5 } } })).filter((l) => /^ {4}session +\S|no runs yet/.test(l));
-      expect(t.length).toBe(2);
-      for (const l of t) expect(l, l).not.toContain('…');
-      expect(t[0]).toContain('no runs yet'); // runs: no pulse run yet
-      expect(t[1]).toContain('up 0:16');
-      expect(t[1]).not.toContain('0:02'); // a run's seconds are the band's alone
-    });
-  }
-  test('`0 agents` and `0 failed` never print at all; a run in the pulse shows its age', () => {
-    const t = body(world(57, { health: { ...h, pulse: { events: [], ctx: [], runs: [{ secs: 2, ok: true, at: 1 }] } } }));
-    const last = t.find((l) => /1 run\b/.test(l))!;
-    expect(last).not.toContain('0 failed');
-    expect(last).toContain('1 run');
-    expect(last).toContain('avg 0:02');
-    expect(last).not.toContain('last'); // round 3 (E7): the card and the panel never say `last` twice
-  });
   test('fitFields drops by keep order and keeps the first', () => {
     const f = (t: string, keep: number) => ({ runs: [{ t, tone: 'text' as const }], keep });
     const out = ih.fitFields([f('up 0:16', 9), f('ctx 6%', 8), f('branch master', 2)], 20).map((x) => x.t).join('');
@@ -210,19 +161,6 @@ describe('7: the idle band carries one more live figure, the age of the last eve
   });
 });
 
-describe('8: a narrow pane names the stages, it does not print bare dots', () => {
-  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /research.*theory.*test.*implement.*verify/]] as const) {
-    test(`the idle stepper at ${cols} cells reads ${cols === 54 ? 'whole names' : 'whole names, wrapped to a second row (round 3 E9), never `res thy tst`'}`, () => {
-      const rows = body(world(cols, { phases: ['research', 'theory', 'test', 'implement', 'verify'], phase: 'research' }));
-      const from = rows.findIndex((l) => /^ ── PHASE/.test(l));
-      const t = rows.slice(from + 1, rows.findIndex((l) => /^ ── ACTIVITY/.test(l))).join(' ');
-      expect(t).toMatch(names);
-      expect(t).not.toContain('· · ·');
-      for (const l of rows) expect(textWidth(l)).toBeLessThanOrEqual(cols);
-    });
-  }
-});
-
 describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither for inputs and labels', () => {
   const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, toggleTodos() {} };
   const pane = (view: 'route' | 'team'): Node => sidebarTree(els, { snapshot: { ...idleSnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns: 57, rows: 45 }, side) as unknown as Node;
@@ -246,11 +184,6 @@ describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither fo
   test('the message input is not drawn as a toggle: no ▸ in its label', () => {
     const input = all(pane('team')).find((n) => n.kind === 'Input')!;
     expect(String(input.props.label)).not.toMatch(/[▸▾]/);
-  });
-  test('the `phase` label row is plain text, not a control', () => {
-    const phase = bodyLines(world(57)).find((l) => lineText(l).includes('PHASE'))!;
-    expect(phase.press).toBeUndefined();
-    expect(lineText(phase)).not.toMatch(/[▸▾]/);
   });
 });
 

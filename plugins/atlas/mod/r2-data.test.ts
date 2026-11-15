@@ -91,8 +91,8 @@ describe('D4: gates report denials', () => {
       ...panel,
     ];
     for (const l of all) expect(l).not.toMatch(gateRatio);
-    expect(panel.join('\n')).toMatch(/completion\s+1 pass · 2 deny/);
-    expect(panel.join('\n')).toMatch(/header\s+not fired/);
+    expect(panel.join('\n')).toMatch(/completion\s+1\s+2$/m); // the GATES table: ok and fail columns, never a ratio
+    expect(panel.join('\n')).toMatch(/header\s+\d* ?armed/); // a gate that has not fired is armed
   });
 });
 

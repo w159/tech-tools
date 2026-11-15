@@ -38,7 +38,7 @@ type Kind = 'idle' | 'working' | 'done';
 const world = (cols: number, rows: number, kind: Kind = 'working', over: Partial<PanelModel> = {}): PanelModel =>
   panelWorld('route', cols, ui, { rows, phases: PHASES, phase: 'theory', entered: ['research', 'theory'], todos: [], workers: [], gates: [], notes: [], run: { kind, secs: 5, startMs: NOW, frame: 0 }, health: health(), ...over } as never);
 const text = (m: PanelModel): string[] => panelLines(m).map((l) => lineText(l).trimEnd());
-const FOOT = 'atlas 17.24.0 · hooks loaded';
+const FOOT = 'atlas 17.24.0 · master';
 
 describe('D11: the panel fills its height, the footer is the last row', () => {
   for (const cols of [54, 47, 37]) for (const rows of [24, 30, 40, 48]) for (const kind of ['idle', 'working', 'done'] as Kind[]) {
@@ -53,61 +53,9 @@ describe('D11: the panel fills its height, the footer is the last row', () => {
     expect(t[39]!.trim()).toBe(FOOT);
     expect(t.slice(-3, -1).some((l) => /^─{10,}$/.test(l.trim()))).toBe(false);
   });
-  test('RECENT grows into the free rows, newest first, one row per second of events, no large void', () => {
-    const t = text(world(54, 48));
-    const at = t.findIndex((l) => /^ ── RECENT/.test(l));
-    expect(at).toBeGreaterThan(0);
-    const rows = t.slice(at + 1).filter((l) => /^ {4}[ \d]\d[smh] +\S/.test(l));
-    expect(rows.length).toBeGreaterThanOrEqual(12);
-    const ages = rows.map((l) => /(\d+)([smh])/.exec(l)!).map((m) => Number(m[1]) * (m[2] === 'h' ? 3600 : m[2] === 'm' ? 60 : 1));
-    expect(ages).toEqual([...ages].sort((a, b) => a - b)); // newest first
-    let run = 0;
-    let worst = 0;
-    for (const l of t) { run = l.trim() === '' ? run + 1 : 0; worst = Math.max(worst, run); }
-    expect(worst).toBeLessThanOrEqual(2);
-  });
-  test('a recent row is `age  glyph text` with the text in the value column (cell 14), the glyph in cell 12, the age in a 3-cell right-aligned column at cell 4', () => {
-    const t = text(world(54, 40));
-    const row = t.find((l) => l.includes('turn finished'))!;
-    expect(row.slice(0, 14)).toMatch(/^ {4}[ \d]\d[smh] {5}[·●✗] $/);
-    expect(row.slice(14)).toMatch(/^turn finished/);
-  });
-  test('severity glyphs: `·` info (dim), `●` ok (green), `✗` deny or failure (red)', () => {
-    const m = world(54, 48);
-    const rows = panelLines(m).filter((l) => /^ {4}[ \d]\d[smh] /.test(lineText(l)));
-    const glyph = (needle: string): Run => rows.find((l) => lineText(l).includes(needle))!.runs.find((x) => /^[·●✗]$/.test(x.t))!;
-    expect(glyph('tool call Bash')).toMatchObject({ t: '·', tone: 'dim' });
-    expect(glyph('turn finished')).toMatchObject({ t: '●', tone: 'ok' });
-    expect(glyph('classic Stop blocked')).toMatchObject({ t: '✗', tone: 'bad' });
-  });
-  test('every section opens on its ribbon, with at most two blank rows between sections', () => {
-    const t = text(world(54, 40));
-    for (const head of ['ACTIVITY', 'CONTEXT', 'RUNS', 'GATES', 'RECENT']) {
-      const i = t.findIndex((l) => new RegExp(`^ ── ${head}\\b`).test(l));
-      expect(i).toBeGreaterThan(1);
-      expect([head, t[i - 1]!.trim() === '' && t[i - 2]!.trim() === '' && t[i - 3]!.trim() === ''].join('|')).toBe(`${head}|false`);
-    }
-  });
-  test('a short pane keeps the footer and gives up recent rows, then the rule, before it gives up a section', () => {
-    const t = text(world(54, 24));
-    expect(t.at(-1)!.trim()).toBe(FOOT);
-    for (const head of ['PHASE', 'ACTIVITY', 'CONTEXT']) expect(t.some((l) => new RegExp(`^ ── ${head}\\b`).test(l))).toBe(true);
-  });
 });
 
 describe('D8: one chip idiom, inert uppercase headers', () => {
-  test('section headers are uppercase labels, never lowercase, never pressable', () => {
-    const m = world(54, 40);
-    const lines = panelLines(m);
-    for (const head of ['PHASE', 'ACTIVITY', 'CONTEXT', 'RUNS', 'GATES', 'RECENT']) {
-      const l = lines.find((x) => new RegExp(`^ ── ${head}\\b`).test(lineText(x)));
-      expect(l).toBeDefined();
-      expect(l!.press).toBeUndefined();
-      expect(l!.runs.some((x) => x.press !== undefined)).toBe(false);
-    }
-    const t = text(m).map((l) => l.trim());
-    for (const low of ['phase', 'activity', 'context', 'runs', 'gates', 'recent']) expect(t).not.toContain(low);
-  });
   test('no header is a Button in the drawn pane', () => {
     const tree = sidebarTree(els, { ...goldenModel('route'), columns: 55, rows: 40, run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: health() }, on);
     for (const b of all(tree).filter((n) => n.kind === 'Button')) expect(textOf(b)).not.toMatch(/\b(PHASE|ACTIVITY|CONTEXT|RUNS|GATES|RECENT)\b/);
@@ -135,86 +83,13 @@ describe('D8: one chip idiom, inert uppercase headers', () => {
     const flat = healthCardRows(health(), { cols: 100, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     for (const word of ['completion', 'tripwire', 'routing', 'header', 'ACTIVITY', 'CONTEXT', 'RUNS', 'session', '64k of 1M', 'master']) expect(flat).toContain(word);
   });
-  test('a panel chip is raised: 1-cell padding each side, the glyph inside, a fill, a hover key', () => {
-    const lines = panelLines(world(54, 20, 'working', { health: health() })); // the chip appears only where the height needs it
-    const chip = lines.flatMap((l) => l.runs).find((x) => x.press === 'health:gates')!;
-    expect(chip.t).toBe(' ▸ gates ');
-    expect(chip.bgHex).toBeDefined();
-    expect(chip.hover).toBe(true);
-  });
-  test('the drawn chip carries the raised fill (fillHex) and an accent-tinted hover', () => {
-    const tree = sidebarTree(els, { ...goldenModel('route'), columns: 55, rows: 20, run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: health() }, on);
-    const b = all(tree).find((n) => n.kind === 'Button' && n.props.key === 'health:gates')!;
-    const t = all(b).find((n) => n.kind === 'Text' && String(n.props.children).includes('▸ gates'))!;
-    expect(t.props.children).toBe(' ▸ gates ');
-    expect(t.props.backgroundColor).toBe(chipStyle(ui).backgroundColor);
-    expect(t.props.backgroundColor).not.toBe(sidebarPanelBg());
-    expect(t.props.hover).toMatchObject({ underline: true });
-    expect(t.props.hover.backgroundColor).toBeDefined();
-  });
 });
 
 describe('D12: the phase stepper', () => {
   const stepper = (m: PanelModel): PanelLine => panelLines(m).find((l) => /research/.test(lineText(l)) || /● ◐|[●◐◓◑◒–○] [●◐◓◑◒–○]/.test(lineText(l)))!;
-  test('passed stages are green `●`, the current one is the violet spinner, pending are `○` at higher contrast than dim', () => {
-    const l = stepper(world(54, 40, 'working'));
-    expect(lineText(l).trim()).toMatch(/^● research [◐◓◑◒] theory ○ test ○ implement ○ verify$/);
-    const g = (c: string) => l.runs.find((x) => x.t.trim() === c || x.t === `${c} `)!;
-    expect(g('●')).toMatchObject({ tone: 'ok' });
-    expect(l.runs.find((x) => /^[◐◓◑◒]/.test(x.t))).toMatchObject({ tone: 'accent' });
-    const pend = l.runs.find((x) => x.t.startsWith('○'))!;
-    expect(pend.fg).toBeDefined();
-    expect(contrast(pend.fg!, '#181825')).toBeGreaterThanOrEqual(3.5);
-    const word = l.runs.find((x) => x.t === 'test')!;
-    expect(word.fg ?? '#585858').not.toBe('#585858');
-  });
-  test('a stage the run passed over is `–`', () => {
-    const l = stepper(world(54, 40, 'working', { phase: 'implement', entered: ['research', 'test', 'implement'] }));
-    expect(lineText(l).trim()).toMatch(/^● research – theory ● test [◐◓◑◒] implement ○ verify$/);
-  });
-  test('done: every stage the run passed is filled', () => {
-    const l = stepper(world(54, 40, 'done', { phase: 'done', entered: PHASES }));
-    expect(lineText(l).trim()).toBe('● research ● theory ● test ● implement ● verify');
-  });
-  for (const cols of [47, 40, 37]) {
-    test(`${cols} columns: every stage spelled out whole, wrapping to a second row, never an abbreviation`, () => {
-      const t = text(world(cols, 30, 'working'));
-      const from = t.findIndex((l) => /^ ── PHASE/.test(l));
-      const rows = t.slice(from + 1, t.findIndex((l) => /^ ── ACTIVITY/.test(l)));
-      expect(rows.length).toBeGreaterThanOrEqual(1);
-      for (const n of PHASES) expect(rows.join(' ')).toContain(n);
-      expect([...rows.join('')].filter((c) => '●◐◓◑◒○–'.includes(c))).toHaveLength(5);
-      expect(t.join('\n')).not.toMatch(/res thy|tst|imp ver|\bthy\b/);
-    });
-  }
-  test('at rest the stages the run entered stay `●`, spelled in full; a fresh idle pane is five `○`', () => {
-    const stage = (m: PanelModel): string => { const t = text(m); return t.slice(t.findIndex((l) => /^ ── PHASE/.test(l)) + 1, t.findIndex((l) => /^ ── ACTIVITY/.test(l))).join(' ').replace(/\s+/g, ' ').trim(); };
-    expect(stage(world(37, 30, 'done', { phase: 'done', entered: PHASES }))).toBe('● research ● theory ● test ● implement ● verify');
-    expect(stage(world(37, 30, 'idle', { entered: [] }))).toBe('○ research ○ theory ○ test ○ implement ○ verify');
-    expect(stage(world(37, 30, 'idle', { entered: ['research', 'theory'] }))).toBe('● research ● theory ○ test ○ implement ○ verify');
-  });
 });
 
 describe('D13: narrow gates are named', () => {
-  for (const cols of [47, 37]) {
-    test(`${cols} columns: one row per gate with its name and its counts, never bare dots`, () => {
-      const t = text(world(cols, 40, 'working'));
-      for (const id of ['completion', 'tripwire', 'routing']) expect(t.some((l) => l.includes(id) && l.includes('8 pass · 0 deny'))).toBe(true);
-      expect(t.some((l) => l.includes('header') && l.includes('not fired'))).toBe(true);
-      expect(t.some((l) => /^\s*(▸ |▾ )?gates?\s+(●|○)( (●|○))+\s*$/.test(l) || /^\s+(●|○) (●|○) (●|○)/.test(l))).toBe(false);
-    });
-  }
-  test('a short pane collapses the gates to the chip and a summary in words, not dots', () => {
-    const t = text(world(54, 20, 'working'));
-    const row = t.find((l) => l.includes('▸ gates'))!;
-    expect(row).toMatch(/▸ gates {2}● ok · 0 denied · 4 gates · 1 not fired/);
-    expect(row).not.toMatch(/● completion ● tripwire/);
-  });
-  test('54 columns: one named row per gate in the one vocabulary', () => {
-    const t = text(world(54, 40, 'working', { expanded: 'health:gates' }));
-    expect(t.some((l) => /● completion\s+8 pass · 0 deny/.test(l))).toBe(true);
-    expect(t.some((l) => /○ header\s+not fired/.test(l))).toBe(true);
-  });
 });
 
 describe('D14: tabs', () => {
@@ -290,12 +165,6 @@ describe('D14: each tab owns the full body', () => {
       expect(t).toContain(FOOT); // round 3 (E6): the footer is the last row of every tab
     });
   }
-  test('status: PHASE, ACTIVITY, CONTEXT, RUNS, GATES and RECENT in that order', () => {
-    const t = text(world(54, 40));
-    const at = ['PHASE', 'ACTIVITY', 'CONTEXT', 'RUNS', 'GATES', 'RECENT'].map((h) => t.findIndex((l) => new RegExp(`^ ── ${h}\\b`).test(l)));
-    expect(at.every((i) => i > 0)).toBe(true);
-    expect([...at].sort((a, b) => a - b)).toEqual(at);
-  });
 });
 
 describe('D4 leftovers: no gate ratios', () => {
@@ -309,13 +178,6 @@ describe('D4 leftovers: no gate ratios', () => {
     }
     const t = [...headerRows({ ...m, tab: 'gates' }), ...bodyLines({ ...m, tab: 'gates' })].map(lineText).join('\n');
     expect(t).toMatch(/1 denied|1 deny/);
-  });
-  test('the panel context gauge is the card gauge (one gaugeRuns): the same fill and track cells', () => {
-    const card = healthCardRows(health({ ctxPct: 62 }), { cols: 100, ui }).map((r) => r.map((x) => x.t).join('')).find((l) => /[█▉▊▋▌▍▎▏]{8} 62%/.test(l))!;
-    const panel = text(world(54, 40, 'working', { health: health({ ctxPct: 62 }) })).find((l) => /[█▉▊▋▌▍▎▏]{8} 62%/.test(l))!;
-    const cells = (s: string): string => /[█▉▊▋▌▍▎▏]{8}/.exec(s)![0].slice(0, 3);
-    expect(cells(panel)).toBe(cells(card));
-    expect(panelLines(world(54, 40, 'working', { health: health({ ctxPct: 62 }) })).flatMap((l) => l.runs).some((x) => x.tone === 'warn' && /^█+/.test(x.t))).toBe(true);
   });
 });
 

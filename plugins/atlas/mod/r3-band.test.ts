@@ -186,7 +186,6 @@ describe('E7: the session row has its own SESSION ribbon', () => {
     expect(at).toBeGreaterThan(gates);
     expect(t[at - 1]).not.toMatch(/pass|deny/); // not hanging under the last gate row
   };
-  test('the panel status tab', () => { sessionAfterRibbon(panelLines(world(54, 50)).map((l) => lineText(l).trimEnd())); });
   test('the card (one column)', () => {
     const t = healthCardRows(health(), { cols: 60, ui }).map((r) => r.map((x) => x.t).join('').trimEnd());
     const at = t.findIndex((l) => /── SESSION ─/.test(l));

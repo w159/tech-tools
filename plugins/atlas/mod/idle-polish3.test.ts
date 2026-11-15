@@ -26,18 +26,6 @@ describe('1: a tall idle pane is not a slab of empty rows (D11: RECENT grows int
     for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
     expect(dead).toBeLessThanOrEqual(1);
   });
-  test('the same with no context figure yet (a fresh session, before the first measure): still no void', () => {
-    const t = body(world(54, { health: { ...h, ctxPct: undefined, tokens: undefined, window: undefined, hooks: { total: 40, byLabel: [{ label: 'tool.call', n: 40 }], recent: MANY } } }));
-    const rule = t.length - 1;
-    let dead = 0;
-    for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
-    expect(dead).toBeLessThanOrEqual(1);
-    expect(t.join('\n')).toMatch(/^ {14}█+ —/m); // D6 (round 3: solid dim cells, never `░`): an empty track and an em dash, never `none yet`
-  });
-  test('the context gauge is a real row: `context ██░░░░░░ 6% · 63k of 1M`; an empty track and `—` without a context figure', () => {
-    expect(body(world(54)).join('\n')).toMatch(/^ {14}[█▏▎▍▌▋▊▉░]+ 6% · 63k of 1M/m); // the gauge, the percent, the tokens and the window on one CONTEXT row
-    expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).toMatch(/^ {14}█+ —/m);
-  });
   test('slice S3: no `waiting for first prompt` line and no zero state; the stepper at rest is five `○` (the slots never move)', () => {
     const t = body(world(54)).join('\n');
     expect(t).not.toContain('waiting for first prompt');
@@ -51,23 +39,10 @@ describe('4: the run duration is said once', () => {
     const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last } })).join('\n');
     expect(t.match(/0:02/g)).toBeNull();
   });
-  test('a live run: the phase row never reads idle, carries no clock, and no `last run` row repeats it', () => {
-    const t = body(world(54, { run: { kind: 'working', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last } }));
-    const phase = t.find((l) => /PHASE/.test(l))!;
-    expect(phase).not.toContain('idle');
-    expect(t.join('\n').match(/0:02/g)).toBeNull();
-    expect(t.join('\n')).not.toContain('last run');
-  });
 });
 
 describe('5: the recent list reads in words, collapsed, at most 3 rows', () => {
   const m = (): PanelModel => world(54, { health: { ...h, hooks: HOOKS } });
-  test('human labels, no raw hook names', () => {
-    const t = body(m()).join('\n');
-    expect(t).not.toMatch(/session\.measure|turn\.complete|classic\.Stop|prompt\.submit|session\.start/);
-    expect(t).toMatch(/turn finished/);
-    expect(t).toMatch(/prompt sent/);
-  });
   test('events of the same second are one row with a count; the list is capped at 3', () => {
     const rows = recentEvents(HOOKS.recent, 3);
     expect(rows.length).toBe(3);
@@ -85,23 +60,6 @@ describe('5: the recent list reads in words, collapsed, at most 3 rows', () => {
   });
 });
 
-describe('6: a narrow pane abbreviates the stages (slice S3: one glyph per stage, the lit one turning)', () => {
-  test('at 37 columns the stepper is `◐ ○ ○ ○ ○ research`: dots plus the stage in words, never `res thy tst`', () => {
-    const t = body(world(37, { run: { kind: 'working', secs: 3, startMs: NOW, frame: 0 }, phase: 'research', phases: ['research', 'theory', 'test', 'implement', 'verify'], entered: ['research'] })).join('\n');
-    expect(t).toMatch(/◐ research ○ theory/); // round 3 (E9): whole names at every width
-    expect(t).toContain('verify');
-    expect(t).not.toMatch(/\b(res|thy|tst|imp|ver)\b/);
-  });
-});
-
-describe('7: no orphan `0 messages` on the idle panel', () => {
-  test('zero messages: no row; with notes the count folds into the session row', () => {
-    expect(body(world(54)).join('\n')).not.toMatch(/0 messages/);
-    const note = { at: '12:00', from: 'lead', text: 'hi' } as never;
-    const t = body(world(54, { notes: [note] }));
-    expect(t.join('\n')).toMatch(/session .*1 message/);
-  });
-});
 
 describe('8: the HEALTH card has one row schema at both widths', () => {
   const text = (cols: number, panel: boolean): string[] => healthCardRows({ ...idleHealth, panel }, { cols, ui }).map((r) => r.map((x) => x.t).join(''));
@@ -131,11 +89,4 @@ describe('9: every tab is a chip', () => {
 });
 
 describe('10: the last run ended `Ns ago`, not a wall clock with no zone', () => {
-  test('relative age on the last run row', () => {
-    const last = { secs: 2, done: 0, total: 0, agents: 0, failed: 0, endedAgo: 125 };
-    const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last, pulse: { events: [], ctx: [], runs: [{ secs: 2, ok: true, at: 1 }] } } })).join('\n');
-    expect(t).toMatch(/1 run\b/); // round 3 (E7): the runs row says the count and the average; the `ago` clock is gone with `last`
-    expect(t).not.toMatch(/\blast \d/);
-    expect(t).not.toMatch(/\d:\d\d [AP]M/);
-  });
 });

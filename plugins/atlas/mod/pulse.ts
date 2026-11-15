@@ -15,6 +15,7 @@
 //   pulseOf(now)         the current Pulse at engine clock `now` (ms)
 //   ctxSeries(pulse)      the context percent of every measure, oldest first (the context chart's series)
 //   ctxDelta(pulse)       `+12k/turn`: the token change between the last two measures, k-rounded (`-3k/turn` when it fell); undefined under two measures
+//   ctxRunway(pulse)      turns the window still holds at the newest turn's growth (`~78 turns left`); undefined under two measures, with no window or while the context is flat
 //   ctxText(pulse)        `6% · 64k of 1M · +12k/turn` (the window and the delta ride only when known); undefined before the first measure
 //   activityStats(pulse, runTools) -> `6 events · 1.2/min · peak 4 · 3 tools`   the events of the window, per minute over the window's span, the busiest bucket, the tools the run has called
 //   resetPulse()         a new session: empty rings, no cost (the event stamps are cleared by hook-log's resetHookLog)
@@ -99,6 +100,14 @@ export function ctxDelta(p: Pick<Pulse, 'ctx'>): string | undefined {
   const d = p.ctx[p.ctx.length - 1]!.tokens - p.ctx[p.ctx.length - 2]!.tokens;
   const k = Math.round(Math.abs(d) / 1000);
   return `${d < 0 && k > 0 ? '-' : '+'}${k}k/turn`;
+}
+
+/** NEW (runway): `~78 turns left`, the tokens still free in the window over the newest turn's growth (the last two measures); undefined under two measures, with no window, or while the context is not growing. */
+export function ctxRunway(p: Pick<Pulse, 'ctx' | 'window'>): number | undefined {
+  if (p.ctx.length < 2 || p.window === undefined || !(p.window > 0)) return undefined;
+  const last = p.ctx[p.ctx.length - 1]!;
+  const d = last.tokens - p.ctx[p.ctx.length - 2]!.tokens;
+  return d > 0 ? Math.max(0, Math.floor((p.window - last.tokens) / d)) : undefined;
 }
 
 export function ctxText(p: Pick<Pulse, 'ctx' | 'window'>): string | undefined {
