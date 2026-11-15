@@ -223,7 +223,7 @@ describe('B9: 150, pane closed (band 145): idle, working, done; the health chip 
   });
   test('done', () => {
     const got = row({ kind: 'done', cols: 145, panel: false, rest: 12, ctx: 6, health: { pulse: pulse([0, 0, 2, 2, 3, 2, 2, 0, 0, 0, 0, 0, 1, 0, 0, 1, 5, 3, 7, 0], 0.01), hooks: hooks({ ...WORK_HOOKS, lastEventSecs: 10, latency: lat }) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok ›    │ ▁▁▃▃▄▃▃▁▁▁▁▁▂▁▁▂▆▄█▁  26 ev/5m │ ctx   6% │ hook   3ms │ last 10s │ $0.01 ▸ health  [-]').replace('26 ev/5m', '28 ev/5m'));
+    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok ›    │ ▁▁▃▃▄▃▃▁▁▁▁▁▂▁▁▂▆▄█▁  26 ev/5m │ ctx   6% │ hook   3ms │ $0.01            ▸ health  [-]').replace('26 ev/5m', '28 ev/5m')); // Y1c: `last 10s` is left out, `ended 12s` already says when
   });
   test('the chips: gates opens the gates tab, health toggles the card; both on the 239 fill, one chip each', () => {
     const calls: string[] = [];

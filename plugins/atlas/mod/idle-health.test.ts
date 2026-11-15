@@ -137,7 +137,7 @@ describe('the expanded health card (HUD)', () => {
   });
   test('a finished run is the runs row: a bar per run, the count and the average', () => {
     const t = text({ pulse: { events: [], ctx: [], runs: [{ secs: 134, ok: true, at: 1 }] } });
-    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+1 run · med 2:14 · max 2:14/.test(l))).toBe(true);
+    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+1 run · med 2:14 · p90 2:14/.test(l))).toBe(true);
     expect(t.join('\n')).not.toMatch(/last run/);
   });
   test('only values the mod has: no ctx, no tokens, no branch', () => {

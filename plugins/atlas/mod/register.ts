@@ -18,6 +18,8 @@ import { healthCardRows } from './hud-surface';
 import { healthLine, type HealthIn } from './idle-health';
 import { hookDone, hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
 import { denyAgeSecs, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
+import { healthStripRows, STRIP_ROWS, stripWanted } from './strip-frame';
+import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryRun } from './history';
 import { deniedCalls } from './vocab';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
@@ -424,9 +426,9 @@ export async function readStatuslineRows($: EngineInterface, root: string | null
 /** The AbovePrompt tree, in the one order the slot draws it: the band (with its worker rows) FIRST, then the breathing blank, then the HUD box, then whatever the next hook draws.
  * When the host clips a tree taller than the slot it keeps the top rows and prints `n more` for the rest (index.d.ts, AbovePrompt `maxRows` and `scroll.bodyRows`; inline,
  * `maxRows` is the terminal's height, so the mod cannot know how many rows will survive): a clip then eats the HUD's last rows and never the band (critique 23, live-150-1 f0053, f0055). */
-export function atlasSlot(els: ClientElements, parts: { band: RenderElement; gapRow: readonly RenderElement[]; hud: readonly RenderElement[]; pad?: readonly RenderElement[]; lead?: number; below: RenderElement }): RenderElement {
+export function atlasSlot(els: ClientElements, parts: { /** Y1d: the narrow idle health strip, the rows directly above the band. */ strip?: readonly RenderElement[]; band: RenderElement; gapRow: readonly RenderElement[]; hud: readonly RenderElement[]; pad?: readonly RenderElement[]; lead?: number; below: RenderElement }): RenderElement {
 	const lower = [...parts.hud, ...(parts.pad ?? [])]; // `pad`: blank rows under the HUD that keep the slot one height through a run
-	return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(parts.lead ? [els.Box({ height: parts.lead, flexShrink: 0, children: [] })] : []), parts.band, ...parts.gapRow, ...(lower.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: lower })] : []), parts.below] });
+	return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(parts.lead ? [els.Box({ height: parts.lead, flexShrink: 0, children: [] })] : []), ...(parts.strip ?? []), parts.band, ...parts.gapRow, ...(lower.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: lower })] : []), parts.below] });
 }
 
 export { fitHudToBand, hudGapRows, hudSlotCap, slotHold } from './slot';
@@ -879,10 +881,13 @@ export async function openBoard($: EngineInterface): Promise<void> {
 /** Wave 42: the idle health's raw inputs: uptime on the clock, the version and branch read at boot, the tokens the host measured, whether the card is open. */
 async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthIn> {
 	const usage = await read($, usageState);
-	const panelUp = await read($, paneOpenedState);
+	// Y1d: the pane counts as up only while the engine has it placed: below 144 columns an unasked pane is open but waits undrawn, and the band, the card and the narrow strip then stand in for it
+	const listed = await (async () => $.ui.panes())().catch(() => undefined);
+	const panelUp = (await read($, paneOpenedState)) && (listed === undefined || listed.some((p) => p.id === PANE_ID && p.isPlaced));
 	if (panelUp) healthOpenNow = false; // round 2 (D1): card and panel never show at once; a card open when the panel opens is closed (and stays closed when the panel closes)
 	noteDenied(deniedCalls(await gateGroups($)), clockNow); // N3: the gates chip reads red until DENY_RED_SECS after the denied count last rose
 	const denyAge = denyAgeSecs(clockNow);
+	const hist = historyView(clockNow); // Y1a: what earlier sessions recorded, drawn as `prev`
 	return {
 		...(denyAge !== undefined ? { denyAgeSecs: denyAge } : {}),
 		...(sessionStartMs !== null ? { upSecs: Math.max(0, Math.floor((clockNow - sessionStartMs) / 1000)) } : {}),
@@ -892,6 +897,7 @@ async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthI
 		...(typeof usageWindow === 'number' ? { window: usageWindow } : {}),
 		hooks: hookStats(clockNow, 40, runClock.startMs ?? undefined), // the panel's RECENT grows into the free rows of a tall pane
 		pulse: pulseOf(clockNow),
+		...(hist ? { hist } : {}),
 		open: healthOpenNow,
 		...(panelUp ? { panel: true } : {}), // the side panel is up: it says the gates, the uptime, the context and the events; the band and the card say only what it does not
 	};
@@ -1151,6 +1157,13 @@ function runBandModel(i: { snapshot: LiveSnapshot; live: BandModel['live']; gate
 	};
 }
 
+/** Y1a: write the persisted history (the context percents of this session's measures first); a run end forces it, the slow tick writes it at most every 10 s when it changed. */
+async function syncHistory($: EngineInterface, now: number, force = false): Promise<void> {
+	const pcts = pulseOf(now).ctx.map((c) => c.pct);
+	noteHistoryCtx(pcts, now);
+	await flushHistory($, rootOf(await read($, snapshotState)), now, force);
+}
+
 /** One beat of the frame loop: step the run clock, and redraw (one frame, the counter is the shared frame index of every surface) while Atlas works, on the beat a run ends,
  * and once when a finished run rests long enough to read `idle`. It reads the snapshot but waits for no store update, poll or timer of any other kind. */
 async function frameBeat($: EngineInterface): Promise<void> {
@@ -1174,7 +1187,12 @@ async function frameBeat($: EngineInterface): Promise<void> {
 		verdictBusy = true;
 		try { await verdictFast($, snap as LiveSnapshot); } finally { verdictBusy = false; }
 	}
-	if (ended) noteRunEnd(Math.floor((runClock.ranMs ?? now - before.startMs!) / 1000), !stopRefused, now); // the run's own seconds and verdict join the pulse's `runs` row
+	if (ended) {
+		const ranSecs = Math.floor((runClock.ranMs ?? now - before.startMs!) / 1000);
+		noteRunEnd(ranSecs, !stopRefused, now); // the run's own seconds and verdict join the pulse's `runs` row
+		noteHistoryRun({ secs: ranSecs, ok: !stopRefused, tools: hookStats(now, 0, before.startMs!).runTools ?? 0, at: now }); // Y1a: and the persisted history
+		void syncHistory($, now, true).catch(() => undefined);
+	}
 	beatN++;
 	const idleLive = !working && now - bandDrawnMs <= BAND_SHOWN_MS; // the band is on screen and nothing works: it breathes and its `up` clock ticks on every 2nd beat (5 Hz)
 	if (beatDue({ working, shown: shownKind, open: runClock.startMs !== null, ended, flip, idleLive, idleBeat: beatN })) await update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; });
@@ -1250,6 +1268,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
 		await builder.init(cwd, { ATLAS_PROJECT_ROOT: envRoot }, sessionId, folderOf(cwd), await gitBranch($, cwd));
 		await rebuild($);
+		await loadHistory($, rootOf(await read($, snapshotState)), sessionStartMs); // Y1a: the earlier sessions' runs, hook latencies and minutes, or an empty history
 		if (interactive) {
 			if (!wired) {
 				wired = true;
@@ -1286,6 +1305,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 					if (!snap) return;
 					await easeTick($, snap as LiveSnapshot);
 					await motionTick($, snap as LiveSnapshot);
+					await syncHistory($, await $.clock.now());
 					if (isWorkingNow(snap as LiveSnapshot, hostWorking)) await verdictFast($, snap as LiveSnapshot); // the Stop hook runs inside a busy turn: read its write on this tick
 				})().catch(() => undefined);
 			});
@@ -1514,7 +1534,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const health = bandHealth(bandIn([], 1)); // wave 42: the idle health, from the band's own inputs
 		const healthLn = health ? healthLine(health, look.ui) : '';
 		const healthCard = health && healthIn.open ? healthCardRows(health, { cols: columns, ui: look.ui }).map((row) => row.filter((x) => x.t !== '').map((x) => segmentOf(x, look.ui))) : undefined;
-		const plan = composeSlot({ budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView: { ...hudView, ...(healthLn ? { healthLine: healthLn } : {}) }, ...(healthCard ? { healthCard } : {}), running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: slotHeld });
+		// Y1d: below the pane's rest width an idle session gets the two-row health strip above the band (never beside the open pane or the open card); it takes its rows off the budget first
+		const stripOn = health !== undefined && e.props.maxRows !== undefined && budget >= STRIP_ROWS + 2 && stripWanted({ cols: columns, kind: shownKind, panel: healthIn.panel === true, open: healthIn.open === true });
+		const plan = composeSlot({ budget: stripOn ? budget - STRIP_ROWS : budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView: { ...hudView, ...(healthLn ? { healthLine: healthLn } : {}) }, ...(healthCard ? { healthCard } : {}), running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: slotHeld });
 		slotHeld = plan.held;
 		const hud = plan.hud;
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
@@ -1532,7 +1554,8 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const blankRow = (): RenderElement => rowOf(els, [segmentOf({ t: ' '.repeat(columns), tone: 'text' }, look.ui)], columns);
 		const gapRow = Array.from({ length: plan.gap }, blankRow);
 		const pad = plan.pad > 0 ? [els.Box({ height: plan.pad, flexShrink: 0, children: [] })] : []; // rows the HUD does not use: empty and unfilled, under the block (never a 234 slab)
-		return atlasSlot(els, { band, gapRow, hud: hud.map((r) => rowOf(els, r, columns, hudPress)), pad, lead: plan.lead, below: await next(e) });
+		const strip = stripOn && health ? healthStripRows(health, { cols: columns, ui: look.ui }).map((row) => rowOf(els, row.filter((x) => x.t !== '').map((x) => segmentOf(x, look.ui)), columns, hudPress)) : [];
+		return atlasSlot(els, { strip, band, gapRow, hud: hud.map((r) => rowOf(els, r, columns, hudPress)), pad, lead: plan.lead, below: await next(e) });
 		} finally {
 			release();
 		}

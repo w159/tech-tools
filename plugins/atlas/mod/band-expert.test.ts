@@ -61,7 +61,7 @@ describe('(a) the band is one row of a fixed order; the head and the cap always 
   test('the wide band reads like the frame spec', () => {
     expect(first(model('idle', 150, false)).trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ◌ idle up 0:09 +│  ○ gates armed › │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
     expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement 5\/6 +│  ● gates ok › +│ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
-    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 6\/6 +ended 1s +│  ● gates ok › +│ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
+    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 6\/6 +ended 1s +│  ● gates ok › +│ [▁-█]{20} +12 ev\/5m │ ctx +6% .*▸ health$/); // Y1c: no `last 0s` beside `ended 1s`
   });
 });
 

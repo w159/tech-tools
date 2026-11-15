@@ -3,6 +3,7 @@
 import { elapsedClock, stateRun, type Run, type Ui } from './atlas-ui';
 import { fitText, textWidth } from './theme';
 import type { HookStats } from './hook-log';
+import type { HistView } from './history';
 import { activityStats, BUCKETS, BUCKET_MS, ctxSeries, ctxText as pulseCtxText, RATE_BUCKETS, rateLabel, type Pulse } from './pulse';
 import { ctxInk, gaugeRuns, sparkRuns } from './spark';
 import { areaChartRuns, runBars, runsSummary } from './chart';
@@ -33,6 +34,8 @@ export type Health = {
   team?: string;
   /** The observed-only history (pulse.ts) the events, context and runs rows draw their shapes from; absent: flat baselines and `—`. */
   pulse?: Pulse;
+  /** Y1a: what earlier sessions recorded (history.ts): their runs, the per-minute events before this session, the last measured context. Everything drawn from it is labelled `prev`. */
+  hist?: HistView;
   /** Seconds since the denied count last rose (pulse.denyAgeSecs); absent when no denial has been seen. The band's gates chip reads red for DENY_RED_SECS after it. */
   denyAgeSecs?: number;
   /** The side panel is drawn beside the transcript: it already says the gates, the uptime, the context, the events and the last run, so the band and the card say only what it does not. */
@@ -40,7 +43,7 @@ export type Health = {
 };
 
 /** The raw inputs register.ts hands the band; band.tsx completes them from the snapshot, the gates and the run clocks. */
-export type HealthIn = { panel?: boolean; /** Seconds since the denied-call count last rose (pulse.denyAgeSecs). */ denyAgeSecs?: number; /** The observed history (pulse.ts pulseOf); absent until register.ts wires it: the band then draws no events spark. */ pulse?: Pulse; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
+export type HealthIn = { panel?: boolean; /** Seconds since the denied-call count last rose (pulse.denyAgeSecs). */ denyAgeSecs?: number; /** The observed history (pulse.ts pulseOf); absent until register.ts wires it: the band then draws no events spark. */ pulse?: Pulse; /** Y1a: the persisted history (history.ts historyView). */ hist?: HistView; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
 
 const r = (t: string, tone: Run['tone'] = 'text', o: Partial<Run> = {}): Run => ({ t, tone, ...o });
 const glue = (): Run => r(' · ', 'sub');

@@ -18,7 +18,7 @@ export type HookStats = {
   /** How long the mod's own handlers held an event before handing it on (N1): the median and p95 over every sample of the session, `n` samples; absent before the first. */
   latency?: { n: number; p50: number; p95: number };
   /** Per label kind (the label's first word: `tool.call` for `tool.call Bash`): events seen, the handler latency median and p95 over that kind's samples (absent while unmeasured), and the age in whole seconds of its newest event (absent when it never fired). The status tab's HOOKS table reads it. */
-  perHook?: { label: string; n: number; p50?: number; p95?: number; lastSecs?: number }[];
+  perHook?: { label: string; n: number; p50?: number; p95?: number; lastSecs?: number; /** Y1a: the latency figures come only from the persisted ring of an earlier session (this session has stamped no sample for the kind yet). */ prev?: true }[];
 };
 
 /** N2: the hooks the mod wires and stamps (`6 hooks` armed on the status tab): session start, prompt, tool call, Stop, measure, turn end. */
@@ -26,8 +26,8 @@ export const WIRED_HOOKS: readonly string[] = ['session.start', 'prompt.submit',
 
 const KEEP = 64;
 /** Every event's clock reading for the pulse series; only the last STAMP_SPAN_MS before the newest is kept (the 64-entry log would drop a busy minute). */
-const STAMP_SPAN_MS = 450_000;
-const STAMP_CAP = 4096;
+const STAMP_SPAN_MS = 1_860_000; // Y1b: the activity chart's window reaches 30 minutes
+const STAMP_CAP = 8192;
 let log: HookEvent[] = [];
 let stamps: number[] = [];
 let toolStamps: number[] = [];
@@ -38,6 +38,13 @@ const counts = new Map<string, number>();
 const lastAtKind = new Map<string, number>();
 /** Handler latency samples in ms, a ring of KEEP per label (N1). */
 const latencies = new Map<string, number[]>();
+/** Y1a: the latency samples of each kind (the label's first word) in the order they came, a ring of KEEP: seeded from the persisted history at boot, so p50 and p95 read the last 64 calls across sessions. */
+const kindRing = new Map<string, number[]>();
+/** The kinds whose ring holds samples this session stamped (an unmarked kind in `kindRing` holds only the persisted ones). */
+const kindLive = new Set<string>();
+/** Y1a: events per wall-clock minute (floor(at / 60 s)) of this session, the last MINUTES_KEEP minutes. */
+const minutes = new Map<number, number>();
+const MINUTES_KEEP = 60;
 
 /** A new session starts an empty log. */
 export function resetHookLog(): void {
@@ -49,6 +56,27 @@ export function resetHookLog(): void {
   counts.clear();
   lastAtKind.clear();
   latencies.clear();
+  kindRing.clear();
+  kindLive.clear();
+  minutes.clear();
+}
+
+/** Y1a: seed the per-kind latency rings with the persisted ones (oldest first, at most KEEP each); call once after `resetHookLog` at boot. Malformed entries are skipped. */
+export function seedHookLatency(lat: Readonly<Record<string, readonly number[]>>): void {
+  for (const [kind, xs] of Object.entries(lat)) {
+    const ring = (Array.isArray(xs) ? xs : []).filter((x): x is number => typeof x === 'number' && Number.isFinite(x) && x >= 0).slice(-KEEP);
+    if (ring.length) kindRing.set(kind, ring);
+  }
+}
+
+/** Y1a: every kind's latency ring as it stands (persisted samples first, this session's after), for the history file. */
+export function hookLatencyRings(): Record<string, number[]> {
+  return Object.fromEntries([...kindRing].map(([k, v]) => [k, [...v]]));
+}
+
+/** Y1a: this session's events per minute, oldest first: `{ m: floor(at / 60 s), n }`. */
+export function eventMinutes(): { m: number; n: number }[] {
+  return [...minutes].map(([m, n]) => ({ m, n })).sort((a, b) => a.m - b.m);
 }
 
 /** Record one event the handlers saw, at the engine clock `at` (ms); an event with no clock reading is not recorded. */
@@ -67,6 +95,9 @@ export function noteHook(label: string, at: number | undefined): void {
   }
   counts.set(kind, (counts.get(kind) ?? 0) + 1);
   lastAtKind.set(kind, Math.max(lastAtKind.get(kind) ?? -Infinity, at));
+  const min = Math.floor(at / 60_000);
+  minutes.set(min, (minutes.get(min) ?? 0) + 1);
+  if (minutes.size > MINUTES_KEEP) for (const m of [...minutes.keys()].sort((a, b) => a - b).slice(0, minutes.size - MINUTES_KEEP)) minutes.delete(m);
 }
 
 /**
@@ -80,6 +111,12 @@ export function noteHookMs(label: string, startAt: number | undefined, endAt: nu
   ring.push(ms);
   if (ring.length > KEEP) ring.shift();
   latencies.set(label, ring);
+  const kind = label.split(' ')[0]!;
+  const kr = kindRing.get(kind) ?? [];
+  kr.push(ms);
+  if (kr.length > KEEP) kr.shift();
+  kindRing.set(kind, kr);
+  kindLive.add(kind);
   for (let i = log.length - 1; i >= 0; i--) { // the event this handler stamped: the newest one of this label at its entry reading
     const e = log[i]!;
     if (e.label === label && e.at === startAt) { if (e.ms === undefined) e.ms = ms; break; }
@@ -99,14 +136,16 @@ export async function hookStamp($: EngineInterface): Promise<number | undefined>
 const rank = (sorted: readonly number[], p: number): number => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))]!;
 
 export function hookStats(now: number, max = 8, since?: number): HookStats {
-  const samples = [...latencies.values()].flat().sort((a, b) => a - b);
+  const samples = [...kindRing.values()].flat().sort((a, b) => a - b);
   const recent = [...log].reverse().slice(0, max).map((e) => ({ label: e.label, ageSecs: Math.max(0, Math.floor((now - e.at) / 1000)), ...(e.ms !== undefined ? { ms: e.ms } : {}) }));
   const last = [...log].reverse().find((e) => e.label !== 'session.start');
-  const perHook = [...counts].map(([label, n]) => {
-    const ms = [...latencies].filter(([l]) => l.split(' ')[0] === label).flatMap(([, v]) => v).sort((a, b) => a - b);
+  const figures = (label: string, n: number): NonNullable<HookStats['perHook']>[number] => {
+    const ms = [...(kindRing.get(label) ?? [])].sort((a, b) => a - b);
     const at = lastAtKind.get(label);
-    return { label, n, ...(ms.length ? { p50: rank(ms, 0.5), p95: rank(ms, 0.95) } : {}), ...(at !== undefined ? { lastSecs: Math.max(0, Math.floor((now - at) / 1000)) } : {}) };
-  });
+    return { label, n, ...(ms.length ? { p50: rank(ms, 0.5), p95: rank(ms, 0.95) } : {}), ...(ms.length && !kindLive.has(label) ? { prev: true as const } : {}), ...(at !== undefined ? { lastSecs: Math.max(0, Math.floor((now - at) / 1000)) } : {}) };
+  };
+  // a kind with persisted samples and no event yet this session still has its figures (labelled prev by the HOOKS table)
+  const perHook = [...counts].map(([label, n]) => figures(label, n)).concat([...kindRing.keys()].filter((k) => !counts.has(k)).map((k) => figures(k, 0)));
   return {
     perHook,
     total: [...counts.values()].reduce((n, x) => n + x, 0),

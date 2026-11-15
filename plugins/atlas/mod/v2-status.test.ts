@@ -179,32 +179,32 @@ describe('the status tab body, round W1', () => {
     expect(rows[top]!.slice(5, 8)).toMatch(/^ ?\d┤$|^\d\d┤$/);
     for (let i = top + 1; i < base; i++) expect(rows[i]!.slice(5, 8)).toBe('  │');
     const axis = rows[base + 1]!;
-    expect(axis.indexOf('-5m')).toBe(8);
+    expect(axis.indexOf('-4m')).toBe(8); // Y1b: the window is the session's age (185 s) rounded up to the next minute
     expect(axis.indexOf('now') + 3).toBe(u + 1);
-    expect(axis).toContain('-2.5m');
-    expect(axis.indexOf('-2.5m')).toBeGreaterThan(8 + 3);
-    expect(axis.indexOf('-2.5m') + 5).toBeLessThan(axis.indexOf('now'));
+    expect(axis).toContain('-2m');
+    expect(axis.indexOf('-2m')).toBeGreaterThan(8 + 3);
+    expect(axis.indexOf('-2m') + 3).toBeLessThan(axis.indexOf('now'));
   });
   test('C: the stats ride the section rule; idle with no events says waiting', () => {
     expect(body(render(W150, 'idle', IDLE([], []))).find((l) => l.includes('── ACTIVITY'))).toMatch(/0 ev · waiting$/);
-    expect(body(render(W150, 'working', WORKING(false))).find((l) => l.includes('── ACTIVITY'))).toMatch(/── 15 ev · peak 5\/15s · last 5s$/);
+    expect(body(render(W150, 'working', WORKING(false))).find((l) => l.includes('── ACTIVITY'))).toMatch(/── 15 ev · peak 5 \/ \d+(\.\d)?s · last 5s$/);
     expect(body(render(W150, 'working', WORKING(false))).some((l) => /no calls|^ {20,}\d+ ev$/.test(l))).toBe(false);
   });
   test('C: events are bucketed to the chart\'s width and aligned to the wall clock; the total is conserved', () => {
     const at = 1_000_000_000_000;
     const stamps = [at - 290_000, at - 100_000, at - 100_050, at - 3000, at - 10];
     const pulse = { events: [], ctx: [], runs: [], stamps, at };
-    const a = chartSeries({ ...IDLE(EV.idle, []), pulse }, 40);
+    const a = chartSeries({ ...IDLE(EV.idle, []), upSecs: 300, pulse }, 40);
     expect(a.vals).toHaveLength(40);
     expect(a.total).toBe(5);
     expect(a.vals.at(-1)).toBeGreaterThanOrEqual(1);
-    const b = chartSeries({ ...IDLE(EV.idle, []), pulse: { ...pulse, at: at + 100 } }, 40); // later in the same bucket: the same series
+    const b = chartSeries({ ...IDLE(EV.idle, []), upSecs: 300, pulse: { ...pulse, at: at + 100 } }, 40); // later in the same bucket: the same series
     expect(b.vals).toEqual(a.vals);
-    const c = chartSeries({ ...IDLE(EV.idle, []), pulse: { ...pulse, at: at + 300_000 } }, 40); // five minutes on: every stamp has left the window
+    const c = chartSeries({ ...IDLE(EV.idle, []), upSecs: 300, pulse: { ...pulse, at: at + 300_000 } }, 40); // five minutes on: every stamp has left the window
     expect(c.total).toBe(0);
     const spread = chartSeries(WORKING(false), 40); // no stamps: the 15 s series spread to the width, the total and the 15 s peak kept
     expect(spread.total).toBe(EV.work.reduce((n, x) => n + x, 0));
-    expect(spread.peak15).toBe(5);
+    expect(spread.peak).toBe(5);
   });
   test('C: the chart grows from 3 rows by the free height, to 8 and only past it when nothing else can use the rows', () => {
     const count = (rows: number): number => {
@@ -264,7 +264,7 @@ describe('the status tab body, round W1', () => {
     const m = render(W150, 'done', DONE());
     const rows = body(m);
     const i = rows.findIndex((l) => l.includes('── RUNS'));
-    expect(rows[i + 1]).toMatch(/^ {5}[▁-█]{3} {2}3 runs · med 0:42 · max 0:58 · 1 failed$/);
+    expect(rows[i + 1]).toMatch(/^ {5}[▁-█]{3} {2}3 runs · med 0:42 · p90 0:58 · 1 failed$/);
     const bars = panelLines(m).map((l) => l.runs).find((rs) => rs.some((x) => /^[▁-█]+$/.test(x.t) && x.tone === 'ok'))!;
     expect(bars.some((x) => x.tone === 'bad')).toBe(true);
   });

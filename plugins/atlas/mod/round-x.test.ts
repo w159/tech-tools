@@ -54,9 +54,9 @@ describe('X1: one widget set', () => {
       const rows = text(tab(t, cols, { workers: t === 'team' ? [{ name: 'w', state: 'running', detail: 'x', secs: 3 }] : [] }));
       const all = rows.join('\n');
       expect(all).toMatch(/── ACTIVITY /);
-      if (cols >= 48) expect(all).toMatch(/── ACTIVITY ─+ \d+ ev · peak \d+\/15s/);
-      expect(all).toMatch(/-5m +-2\.5m +now/);
-      expect(all).toMatch(/hook +n +p50 +p95 +last/);
+      if (cols >= 48) expect(all).toMatch(/── ACTIVITY ─+ \d+ ev · peak \d+ \/ [\d.]+[sm]/);
+      expect(all).toMatch(/-\d+m +-[\d.]+m +now/);
+      expect(all).toMatch(/hook(?: · last 64 calls)? +n +p50 +p95 +last/);
       expect(all).toMatch(/── CONTEXT /);
       expect(all).not.toMatch(/0└5m|checks +ok fail|\d+ seen · \d+ms|no calls/);
     });
@@ -70,13 +70,13 @@ describe('X1: one widget set', () => {
     const tb = text(tab('gates', u + 2));
     const a = chartRows(st).slice(0, 3), b = chartRows(tb).slice(0, 3);
     expect(b[0]).toBe(a[0]); // the y gutter and the first chart row at the same width
-    expect(st.join('\n')).toMatch(/hook +n +p50 +p95 +last/);
+    expect(st.join('\n')).toMatch(/hook(?: · last 64 calls)? +n +p50 +p95 +last/);
   });
   test('the card holds the same sections by the same names', () => {
     const t = cardFrame(health(), { cols: 150, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     for (const s of ['ACTIVITY', 'CONTEXT', 'RUNS', 'GATES', 'HOOKS']) expect(t).toContain(`── ${s} `);
     expect(t).toMatch(/pass deny last/);
-    expect(t).toMatch(/hook +n +p50 +p95 +last/);
+    expect(t).toMatch(/hook(?: · last 64 calls)? +n +p50 +p95 +last/);
     expect(t).not.toMatch(/checks +ok fail|0└5m/);
   });
 });

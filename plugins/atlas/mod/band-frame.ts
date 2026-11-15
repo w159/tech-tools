@@ -169,7 +169,10 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   const extras: Run[][] = [];
   if (h.ctxPct !== undefined) extras.push([dim('ctx '), txt(`${pad3(h.ctxPct)}%`, h.ctxPct >= 70 ? { fg: k.warn, tone: 'warn' } : {})]);
   if (h.hooks?.latency) extras.push([dim('hook '), txt(`${pad3(h.hooks.latency.p50)}ms`, h.hooks.latency.p50 >= 50 ? { fg: k.warn, tone: 'warn' } : {})]);
-  if (h.hooks?.lastEventSecs !== undefined) extras.push([dim('last '), txt(agoText(h.hooks.lastEventSecs).padEnd(3))]);
+  // Y1c: one age per state: a finished run's `ended 12s` already says when the last event came, so `last 12s` beside it is left out while the two are the same instant
+  const stateAge = a.kind === 'done' ? a.restSecs : undefined;
+  const lastAge = h.hooks?.lastEventSecs;
+  if (lastAge !== undefined && !(stateAge !== undefined && Math.abs(stateAge - lastAge) <= 2)) extras.push([dim('last '), txt(agoText(lastAge).padEnd(3))]);
   if (h.pulse?.cost) extras.push([txt(`$${h.pulse.cost.usd.toFixed(2)}`)]);
   const limit = cols - chipRoom; // the chip carries its own leading cell
   for (const ex of extras) {
