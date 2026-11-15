@@ -41,7 +41,7 @@ const first = (b: BandModel): string => rows(b)[0]!;
 
 /** The segments the band row draws, by id, in the order they appear. */
 const idsIn = (row: string): string[] => [
-  ['gates', /gates \d+\/\d+/], ['events', /[⣀-⣿]{6,}/], ['ctx', /ctx \d+%/], ['up', /up \d+:\d\d/], ['health', /▸ health/],
+  ['gates', /gates ok|\d+ denied|not fired/], ['events', /[⣀-⣿]{6,}/], ['ctx', /ctx \d+%/], ['up', /up \d+:\d\d/], ['health', /▸ health/],
 ].map(([id, re]) => ({ id: id as string, at: row.search(re as RegExp) })).filter((x) => x.at >= 0).sort((a, b) => a.at - b.at).map((x) => x.id);
 
 describe('(a) segments are a priority-ordered prefix; state and the chip always stay', () => {
@@ -66,9 +66,9 @@ describe('(a) segments are a priority-ordered prefix; state and the chip always 
   });
   test('the wide idle band reads like the mock', () => {
     const row = first(model('idle', 150, false)).trimEnd();
-    expect(row).toMatch(/^◖ ◆ ATLAS ◗ ○ idle ▌ ● gates 4\/4 ▌ [⣀-⣿]{8} ▌ ctx 6% ▌ up 0:09 ▌ ▸ health$/);
-    expect(first(model('working', 150, false)).trimEnd()).toMatch(/working 0:03 ▌ ● gates 4\/4 ▌ [⣀-⣿]{8} 3 tools ▌ ctx 6% ▌ up 0:09 ▌ ▸ health$/);
-    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 0:05 ▌ ● gates 4\/4 ▌ [⣀-⣿]{8} ▌ ctx 6% ▌ up 0:09 ▌ ▸ health$/);
+    expect(row).toMatch(/^◖ ◆ ATLAS ◗ ○ idle ▌ ● gates ok ▌ [⣀-⣿]{8} ▌ ctx 6% ▌ up 0:09 ▌ ▸ health$/);
+    expect(first(model('working', 150, false)).trimEnd()).toMatch(/working 0:03 ▌ ● gates ok ▌ [⣀-⣿]{8} 3 tools ▌ ctx 6% ▌ up 0:09 ▌ ▸ health$/);
+    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 0:05 ▌ ● gates ok ▌ [⣀-⣿]{8} ▌ ctx 6% ▌ up 0:09 ▌ ▸ health$/);
   });
 });
 
@@ -211,7 +211,7 @@ describe('(g) no pulse, no spark', () => {
     for (const kind of ['idle', 'working', 'done'] as Kind[]) {
       const row = first({ ...model(kind, 150, false), health: noPulse });
       expect(row).not.toMatch(/[⣀-⣿]/);
-      expect(row).toContain('gates 4/4');
+      expect(row).toContain('gates ok');
       expect(row).toContain('ctx 6%');
     }
   });

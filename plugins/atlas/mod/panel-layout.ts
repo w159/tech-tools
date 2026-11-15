@@ -682,7 +682,7 @@ function stepperRow(m: PanelModel): PanelLine {
 }
 const phaseBlock = (m: PanelModel): PanelLine[] => [sect('phase', m), stepperRow(m)];
 
-/** The pulse block: `events` (a spark and `N in 5m`), `context` (the gauge, tokens and a short spark, or `none yet`), `runs` (a bar per run this session). Every shape is observed this session (idle-health healthRows). */
+/** The pulse block: `events` (a spark and `N/5m`), `context` (the gauge and `6% · 64k of 1M`, or an empty track and `—`), `runs` (a dot per run, `N runs · last m:ss`). Every shape is observed this session (idle-health healthRows). */
 function pulseBlock(m: PanelModel, h: Health): PanelLine[] {
   const room = m.cols - 1 - VALUE_AT;
   const rows = healthRows(h, m.ui, { footer: true, sparkW: Math.max(8, Math.min(20, room - 10)), gaugeW: Math.max(6, Math.min(14, room - 24)), ...(m.notes.length ? { messages: m.notes.length } : {}) });

@@ -122,9 +122,9 @@ describe('1. state colours: 179 is the gates chip only', () => {
     const runs = bandRuns(f.model);
     const amber = runs.filter((x) => x.tone === 'warn');
     expect(amber.length).toBeGreaterThan(0);
-    expect(amber.map((x) => x.t).join('')).toMatch(/gates \d\/\d/);
+    expect(amber.map((x) => x.t).join('')).toMatch(/\d+ denied/);
     expect(runs.some((x) => x.bgHex === warn)).toBe(false);
-    expect(f.band).toMatch(/△ gates \d\/\d/);
+    expect(f.band).toMatch(/△ \d+ denied/);
   });
 });
 

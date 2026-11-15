@@ -1,4 +1,4 @@
-// Slice S4 of the mods expert-grade spec: the HEALTH card is a flat full-width ribbon with the pulse block, every gate is one `● name n/m`, team is its own item, and a run's duration prints once.
+// Slice S4 of the mods expert-grade spec: the HEALTH card is a flat full-width ribbon with the pulse block, every gate is one `● name 8 pass · 0 deny`, team is its own item, and a run's duration prints once.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import type { AtlasSnapshot, SquadAgent } from './contract';
@@ -6,7 +6,7 @@ import { bandTree, type BandHandlers, type BandModel } from './band';
 import { busySnap, NOW } from './live_fixture';
 import { uiFromEnv, type Run } from './atlas-ui';
 import { healthCardRows } from './hud-surface';
-import { healthRows, type Health } from './idle-health';
+import { gateOf, healthRows, type Health } from './idle-health';
 import { bodyLines, lineText } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { textWidth } from './theme';
@@ -72,61 +72,59 @@ describe('card: team is its own item, never a note or a suffix', () => {
 });
 
 describe('gates: one vocabulary', () => {
-  test('every gate line in the card and in the health rows reads `● name n/m`; a gate with no checks is 0/0 in the neutral tone', () => {
+  test('every gate line in the card and in the health rows reads `● name 8 pass · 0 deny`; a gate that never fired is `○ name not fired` in the neutral tone', () => {
     const rows = card(health(), 110, BUSY);
-    const lines = rowsText(rows).join('\n').match(/● \w+ +\d+\/\d+/g) ?? [];
-    expect(lines.map((l) => l.replace(/ +/g, ' '))).toEqual(['● completion 1/1', '● tripwire 2/2', '● routing 8/8', '● header 0/0']);
-    const mark = rows.flat().filter((x) => x.t === '●');
-    expect(mark.map((x) => x.tone)).toEqual(['ok', 'ok', 'ok', 'sub']);
+    const lines = rowsText(rows).join('\n').match(/[●○] \w+ +(?:\d+ pass · \d+ deny|not fired)/g) ?? [];
+    expect(lines.map((l) => l.replace(/ +/g, ' '))).toEqual(['● completion 1 pass · 0 deny', '● tripwire 2 pass · 0 deny', '● routing 8 pass · 0 deny', '○ header not fired']);
+    expect(health().gates.checks.map((c) => gateOf(c, ui).tone)).toEqual(['ok', 'ok', 'ok', 'sub']);
     const g = healthRows({ ...health(), pulse: BUSY }, ui, { recent: true }).find((r) => r.id === 'gates')!;
-    for (const d of g.detail.filter((x) => !x.startsWith(' '))) expect(d).toMatch(/● \w+ +\d+\/\d+/);
+    for (const d of g.detail.filter((x) => !x.startsWith(' '))) expect(d).toMatch(/[●○] \w+ (?:\d+ pass · \d+ deny|not fired)/);
     expect(gateLine('header', 0, 0).tone).toBe('sub');
   });
-  test('the sum of the shown n/m is the one total (vocab.gatesTotal), nowhere a second count', () => {
+  test('the total is denials over the gates that fired (vocab.gatesTotal), never a ratio, and a gate that never fired is left out of it', () => {
     const t = rowsText(card(health(), 110, BUSY)).join('\n');
-    const nm = [...t.matchAll(/● \w+ +(\d+)\/(\d+)/g)].map((m) => ({ pass: Number(m[1]), total: Number(m[2]) }));
-    expect(gatesTotal(nm).text).toBe('11/11');
-    expect(t).not.toMatch(/\d+\/\d+ green|checks? pass/);
+    const nm = [...t.matchAll(/● \w+ +(\d+) pass · (\d+) deny/g)].map((m) => ({ pass: Number(m[1]), total: Number(m[1]) + Number(m[2]) }));
+    expect(gatesTotal([...nm, { pass: 0, total: 0 }])).toMatchObject({ text: 'ok', pass: 11, total: 11, fired: 3, notFired: 1 });
+    expect(t).not.toMatch(/\d+\/\d+ green|checks? pass|\d+\/\d+ gates/);
   });
-  test('a failed gate keeps its red mark and its count', () => {
+  test('a denied gate keeps its red mark and its count', () => {
     const h = health({ gates: { total: 2, green: 1, checks: [check('completion'), check('routing', { ok: false, lines: 8, pass: 6 })] } });
     const rows = card(h, 110, BUSY);
-    expect(rowsText(rows).join('\n')).toMatch(/● routing +6\/8/);
-    expect(rows.flat().filter((x) => x.t === '●').map((x) => x.tone)).toEqual(['ok', 'bad']);
+    expect(rowsText(rows).join('\n')).toMatch(/● routing +6 pass · 2 deny/);
+    expect(h.gates.checks.map((c) => gateOf(c, ui).tone)).toEqual(['ok', 'bad']);
   });
 });
 
 describe('pulse rows', () => {
-  test('events: a 28-cell spark of pulse.events and `N in 5m`; context: framed gauge, `64k of 1M`, a short spark; cost only when the pulse has it', () => {
+  test('events: a 28-cell spark of pulse.events and `N/5m`; context: framed gauge, `6% · 64k of 1M`; cost only when the pulse has it', () => {
     const rows = rowsText(card(health(), 110, BUSY));
     const ev = rows.find((r) => /^ {2}events /.test(r))!;
     expect(ev).toMatch(/[⣀-⣿]{28}/);
     expect(ev).not.toMatch(/[⣀-⣿]{29}/);
-    expect(ev).toContain('8 in 5m');
+    expect(ev).toContain('8/5m');
     const cx = rows.find((r) => /^ {2}context /.test(r))!;
-    expect(cx).toMatch(/▕[█▏▎▍▌▋▊▉░]{20}▏ 64k of 1M · [⣀-⣿]{3}/);
+    expect(cx).toMatch(/▕[█▏▎▍▌▋▊▉░]{20}▏ 6% · 64k of 1M/);
     expect(rows.join('\n')).toContain('cost $0.04');
     const noCost = rowsText(card(health(), 110, { ...BUSY, cost: undefined } as Pulse)).join('\n');
     expect(noCost).not.toMatch(/cost|\$/);
   });
-  test('an empty pulse is a flat baseline and `none yet`, never an invented number', () => {
+  test('an empty pulse is a flat baseline, `0/5m` and an em dash, never `none yet` or an invented number', () => {
     const rows = rowsText(card(health({ ctxPct: undefined, tokens: undefined, window: undefined }), 110, IDLE));
     const ev = rows.find((r) => /^ {2}events /.test(r))!;
     expect(ev).toMatch(/⣀{28}/);
-    expect(ev).toContain('none yet');
-    expect(ev).not.toMatch(/\d+ in 5m/);
-    expect(rows.find((r) => /^ {2}runs /.test(r))).toContain('none yet');
-    expect(rows.find((r) => /^ {2}context /.test(r))).toContain('none yet');
+    expect(ev).toContain('0/5m');
+    expect(rows.find((r) => /^ {2}runs /.test(r))).toContain('○ no runs this session');
+    expect(rows.find((r) => /^ {2}context /.test(r))).toMatch(/▕░{20}▏ —/);
+    expect(rows.join('\n')).not.toContain('none yet');
     expect(rows.join('\n')).not.toMatch(/cost|\$/);
     const none = rowsText(card(health({ hooks: undefined }), 110)); // no pulse at all and no hook seen (a card built before the pulse is wired)
-    expect(none.find((r) => /^ {2}events /.test(r))).toContain('none yet');
+    expect(none.find((r) => /^ {2}events /.test(r))).toContain('0/5m');
     const seen = rowsText(card(health(), 110)).find((r) => /^ {2}events /.test(r))!; // no pulse yet but the hooks did fire: their own count, on a flat baseline
     expect(seen).toMatch(/⣀{28}\s+6 events/);
   });
-  test('runs: one bar per run (shapes, no seconds), the count and the failures', () => {
+  test('runs: an outcome dot per run (newest right), the count and the last run', () => {
     const r = rowsText(card(health(), 110, BUSY)).find((x) => /^ {2}runs /.test(x))!;
-    expect(r).toMatch(/runs +[⣀-⣿]{2} +2 runs · 1 failed/);
-    expect(r).not.toMatch(/\d+:\d\d/);
+    expect(r).toMatch(/runs +● ● +2 runs · last 0:05/);
   });
 });
 
@@ -162,8 +160,9 @@ describe('the run duration prints once across band, panel and transcript card', 
       const runId = ids.find((i) => i.startsWith('done-run'))!;
       const cardText = flat(placedTree(runId, ui));
       expect(cardText).toMatch(/● done\s+1\/1 · 1 worker/);
-      const joined = [bandText, panelText, cardText].join('\n');
-      expect(joined.match(/0:05/g)).toHaveLength(1);
+      expect(bandText.match(/0:05/g)).toHaveLength(1); // the band's state word is the clock
+      expect(panelText.match(/0:05/g)).toHaveLength(1); // D7: the panel's runs row says `last 0:05`
+      expect(cardText).not.toContain('0:05'); // the transcript card says its other facts
     } finally { forgetPlaced(); }
   });
   test('a run card with no facts is not placed (never an empty card)', async () => {

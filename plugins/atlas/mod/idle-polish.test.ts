@@ -50,7 +50,7 @@ describe('1: the checks row never repeats the gates figure', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols}, all green: the band says gates once and draws no checks row`, () => {
       const rows = rowsOf(model(cols));
-      expect(rows[0]).toContain('● gates 4/4');
+      expect(rows[0]).toContain('● gates ok');
       expect(rows.join('\n')).not.toMatch(/checks|4\/4 green|completion/);
     });
     test(`at ${cols}, a gate not green brings the checks row back`, () => {
@@ -62,14 +62,14 @@ describe('1: the checks row never repeats the gates figure', () => {
 
 describe('2: the expanded card says each gate in the one vocabulary, never a second gate total', () => {
   const card = healthCardRows(h, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
-  test('no line restates the band\'s figure (`gates 4/4`, `n/m green`); the session row holds the uptime (slice S4: the card is a superset of the panel)', () => {
+  test('no line restates the band\'s figure (`gates ok`, `N denied`, `n/m green`); the session row holds the uptime (slice S4: the card is a superset of the panel)', () => {
     const t = card.join('\n');
-    expect(t).not.toMatch(/gates 4\/4|\d+\/\d+ green/);
+    expect(t).not.toMatch(/gates ok|\d+ denied|\d+\/\d+ green/);
     expect(t).toMatch(/session\s+up 0:16/);
   });
-  test('each gate is `● name n/m`, two to a row; its note rides after it', () => {
-    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`● ${id} 3/3`).test(l)), id).toBe(true);
-    expect(card.join('\n')).toContain('● completion 3/3 · Last Stop allowed');
+  test('each gate is `● name 3 pass · 0 deny`, two to a row; its note rides after it', () => {
+    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`● ${id} +3 pass · 0 deny`).test(l)), id).toBe(true);
+    expect(card.join('\n')).toContain('● completion 3 pass · 0 deny · Last Stop allowed');
   });
 });
 
@@ -107,7 +107,7 @@ describe('3: a health row opens only when it has real detail', () => {
     expect(body(world(57)).join('\n').match(/atlas 17\.21\.1/g)?.length).toBe(1); // the version is said once, in the pinned footer
   });
   test('the session row says the uptime and the branch (slice S4); the version is said once, in the pinned footer', () => {
-    expect(body(world(80)).find((l) => l.includes('session'))).toContain('up 0:16');
+    expect(body(world(80)).find((l) => /^\s+session /.test(l))).toContain('up 0:16');
     const short = body(world(57, { rows: 24 })).join('\n'); // a short pane keeps the figures in the session row (a tall one draws the branch as a row of its own)
     expect(short).toMatch(/session\s+up 0:16 · master/);
     expect(short.match(/atlas 17\.21\.1/g)?.length).toBe(1);
@@ -144,7 +144,7 @@ describe('5: rows fit by dropping the lowest-value field, never by cutting', () 
       const t = body(world(cols, { health: { ...h, last: { ...h.last!, secs: 2, agents: 0, failed: 0, total: 5, done: 5 } } })).filter((l) => /^\s+[▸▾]?\s*(session|runs) +\S/.test(l));
       expect(t.length).toBe(2);
       for (const l of t) expect(l, l).not.toContain('…');
-      expect(t[0]).toContain('none yet'); // runs: no pulse run yet
+      expect(t[0]).toContain('no runs this session'); // runs: no pulse run yet
       expect(t[1]).toContain('up 0:16');
       expect(t[1]).not.toContain('0:02'); // a run's seconds are the band's alone
     });
@@ -154,7 +154,7 @@ describe('5: rows fit by dropping the lowest-value field, never by cutting', () 
     const last = t.find((l) => /^\s+[▸▾]?\s*runs /.test(l))!;
     expect(last).not.toContain('0 failed');
     expect(last).toContain('1 run');
-    expect(last).toContain('ended 10m ago');
+    expect(last).toContain('last 0:02 · 10m ago');
   });
   test('fitFields drops by keep order and keeps the first', () => {
     const f = (t: string, keep: number) => ({ runs: [{ t, tone: 'text' as const }], keep });

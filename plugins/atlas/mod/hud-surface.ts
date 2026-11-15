@@ -852,7 +852,7 @@ function clipRuns(runs: Run[], cols: number): Run[] {
 
 /** The expanded health card the band's `▾ health` button opens (slice S4): a FLAT ribbon like the TODO and SUBAGENTS ones (`── ▾ HEALTH ──── ▾ hide ──`, no corners), every row exactly `cols` wide, and the rows are a superset of the
  * panel's health rows: gates (the one `● name n/m` vocabulary, each with its note, two to a row when they fit), the events spark (28 cells of 15 s buckets) with `N in 5m`, the context gauge with `64k of 1M` and a short spark, the runs
- * (bars and counts, never seconds: the band owns the run clock) and the session row (`up · branch · team · version · cost`). The history is `h.pulse` (observed this session; absent: baselines and `none yet`). The `▾ hide` chip carries the band's
+ * (bars and counts, never seconds: the band owns the run clock) and the session row (`up · branch · team · version · cost`). The history is `h.pulse` (observed this session; absent: baselines and `—`). The `▾ hide` chip carries the band's
  * own `band:health` press key, so a click closes the card. */
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
   const { cols, ui } = o;
@@ -864,15 +864,13 @@ export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): 
   const row = (label: string, runs: Run[]): Run[] => [t('  '), t(label.padEnd(LABEL), 'muted'), t(' '), ...runs];
   for (const hr of rows) {
     if (hr.id !== 'gates') { body.push(row(hr.label, fitFields(hr.fields, room))); continue; }
-    // gates: `● completion 1/1 · Last Stop allowed`, two columns when both fit the room, else one per row
-    const items = h.gates.checks.map((c): Run[] => { const g = gateOf(c, ui); const note = noteOf(c); return [t(g.glyph, g.tone), t(` ${g.name} ${g.count}`), ...(note ? [t(` · ${note}`, 'sub')] : [])]; });
-    const widest = items.reduce((n, it) => Math.max(n, runsCells(it)), 0);
-    const two = items.length > 1 && 2 * widest + 3 <= room;
-    for (let i = 0; i < items.length; i += two ? 2 : 1) {
-      const a = items[i]!;
-      const b = two ? items[i + 1] : undefined;
-      body.push(row(i === 0 ? hr.label : '', b ? [...a, t(' '.repeat(widest - runsCells(a) + 3)), ...b] : a));
-    }
+    // gates: one per row, the name column aligned: `● completion 3 pass · 0 deny · Last Stop allowed`, `○ header     not fired` (round 2, D4: denials, never a ratio; one row each so no width reflows the rows)
+    const nameW = h.gates.checks.reduce((n, c) => Math.max(n, runsCells([t(c.id)])), 0);
+    h.gates.checks.forEach((c, i) => {
+      const g = gateOf(c, ui);
+      const note = noteOf(c);
+      body.push(row(i === 0 ? hr.label : '', [t(g.glyph, g.tone), t(` ${g.name.padEnd(nameW)} ${g.count}`), ...(note ? [t(` · ${note}`, 'sub')] : [])]));
+    });
   }
   // the ribbon: `── ▾ HEALTH ───── ▾ hide ──` (ASCII `-- v HEALTH ----- v hide --`)
   const rule = ui.ascii ? '-' : RULE;

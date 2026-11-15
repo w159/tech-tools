@@ -38,14 +38,15 @@ describe('a: the gates are one collapsed row, no `checks` section', () => {
     const row = t.find((l) => /▸ gates/.test(l))!;
     expect(row).toBeDefined();
     expect(row).not.toMatch(/\d\/\d/);
-    if (cols >= 54) for (const n of ['completion', 'tripwire', 'routing', 'header']) expect(row).toContain(`● ${n}`);
-    else expect(row).toMatch(/● ● ● ●/);
+    if (cols >= 54) for (const n of ['completion', 'tripwire', 'routing']) expect(row).toContain(`● ${n}`);
+    if (cols >= 54) expect(row).toContain('○ header'); // a gate that never fired is a grey hollow dot
+    else expect(row).toMatch(/● ● ● ○/);
   });
-  for (const cols of WIDTHS) test(`${cols}: opened, each gate is one \`● name n/m\` row once, its note on its own indented line`, () => {
+  for (const cols of WIDTHS) test(`${cols}: opened, each gate is one \`● name 8 pass · 0 deny\` row once, its note on its own indented line`, () => {
     const t = body(world(cols, 'idle', { expanded: 'health:gates' }));
     const text = t.join('\n');
     expect(text).toContain('▾ gates');
-    for (const [n, c] of [['completion', '1/1'], ['tripwire', '2/2'], ['routing', '8/8'], ['header', '0/0']] as const) expect(text.match(new RegExp(`● ${n}\\s+${c.replace('/', '\\/')}`, 'g'))?.length, n).toBe(1);
+    for (const [g, n, c] of [['●', 'completion', '1 pass · 0 deny'], ['●', 'tripwire', '2 pass · 0 deny'], ['●', 'routing', '8 pass · 0 deny'], ['○', 'header', 'not fired']] as const) expect(text.match(new RegExp(`${g} ${n}\\s+${c}`, 'g'))?.length, n).toBe(1);
     const note = t.findIndex((l) => l.includes('Last Stop allowed'));
     expect(note).toBeGreaterThan(t.findIndex((l) => /● completion/.test(l)));
     expect(edge(t[note]!)).toBeGreaterThan(4);

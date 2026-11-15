@@ -4,8 +4,9 @@ import { elapsedClock, stateRun, type Run, type Ui } from './atlas-ui';
 import { textWidth } from './theme';
 import type { HookStats } from './hook-log';
 import type { Pulse } from './pulse';
-import { spark, gaugeFramed } from './spark';
-import { gateLine } from './vocab';
+import { gaugeRuns, sparkRuns } from './spark';
+import { rateLabel } from './pulse';
+import { gateCounts, gateLine, gatesTotal } from './vocab';
 
 export type HealthLast = { secs?: number; done: number; total: number; agents: number; failed: number; /** Whole seconds since the run ended (a clock with no zone read as a time of day only to its owner): drawn `ended 3m ago`. */ endedAgo?: number; /** Each worker of the run with how it ended and how long it ran. */ workers?: readonly { name: string; state: string; secs?: number }[] };
 /** One gate group: its mark, and (from the gate groups the mod reads) how many of its lines pass and the first line's own words. */
@@ -30,7 +31,7 @@ export type Health = {
   button?: boolean;
   /** Team mode (`off`, `on`) as its own session item; when absent it is read from the tripwire gate's `Team mode: off` note (teamOf), which is then left out of the notes. */
   team?: string;
-  /** The observed-only history (pulse.ts) the events, context and runs rows draw their shapes from; absent: flat baselines and `none yet`. */
+  /** The observed-only history (pulse.ts) the events, context and runs rows draw their shapes from; absent: flat baselines and `—`. */
   pulse?: Pulse;
   /** The side panel is drawn beside the transcript: it already says the gates, the uptime, the context, the events and the last run, so the band and the card say only what it does not. */
   panel?: boolean;
@@ -79,10 +80,17 @@ export const NOTE_INDENT = '  ';
 export const teamOf = (h: Pick<Health, 'gates' | 'team'>): string | undefined => h.team ?? h.gates.checks.map((c) => /^Team mode:\s*(.+)$/.exec(c.note ?? '')?.[1]?.trim()).find((x) => !!x);
 /** A gate's note without the team line (that is the session row's `team off`). */
 export const noteOf = (c: HealthCheck): string => (c.note && !/^Team mode:/.test(c.note) ? c.note : '');
-/** One gate in the one vocabulary `● name n/m` (vocab.gateLine): n of m is the gate's own checks that pass; a gate with no checks is `0/0` in the neutral tone, and a failed one keeps its red. */
-export function gateOf(c: HealthCheck, ui: Pick<Ui, 'ascii'>): { glyph: string; name: string; count: string; text: string; tone: Run['tone'] } {
-  const g = gateLine(c.id, c.pass ?? 0, c.lines ?? 0, ui.ascii);
-  return { glyph: g.glyph, name: c.id, count: `${g.pass}/${g.total}`, text: g.text, tone: !c.ok ? 'bad' : g.tone };
+/** One gate in the one vocabulary (vocab.gateLine): `● name 8 pass · 0 deny`, red when any line is denied (deny = lines that are not ok); `○ name not fired` in grey when the gate has no lines yet. No pass ratio. */
+export function gateOf(c: HealthCheck, ui: Pick<Ui, 'ascii'>): { glyph: string; name: string; count: string; text: string; tone: Run['tone']; pass: number; deny: number; fired: boolean } {
+  const n = gateCounts(c);
+  const g = gateLine(c.id, n.pass, n.total, ui.ascii);
+  return { glyph: g.glyph, name: c.id, count: g.count, text: g.text, tone: g.tone, pass: g.pass, deny: g.deny, fired: g.fired };
+}
+
+/** The gates in one figure: denials summed over the gates that fired (`deny`), how many fired and how many have not. Checks that carry no group data fall back to the one-line-each count of the Health's own totals. */
+export function gatesSummary(h: Pick<Health, 'gates'>) {
+  const cs = h.gates.checks;
+  return cs.length > 0 ? gatesTotal(cs.map(gateCounts)) : gatesTotal(h.gates.total > 0 ? [{ pass: h.gates.green, total: h.gates.total }] : []);
 }
 
 /** A hook's own name in words: `session.measure` -> `context measured`; an unnamed one reads its dotted words (`tool.call Bash` -> `tool call Bash`). */
@@ -114,35 +122,44 @@ export type RowOpts = { recent?: boolean; /** Messages on the channel: folded in
 /** The events spark's cells in the panel: one per 15 s bucket of the 5 minutes the pulse keeps. */
 export const EVENTS_W = 20;
 const sum = (xs: readonly number[]): number => xs.reduce((n, x) => n + x, 0);
-/** The health rows both the panel and the card read: events, gates, context, runs, session. Every shape is drawn from the pulse (observed this session); an empty one is a flat baseline and `none yet`, never a made-up figure. The run's own seconds are the band's alone (the runs row holds shapes and counts). */
+/** The health rows both the panel and the card read: events, gates, context, runs, session. Every shape is drawn from the pulse (observed this session); an empty one is a flat baseline and `—`, never a made-up figure. The run's own seconds are the band's alone (the runs row holds shapes and counts). */
 export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
   const rows: HealthRow[] = [];
   const p = h.pulse;
   const f = (text: string, keep: number, tone: Run['tone'] = 'text'): HealthField => ({ runs: [r(text, tone)], keep });
   const add = (id: HealthRow['id'], label: string, fields: HealthField[]): void => { rows.push({ id, label, fields, runs: fields.flatMap((x) => x.runs), detail: healthDetail(h, id, o) }); };
   if (h.gates.checks.length > 0) {
-    const marks = h.gates.checks.flatMap((c, i): Run[] => { const g = gateOf(c, ui); return [...(i ? [r('  ')] : []), r(g.glyph, g.tone), r(` ${g.name}`)]; });
-    add('gates', 'gates', [{ runs: marks, keep: 9 }]);
+    const g = gatesSummary(h);
+    const mark = g.fired === 0 ? r(ui.ascii ? 'o' : '○', 'sub') : g.deny > 0 ? r(ui.ascii ? 'x' : '✗', 'bad') : r(ui.ascii ? '*' : '●', 'ok');
+    add('gates', 'gates', [
+      { runs: [mark, r(g.fired === 0 ? ' not fired' : g.deny > 0 ? ` ${g.deny} denied` : ' ok', g.tone)], keep: 9 },
+      ...(g.fired > 0 && g.deny === 0 ? [f('0 denied', 8, 'sub')] : []),
+      { runs: [r(plural(h.gates.checks.length, 'gate'), 'text')], keep: 6 },
+      ...(g.notFired > 0 && g.fired > 0 ? [f(`${g.notFired} not fired`, 5, 'sub')] : []),
+    ]);
   }
-  const inWindow = p ? sum(p.events) : 0;
   const seen = h.hooks?.total ?? 0; // no pulse wired yet: the hooks' own session count is real, and the baseline stays flat
-  const count = inWindow > 0 ? `${inWindow} in 5m` : !p && seen > 0 ? plural(seen, 'event') : 'none yet';
-  add('events', 'events', [{ runs: [r(spark(p?.events ?? [], o.sparkW ?? EVENTS_W, { ascii: ui.ascii }), inWindow > 0 ? 'accent' : 'dim'), r('  '), r(count, count === 'none yet' ? 'muted' : 'text')], keep: 9 }]);
+  const lastEvent = h.hooks?.lastEventSecs;
+  const rate = p ? rateLabel(p.events) : seen > 0 ? plural(seen, 'event') : '0/5m';
+  add('events', 'events', [
+    { runs: [...sparkRuns(p?.events ?? [], o.sparkW ?? EVENTS_W, ui), r('  '), r(rate, rate.startsWith('0/') ? 'muted' : 'text')], keep: 9 },
+    ...(lastEvent !== undefined ? [f(`last ${agoText(lastEvent)}`, 4, 'sub')] : []),
+  ]);
   if (!o.gauge) {
     const pct = h.ctxPct;
-    const series = (p?.ctx ?? []).map((x) => x.pct);
-    add('context', 'context', pct === undefined
-      ? [{ runs: [r('none yet', 'muted')], keep: 9 }]
-      : [
-          { runs: [r(gaugeFramed(pct, o.gaugeW ?? 20, ui.ascii), pct > 70 ? 'warn' : 'sub'), r(` ${h.tokens !== undefined ? (h.window !== undefined ? `${tokenText(h.tokens)} of ${tokenText(h.window)}` : `${tokenText(h.tokens)} tokens`) : `${Math.round(pct)}%`}`)], keep: 9 },
-          ...(series.length >= 2 ? [{ runs: [r(spark(series, Math.min(8, series.length), { ascii: ui.ascii }), 'dim')], keep: 3 }] : []),
-        ]);
+    const detail = pct === undefined ? (ui.ascii ? '-' : '—') : h.tokens !== undefined ? (h.window !== undefined ? `${Math.round(pct)}% · ${tokenText(h.tokens)} of ${tokenText(h.window)}` : `${Math.round(pct)}% · ${tokenText(h.tokens)} tokens`) : `${Math.round(pct)}%`;
+    add('context', 'context', [{ runs: [...gaugeRuns(pct, o.gaugeW ?? 20, ui), r(` ${detail}`, pct === undefined ? 'muted' : 'text')], keep: 9 }]);
   }
   const done = p?.runs ?? [];
-  const failedRuns = done.filter((x) => !x.ok).length;
+  const lastRun = done.at(-1);
+  const okGlyph = ui.ascii ? '*' : '●';
   add('runs', 'runs', done.length
-    ? [{ runs: [r(spark(done.map((x) => x.secs), done.length, { ascii: ui.ascii }), failedRuns > 0 ? 'warn' : 'ok'), r(`  ${plural(done.length, 'run')}`)], keep: 9 }, ...(failedRuns > 0 ? [f(`${failedRuns} failed`, 7, 'bad')] : []), ...(h.last?.endedAgo !== undefined ? [f(`ended ${agoText(h.last.endedAgo)} ago`, 5, 'sub')] : [])]
-    : [{ runs: [r('none yet', 'muted')], keep: 9 }]);
+    ? [
+        { runs: [...done.flatMap((x, i): Run[] => [...(i ? [r(' ')] : []), r(okGlyph, x.ok ? 'ok' : 'bad')]), r('  '), r(plural(done.length, 'run'))], keep: 9 },
+        f(`last ${elapsedClock(lastRun!.secs)}`, 7),
+        ...(h.last?.endedAgo !== undefined ? [f(`${agoText(h.last.endedAgo)} ago`, 5, 'sub')] : []),
+      ]
+    : [{ runs: [r(ui.ascii ? 'o' : '○', 'muted'), r(' no runs this session', 'muted')], keep: 9 }]);
   const team = teamOf(h);
   const sessionFields: HealthField[] = [
     ...(h.upSecs !== undefined ? [f(`up ${elapsedClock(h.upSecs)}`, 9)] : []),
@@ -156,9 +173,11 @@ export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
   return rows;
 }
 
-/** One summary line for the empty TODO and SUBAGENTS boxes: `● gates 4/4 · ctx 18%`; empty when the mod has neither figure. */
+/** One summary line for the empty TODO and SUBAGENTS boxes: `● gates ok · ctx 18%` or `✗ 2 denied · ctx 18%`; empty when the mod has neither figure. */
 export function healthLine(h: Health, ui: Ui): string {
-  const bits = [...(h.gates.total > 0 ? [`${gatesMark(h, ui).t} gates ${h.gates.green}/${h.gates.total}`] : []), ...(h.ctxPct !== undefined ? [`ctx ${Math.round(h.ctxPct)}%`] : [])];
+  const g = gatesSummary(h);
+  const gateBit = g.fired + g.notFired === 0 ? [] : g.fired === 0 ? [`${ui.ascii ? 'o' : '○'} gates not fired`] : g.deny > 0 ? [`${ui.ascii ? 'x' : '✗'} ${g.deny} denied`] : [`${ui.ascii ? '*' : '●'} gates ok`];
+  const bits = [...gateBit, ...(h.ctxPct !== undefined ? [`ctx ${Math.round(h.ctxPct)}%`] : [])];
   return bits.join(' · ');
 }
 

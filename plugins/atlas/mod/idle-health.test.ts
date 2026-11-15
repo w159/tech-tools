@@ -38,7 +38,7 @@ describe('idle band shows live health', () => {
     test(`at ${cols}: idle, gates, ctx and the health button replace \`todo -\` and \`no agents\``, () => {
       const row = firstRow(model(cols));
       expect(row).toContain('◖ ◆ ATLAS ◗ ○ idle');
-      expect(row).toContain('● gates 4/4');
+      expect(row).toContain('● gates ok');
       expect(row).toContain('ctx 18%'); // slice S2: the one band says `ctx 18%` (the panel and the card say `context`)
       expect(row).toContain('▸ health');
       expect(row).not.toContain('todo -');
@@ -52,9 +52,9 @@ describe('idle band shows live health', () => {
     expect(row).not.toContain('tok');
     expect(row).toContain('up 12:04');
   });
-  test('a failed gate reads ■ and the count', () => {
+  test('a denied gate reads ✗ and the count', () => {
     const bad = [...GATES.slice(0, 3), { id: 'header', title: 'header', lines: [{ id: 'header', label: 'header', ok: false }] }] as any;
-    expect(firstRow(model(150, { gates: bad }))).toContain('■ gates 3/4');
+    expect(firstRow(model(150, { gates: bad }))).toContain('✗ 1 denied');
   });
   test('an unknown context is omitted, never made up', () => {
     const row = firstRow(model(150, { snapshot: idleSnap({ contextPct: 0 }), health: { ...HEALTH, tokens: null } }));
@@ -118,7 +118,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
     expect(working(150, true).trimEnd()).toBe(WORKING_150);
   });
 });
-const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ● gates 4/4 ▌ ctx 12% ▌ up 12:04 ▌ ▸ health';
+const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ● gates ok ▌ ctx 12% ▌ up 12:04 ▌ ▸ health';
 
 describe('the expanded health card (HUD)', () => {
   const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };
@@ -126,15 +126,16 @@ describe('the expanded health card (HUD)', () => {
   test('ribbon, rows and closing rule', () => {
     const t = text();
     expect(t[0]).toMatch(/^── ▾ HEALTH ─+ ▾ hide ──$/); // slice S4: a flat ribbon with its close chip, no corners and no second badge (the TODO and SUBAGENTS ribbons keep theirs)
-    expect(t.some((l) => /gates\s+● completion 1\/1 {3,}● tripwire 1\/1/.test(l))).toBe(true); // every gate is `● name n/m`, two to a row when they fit
-    expect(t.some((l) => /context\s+▕.*▏ 42k tokens/.test(l))).toBe(true);
+    expect(t.some((l) => /gates\s+● completion +1 pass · 0 deny/.test(l))).toBe(true); // every gate is `● name 1 pass · 0 deny`, one per row
+    expect(t.some((l) => /^\s+● tripwire +1 pass · 0 deny/.test(l))).toBe(true);
+    expect(t.some((l) => /context\s+▕.*▏ 18% · 42k tokens/.test(l))).toBe(true);
     expect(t.some((l) => /last run/.test(l))).toBe(false); // the band says the run
     expect(t[t.length - 1]).toMatch(/^─+$/);
   });
-  test('a finished run is the runs row: a bar per run and a count, never its seconds', () => {
+  test('a finished run is the runs row: a dot per run, the count and `last m:ss`', () => {
     const t = text({ pulse: { events: [], ctx: [], runs: [{ secs: 134, ok: true, at: 1 }] } });
-    expect(t.some((l) => /runs\s+[⣀-⣿]\s+1 run\b/.test(l))).toBe(true);
-    expect(t.join('\n')).not.toMatch(/last run|2:14/);
+    expect(t.some((l) => /runs\s+●\s+1 run · last 2:14/.test(l))).toBe(true);
+    expect(t.join('\n')).not.toMatch(/last run/);
   });
   test('only values the mod has: no ctx, no tokens, no branch', () => {
     const t = text({ ctxPct: undefined, tokens: undefined, branch: undefined }).join('\n');
@@ -145,13 +146,13 @@ describe('the expanded health card (HUD)', () => {
 });
 
 describe('empty HUD boxes say what will appear, never the gates figure again', () => {
-  const o = { cols: 110, ui, reserve: true, healthLine: '● gates 4/4 · ctx 18%' };
+  const o = { cols: 110, ui, reserve: true, healthLine: '● gates ok · ctx 18%' };
   test('TODO and SUBAGENTS', () => {
     const todo = todoRows([], o as never, { spacers: false, extras: false }).map((r) => r.map((x) => x.t).join('')).join('\n');
     const subs = agentRows([], o as never, { spacers: false, extras: false }).map((r) => r.map((x) => x.t).join('')).join('\n');
     for (const s of [todo, subs]) {
       expect(s).not.toMatch(/no tasks yet|none running yet/);
-      expect(s).not.toContain('gates 4/4'); // round 2: the band says it once
+      expect(s).not.toContain('gates ok'); // round 2: the band says it once
     }
     expect(todo).toContain('plan rows appear here');
     expect(subs).toContain('agents appear here');
@@ -178,7 +179,7 @@ describe('the side panel status view, idle', () => {
     const t = rows(world({ expanded: 'health:gates' })).map(lineText);
     const i = t.findIndex((l) => l.includes('▾') && l.includes('gates'));
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/● completion\s+1\/1/);
+    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/● completion\s+1 pass · 0 deny/);
     // slice S3: only gates opens on the panel; context, events and runs are plain rows
     const s = rows(world({ rows: 24, expanded: 'health:context' })).map(lineText).join('\n');
     expect(s).toMatch(/context +▕/);

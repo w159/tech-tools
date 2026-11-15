@@ -237,17 +237,17 @@ describe('5. a done row: dim title, the `done` word in its state cell, the agent
   });
 });
 
-describe('6. gates: the one amber 179 on the bar is the separate `△ gates 2/4` chip, in every state (wave 36)', () => {
+describe('6. gates: the one amber 179 on the bar is the separate `△ 2 denied` chip, in every state (wave 36)', () => {
   const base = { cols: 150, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'research', done: 5, total: 5, openWork: 0, openDispatch: 0, todoBlocked: 0, workers: [], checks: [{ id: 'g', ok: true }, { id: 'h', ok: false }, { id: 'i', ok: true }, { id: 'j', ok: false }], ui, bar: true } as const;
   const tone = (extra: object): [string, string | undefined] => {
     const runs = bandLines({ ...base, ...extra } as never)[0]!.runs;
-    const g = runs.find((x) => /^ gates \d\/\d$/.test(x.t));
+    const g = runs.find((x) => /^ \d+ denied$/.test(x.t));
     return [g?.t ?? 'none', g?.tone];
   };
-  test('the chip is warn in every state, and the figure is green-of-total', () => {
-    expect(tone({ busy: true, turnSecs: 20 })).toEqual([' gates 2/4', 'warn']);
-    expect(tone({ busy: false, phase: 'done', restSecs: 3, ranSecs: 58 })).toEqual([' gates 2/4', 'warn']);
-    expect(tone({ busy: false, restSecs: 60, ranSecs: 58 })).toEqual([' gates 2/4', 'warn']);
+  test('the chip is warn in every state, and the figure is the denied gates', () => {
+    expect(tone({ busy: true, turnSecs: 20 })).toEqual([' 2 denied', 'warn']);
+    expect(tone({ busy: false, phase: 'done', restSecs: 3, ranSecs: 58 })).toEqual([' 2 denied', 'warn']);
+    expect(tone({ busy: false, restSecs: 60, ranSecs: 58 })).toEqual([' 2 denied', 'warn']);
   });
   test('no failing gate, no segment', () => {
     expect(tone({ busy: true, turnSecs: 20, checks: [{ id: 'g', ok: true }] })[0]).toBe('none');

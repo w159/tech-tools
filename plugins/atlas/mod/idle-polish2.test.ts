@@ -64,13 +64,13 @@ describe('2: the idle band at 110 says more than one line of figures when no pan
       const rows = rowsOf(model(cols));
       expect(rows[1]).toMatch(/^ status +team +channel/);
       expect(rows.join('\n')).not.toMatch(/last run|events|last \d+s ago/);
-      expect(rows[0]).toContain('gates 4/4');
+      expect(rows[0]).toContain('gates ok');
     });
   }
   test('with the panel up the band reads as it does closed, minus `up` (the panel owns the uptime)', () => {
     const rows = rowsOf(model(150, { panel: true }));
     expect(rows[0]).toContain('▸ health');
-    expect(rows[0]).toContain('gates 4/4');
+    expect(rows[0]).toContain('gates ok');
     expect(rows[0]).toContain('ctx 18%');
     expect(rows.join('\n')).not.toMatch(/up 12:04|last run|events/);
   });
@@ -107,13 +107,13 @@ describe('3: the idle panel is one finished card: the rule and the footer close 
 
 describe('4: no run, no plan, no agent: one line, not two empty boxes', () => {
   test('the HUD holds a single `no plan yet · 0 agents` row with no gates figure', () => {
-    const rows = hudLines({ todos: [], agents: [] } as never, { cols: 110, maxRows: 12, ui, reserve: true, healthLine: '● gates 4/4 · ctx 18%' }).map((r) => r.map((x) => x.t).join(''));
+    const rows = hudLines({ todos: [], agents: [] } as never, { cols: 110, maxRows: 12, ui, reserve: true, healthLine: '● gates ok · ctx 18%' }).map((r) => r.map((x) => x.t).join(''));
     expect(rows.length).toBe(1);
     expect(rows[0]).toContain('no plan yet · 0 agents');
     expect(rows[0]).not.toMatch(/gates|appear here|ctx/);
   });
   test('a box that does wait for data (one side empty) no longer repeats the gates figure', () => {
-    const o = { cols: 110, ui, reserve: true, healthLine: '● gates 4/4 · ctx 18%' };
+    const o = { cols: 110, ui, reserve: true, healthLine: '● gates ok · ctx 18%' };
     for (const rows of [todoRows([], o as never, { spacers: false, extras: false }), agentRows([], o as never, { spacers: false, extras: false })]) expect(rows.map((r) => r.map((x) => x.t).join('')).join('\n')).not.toMatch(/gates|ctx/);
   });
   test('the TODO and SUBAGENTS ribbons keep their markers when they hold data', () => {
@@ -135,7 +135,7 @@ describe('5: each fact once across the band, the card and the panel', () => {
     const t = healthCardRows({ ...one, panel: true }, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     expect(t).not.toMatch(/last run|session\.start|session started/);
     expect(t).toContain('atlas 17.21.1'); // idle polish 3: the card is one schema at every width, version included
-    expect(t).toContain('● completion 3/3');
+    expect(t).toContain('● completion 3 pass · 0 deny');
   });
   test('the card with no panel keeps the version; the band has no last run or event line any more', () => {
     const t = healthCardRows(one, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
@@ -228,8 +228,8 @@ describe('12: `context 6%` on the band; the tokens and the window only in the se
     expect(r).not.toMatch(/tok/);
   });
   test('the context row says the gauge and `63k of 1M`', () => {
-    expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).toMatch(/▕.*▏ 63k of 1M/); // a short pane: the context row (slice S4: framed gauge and `63k of 1M`), its detail the exact tokens
+    expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).toMatch(/▕.*▏ 6% · 63k of 1M/); // a short pane: the context row (slice S4: framed gauge and `63k of 1M`), its detail the exact tokens
     expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).not.toMatch(/tok/);
-    expect(body(world(57)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 63k of 1M/); // slice S3: one context row on the grid, the gauge and `63k of 1M`; the exact tokens are the card's
+    expect(body(world(57)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 6% · 63k of 1M/); // slice S3: one context row on the grid, the gauge and `63k of 1M`; the exact tokens are the card's
   });
 });

@@ -416,6 +416,10 @@ export const brandMark = (ui: Pick<Ui, 'ascii'>): Run[] => (ui.ascii ? [{ t: 'AT
 
 /** The rev 5 palette as hex (xterm-256 index in the comment). The Mocha tokens still carry the Catppuccin hexes: the motion ramps and their 256-colour tests are tuned to them (swap PALETTES.mocha to these in one place when the ramps are retuned). */
 export const PALETTE5 = { accent: '#af87ff' /* 141 */, rule: '#303030' /* 236 */, dim: '#585858' /* 240 */, secondary: '#8a8a8a' /* 245 */, body: '#d0d0d0' /* 252 */, ok: '#87d787' /* 114 */, warn: '#d7af5f' /* 179 */, error: '#ff5f5f' /* 203 */ } as const;
+/** Round 2 (D5, D6): the data-ink tokens. `body` and `peak` are a muted blue-grey ramp for chart cells (the events spark; the peak cell is one step brighter); violet stays identity and controls only. `track` is the dark empty part of a gauge. */
+export const DATA_INK = { mocha: { body: '#5f87af' /* 67 */, peak: '#87afd7' /* 110 */, track: '#303030' /* 236 */ }, latte: { body: '#7287a8', peak: '#4c6a9a', track: '#ccd0da' } } as const;
+export const dataInk = (ui: Pick<Ui, 'theme'>): { body: string; peak: string; track: string } => DATA_INK[ui.theme];
+
 /** The tone a surface draws with, by role (use these, not hex): the accent for the wordmark, the active tab and focus only; body normal text; secondary quiet text; dim timestamps, counts and done rows. */
 export const TONE5 = { accent: 'accent', body: 'text', secondary: 'sub', dim: 'dim', ok: 'ok', warn: 'warn', error: 'bad' } as const satisfies Record<string, Tone>;
 /** The rev 5 glyph set. Rows the capture scorer reads in fmt 4 (TODO, SUBAGENTS, board and band worker rows) still draw STATE_GLYPHS: it maps only the old marks. */

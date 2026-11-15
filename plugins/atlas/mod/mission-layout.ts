@@ -286,7 +286,8 @@ export function runStateOf(m: MissionModel): { blocked: boolean; warn?: string; 
   const warn = !blocked && failing.length > 0 && (quiet || m.phase === 'done') ? gatesToCheck(failing) : undefined;
   // The state the band leads with: blocked (the lead or Stop says so), working (a turn, a worker or a running plan row), done (the plan is full and nothing runs, for IDLE_AFTER_SECS), else idle.
   // A gate warning never leads (round 3): it rides the tail of a done, idle or working band (`warn`).
-  const finished = m.phase === 'done' || (m.total > 0 && m.done >= m.total);
+  // Round 2 (D3): a run the clock has seen close (`ranSecs`) with nothing alive, no block and no open failure is finished even with no plan rows, so `done m:ss` holds IDLE_AFTER_SECS at every width (seen live at 110: working -> idle).
+  const finished = m.phase === 'done' || (m.total > 0 && m.done >= m.total) || m.ranSecs !== undefined;
   const computedKind: BandKind = blocked ? 'blocked' : !quiet ? 'working' : finished && (m.restSecs ?? 0) < IDLE_AFTER_SECS ? 'done' : 'idle';
   const kind: BandKind = computedKind === 'idle' && m.heldKind && m.heldKind !== 'idle' ? m.heldKind : computedKind;
   // State 38: two reasons only. The Stop hook refused (or the store holds a dispatch row Stop will refuse on): `stop refused`; otherwise the failed workers: `N failed` (a dead dispatch is a failure everywhere).
@@ -317,16 +318,16 @@ const warnSeg = (ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'shor
   return [r(' · ', 'sub'), gateMark(ui), r(` ${form === 'long' ? st.warn : st.warn.replace(/ to check$/, '')}`, ui.ascii ? 'text' : 'warn')]; // wave 31: the same 179 in every state (it was 240 at rest)
 };
 
-/** The gates segment `gates 2/4` (green of total, the gates tab's own figure): amber 179 while the band works, dim 240 once it is done or idle (wave 32: `△ 2 gates to check` stayed amber on the green done row and
+/** The gates segment `2 denied` (the failing gates, round 2 D4: no pass ratio): amber 179 while the band works, dim 240 once it is done or idle (wave 32: `△ 2 gates to check` stayed amber on the green done row and
  * the grey idle row). It shows while any gate fails and Stop did not refuse; a pending gate (Stop alone decides) is not a failure. */
 const gatesSeg = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>): Run[] => {
   const checks = m.checks ?? [];
   if (st.blocked || !checks.some((c) => !c.ok)) return [];
-  const green = checks.filter((c) => c.ok && !c.pending).length;
-  // Wave 36: the one place the warning 179 appears on the bar, a separate chip in the last segment (`△ gates 2/4`), whatever the state: the state slab itself is never amber.
-  return [r(' · ', 'sub'), gateMark(ui), r(` gates ${green}/${checks.length}`, ui.ascii ? 'text' : 'warn')];
+  const denied = checks.filter((c) => !c.ok).length; // round 2 (D4): denials, never a pass ratio
+  // Wave 36: the one place the warning 179 appears on the bar, a separate chip in the last segment (`△ 2 denied`), whatever the state: the state slab itself is never amber.
+  return [r(' · ', 'sub'), gateMark(ui), r(` ${denied} denied`, ui.ascii ? 'text' : 'warn')];
 };
-/** The gate tail the model's host draws: the Claude Code bar's `gates 2/4`, else the warn tail. */
+/** The gate tail the model's host draws: the Claude Code bar's `2 denied`, else the warn tail. */
 const gateTail = (m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, form: 'long' | 'short' = 'long'): Run[] => (m.bar ? gatesSeg(m, ui, st) : warnSeg(ui, st, form));
 
 /** How much of the lead a form keeps: the clock or last run, the blocked reason (`long`, `short`, `bare`, or none) and the moving `fixing`. */
@@ -771,7 +772,7 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
  * pads their gap itself). Fewer rows when only one has content; none when neither. */
 function footerLines(m: MissionModel): Line[] {
   const keys = m.keysWidth ?? 0;
-  // The band carries `● gates 4/4` itself: with every gate green the checks row would say it a second time, so it shows only when a gate needs attention.
+  // The band carries `● gates ok` itself: with every gate green the checks row would say it a second time, so it shows only when a gate needs attention.
   const healthShows = !!m.health && runStateOf(m).kind !== 'blocked';
   const allGreen = !!m.checks?.length && m.checks.every((c) => c.ok && !c.pending);
   const checks = healthShows && allGreen ? [] : checkRuns(m.checks, m.cols, uiOf(m));

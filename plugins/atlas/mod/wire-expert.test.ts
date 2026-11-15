@@ -137,7 +137,7 @@ describe('wire-expert: the pulse', () => {
     const card = textOf(await b.band());
     expect(card).toContain('64k of 1M');
     expect(card).toContain('$0.04');
-    expect(card).toMatch(/events\s+[⠀-⣿]+\s+\d+ in 5m/);
+    expect(card).toMatch(/events\s+[⠀-⣿]+\s+\d+\/5m/);
   });
   test('(g) a new session resets the pulse and the hook log', async () => {
     const b = await boot();
@@ -151,7 +151,7 @@ describe('wire-expert: the pulse', () => {
     const card = textOf(await b.band());
     expect(card).not.toContain('64k of 1M');
     expect(card).not.toContain('$0.04');
-    expect(card).toMatch(/events\s+[⠀-⣿]+\s+1 in 5m/); // only the new session's own start
+    expect(card).toMatch(/events\s+[⠀-⣿]+\s+1\/5m/); // only the new session's own start
   });
 });
 

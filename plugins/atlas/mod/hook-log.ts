@@ -17,7 +17,7 @@ export type HookStats = {
 
 const KEEP = 64;
 /** Every event's clock reading for the pulse series; only the last STAMP_SPAN_MS before the newest is kept (the 64-entry log would drop a busy minute). */
-const STAMP_SPAN_MS = 300_000;
+const STAMP_SPAN_MS = 450_000;
 const STAMP_CAP = 4096;
 let log: HookEvent[] = [];
 let stamps: number[] = [];
@@ -65,14 +65,15 @@ export function hookStats(now: number, max = 8, since?: number): HookStats {
 }
 
 /**
- * Events per bucket as the handlers really saw them: `buckets` slots of `bucketMs`, OLDEST FIRST, the last slot ending at `now`
- * (age 0 to under `bucketMs`). An event older than the whole span is not counted; one stamped after `now` counts in the newest slot.
- * Before any event every slot is 0.
+ * Events per bucket as the handlers really saw them: `buckets` slots of `bucketMs`, OLDEST FIRST, aligned to the wall clock (round 2, D5): an event's slot is
+ * floor(at / bucketMs), the last slot is floor(now / bucketMs), so two `now` values in one window give the same series and a bar never slides under the reader.
+ * An event older than the whole span is not counted; one stamped after `now` counts in the newest slot. Before any event every slot is 0.
  */
-export function eventBuckets(now: number, buckets = 20, bucketMs = 15_000): number[] {
+export function eventBuckets(now: number, buckets = 28, bucketMs = 15_000): number[] {
   const out = new Array<number>(buckets).fill(0);
+  const cur = Math.floor(now / bucketMs);
   for (const at of stamps) {
-    const slot = buckets - 1 - Math.floor(Math.max(0, now - at) / bucketMs);
+    const slot = buckets - 1 - Math.max(0, cur - Math.floor(at / bucketMs));
     if (slot >= 0) out[slot]!++;
   }
   return out;

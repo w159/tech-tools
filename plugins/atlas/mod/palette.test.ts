@@ -3,14 +3,14 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { PALETTE5, PALETTES } from './atlas-ui';
+import { DATA_INK, PALETTE5, PALETTES } from './atlas-ui';
 import { leadTone } from './transcript/leadheader';
 
 const ROOT = resolve(import.meta.dir, '..'); // plugins/atlas
 const hexes = (o: Record<string, string>): string[] => Object.values(o).map((h) => h.toLowerCase());
 
-/** Every colour a source file may spell: the Mocha and Latte tokens, the five-role palette, and white (the chip ink). */
-const ALLOWED = new Set<string>([...hexes(PALETTES.mocha), ...hexes(PALETTES.latte), ...hexes(PALETTE5), '#ffffff']);
+/** Every colour a source file may spell: the Mocha and Latte tokens, the five-role palette, the data-ink ramp and gauge track (round 2), and white (the chip ink). */
+const ALLOWED = new Set<string>([...hexes(PALETTES.mocha), ...hexes(PALETTES.latte), ...hexes(PALETTE5), ...hexes(DATA_INK.mocha), ...hexes(DATA_INK.latte), '#ffffff']);
 
 /** Files that spell colours for something other than an Atlas surface, each with its reason. */
 const EXEMPT: Record<string, string> = {

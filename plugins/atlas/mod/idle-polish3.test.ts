@@ -31,11 +31,11 @@ describe('1: a tall idle pane is not a slab of empty rows', () => {
     let dead = 0;
     for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
     expect(dead).toBeLessThanOrEqual(10);
-    expect(t.join('\n')).not.toMatch(/▕/);
+    expect(t.join('\n')).toMatch(/context {1,2}▕░+▏ —/); // D6: an empty track and an em dash, never `none yet`
   });
-  test('the context gauge is a real row: `context ▕██░░░░░░▏ 6%`; none without a context figure', () => {
-    expect(body(world(54)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 63k of 1M/); // slice S3: the gauge, the tokens and the window on one context row
-    expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).not.toMatch(/▕/);
+  test('the context gauge is a real row: `context ▕██░░░░░░▏ 6% · 63k of 1M`; an empty track and `—` without a context figure', () => {
+    expect(body(world(54)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 6% · 63k of 1M/); // slice S3: the gauge, the tokens and the window on one context row
+    expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).toMatch(/context {1,2}▕░+▏ —/);
   });
   test('slice S3: no `waiting for first prompt` line and no zero state; the stepper at rest is five `○` (the slots never move)', () => {
     const t = body(world(54)).join('\n');
@@ -106,15 +106,15 @@ describe('8: the HEALTH card has one row schema at both widths', () => {
   test('the same rows at 110 and 150 (panel up or not), the note on its own line', () => {
     const a = text(110, false).map((s) => s.replace(/[╭╮╰╯─│\s]+$/g, '').trim());
     const b = text(150, true).map((s) => s.replace(/[╭╮╰╯─│\s]+$/g, '').trim());
-    expect(a.filter((l) => /^(gates|session)?\s*[●◇■]/.test(l) || /atlas|branch/.test(l)).length).toBe(b.filter((l) => /^(gates|session)?\s*[●◇■]/.test(l) || /atlas|branch/.test(l)).length);
+    expect(a.filter((l) => /^(gates|session)?\s*[●○◇■]/.test(l) || /atlas|branch/.test(l)).length).toBe(b.filter((l) => /^(gates|session)?\s*[●○◇■]/.test(l) || /atlas|branch/.test(l)).length);
     expect(a.join('|').replace(/\s+/g, ' ').replace(/[─╭╮╰╯]/g, '')).toBe(b.join('|').replace(/\s+/g, ' ').replace(/[─╭╮╰╯]/g, ''));
   });
-  test('a check is `● name n/m`; the team line is the session row\'s `team off`, never a note', () => {
+  test('a check is `● name 3 pass · 0 deny` (no ratio); the team line is the session row\'s `team off`, never a note', () => {
     const t = text(150, true).join('\n');
-    expect(t).not.toMatch(/pass · /);
+    expect(t).not.toMatch(/\d+\/\d+ pass|\d+\/\d+ gates/);
     expect(t).not.toContain('Team mode');
     expect(t).toContain('team off');
-    expect(t).toMatch(/● tripwire 3\/3/);
+    expect(t).toMatch(/● tripwire +3 pass · 0 deny/);
   });
 });
 
@@ -132,7 +132,7 @@ describe('10: the last run ended `Ns ago`, not a wall clock with no zone', () =>
   test('relative age on the last run row', () => {
     const last = { secs: 2, done: 0, total: 0, agents: 0, failed: 0, endedAgo: 125 };
     const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last, pulse: { events: [], ctx: [], runs: [{ secs: 2, ok: true, at: 1 }] } } })).join('\n');
-    expect(t).toContain(`ended ${agoText(125)} ago`);
+    expect(t).toContain(`${agoText(125)} ago`);
     expect(t).not.toMatch(/\d:\d\d [AP]M/);
   });
 });

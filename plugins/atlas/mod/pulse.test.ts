@@ -6,30 +6,30 @@ import { BUCKETS, BUCKET_MS, CTX_KEEP, RUNS_KEEP, noteMeasure, noteRunEnd, pulse
 const fresh = (): void => { resetHookLog(); resetPulse(); };
 
 describe('records only observed samples', () => {
-  test('events at t=0, 3 s, 25 s land in 15 s buckets, 20 buckets, oldest first', () => {
+  test('events at t=0, 3 s, 25 s land in wall-clock 15 s buckets, 28 buckets, oldest first', () => {
     fresh();
     noteHook('tool.call Bash', 0);
     noteHook('tool.call Read', 3000);
     noteHook('turn.complete', 25000);
     const p = pulseOf(25000);
-    expect(BUCKETS).toBe(20);
+    expect(BUCKETS).toBe(28);
     expect(BUCKET_MS).toBe(15000);
-    expect(p.events.length).toBe(20);
+    expect(p.events.length).toBe(28);
     expect(p.events.reduce((a, b) => a + b, 0)).toBe(3);
-    expect(p.events[19]).toBe(1); // 25 s: the newest bucket
-    expect(p.events[18]).toBe(2); // 0 s and 3 s: 22-25 s old, the bucket before
-    expect(p.events.slice(0, 18).every((n) => n === 0)).toBe(true);
+    expect(p.events[27]).toBe(1); // 25 s: the window 15-30 s holds `now`
+    expect(p.events[26]).toBe(2); // 0 s and 3 s: the window 0-15 s, the bucket before
+    expect(p.events.slice(0, 26).every((n) => n === 0)).toBe(true);
   });
-  test('an event older than 5 minutes leaves the series', () => {
+  test('an event older than the 28 buckets (7 minutes) leaves the series', () => {
     fresh();
     noteHook('tool.call', 0);
-    expect(pulseOf(299_000).events.reduce((a, b) => a + b, 0)).toBe(1);
-    expect(pulseOf(301_000).events.reduce((a, b) => a + b, 0)).toBe(0);
+    expect(pulseOf(419_000).events.reduce((a, b) => a + b, 0)).toBe(1);
+    expect(pulseOf(421_000).events.reduce((a, b) => a + b, 0)).toBe(0);
   });
   test('before any event: events all zero, ctx and runs empty, no cost key', () => {
     fresh();
     const p = pulseOf(1000);
-    expect(p.events).toEqual(new Array(20).fill(0));
+    expect(p.events).toEqual(new Array(28).fill(0));
     expect(p.ctx).toEqual([]);
     expect(p.runs).toEqual([]);
     expect('cost' in p).toBe(false);
