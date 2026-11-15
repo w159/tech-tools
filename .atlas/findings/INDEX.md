@@ -64,6 +64,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-15 | tc0aee6c7 | verified | atlas 17.24.0 HEAD release-ready; doc figures match code output | [2026-11-15_tc0aee6c7.md](2026-11-15_tc0aee6c7.md) |
 | 2026-11-14 | tele-6 | verified | worker sessions record no session/active.day keys | [2026-11-14_tele-6.md](2026-11-14_tele-6.md) |
 | 2026-11-14 | tele-5 | verified | _notice_shown True with ATLAS_ANALYTICS=on; send --auto exits 2 w/o notice | [2026-11-14_tele-5.md](2026-11-14_tele-5.md) |
 | 2026-11-14 | tele-4 | verified | record() adds one os.stat; test_hook_perf 20 passed | [2026-11-14_tele-4.md](2026-11-14_tele-4.md) |
