@@ -1,6 +1,6 @@
 // card-frame.ts: the health card (round X: critics/spec-x.md X4), as rows of runs. Pure.
 // The card is drawn above the band row while the pane is closed. It is the status tab's own sections (statusActivityRows, statusContextRows, statusRunsRows, statusGatesRows, statusHooksRows: one kit, one set of
-// builders) packed in columns: two equal columns from 120 cells (left ACTIVITY, CONTEXT, RUNS; right GATES, HOOKS), one below it. Columns are `u` usable cells wide with a 3-cell gutter; the second section of every column
+// builders) packed in columns: Z7: the status tab's order (ACTIVITY, CONTEXT, RUNS, GATES, HOOKS) at both widths: two equal columns from 120 cells split it left (ACTIVITY, CONTEXT, RUNS) and right (GATES, HOOKS), one column below it. Columns are `u` usable cells wide with a 3-cell gutter; the second section of every column
 // starts on the same row (a shorter first section is padded), and no cell is cut: a row that does not fit is shortened at its end by the kit, never mid-word by the column. The title is a chip that closes the card
 // (`▾ HEALTH ───`; the band right under it already carries the pill), and so does the band's `▾ health` chip.
 import { type Run, type Ui } from './atlas-ui';
@@ -33,7 +33,7 @@ function pack(columns: readonly Run[][][][], width: number): Run[][] {
   }));
 }
 
-/** The health card at `o.cols` cells: the title chip row, then the packed sections. Y2a: with `o.maxRows` (the rows the host gives the card: its slot budget less the band's row) the card keeps whole sections only, dropping the lowest priority first (HOOKS, RUNS, CONTEXT, GATES, ACTIVITY), and ends in a chip `+N more ›` (key `card:more`, opens the status view) when any went. */
+/** The health card at `o.cols` cells: the title chip row, then the packed sections. Y2a, Z7: with `o.maxRows` (the rows the host gives the card: its slot budget less the band's row) the card keeps whole sections only, dropping from the end of the status tab's order (HOOKS, GATES, RUNS, CONTEXT, ACTIVITY), and ends in a chip `+N more ›` (key `card:more`, opens the status view) when any went. */
 export function cardFrame(h: Health, o: { cols: number; ui: Ui; maxRows?: number }): Run[][] {
   const cols = Math.max(8, o.cols);
   const two = cols >= CARD_COL2;
@@ -48,7 +48,7 @@ export function cardFrame(h: Health, o: { cols: number; ui: Ui; maxRows?: number
     hooks: statusHooksRows(kit, h),
   };
   type Key = keyof typeof secs;
-  const DROP: readonly Key[] = ['hooks', 'runs', 'ctx', 'gates', 'act']; // the order sections give way
+  const DROP: readonly Key[] = ['hooks', 'gates', 'runs', 'ctx', 'act']; // Z7: the order sections give way is the reverse of the status tab's, so a short card shows a prefix of ACTIVITY, CONTEXT, RUNS, GATES, HOOKS, never a gap in it
   const present = (xs: Run[][][]): Run[][][] => xs.filter((x) => x.length);
   const lay = (kept: ReadonlySet<Key>): Run[][] => {
     const pick = (...ks: Key[]): Run[][][] => present(ks.filter((k) => kept.has(k)).map((k) => secs[k]));

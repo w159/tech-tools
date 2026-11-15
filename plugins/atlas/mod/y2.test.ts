@@ -54,11 +54,12 @@ describe('Y2a: whole sections only, under every row budget', () => {
   });
   for (const cols of [48, 41]) for (const t of ['team', 'channel', 'gates', 'core', 'board'] as TabId[]) {
     test(`${t} at ${cols}: pane rows 12..45 never cut a section; a dropped shared section leaves a goto chip`, () => {
-      const full = tabText(tabFrame(tab(t, cols, { room: 80 }))).filter((l) => SECTION.test(l));
+      const keep = (l: string): boolean => SECTION.test(l) && (t === 'channel' || !/^ ── RECENT /.test(l)); // Z4: RECENT is the elastic log, it gives way first and without a chip
+      const full = tabText(tabFrame(tab(t, cols, { room: 80 }))).filter(keep);
       for (let room = 12; room <= 45; room++) {
         const lines = tabFrame(tab(t, cols, { room }));
         const txt = tabText(lines);
-        const sections = txt.filter((l) => SECTION.test(l));
+        const sections = txt.filter(keep);
         expect(sections.length, `${t}@${cols}/${room}`).toBeGreaterThanOrEqual(1);
         expect(sections[0], `${t}@${cols}/${room}`).toBe(full[0]);
         if (sections.length < full.length) {
@@ -77,13 +78,15 @@ describe('Y2a: whole sections only, under every row budget', () => {
   });
 });
 
-describe('Y2b: each tab shows its own body plus exactly one related shared section', () => {
-  const OWN: Record<string, [string, string]> = { team: ['TEAM', 'ACTIVITY'], board: ['BOARD', 'RUNS'], channel: ['CHANNEL', 'RECENT'], core: ['CORE', 'GATES'], gates: ['GATES', 'HOOKS'] };
+describe('Y2b: each tab shows its own body plus one related shared section (Z4: then the elastic RECENT log)', () => {
+  const OWN: Record<string, [string, string]> = { team: ['TEAM', 'ACTIVITY'], board: ['BOARD', 'RUNS'], channel: ['CHAT', 'RECENT'], core: ['CORE', 'GATES'], gates: ['GATES', 'HOOKS'] };
   for (const cols of [48, 41]) for (const t of Object.keys(OWN) as TabId[]) {
     test(`${t} at ${cols}: ribbons are [own, ${OWN[t]![1]}]`, () => {
       const r = tabText(tabFrame(tab(t, cols, { room: 45 }))).filter((l) => SECTION.test(l)).map((l) => l.match(SECTION)![1]!);
-      expect(r).toHaveLength(2);
+      expect(r.length).toBeGreaterThanOrEqual(2);
+      expect(r[0]).toBe(OWN[t]![0]);
       expect(r[1]).toBe(OWN[t]![1]);
+      expect(r.slice(2).every((x) => x === 'RECENT')).toBe(true);
     });
   }
 });

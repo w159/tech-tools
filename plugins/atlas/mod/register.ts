@@ -133,6 +133,7 @@ let beatFrame = 0;
 let sessionStartMs: number | null = null; // wave 42: the idle health's `up 12:04`: the clock reading at this session's start
 let pluginVersion: string | undefined; // read from plugin.json at boot
 let branchName: string | undefined; // the git branch at boot; absent when git said nothing
+let tmuxHere: boolean | undefined; // Z4: tmux answered `-V` at boot (the team tab's slot table says yes or no); absent before the probe
 let usageWindow: number | null = null; // the model's context window from the last session.measure (the figure ctx % is a share of)
 let healthOpenNow = false; // wave 42: the band's `▸ health` button; the HUD draws the card while it is true (a toggle redraws through the spinner tick)
 let bandDrawnMs = -Infinity; // the engine clock of the band's last render: the idle beat runs only while the band is on screen (a redraw each 200 ms is what keeps this fresh)
@@ -771,6 +772,16 @@ async function gitBranch($: EngineInterface, cwd: string): Promise<string> {
 	}
 }
 
+/** Z4: whether `tmux` runs on this machine, probed once at boot (a missing binary is a plain `no`); never throws. */
+async function probeTmux($: EngineInterface): Promise<void> {
+	try {
+		const out = await $.process.run(['tmux', '-V']);
+		tmuxHere = out.exitCode === 0;
+	} catch {
+		tmuxHere = false;
+	}
+}
+
 /** Gate groups from one atlas_gates.py run; a nonzero exit or bad JSON becomes a single error group. */
 function groupsFromRun(out: { exitCode: number; stdout: string; stderr: string }): GateGroup[] {
 	try {
@@ -894,6 +905,7 @@ async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthI
 		...(sessionStartMs !== null ? { upSecs: Math.max(0, Math.floor((clockNow - sessionStartMs) / 1000)) } : {}),
 		...(pluginVersion ? { version: pluginVersion } : {}),
 		...(branchName ? { branch: branchName } : {}),
+		...(tmuxHere !== undefined ? { tmux: tmuxHere } : {}),
 		...(typeof usage.tokens === 'number' ? { tokens: usage.tokens } : {}),
 		...(typeof usageWindow === 'number' ? { window: usageWindow } : {}),
 		hooks: hookStats(clockNow, 40, runClock.startMs ?? undefined), // the panel's RECENT grows into the free rows of a tall pane
@@ -1271,6 +1283,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		await rebuild($);
 		await loadHistory($, rootOf(await read($, snapshotState)), sessionStartMs); // Y1a: the earlier sessions' runs, hook latencies and minutes, or an empty history
 		if (interactive) {
+			await probeTmux($); // Z4: headless sessions run no process but the branch probe
 			if (!wired) {
 				wired = true;
 				await $.command.register({ name: 'atlas-cc', description: 'Open and focus the Atlas sidebar' });

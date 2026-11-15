@@ -157,6 +157,7 @@ function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTa
     ...(h.hooks ? { hooks: h.hooks } : {}),
     ...(h.pulse ? { pulse: h.pulse } : {}),
     ...(h.hist ? { hist: h.hist } : {}),
+    ...(h.tmux !== undefined ? { tmux: h.tmux } : {}),
     ...(h.upSecs !== undefined ? { upSecs: h.upSecs } : {}),
     ...(h.branch ? { branch: h.branch } : {}),
     ...(h.version ? { version: h.version } : {}),

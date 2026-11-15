@@ -157,7 +157,7 @@ describe('B5: route rows do not wrap at 110, and one strip form serves every tab
   });
   test('the strip is the same on every tab at every width; the names alone, never the keys (design rev 5 C1)', () => {
     for (const cols of [37, 44, 47, 52, 60, 80, 120]) {
-      const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => JSON.stringify(stripLayout(cols, t)));
+      const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => { const f = stripLayout(cols, t); return JSON.stringify({ ...f, rows: f.rows.map((r) => r.length), folded: f.folded.length }); }); // Z5: only which tab holds the last place follows the lit one
       expect([cols, new Set(forms).size]).toEqual([cols, 1]);
       expect([cols, tabRows(panelWorld('route', cols, ui)).map(lineText).join('\n')]).toEqual([cols, expect.stringMatching(cols >= 48 ? /^ status {1,3}team {1,3}channel {1,3}gates {1,3}core {1,3}board ?$/m : /^ status {1,3}team {1,3}channel( {1,3}gates)? {1,3}more › ?$/m)]);
     }

@@ -16,15 +16,28 @@ describe('C5 (D14): the tab strip is one row of chips at every width; the traili
       test(`${cols} cells, ${tab} lit: one strip row, whole words, the rest behind \`more ›\``, () => {
         const rows = tabRows(panelWorld(tab, cols, ui)).map(lineText);
         expect(rows).toHaveLength(1); // the strip alone: no rule under the lit tab, no wrapped second strip
-        expect(rows[0]!.trim()).toMatch(/^status {1,3}team {1,3}channel( {1,3}gates)? {1,3}more ›$/);
+        // Z5: the lit tab is always on the strip: a lit tab that lives in the folded set takes the place of the last regular one
+        const base = cols >= 44 ? ['status', 'team', 'channel', 'gates'] : ['status', 'team', 'channel'];
+        const want = tab === 'core' || (tab === 'gates' && cols < 44) ? [...base.slice(0, -1), tab] : base;
+        expect(rows[0]!.trim()).toMatch(new RegExp(`^${want.join(' {1,3}')} {1,3}more ›$`));
         for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       });
     }
   }
-  test('the same form on every tab at a width (no tab drops its words to fit while another wraps)', () => {
+  test('the same form on every tab at a width (no tab drops its words to fit while another wraps): the chip shape never changes, only which tab holds the last place (Z5)', () => {
     for (const cols of [37, 38, 44, 52, 60]) {
-      const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => JSON.stringify(stripLayout(cols, t)));
+      const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => { const f = stripLayout(cols, t); return JSON.stringify({ ...f, rows: f.rows.map((r) => r.length), folded: f.folded.length }); });
       expect([cols, new Set(forms).size]).toEqual([cols, 1]);
+    }
+  });
+  test('Z5: the visible strip holds the lit tab at every width, `more ›` stays last', () => {
+    for (const cols of [30, 37, 38, 40, 44, 47]) {
+      for (const tab of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) {
+        const f = stripLayout(cols, tab);
+        expect([cols, tab, f.rows[0]!.some((t) => t.id === tab)]).toEqual([cols, tab, true]);
+        expect(f.more).toBe(true);
+        expect(f.folded.some((t) => t.id === tab)).toBe(false);
+      }
     }
   });
   test('the keys are never drawn in the strip, at any width (48 cells and up show all six whole words)', () => {

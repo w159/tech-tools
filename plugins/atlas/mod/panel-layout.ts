@@ -67,8 +67,8 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
 }
 
 /** The strip both hosts draw at `cols` cells (round 2, D14): every tab as a chip on one row where they fit (48 cells), else the leading tabs that fit beside a `more ›` chip and the rest in `folded`
- * (shown on a second row while the `more` chip is open). `rows` is the visible row; `more` says the chip is there. The lit tab is filled; no key letter is drawn or bound. The form never depends on the lit tab. */
-export function stripLayout(cols: number, _lit?: string): StripForm & { rows: StripTab[][]; folded: StripTab[]; more: boolean; /** Always true: no key prefix is drawn. */ bare: boolean } {
+ * (shown on a second row while the `more` chip is open). `rows` is the visible row; `more` says the chip is there. The lit tab is filled; no key letter is drawn or bound. Z5: the visible strip always holds the lit tab: when it lives in the folded set it takes the place of the last regular tab (the displaced one folds), `more ›` stays last. */
+export function stripLayout(cols: number, lit?: string): StripForm & { rows: StripTab[][]; folded: StripTab[]; more: boolean; /** Always true: no key prefix is drawn. */ bare: boolean } {
   const words = stripTabs();
   const f = STRIP_FORM;
   const room = Math.max(1, cols);
@@ -78,9 +78,15 @@ export function stripLayout(cols: number, _lit?: string): StripForm & { rows: St
   let n = words.length - 1;
   // Round 3 (E8): one row always. The first set ends in `more ›`, the second (the folded tabs) in `‹ back`. The first set keeps as many tabs as fit; the folded set keeps as many of the rest as fit beside `‹ back` (a pane under ~36 cells cannot reach every tab).
   while (n > 1 && chipsWidth(words.slice(0, n), f) + f.gap + moreW > room) n--;
-  let folded = words.slice(n);
+  let visible = words.slice(0, n);
+  const litTab = lit ? words.slice(n).find((t) => t.id === lit) : undefined;
+  if (litTab) {
+    visible = [...visible.slice(0, -1), litTab]; // Z5: the lit tab is always on the strip
+    while (visible.length > 1 && chipsWidth(visible, f) + f.gap + moreW > room) visible = [...visible.slice(0, -2), litTab]; // a wider lit label pushes the tab before it out
+  }
+  let folded = words.filter((t) => !visible.includes(t));
   while (folded.length > 1 && chipsWidth(folded, f) + f.gap + backW > room) folded = folded.slice(0, -1);
-  return { ...f, rows: [words.slice(0, n)], folded, more: true, bare: true };
+  return { ...f, rows: [visible], folded, more: true, bare: true };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
@@ -259,13 +265,14 @@ export function ribbonRow(m: PanelModel, view?: { title: string; right: string }
 /** The tab strip (round 2, D14): every tab as a ` label ` chip, the lit one filled with the accent, one cell between chips. A strip that does not fit ends in a `more ›` chip (key `tabs:more`)
  * that opens a second row with the folded tabs (`▾ more`); the chip is filled while the lit tab is one of the folded. */
 export function tabRows(m: PanelModel): PanelLine[] {
-  const f = stripLayout(m.cols, m.tab);
+  const lit: string = m.board ? 'board' : m.tab;
+  const f = stripLayout(m.cols, lit);
   const gap = r(' '.repeat(f.gap));
   const tile = tileOf(m.ui);
-  const chip = (t: StripTab): Run => { const text = chipText(t.label, f); return t.id === m.tab ? r(text, 'ink', { bold: true, bg: 'accent' }) : r(text, 'accent', { ...(tile ? { bgHex: tile } : {}) }); }; // the lit chip is filled, every other one is raised on a tile one step off the panel
+  const chip = (t: StripTab): Run => { const text = chipText(t.label, f); return t.id === lit ? r(text, 'ink', { bold: true, bg: 'accent' }) : r(text, 'accent', { ...(tile ? { bgHex: tile } : {}) }); }; // the lit chip is filled, every other one is raised on a tile one step off the panel
   const strip = (tabs: readonly StripTab[]): Run[] => tabs.flatMap((t, i) => [...(i ? [gap] : []), chip(t)]);
   const open = m.expanded === MORE_KEY;
-  const litFolded = f.folded.some((t) => t.id === m.tab);
+  const litFolded = f.folded.some((t) => t.id === lit);
   const more: Run[] = f.more ? [gap, { ...chipRun(moreWord(false, m.ui), m.ui, MORE_KEY), ...(litFolded ? { tone: 'ink' as const, bg: 'accent' as const, bgHex: undefined } : {}) }] : [];
   // One row always: `more ›` swaps the visible set for the folded tabs (and a `‹ back` chip) on the same row.
   if (f.more && open) return [line(fitRuns([...strip(f.folded), gap, chipRun(backWord(m.ui), m.ui, MORE_KEY)], m.cols))];

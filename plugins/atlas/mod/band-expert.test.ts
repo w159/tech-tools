@@ -71,7 +71,11 @@ describe('(b) with the pane open the band is the same row without the health chi
       const closed = first(model(kind, cols, false)).replace(/ *▸ health *$/, '');
       const open = first(model(kind, cols, true));
       expect(open).not.toContain('health');
-      expect(closed.trimEnd()).toBe(open.trimEnd());
+      if (kind === 'idle') {
+        // Z6: the idle band beside the open pane gives its empty detail slot to one live health figure (the context here: this health has no hook latency), the spark keeps its unit
+        expect(open.trimEnd()).toMatch(/[▁-█]{3,} +\d+ ev\/5m │ ctx +6%$/);
+        expect(open.trimEnd()).not.toMatch(/last \d|\$\d/);
+      } else expect(closed.trimEnd()).toBe(open.trimEnd());
     });
   }
 });

@@ -231,15 +231,15 @@ describe('Y1a: idle RUNS and HOOKS are the persisted figures, labelled', () => {
     expect(statusRunsRows(kit, health())).toEqual([]); // a first-ever session: the honest empty state
   });
 
-  test('HOOKS: the latency columns come from the persisted ring (dim, `last 64 calls`) while this session has no call', () => {
-    const h = health({ hooks: { total: 1, byLabel: [{ label: 'session.start', n: 1 }], recent: [], perHook: [{ label: 'session.start', n: 1 }, { label: 'tool.call', n: 0, p50: 8, p95: 13, prev: true }] } });
+  test('HOOKS: the latency columns come from the persisted ring (`last 64 calls`) while this session has no call', () => {
+    const h = health({ hooks: { total: 1, byLabel: [{ label: 'session.start', n: 1 }], recent: [], perHook: [{ label: 'session.start', n: 1 }, { label: 'tool.call', n: 0, p50: 8, p95: 13, samples: 12, prev: true }] } });
     const rows = statusHooksRows(frameKit(ui, 60), h);
-    expect(text(rows[1]!)).toMatch(/hook · last 64 calls \(dim: prev\) +n +p50 +p95 +last/);
+    expect(text(rows[1]!)).toMatch(/hook · last 64 calls +n +p50 +p95 +last/);
     const tool = rows.find((r) => text(r).includes('tool.call'))!;
     expect(text(tool)).toMatch(/tool\.call +0 +8ms +13ms/);
     const cells = tool.filter((x) => x.t.trim() === '8ms' || x.t.trim() === '13ms');
     expect(cells).toHaveLength(2);
-    for (const c of cells) expect(c.tone).toBe('sub'); // dim: not from this session
+    for (const c of cells) expect(c.tone).toBe('ok'); // Z3: the latency colours hold whatever session the samples are from (green to 100 ms)
   });
 
   test('HOOKS: with no latency anywhere the head is just `hook` (nothing to label)', () => {
@@ -299,10 +299,11 @@ describe('Y1b: the chart window fits the data', () => {
     expect(rows.slice(1, 4).join('')).toMatch(/[▁-▇]/); // the two-event bar ends in a part block (sub-row resolution)
   });
 
-  test('the scale follows the data: no minimum of four, one event is a full-height bar of `1`', () => {
+  test('Z1: the y axis never tops out below 4 events per bucket: one event is a short bar under a `4┤` axis, the rule still says the real peak', () => {
     const rows = rowsText(statusActivityRows(kit, withAge(60, [AT - 5000]), 3));
-    expect(rows[1]).toMatch(/^ {5} ?1┤/);
+    expect(rows[1]).toMatch(/^ {5} ?4┤/);
     expect(rows[0]).toMatch(/1 ev · peak 1 \/ /);
+    expect(rows[1]).not.toContain('█'); // the single event does not reach the top row
   });
 
   test('the earlier session`s minutes sit dimmed left of a `│` marker and the window keeps the rest of the width', () => {
@@ -421,7 +422,8 @@ describe('Y1d: the narrow idle health strip', () => {
 
   test('a run of an earlier session and the earlier context are labelled prev; a first-ever session says `no runs yet`', () => {
     const prev = rowsText(strip(health({ ctxPct: undefined, hist: { runs: [{ secs: 5, ok: true, tools: 2, at: 1 }], minutes: [], ctx: { at: 1, pcts: [9] } }, pulse: { events: [], ctx: [], runs: [] } })));
-    expect(prev[0]).toContain('prev run 0:05 ok · 1 run · med 0:05');
+    expect(prev[0]).toContain('prev run 0:05 ok · 1 run');
+    expect(prev[0]).not.toContain('med'); // Z2: one run is not a median
     expect(prev[1]).toContain('ctx 9% prev');
     const first = rowsText(strip(health()));
     expect(first[0]).toContain('◌ idle · no runs yet');

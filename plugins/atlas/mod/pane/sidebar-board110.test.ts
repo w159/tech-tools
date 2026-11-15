@@ -30,7 +30,7 @@ describe('the board view in a narrow pane draws the one-row chip strip (critique
       const r = rows('board', columns).join('\n').split('\n');
       expect(r[0]).toContain('▸ SIDEPANEL · board');
       expect(r[0]).toContain('▸ SIDEPANEL'); // the scorer's pane marker (live_capture.py: `r: route` or `▸ SIDEPANEL`)
-      expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^status team channel( gates)? more ›$/); // D14: the trailing tabs fold behind `more ›`
+      expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^status team (channel )?board more ›$/); // D14: the trailing tabs fold behind `more ›`; Z5: the lit board tab holds the last regular place
       expect(r.findIndex((l, i) => i > 1 && /^ *━+ *$/.test(l))).toBe(-1); // one idiom: the lit chip is filled, nothing is ruled under it
       expect(r[3]!.includes('━')).toBe(false); // the strip is not wrapped: the row under it is the body
       for (const l of r.slice(0, 3)) expect([...l].length).toBeLessThanOrEqual(columns);
@@ -38,7 +38,8 @@ describe('the board view in a narrow pane draws the one-row chip strip (critique
   }
   test('every view draws the same strip row at 38 columns (critique 17 B5: one form on every tab)', () => {
     const first = (v: SidebarView): string => rows(v, 38)[2]!.trimEnd();
-    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ' status   team   channel   more ›']);
+    // Z5: one form (three chips and `more ›`); the lit tab is always on the strip, so a folded tab takes the last regular place
+    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ` status   team   ${['gates', 'core', 'board'].includes(v) ? v : 'channel'}   more ›`]);
   });
 });
 

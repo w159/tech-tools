@@ -32,6 +32,8 @@ export type Health = {
   button?: boolean;
   /** Team mode (`off`, `on`) as its own session item; when absent it is read from the tripwire gate's `Team mode: off` note (teamOf), which is then left out of the notes. */
   team?: string;
+  /** Z4: whether tmux is on this machine (probed once at boot); absent when the probe never ran. The team tab's slot table says yes or no, `—` when unknown. */
+  tmux?: boolean;
   /** The observed-only history (pulse.ts) the events, context and runs rows draw their shapes from; absent: flat baselines and `—`. */
   pulse?: Pulse;
   /** Y1a: what earlier sessions recorded (history.ts): their runs, the per-minute events before this session, the last measured context. Everything drawn from it is labelled `prev`. */
@@ -43,7 +45,7 @@ export type Health = {
 };
 
 /** The raw inputs register.ts hands the band; band.tsx completes them from the snapshot, the gates and the run clocks. */
-export type HealthIn = { panel?: boolean; /** Seconds since the denied-call count last rose (pulse.denyAgeSecs). */ denyAgeSecs?: number; /** The observed history (pulse.ts pulseOf); absent until register.ts wires it: the band then draws no events spark. */ pulse?: Pulse; /** Y1a: the persisted history (history.ts historyView). */ hist?: HistView; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
+export type HealthIn = { panel?: boolean; /** Z4: tmux is on this machine (register.ts probes it at boot). */ tmux?: boolean; /** Seconds since the denied-call count last rose (pulse.denyAgeSecs). */ denyAgeSecs?: number; /** The observed history (pulse.ts pulseOf); absent until register.ts wires it: the band then draws no events spark. */ pulse?: Pulse; /** Y1a: the persisted history (history.ts historyView). */ hist?: HistView; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
 
 const r = (t: string, tone: Run['tone'] = 'text', o: Partial<Run> = {}): Run => ({ t, tone, ...o });
 const glue = (): Run => r(' · ', 'sub');

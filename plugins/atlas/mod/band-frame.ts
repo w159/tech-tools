@@ -11,6 +11,7 @@ import { idleRamp } from './band-motion';
 import { blockSpark } from './chart';
 import { agoText, gatesSummary, promptedOf, type Health } from './idle-health';
 import { RATE_BUCKETS } from './pulse';
+import { ctxLevel, latencyLevel } from './status-frame';
 import { fitText, textWidth } from './theme';
 
 /** Cells of the state head (`◌ idle up 0:41`); the detail slot adds a gap and DETAIL_W after it. */
@@ -75,7 +76,9 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   const pad = (n: number): Run[] => (n > 0 ? [on(' '.repeat(n), k.text)] : []);
   const join = (): Run[] => [on(' ', k.text), on(ascii ? '|' : '│', k.rule, { tone: 'dim' }), on(' ', k.text)];
 
-  const detailOn = cols >= DETAIL_FROM;
+  // Z6: an idle band beside the open pane has no detail text, so its empty slot is the health figure's room
+  const idleOpen = a.kind === 'idle' && h.panel === true && (h.hooks?.latency !== undefined || h.ctxPct !== undefined);
+  const detailOn = cols >= DETAIL_FROM && !idleOpen;
   const narrow = !detailOn; // K: with the pane open at 110 the band is about 58 cells: the state slot and the gates chip keep their own width (no padding) so the spark keeps its unit
   // ---- the gates chip ----
   const g = gatesSummary(h);
@@ -167,19 +170,29 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
 
   // ---- the extras, dropped from the end ----
   const extras: Run[][] = [];
-  if (h.ctxPct !== undefined) extras.push([dim('ctx '), txt(`${pad3(h.ctxPct)}%`, h.ctxPct >= 70 ? { fg: k.warn, tone: 'warn' } : {})]);
-  if (h.hooks?.latency) extras.push([dim('hook '), txt(`${pad3(h.hooks.latency.p50)}ms`, h.hooks.latency.p50 >= 50 ? { fg: k.warn, tone: 'warn' } : {})]);
+  const inkOf = (lv: 'ok' | 'warn' | 'bad'): Partial<Run> => (lv === 'bad' ? { fg: k.bad, tone: 'bad' } : lv === 'warn' ? { fg: k.warn, tone: 'warn' } : { fg: k.ok, tone: 'ok' });
+  const ctxExtra = (): Run[] => [dim('ctx '), txt(`${pad3(h.ctxPct!)}%`, inkOf(ctxLevel(h.ctxPct!)))];
+  const hookExtra = (long: boolean): Run[] => [dim(long ? 'hook p50 ' : 'hook '), txt(`${long && narrow ? String(Math.round(h.hooks!.latency!.p50)) : pad3(h.hooks!.latency!.p50)}ms`, inkOf(latencyLevel(h.hooks!.latency!.p50)))];
+  if (idleOpen) {
+    // Z6: at idle beside the open pane, one live health figure after the spark, shed before the spark loses its unit: the hook median in the latency colours, else the context
+    if (h.hooks?.latency) extras.push(hookExtra(true));
+    if (h.ctxPct !== undefined) extras.push(ctxExtra()); // the context stands in when the median does not fit
+  } else {
+    if (h.ctxPct !== undefined) extras.push(ctxExtra());
+    if (h.hooks?.latency) extras.push(hookExtra(false));
+  }
   // Y1c: one age per state: a finished run's `ended 12s` already says when the last event came, so `last 12s` beside it is left out while the two are the same instant
   const stateAge = a.kind === 'done' ? a.restSecs : undefined;
   const lastAge = h.hooks?.lastEventSecs;
-  if (lastAge !== undefined && !(stateAge !== undefined && Math.abs(stateAge - lastAge) <= 2)) extras.push([dim('last '), txt(agoText(lastAge).padEnd(3))]);
-  if (h.pulse?.cost) extras.push([txt(`$${h.pulse.cost.usd.toFixed(2)}`)]);
+  if (!idleOpen && lastAge !== undefined && !(stateAge !== undefined && Math.abs(stateAge - lastAge) <= 2)) extras.push([dim('last '), txt(agoText(lastAge).padEnd(3))]);
+  if (!idleOpen && h.pulse?.cost) extras.push([txt(`$${h.pulse.cost.usd.toFixed(2)}`)]);
   const limit = cols - chipRoom; // the chip carries its own leading cell
   for (const ex of extras) {
     const width = ex.reduce((s, x) => s + textWidth(x.t), 0);
-    if (w + joinW + width > limit) break;
+    if (w + joinW + width > limit) { if (idleOpen) continue; break; }
     out.push(...join(), ...ex);
     w += joinW + width;
+    if (idleOpen) break; // one figure
   }
 
   // ---- the health chip, right-anchored ----

@@ -54,12 +54,13 @@ describe('X1: one widget set', () => {
     team: ['ACTIVITY', /-\d+m +-[\d.]+m +now/], channel: ['RECENT', /\d+s · /], gates: ['HOOKS', /hook(?: · last 64 calls)? +n +p50 +p95 +last/], core: ['GATES', /pass deny last/], board: ['RUNS', /\d+ runs? · med/],
   };
   for (const cols of WIDTHS) for (const t of ['team', 'channel', 'gates', 'core', 'board'] as TabId[]) {
-    test(`${t} at ${cols}: its own body plus exactly one shared section, ${SHARED[t]![0]}, drawn by the status tab's builder`, () => {
+    test(`${t} at ${cols}: its own body plus the shared section ${SHARED[t]![0]} (then RECENT as the elastic log, Z4), drawn by the status tab's builder`, () => {
       const rows = text(tab(t, cols, { workers: t === 'team' ? [{ name: 'w', state: 'running', detail: 'x', secs: 3 }] : [] }));
       const all = rows.join('\n');
       const ribbons = rows.filter((l) => /^ ── [A-Z]+ /.test(l)).map((l) => l.match(/^ ── ([A-Z]+) /)![1]!);
-      expect(ribbons, `${t}@${cols}`).toHaveLength(2); // the tab's own ribbon, then the one shared section
+      expect(ribbons.length, `${t}@${cols}`).toBeGreaterThanOrEqual(2); // the tab's own ribbon, then the shared section
       expect(ribbons[1]).toBe(SHARED[t]![0]);
+      expect(ribbons.slice(2).every((x) => x === 'RECENT'), `${t}@${cols}`).toBe(true); // Z4: only the log follows, and only where the tab has rows to fill
       expect(all).toMatch(SHARED[t]![1]);
       expect(all).not.toMatch(/── CONTEXT |0└5m|checks +ok fail|\d+ seen · \d+ms|no calls/);
     });

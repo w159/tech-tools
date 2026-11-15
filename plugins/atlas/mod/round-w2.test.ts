@@ -135,7 +135,8 @@ describe('K: 110 parity', () => {
   });
   test('the pane open at 110 is the closed row without the health chip: width independent', () => {
     for (const cols of [150, 110, 100]) for (const kind of ['idle', 'working', 'done'] as Kind[]) {
-      expect(row(kind, cols, true).trimEnd()).toBe(row(kind, cols, false).replace(/ *▸ health *$/, '').trimEnd());
+      if (kind === 'idle') expect(row(kind, cols, true).trimEnd()).toMatch(/[▁-█]{3,} +\d+ ev\/5m( │ ctx +6%)?$/); // Z6: the idle band beside the pane drops its empty detail slot for one health figure
+      else expect(row(kind, cols, true).trimEnd()).toBe(row(kind, cols, false).replace(/ *▸ health *$/, '').trimEnd());
     }
   });
   test('the idle head glyph is the same at 110 and 150', () => {

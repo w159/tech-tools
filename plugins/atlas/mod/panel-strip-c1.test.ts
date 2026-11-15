@@ -17,7 +17,8 @@ describe('C1 (D14): the strip is chips with one fixed shape at every width', () 
         const rows = tabRows(panelWorld(tab, cols, ui));
         const text = rows.map(lineText);
         expect(rows).toHaveLength(1);
-        const names = stripLayout(cols).rows[0]!.map((t) => t.label).join('   ') + (stripLayout(cols).more ? '   more ›' : '');
+        const f = stripLayout(cols, tab); // Z5: the lit tab is always on the strip
+        const names = f.rows[0]!.map((t) => t.label).join('   ') + (f.more ? '   more ›' : '');
         expect(text[0]!.trim()).toBe(names); // the same chip shape at every width: pad 1, gap 1 around the chip, so the text reads three apart
         expect(text[0]).not.toMatch(/\b[rtcgko]:/);
         for (const t of text) expect(cells(t)).toBeLessThanOrEqual(cols);

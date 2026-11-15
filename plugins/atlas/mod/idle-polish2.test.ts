@@ -132,7 +132,7 @@ describe('5: each fact once across the band, the card and the panel', () => {
 describe('6: the team tab with only the lead draws no dead sparkline', () => {
   test('lead row has no braille run and the lines under it say `Team mode is off.` and `no workers registered`', () => {
     const rows = body(world(57, { lead: { name: 'lead', state: 'waiting', secs: 0 } as never }, 'team'));
-    const top = rows.slice(rows.findIndex((l) => l.includes('── TEAM')), rows.findIndex((l) => l.includes('── TEAM')) + 5).join('\n'); // frame spec T1: the ribbon carries `off`, the lead row sits right under it
+    const top = rows.slice(rows.findIndex((l) => l.includes('── TEAM')), rows.findIndex((l) => l.includes('── TEAM')) + 8).join('\n'); // frame spec T1: the ribbon carries `off`, the lead row sits right under it, then the Z4 slot table (mode, tmux, slots)
     expect(top).not.toMatch(/[⣀⣄⣤⣶⣿▁]/u);
     expect(top).toContain('lead');
     expect(top).toMatch(/no workers/);

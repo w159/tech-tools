@@ -18,7 +18,7 @@ export type HookStats = {
   /** How long the mod's own handlers held an event before handing it on (N1): the median and p95 over every sample of the session, `n` samples; absent before the first. */
   latency?: { n: number; p50: number; p95: number };
   /** Per label kind (the label's first word: `tool.call` for `tool.call Bash`): events seen, the handler latency median and p95 over that kind's samples (absent while unmeasured), and the age in whole seconds of its newest event (absent when it never fired). The status tab's HOOKS table reads it. */
-  perHook?: { label: string; n: number; p50?: number; p95?: number; lastSecs?: number; /** Y1a: the latency figures come only from the persisted ring of an earlier session (this session has stamped no sample for the kind yet). */ prev?: true }[];
+  perHook?: { label: string; n: number; p50?: number; p95?: number; /** Z2: the latency samples behind p50 and p95 (the kind's ring, this session's and the persisted ones); the surfaces draw p95 only from 5 of them. */ samples?: number; lastSecs?: number; /** Y1a: the latency figures come only from the persisted ring of an earlier session (this session has stamped no sample for the kind yet). */ prev?: true }[];
 };
 
 /** N2: the hooks the mod wires and stamps (`6 hooks` armed on the status tab): session start, prompt, tool call, Stop, measure, turn end. */
@@ -142,7 +142,7 @@ export function hookStats(now: number, max = 8, since?: number): HookStats {
   const figures = (label: string, n: number): NonNullable<HookStats['perHook']>[number] => {
     const ms = [...(kindRing.get(label) ?? [])].sort((a, b) => a - b);
     const at = lastAtKind.get(label);
-    return { label, n, ...(ms.length ? { p50: rank(ms, 0.5), p95: rank(ms, 0.95) } : {}), ...(ms.length && !kindLive.has(label) ? { prev: true as const } : {}), ...(at !== undefined ? { lastSecs: Math.max(0, Math.floor((now - at) / 1000)) } : {}) };
+    return { label, n, ...(ms.length ? { p50: rank(ms, 0.5), p95: rank(ms, 0.95), samples: ms.length } : {}), ...(ms.length && !kindLive.has(label) ? { prev: true as const } : {}), ...(at !== undefined ? { lastSecs: Math.max(0, Math.floor((now - at) / 1000)) } : {}) };
   };
   // a kind with persisted samples and no event yet this session still has its figures (labelled prev by the HOOKS table)
   const perHook = [...counts].map(([label, n]) => figures(label, n)).concat([...kindRing.keys()].filter((k) => !counts.has(k)).map((k) => figures(k, 0)));

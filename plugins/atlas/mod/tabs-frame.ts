@@ -1,7 +1,8 @@
 // tabs-frame.ts: the side panel's other tabs of the approved frame spec (critics/mock-final.md section 5: G1-G3 gates, T1-T3 team, D1-D3 board, C1-C3 chat, K1-K3 core), as rows of runs.
 // Pure, like status-frame.ts, and built from the same kit and the same section builders (statusActivityRows, statusRunsRows, statusHooksRows, statusRecentRows, statusGatesRows, the GATES table columns).
-// Round Y2b: a tab shows its own body plus at most ONE related shared section beneath it (board RUNS, team ACTIVITY, channel RECENT, core GATES, gates HOOKS), the footer pinned to the last row (and, on
-// chat, the compose field above it). A tab with nothing to show draws its ribbon and one honest line (what will appear, what triggers it), never a filler row.
+// Round Y2b, Z4: a tab shows its own body plus the shared sections beneath it, and the elastic one takes every remaining row so no tab ends with more than one blank row above the footer (a log that runs out
+// stops there): board RUNS as a multi-row bar chart of the recorded runs; team a worker slot table, ACTIVITY at the pane's fixed chart height, then RECENT; channel RECENT; core GATES with their lines
+// expanded, then RECENT; gates HOOKS, then RECENT. The footer is pinned to the last row (and, on chat, the compose field above it). A tab with nothing to show draws its ribbon and one honest line (what will appear, what triggers it), never a filler row.
 //
 // One control idiom (2.3, Y2c): a row that expands in place (a worker, a board item) is one chip spanning the usable width with its numbers inside the fill (2.4c); a gate group row carries the chip fill on its
 // caret cell; a failing or blocked row is an alert chip. Rows carry a `press`: `flip` (expand or collapse the row; the key is remembered for the session), `compose`, `goto` (open another view).
@@ -11,7 +12,7 @@
 import { elapsedClock, type Run, type Ui, type UiState } from './atlas-ui';
 import type { CoreModel } from './data/core';
 import { agoText, teamOf, type Health } from './idle-health';
-import { footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, moreRow, promptedOf, statusActivityRows, statusGatesRows, statusHooksRows, statusRecentRows, statusRunsRows, type Kit, type StatusGate, type StatusIn } from './status-frame';
+import { chartRows, footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, moreRow, promptedOf, statusActivityRows, statusHooksRows, statusRecentRows, statusRunsChart, type Kit, type StatusGate, type StatusIn } from './status-frame';
 import { fitText, textWidth } from './theme';
 import { checkOff, gateCounts } from './vocab';
 
@@ -50,8 +51,8 @@ export type TabIn = {
 };
 
 const BLANKS = 1;
-const CHART_MIN = 3;
-const CHART_MAX = 12;
+/** Z4: the rows the RUNS chart of the board tab never goes below (its rule, two chart rows and the x labels). */
+const RUNS_MIN = 4;
 const sum = (xs: readonly number[]): number => xs.reduce((n, x) => n + x, 0);
 
 type Part = { lines: TabLine[]; /** Rows that collapse, in the order they give way (oldest done first). */ order: string[] };
@@ -111,7 +112,8 @@ function sharedNote(lines: readonly { ok: boolean; detail?: string }[]): string 
   return first !== undefined && rest.length >= 2 && rest.every((t) => t === first) ? first : '';
 }
 
-function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted: boolean): Part {
+/** `force`: every group with lines opens (the core tab's GATES), not only the ones that fired; a flip still toggles it. */
+function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted: boolean, force = false): Part {
   const { g, dim, txt, red, green, sp, row, ribbon, metaText, cell } = kit;
   const h = a.health;
   const flips = new Set(a.flips);
@@ -126,7 +128,7 @@ function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted:
     const key = `gate:${c.id}`;
     const grp = a.gates.find((x) => x.id === c.id);
     const canOpen = !!grp && grp.lines.length > 0;
-    const open = canOpen && (fired !== flips.has(key)) && !collapsed.has(key);
+    const open = canOpen && ((fired || force) !== flips.has(key)) && !collapsed.has(key);
     if (open && !flips.has(key) && deny === 0) order.push({ key, done: true });
     const lastSecs = fired ? gateLastSecs(h, c) : undefined;
     const right: Run[] = fired
@@ -185,6 +187,13 @@ function teamPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>): Part {
   const lines: TabLine[] = [plain(ribbon('TEAM', metaText(meta)))];
   const secs = h.upSecs ?? a.leadSecs; // the lead's clock is the session's (spec 2.10: `up` from the session start)
   lines.push(plain(row([txt(g('◉', '@')), txt(' lead'), ...(h.branch ? [dim(` · ${h.branch}`)] : [])], secs !== undefined ? [dim(elapsedClock(secs))] : [])));
+  // Z4: the worker slot table, from what the mod recorded: the team mode, whether tmux is there, the configured team size (the largest `max` of a recorded team); a figure the mod does not hold reads `—`, never a guess
+  const size = Math.max(0, ...(a.core?.routes ?? []).map((r) => r.maxParallel));
+  const none = g('—', '-');
+  const slot = (l: string, v: Run[]): TabLine => plain(row([dim(l.padEnd(9)), ...v]));
+  lines.push(slot('mode', [team ? (team === 'on' ? txt(team) : dim(team)) : dim(none)]));
+  lines.push(slot('tmux', [h.tmux === undefined ? dim(none) : h.tmux ? kit.green('yes') : dim('no')]));
+  lines.push(slot('slots', size > 0 ? [txt(`${size} configured`), dim(` · ${working} in use`)] : [dim('none recorded')]));
   if (!ws.length) {
     lines.push(plain(oneLine(kit, ['no workers yet · they appear when the lead dispatches a subagent', 'no workers yet · a dispatch adds one', 'no workers yet · dispatch adds'])));
     return { lines, order: [] };
@@ -335,21 +344,26 @@ export function tabFrame(a: TabIn): TabLine[] {
     const again = a.tab === 'gates' ? gatesPart(a, kit, gone, prompted) : a.tab === 'team' ? teamPart(a, kit, gone) : boardPart(a, kit, gone);
     return { lines: again.lines, order: first.order };
   };
-  /** The shared section at `spare` extra rows (the chart and the log grow into them); empty when the data has none. */
-  const shared = (spare: number): Run[][] => {
+  /** The shared sections at `extra` rows beyond the least that can stand (`shared(0)`): the elastic one takes them (the RUNS chart grows, the logs lengthen), so the tab fills to the footer while data lasts; the result is never longer than `shared(0)` + `extra`. */
+  const recentAt = (n: number): TabLine[] => (feed.length && n >= 2 ? statusRecentRows(kit, h, feed, Math.min(feed.length, n - 1)).map(plain) : []);
+  /** `base`, then (given at least a blank, the rule and a row of room) the RECENT log in the rest of `extra`. */
+  const withRecent = (base: TabLine[], extra: number): TabLine[] => { const log = recentAt(extra - 1); return log.length ? [...base, plain(kit.blank), ...log] : base; };
+  const gatesOpen = (): TabLine[] => gatesPart(a, kit, new Set<string>(), prompted, true).lines;
+  const gatesShut = (): TabLine[] => gatesPart(a, kit, new Set(h.gates.checks.map((c) => `gate:${c.id}`)), prompted).lines;
+  const shared = (extra: number): TabLine[] => {
     switch (a.tab) {
-      case 'board': return statusRunsRows(kit, h);
-      case 'team': return statusActivityRows(kit, h, Math.min(CHART_MAX, CHART_MIN + Math.max(0, spare)));
-      case 'channel': return feed.length ? statusRecentRows(kit, h, feed, Math.min(feed.length, Math.max(2, 2 + spare))) : [];
-      case 'core': return statusGatesRows(kit, h, { gates: a.gates, prompted }, false);
-      default: return statusHooksRows(kit, h);
+      case 'board': return statusRunsChart(kit, h, RUNS_MIN - 2 + Math.max(0, extra)).map(plain);
+      case 'team': return withRecent(statusActivityRows(kit, h, chartRows(a.room)).map(plain), extra);
+      case 'channel': return feed.length ? statusRecentRows(kit, h, feed, Math.min(feed.length, Math.max(2, 2 + extra))).map(plain) : [];
+      case 'core': { const shut = gatesShut(); const open = gatesOpen(); return open.length - shut.length <= extra ? withRecent(open, extra - (open.length - shut.length)) : shut; }
+      default: return withRecent(statusHooksRows(kit, h).map(plain), extra);
     }
   };
   const lead = a.lead ? 1 : 0;
   const foot = footer.length ? 1 : 0;
-  const tail = foot + BLANKS + (chat ? 2 : 0); // the footer, a blank row above it, on chat the compose field and one more blank
+  const tail = foot + BLANKS + (chat ? 1 : 0); // the footer and a blank row above it; on chat the compose field too
   let part = build(0, 0);
-  let sec: Run[][] = shared(0);
+  let sec: TabLine[] = shared(0);
   let more = false;
   let moreCount = 1; // sections dropped (rows, when the content itself is cut)
   if (a.room > 0) {
@@ -387,18 +401,14 @@ export function tabFrame(a: TabIn): TabLine[] {
           moreCount = Math.max(1, hidden);
         }
       }
-      // spare rows: the shared section takes them (the chart grows, the log lengthens)
-      if (sec.length && !more) {
-        let spare = 0;
-        while (spare < 10) {
-          const next = shared(spare + 1);
-          if (next.length === sec.length || lead + part.lines.length + 1 + next.length > avail) break;
-          sec = next; spare++;
-        }
-      }
+    }
+    // Z4: the spare rows go to the elastic section (the chart grows, the logs lengthen) until the tab reaches the footer or its data runs out
+    if (sec.length && !more) {
+      const spare = avail - fit(part, true);
+      if (spare > 0) { const next = shared(Math.min(spare, 60)); if (fit(part, true) - sec.length + next.length <= avail) sec = next; }
     }
   }
-  const sections: TabLine[][] = [part.lines, ...(sec.length ? [sec.map(plain)] : [])];
+  const sections: TabLine[][] = [part.lines, ...(sec.length ? [sec] : [])];
   const target = HOLDER[a.tab];
   const moreLine: TabLine[] = more ? [plain(kit.blank), { runs: moreRow(kit, moreCount, target), press: { kind: 'goto', key: target } }] : [];
   const body: TabLine[] = [...(a.lead ? [plain(kit.blank)] : []), ...sections.flatMap((s, i) => [...s, ...(i < sections.length - 1 ? [plain(kit.blank)] : [])]), ...moreLine];

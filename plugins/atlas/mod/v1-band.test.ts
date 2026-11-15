@@ -277,11 +277,14 @@ describe('the rules the frames rest on', () => {
     expect(cols({ gates: GATES_ARMED as never[] })).toEqual(base);
     expect(cols({}, { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 0, 120]) })).toEqual(base);
   });
-  test('amber only for ctx >= 70 % and hook p50 >= 50 ms', () => {
+  test('amber only for ctx >= 70 % and a hook p50 over 100 ms (Z3: the latency thresholds, red over 500)', () => {
     const amber = (o: Partial<Over>, extra: object = {}): string[] => bandRuns(model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { ...h, ...extra }, ...o }), true).filter((x) => x.fg === xtermHex(214)).map((x) => x.t);
     expect(amber({})).toEqual([]);
     expect(amber({ ctx: 70 })).toEqual(['  70%'.slice(1)]);
-    expect(amber({}, { hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 50, p95: 80 } }) })).toEqual([' 50ms'.slice(0)]);
+    expect(amber({}, { hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 50, p95: 80 } }) })).toEqual([]);
+    expect(amber({}, { hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 120, p95: 180 } }) })).toEqual(['120ms']);
+    const red = bandRuns(model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { ...h, hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 600, p95: 700 } }) } }), true).filter((x) => x.fg === xtermHex(203)).map((x) => x.t);
+    expect(red).toEqual(['600ms']);
   });
   test('narrowing: the detail slot drops under 85, the spark shrinks 20 / 10 / 5, the extras drop from the end', () => {
     const w = (cols: number, panel = false): string => row({ kind: 'working', cols, panel, ctx: 6, health: { pulse: pulse(SPARK15, 0.01), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }) } });

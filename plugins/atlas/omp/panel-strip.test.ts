@@ -50,10 +50,13 @@ describe('change 9: one tab strip on both hosts', () => {
       expect(cc).toHaveLength(1); // D14: one strip row at every width; the trailing tabs fold into `more ›` rather than wrap
       expect(cc[0]!).toMatch(/^ \S/); // one cell of padding from the left rule
       const said = cc.join(' ').trim().split(/\s+/).filter((w) => w !== '▸' && w !== 'more' && w !== '›');
-      expect(said).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board'].slice(0, said.length)); // names only, whole, in order, the rest behind `more ›`
+      const ALL = ['status', 'team', 'channel', 'gates', 'core', 'board'];
+      expect(said.every((w) => ALL.includes(w))).toBe(true); // names only, whole
+      expect(said).toEqual(ALL.filter((w) => said.includes(w))); // in order; Z5: the lit tab takes the last place when it was folded, the rest behind `more ›`
+      expect(said).toContain(tab === 'route' ? 'status' : tab);
       if (cols >= 48) expect(said).toHaveLength(6);
       expect(cc.join(' ')).not.toMatch(/\b[rtcgko]:/); // never a key letter in the strip
-      if (L.stripLayout(cols).rows[0]!.some((t) => t.id === tab)) expect(cc.join(' ')).toMatch(new RegExp(`\\b${tab === "route" ? "status" : tab}\\b`)); // the lit tab keeps its word while it is not folded
+      if (L.stripLayout(cols, tab).rows[0]!.some((t) => t.id === tab)) expect(cc.join(' ')).toMatch(new RegExp(`\\b${tab === "route" ? "status" : tab}\\b`)); // the lit tab keeps its word while it is not folded
       // words go from the right end only: once a tab shows its word, every tab to its left does too (the lit tab is the one exception)
     });
   }

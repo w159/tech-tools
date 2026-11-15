@@ -138,10 +138,12 @@ export function hookFeed(h: Health): FeedRow[] {
 
 const GUTTER = 3; // y gutter of the chart: a two-cell label and the `┤` tick
 export const GATE_COL = 5;
-/** The y gutter and the last chart row of one stack are the most the chart takes; spare rows beyond the spec's 8 go to it only when nothing else can use them (no blank void above the footer). */
-const CHART_SPEC_MAX = 8;
-const CHART_MAX = 12;
-const CHART_MIN = 3;
+/** Z1: the y axis never tops out below this many events per bucket, so one event is a short bar, never a full-height pillar. */
+export const CHART_AXIS_MIN = 4;
+/** Z1: the activity chart's rows follow the pane's height alone (never the run's state): the same pane draws the same chart idle, working and done. Rows the chart does not take go to the section that grows (RECENT, RUNS). Unknown room: 4. */
+export const chartRows = (room: number): number => (room <= 0 ? 4 : room >= 40 ? 6 : room >= 32 ? 5 : room >= 26 ? 4 : 3);
+/** Z2: a percentile needs this many samples behind it; below it the p95 column says `—` and the single or median value stays in p50. */
+export const P95_MIN_SAMPLES = 5;
 
 /** Merge neighbouring cells of one style into one run (a 46-cell chart row is a handful of runs, not 46). */
 const merge = (runs: readonly Run[]): Run[] => {
@@ -170,7 +172,7 @@ export type ChartData = {
   /** Y1a: the earlier sessions' events as the same unit (events per bucket, from their per-minute counts), one column per minute, oldest first; empty when none fit. */
   prev: number[];
   total: number;
-  /** The tallest bar drawn, this session's or `prev`: the y axis maximum and the rule's peak are this one figure, in events per bucket. */
+  /** The tallest bar drawn, this session's or `prev`, in events per bucket: the rule's peak. The y axis maximum is `max(CHART_AXIS_MIN, peak)`. */
   peak: number;
   minutes: number;
   bucketSecs: number;
@@ -218,19 +220,19 @@ export function chartSeries(h: Health, cols: number): ChartData {
 /** `-1.5m`: a minute count on the axis. */
 const axisMin = (m: number): string => `-${trimNum(m)}m`;
 
-/** ACTIVITY (C): the section rule carries the stats (`6 ev · peak 4 / 10s · last 1s`, idle `0 ev · waiting`); under it `rows` chart rows of eighth blocks, one bucket per column after a 3-cell y gutter (the top row's label is the tallest bar, `4┤`, the same figure as the rule's peak; `0┤` on the baseline, an empty baseline cell the dim zero glyph). Y1b: the window is the session's age rounded up to the minute (2 to 30 minutes), the x labels follow it (`-3m ... now`). Y1a: earlier sessions' minutes, dimmed, sit left of a `│` marker (`prev`). The `last` age is left out when the state already says the same instant (a finished run's `ended 18s ago`). */
+/** ACTIVITY (C): the section rule carries the stats (`6 ev · peak 4 / 10s · last 1s`, idle `0 ev · waiting`); under it `rows` chart rows of eighth blocks, one bucket per column after a 3-cell y gutter (the top row's label is the axis maximum, at least 4 events per bucket, `4┤`; the rule's peak is the tallest real bar; `0┤` on the baseline, an empty baseline cell the dim zero glyph). Y1b: the window is the session's age rounded up to the minute (2 to 30 minutes), the x labels follow it (`-3m ... now`). Y1a: earlier sessions' minutes, dimmed, sit left of a `│` marker (`prev`). The `last` age is left out when the state already says the same instant (a finished run's `ended 18s ago`). */
 export function statusActivityRows(kit: Kit, h: Health, rows: number): Run[][] {
   const { on, dim, row, ribbon, metaText, g, k, ascii, sp } = kit;
   const w = Math.max(8, kit.u - INDENT - GUTTER);
   const ch = chartSeries(h, w);
   const { vals, prev, total } = ch;
   const ramp = ascii ? BLOCKS_ASCII : BLOCKS;
-  const scale = Math.max(1, ch.peak);
+  const scale = Math.max(CHART_AXIS_MIN, ch.peak);
   const levels = rows * 8;
   const level = (v: number): number => (v <= 0 ? 0 : Math.max(1, Math.min(levels, Math.round((v / scale) * levels))));
   const lastSecs = h.hooks?.lastEventSecs;
   const sameInstant = lastSecs !== undefined && h.last?.endedAgo !== undefined && Math.abs(h.last.endedAgo - lastSecs) <= 2;
-  const meta = total > 0 ? `${total} ev · peak ${scale} / ${bucketLabel(ch.bucketSecs)}${lastSecs !== undefined && !sameInstant ? ` · last ${agoText(lastSecs)}` : ''}` : '0 ev · waiting';
+  const meta = total > 0 ? `${total} ev · peak ${ch.peak} / ${bucketLabel(ch.bucketSecs)}${lastSecs !== undefined && !sameInstant ? ` · last ${agoText(lastSecs)}` : ''}` : '0 ev · waiting';
   const out: Run[][] = [ribbon('ACTIVITY', metaText(meta))];
   for (let r = 0; r < rows; r++) {
     const bottom = rows - 1 - r;
@@ -293,7 +295,17 @@ export function runFigures(secs: readonly number[]): { med: number; p90: number 
   return { med, p90: sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * 0.9) - 1))]! };
 }
 
-/** RUNS (E, Y1a): one bar per run (the last 12) scaled to the longest (green ok, red failed; a run of an earlier session is drawn dim when it passed), then `12 runs · med 0:41 · p90 1:20 · 1 failed` over every run the history holds. The rule says `prev` while every run is from an earlier session, `+N prev` when this session's join them. */
+/** Z2: the run figures that may be printed for `n` runs: the single value from one run, the median from two, the 90th percentile only from 5 (never the same number twice as two statistics). Longest wording first. */
+function runFigureTexts(runs: readonly { secs: number }[]): string[] {
+  const n = runs.length;
+  const count = `${n} ${n === 1 ? 'run' : 'runs'}`;
+  const { med, p90 } = runFigures(runs.map((x) => x.secs));
+  if (n === 1) return [`${count} · ${elapsedClock(med)}`, count];
+  if (n < 5) return [`${count} · med ${elapsedClock(med)}`, count];
+  return [`${count} · med ${elapsedClock(med)} · p90 ${elapsedClock(p90)}`, `${count} · med ${elapsedClock(med)}`, count];
+}
+
+/** RUNS (E, Y1a): one bar per run (the last 12) scaled to the longest (green ok, red failed; a run of an earlier session is drawn dim when it passed), then `12 runs · med 0:41 · p90 1:20 · 1 failed` over every run the history holds (Z2: the median from 2 runs, the p90 from 5). The rule says `prev` while every run is from an earlier session, `+N prev` when this session's join them. */
 export function statusRunsRows(kit: Kit, h: Health): Run[][] {
   const { on, dim, red, sp, row, ribbon, metaText, k, ascii } = kit;
   const ramp = ascii ? BLOCKS_ASCII : BLOCKS;
@@ -302,16 +314,58 @@ export function statusRunsRows(kit: Kit, h: Health): Run[][] {
   const longest = Math.max(1, ...runs.map((x) => x.secs));
   const shown = runs.slice(-12);
   const bars: Run[] = merge(shown.map((x) => on(ramp[Math.max(1, Math.min(8, Math.round((x.secs / longest) * 7) + 1))]!, x.ok ? (x.prev ? k.dim : k.ok) : k.bad, { tone: x.ok ? (x.prev ? 'sub' : 'ok') : 'bad' })));
-  const { med, p90 } = runFigures(runs.map((x) => x.secs));
   const failed = runs.filter((x) => !x.ok).length;
   // the figures give way from the right (p90, then med) before a word is cut in a narrow pane
-  const count = `${runs.length} ${runs.length === 1 ? 'run' : 'runs'}`;
   const failedW = failed ? textWidth(` · ${failed} failed`) : 0;
   const room = kit.u - INDENT - shown.length - 2;
-  const figs = [`${count} · med ${elapsedClock(med)} · p90 ${elapsedClock(p90)}`, `${count} · med ${elapsedClock(med)}`, count].find((t) => textWidth(t) + failedW <= room) ?? count;
+  const texts = runFigureTexts(runs);
+  const figs = texts.find((t) => textWidth(t) + failedW <= room) ?? texts[texts.length - 1]!;
   const nPrev = runs.filter((x) => x.prev).length;
   const label = nPrev === 0 ? '' : nPrev === runs.length ? 'prev' : `+${nPrev} prev`;
   return [ribbon('RUNS', label ? metaText(label) : []), row([...bars, sp(2), dim(`${figs}${failed ? ' · ' : ''}`), ...(failed ? [red(`${failed} failed`)] : [])])];
+}
+
+/** The run chart's y axis never tops out below this many seconds, so a 5 s run is a short bar, not a pillar. */
+export const RUN_AXIS_MIN_SECS = 60;
+/** Z4: RUNS as a multi-row bar chart of every recorded run (history.ts: this session's and the earlier ones'), oldest left, newest right: y is the run's duration (`1:00┤` at the top, `0┤` on the baseline), a passed run green, a failed one red, the x labels `oldest` and `newest`. The rule carries the figures (`12 runs · med 0:41 · p90 1:20 · 1 failed`). `rows` is the chart's height; no runs: the rule and one honest line. */
+export function statusRunsChart(kit: Kit, h: Health, rows: number): Run[][] {
+  const { on, dim, red, sp, row, ribbon, metaText, k, ascii, g } = kit;
+  const runs = runsOf(h);
+  if (!runs.length) return [ribbon('RUNS'), row([dim('no runs yet · a finished run adds a bar')])];
+  const ramp = ascii ? BLOCKS_ASCII : BLOCKS;
+  const gw = 5; // the y gutter: `1:00┤`
+  const w = Math.max(8, kit.u - INDENT - gw);
+  const slot = runs.length * 3 <= w ? 3 : 2; // a bar of 2 cells and a gap, or one cell and a gap
+  const shown = runs.slice(-Math.max(1, Math.floor(w / slot)));
+  const longest = Math.max(RUN_AXIS_MIN_SECS, ...shown.map((x) => x.secs));
+  const levels = Math.max(1, rows) * 8;
+  const level = (v: number): number => (v <= 0 ? 0 : Math.max(1, Math.min(levels, Math.round((v / longest) * levels))));
+  const barW = slot - 1;
+  const failed = runs.filter((x) => !x.ok).length;
+  const texts = runFigureTexts(runs);
+  const figs = texts.find((t) => textWidth(t) + (failed ? textWidth(` · ${failed} failed`) : 0) + 8 <= kit.u - 2) ?? texts[texts.length - 1]!;
+  const nPrev = runs.filter((x) => x.prev).length;
+  const meta: Run[] = [dim(figs), ...(failed ? [dim(' · '), red(`${failed} failed`)] : []), ...(nPrev ? [dim(nPrev === runs.length ? ' · prev' : ` · +${nPrev} prev`)] : [])];
+  const out: Run[][] = [ribbon('RUNS', meta)];
+  const used = shown.length * slot;
+  const lead = w - used; // the chart is right-aligned: the newest run sits at the right edge
+  for (let r = 0; r < rows; r++) {
+    const bottom = rows - 1 - r;
+    const gutter = r === 0 ? `${elapsedClock(longest).padStart(gw - 1)}${g('┤', '|')}` : bottom === 0 ? `${'0'.padStart(gw - 1)}${g('┤', '|')}` : `${' '.repeat(gw - 1)}${g('│', '|')}`;
+    const cells: Run[] = [];
+    for (const x of shown) {
+      const lv = Math.max(0, Math.min(8, level(x.secs) - bottom * 8));
+      cells.push(lv === 0 ? (bottom === 0 ? on(ramp[1]!.repeat(barW), k.rule, { tone: 'dim' }) : sp(barW)) : x.ok ? on(ramp[lv]!.repeat(barW), k.ok, { tone: 'ok' }) : on(ramp[lv]!.repeat(barW), k.bad, { tone: 'bad' }));
+      cells.push(bottom === 0 ? on(ramp[1]!, k.rule, { tone: 'dim' }) : sp(1));
+    }
+    out.push(row([dim(gutter), ...(lead > 0 ? [bottom === 0 ? on(ramp[1]!.repeat(lead), k.rule, { tone: 'dim' }) : sp(lead)] : []), ...merge(cells)]));
+  }
+  const axis = new Array<string>(w).fill(' ');
+  const put = (at: number, t: string): void => { for (let i = 0; i < t.length; i++) if (at + i >= 0 && at + i < w) axis[at + i] = t[i]!; };
+  if (shown.length >= 2 && used >= 'oldest'.length + 3 + 'newest'.length) put(lead, 'oldest');
+  put(w - 'newest'.length, 'newest');
+  out.push(row([sp(gw), dim(axis.join(''))]));
+  return out;
 }
 
 /** The hook whose event runs each gate: the completion and routing gates are read on Stop, the tripwire on every tool call, the header contract when a turn completes. */
@@ -360,37 +414,41 @@ export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boo
   return out;
 }
 
-export type HookRow = { name: string; n: number; p50?: number; p95?: number; lastSecs?: number; /** Y1a: the latency figures are the persisted ring's alone (this session has stamped none for this hook). */ prev?: true };
+export type HookRow = { name: string; n: number; p50?: number; p95?: number; /** Z2: the latency samples behind p50 and p95; the p95 column is drawn only from P95_MIN_SAMPLES of them. */ samples?: number; lastSecs?: number; /** Y1a: the latency figures are the persisted ring's alone (this session has stamped none for this hook). */ prev?: true };
 /** One row per wired hook (every hook in WIRED_HOOKS, fired or not) from the hook log's per-kind figures; a health without `perHook` gets them from `byLabel` and the recent events. */
 export function hookTable(h: Health): HookRow[] {
   const hk = h.hooks;
   return WIRED_HOOKS.map((name): HookRow => {
     const ph = hk?.perHook?.find((x) => x.label === name);
-    if (ph) return { name, n: ph.n, ...(ph.p50 !== undefined ? { p50: ph.p50 } : {}), ...(ph.p95 !== undefined ? { p95: ph.p95 } : {}), ...(ph.lastSecs !== undefined ? { lastSecs: ph.lastSecs } : {}), ...(ph.prev ? { prev: true as const } : {}) };
+    if (ph) return { name, n: ph.n, ...(ph.p50 !== undefined ? { p50: ph.p50 } : {}), ...(ph.p95 !== undefined ? { p95: ph.p95 } : {}), samples: ph.samples ?? ph.n, ...(ph.lastSecs !== undefined ? { lastSecs: ph.lastSecs } : {}), ...(ph.prev ? { prev: true as const } : {}) };
     const mine = (hk?.recent ?? []).filter((e) => e.label.split(' ')[0] === name);
     const ms = mine.flatMap((e) => (e.ms !== undefined ? [e.ms] : [])).sort((a, b) => a - b);
     const rank = (p: number): number => ms[Math.min(ms.length - 1, Math.max(0, Math.ceil(ms.length * p) - 1))]!;
     const n = (hk?.byLabel ?? []).find((x) => x.label === name)?.n ?? mine.length;
-    return { name, n, ...(ms.length ? { p50: rank(0.5), p95: rank(0.95) } : {}), ...(mine.length ? { lastSecs: Math.min(...mine.map((e) => e.ageSecs)) } : {}) };
+    return { name, n, ...(ms.length ? { p50: rank(0.5), p95: rank(0.95), samples: ms.length } : {}), ...(mine.length ? { lastSecs: Math.min(...mine.map((e) => e.ageSecs)) } : {}) };
   });
 }
 
-/** HOOKS (D): the fixed table of the wired hooks, header row then one row each: name, count, p50, p95, last (right-aligned, flush right). A hook that never fired is dim `0 — — —`. The rule states the latency colours once (amber over 100 ms, red over 500 ms); only the latency cells take them. `rows` cuts the table from the end on a short pane. */
+/** The latency colour on every surface (Z3): green up to 100 ms, amber above 100, red above 500. */
+export const latencyLevel = (ms: number): 'ok' | 'warn' | 'bad' => (ms > 500 ? 'bad' : ms > 100 ? 'warn' : 'ok');
+
+/** HOOKS (D): the fixed table of the wired hooks, header row then one row each: name, count, p50, p95, last (right-aligned, flush right). A hook that never fired is dim `0 — — —`. Z2: a hook with fewer than 5 samples shows its single or median value in p50 and `—` in p95, so one number is never printed as two statistics. Z3: p50 and p95 take the latency colours (green to 100 ms, amber above, red above 500) whatever the session; the rule states the two thresholds once. `rows` cuts the table from the end on a short pane. */
 export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length): Run[][] {
   const { dim, txt, red, amber, green, row, ribbon, metaText, g } = kit;
   const narrow = kit.u < 44;
   const wl = narrow ? 5 : 6;
   const pad = (t: string, n: number): string => t.padStart(n);
   const none = g('—', '-');
-  const ms = (v: number | undefined, prev = false): Run => (v === undefined ? dim(pad(none, wl)) : prev ? dim(pad(`${v}ms`, wl)) : v > 500 ? red(pad(`${v}ms`, wl)) : v > 100 ? amber(pad(`${v}ms`, wl)) : green(pad(`${v}ms`, wl)));
+  const ms = (v: number | undefined): Run => (v === undefined ? dim(pad(none, wl)) : { ok: green, warn: amber, bad: red }[latencyLevel(v)](pad(`${v}ms`, wl)));
   const table = hookTable(h);
-  // Y1a: the latencies are the last 64 calls of each hook across sessions (the persisted ring), so the head says so; a figure no call of this session has made is dim (`prev`)
+  // Y1a: the latencies are the last 64 calls of each hook across sessions (the persisted ring)
   const roomL = kit.u - INDENT - (4 + wl * 2 + 5) - 1; // what the name column has left of the figures
-  const head = table.some((e) => e.p50 !== undefined) && roomL >= 20 ? `hook · last 64 calls${table.some((e) => e.prev) && roomL >= 33 ? ' (dim: prev)' : ''}` : 'hook';
-  const out: Run[][] = [ribbon('HOOKS', metaText('p95 amber>100ms red>500ms')), row([dim(head)], [dim(pad('n', 4)), dim(pad('p50', wl)), dim(pad('p95', wl)), dim(pad('last', 5))])];
+  const head = table.some((e) => e.p50 !== undefined) && roomL >= 20 ? 'hook · last 64 calls' : 'hook';
+  const out: Run[][] = [ribbon('HOOKS', metaText('amber>100ms red>500ms')), row([dim(head)], [dim(pad('n', 4)), dim(pad('p50', wl)), dim(pad('p95', wl)), dim(pad('last', 5))])];
   for (const e of table.slice(0, Math.max(0, rows))) {
     const fired = e.n > 0;
-    out.push(row([fired ? txt(e.name) : dim(e.name)], [fired ? txt(pad(String(e.n), 4)) : dim(pad('0', 4)), ms(e.p50, e.prev), ms(e.p95, e.prev), e.lastSecs !== undefined ? dim(pad(agoText(e.lastSecs), 5)) : dim(pad(none, 5))]));
+    const p95 = (e.samples ?? e.n) >= P95_MIN_SAMPLES ? e.p95 : undefined;
+    out.push(row([fired ? txt(e.name) : dim(e.name)], [fired ? txt(pad(String(e.n), 4)) : dim(pad('0', 4)), ms(e.p50), ms(p95), e.lastSecs !== undefined ? dim(pad(agoText(e.lastSecs), 5)) : dim(pad(none, 5))]));
   }
   return out;
 }
@@ -486,7 +544,7 @@ export function statusFrame(a: StatusIn): Run[][] {
   const context = statusContextRows(kit, h);
   const runsSec = statusRunsRows(kit, h);
 
-  // ---- the stack (D, Y2a): sections, then every spare row down to the pinned footer goes to the chart (to 8), then the RECENT log, then the chart again (to 12). A short pane gives up whole sections, never rows of one: HOOKS, RUNS, the gate children, CONTEXT, ACTIVITY in that order; a `+N more ›` chip ends the body when a section went. ----
+  // ---- the stack (D, Y2a, Z1): sections, then every spare row down to the pinned footer goes to the RECENT log. A short pane gives up whole sections, never rows of one: HOOKS, RUNS, the gate children, CONTEXT, ACTIVITY in that order; a `+N more ›` chip ends the body when a section went. ----
   type Plan = { chart: number; recent: number; hooks: boolean; runs: boolean; children: boolean; ctx: boolean; activity: boolean };
   const dropped = (o: Plan): string[] => [...(o.activity ? [] : ['activity']), ...(o.ctx || !context.length ? [] : ['context']), ...(o.runs || !runsSec.length ? [] : ['runs']), ...(o.hooks ? [] : ['hooks'])];
   const sectionsOf = (o: Plan): Run[][][] => [
@@ -496,7 +554,8 @@ export function statusFrame(a: StatusIn): Run[][] {
   const sizeOf = (o: Plan): number => { const s = sectionsOf(o); return (a.lead ? 1 : 0) + sum(s.map((x) => x.length)) + s.length - 1 + (dropped(o).length ? 2 : 0); };
   const foot = footer.length ? 1 : 0;
   const cap = a.room > 0 ? a.room - foot : Infinity;
-  let plan: Plan = { chart: a.room > 0 ? CHART_MIN : 4, recent: 0, hooks: true, runs: true, children: true, ctx: true, activity: true };
+  // Z1: the chart's rows are the pane's alone (chartRows), never the run's state; rows the sections leave go to the RECENT log
+  let plan: Plan = { chart: chartRows(a.room), recent: 0, hooks: true, runs: true, children: true, ctx: true, activity: true };
   if (a.room > 0) {
     const fits = (o: Plan): boolean => sizeOf(o) <= cap;
     if (!fits(plan)) plan = { ...plan, hooks: false };
@@ -504,11 +563,7 @@ export function statusFrame(a: StatusIn): Run[][] {
     if (!fits(plan)) plan = { ...plan, children: false };
     if (!fits(plan)) plan = { ...plan, ctx: false };
     if (!fits(plan)) plan = { ...plan, activity: false };
-    if (fits(plan) && plan.activity) {
-      while (plan.chart < CHART_SPEC_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
-      while (plan.recent < feed.length && fits({ ...plan, recent: plan.recent + 1 })) plan = { ...plan, recent: plan.recent + 1 };
-      while (plan.chart < CHART_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
-    }
+    if (fits(plan) && plan.activity) while (plan.recent < feed.length && fits({ ...plan, recent: plan.recent + 1 })) plan = { ...plan, recent: plan.recent + 1 };
   }
   const secs = sectionsOf(plan);
   const gone = dropped(plan);

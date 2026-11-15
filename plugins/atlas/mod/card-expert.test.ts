@@ -104,10 +104,10 @@ describe('pulse rows', () => {
     const none = rowsText(card(health({ hooks: undefined }), 110)); // no pulse at all and no hook seen (a card built before the pulse is wired)
     expect(none.find((r) => r.includes('── ACTIVITY'))).toBeDefined();
   });
-  test('runs: a bar per run (newest right), the count, the median and the longest', () => {
+  test('runs: a bar per run (newest right), the count and the median; the p90 only from 5 runs (Z2)', () => {
     const t = rowsText(card(health(), 110, BUSY)).join('\n');
     expect(t).toMatch(/── RUNS /);
-    expect(t).toMatch(/[▁-█]+ +2 runs · med 0:\d\d · p90 0:\d\d · 1 failed/);
+    expect(t).toMatch(/[▁-█]+ +2 runs · med 0:\d\d · 1 failed/);
   });
 });
 
