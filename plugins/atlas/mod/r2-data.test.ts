@@ -48,12 +48,12 @@ describe('D4: gates report denials', () => {
   const seg = (h: Health): Run[] => bandSegments(h, ui).find((s) => s.id === 'gates')!.runs;
 
   test('band: ok is a green dot and `gates ok`; a gate that never fired changes nothing', () => {
-    expect(text(seg(okH))).toBe('● gates ok');
+    expect(text(seg(okH)).trimEnd()).toBe('● gates ok'); // round 2 D9: the slot is padded to a fixed width
     expect(seg(okH)[0]!.tone).toBe('ok');
   });
   test('band: denials read `✗ N denied` in the bad tone', () => {
-    expect(text(seg(badH))).toBe('✗ 2 denied');
-    expect(seg(badH).every((x) => x.tone === 'bad')).toBe(true);
+    expect(text(seg(badH)).trimEnd()).toBe('✗ 2 denied');
+    expect(seg(badH).filter((x) => x.t.trim() !== '').every((x) => x.tone === 'bad')).toBe(true);
   });
   test('row form: pass and deny counts; a gate that never fired is grey `not fired`', () => {
     const a = gateOf(chk('routing', 8, 8), ui);

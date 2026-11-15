@@ -238,9 +238,9 @@ describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither fo
     expect(new Set(tiles).size).toBe(1);
     expect(tiles[0]).not.toBe('#181825');
   });
-  test('the band footer chips sit on the same raised tile', () => {
+  test('the band has no footer chips (round 2 D9: tabs live only in the panel)', () => {
     const chips = all(bandTree(els, model(150), handlers) as unknown as Node).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:') && n.props.key !== 'band:health');
-    expect(chips.length).toBe(6);
+    expect(chips.length).toBe(0); // round 2 D9: the tab chips live only in the panel; the band keeps the one `▸ health` chip
     for (const c of chips) expect(all(c).find((x) => x.kind === 'Text')!.props.backgroundColor).not.toBe('#181825');
   });
   test('the message input is not drawn as a toggle: no ▸ in its label', () => {

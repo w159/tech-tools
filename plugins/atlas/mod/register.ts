@@ -897,6 +897,8 @@ function bandHandlers($: EngineInterface): BandHandlers {
 			}),
 		toggleTodos: () => guarded(() => openBoard($)),
 		toggleHealth: () => guarded(() => { healthOpenNow = !healthOpenNow; return update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; }); }),
+		// Round 2 (D1): with the side panel up the chip shows the panel's status tab with its gates row open; the card stays shut (card and panel never show at once).
+		openHealthInPanel: () => guarded(async () => { healthOpenNow = false; await update($, viewState, () => 'route'); await update($, expandedState, () => 'health:gates'); return update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; }); }),
 	};
 }
 

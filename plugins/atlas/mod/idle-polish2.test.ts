@@ -60,14 +60,14 @@ describe('2: the idle band at 110 says more than one line of figures when no pan
     expect(shouldDock({ isFullscreen: true, columns: 150 })).toBe(true);
   });
   for (const cols of [110, 150]) {
-    test(`at ${cols} with no panel: the second line is the tab chips, left-aligned; no last run, event count or age line (slice S2)`, () => {
+    test(`at ${cols} with no panel: one row, no tab chips under it (round 2 D9), no last run, event count or age line`, () => {
       const rows = rowsOf(model(cols));
-      expect(rows[1]).toMatch(/^ status +team +channel/);
-      expect(rows.join('\n')).not.toMatch(/last run|events|last \d+s ago/);
+      expect(rows).toHaveLength(1);
+      expect(rows.join('\n')).not.toMatch(/last run|events|last \d+s ago|status/);
       expect(rows[0]).toContain('gates ok');
     });
   }
-  test('with the panel up the band reads as it does closed, minus `up` (the panel owns the uptime)', () => {
+  test('with the panel up the band reads as it does closed (the uptime is the card\'s and the panel\'s)', () => {
     const rows = rowsOf(model(150, { panel: true }));
     expect(rows[0]).toContain('▸ health');
     expect(rows[0]).toContain('gates ok');
@@ -85,8 +85,8 @@ describe('2b: the band drops its tab chips while the side panel shows its own st
       expect(open.at(-1)?.trim()).not.toBe('');
       expect(bandRowCount(model(cols, { panel: true }), true)).toBe(1); // the health row alone: the chip row is gone and no blank stands in for it
     });
-    test(`at ${cols} with the panel closed: the chip row is drawn`, () => {
-      expect(chipRow(rowsOf(model(cols))).length).toBe(1);
+    test(`at ${cols} with the panel closed: no chip row either (round 2 D9: tabs live only in the panel)`, () => {
+      expect(chipRow(rowsOf(model(cols))).length).toBe(0);
     });
   }
 });
@@ -106,11 +106,9 @@ describe('3: the idle panel is one finished card: the rule and the footer close 
 });
 
 describe('4: no run, no plan, no agent: one line, not two empty boxes', () => {
-  test('the HUD holds a single `no plan yet · 0 agents` row with no gates figure', () => {
+  test('with the health band up and no plan or agent the HUD draws no ribbon at all: `no plan yet · 0 agents` never prints (round 2 D9)', () => {
     const rows = hudLines({ todos: [], agents: [] } as never, { cols: 110, maxRows: 12, ui, reserve: true, healthLine: '● gates ok · ctx 18%' }).map((r) => r.map((x) => x.t).join(''));
-    expect(rows.length).toBe(1);
-    expect(rows[0]).toContain('no plan yet · 0 agents');
-    expect(rows[0]).not.toMatch(/gates|appear here|ctx/);
+    expect(rows).toEqual([]);
   });
   test('a box that does wait for data (one side empty) no longer repeats the gates figure', () => {
     const o = { cols: 110, ui, reserve: true, healthLine: '● gates ok · ctx 18%' };
@@ -171,31 +169,27 @@ describe('7: the idle stepper is dim, bold only while a stage is live', () => {
   });
 });
 
-describe('8: the card has no second badge; the band row and the chip strip end on one edge and one fill', () => {
+describe('8: the card has no second badge; the band row ends on one edge and one fill', () => {
   test('HEALTH ribbon carries no `◖ ◆ ATLAS ◗`', () => {
     expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('')).toMatch(/^── ▾ HEALTH ─+ ▾ hide ──$/); // slice S4: a flat ribbon with its close chip
   });
   for (const cols of [150, 110]) {
-    test(`at ${cols}: both rows are ${cols} cells and their last cells wear the same fill`, () => {
+    test(`at ${cols}: the band row is ${cols} cells, there is no strip row, and its last cell wears the chip's fill (flush before the host's [-])`, () => {
       const rows = kids(bandTree(els, model(cols, { panel: false }), handlers) as unknown as Node);
       const band = rows[0]!;
-      const strip = rows.find((r) => textOf(r).includes('status'))!;
+      expect(rows).toHaveLength(1);
       expect(textWidth(textOf(band))).toBe(cols);
-      expect(textWidth(textOf(strip))).toBe(cols);
-      const last = (r: Node) => leaves(r).at(-1)!.props.backgroundColor;
-      expect(last(strip)).toBe(last(band));
+      expect(leaves(band).at(-1)!.props.backgroundColor).toBeTruthy();
     });
   }
 });
 
 describe('9: one accent, for what answers a click', () => {
-  test('the health button and the lit-or-idle tab chips are the accent; the strip tile is raised off the band fill', () => {
+  test('the health button is the accent (the band has no tab chips any more, round 2 D9)', () => {
     const t = bandTree(els, model(150), handlers) as unknown as Node;
     const btn = leaves(t).find((n) => String(n.props.children).includes('health'))!;
     expect(btn.props.color).toBe('#af87ff');
-    const chip = leaves(t).find((n) => String(n.props.children).includes('team'))!;
-    expect(chip.props.color).toBe('#af87ff');
-    expect(chip.props.backgroundColor).not.toBe(leaves(t).at(-1)!.props.backgroundColor); // a chip is a tile on the strip, the only raised fill of the two rows
+    expect(leaves(t).some((n) => String(n.props.children).includes('team'))).toBe(false);
   });
   test('the panel`s row labels and chevrons are the same accent', () => {
     const l = bodyLines(world(57)).find((x) => lineText(x).includes('gates'))!;

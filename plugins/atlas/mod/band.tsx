@@ -39,7 +39,7 @@ const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
 /** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
-export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; /** Wave 42: the `▸ health` button opens and closes the HUD's health card. */ toggleHealth?(): void };
+export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; /** Wave 42: the `▸ health` button opens and closes the HUD's health card. */ toggleHealth?(): void; /** Round 2 (D1): with the side panel up the `▸ health` chip opens the panel's status tab with its gates row expanded instead of the card. */ openHealthInPanel?(): void };
 /** The band's controls: click chips, one per tab of the side panel's strip (wave 43: no key letters are drawn or bound). */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
 const buttonWidth = (b: { label: string }): number => textWidth(chipText(b.label)); // a chip is its label with a space each side
@@ -234,15 +234,16 @@ export function bandRows(m: MissionModel): string[] {
 }
 
 /** A row that holds clickable runs (wave 42, `▸ health`): the runs around a control are Texts, the control is a Button of one Text in the accent with the hover style. */
-function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui): RenderElement {
+function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui, panel = false): RenderElement {
   const ss = segs(l, ui);
+  const press = (): void => { if (panel && on.openHealthInPanel) on.openHealthInPanel(); else on.toggleHealth?.(); };
   let left = Math.max(1, cols);
   const children = l.runs.flatMap((x, i): RenderElement[] => {
     const sg = ss[i]!;
     const room = left;
     left -= textWidth(sg.t);
     if (!x.press) return fitRuns(els, [sg], room);
-    return [els.Button({ key: x.press, plain: true, onPress: () => on.toggleHealth?.(), children: [els.Text({ color: sg.color, backgroundColor: sg.bg, bold: true, hover: hoverStyle(ui, x.press), children: fitText(sg.t, room) })] })];
+    return [els.Button({ key: x.press, plain: true, onPress: press, children: [els.Text({ color: sg.color, backgroundColor: sg.bg, bold: true, hover: hoverStyle(ui, x.press), children: fitText(sg.t, room) })] })];
   });
   return els.Box({ flexDirection: 'row', flexShrink: 0, children });
 }
@@ -279,7 +280,7 @@ const panel = (els: ClientElements, rows: Row[], cols: number, ui: Ui): RenderEl
 /** Any MissionModel as the band tree (the shared-world goldens and the renderer feed models directly). */
 export function missionTree(els: ClientElements, m: MissionModel, todoRows: (rows: number) => Segment[][] = () => [], on?: BandHandlers): RenderElement {
   const ui = m.ui ?? uiFromEnv();
-  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui)] : [segs(l, ui)]));
+  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui, !!m.health?.panel)] : [segs(l, ui)]));
   return panel(els, rows, m.cols, ui);
 }
 
@@ -307,7 +308,7 @@ function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: Mission
   const m0 = missionModel({ ...b, maxRows, ui });
   const m: MissionModel = m0.health ? { ...m0, health: { ...m0.health, ...(on ? { button: true } : {}) } } : m0;
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
-  const keys = on && idle && !m.health?.panel; // wave 44: with the side panel up its own tab strip is the chips; the band draws none and keeps no blank row for them
+  const keys = on && idle && !m.health; // round 2 (D9): with health the band is one row and the tabs live only in the panel: no key row at any width (no orphan row under the band)
   // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
   // The narrow form (one band row, no footer) still ends in the key row, blank under 80 columns: an idle band is as tall at 79 columns as at 80, so it never moves when the pane docks.
@@ -335,7 +336,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
     if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
-    if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui)];
+    if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui, !!m.health?.panel)];
     return [segs(l, ui)];
   });
   return panel(els, rows, cols, ui);

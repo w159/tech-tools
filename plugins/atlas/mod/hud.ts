@@ -8,7 +8,7 @@ import { FN_TAIL, isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
 import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
-import { emptyRibbon, fitStack, isFailedRow, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
+import { fitStack, isFailedRow, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
 
@@ -399,8 +399,9 @@ export function hudMotionItems(input: HudInput, opts: { now: number }): { todos:
 /** The HUD as design Runs, each row padded to the width: [] when there is nothing to show. */
 export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
   const { s, o } = surfaces(input, opts);
-  if (opts.maxRows <= 0 || (s.todos.length === 0 && s.agents.length === 0 && !opts.reserve)) return [];
-  const rows = padRows(s.todos.length === 0 && s.agents.length === 0 && o.healthLine && o.reserve ? [emptyRibbon(o)] : fitStack(s, o, opts.maxRows), o.cols);
+  // Round 2 (D9): the TODO and SUBAGENTS ribbons draw only when a plan row or an agent exists; with neither the block is empty (no `no plan yet · 0 agents` row) while the health band is up.
+  if (opts.maxRows <= 0 || (s.todos.length === 0 && s.agents.length === 0 && (!opts.reserve || !!o.healthLine))) return [];
+  const rows = padRows(fitStack(s, o, opts.maxRows), o.cols);
   return opts.idle === true ? rows.map(idleRow) : rows;
 }
 

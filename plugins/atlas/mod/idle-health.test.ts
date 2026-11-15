@@ -46,11 +46,11 @@ describe('idle band shows live health', () => {
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
     });
   }
-  test('at 150 the context (no tokens, round 2), the uptime and the version-free summary all show', () => {
+  test('at 150 the context (no tokens, round 2) shows; the uptime is the card\'s, never the band\'s (round 2 D9: fixed slots, no `up`)', () => {
     const row = firstRow(model(150));
     expect(row).toContain('ctx 18%');
     expect(row).not.toContain('tok');
-    expect(row).toContain('up 12:04');
+    expect(row).not.toContain('up 12:04');
   });
   test('a denied gate reads ✗ and the count', () => {
     const bad = [...GATES.slice(0, 3), { id: 'header', title: 'header', lines: [{ id: 'header', label: 'header', ok: false }] }] as any;
@@ -60,7 +60,6 @@ describe('idle band shows live health', () => {
     const row = firstRow(model(150, { snapshot: idleSnap({ contextPct: 0 }), health: { ...HEALTH, tokens: null } }));
     expect(row).not.toContain('ctx');
     expect(row).not.toContain('tok');
-    expect(row).toContain('up 12:04');
   });
   test('a run that ended this session adds no `last run` line (slice S2: the run seconds are the state word\'s alone, `done 2:14`)', () => {
     const rest = kids(bandTree(els, model(150, { ranSecs: 134, restSecs: 40 }), handlers) as unknown as Node).map(textOf).join('\n');
@@ -68,8 +67,10 @@ describe('idle band shows live health', () => {
     expect(rest).not.toContain('2:14');
     expect(firstRow(model(150, { snapshot: idleSnap({ phase: 'done' }), ranSecs: 134, restSecs: 4 }))).toContain('done 2:14');
   });
-  test('the uptime ticks', () => {
-    expect(firstRow(model(150, { health: { ...HEALTH, upSecs: 725 } }))).toContain('up 12:05');
+  test('the idle head ticks: seconds since the last hook event (round 2 D2)', () => {
+    const at = (secs: number) => firstRow(model(150, { health: { ...HEALTH, hooks: { total: 1, byLabel: [], recent: [], lastEventSecs: secs } } }));
+    expect(at(7)).toContain('○ idle 7s');
+    expect(at(8)).toContain('○ idle 8s');
   });
 });
 
@@ -109,7 +110,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
   for (const cols of [150, 110]) {
     test(`at ${cols} a running band keeps its state, plan and workers and adds the health segments after them (slice S2: one band)`, () => {
       const row = working(cols, true);
-      expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ')).toBe(true);
+      expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ implement                    ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ')).toBe(true); // round 2 D2: the working head is the phase (no clock; the host prints elapsed), padded to its fixed slot
       expect(row).toContain('▸ health');
       expect(working(cols, false)).not.toContain('health');
     });
@@ -118,7 +119,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
     expect(working(150, true).trimEnd()).toBe(WORKING_150);
   });
 });
-const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ● gates ok ▌ ctx 12% ▌ up 12:04 ▌ ▸ health';
+const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement                    ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ● gates ok   ▌ ctx 12%  ▌' + ' '.repeat(38) + '▸ health';
 
 describe('the expanded health card (HUD)', () => {
   const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };

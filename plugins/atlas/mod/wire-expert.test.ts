@@ -179,7 +179,7 @@ describe('wire-expert: one spinner', () => {
     await b.advance(1500, async () => { await b.band(); });
     const band = textOf(await b.band());
     const pane = textOf(await b.pane());
-    const glyph = /([◐◓◑◒]) working/.exec(band)?.[1];
+    const glyph = /ATLAS ◗ ([◐◓◑◒])/.exec(band)?.[1]; // round 2 D2: the working head is `◓ <phase> · ..`, no `working` word
     expect(glyph).toBeDefined();
     expect(pane).toContain(`${glyph}`);
   });

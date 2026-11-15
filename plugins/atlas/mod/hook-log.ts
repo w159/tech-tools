@@ -13,6 +13,8 @@ export type HookStats = {
   lastEventSecs?: number;
   /** Tool calls seen since the run began (`hookStats`'s `since`, the run clock's start); absent when no run is open. The band's `N tools` is this, not the session's total. */
   runTools?: number;
+  /** The tool of the newest `tool.call` event of this run (the label's word after `tool.call`, as `Bash`); absent when the run has seen none or the label carried no name. The band's `◓ research · Bash`. */
+  runTool?: string;
 };
 
 const KEEP = 64;
@@ -22,6 +24,7 @@ const STAMP_CAP = 4096;
 let log: HookEvent[] = [];
 let stamps: number[] = [];
 let toolStamps: number[] = [];
+let lastTool: { name: string; at: number } | null = null;
 let newest = -Infinity;
 const counts = new Map<string, number>();
 
@@ -30,6 +33,7 @@ export function resetHookLog(): void {
   log = [];
   stamps = [];
   toolStamps = [];
+  lastTool = null;
   newest = -Infinity;
   counts.clear();
 }
@@ -43,7 +47,11 @@ export function noteHook(label: string, at: number | undefined): void {
   if (stamps[0]! < newest - STAMP_SPAN_MS || stamps.length > STAMP_CAP) stamps = stamps.filter((t) => t >= newest - STAMP_SPAN_MS).slice(-STAMP_CAP);
   if (log.length > KEEP) log = log.slice(-KEEP);
   const kind = label.split(' ')[0]!;
-  if (kind === 'tool.call') toolStamps = [...toolStamps, at].slice(-STAMP_CAP);
+  if (kind === 'tool.call') {
+    toolStamps = [...toolStamps, at].slice(-STAMP_CAP);
+    const name = label.slice(kind.length).trim();
+    lastTool = name ? { name, at } : null;
+  }
   counts.set(kind, (counts.get(kind) ?? 0) + 1);
 }
 
@@ -61,6 +69,7 @@ export function hookStats(now: number, max = 8, since?: number): HookStats {
     recent,
     ...(last ? { lastEventSecs: Math.max(0, Math.floor((now - last.at) / 1000)) } : {}),
     ...(since !== undefined ? { runTools: toolStamps.filter((t) => t >= since).length } : {}),
+    ...(since !== undefined && lastTool && lastTool.at >= since ? { runTool: lastTool.name } : {}),
   };
 }
 
