@@ -52,8 +52,8 @@ describe('tab strip', () => {
       expect(lineText(next!)).not.toMatch(/━/);
     }
   });
-  test('L21: one strip row at every width from 29 to 140, never wider than the pane; from 34 the closed set and the `▸ more` set together hold every tab, in order', () => {
-    const words = (m: ReturnType<typeof panelWorld>): string[] => tabRows(m).map(lineText).join(' ').split(/\s+/).filter((w) => w && !['▸', 'more', '‹', 'back'].includes(w));
+  test('L21: one strip row at every width from 29 to 140, never wider than the pane; from 34 the closed set and the `more ›` set together hold every tab, in order', () => {
+    const words = (m: ReturnType<typeof panelWorld>): string[] => tabRows(m).map(lineText).join(' ').split(/\s+/).filter((w) => w && !['▸', '›', 'more', '‹', 'back'].includes(w));
     for (let cols = 29; cols <= 140; cols++) {
       const closed = tabRows(panelWorld('route', cols, mocha, {}));
       const open = tabRows(panelWorld('route', cols, mocha, { expanded: MORE_KEY }));

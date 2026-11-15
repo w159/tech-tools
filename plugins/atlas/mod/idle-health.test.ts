@@ -129,15 +129,15 @@ describe('the expanded health card (HUD)', () => {
   const text = (over: Record<string, unknown> = {}): string[] => healthCardRows({ ...h, ...over } as never, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
   test('ribbon, rows and closing rule', () => {
     const t = text();
-    expect(t[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/); // frame spec section 6: the fixed title, a flat ribbon with no control of its own
-    expect(t.some((l) => /○ completion +1 armed/.test(l))).toBe(true); // nothing fired yet (no prompt, no run): every gate is `○ name  n armed`, one per row (in the card's middle column)
-    expect(t.some((l) => /○ tripwire +1 armed/.test(l))).toBe(true);
+    expect(t[0]!.trimEnd()).toMatch(/^ +▾ HEALTH +─+$/); // X4: the one title chip and a flat rule; the band under the card carries the pill
+    expect(t.some((l) => /○ completion +0 +0 +—/.test(l))).toBe(true); // nothing fired yet (no prompt, no run): every gate is `○ name  0  0  —`, one per row (in the card's middle column)
+    expect(t.some((l) => /○ tripwire +0 +0 +—/.test(l))).toBe(true);
     expect(t.some((l) => /▰+▱+ 18%/.test(l)) && t.join('\n').includes('42k')).toBe(true);
     expect(t.some((l) => /last run/.test(l))).toBe(false); // the band says the run
   });
   test('a finished run is the runs row: a bar per run, the count and the average', () => {
     const t = text({ pulse: { events: [], ctx: [], runs: [{ secs: 134, ok: true, at: 1 }] } });
-    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+med 2:14 · max 2:14/.test(l))).toBe(true);
+    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+1 run · med 2:14 · max 2:14/.test(l))).toBe(true);
     expect(t.join('\n')).not.toMatch(/last run/);
   });
   test('only values the mod has: no ctx, no tokens, no branch', () => {

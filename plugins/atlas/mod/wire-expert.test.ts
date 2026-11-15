@@ -136,8 +136,7 @@ describe('wire-expert: the pulse', () => {
     await press(button(await b.band(), 'band:health'));
     const card = textOf(await b.band());
     expect(card).toContain('64k of 1M');
-    expect(card).toMatch(/── ACTIVITY ─+ hook events · 5 min/);
-    expect(card).toMatch(/\b\d+ ev\b/);
+    expect(card).toMatch(/── ACTIVITY ─+ \d+ ev · peak \d+\/15s/);
   });
   test('(g) a new session resets the pulse and the hook log', async () => {
     const b = await boot();

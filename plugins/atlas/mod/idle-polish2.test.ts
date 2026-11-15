@@ -117,7 +117,7 @@ describe('5: each fact once across the band, the card and the panel', () => {
   test('the card with the panel up holds only what opening a row adds: no `last run none`, no hooks line that the recent list says', () => {
     const t = healthCardRows({ ...one, panel: true }, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     expect(t).not.toMatch(/last run|session started/);
-    expect(t).toMatch(/[●○] completion +(?:3 +0|3 armed)/);
+    expect(t).toMatch(/[●○] completion +(?:3 +0 +\S+|0 +0 +—)/);
   });
   test('the card has no last run line (the version is the pane\'s footer); the band has no last run or event line any more', () => {
     const t = healthCardRows(one, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
@@ -144,8 +144,8 @@ describe('7: the idle stepper is dim, bold only while a stage is live', () => {
 });
 
 describe('8: the card has no second badge; the band row ends on one edge and one fill', () => {
-  test('the HEALTH ribbon carries the one capsule and no control', () => {
-    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('').trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/); // the fixed title of frame spec section 6
+  test('the HEALTH ribbon is the one `▾ HEALTH` chip and a rule, no capsule (the band right under it carries the pill)', () => {
+    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('').trimEnd()).toMatch(/^ +▾ HEALTH +─+$/); // X4: the title chip
   });
   for (const cols of [150, 110]) {
     test(`at ${cols}: the band row is ${cols} cells, there is no strip row, and its last cell wears the chip's fill (flush before the host's [-])`, () => {

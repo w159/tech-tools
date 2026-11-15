@@ -10,13 +10,13 @@ import { headerRows, lineText, stripLayout, tabRows, type PanelTab } from './pan
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 
-describe('C5 (D14): the tab strip is one row of chips at every width; the trailing tabs fold into `▸ more`', () => {
+describe('C5 (D14): the tab strip is one row of chips at every width; the trailing tabs fold into `more ›`', () => {
   for (const cols of [37, 38, 40, 44]) {
     for (const tab of TABS) {
-      test(`${cols} cells, ${tab} lit: one strip row, whole words, the rest behind \`▸ more\``, () => {
+      test(`${cols} cells, ${tab} lit: one strip row, whole words, the rest behind \`more ›\``, () => {
         const rows = tabRows(panelWorld(tab, cols, ui)).map(lineText);
         expect(rows).toHaveLength(1); // the strip alone: no rule under the lit tab, no wrapped second strip
-        expect(rows[0]!.trim()).toMatch(/^status {1,3}team {1,3}channel( {1,3}gates)? {1,3}▸ more$/);
+        expect(rows[0]!.trim()).toMatch(/^status {1,3}team {1,3}channel( {1,3}gates)? {1,3}more ›$/);
         for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       });
     }
@@ -31,7 +31,7 @@ describe('C5 (D14): the tab strip is one row of chips at every width; the traili
     expect(headerRows(panelWorld('route', 120, ui)).slice(2, 3).map(lineText)[0]!.trim()).toBe('status   team   channel   gates   core   board');
     expect(lineText(tabRows(panelWorld('team', 54, ui))[0]!).trim()).toBe('status   team   channel   gates   core   board');
   });
-  test('all six words on one row down to 48 cells; below that the trailing tabs fold into `▸ more` (never a shortened word, never a second strip row while closed)', () => {
+  test('all six words on one row down to 48 cells; below that the trailing tabs fold into `more ›` (never a shortened word, never a second strip row while closed)', () => {
     expect(stripLayout(48, 'route').rows).toHaveLength(1);
     expect(stripLayout(48, 'route').more).toBe(false);
     expect(stripLayout(47, 'route').more).toBe(true);

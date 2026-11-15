@@ -93,9 +93,11 @@ describe('I: gates rows', () => {
     expect(t.filter((l) => /Native Read/.test(l))).toHaveLength(1);
     expect(t.find((l) => /Native Read/.test(l))).toMatch(/×4/);
     const long = t.find((l) => /A very long/.test(l))!;
-    expect(long).toMatch(/…$/);
+    expect(long).toMatch(/…\s+ok$/); // X3: the label is cut at its end, the value column stays whole and short
+    expect(long.replace(/…\s+ok$/, '').length).toBeGreaterThanOrEqual(5 + 4 + 22); // at least 22 cells of label before any cut
     const grep = t.find((l) => /Native Grep/.test(l))!;
-    expect(grep).toMatch(/2 calls denied$/);
+    expect(grep).toMatch(/deny$/);
+    expect(t.some((l) => /^\s+2 calls denied$/.test(l))).toBe(true); // the sentence hangs under the row, never cut into the value column
     expect(textWidth(grep)).toBeLessThanOrEqual(cols);
     for (const l of t) expect(textWidth(l)).toBeLessThanOrEqual(cols);
   });
@@ -108,14 +110,14 @@ describe('J: empty tabs own their body', () => {
     const m = panelWorld(tab as never, cols, ui, { rows: 40, ...EMPTY, run: { kind: 'idle', secs: 0, startMs: NOW, frame: 0 }, health: h(last), ...(tab === 'route' ? { board: true } : {}) } as never);
     return panelLines(m).map((l) => lineText(l).trimEnd());
   };
-  for (const [tab, fact, head] of [['team', '0 workers', 'worker'], ['channel', '0 notes', 'time'], ['core', '0 verdicts', 'check'], ['route', '0 items', 'item']] as const) {
-    test(`${tab}: ribbon, the live fact \`${fact}\`, a dim skeleton with column heads, then the pinned footer`, () => {
+  for (const [tab, fact] of [['team', 'team off · 0 workers'], ['channel', 'no notes yet'], ['core', 'no verdicts yet'], ['route', '0 items']] as const) {
+    test(`${tab}: ribbon, the live fact \`${fact}\`, no placeholder rows, then the shared dock and the pinned footer (X2)`, () => {
       const t = body(tab === 'route' ? 'route' : tab);
       const i = t.findIndex((l) => l.includes(fact));
-      if (tab === 'route') { expect(i).toBeGreaterThan(-1); }
-      else expect(i).toBeGreaterThan(0);
-      expect(t.some((l, k) => k > i && l.trimStart().startsWith(head))).toBe(true);
-      expect(t.filter((l) => /·{3,}|---|—/.test(l)).length).toBeGreaterThanOrEqual(2); // the placeholder rows
+      expect(i).toBeGreaterThan(0);
+      expect(t.some((l) => /── (TEAM|CHAT|CORE|BOARD) /.test(l))).toBe(true);
+      expect(t.some((l) => /·{3,}|--:--|○ T\d|○ w\d|queued|worker +state|time +from|check +figure|item +owner/.test(l))).toBe(false); // nothing invented
+      for (const sec of ['ACTIVITY', 'HOOKS']) expect(t.some((l) => l.includes(`── ${sec}`))).toBe(true); // never a void under the fact
       expect(t.at(-1)!.trim()).toMatch(/^atlas /);
     });
   }
@@ -150,7 +152,7 @@ describe('L: the pill breathes slowly', () => {
   };
   const fills = (u: Ui, n = 24): Set<string | undefined> => new Set(Array.from({ length: n }, (_, tick) => bandRuns(model('idle', 150, false, { tick }, {}, u), true).find((x) => x.t === ' ◆ ')!.bgHex));
   test('truecolor: 13 tones, one 2.4 s breath (24 beats of 100 ms)', () => withMotion(() => { expect(fills(ui).size).toBe(13); }));
-  test('256 colours: four steps', () => withMotion(() => { expect(fills({ ...ui, color: '256' }).size).toBe(4); }));
+  test('256 colours: eight violets in one breath (at least six distinct)', () => withMotion(() => { const n = fills({ ...ui, color: '256' }).size; expect(n).toBe(8); expect(n).toBeGreaterThanOrEqual(6); }));
   test('no colour: the pill does not move', () => withMotion(() => { expect(fills({ ...ui, color: 'none' }).size).toBe(1); }));
   test('only idle breathes: working and done hold one pill fill', () => withMotion(() => {
     for (const kind of ['working', 'done'] as Kind[]) expect(new Set(Array.from({ length: 24 }, (_, tick) => bandRuns(model(kind, 150, false, { tick }), true).find((x) => x.t === ' ◆ ')!.bgHex)).size).toBe(1);

@@ -39,15 +39,15 @@ export const CHIP_PAD = 2;
 export type StripTab = { id: PanelTab | 'board'; label: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** The strip's one shape (round 2, D14): a chip is its label with one cell of padding each side, one cell between chips, nothing before the first. It is the same at every width: a strip that does not fit folds its trailing tabs into `▸ more`, it never changes the chips. */
+/** The strip's one shape (round 2, D14): a chip is its label with one cell of padding each side, one cell between chips, nothing before the first. It is the same at every width: a strip that does not fit folds its trailing tabs into `more ›`, it never changes the chips. */
 export type StripForm = { pad: number; gap: number; lead: number };
 const STRIP_FORM: StripForm = { pad: 1, gap: 1, lead: 0 };
 /** The text a tab is drawn as: the label with its padding. */
 export const chipText = (label: string, f: Pick<StripForm, 'pad'> = STRIP_FORM): string => `${' '.repeat(f.pad)}${label}${' '.repeat(f.pad)}`;
 /** The `more` chip's press key (and the `expanded` key that opens the folded row). */
 export const MORE_KEY = 'tabs:more';
-/** The `more` chip's words: `▸ more` closed, `▾ more` while its row is open. */
-export const moreWord = (open: boolean, ui: Pick<Ui, 'ascii'>): string => `${chevron(open, ui)} more`;
+/** The `more` chip's words: `more ›` (X7: a chip that navigates trails `›`; the chevrons `▸`/`▾` are for chips that expand in place). */
+export const moreWord = (_open: boolean, ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? 'more >' : 'more ›');
 /** The second tab set's chip: it swaps the first set back in place. */
 export const backWord = (ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? '< back' : '‹ back');
 const stripTabs = (): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t }));
@@ -66,17 +66,17 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
   return rows;
 }
 
-/** The strip both hosts draw at `cols` cells (round 2, D14): every tab as a chip on one row where they fit (48 cells), else the leading tabs that fit beside a `▸ more` chip and the rest in `folded`
+/** The strip both hosts draw at `cols` cells (round 2, D14): every tab as a chip on one row where they fit (48 cells), else the leading tabs that fit beside a `more ›` chip and the rest in `folded`
  * (shown on a second row while the `more` chip is open). `rows` is the visible row; `more` says the chip is there. The lit tab is filled; no key letter is drawn or bound. The form never depends on the lit tab. */
 export function stripLayout(cols: number, _lit?: string): StripForm & { rows: StripTab[][]; folded: StripTab[]; more: boolean; /** Always true: no key prefix is drawn. */ bare: boolean } {
   const words = stripTabs();
   const f = STRIP_FORM;
   const room = Math.max(1, cols);
   if (chipsWidth(words, f) <= room) return { ...f, rows: [words], folded: [], more: false, bare: true };
-  const moreW = 2 * f.pad + cells('▸ more');
+  const moreW = 2 * f.pad + cells('more ›');
   const backW = 2 * f.pad + cells('‹ back');
   let n = words.length - 1;
-  // Round 3 (E8): one row always. The first set ends in `▸ more`, the second (the folded tabs) in `‹ back`. The first set keeps as many tabs as fit; the folded set keeps as many of the rest as fit beside `‹ back` (a pane under ~36 cells cannot reach every tab).
+  // Round 3 (E8): one row always. The first set ends in `more ›`, the second (the folded tabs) in `‹ back`. The first set keeps as many tabs as fit; the folded set keeps as many of the rest as fit beside `‹ back` (a pane under ~36 cells cannot reach every tab).
   while (n > 1 && chipsWidth(words.slice(0, n), f) + f.gap + moreW > room) n--;
   let folded = words.slice(n);
   while (folded.length > 1 && chipsWidth(folded, f) + f.gap + backW > room) folded = folded.slice(0, -1);
@@ -252,10 +252,11 @@ export function ribbonRow(m: PanelModel, view?: { title: string; right: string }
   const fitsRight = right && m.cols >= 40 + cells(right);
   // The gates figure (`ok`, `2 denied`) never drops from the header while the capsule and title fit beside it.
   const keep = !view && m.tab === 'gates' && !!right && m.cols >= 32 + cells(right);
-  return line(lightRibbon(ribbon(m.cols, view?.title ?? `SIDEPANEL ${dot(m.ui)} ${tabWord(m.tab)}`, fitsRight || keep ? right : '', m.ui), m.ui));
+  // X7: the `▸` before the title is a breadcrumb (dim, not a control); a chevron elsewhere is a chip that expands or collapses.
+  return line(lightRibbon(ribbon(m.cols, view?.title ?? `SIDEPANEL ${dot(m.ui)} ${tabWord(m.tab)}`, fitsRight || keep ? right : '', m.ui), m.ui).map((x) => (x.t === ' ▸ ' || x.t === ' > ' ? { ...x, tone: 'dim' as const } : x)));
 }
 
-/** The tab strip (round 2, D14): every tab as a ` label ` chip, the lit one filled with the accent, one cell between chips. A strip that does not fit ends in a `▸ more` chip (key `tabs:more`)
+/** The tab strip (round 2, D14): every tab as a ` label ` chip, the lit one filled with the accent, one cell between chips. A strip that does not fit ends in a `more ›` chip (key `tabs:more`)
  * that opens a second row with the folded tabs (`▾ more`); the chip is filled while the lit tab is one of the folded. */
 export function tabRows(m: PanelModel): PanelLine[] {
   const f = stripLayout(m.cols, m.tab);
@@ -266,7 +267,7 @@ export function tabRows(m: PanelModel): PanelLine[] {
   const open = m.expanded === MORE_KEY;
   const litFolded = f.folded.some((t) => t.id === m.tab);
   const more: Run[] = f.more ? [gap, { ...chipRun(moreWord(false, m.ui), m.ui, MORE_KEY), ...(litFolded ? { tone: 'ink' as const, bg: 'accent' as const, bgHex: undefined } : {}) }] : [];
-  // One row always: `▸ more` swaps the visible set for the folded tabs (and a `‹ back` chip) on the same row.
+  // One row always: `more ›` swaps the visible set for the folded tabs (and a `‹ back` chip) on the same row.
   if (f.more && open) return [line(fitRuns([...strip(f.folded), gap, chipRun(backWord(m.ui), m.ui, MORE_KEY)], m.cols))];
   return [line(fitRuns([...strip(f.rows[0]!), ...more], m.cols))];
 }

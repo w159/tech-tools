@@ -1,6 +1,7 @@
 // tabs-frame.ts: the side panel's other tabs of the approved frame spec (critics/mock-final.md section 5: G1-G3 gates, T1-T3 team, D1-D3 board, C1-C3 chat, K1-K3 core), as rows of runs.
-// Pure, like status-frame.ts, and built from the same kit and section builders: a tab shows its own content first, then the dock (ACTIVITY, CONTEXT, HOOKS; spec 2.4e) directly beneath it, the free rows at
-// the bottom, the footer pinned to the last row (and, on chat, the compose chip above it).
+// Pure, like status-frame.ts, and built from the same kit and the same section builders (round X: statusActivityRows, statusContextRows, statusRunsRows, statusHooksRows, statusRecentRows, the GATES table
+// columns): a tab shows its own content first, then the dock (ACTIVITY, CONTEXT, RUNS, HOOKS, RECENT) directly beneath it, the footer pinned to the last row (and, on chat, the compose chip above it).
+// A tab with nothing to show draws its ribbon, one honest line and the last run's figures, never a placeholder row.
 //
 // One control idiom (2.3): a row that expands in place (a gate group, a worker, a board item) is one chip spanning the usable width with its numbers inside the fill (2.4c); a failing or blocked row is an
 // alert chip. Nothing else here is clickable except the chat compose chip. Rows carry a `press`: `flip` (expand or collapse the row; the key is remembered for the session), `compose`.
@@ -9,8 +10,9 @@
 // (at least two while the dock has room), and two blank rows (three on chat) stay above the footer.
 import { elapsedClock, type Run, type Ui, type UiState } from './atlas-ui';
 import type { CoreModel } from './data/core';
-import { teamOf, type Health } from './idle-health';
-import { activityRows, contextRows, footerRow, frameKit, hookFeed, hooksRows, promptedOf, type Kit, type StatusGate, type StatusIn } from './status-frame';
+import { agoText, teamOf, type Health } from './idle-health';
+import { footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, promptedOf, statusActivityRows, statusContextRows, statusHooksRows, statusRecentRows, statusRunsRows, type Kit, type StatusGate, type StatusIn } from './status-frame';
+import { WIRED_HOOKS } from './hook-log';
 import { fitText, textWidth } from './theme';
 import { checkOff, gateCounts } from './vocab';
 
@@ -48,8 +50,11 @@ export type TabIn = {
   lead: boolean;
 };
 
-const BLANKS = 2;
+const BLANKS = 1;
 const HOOKS_MIN = 2;
+const CHART_MIN = 3;
+const CHART_SPEC_MAX = 8;
+const CHART_MAX = 12;
 const sum = (xs: readonly number[]): number => xs.reduce((n, x) => n + x, 0);
 
 type Part = { lines: TabLine[]; /** Rows that collapse, in the order they give way (oldest done first). */ order: string[] };
@@ -64,19 +69,8 @@ function gauge(kit: Kit, done: number, total: number, cells = 8): Run[] {
   return [...(on ? [violet(g('▰', '#').repeat(on), 1)] : []), ...(on < cells ? [dim(g('▱', '-').repeat(cells - on))] : [])];
 }
 
-// ---- empty tabs (J) ------------------------------------------------------------------------------------------------------------------------
-// An empty tab is never one line over a void: the ribbon, the one live fact, a dim skeleton of what will appear (column names and two placeholder rows) and the last run's figures.
-
-/** The dim skeleton: a column-name row, then placeholder rows (`rows` of them, dots where the data will go). */
-function skeleton(kit: Kit, head: [string, string], rows: readonly [string, string][], mark = '○'): Run[][] {
-  const { g, dim, row } = kit;
-  const dots = (n: number): string => g('·', '.').repeat(Math.max(1, n));
-  const w = Math.max(8, kit.u - 4 - 12);
-  return [
-    row([dim(head[0])], [dim(head[1])]),
-    ...rows.map(([name, right]) => row([dim(`${mark === ' ' ? ' ' : g(mark, 'o')} ${name} ${dots(w - textWidth(name) - 4)}`)], [dim(right)])),
-  ];
-}
+// ---- empty tabs ----------------------------------------------------------------------------------------------------------------------------
+// An empty tab draws its ribbon, one honest line with the live fact and the last run's figures (when the mod holds them); the dock below it is the same one every tab has. Nothing is drawn as a placeholder.
 
 /** `last run 0:05 · 6/6 · 6 hooks`: the last finished run's figures, only what the mod holds; none before a run. */
 function lastRunRow(a: TabIn, kit: Kit): Run[][] {
@@ -96,11 +90,36 @@ const giveWay = (items: readonly { key: string; done: boolean }[]): string[] => 
 
 // ---- gates ---------------------------------------------------------------------------------------------------------------------------------
 
+/** A gate line's value column: a short figure (`0`, `2/4`, `3 open`), `on`/`off`, `ok`, or `—`; never a sentence (the sentence of a failing line hangs under it). */
+export function gateValue(l: { label: string; ok: boolean; detail?: string }, none = '—'): string {
+  const d = (l.detail ?? '').trim();
+  if (!l.ok) return 'deny';
+  if (checkOff(l.label, d)) return 'off';
+  let m: RegExpMatchArray | null;
+  if ((m = d.match(/^(on|off)$/i))) return m[1]!.toLowerCase();
+  if ((m = d.match(/^(\d+)\s+of\s+(\d+)/))) return `${m[1]}/${m[2]}`;
+  if ((m = d.match(/^(\d+)\s+direct calls.*limit\s+(\d+)/))) return `${m[1]}/${m[2]}`;
+  if ((m = d.match(/^(\d+)\s+open/))) return `${m[1]} open`;
+  if ((m = d.match(/^(\d+)\b/))) return m[1]!;
+  if ((m = d.match(/^declared phase:\s*(\S+)/))) return fitText(m[1]!, 8);
+  if (/^not an orchestrat/i.test(d)) return none;
+  return 'ok';
+}
+
+/** The text every line of a group shares after its figure (`as of the last ingest (Stop, ...)`): drawn once under the group. */
+function sharedNote(lines: readonly { ok: boolean; detail?: string }[]): string {
+  const rest = lines.filter((l) => l.ok).map((l) => (l.detail ?? '').trim().replace(/^\d+\s+/, '')).filter((t) => t.length > 0 && !/^(on|off)$/i.test(t));
+  const first = rest[0];
+  return first !== undefined && rest.length >= 2 && rest.every((t) => t === first) ? first : '';
+}
+
 function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted: boolean): Part {
-  const { g, dim, txt, red, row, ribbon, metaText, chip } = kit;
+  const { g, dim, txt, red, sp, row, ribbon, metaText, chip } = kit;
   const h = a.health;
   const flips = new Set(a.flips);
-  const lines: TabLine[] = [plain(ribbon('GATES', metaText('checks   ok fail')))];
+  const cell = (t: string): string => t.padStart(GATE_COL);
+  const none = g('—', '-');
+  const lines: TabLine[] = [plain(ribbon('GATES', metaText(`${gateHead()} `)))];
   const order: { key: string; done: boolean }[] = [];
   for (const c of h.gates.checks) {
     const n = gateCounts(c);
@@ -111,34 +130,41 @@ function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted:
     const canOpen = !!grp && grp.lines.length > 0;
     const open = canOpen && (fired !== flips.has(key)) && !collapsed.has(key);
     if (open && !flips.has(key) && deny === 0) order.push({ key, done: true });
-    const armed = c.lines ?? n.total;
-    const right = fired ? `${String(n.pass).padStart(2)} ${String(deny).padStart(4)}` : armed > 0 ? `${armed} armed` : 'armed';
+    const lastSecs = fired ? gateLastSecs(h, c) : undefined;
+    const right = fired ? `${cell(String(n.pass))}${cell(String(deny))}${cell(lastSecs !== undefined ? agoText(lastSecs) : none)}` : `${cell('0')}${cell('0')}${cell(none)}`;
     const mark = deny > 0 ? g('■', 'x') : fired ? g('●', '*') : g('○', 'o');
+    // a group row is a chip (raised fill) with the chevron; a group with nothing under it has no chevron, only a blank cell
     lines.push({ runs: chip(`${canOpen ? (open ? g('▾', 'v') : g('▸', '>')) : ' '} ${mark} ${c.id}`, right, deny > 0 ? 'alert' : 'idle'), ...(canOpen ? { press: { kind: 'flip', key } } : {}) });
     if (!open || !grp) continue;
-    // I: identical rows merge into one (`×8`); the verdict sits in a fixed right column (cut at its end, never at its start); the label takes the rest and is cut at its END with `…`.
+    // identical rows merge into one (`×8`); the value column is short and right-aligned (flush with the chip's own numbers); the label takes the rest and is cut at its END with `…`.
     const merged: { l: (typeof grp.lines)[number]; n: number }[] = [];
     for (const l of grp.lines) {
       const same = merged.find((m) => m.l.ok === l.ok && m.l.label === l.label && (m.l.detail ?? '').trim() === (l.detail ?? '').trim() && (m.l.fix ?? '') === (l.fix ?? ''));
       if (same) same.n++;
       else merged.push({ l, n: 1 });
     }
-    const vw = Math.min(18, Math.max(0, ...merged.map((m) => textWidth((m.l.detail ?? '').trim()))));
+    const note = sharedNote(grp.lines);
+    const vw = Math.min(8, Math.max(2, ...merged.map((m) => textWidth(gateValue(m.l, none)))));
     merged.forEach(({ l, n }, i) => {
       const last = i === merged.length - 1;
       const off = l.ok && checkOff(l.label, l.detail);
-      const detail = fitText((l.detail ?? '').trim(), vw);
+      const value = gateValue(l, none).padStart(vw);
       const times = n > 1 ? ` ×${n}` : '';
-      const room = Math.max(4, kit.u - 9 - (detail ? vw + 2 : 0)); // a row without a verdict keeps the whole width
-      const label = `${fitText(l.label, Math.max(1, room - textWidth(times)))}${times}`;
-      const branch = dim(`${last ? g('└', '+') : g('├', '+')} `);
+      const label = `${fitText(l.label, Math.max(4, kit.u - 5 - 4 - vw - 2 - textWidth(times)))}${times}`;
+      const branch = dim(`${last && !note ? g('└', '+') : g('├', '+')} `);
       if (!l.ok) {
-        lines.push(plain(row([branch, red(g('■', 'x')), txt(` ${label}`, { fg: kit.k.bad, tone: 'bad' })], detail ? [red(detail)] : [], 5)));
-        if (l.fix) lines.push(plain(row([dim(`${last ? ' ' : g('│', '|')}   fix: ${l.fix}`)], [], 5)));
+        lines.push(plain(row([branch, red(g('■', 'x')), txt(` ${label}`, { fg: kit.k.bad, tone: 'bad' })], [red(value), sp(1)], 5)));
+        const why = (l.detail ?? '').trim();
+        if (why) lines.push(plain(row([dim(`${last && !note ? ' ' : g('│', '|')}   ${fitText(why, Math.max(4, kit.u - 12))}`)], [], 5)));
+        if (l.fix) lines.push(plain(row([dim(`${last && !note ? ' ' : g('│', '|')}   fix: ${l.fix}`)], [], 5)));
       } else {
-        lines.push(plain(row([branch, off || !fired ? dim(g('○', 'o')) : kit.green(g('●', '*')), txt(` ${label}`)], detail ? [dim(detail)] : [], 5)));
+        lines.push(plain(row([branch, off || !fired ? dim(g('○', 'o')) : kit.green(g('●', '*')), txt(` ${label}`)], [dim(value), sp(1)], 5)));
       }
     });
+    if (note) {
+      const shown = textWidth(note) <= kit.u - 9 ? note : note.replace(/\s*\(.*\)\s*$/, ''); // the parenthesis goes before a word is cut
+      lines.push(plain(row([dim(`${g('└', '+')} ${fitText(shown, Math.max(4, kit.u - 9))}`)], [], 5)));
+    }
   }
   return { lines, order: giveWay(order) };
 }
@@ -157,11 +183,7 @@ function teamPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>): Part {
   const secs = h.upSecs ?? a.leadSecs; // the lead's clock is the session's (spec 2.10: `up` from the session start)
   lines.push(plain(row([txt(g('◉', '@')), txt(' lead'), ...(h.branch ? [dim(` · ${h.branch}`)] : [])], secs !== undefined ? [dim(elapsedClock(secs))] : [])));
   if (!ws.length) {
-    lines.push(
-      plain(kit.blank), plain(row([txt(`team ${team ?? 'off'} · 0 workers`)])), plain(kit.blank),
-      ...skeleton(kit, ['worker', 'state'], [['w1', 'queued'], ['w2', 'queued']]).map(plain),
-      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
-    );
+    lines.push(plain(row([txt(`team ${team ?? 'off'} · 0 workers`)])), ...lastRunRow(a, kit).map(plain));
     return { lines, order: [] };
   }
   const order: { key: string; done: boolean }[] = [];
@@ -188,11 +210,10 @@ function boardPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>): Part {
   const done = items.filter((t) => t.state === 'done').length;
   const lines: TabLine[] = [plain(ribbon('BOARD', items.length ? [...gauge(kit, done, items.length), dim(` ${done}/${items.length}`)] : []))];
   if (!items.length) {
-    lines.push(
-      plain(row([txt('0 items')])), plain(kit.blank),
-      ...skeleton(kit, ['item', 'owner  time'], [['T1', 'worker  0:00'], ['T2', 'worker  0:00']]).map(plain),
-      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
-    );
+    // the fact, then the hint; the hint drops to its short form (or to a row of its own) before any word is cut
+    const hint = kit.u - 4 - 9 >= textWidth('items appear here when a plan is set') ? 'items appear here when a plan is set' : 'appear when a plan is set';
+    const one = kit.u - 4 >= textWidth(`0 items · ${hint}`);
+    lines.push(...(one ? [plain(row([txt('0 items'), dim(` · ${hint}`)]))] : [plain(row([txt('0 items')])), plain(row([dim(hint)]))]), ...lastRunRow(a, kit).map(plain));
     return { lines, order: [] };
   }
   const worker = (o?: string) => (o ? a.workers.find((w) => w.name === o) : undefined);
@@ -233,11 +254,7 @@ function chatPart(a: TabIn, kit: Kit, take: number): Part {
   const n = a.notes.length;
   const lines: TabLine[] = [plain(ribbon('CHAT', metaText(`${name}${n ? ` · ${n} ${n === 1 ? 'note' : 'notes'}` : ''}`)))];
   if (!n) {
-    lines.push(
-      plain(row([txt(`0 notes · ${a.people} ${a.people === 1 ? 'member' : 'members'}`)])), plain(kit.blank),
-      ...skeleton(kit, ['time   from', 'note'], [['--:--  lead', '········'], ['--:--  worker', '········']], ' ').map(plain),
-      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
-    );
+    lines.push(plain(row([txt('no notes yet'), dim(` · ${a.people} ${a.people === 1 ? 'member' : 'members'}`)])), ...lastRunRow(a, kit).map(plain));
     return { lines, order: [] };
   }
   const shown = take > 0 ? Math.max(1, Math.min(n, Math.floor(take / 2))) : n;
@@ -270,11 +287,7 @@ function corePart(a: TabIn, kit: Kit): Part {
   const local = sum((c?.routes ?? []).filter((r) => r.transport !== 'tmux').map((r) => sum(r.seats.map((s) => s.count))));
   const lines: TabLine[] = [plain(ribbon('CORE', verdictText ? metaText(verdictText) : []))];
   if (!verdictText && !read && !tmux && !local) {
-    lines.push(
-      plain(row([txt('0 verdicts')])), plain(kit.blank),
-      ...skeleton(kit, ['check', 'figure'], [['verdicts', g('—', '-')], ['kept out', g('—', '-')], ['workers', g('—', '-')]], ' ').map(plain),
-      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
-    );
+    lines.push(plain(row([txt('no verdicts yet')])), ...lastRunRow(a, kit).map(plain));
     return { lines, order: [] };
   }
   const label = (t: string): Run => dim(t.padEnd(9));
@@ -288,7 +301,7 @@ function corePart(a: TabIn, kit: Kit): Part {
 
 // ---- the dock ------------------------------------------------------------------------------------------------------------------------------
 
-/** One tab as rows (each starts with the gutter cell): the tab's content, ACTIVITY, CONTEXT and HOOKS beneath it, the footer on the last row. */
+/** One tab as rows (each starts with the gutter cell): the tab's content, then the status tab's own ACTIVITY, CONTEXT, RUNS, HOOKS (and RECENT on a tall pane) beneath it, the footer on the last row. */
 export function tabFrame(a: TabIn): TabLine[] {
   const u = Math.max(20, a.cols - 2);
   const kit = frameKit(a.ui, u);
@@ -296,8 +309,8 @@ export function tabFrame(a: TabIn): TabLine[] {
   const prompted = promptedOf(a.kind, h);
   const chat = a.tab === 'channel';
   const feed = hookFeed(h);
-  const activity = activityRows(kit, h).map(plain);
-  const context = contextRows(kit, h).map(plain);
+  const context = statusContextRows(kit, h);
+  const runsSec = statusRunsRows(kit, h);
   const footer = footerRow(kit, h);
   const compose: TabLine = { runs: kit.chip(`${kit.g('✎', '>')} message the ${a.recipient ?? 'lead'}`, '', 'idle', textWidth(`✎ message the ${a.recipient ?? 'lead'}`) + 2), press: { kind: 'compose', key: 'compose', ...(a.recipient ? { name: a.recipient } : {}) } };
   const build = (collapse: number, take: number): Part => {
@@ -308,40 +321,58 @@ export function tabFrame(a: TabIn): TabLine[] {
     const again = a.tab === 'gates' ? gatesPart(a, kit, gone, prompted) : a.tab === 'team' ? teamPart(a, kit, gone) : boardPart(a, kit, gone);
     return { lines: again.lines, order: first.order };
   };
+  type Plan = { chart: number; hooks: number; ctx: boolean; runs: boolean; recent: number };
+  const dock = (o: Plan): Run[][][] => [
+    statusActivityRows(kit, h, o.chart),
+    ...(o.ctx && context.length ? [context] : []),
+    ...(o.runs && runsSec.length ? [runsSec] : []),
+    statusHooksRows(kit, h, o.hooks),
+    ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
+  ];
   const lead = a.lead ? 1 : 0;
   const foot = footer.length ? 1 : 0;
-  const tail = foot + BLANKS + (chat ? 2 : 0); // the footer, the blank rows above it, on chat the compose chip and one more blank
-  const hooksMin = Math.min(HOOKS_MIN, feed.length);
-  const used = (content: number, withCtx: boolean, hooks: number): number => lead + content + 1 + activity.length + 1 + (withCtx && context.length ? context.length + 1 : 0) + 1 + hooks;
+  const tail = foot + BLANKS + (chat ? 2 : 0); // the footer, a blank row above it, on chat the compose chip and one more blank
+  const dockLen = (o: Plan): number => { const d = dock(o); return sum(d.map((x) => x.length)) + d.length; }; // each section after the content costs one blank row before it
+  const used = (content: number, o: Plan): number => lead + content + dockLen(o);
+  let plan: Plan = { chart: CHART_MIN, hooks: WIRED_HOOKS.length, ctx: true, runs: true, recent: 0 };
   let part = build(0, 0);
-  let withCtx = context.length > 0;
-  let want = a.room > 0 ? feed.length : Math.min(feed.length, 5);
   if (a.room > 0) {
     const avail = a.room - tail;
+    const small: Plan = { ...plan, hooks: Math.min(HOOKS_MIN, WIRED_HOOKS.length) };
     if (chat) {
-      // Chat: the newest notes that fit; the dock keeps its context while it can.
-      const fixed = (ctx: boolean): number => used(1, ctx, hooksMin) - 1;
-      const roomFor = (ctx: boolean): number => avail - fixed(ctx) - 1;
-      part = build(0, roomFor(withCtx));
-      if (roomFor(true) < 4 && context.length) { withCtx = false; part = build(0, roomFor(false)); }
+      // Chat: the newest notes that fit; the dock keeps what it can.
+      let p = small;
+      if (avail - dockLen(p) - 3 < 4) p = { ...p, runs: false };
+      if (avail - dockLen(p) - 3 < 4) p = { ...p, ctx: false };
+      if (avail - dockLen(p) - 3 < 4) p = { ...p, hooks: 1 };
+      plan = p;
+      part = build(0, Math.max(2, avail - dockLen(p) - 2));
     } else {
       const max = part.order.length;
       let pick = -1;
       for (let k = 0; k <= max; k++) {
         const p = build(k, 0);
-        if (used(p.lines.length, true, hooksMin) <= avail) { part = p; pick = k; break; }
+        if (used(p.lines.length, small) <= avail) { part = p; pick = k; break; }
       }
+      plan = small;
       if (pick < 0) {
-        withCtx = false;
         part = build(max, 0);
-        const keep = Math.max(2, avail - used(0, false, hooksMin) - 1);
+        plan = { ...small, runs: false };
+        if (used(part.lines.length, plan) > avail) plan = { ...plan, ctx: false };
+        if (used(part.lines.length, plan) > avail) plan = { ...plan, hooks: 1 };
+        const keep = Math.max(2, avail - dockLen(plan));
         if (part.lines.length > keep) part = { lines: [...part.lines.slice(0, keep - 1), plain(kit.row([kit.dim(`+${part.lines.length - keep + 1} more`)]))], order: [] };
+      } else {
+        // spare rows: hooks to the whole table first, then the chart (to 8), the RECENT log, the chart again (to 12), RUNS back
+        const fits = (o: Plan): boolean => used(part.lines.length, o) <= avail;
+        while (plan.hooks < WIRED_HOOKS.length && fits({ ...plan, hooks: plan.hooks + 1 })) plan = { ...plan, hooks: plan.hooks + 1 };
+        while (plan.chart < CHART_SPEC_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
+        while (plan.recent < feed.length && fits({ ...plan, recent: plan.recent + 1 })) plan = { ...plan, recent: plan.recent + 1 };
+        while (plan.chart < CHART_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
       }
     }
-    want = Math.max(0, Math.min(feed.length, avail - used(part.lines.length, withCtx, 0)));
-    if (feed.length > 0 && want < hooksMin && used(part.lines.length, withCtx, hooksMin) <= avail) want = hooksMin;
   }
-  const sections: TabLine[][] = [part.lines, activity, ...(withCtx && context.length ? [context] : []), hooksRows(kit, h, feed, want).map(plain)];
+  const sections: TabLine[][] = [part.lines, ...dock(plan).map((d) => d.map(plain))];
   const body: TabLine[] = [...(a.lead ? [plain(kit.blank)] : []), ...sections.flatMap((s, i) => [...s, ...(i < sections.length - 1 ? [plain(kit.blank)] : [])])];
   if (a.room > 0) {
     const cap = a.room - foot - (chat ? 1 : 0);

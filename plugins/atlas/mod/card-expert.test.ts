@@ -34,14 +34,14 @@ describe('card: a flat ribbon, every row exactly cols wide', () => {
       const rows = rowsText(card(health(), cols, BUSY));
       for (const r of rows) expect(textWidth(r), r).toBe(cols);
       expect(rows.join('\n')).not.toMatch(/[╭╮╰╯]/);
-      expect(rows[0]).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/); // frame spec section 6: a fixed title, the same ribbon the pane has
+      expect(rows[0]!.trimEnd()).toMatch(/^ +▾ HEALTH +─+$/); // X4: one `▾ HEALTH` chip and a rule; the pill is the band's, right under the card
       expect(rows[0]).not.toContain('hide');
     });
   }
   test('the card title is its own toggle (round W M): `▾ HEALTH` closes it, as does the band\'s `▾ health` chip; no other run is pressable', () => {
     const p = card(health(), 100, BUSY).flat().filter((x) => x.press !== undefined);
     expect(new Set(p.map((x) => x.press))).toEqual(new Set(['band:health']));
-    expect(p.map((x) => x.t.trim()).sort()).toEqual(['HEALTH', '▾']);
+    expect(p.map((x) => x.t.trim())).toEqual(['▾ HEALTH']);
   });
 });
 
@@ -61,17 +61,17 @@ describe('card: team is its own item, never a note or a suffix', () => {
 });
 
 describe('gates: one vocabulary', () => {
-  test('a gate that fired is `● name  pass  deny` (columns under `ok fail`); a gate that never fired is `○ name  armed`', () => {
-    const lines = rowsText(card(health(), 110, BUSY)).join('\n').match(/[●○] \w+ +(?:\d+ +\d+|armed|\d+ armed)(?= |$)/gm) ?? [];
-    expect(lines.map((l) => l.replace(/ +/g, ' '))).toEqual(['● completion 1 0', '● tripwire 2 0', '● routing 8 0', '○ header armed']);
+  test('a gate that fired is `● name  pass  deny` (columns under `ok fail`); a gate that never fired is a dim `○ name  0  0  —`', () => {
+    const lines = rowsText(card(health(), 110, BUSY)).join('\n').match(/[●○] \w+ +\d+ +\d+ +(?:\d+[smh]|—)(?= |$)/gm) ?? [];
+    expect(lines.map((l) => l.replace(/ +/g, ' ').split(' ').slice(0, 4).join(' '))).toEqual(['● completion 1 0', '● tripwire 2 0', '● routing 8 0', '○ header 0 0']);
     expect(health().gates.checks.map((c) => gateOf(c, ui).tone)).toEqual(['ok', 'ok', 'ok', 'sub']);
     const g = healthRows({ ...health(), pulse: BUSY }, ui, { recent: true }).find((r) => r.id === 'gates')!;
     for (const d of g.detail.filter((x) => !x.startsWith(' '))) expect(d).toMatch(/[●○] \w+ (?:\d+ pass · \d+ deny|not fired)/);
     expect(gateLine('header', 0, 0).tone).toBe('sub');
   });
-  test('no gate ratio: the ribbon names the columns (`checks   ok fail`)', () => {
+  test('no gate ratio: the ribbon names the columns (`pass deny last`, the status tab columns)', () => {
     const t = rowsText(card(health(), 110, BUSY)).join('\n');
-    expect(t).toContain('checks   ok fail');
+    expect(t).toContain('pass deny last');
     expect(t).not.toMatch(/\d+\/\d+ green|checks? pass|\d+\/\d+ gates/);
     expect(gatesTotal([{ pass: 11, total: 11 }, { pass: 0, total: 0 }])).toMatchObject({ text: 'ok', pass: 11, total: 11, fired: 1, notFired: 1 });
   });
@@ -87,9 +87,8 @@ describe('gates: one vocabulary', () => {
 describe('pulse rows', () => {
   test('events: the chart, `N ev` and the peak; context: the gauge, `6%`, `64k of 1M`; the cost stays on the pane\'s footer', () => {
     const rows = rowsText(card(health(), 110, BUSY));
-    expect(rows.find((r) => /^ {5}0└5m─+now/.test(r))).toBeDefined(); // the chart's axis under the bars
-    expect(rows.find((r) => r.includes('── ACTIVITY'))).toContain('hook events · 5 min');
-    expect(rows.join('\n')).toMatch(/\b8 ev\b/);
+    expect(rows.find((r) => /^ {8}-5m .*-2\.5m .*now/.test(r))).toBeDefined(); // the chart's axis under the bars
+    expect(rows.find((r) => r.includes('── ACTIVITY'))).toMatch(/\b8 ev · peak \d+\/15s/);
     const cx = rows.join('\n');
     expect(cx).toMatch(/▰[▰▱]{11} 6%/);
     expect(cx).toContain('64k of 1M');
@@ -97,7 +96,7 @@ describe('pulse rows', () => {
   });
   test('an empty pulse is a flat baseline and `0 ev`, never `none yet` or an invented number', () => {
     const rows = rowsText(card(health({ ctxPct: undefined, tokens: undefined, window: undefined }), 110, IDLE));
-    expect(rows.find((r) => /^ {5}0└5m─+now/.test(r))).toBeDefined();
+    expect(rows.find((r) => /^ {8}-5m .*-2\.5m .*now/.test(r))).toBeDefined();
     expect(rows.join('\n')).toMatch(/\b0 ev\b/);
     expect(rows.join('\n')).not.toContain('none yet');
     expect(rows.join('\n')).not.toMatch(/cost|\$/);
@@ -107,8 +106,8 @@ describe('pulse rows', () => {
   });
   test('runs: a bar per run (newest right), the count, the median and the longest', () => {
     const t = rowsText(card(health(), 110, BUSY)).join('\n');
-    expect(t).toMatch(/── RUNS [─ ]*2 runs/);
-    expect(t).toMatch(/[▁-█]+ +med 0:\d\d · max 0:\d\d · 1 failed/);
+    expect(t).toMatch(/── RUNS /);
+    expect(t).toMatch(/[▁-█]+ +2 runs · med 0:\d\d · max 0:\d\d · 1 failed/);
   });
 });
 

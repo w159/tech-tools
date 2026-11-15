@@ -55,7 +55,7 @@ describe('(a) the band is one row of a fixed order; the head and the cap always 
       if (panel) expect(ids).not.toContain('health');
       else if (cols >= 80) expect(ids.at(-1)).toBe('health');
       expect(row).toContain('◖ ◆ ATLAS ◗ ');
-      expect(row).toMatch(kind === 'idle' ? /◌ idle up/ : kind === 'working' ? /[◐◓◑◒] implement/ : /● done/);
+      expect(row).toMatch(kind === 'idle' ? (panel && cols <= 60 ? /◌ idle (up [\d:]+ )?│/ : /◌ idle up/) : kind === 'working' ? /[◐◓◑◒] implement/ : /● done/);
     });
   }
   test('the wide band reads like the frame spec', () => {
@@ -109,10 +109,11 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
     expect(new Set(f.map((x) => x.hex)).size).toBeGreaterThanOrEqual(12);
     expect(frames(false, ui, envOk)).toEqual([]);
   });
-  test('256 colours: four stable xterm indices', () => {
+  test('256 colours: eight stable xterm violets, at least six distinct in one breath', () => {
     const f = frames(true, { ...ui, color: '256' }, envOk);
     const hexes = new Set(f.map((x) => x.hex));
-    expect(hexes.size).toBe(4);
+    expect(hexes.size).toBe(8);
+    expect(hexes.size).toBeGreaterThanOrEqual(6);
     expect([...hexes].sort()).toEqual(IDLE_RAMP_256.map(xtermHex).sort());
   });
   test('TERM=dumb, NO_COLOR and reduced motion give no ramp', () => {

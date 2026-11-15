@@ -17,14 +17,14 @@ const MIDDLE = /[A-Za-z0-9]\.\.\.[A-Za-z0-9]/;
 
 describe('1: the tab strip never blanks a label', () => {
   for (const cols of [26, 30, 40, 60]) {
-    test(`at ${cols} every shown tab keeps a word, the rest sit behind \`▸ more\``, () => {
+    test(`at ${cols} every shown tab keeps a word, the rest sit behind \`more ›\``, () => {
       const rows = tabRows(model('route', cols)).map((l) => lineText(l));
       const text = rows.join('\n');
       expect(text).not.toMatch(/\b[rtcgko]: /); // the words alone (the keys stay bound by the host layer)
       const all = ['status', 'team', 'channel', 'gates', 'core', 'board'];
       const shown = all.filter((w) => text.includes(w));
       expect(shown).toEqual(all.slice(0, shown.length)); // whole words, in order, from the left
-      if (shown.length < all.length) expect(text).toContain('▸ more');
+      if (shown.length < all.length) expect(text).toContain('more ›');
       expect(shown.length).toBeGreaterThanOrEqual(2);
       expect(text).not.toMatch(/[a-z]: {2,}/);
       expect(text).not.toMatch(/[a-z]: *$/m);

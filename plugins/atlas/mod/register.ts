@@ -68,9 +68,13 @@ const PANE_BOARD = { id: BOARD_ID, title: 'Board', rows: 14, closeOnEscape: true
 export const STOP_SETTLE_MS = FRAME_MS + 40;
 const TICK_MS = 250; // the slow tick: gauges, motion and the Stop verdict (the spinner has its own beat, FRAME_MS in band-motion.ts, and waits for none of this)
 const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
-// K: one rule at every width. The pane never opens by itself at rest (the engine places an unasked pane only from 144 columns, so a rest-time open would show at 150 and not at 110): it opens when the first prompt of a run is sent,
-// where an open is "asked" and the engine docks it beside a fullscreen transcript from 110 columns.
+// X5: idle is never empty. The pane is opened at rest at every width: the engine places an unasked pane from 144 columns, an open behind the person's prompt (asked) from 110, so the rest-time open asks for it
+// at every width (it draws at once from 144) and the first prompt asks again (it docks from 110). One rule, one pane, the status tab first.
 const DOCK_ASKED_MIN_COLUMNS = 110;
+const DOCK_MIN_COLUMNS = 144; // the engine places an unasked pane only from 144 columns (UiOpenResult)
+
+/** The rest-time open: a fullscreen terminal, whatever its width (below 144 the engine keeps the pane undrawn until a prompt asks for it). */
+export const shouldDockRest = (v: { isFullscreen?: boolean; columns: number }): boolean => v.isFullscreen === true;
 
 /** The pane the first prompt of a run may open: fullscreen and at least 110 columns wide (narrower, an asked pane would sit inline above the prompt). */
 export const shouldDockAsked = (v: { isFullscreen?: boolean; columns: number } | undefined): boolean => v !== undefined && v.isFullscreen === true && v.columns >= DOCK_ASKED_MIN_COLUMNS;
@@ -169,6 +173,9 @@ let verdictSig = ''; // stat signature of stop-verdict.json at the last poll
 let gatesRunAt = -Infinity; // ms clock of the last gate run
 let pendingDrift: string[] = [];
 let lastViewport: { isFullscreen?: boolean; columns: number } | undefined; // the last viewport the band render saw: the prompt hook has none of its own
+let paneChecked = false; // the rest-time pane open is decided once per session
+let dockWanted = false; // set by the first AbovePrompt render with a viewport, acted on by dockTick (renders may not write)
+let dockedAtRest = false; // the rest-time open was placed (drawn): the first prompt need not open it again
 let promptDockDone = false; // the first prompt of the session asked for the docked pane (once)
 let paneClosedByPerson = false; // the person closed the pane by hand: no later prompt reopens it
 let modOnNow = false; // isModOn, mirrored for a hook that must open the pane before any await
@@ -597,6 +604,16 @@ async function rebuildOnce($: EngineInterface): Promise<void> {
 	}
 }
 
+/** The rest-time pane open the first render asked for, done from a tick where `$.state` writes are allowed. Below 144 columns the engine keeps it undrawn (no toast: the first prompt opens it). */
+export async function dockTick($: EngineInterface): Promise<void> {
+	if (!dockWanted) return;
+	dockWanted = false;
+	await update($, paneOpenedState, () => true);
+	const wide = (lastViewport?.columns ?? 0) >= DOCK_MIN_COLUMNS;
+	void $.ui.open(PANE_DOCK).then((r) => { dockedAtRest = r.isPlaced; if (wide) toastUnplaced($)(r); });
+	void noteUsage($, 'mod.open.dock');
+}
+
 /** Signature of what atlas_gates.py reads: the board files under <root>/.atlas/.run and the gate DB (ATLAS_DB, else
  * $ATLAS_HOME/atlas.db, else ~/.atlas/atlas.db) with its WAL, where the hooks record every check. */
 async function gatesSigOf($: EngineInterface, root: string): Promise<string> {
@@ -658,6 +675,7 @@ async function gatesPoll($: EngineInterface): Promise<void> {
 
 /** POLL_MS tick: rebuild only when the data files moved. */
 export async function rebuildTick($: EngineInterface): Promise<void> {
+	await dockTick($);
 	if (builder === null) return;
 	await gatesPoll($).catch(() => undefined);
 	const fingerprint = await dataFingerprint($);
@@ -1198,6 +1216,9 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		usageWindow = null;
 		await update($, taskAgentsState, () => []);
 		await update($, paneOpenedState, () => false);
+		paneChecked = false;
+		dockWanted = false;
+		dockedAtRest = false;
 		promptDockDone = false;
 		paneClosedByPerson = false;
 		modOnNow = modOn;
@@ -1281,7 +1302,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
  * person's prompt is asked and docks from 110). Once per session, never after a by-hand close, never below 110 or inline. `ui.open` is called before any await: only then is the prompt behind it.
  * Called from the mod's one prompt.submit hook: the host refuses a second unmatched prompt.submit hook and drops the whole mod. */
 async function dockOnPrompt($: EngineInterface): Promise<void> {
-	if (booted?.interactive === true && modOnNow && !promptDockDone && !paneClosedByPerson && shouldDockAsked(lastViewport)) {
+	if (booted?.interactive === true && modOnNow && !promptDockDone && !paneClosedByPerson && !dockedAtRest && shouldDockAsked(lastViewport)) {
 		promptDockDone = true;
 		const opened = $.ui.open(PANE_DOCK);
 		void noteUsage($, 'mod.open.dock');
@@ -1431,8 +1452,13 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// The band above the prompt: bordered section (terminal + interactive only).
 	on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
 		if (e.surface !== 'terminal' || e.props.hasSurvey || !(await read($, isModOn)) || !(await read($, isInteractive))) return next(e);
-		// The pane opens at the first prompt (dockOnPrompt), never at rest: the render only notes the viewport.
+		// X5: the pane opens at rest (dockTick) and again at the first prompt (dockOnPrompt). Drawing is pure: the engine denies a $.state write made while ui.render dispatches (the hook is then skipped and the band never
+		// draws), so the render only notes the wish; dockTick opens the pane. A terminal widened later is checked again until the open is made once; a pane the person closed stays closed.
 		lastViewport = e.viewport ? { isFullscreen: e.viewport.isFullscreen, columns: e.viewport.columns } : undefined;
+		if (!paneChecked && !paneClosedByPerson && e.viewport) {
+			dockWanted = shouldDockRest(e.viewport);
+			paneChecked = dockWanted;
+		}
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const gates = await gateGroups($);

@@ -73,7 +73,7 @@ describe('D8: one chip idiom, inert uppercase headers', () => {
     const flat = rows.map((r) => r.map((x) => x.t).join(''));
     expect(flat.join('\n')).not.toContain('hide');
     expect(new Set(rows.flat().filter((x) => x.press !== undefined).map((x) => x.press))).toEqual(new Set(['band:health'])); // round W M: the title chip is the toggle, nothing else is
-    expect(flat[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/);
+    expect(flat[0]!.trimEnd()).toMatch(/^ +▾ HEALTH +─+$/);
   });
   test('the card keeps every health row when the panel is closed', () => {
     const flat = healthCardRows(health(), { cols: 100, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
@@ -103,15 +103,15 @@ describe('D14: tabs', () => {
       expect(textWidth(lineText(row!))).toBeLessThanOrEqual(cols);
     });
   }
-  test('37 columns: trailing tabs fold into a `▸ more` chip; the folded ones are not in the first row', () => {
+  test('37 columns: trailing tabs fold into a `more ›` chip; the folded ones are not in the first row', () => {
     const [row] = rowsAt(37);
-    expect(row).toMatch(/^ status {3}team {3}channel {3}▸ more$/);
+    expect(row).toMatch(/^ status {3}team {3}channel {3}more ›$/);
     expect(row).not.toMatch(/gates|core|board/);
-    const chip = tabRows(world(37, 40))[0]!.runs.find((x) => x.t === ' ▸ more ')!;
+    const chip = tabRows(world(37, 40))[0]!.runs.find((x) => x.t === ' more › ')!;
     expect(chip.press).toBe('tabs:more');
     expect(chip.hover).toBe(true);
   });
-  test('`▸ more` swaps the visible set in place for the folded tabs, `‹ back` swaps it back', () => {
+  test('`more ›` swaps the visible set in place for the folded tabs, `‹ back` swaps it back', () => {
     const open = rowsAt(37, 'tabs:more');
     expect(open).toHaveLength(1);
     expect(open[0]).toMatch(/^ gates {3}core {3}board {3}‹ back$/);
@@ -127,7 +127,7 @@ describe('D14: tabs', () => {
       expect(r).toContain(`◖ ◆ ATLAS ◗ ▸ SIDEPANEL · ${label}`);
     }
   });
-  test('the drawn pane: tab Buttons are the ` label ` chips, `▸ more` is a Button that toggles tabs:more, a folded tab has no Button', () => {
+  test('the drawn pane: tab Buttons are the ` label ` chips, `more ›` is a Button that toggles tabs:more, a folded tab has no Button', () => {
     const calls: string[] = [];
     const h: SidebarHandlers = { ...on, toggle: (k) => calls.push(`toggle:${k}`), setView: (v) => calls.push(`view:${v}`) };
     const m: SidebarModel = { ...goldenModel('route'), columns: 38, rows: 40 };
@@ -137,7 +137,7 @@ describe('D14: tabs', () => {
     expect(keys).not.toContain('tab:gates');
     expect(keys).toContain('tab:channel');
     const more = all(tree).find((n) => n.kind === 'Button' && n.props.key === 'tab:more')!;
-    expect(textOf(more)).toBe(' ▸ more ');
+    expect(textOf(more)).toBe(' more › ');
     more.props.onPress();
     expect(calls).toEqual(['toggle:tabs:more']);
     const opened = sidebarTree(els, { ...m, ui: { ...m.ui, expanded: 'tabs:more' } }, h);
@@ -153,11 +153,11 @@ describe('D14: tabs', () => {
 
 describe('D14: each tab owns the full body', () => {
   for (const tab of ['team', 'channel', 'gates', 'core'] as PanelTab[]) {
-    test(`${tab}: no ACTIVITY, CONTEXT or RECENT from the status dashboard`, () => {
+    test(`${tab}: no PULSE or HEALTH block; the dock under it is the status tab's own sections (round X)`, () => {
       const m = { ...world(54, 40, 'idle'), tab, lead: { name: 'lead', state: 'running' as const, detail: '' } };
       const t = [...headerRows(m), ...bodyLines(m)].map((l) => lineText(l)).join('\n');
-      expect(t).not.toMatch(/\b(PULSE|HEALTH|RECENT)\b/);
-      expect(t).not.toMatch(/\b(pulse|health|recent)\b/);
+      expect(t).not.toMatch(/\b(PULSE|HEALTH)\b/);
+      expect(t).not.toMatch(/\b(pulse|health)\b/);
       expect(t).toContain(FOOT); // round 3 (E6): the footer is the last row of every tab
     });
   }

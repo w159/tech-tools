@@ -23,7 +23,7 @@ export { stripRows };
 function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, ui: Ui): RenderElement[] {
   const bg = panelBg(ui);
   const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
-  const f = stripLayout(inner, m.ui.view); // every tab as a ` label ` chip on one row where they fit, else the leading ones and a `▸ more` chip (mod/panel-layout.ts)
+  const f = stripLayout(inner, m.ui.view); // every tab as a ` label ` chip on one row where they fit, else the leading ones and a `more ›` chip (mod/panel-layout.ts)
   const open = m.ui.expanded === MORE_KEY;
   const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
   const tile = chipStyle(ui);
@@ -41,7 +41,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
   const tabEl = (it: StripTab): RenderElement => chip(it.label, keyOf(it), it.id === m.ui.view, pressOf(it));
   const row = (key: string, kids: RenderElement[]): RenderElement => els.Box({ key, flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: kids.flatMap((k, i) => (i ? [gap(f.gap), k] : [k])) });
   const more = f.more ? [chip(moreWord(false, ui), 'tab:more', f.folded.some((it) => it.id === m.ui.view), () => on.toggle(MORE_KEY))] : [];
-  // One row always (round 3, E8): `▸ more` swaps the visible set for the folded tabs, which end in a `‹ back` chip.
+  // One row always (round 3, E8): `more ›` swaps the visible set for the folded tabs, which end in a `‹ back` chip.
   const rows = [row('tabs', f.more && open ? [...f.folded.map(tabEl), chip(backWord(ui), 'tab:back', false, () => on.toggle(MORE_KEY))] : [...f.rows[0]!.map(tabEl), ...more])];
   return rows; // no rule under the lit chip: it is the filled one
 }

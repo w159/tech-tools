@@ -68,7 +68,7 @@ describe('2: the expanded card says each gate in the one vocabulary, never a sec
     expect(t).not.toMatch(/session\s+up /);
   });
   test('each gate is one row of the GATES section: `● name  ok fail` once it fired, `○ name  n armed` before', () => {
-    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`[●○] ${id} +(?:3 +0|3 armed)`).test(l)), id).toBe(true);
+    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`[●○] ${id} +(?:3 +0 +\\S+|0 +0 +—)`).test(l)), id).toBe(true);
     expect(card.join('\n')).not.toContain('Last Stop allowed'); // round 3 (E11): the card's GATES column holds the rows and their numbers; a gate's note stays on the panel
   });
 });
@@ -205,7 +205,7 @@ describe('12: the open card is one even block, spaced like the TODO box', () => 
     expect(w[0]).toBe(110);
   });
   test('the title is the fixed `HEALTH` label of the ribbon, a toggle itself (the band chip closes the card too)', () => {
-    const title = rows[0]!.find((x) => x.t.trim() === 'HEALTH')!;
+    const title = rows[0]!.find((x) => x.t.includes('HEALTH'))!; // X4: one chip, `▾ HEALTH`
     expect(title).toBeDefined();
     expect(title.bold).toBe(true);
     expect(title.press).toBe('band:health'); // round W M: the title is the toggle
@@ -213,7 +213,7 @@ describe('12: the open card is one even block, spaced like the TODO box', () => 
   test('the slot leaves the blank row under the band a HUD block has', () => {
     const card = padRows(healthCardRows(h, { cols: 110, ui }), 110).map((r) => r.map((x) => ({ t: x.t })));
     const hudIn = { todos: [], agents: [], root: '/tmp/proj', phases: { ids: ['plan'], active: 0 } };
-    const plan = composeSlot({ budget: 20, hasSlot: true, hudOn: true, runOn: false, columns: 110, hudIn, hudView: { cols: 110, tick: 0, ui }, running: false, agentsListed: false, orchestrated: false, now: NOW, bandIn: (_r: unknown, maxRows: number | undefined) => model(110, { maxRows: maxRows ?? 12 }), held: 0, healthCard: card } as never);
+    const plan = composeSlot({ budget: 40, hasSlot: true, hudOn: true, runOn: false, columns: 110, hudIn, hudView: { cols: 110, tick: 0, ui }, running: false, agentsListed: false, orchestrated: false, now: NOW, bandIn: (_r: unknown, maxRows: number | undefined) => model(110, { maxRows: maxRows ?? 12 }), held: 0, healthCard: card } as never);
     expect(plan.hud.length).toBe(card.length);
     expect(plan.gap).toBe(1);
   });

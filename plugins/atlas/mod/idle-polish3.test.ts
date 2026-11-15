@@ -71,7 +71,7 @@ describe('8: the HEALTH card has one row schema at both widths', () => {
     const t = text(150, true).join('\n');
     expect(t).not.toMatch(/\d+\/\d+ pass|\d+\/\d+ gates/);
     expect(t).not.toContain('Team mode');
-    expect(t).toMatch(/[●○] tripwire +(?:3 +0|3 armed)/);
+    expect(t).toMatch(/[●○] tripwire +(?:3 +0 +\S+|0 +0 +—)/);
   });
 });
 

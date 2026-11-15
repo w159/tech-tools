@@ -60,7 +60,7 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   const k = bandLook(ui);
   const ascii = ui.ascii;
   const capW = a.cap.reduce((n, x) => n + textWidth(x.t), 0);
-  // The wordmark pill (H, L): the `◖ ◗` caps sit on the band's own fill (no notch), and at rest the pill's background breathes (2.4 s, 13 tones in truecolor, 4 in 256 colours, none without colour or with reduced motion).
+  // The wordmark pill (H, L): the `◖ ◗` caps sit on the band's own fill (no notch), and at rest the pill's background breathes (2.4 s, 13 tones in truecolor, 8 in 256 colours, none without colour or with reduced motion).
   const breath = a.kind === 'idle' && !ascii ? idleRamp(a.clockMs, ui, undefined, a.still).hex : undefined;
   const cap: Run[] = ui.color === 'none' || ascii ? a.cap : a.cap.map((x): Run => {
     if (x.t === '◖' || x.t === '◗') return { ...x, bgHex: k.fill, ...(breath ? { fg: breath } : {}) };
@@ -75,9 +75,28 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   const pad = (n: number): Run[] => (n > 0 ? [on(' '.repeat(n), k.text)] : []);
   const join = (): Run[] => [on(' ', k.text), on(ascii ? '|' : '│', k.rule, { tone: 'dim' }), on(' ', k.text)];
 
-  // ---- the state slot ----
   const detailOn = cols >= DETAIL_FROM;
   const narrow = !detailOn; // K: with the pane open at 110 the band is about 58 cells: the state slot and the gates chip keep their own width (no padding) so the spark keeps its unit
+  // ---- the gates chip ----
+  const g = gatesSummary(h);
+  const denied = g.deny > 0 || (h.gates.denied ?? 0) > 0 ? Math.max(1, Math.min(99, h.gates.denied ?? g.deny)) : 0;
+  const chip = (pieces: { t: string; fg: string; bold?: boolean }[], key: string, bg: string): Run[] => pieces.map((p, i): Run => ({ t: p.t, tone: 'accent', fg: p.fg, bgHex: bg, bold: p.bold ?? true, press: pieces.length > 1 ? `${key}#${i}` : key, hover: true }));
+  const glyph = (full: string, plain: string): string => (ascii ? plain : full);
+  // One idiom (F): the gates chip is clickable (it opens the gates tab), so it is a raised chip with a trailing ` ›`; the dot is the panel's own colour (green once checks passed, grey while armed, red on a denial).
+  const tail = glyph('›', '>');
+  const body = (text: string, fg: string, dot: { t: string; fg: string }, bg: string): Run[] => chip([{ t: ` ${dot.t} `, fg: dot.fg }, { t: (`${text} ${tail}`).padEnd(narrow ? 0 : GATES_CHIP_W - 3), fg }], BAND_GATES_KEY, bg);
+  let gates: Run[];
+  if (denied > 0) {
+    const fresh = a.kind === 'working' || h.denyAgeSecs === undefined || h.denyAgeSecs < DENY_RED_SECS;
+    gates = fresh
+      ? body(`${denied} denied`, k.alertFg, { t: glyph('■', 'x'), fg: k.alertFg }, k.alertBg)
+      : body(`${denied} denied`, k.warn, { t: glyph('■', 'x'), fg: k.warn }, k.chipBg);
+  } else if (g.fired === 0 || !promptedOf(a.kind, h)) gates = body('gates armed', k.dim, { t: glyph('○', 'o'), fg: k.dim }, k.chipBg);
+  else gates = body('gates ok', k.chipFg, { t: glyph('●', '*'), fg: k.ok }, k.chipBg);
+  const joinW = 3;
+  const gatesW = gates.reduce((n, x) => n + textWidth(x.t), 0);
+
+  // ---- the state slot ----
   const head: Run[] = [];
   if (a.kind === 'idle') {
     head.push(on(ascii ? '.' : '◌', k.dim, { tone: 'sub' }), dim(' idle'), ...(h.upSecs !== undefined ? [dim(` up ${elapsedClock(h.upSecs)}`)] : []));
@@ -98,6 +117,13 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
     return [...out, ...pad(left)];
   };
   const detailText = a.kind === 'working' ? (h.hooks?.runTool ?? '').replace(/^mcp__.*__/, '') : a.kind === 'done' && a.restSecs !== undefined ? `ended ${agoText(a.restSecs)}` : '';
+  // X5: with the pane open at 110 the band is about 57 cells: the idle uptime gives way before the spark loses its unit (state, gates chip and `ev/5m` stay)
+  const eventsAll = h.pulse?.events;
+  if (narrow && h.panel === true && a.kind === 'idle' && h.upSecs !== undefined && eventsAll) {
+    const sparkNeed = joinW + 3 + 1 + String(Math.max(0, Math.min(999, Math.round(eventsAll.slice(-RATE_BUCKETS).reduce((n, x) => n + x, 0))))).length + 6;
+    const withUp = capW + 1 + head.reduce((n, x) => n + textWidth(x.t), 0) + joinW + gatesW + sparkNeed;
+    if (withUp > cols) head.splice(2, 1);
+  }
   const headW = narrow ? Math.min(HEAD_W, head.reduce((n, x) => n + textWidth(x.t), 0)) : HEAD_W;
   const state: Run[] = [...fitHead(head, headW), ...(detailOn ? [...pad(1), ...fitHead(detailText ? [dim(detailText)] : [], DETAIL_W)] : [])];
   const used0 = capW + 1 + (detailOn ? HEAD_W + 1 + DETAIL_W : headW);
@@ -107,24 +133,6 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   const out: Run[] = [...lead];
   let w = used0;
 
-  // ---- the gates chip ----
-  const g = gatesSummary(h);
-  const denied = g.deny > 0 || (h.gates.denied ?? 0) > 0 ? Math.max(1, Math.min(99, h.gates.denied ?? g.deny)) : 0;
-  const chip = (pieces: { t: string; fg: string; bold?: boolean }[], key: string, bg: string): Run[] => pieces.map((p, i): Run => ({ t: p.t, tone: 'accent', fg: p.fg, bgHex: bg, bold: p.bold ?? true, press: pieces.length > 1 ? `${key}#${i}` : key, hover: true }));
-  const glyph = (full: string, plain: string): string => (ascii ? plain : full);
-  // One idiom (F): the gates chip is clickable (it opens the gates tab), so it is a raised chip with a trailing ` ›`; the dot is the panel's own colour (green once checks passed, grey while armed, red on a denial).
-  const tail = glyph('›', '>');
-  const body = (text: string, fg: string, dot: { t: string; fg: string }, bg: string): Run[] => chip([{ t: ` ${dot.t} `, fg: dot.fg }, { t: (`${text} ${tail}`).padEnd(narrow ? 0 : GATES_CHIP_W - 3), fg }], BAND_GATES_KEY, bg);
-  let gates: Run[];
-  if (denied > 0) {
-    const fresh = a.kind === 'working' || h.denyAgeSecs === undefined || h.denyAgeSecs < DENY_RED_SECS;
-    gates = fresh
-      ? body(`${denied} denied`, k.alertFg, { t: glyph('■', 'x'), fg: k.alertFg }, k.alertBg)
-      : body(`${denied} denied`, k.warn, { t: glyph('■', 'x'), fg: k.warn }, k.chipBg);
-  } else if (g.fired === 0 || !promptedOf(a.kind, h)) gates = body('gates armed', k.dim, { t: glyph('○', 'o'), fg: k.dim }, k.chipBg);
-  else gates = body('gates ok', k.chipFg, { t: glyph('●', '*'), fg: k.ok }, k.chipBg);
-  const joinW = 3;
-  const gatesW = gates.reduce((n, x) => n + textWidth(x.t), 0);
   if (w + joinW + gatesW <= cols) { out.push(...join(), ...gates); w += joinW + gatesW; }
 
   // ---- the events spark and rate, or the bare count ----
@@ -135,7 +143,7 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
     const n = events.slice(-RATE_BUCKETS).reduce((s, x) => s + x, 0);
     const sparkMax = cols >= 120 ? 20 : cols >= 110 ? 10 : 5;
     const countText = narrow ? String(Math.max(0, Math.min(999, Math.round(n)))) : pad3(n);
-    const room = cols - chipRoom - w;
+    const room = cols - (healthChip ? chipRoom : 0) - w; // X5: with the pane open the health chip is not drawn, so its cells are the spark's
     const sparkW = [sparkMax, 3].find((sw) => sw <= sparkMax && joinW + sw + 1 + textWidth(countText) + 6 <= room);
     if (sparkW !== undefined) {
       const vals = events.slice(-sparkW);

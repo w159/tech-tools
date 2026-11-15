@@ -1,5 +1,5 @@
 // Round 3 panel and card rules (spec-r3 E1-E9, E11, E12): the status view is an instrument (a focal ACTIVITY chart with axes, context trend, run bars, ribbon headers on one grid), fills its height with a pinned footer,
-// uses one control idiom (carets on expandable rows only, one row of tabs, `▸ more` swapping the set in place), keeps one stepper form at every width, empty tabs are skeletons, and the card is a capped two-column layout.
+// uses one control idiom (carets on expandable rows only, one row of tabs, `more ›` swapping the set in place), keeps one stepper form at every width, empty tabs are skeletons, and the card is a capped two-column layout.
 import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv, type Ui } from './atlas-ui';
 import { healthCardRows } from './hud-surface';
@@ -72,10 +72,10 @@ describe('E8: carets, tabs and the gates tab', () => {
     expect(fixable.trimStart().slice(0, 4)).toBe('└ ■ ');
     expect(t.some((l) => l.includes('fix: run it'))).toBe(true);
   });
-  test('tabs are one row at 47 columns: `▸ more` swaps the set in place and the second set ends in `‹ back`', () => {
+  test('tabs are one row at 47 columns: `more ›` swaps the set in place and the second set ends in `‹ back`', () => {
     const closed = tabRows(world(46, 40));
     expect(closed).toHaveLength(1);
-    expect(lineText(closed[0]!).trimEnd()).toMatch(/^ status {3}team {3}channel {3}gates {3}▸ more$/);
+    expect(lineText(closed[0]!).trimEnd()).toMatch(/^ status {3}team {3}channel {3}gates {3}more ›$/);
     const open = tabRows({ ...world(46, 40), expanded: MORE_KEY });
     expect(open).toHaveLength(1);
     expect(lineText(open[0]!).trimEnd()).toMatch(/^ core {3}board {3}‹ back$/);
@@ -91,7 +91,7 @@ describe('E9: the stepper has one form at every width', () => {
 
 describe('E12: a tab with nothing to show is a ribbon, one sentence, one measured fact and the footer (frame spec 2.5), never one centred line', () => {
   const empty = { workers: [], notes: [], gates: [], todos: [], core: null, lead: undefined } as Partial<PanelModel>;
-  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['team off · 0 workers', 'worker']], ['channel', /── CHAT ─+/, ['0 notes', 'time   from']], ['gates', /── GATES ─+/, ['armed']], ['core', /── CORE ─+/, ['0 verdicts', 'check']]];
+  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['team off · 0 workers']], ['channel', /── CHAT ─+/, ['no notes yet']], ['gates', /── GATES ─+/, ['pass deny last']], ['core', /── CORE ─+/, ['no verdicts yet']]];
   for (const [tab, ribbon, words] of cases) for (const cols of [54, 37]) {
     test(`${tab} at ${cols} columns`, () => {
       const m = world(cols, 40, 'idle', { ...empty, health: health({ team: 'off' }) }, tab);
@@ -105,33 +105,38 @@ describe('E12: a tab with nothing to show is a ribbon, one sentence, one measure
   }
 });
 
-describe('E11: the card is three columns from 142, two from 97 and one below (frame spec section 6)', () => {
+describe('E11/X4: the card is two equal columns from 120 and one below (round X)', () => {
   const flat = (cols: number): string[] => healthCardRows(health(), { cols, ui }).map((r) => r.map((x) => x.t).join(''));
-  test('no row is wider than the terminal; the ribbon runs to the last cell', () => {
-    for (const cols of [150, 110, 96, 80]) for (const l of flat(cols)) expect(textWidth(l)).toBe(cols);
-    expect(flat(150)[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─{80,}$/);
-    expect(textWidth(flat(150)[0]!.trimEnd())).toBe(150);
+  test('no row is wider than the terminal; the title chip is followed by a rule to the last cell', () => {
+    for (const cols of [150, 120, 110, 96, 80]) for (const l of flat(cols)) expect(textWidth(l)).toBe(cols);
+    expect(flat(150)[0]!.trimEnd()).toMatch(/^ +▾ HEALTH +─{80,}$/);
+    expect(textWidth(flat(150)[0]!.trimEnd())).toBe(149);
+    expect(flat(150)[0]).not.toContain('ATLAS'); // the band right under it carries the pill
   });
-  test('150 columns: ACTIVITY and CONTEXT on the left, GATES and RUNS in the middle, HOOKS on the right, side by side', () => {
+  test('150 columns: two equal columns, a 3-cell gutter; ACTIVITY and GATES start on one row, CONTEXT and HOOKS on one row', () => {
     const t = flat(150);
     const row = t.find((l) => l.includes('ACTIVITY'))!;
-    expect([row.indexOf('ACTIVITY'), row.indexOf('GATES'), row.indexOf('HOOKS')]).toEqual([4, 52, 100]);
-    expect(t.find((l) => l.includes('── RUNS'))!.indexOf('RUNS')).toBe(52);
-    expect(t.find((l) => l.includes('── CONTEXT'))!.indexOf('CONTEXT')).toBeLessThan(49);
+    expect(row).toContain('GATES');
+    const u = Math.floor((150 - 4) / 2) - 1;
+    expect(row.indexOf('GATES') - row.indexOf('ACTIVITY')).toBe(u + 1 + 3);
+    expect(t.findIndex((l) => l.includes('── ACTIVITY'))).toBe(t.findIndex((l) => l.includes('── GATES')));
+    const second = t.find((l) => l.includes('── CONTEXT'))!;
+    expect(second).toContain('── HOOKS');
+    expect(t.indexOf(second)).toBe(t.findIndex((l) => l.includes('── HOOKS')));
     for (const word of ['completion', 'tripwire', 'routing', 'header', '2 runs', '64k of 1M']) expect(t.join('\n')).toContain(word);
   });
-  test('80 columns: one column, the sections stacked, each on its own rows', () => {
-    const t = flat(80);
-    for (const l of t) expect([['ACTIVITY', 'GATES'], ['CONTEXT', 'RUNS'], ['ACTIVITY', 'CONTEXT']].some(([a, b]) => l.includes(a!) && l.includes(b!))).toBe(false);
-    const at = ['ACTIVITY', 'CONTEXT', 'RUNS', 'GATES'].map((h) => t.findIndex((l) => l.includes(`── ${h}`)));
+  test('110 columns: one column, the sections stacked, each on its own rows', () => {
+    const t = flat(110);
+    for (const l of t) expect([['ACTIVITY', 'GATES'], ['CONTEXT', 'RUNS'], ['ACTIVITY', 'CONTEXT'], ['HOOKS', 'GATES']].some(([a, b]) => l.includes(a!) && l.includes(b!))).toBe(false);
+    const at = ['ACTIVITY', 'CONTEXT', 'RUNS', 'GATES', 'HOOKS'].map((h) => t.findIndex((l) => l.includes(`── ${h}`)));
     expect(at.every((i) => i > 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
-  test('the card title is the toggle (round W M): only the ▾ and HEALTH runs carry the card key; no other run carries a press', () => {
+  test('the card title is the toggle (round W M): the one `▾ HEALTH` chip carries the card key; no other run carries a press', () => {
     const pressed = healthCardRows(health(), { cols: 150, ui }).flat().filter((x) => x.press !== undefined);
-    expect(pressed.length).toBeGreaterThan(0);
-    expect(new Set(pressed.map((x) => x.press))).toEqual(new Set(['band:health']));
-    expect(pressed.map((x) => x.t.trim()).sort()).toEqual(['HEALTH', '▾']);
+    expect(pressed).toHaveLength(1);
+    expect(pressed[0]!.press).toBe('band:health');
+    expect(pressed[0]!.t.trim()).toBe('▾ HEALTH');
   });
   test('no `none yet`, no gate ratio', () => {
     for (const cols of [150, 80]) expect(flat(cols).join('\n')).not.toMatch(/none yet|\b\d+\/\d+\b/);

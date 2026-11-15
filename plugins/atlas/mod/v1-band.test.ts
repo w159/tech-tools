@@ -110,9 +110,9 @@ describe('B1: 150, pane open, idle: the heartbeat ramps ◌ ◎ ◌ ◌ and the 
 });
 
 describe('B2: 110, pane open, idle', () => {
-  test('the 5-cell spark is replaced by the bare count', () => {
+  test('X5: the idle uptime gives way so the state, the gates chip and the spark with its unit all stay', () => {
     const got = row({ kind: 'idle', cols: 55, panel: true, gates: GATES_ARMED as never[], health: { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle up 0:41 │  ○ gates armed ›           [-]'));
+    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle │  ○ gates armed › │ ▁▁▁▂▁ 1 ev/5m   [-]'));
     expect(textWidth(got)).toBe(55);
   });
 });
@@ -126,7 +126,7 @@ describe('B3 and B4: working', () => {
     expect(row({ kind: 'working', cols: 89, panel: true, tick: 1, ctx: 6, health: h })).toBe(frame(f2));
   });
   test('B4 110 pane open', () => {
-    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ● gates ok ›                  [-]'));
+    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ● gates ok › │ ▅▃▁▂█ 15 ev/5m [-]'));
   });
   test('the head names the contract phase out of six, not the five-step rail', () => {
     expect(row({ kind: 'working', cols: 89, panel: true, phase: 'implement', health: h })).toContain('◐ implement 5/6');
@@ -146,7 +146,7 @@ describe('B5 and B6: done', () => {
     expect(row({ kind: 'done', cols: 89, panel: true, rest: 13, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 13s  │  ● gates ok ›    │ ▁▂▂█▇  26 ev/5m             [-]'));
   });
   test('B6 110 pane open', () => {
-    expect(row({ kind: 'done', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6 │  ● gates ok ›                  [-]'));
+    expect(row({ kind: 'done', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6 │  ● gates ok › │ ▁▂▂█▇ 26 ev/5m [-]'));
   });
   test('only the done glyph is ok green', () => {
     const rs = bandRuns(model({ kind: 'done', cols: 89, panel: true, ctx: 6, health: h }), true);
@@ -168,7 +168,7 @@ describe('B7 and B8: gate denial', () => {
     expect(row({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Grep       │  ■ 2 denied ›    │ ▅▃▁▂█  15 ev/5m             [-]'));
   });
   test('B8 110 pane open', () => {
-    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ■ 2 denied ›                  [-]'));
+    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ■ 2 denied › │ ▅▃▁▂█ 15 ev/5m [-]'));
   });
   test('the denial chip is an alert chip (bg 52, fg 210) while the run works', () => {
     const rs = bandRuns(model({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h }), true);

@@ -162,12 +162,12 @@ export const IDLE_PHASES = IDLE_TOP * 2;
 export const idlePhase = (nowMs: number): number => ((Math.floor(nowMs / IDLE_STEP_MS) % IDLE_PHASES) + IDLE_PHASES) % IDLE_PHASES;
 /** Tone level 0..IDLE_TOP of a phase. */
 export const idleLevel = (phase: number): number => (phase <= IDLE_TOP ? phase : IDLE_PHASES - phase);
-/** The 256-colour pill ramp: four xterm indices (band.tsx PINNED_256 hands the host their pre-images, so each lands exactly). */
-export const IDLE_RAMP_256: readonly number[] = [97, 98, 135, 141];
+/** The 256-colour pill ramp: eight xterm violets from dark to light (band.tsx PINNED_256 hands the host their pre-images, so each lands exactly): the breath shows at least six distinct fills. */
+export const IDLE_RAMP_256: readonly number[] = [54, 55, 91, 97, 135, 141, 177, 183];
 /** The dim end of the breath in truecolor (xterm 97); the bright end is the accent. */
 export const PILL_DIM_HEX = xtermHex(97);
 const lerpHex = (a: string, b: string, t: number): string => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) + (parseInt(b.slice(i, i + 2), 16) - parseInt(a.slice(i, i + 2), 16)) * t).toString(16).padStart(2, '0')).join('');
-/** The breathing pill fill at `nowMs`: `hex` is the pill's background (dim violet rising to the accent), absent when nothing may move (NO_COLOR, reduced motion, TERM=dumb). 13 truecolor steps, 4 indices in 256 colours. */
+/** The breathing pill fill at `nowMs`: `hex` is the pill's background (dim violet rising to the accent), absent when nothing may move (NO_COLOR, reduced motion, TERM=dumb). 13 truecolor steps, 8 indices in 256 colours. */
 export function idleRamp(nowMs: number, ui: Pick<Ui, 'theme' | 'color'>, env: UiEnv = hostEnv(), still = false): { phase: number; level: number; hex?: string } {
 	const phase = idlePhase(nowMs);
 	const level = idleLevel(phase);
