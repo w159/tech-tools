@@ -95,6 +95,9 @@ export function gatesSummary(h: Pick<Health, 'gates'>) {
   return cs.length > 0 ? gatesTotal(cs.map(gateCounts)) : gatesTotal(h.gates.total > 0 ? [{ pass: h.gates.green, total: h.gates.total }] : []);
 }
 
+/** True once a prompt reached the mod or a run ended: before that the gates are armed, not measured (2.5), and the head says no prompt yet. */
+export const promptedOf = (kind: string, h: Pick<Health, 'hooks' | 'pulse'>): boolean => kind !== 'idle' || (h.hooks?.byLabel ?? []).some((e) => e.label === 'prompt.submit') || !!h.pulse?.runs.at(-1);
+
 /** A hook's own name in words: `session.measure` -> `context measured`; an unnamed one reads its dotted words (`tool.call Bash` -> `tool call Bash`). */
 const EVENT_WORDS: Record<string, string> = { 'session.measure': 'context measured', 'turn.complete': 'turn finished', 'classic.Stop': 'stop check', 'prompt.submit': 'prompt sent', 'session.start': 'session started' };
 export const humanEvent = (label: string): string => EVENT_WORDS[label] ?? label.replace(/[._]+/g, ' ');

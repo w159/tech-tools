@@ -214,9 +214,9 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
 
 // ---- paint --------------------------------------------------------------------------
 
-/** Fills whose xterm index the 256-colour table cannot reach by nearest match (97 and 54 are not stable: the host maps their own hex to another index): the wordmark pill. In 256 colours the host is handed
+/** Fills whose xterm index the 256-colour table cannot reach by nearest match (97 and 54 are not stable: the host maps their own hex to another index): the wordmark pill and its idle breathing steps (band-motion IDLE_RAMP_256). In 256 colours the host is handed
  * the index's pre-image, so its own downsampler lands on exactly 97 (54 on latte). Other modes keep the hex. */
-const PINNED_256: ReadonlyMap<string, number> = new Map([[xtermHex(97), 97], [xtermHex(54), 54]]);
+const PINNED_256: ReadonlyMap<string, number> = new Map([[xtermHex(97), 97], [xtermHex(54), 54], [xtermHex(98), 98], [xtermHex(135), 135], [xtermHex(141), 141]]);
 const pinned = (hex: string, ui: Ui): string | undefined => (ui.color === '256' && PINNED_256.has(hex) ? preImage(PINNED_256.get(hex)!) : undefined);
 
 /** A run as a Segment: the live theme's tone colour on the run's own fill or the panel; with NO_COLOR only bold and strike remain. */

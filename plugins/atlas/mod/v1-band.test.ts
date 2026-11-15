@@ -56,10 +56,10 @@ const WORK_HOOKS = { runTool: 'Bash', runTools: 6, lastEventSecs: 5 };
 
 describe('B1: 150, pane open, idle: the heartbeat ramps ◌ ◎ ◌ ◌ and the clock rolls', () => {
   const frames = [
-    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates     │ ▁▁▁▁▁▁▁▁▂▁   1 ev/5m            [-]',
-    '◖ ◆ ATLAS ◗ ◎ idle up 0:41               │  ○ gates     │ ▁▁▁▁▁▁▁▁▂▁   1 ev/5m            [-]',
-    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates     │ ▁▁▁▁▁▁▁▁▂▁   1 ev/5m            [-]',
-    '◖ ◆ ATLAS ◗ ◌ idle up 0:42               │  ○ gates     │ ▁▁▁▁▁▁▁▁▂▁   1 ev/5m            [-]',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:42               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
   ];
   frames.forEach((f, i) => {
     test(`frame ${i + 1} is the spec line, 89 cells`, () => {
@@ -68,29 +68,41 @@ describe('B1: 150, pane open, idle: the heartbeat ramps ◌ ◎ ◌ ◌ and the 
       expect(textWidth(got)).toBe(89);
     });
   });
-  test('only the heartbeat glyph changes colour with time; every other run is the same four frames', () => {
+  test('L: at rest only the wordmark pill breathes (its background and the caps that match it); every other run is the same in every frame', () => {
     const restore = pinMotionEnv();
     try {
     const at = (tick: number): Run[] => bandRuns(model({ kind: 'idle', cols: 89, panel: true, tick, gates: GATES_ARMED as never[], health: { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]) } }), true);
-    const [a, b] = [at(0), at(2)];
-    const heart = (rs: Run[]): Run => rs.find((x) => /^[◌◎]/.test(x.t))!;
-    expect(heart(a).fg).not.toBe(heart(b).fg);
-    const rest = (rs: Run[]): string => JSON.stringify(rs.filter((x) => !/^[◌◎]/.test(x.t)));
+    const [a, b] = [at(0), at(6)];
+    const pill = (rs: Run[]): Run => rs.find((x) => x.t === ' ◆ ')!;
+    expect(pill(a).bgHex).not.toBe(pill(b).bgHex);
+    const rest = (rs: Run[]): string => JSON.stringify(rs.slice(rs.findIndex((x) => x.t === '◗') + 1));
+    const letters = (rs: Run[]): (string | undefined)[] => rs.slice(1, rs.findIndex((x) => x.t === '◗')).map((x) => x.bgHex);
+    expect(new Set(letters(a)).size).toBe(1); // every letter of the pill wears the one breathing fill
     expect(rest(a)).toBe(rest(b));
     } finally { restore(); }
   });
-  test('the heartbeat colour stays inside the 97 to 183 ramp', () => {
+  test('L: the pill background breathes between xterm 97 and the accent, 13 tones over a 2.4 s period; the caps carry the pill fill on the band fill (H)', () => {
     const restore = pinMotionEnv();
     try {
-    const lo = parseInt(xtermHex(97).slice(1, 3), 16);
-    const hi = parseInt(xtermHex(183).slice(1, 3), 16);
-    for (let tick = 0; tick < 28; tick++) {
-      const r = bandRuns(model({ kind: 'idle', cols: 89, panel: true, tick }), true).find((x) => /^[◌◎]/.test(x.t))!;
-      const red = parseInt(r.fg!.slice(1, 3), 16);
-      expect(red).toBeGreaterThanOrEqual(Math.min(lo, hi));
-      expect(red).toBeLessThanOrEqual(Math.max(lo, hi));
+    const fills = new Set<string>();
+    for (let tick = 0; tick < 24; tick++) {
+      const rs = bandRuns(model({ kind: 'idle', cols: 89, panel: true, tick }), true);
+      const pill = rs.find((x) => x.t === ' ◆ ')!;
+      fills.add(pill.bgHex!);
+      const caps = rs.filter((x) => x.t === '◖' || x.t === '◗');
+      expect(caps.map((x) => x.fg)).toEqual([pill.bgHex, pill.bgHex]);
+      expect(caps.map((x) => x.bgHex)).toEqual([xtermHex(235), xtermHex(235)]);
     }
+    expect(fills.size).toBe(13);
+    const lo = parseInt(xtermHex(97).slice(1, 3), 16);
+    for (const f of fills) expect(parseInt(f.slice(1, 3), 16)).toBeGreaterThanOrEqual(lo);
+    const at0 = bandRuns(model({ kind: 'idle', cols: 89, panel: true, tick: 0 }), true).find((x) => x.t === ' ◆ ')!.bgHex;
+    const at24 = bandRuns(model({ kind: 'idle', cols: 89, panel: true, tick: 24 }), true).find((x) => x.t === ' ◆ ')!.bgHex;
+    expect(at24).toBe(at0); // 24 beats of 100 ms: one 2.4 s breath
     } finally { restore(); }
+  });
+  test('the idle head glyph is the same ◌ at every width and every beat (no 1/s pulse)', () => {
+    for (const cols of [55, 89, 145]) for (let tick = 0; tick < 8; tick++) expect(row({ kind: 'idle', cols, panel: true, tick })).toContain('◌ idle');
   });
   test('the idle clock is the session uptime, never the age of the last event', () => {
     expect(row({ kind: 'idle', cols: 89, panel: true, upSecs: 3725, health: { hooks: hooks({ lastEventSecs: 9 }) } })).toContain('idle up 1:02:05');
@@ -100,7 +112,7 @@ describe('B1: 150, pane open, idle: the heartbeat ramps ◌ ◎ ◌ ◌ and the 
 describe('B2: 110, pane open, idle', () => {
   test('the 5-cell spark is replaced by the bare count', () => {
     const got = row({ kind: 'idle', cols: 55, panel: true, gates: GATES_ARMED as never[], health: { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle up 0:41    │  ○ gates     │   1/5m   [-]'));
+    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle up 0:41 │  ○ gates armed ›           [-]'));
     expect(textWidth(got)).toBe(55);
   });
 });
@@ -108,13 +120,13 @@ describe('B2: 110, pane open, idle', () => {
 describe('B3 and B4: working', () => {
   const h = { pulse: pulse(SPARK15), hooks: hooks(WORK_HOOKS) };
   test('B3 150 pane open: the spinner turns ◐ then ◓ on the shared frame (100 ms here; the spec draws 200 ms, see the report), the newest tool in the detail slot', () => {
-    const f1 = '◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok  │ ▁▁▁▂▁▅▃▁▂█  15 ev/5m │ ctx   6% [-]';
+    const f1 = '◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok ›    │ ▅▃▁▂█  15 ev/5m             [-]';
     const f2 = f1.replace('◐', '◓');
     expect(row({ kind: 'working', cols: 89, panel: true, tick: 0, ctx: 6, health: h })).toBe(frame(f1));
     expect(row({ kind: 'working', cols: 89, panel: true, tick: 1, ctx: 6, health: h })).toBe(frame(f2));
   });
   test('B4 110 pane open', () => {
-    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        │  ● gates ok  │  15/5m   [-]'));
+    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ● gates ok ›                  [-]'));
   });
   test('the head names the contract phase out of six, not the five-step rail', () => {
     expect(row({ kind: 'working', cols: 89, panel: true, phase: 'implement', health: h })).toContain('◐ implement 5/6');
@@ -130,16 +142,16 @@ describe('B3 and B4: working', () => {
 describe('B5 and B6: done', () => {
   const h = { pulse: pulse(SPARK26), hooks: hooks({ ...WORK_HOOKS, lastEventSecs: 10 }) };
   test('B5 150 pane open: `ended Ns` ticks each second', () => {
-    expect(row({ kind: 'done', cols: 89, panel: true, rest: 12, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok  │ ▁▅▆▃▁▁▂▂█▇  26 ev/5m │ ctx   6% [-]'));
-    expect(row({ kind: 'done', cols: 89, panel: true, rest: 13, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 13s  │  ● gates ok  │ ▁▅▆▃▁▁▂▂█▇  26 ev/5m │ ctx   6% [-]'));
+    expect(row({ kind: 'done', cols: 89, panel: true, rest: 12, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok ›    │ ▁▂▂█▇  26 ev/5m             [-]'));
+    expect(row({ kind: 'done', cols: 89, panel: true, rest: 13, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 13s  │  ● gates ok ›    │ ▁▂▂█▇  26 ev/5m             [-]'));
   });
   test('B6 110 pane open', () => {
-    expect(row({ kind: 'done', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        │  ● gates ok  │  26/5m   [-]'));
+    expect(row({ kind: 'done', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6 │  ● gates ok ›                  [-]'));
   });
   test('only the done glyph is ok green', () => {
     const rs = bandRuns(model({ kind: 'done', cols: 89, panel: true, ctx: 6, health: h }), true);
     const greens = rs.filter((x) => x.fg === xtermHex(78));
-    expect(greens.map((x) => x.t)).toEqual(['●']);
+    expect(greens.map((x) => x.t.trim())).toEqual(['●', '●']); // the done glyph and the gates dot (the panel's green)
     expect(rs.find((x) => x.t === '●')!.fg).toBe(xtermHex(78));
   });
   test('the head returns to idle with the session uptime after 60 s', () => {
@@ -153,26 +165,29 @@ describe('B5 and B6: done', () => {
 describe('B7 and B8: gate denial', () => {
   const h = { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, runTool: 'Grep' }) };
   test('B7 150 pane open: `■ 2 denied` counts denied calls, not failing checks', () => {
-    expect(row({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Grep       │  ■ 2 denied  │ ▁▁▁▂▁▅▃▁▂█  15 ev/5m │ ctx   6% [-]'));
+    expect(row({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Grep       │  ■ 2 denied ›    │ ▅▃▁▂█  15 ev/5m             [-]'));
   });
   test('B8 110 pane open', () => {
-    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        │  ■ 2 denied  │  15/5m   [-]'));
+    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ■ 2 denied ›                  [-]'));
   });
   test('the denial chip is an alert chip (bg 52, fg 210) while the run works', () => {
     const rs = bandRuns(model({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h }), true);
     const chip = rs.filter((x) => x.press);
-    expect(chip.map((x) => x.t).join('')).toBe(' ■ 2 denied ');
+    expect(chip.map((x) => x.t).join('')).toBe(' ■ 2 denied ›   ');
     expect(chip[0]!.bgHex).toBe(xtermHex(52));
     expect(chip[0]!.fg).toBe(xtermHex(210));
   });
-  test('after the run, 60 s on, the chip is neutral with only the ■ red (N3)', () => {
-    const rs = bandRuns(model({ kind: 'done', cols: 89, panel: true, gates: GATES_DENY as never[], health: { ...h, denyAgeSecs: 61 } }), true);
-    const chip = rs.filter((x) => x.press);
-    expect(chip.map((x) => x.t).join('')).toBe(' ■ 2 denied ');
-    expect(new Set(chip.map((x) => x.bgHex))).toEqual(new Set([xtermHex(239)]));
-    expect(chip.filter((x) => x.fg === xtermHex(203)).map((x) => x.t)).toEqual(['■']);
-    const fresh = bandRuns(model({ kind: 'done', cols: 89, panel: true, gates: GATES_DENY as never[], health: { ...h, denyAgeSecs: 59 } }), true).filter((x) => x.press);
-    expect(fresh[0]!.bgHex).toBe(xtermHex(52));
+  test('round W G: a denial stays a red alert chip for 5 minutes after it rose, then the chip is neutral with the ■ and the words amber', () => {
+    const at = (age: number): Run[] => bandRuns(model({ kind: 'done', cols: 89, panel: true, gates: GATES_DENY as never[], health: { ...h, denyAgeSecs: age } }), true).filter((x) => x.press);
+    for (const age of [59, 61, 299]) {
+      const chip = at(age);
+      expect(chip.map((x) => x.t).join('')).toBe(' ■ 2 denied ›   ');
+      expect(new Set(chip.map((x) => x.bgHex))).toEqual(new Set([xtermHex(52)]));
+    }
+    const old = at(301);
+    expect(old.map((x) => x.t).join('')).toBe(' ■ 2 denied ›   ');
+    expect(new Set(old.map((x) => x.bgHex))).toEqual(new Set([xtermHex(239)]));
+    expect(new Set(old.map((x) => x.fg))).toEqual(new Set([xtermHex(214)])); // the band's amber
   });
   test('deniedCalls reads the count in a line\'s own detail, one for a failing line that says none, and skips the Stop verdict', () => {
     const g = (lines: { id: string; ok: boolean; detail?: string }[]) => [{ lines }];
@@ -197,18 +212,18 @@ describe('B9: 150, pane closed (band 145): idle, working, done; the health chip 
   const idleH = { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]), hooks: hooks({ latency: { n: 1, p50: 2, p95: 2 } }) };
   test('idle: hook latency from the handlers, no ctx and no cost before their first datum', () => {
     const got = row({ kind: 'idle', cols: 145, panel: false, gates: GATES_ARMED as never[], health: idleH });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates     │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁   1 ev/5m │ hook   2ms                                   ▸ health  [-]'));
+    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁   1 ev/5m │ hook   2ms                               ▸ health  [-]'));
     expect(textWidth(got)).toBe(145);
   });
   const lat = { n: 8, p50: 3, p95: 5 };
   // The spec's own counts (15 and 26) are not the sum of the 20 cells it draws at its own scale (21 and 28); the band prints the real sum, so those two figures are the only cells that differ.
   test('working: ctx, hook, last and cost join as they fit, the chip stays right-anchored', () => {
     const got = row({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 3, 0, 0, 0, 0, 1, 7, 3], 0.01), hooks: hooks({ ...WORK_HOOKS, latency: lat }) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok  │ ▁▁▁▁▁▁▁▂▁▁▄▄▄▁▁▁▁▂█▄  15 ev/5m │ ctx   6% │ hook   3ms │ last 5s   │ $0.01    ▸ health  [-]').replace('15 ev/5m', '21 ev/5m'));
+    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok ›    │ ▁▁▁▁▁▁▁▂▁▁▄▄▄▁▁▁▁▂█▄  15 ev/5m │ ctx   6% │ hook   3ms │ last 5s  │ $0.01 ▸ health  [-]').replace('15 ev/5m', '21 ev/5m'));
   });
   test('done', () => {
     const got = row({ kind: 'done', cols: 145, panel: false, rest: 12, ctx: 6, health: { pulse: pulse([0, 0, 2, 2, 3, 2, 2, 0, 0, 0, 0, 0, 1, 0, 0, 1, 5, 3, 7, 0], 0.01), hooks: hooks({ ...WORK_HOOKS, lastEventSecs: 10, latency: lat }) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok  │ ▁▁▃▃▄▃▃▁▁▁▁▁▂▁▁▂▆▄█▁  26 ev/5m │ ctx   6% │ hook   3ms │ last 10s  │ $0.01    ▸ health  [-]').replace('26 ev/5m', '28 ev/5m'));
+    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok ›    │ ▁▁▃▃▄▃▃▁▁▁▁▁▂▁▁▂▆▄█▁  26 ev/5m │ ctx   6% │ hook   3ms │ last 10s │ $0.01 ▸ health  [-]').replace('26 ev/5m', '28 ev/5m'));
   });
   test('the chips: gates opens the gates tab, health toggles the card; both on the 239 fill, one chip each', () => {
     const calls: string[] = [];
@@ -217,18 +232,19 @@ describe('B9: 150, pane closed (band 145): idle, working, done; the health chip 
     const buttons: { key: string; onPress: () => void; children: { props: { children: string; backgroundColor: string } }[] }[] = [];
     const walk = (n: any): void => { if (!n || typeof n !== 'object') return; if (n.kind === 'Button') buttons.push(n.props); for (const c of [n.props?.children].flat()) walk(c); };
     walk(tree);
-    expect(buttons.map((b) => b.key)).toEqual(['band:gates', 'band:health']);
-    expect(buttons.map((b) => b.children[0]!.props.children)).toEqual([' ● gates ok ', ' ▸ health ']);
-    expect(buttons.map((b) => b.children[0]!.props.backgroundColor)).toEqual([xtermHex(239), xtermHex(239)]);
+    // the gates chip is two pieces (the dot in the panel's own colour, then the words), health one: every piece is one Button, all on the 239 fill
+    expect(buttons.map((b) => b.key)).toEqual(['band:gates#0', 'band:gates#1', 'band:health']);
+    expect(buttons.map((b) => b.children[0]!.props.children)).toEqual([' ● ', 'gates ok ›   ', ' ▸ health ']);
+    expect(buttons.map((b) => b.children[0]!.props.backgroundColor)).toEqual([xtermHex(239), xtermHex(239), xtermHex(239)]);
     buttons.forEach((b) => b.onPress());
-    expect(calls).toEqual(['view:gates', 'health']);
+    expect(calls).toEqual(['view:gates', 'view:gates', 'health']);
   });
   test('chip columns: gates 44-55 and health 136-145 (1-based), as the spec legend says', () => {
     const rs = bandRuns(model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }), } }), true);
     let col = 1;
     const at: Record<string, [number, number]> = {};
     for (const x of rs) { if (x.press) at[x.press] = [col, col + textWidth(x.t) - 1]; col += textWidth(x.t); }
-    expect(at['band:gates']).toEqual([44, 55]);
+    expect([at['band:gates#0']![0], at['band:gates#1']![1]]).toEqual([44, 59]); // the 16-cell gates chip (round W F/G): two pieces, one chip
     expect(at['band:health']).toEqual([136, 145]);
   });
 });
@@ -236,7 +252,7 @@ describe('B9: 150, pane closed (band 145): idle, working, done; the health chip 
 describe('B10: 110, pane closed (band 100): working', () => {
   test('ctx fits, hook does not, the chip is right-anchored', () => {
     const got = row({ kind: 'working', cols: 100, panel: false, ctx: 6, health: { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok  │ ▁▁▁▂▁▅▃▁▂█  15 ev/5m │ ctx   6%  ▸ health  [-]'));
+    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok ›    │ ▅▃▁▂█  15 ev/5m │ ctx   6%   ▸ health  [-]'));
   });
 });
 
@@ -245,7 +261,7 @@ describe('the rules the frames rest on', () => {
   test('the health chip exists only while the pane is closed', () => {
     expect(row({ kind: 'working', cols: 145, panel: true, ctx: 6, health: h })).not.toContain('health');
     expect(row({ kind: 'working', cols: 145, panel: false, ctx: 6, health: h })).toContain('▸ health');
-    expect(row({ kind: 'working', cols: 100, panel: false, ctx: 6, health: { ...h, open: true } })).toContain('▴ health');
+    expect(row({ kind: 'working', cols: 100, panel: false, ctx: 6, health: { ...h, open: true } })).toContain('▾ health');
   });
   test('the band is one row, with no second `checks` row under a denial', () => {
     const b = model({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h });
@@ -270,7 +286,8 @@ describe('the rules the frames rest on', () => {
   test('narrowing: the detail slot drops under 85, the spark shrinks 20 / 10 / 5, the extras drop from the end', () => {
     const w = (cols: number, panel = false): string => row({ kind: 'working', cols, panel, ctx: 6, health: { pulse: pulse(SPARK15, 0.01), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }) } });
     expect([...w(120).match(/[▁-█]+/)![0]]).toHaveLength(20);
-    expect([...w(100).match(/[▁-█]+/)![0]]).toHaveLength(10);
+    expect([...w(110).match(/[▁-█]+/)![0]]).toHaveLength(10);
+    expect([...w(100).match(/[▁-█]+/)![0]]).toHaveLength(5);
     expect([...w(84).match(/[▁-█]+/)![0]]).toHaveLength(5);
     expect(w(84)).not.toContain('Bash');
     expect(w(100)).toContain('Bash');

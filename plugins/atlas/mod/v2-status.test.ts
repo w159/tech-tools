@@ -153,8 +153,10 @@ describe('the status tab body, round W1', () => {
   });
   test('B: after the first prompt the rows count pass and deny and say when they last ran', () => {
     const rows = body(render(W150, 'working', WORKING(true), true));
-    expect(rows.find((l) => /● completion/.test(l))!.slice(-15)).toBe('    1    0   5s');
-    expect(rows.find((l) => /■ routing/.test(l))!.slice(-15)).toBe('    7    1   5s');
+    // round W N: `last` is each gate's own age (the newest event of the hook it runs on), or `—`: never one shared value. No classic.Stop event was seen, so completion and routing read `—`; the tripwire runs on tool.call (6 s).
+    expect(rows.find((l) => /● completion/.test(l))!.slice(-15)).toBe('    1    0    —');
+    expect(rows.find((l) => /■ routing/.test(l))!.slice(-15)).toBe('    7    1    —');
+    expect(rows.find((l) => /tripwire/.test(l))!.slice(-15)).toBe('    1    0   6s');
     expect(rows.some((l) => /└ ■ Native Grep/.test(l))).toBe(true);
   });
   test('C: the chart spans the content width: one column per cell after the 4-cell indent and the 3-cell y gutter', () => {

@@ -26,9 +26,9 @@ const rows = (view: SidebarView, columns: number): string[] =>
 
 describe('the board view in a narrow pane draws the one-row chip strip (critique 18, D14)', () => {
   for (const columns of [38, 39, 43]) {
-    test(`pane ${columns}: the strip is one row of chips, the ▸ BOARD ribbon names the pane, no rule under the strip, no row is wider than the pane`, () => {
+    test(`pane ${columns}: the strip is one row of chips, the ▸ SIDEPANEL · board ribbon names the pane, no rule under the strip, no row is wider than the pane`, () => {
       const r = rows('board', columns).join('\n').split('\n');
-      expect(r[0]).toContain('▸ BOARD');
+      expect(r[0]).toContain('▸ SIDEPANEL · board');
       expect(r[0]).toContain('▸ SIDEPANEL'); // the scorer's pane marker (live_capture.py: `r: route` or `▸ SIDEPANEL`)
       expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^status team channel( gates)? ▸ more$/); // D14: the trailing tabs fold behind `▸ more`
       expect(r.findIndex((l, i) => i > 1 && /^ *━+ *$/.test(l))).toBe(-1); // one idiom: the lit chip is filled, nothing is ruled under it
@@ -50,7 +50,7 @@ describe('the 110-column pane carries a pane marker the capture scorer recognise
       test(`pane ${columns}, ${v}: marker present, strip one row`, () => {
         const text = rows(v, columns).join('\n');
         expect(SCORER_PANE(text)).toBe(true);
-        if (v === 'board') expect(text).toContain('▸ BOARD');
+        if (v === 'board') expect(text).toContain('▸ SIDEPANEL · board');
       });
     }
   }

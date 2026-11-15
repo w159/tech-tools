@@ -10,7 +10,7 @@
 import { elapsedClock, type Run, type Ui } from './atlas-ui';
 import { bandLook } from './band-frame';
 import { WIRED_HOOKS } from './hook-log';
-import { agoText, gatesSummary, severityOf, teamOf, tokenText, type Health } from './idle-health';
+import { agoText, gatesSummary, promptedOf, severityOf, teamOf, tokenText, type Health } from './idle-health';
 import { ctxDelta, ctxRunway, RATE_BUCKETS } from './pulse';
 import { fitText, textWidth } from './theme';
 import { gateCounts } from './vocab';
@@ -56,8 +56,7 @@ const HEART_MS = 400;
 
 const sum = (xs: readonly number[]): number => xs.reduce((n, x) => n + x, 0);
 
-/** True once a prompt reached the mod or a run ended: before that the gates are armed, not measured (2.5), and the head says no prompt yet. */
-export const promptedOf = (kind: StatusIn['kind'], h: Health): boolean => kind !== 'idle' || (h.hooks?.byLabel ?? []).some((e) => e.label === 'prompt.submit') || !!h.pulse?.runs.at(-1);
+export { promptedOf };
 
 /** The one run kit of the frame spec at `u` usable cells: the styled run makers, the grid row (indent 4, a number flush right at col U), the ribbon (`── TITLE ──── meta`) and the chip row (one fill spanning U). */
 export function frameKit(ui: Ui, u: number) {
@@ -351,6 +350,15 @@ export function statusRunsRows(kit: Kit, h: Health): Run[][] {
   return [ribbon('RUNS'), row([...bars, sp(2), dim(`${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · med ${elapsedClock(med)} · max ${elapsedClock(longest)}${failed ? ' · ' : ''}`), ...(failed ? [red(`${failed} failed`)] : [])])];
 }
 
+/** The hook whose event runs each gate: the completion and routing gates are read on Stop, the tripwire on every tool call, the header contract when a turn completes. */
+export const GATE_HOOK: Readonly<Record<string, string>> = { completion: 'classic.Stop', routing: 'classic.Stop', tripwire: 'tool.call', header: 'turn.complete' };
+/** Seconds since this gate last ran a check (item N): the gate's own stamp when the mod holds one, else the last time the hook that runs it fired (the hook log's per-hook clock). Absent when neither exists: the table shows `—`, never a figure shared by every row. */
+export function gateLastSecs(h: Health, c: { id: string; lastSecs?: number }): number | undefined {
+  if (c.lastSecs !== undefined) return c.lastSecs;
+  const hook = GATE_HOOK[c.id];
+  return hook === undefined ? undefined : hookTable(h).find((x) => x.name === hook)?.lastSecs;
+}
+
 /** GATES (B): a real table. Columns: state dot, name, then right-aligned `pass deny last` (5 cells each, flush right) named in the section rule. Before any check a row reads dim `0 0 —` with the hollow `○`. A failing group's failing lines hang under its row when `children`. `last` is the check's own age (`lastSecs`), else the age of the newest hook event the gates ran on. */
 export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boolean): Run[][] {
   const { dim, txt, green, red, row, ribbon, metaText, g } = kit;
@@ -364,7 +372,7 @@ export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boo
     const deny = n.total - n.pass;
     const fired = n.total > 0 && (src.prompted || deny > 0);
     const mark = deny > 0 ? red(g('■', 'x')) : fired ? green(g('●', '*')) : dim(g('○', 'o'));
-    const lastSecs = fired ? c.lastSecs ?? h.hooks?.lastEventSecs : undefined;
+    const lastSecs = fired ? gateLastSecs(h, c) : undefined;
     const right: Run[] = fired
       ? [txt(cell(String(n.pass))), deny > 0 ? red(cell(String(deny))) : txt(cell('0')), lastSecs !== undefined ? dim(cell(agoText(lastSecs))) : dim(cell(none))]
       : [dim(cell('0')), dim(cell('0')), dim(cell(none))];

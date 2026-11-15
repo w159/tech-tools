@@ -59,9 +59,9 @@ describe('(a) the band is one row of a fixed order; the head and the cap always 
     });
   }
   test('the wide band reads like the frame spec', () => {
-    expect(first(model('idle', 150, false)).trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ◌ idle up 0:09 +│  ● gates ok  │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
-    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement 5\/6 +│  ● gates ok  │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
-    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 6\/6 +ended 1s +│  ● gates ok  │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
+    expect(first(model('idle', 150, false)).trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ◌ idle up 0:09 +│  ○ gates armed › │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
+    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement 5\/6 +│  ● gates ok › +│ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
+    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 6\/6 +ended 1s +│  ● gates ok › +│ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
   });
 });
 
@@ -91,9 +91,9 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
     expect(beatDue({ ...rest })).toBe(false);
     expect(beatDue({ ...rest, idleLive: false })).toBe(false);
   });
-  test('with the beat counter the visible change rides every 2nd beat (5 Hz)', () => {
+  test('with the beat counter every beat is a visible step (10 Hz, round W L)', () => {
     const due = Array.from({ length: 10 }, (_, n) => beatDue({ ...rest, idleLive: true, idleBeat: n }));
-    expect(due).toEqual([true, false, true, false, true, false, true, false, true, false]);
+    expect(due).toEqual(Array(10).fill(true));
   });
   const envOk = { TERM: 'xterm-256color' };
   const frames = (idleLive: boolean, theUi: Ui, env: Record<string, string>): { phase: number; hex?: string }[] => {
@@ -101,11 +101,12 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
     for (let n = 0; n < 30; n++) if (beatDue({ ...rest, idleLive, idleBeat: n })) out.push(idleRamp(NOW + n * 100, theUi, env));
     return out;
   };
-  test('3 s of 100 ms beats at idle: at least 14 distinct ramp frames in truecolor, 8 tones; none when idleLive is false', () => {
+  test('3 s of 100 ms beats at idle: a 2.4 s period, 12+ distinct pill tones in truecolor; none when idleLive is false', () => {
     const f = frames(true, ui, envOk);
-    expect(new Set(f.map((x) => x.phase)).size).toBeGreaterThanOrEqual(14);
-    expect(f).toHaveLength(15);
-    expect(new Set(f.map((x) => x.hex)).size).toBe(8);
+    expect(new Set(f.map((x) => x.phase)).size).toBe(IDLE_PHASES);
+    expect(IDLE_PHASES * 100).toBe(2400);
+    expect(f).toHaveLength(30);
+    expect(new Set(f.map((x) => x.hex)).size).toBeGreaterThanOrEqual(12);
     expect(frames(false, ui, envOk)).toEqual([]);
   });
   test('256 colours: four stable xterm indices', () => {
@@ -113,17 +114,16 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
     const hexes = new Set(f.map((x) => x.hex));
     expect(hexes.size).toBe(4);
     expect([...hexes].sort()).toEqual(IDLE_RAMP_256.map(xtermHex).sort());
-    for (const h of hexes) expect(runHex({ tone: 'muted', fg: h }, 'mocha', '256')).toBe(h); // the host's downsampler lands on the index itself
   });
   test('TERM=dumb, NO_COLOR and reduced motion give no ramp', () => {
     expect(frames(true, ui, { TERM: 'dumb' }).every((x) => x.hex === undefined)).toBe(true);
     expect(frames(true, { ...ui, color: 'none' }, envOk).every((x) => x.hex === undefined)).toBe(true);
     expect(frames(true, ui, { ATLAS_REDUCED_MOTION: '1' }).every((x) => x.hex === undefined)).toBe(true);
   });
-  test('the phase is a 14-step triangle through 8 levels', () => {
-    expect(Array.from({ length: IDLE_PHASES }, (_, p) => idleLevel(p))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 3, 2, 1]);
+  test('the phase is a 24-step triangle through 13 levels', () => {
+    expect(Array.from({ length: IDLE_PHASES }, (_, p) => idleLevel(p))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
     expect(idlePhase(0)).toBe(0);
-    expect(idlePhase(200 * 14)).toBe(0);
+    expect(idlePhase(100 * IDLE_PHASES)).toBe(0);
   });
   describe('the band wears it: the idle dot and the newest spark cell only', () => {
     const penv = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
@@ -136,19 +136,19 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
       const dot = new Set<string | undefined>();
       const cell = new Set<string | undefined>();
       const rest = new Set<string>();
-      for (let tick = 0; tick < 30; tick += 2) {
+      for (let tick = 0; tick < 30; tick += 1) {
         const texts = all(bandTree(els, model(kind, 150, false, { tick }), handlers) as unknown as Node).filter((n) => n.kind === 'Text');
-        const d = texts.find((n) => /^[◌◎]/.test(textOf(n).trim()));
+        const d = texts.find((n) => textOf(n) === ' ◆ ');
         const c = texts.filter((n) => /[▁-█]$/.test(textOf(n).trimEnd()) && /[▁-█]/.test(textOf(n)));
-        dot.add(d?.props.color);
+        dot.add(d?.props.backgroundColor);
         cell.add(c.at(-1)?.props.color);
         rest.add(texts.filter((n) => /gates|ctx|up /.test(textOf(n))).map((n) => `${n.props.color}`).join('|'));
       }
       return { dot, cell, rest };
     };
-    test('idle: the heartbeat glyph breathes through the ramp over 3 s while the spark and the other segments hold still (v1 frame spec)', () => {
+    test('idle: the wordmark pill background breathes through the ramp over 3 s while the spark and the other segments hold still (round W L)', () => {
       const c = withEnv({ TERM: undefined, ATLAS_REDUCED_MOTION: undefined, NO_COLOR: undefined }, () => colours('idle'));
-      expect(c.dot.size).toBeGreaterThanOrEqual(3);
+      expect(c.dot.size).toBeGreaterThanOrEqual(12);
       expect(c.cell.size).toBe(1);
       expect(c.rest.size).toBe(1);
     });
@@ -181,7 +181,7 @@ describe('(f) at 110 with the pane closed the band is one row (round 2 D9: tabs 
   test('no chip row under the band, no `last run` line', () => {
     const rs = kids(bandTree(els, b, handlers) as unknown as Node);
     expect(rs).toHaveLength(1);
-    expect(all(rs[0]!).filter((n) => n.kind === 'Button').map((n) => n.props.key)).toEqual(['band:gates', 'band:health']);
+    expect(all(rs[0]!).filter((n) => n.kind === 'Button').map((n) => String(n.props.key).split('#')[0]).filter((k, i, a) => a.indexOf(k) === i)).toEqual(['band:gates', 'band:health']);
     for (const r of rows(b)) expect(r).not.toMatch(/last run|last \d+s ago| events?\b|status/);
   });
   test('a run that ended adds no `last run m:ss` to the band', () => {
@@ -197,7 +197,7 @@ describe('(g) no pulse, no spark', () => {
     for (const kind of ['idle', 'working', 'done'] as Kind[]) {
       const row = first({ ...model(kind, 150, false), health: noPulse });
       expect(row).not.toMatch(/[⣀-⣿▁-█]/);
-      expect(row).toContain('gates ok');
+      expect(row).toMatch(/gates (ok|armed)/);
       expect(row).toMatch(/ctx +6%/);
     }
   });

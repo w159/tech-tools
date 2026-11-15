@@ -76,11 +76,13 @@ describe('every Button looks clickable', () => {
     for (const t of texts) expect(t.props.hover, `${b.props.key} hover`).toBeDefined();
     const first = texts[0]!.props;
     const chip = /^(band|tab):/.test(String(b.props.key)); // round 3 (E8): the `▸ health` button is a chip too, the band's only one
-    if (chip) { expect(String(first.children), String(b.props.key)).toMatch(/^ \S.* $/); expect(first.bold === true || first.inverse === true, `${b.props.key} bold`).toBe(true); }
+    const later = /#[1-9]\d*$/.test(String(b.props.key)); // a multi-piece chip (`band:gates#0..2`): only its first piece opens with the chip's leading cell
+    if (chip && later) expect(first.bold === true, `${b.props.key} bold`).toBe(true);
+    else if (chip) { expect(String(first.children), String(b.props.key)).toMatch(/^ \S.* $/); expect(first.bold === true || first.inverse === true, `${b.props.key} bold`).toBe(true); }
     else expect(String(first.children), String(b.props.key)).toMatch(CHEVRON);
   };
   for (const cols of [150, 110]) {
-    test(`band buttons at ${cols}`, () => { const bs = buttons(bandOf(cols, false)); expect(bs.map((b) => b.props.key)).toEqual(['band:gates','band:health']); bs.forEach(looks); }); // round 2 D9: the tab chips live only in the panel
+    test(`band buttons at ${cols}`, () => { const bs = buttons(bandOf(cols, false)); expect(bs.map((b) => String(b.props.key).split('#')[0]).filter((k, i, a) => a.indexOf(k) === i)).toEqual(['band:gates','band:health']); bs.forEach(looks); }); // round 2 D9: the tab chips live only in the panel
     for (const view of VIEWS) {
       test(`side panel ${view} buttons at ${cols}`, () => { const bs = buttons(pane(cols, view, true)); expect(bs.length).toBeGreaterThan(0); bs.forEach(looks); });
     }

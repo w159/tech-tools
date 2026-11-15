@@ -2,7 +2,7 @@
 // failure isolation, the session-id guard, the throttle, and one real register path (opening the dock).
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { dockTick, register } from './register';
+import { register } from './register';
 import { memState } from './test_helpers';
 import { noteUsage, resetUsageForTest, USAGE_KEYS } from './usage';
 
@@ -165,7 +165,6 @@ describe('usage counters', () => {
     await pick('session.start')(s.$, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
     const e = { surface: 'terminal', viewport: { columns: 110, rows: 40, isFullscreen: true }, props: { hasSurvey: false, bodyColumns: 110 } };
     await pick('ui.render|AbovePrompt')(s.$, e, noopNext).catch(() => undefined);
-    await dockTick(s.$);
     await pick('prompt.submit')(s.$, { text: 'go' }, noopNext);
     expect(s.opens).toHaveLength(1);
     await new Promise((r) => later(r)); // noteUsage is fire-and-forget on this path

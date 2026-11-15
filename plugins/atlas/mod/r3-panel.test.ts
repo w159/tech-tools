@@ -91,7 +91,7 @@ describe('E9: the stepper has one form at every width', () => {
 
 describe('E12: a tab with nothing to show is a ribbon, one sentence, one measured fact and the footer (frame spec 2.5), never one centred line', () => {
   const empty = { workers: [], notes: [], gates: [], todos: [], core: null, lead: undefined } as Partial<PanelModel>;
-  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['Team mode is off.', 'no workers registered']], ['channel', /── CHAT ─+/, ['No notes yet.']], ['gates', /── GATES ─+/, ['armed']], ['core', /── CORE ─+/, ['No verdicts yet.', 'items done 0 of 0']]];
+  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['team off · 0 workers', 'worker']], ['channel', /── CHAT ─+/, ['0 notes', 'time   from']], ['gates', /── GATES ─+/, ['armed']], ['core', /── CORE ─+/, ['0 verdicts', 'check']]];
   for (const [tab, ribbon, words] of cases) for (const cols of [54, 37]) {
     test(`${tab} at ${cols} columns`, () => {
       const m = world(cols, 40, 'idle', { ...empty, health: health({ team: 'off' }) }, tab);
@@ -99,7 +99,7 @@ describe('E12: a tab with nothing to show is a ribbon, one sentence, one measure
       expect(t.some((l) => ribbon.test(l))).toBe(true);
       for (const w of words) expect(t.join('\n')).toContain(w);
       expect(t.at(-1)!.trim()).toBe(FOOT);
-      expect(t.join('\n')).not.toMatch(/nobody dispatched|no gates reported|no verdicts, workers|···/);
+      expect(t.join('\n')).not.toMatch(/nobody dispatched|no gates reported|no verdicts, workers|Team mode is off|No notes yet|No verdicts yet/);
       for (const l of t) expect(textWidth(l)).toBeLessThanOrEqual(cols);
     });
   }
@@ -109,7 +109,7 @@ describe('E11: the card is three columns from 142, two from 97 and one below (fr
   const flat = (cols: number): string[] => healthCardRows(health(), { cols, ui }).map((r) => r.map((x) => x.t).join(''));
   test('no row is wider than the terminal; the ribbon runs to the last cell', () => {
     for (const cols of [150, 110, 96, 80]) for (const l of flat(cols)) expect(textWidth(l)).toBe(cols);
-    expect(flat(150)[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─{80,}$/);
+    expect(flat(150)[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─{80,}$/);
     expect(textWidth(flat(150)[0]!.trimEnd())).toBe(150);
   });
   test('150 columns: ACTIVITY and CONTEXT on the left, GATES and RUNS in the middle, HOOKS on the right, side by side', () => {
@@ -127,8 +127,11 @@ describe('E11: the card is three columns from 142, two from 97 and one below (fr
     expect(at.every((i) => i > 0)).toBe(true);
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
-  test('the card has no control: no run carries a press (the band chip closes it)', () => {
-    expect(healthCardRows(health(), { cols: 150, ui }).flat().filter((x) => x.press !== undefined)).toHaveLength(0);
+  test('the card title is the toggle (round W M): only the ▾ and HEALTH runs carry the card key; no other run carries a press', () => {
+    const pressed = healthCardRows(health(), { cols: 150, ui }).flat().filter((x) => x.press !== undefined);
+    expect(pressed.length).toBeGreaterThan(0);
+    expect(new Set(pressed.map((x) => x.press))).toEqual(new Set(['band:health']));
+    expect(pressed.map((x) => x.t.trim()).sort()).toEqual(['HEALTH', '▾']);
   });
   test('no `none yet`, no gate ratio', () => {
     for (const cols of [150, 80]) expect(flat(cols).join('\n')).not.toMatch(/none yet|\b\d+\/\d+\b/);

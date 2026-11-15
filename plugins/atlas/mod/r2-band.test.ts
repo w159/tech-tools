@@ -84,7 +84,7 @@ describe('D9: fixed slots', () => {
       for (const k of KINDS) expect(textWidth(first(model(k, cols)).trimEnd())).toBeGreaterThanOrEqual(cols - 1);
     });
     test(`(d) a slot changes content, not width: the gates slot starts at one column in all three states at ${cols}`, () => {
-      const cols_ = KINDS.map((k) => textWidth(first(model(k, cols)).slice(0, first(model(k, cols)).indexOf('● gates ok'))));
+      const cols_ = KINDS.map((k) => textWidth(first(model(k, cols)).slice(0, first(model(k, cols)).search(/[●○] gates (ok|armed)/))));
       expect(new Set(cols_).size).toBe(1);
     });
     test(`(e) the band has the same row count in idle, working and done at ${cols}, open or closed`, () => {
@@ -125,11 +125,12 @@ describe('D10: narrowing (frame spec 2.7: extras from the end, the spark shrinks
     }
     const at = (c: number) => f[WIDTHS.indexOf(c)]!;
     expect(at(110)).toMatchObject({ ctx: true, rate: true, spark: 10, chip: true });
-    expect(at(100)).toMatchObject({ ctx: true, rate: true, spark: 10, chip: true });
-    expect(at(96)).toMatchObject({ ctx: false, rate: true, spark: 10, chip: true });
-    expect(at(86)).toMatchObject({ rate: false, count: true, spark: 0, chip: true }); // one cell short of the 10-cell spark: the count alone
+    expect(at(100)).toMatchObject({ ctx: true, rate: true, spark: 5, chip: true }); // the 16-cell gates chip (round W) narrows the spark at 109 and below
+    expect(at(96)).toMatchObject({ ctx: false, rate: true, spark: 5, chip: true });
+    expect(at(86).chip).toBe(true);
+    expect(at(86).rate || at(86).count).toBe(true); // one cell short of the 5-cell spark: a 3-cell spark keeps its unit
     expect(at(84).spark).toBe(5);
-    expect(at(62)).toMatchObject({ rate: false, count: false, chip: true });
+    expect(at(62)).toMatchObject({ rate: false, chip: true });
     expect(f.filter((x) => x.spark === 20 && !x.ctx)).toEqual([]);
   });
   test('the state head never depends on width: same kind at every width', () => {
@@ -144,7 +145,7 @@ describe('D10: narrowing (frame spec 2.7: extras from the end, the spark shrinks
 describe('D1 (band half): the chips', () => {
   const press = (b: BandModel, on: BandHandlers, key: string): void => {
     const root = bandTree(els, b, on) as unknown as Node;
-    const btn = all(root).find((n) => n.kind === 'Button' && String(n.props.key) === key)!;
+    const btn = all(root).find((n) => n.kind === 'Button' && String(n.props.key).split('#')[0] === key)!;
     btn.props.onPress();
   };
   test('(h) pane closed: the health chip toggles the card, the gates chip opens the pane on its gates tab', () => {
@@ -156,7 +157,7 @@ describe('D1 (band half): the chips', () => {
   });
   test('(h) pane open: the band draws no health chip, so a card can never open beside the panel; the gates chip stays', () => {
     const root = bandTree(els, model('idle', 150, {}, { panel: true }), handlers) as unknown as Node;
-    const keys = all(root).filter((n) => n.kind === 'Button').map((n) => String(n.props.key));
+    const keys = all(root).filter((n) => n.kind === 'Button').map((n) => String(n.props.key).split('#')[0]).filter((k, i, a) => a.indexOf(k) === i);
     expect(keys).toEqual(['band:gates']);
   });
 });

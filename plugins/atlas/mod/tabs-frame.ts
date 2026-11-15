@@ -64,6 +64,29 @@ function gauge(kit: Kit, done: number, total: number, cells = 8): Run[] {
   return [...(on ? [violet(g('▰', '#').repeat(on), 1)] : []), ...(on < cells ? [dim(g('▱', '-').repeat(cells - on))] : [])];
 }
 
+// ---- empty tabs (J) ------------------------------------------------------------------------------------------------------------------------
+// An empty tab is never one line over a void: the ribbon, the one live fact, a dim skeleton of what will appear (column names and two placeholder rows) and the last run's figures.
+
+/** The dim skeleton: a column-name row, then placeholder rows (`rows` of them, dots where the data will go). */
+function skeleton(kit: Kit, head: [string, string], rows: readonly [string, string][], mark = '○'): Run[][] {
+  const { g, dim, row } = kit;
+  const dots = (n: number): string => g('·', '.').repeat(Math.max(1, n));
+  const w = Math.max(8, kit.u - 4 - 12);
+  return [
+    row([dim(head[0])], [dim(head[1])]),
+    ...rows.map(([name, right]) => row([dim(`${mark === ' ' ? ' ' : g(mark, 'o')} ${name} ${dots(w - textWidth(name) - 4)}`)], [dim(right)])),
+  ];
+}
+
+/** `last run 0:05 · 6/6 · 6 hooks`: the last finished run's figures, only what the mod holds; none before a run. */
+function lastRunRow(a: TabIn, kit: Kit): Run[][] {
+  const l = a.health.last;
+  if (!l || l.secs === undefined) return [];
+  const hooks = a.health.hooks?.byLabel?.length ?? 0;
+  const parts = [`last run ${elapsedClock(l.secs)}`, ...(l.total > 0 ? [`${l.done}/${l.total}`] : []), ...(hooks > 0 ? [`${hooks} ${hooks === 1 ? 'hook' : 'hooks'}`] : [])];
+  return [kit.row([kit.dim(parts.join(' · '))])];
+}
+
 const WORD: Record<UiState, string> = { running: 'working', done: 'done', failed: 'failed', blocked: 'blocked', waiting: 'waiting', queued: 'queued' } as Record<UiState, string>;
 const stateGlyph = (kit: Kit, s: UiState): string => (s === 'done' ? kit.g('●', '*') : s === 'failed' || s === 'blocked' ? kit.g('■', 'x') : s === 'running' ? kit.g('◆', '#') : kit.g('○', 'o'));
 const alertOf = (s: UiState): boolean => s === 'failed' || s === 'blocked';
@@ -93,12 +116,21 @@ function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted:
     const mark = deny > 0 ? g('■', 'x') : fired ? g('●', '*') : g('○', 'o');
     lines.push({ runs: chip(`${canOpen ? (open ? g('▾', 'v') : g('▸', '>')) : ' '} ${mark} ${c.id}`, right, deny > 0 ? 'alert' : 'idle'), ...(canOpen ? { press: { kind: 'flip', key } } : {}) });
     if (!open || !grp) continue;
-    grp.lines.forEach((l, i) => {
-      const last = i === grp.lines.length - 1;
+    // I: identical rows merge into one (`×8`); the verdict sits in a fixed right column (cut at its end, never at its start); the label takes the rest and is cut at its END with `…`.
+    const merged: { l: (typeof grp.lines)[number]; n: number }[] = [];
+    for (const l of grp.lines) {
+      const same = merged.find((m) => m.l.ok === l.ok && m.l.label === l.label && (m.l.detail ?? '').trim() === (l.detail ?? '').trim() && (m.l.fix ?? '') === (l.fix ?? ''));
+      if (same) same.n++;
+      else merged.push({ l, n: 1 });
+    }
+    const vw = Math.min(18, Math.max(0, ...merged.map((m) => textWidth((m.l.detail ?? '').trim()))));
+    merged.forEach(({ l, n }, i) => {
+      const last = i === merged.length - 1;
       const off = l.ok && checkOff(l.label, l.detail);
-      const detail = (l.detail ?? '').trim();
-      const rw = detail ? textWidth(detail) + 2 : 0;
-      const label = fitText(l.label, Math.max(4, kit.u - 9 - rw));
+      const detail = fitText((l.detail ?? '').trim(), vw);
+      const times = n > 1 ? ` ×${n}` : '';
+      const room = Math.max(4, kit.u - 9 - (detail ? vw + 2 : 0)); // a row without a verdict keeps the whole width
+      const label = `${fitText(l.label, Math.max(1, room - textWidth(times)))}${times}`;
       const branch = dim(`${last ? g('└', '+') : g('├', '+')} `);
       if (!l.ok) {
         lines.push(plain(row([branch, red(g('■', 'x')), txt(` ${label}`, { fg: kit.k.bad, tone: 'bad' })], detail ? [red(detail)] : [], 5)));
@@ -125,7 +157,11 @@ function teamPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>): Part {
   const secs = h.upSecs ?? a.leadSecs; // the lead's clock is the session's (spec 2.10: `up` from the session start)
   lines.push(plain(row([txt(g('◉', '@')), txt(' lead'), ...(h.branch ? [dim(` · ${h.branch}`)] : [])], secs !== undefined ? [dim(elapsedClock(secs))] : [])));
   if (!ws.length) {
-    lines.push(plain(kit.blank), plain(row([txt(team && team !== 'off' ? `Team mode is ${team}.` : 'Team mode is off.')])), plain(row([dim('no workers registered')])));
+    lines.push(
+      plain(kit.blank), plain(row([txt(`team ${team ?? 'off'} · 0 workers`)])), plain(kit.blank),
+      ...skeleton(kit, ['worker', 'state'], [['w1', 'queued'], ['w2', 'queued']]).map(plain),
+      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
+    );
     return { lines, order: [] };
   }
   const order: { key: string; done: boolean }[] = [];
@@ -152,7 +188,11 @@ function boardPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>): Part {
   const done = items.filter((t) => t.state === 'done').length;
   const lines: TabLine[] = [plain(ribbon('BOARD', items.length ? [...gauge(kit, done, items.length), dim(` ${done}/${items.length}`)] : []))];
   if (!items.length) {
-    lines.push(plain(row([txt('No board items yet.')])), plain(row([dim('plan appears at the first prompt')])));
+    lines.push(
+      plain(row([txt('0 items')])), plain(kit.blank),
+      ...skeleton(kit, ['item', 'owner  time'], [['T1', 'worker  0:00'], ['T2', 'worker  0:00']]).map(plain),
+      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
+    );
     return { lines, order: [] };
   }
   const worker = (o?: string) => (o ? a.workers.find((w) => w.name === o) : undefined);
@@ -193,7 +233,11 @@ function chatPart(a: TabIn, kit: Kit, take: number): Part {
   const n = a.notes.length;
   const lines: TabLine[] = [plain(ribbon('CHAT', metaText(`${name}${n ? ` · ${n} ${n === 1 ? 'note' : 'notes'}` : ''}`)))];
   if (!n) {
-    lines.push(plain(row([txt('No notes yet.')])), plain(row([dim(`${a.people} ${a.people === 1 ? 'member' : 'members'} in channel`)])));
+    lines.push(
+      plain(row([txt(`0 notes · ${a.people} ${a.people === 1 ? 'member' : 'members'}`)])), plain(kit.blank),
+      ...skeleton(kit, ['time   from', 'note'], [['--:--  lead', '········'], ['--:--  worker', '········']], ' ').map(plain),
+      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
+    );
     return { lines, order: [] };
   }
   const shown = take > 0 ? Math.max(1, Math.min(n, Math.floor(take / 2))) : n;
@@ -213,7 +257,7 @@ function chatPart(a: TabIn, kit: Kit, take: number): Part {
 const tok = (n: number): string => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n)));
 
 function corePart(a: TabIn, kit: Kit): Part {
-  const { dim, txt, row, ribbon, metaText } = kit;
+  const { g, dim, txt, row, ribbon, metaText } = kit;
   const c = a.core;
   const doneN = a.todos.filter((t) => t.state === 'done').length;
   const verified = c?.verdicts.filter((v) => v.status === 'verified').length ?? 0;
@@ -226,7 +270,11 @@ function corePart(a: TabIn, kit: Kit): Part {
   const local = sum((c?.routes ?? []).filter((r) => r.transport !== 'tmux').map((r) => sum(r.seats.map((s) => s.count))));
   const lines: TabLine[] = [plain(ribbon('CORE', verdictText ? metaText(verdictText) : []))];
   if (!verdictText && !read && !tmux && !local) {
-    lines.push(plain(row([txt('No verdicts yet.')])), plain(row([dim(`items done ${doneN} of ${a.todos.length}`)])));
+    lines.push(
+      plain(row([txt('0 verdicts')])), plain(kit.blank),
+      ...skeleton(kit, ['check', 'figure'], [['verdicts', g('—', '-')], ['kept out', g('—', '-')], ['workers', g('—', '-')]], ' ').map(plain),
+      ...(lastRunRow(a, kit).length ? [plain(kit.blank)] : []), ...lastRunRow(a, kit).map(plain),
+    );
     return { lines, order: [] };
   }
   const label = (t: string): Run => dim(t.padEnd(9));

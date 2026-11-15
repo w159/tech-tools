@@ -38,7 +38,7 @@ describe('idle band shows live health', () => {
     test(`at ${cols}: idle, gates, ctx and the health button replace \`todo -\` and \`no agents\``, () => {
       const row = firstRow(model(cols));
       expect(row).toContain('◖ ◆ ATLAS ◗ ◌ idle up 12:04');
-      expect(row).toContain('● gates ok');
+      expect(row).toContain('○ gates armed ›');
       expect(row).toMatch(/ctx +18%/); // v1 frame spec: the ctx figure is right-aligned in a fixed slot
       expect(row).toContain('▸ health');
       expect(row).not.toContain('todo -');
@@ -80,9 +80,9 @@ describe('the health button', () => {
     if (!x) throw new Error('no health button');
     return x;
   };
-  test('closed it reads ▸ health, open ▴ health (the selected chip): the toggle flips the chevron', () => {
+  test('closed it reads ▸ health, open ▾ health (the selected chip): the toggle flips the chevron', () => {
     expect(textOf(btn(model(150)))).toBe(' ▸ health '); // round 3 (E8): a chip, one cell of padding each side
-    expect(textOf(btn(model(150, { health: { ...HEALTH, open: true } })))).toBe(' ▴ health ');
+    expect(textOf(btn(model(150, { health: { ...HEALTH, open: true } })))).toBe(' ▾ health ');
   });
   test('it is distinguishable: accent text, a chevron, a hover style', () => {
     const b = btn(model(150));
@@ -111,7 +111,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
     test(`at ${cols} a running band shows the phase head with n/6, the gates chip and ctx, and the health chip (v1 frame spec)`, () => {
       const row = working(cols, true);
       expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ implement 5/6 ')).toBe(true);
-      expect(row).toContain('● gates ok');
+      expect(row).toContain('● gates ok ›');
       expect(row).toMatch(/ctx +12%/);
       expect(row).toContain('▸ health');
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
@@ -122,14 +122,14 @@ describe('the working band keeps its facts and adds the health segments', () => 
     expect(working(150, true).trimEnd()).toBe(WORKING_150);
   });
 });
-const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement 5/6              │  ● gates ok  │ ctx  12%' + ' '.repeat(75) + '▸ health';
+const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement 5/6              │  ● gates ok ›    │ ctx  12%' + ' '.repeat(71) + '▸ health';
 
 describe('the expanded health card (HUD)', () => {
   const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };
   const text = (over: Record<string, unknown> = {}): string[] => healthCardRows({ ...h, ...over } as never, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
   test('ribbon, rows and closing rule', () => {
     const t = text();
-    expect(t[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─+$/); // frame spec section 6: the fixed title, a flat ribbon with no control of its own
+    expect(t[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/); // frame spec section 6: the fixed title, a flat ribbon with no control of its own
     expect(t.some((l) => /○ completion +1 armed/.test(l))).toBe(true); // nothing fired yet (no prompt, no run): every gate is `○ name  n armed`, one per row (in the card's middle column)
     expect(t.some((l) => /○ tripwire +1 armed/.test(l))).toBe(true);
     expect(t.some((l) => /▰+▱+ 18%/.test(l)) && t.join('\n').includes('42k')).toBe(true);

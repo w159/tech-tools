@@ -92,12 +92,11 @@ export function leadBarState(run: string | undefined, lead: UiState): UiState {
   return run === 'working' || (run === undefined && lead === 'running') ? 'running' : 'done';
 }
 
-/** The board view's ribbon words. Where the strip is the bare one-row form (wave 43: no key letters on screen) the title is the breadcrumb `SIDEPANEL ▸ BOARD`: the capture scorer
- * tells the pane from a toast box by its `▸ SIDEPANEL` title and finds the board by `▸ BOARD` (live-110 round 2: board 0.0 with a bare strip under a lone `▸ BOARD`). */
+/** The board view's ribbon words. Round W M: the board tab's header reads `▸ SIDEPANEL · board`, exactly like every other tab (the capture scorer tells the pane from a toast box by its `▸ SIDEPANEL` title); the count is said once, by the summary row. */
 export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { title: string; right: string } {
   // The count is said once, by the summary row in the body (`5 items · 3 dispatches`), not again in the ribbon (critique 22: `5 items` twice).
-  const b = { title: 'BOARD', right: '' };
-  return stripLayout(cols).bare ? { ...b, title: ui.ascii ? 'SIDEPANEL > BOARD' : 'SIDEPANEL ▸ BOARD' } : b;
+  // M: the board tab's header reads like every other tab's (`▸ SIDEPANEL · board`), at every width.
+  return { title: `SIDEPANEL ${ui.ascii ? '|' : '·'} board`, right: '' };
 }
 
 /** The board's one footer row: the totals line (`● 2 done  ■ 1 failed · total 0:57`) with the close hint flush right; the longest form of the hint the row has room for. Nothing to total: the hint alone. */

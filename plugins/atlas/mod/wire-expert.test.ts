@@ -155,7 +155,7 @@ describe('wire-expert: the pulse', () => {
 });
 
 describe('wire-expert: idle breathing', () => {
-  test('(b) at idle with the band drawn, one second of 100 ms beats redraws about 5 times; with nothing drawn none', async () => {
+  test('(b) at idle with the band drawn, one second of 100 ms beats redraws about 10 times; with nothing drawn none', async () => {
     const b = await boot();
     await b.advance(20_000); // the boot run ends and rests, nothing drawn
     const before = b.rec.tickWrites;
@@ -166,8 +166,8 @@ describe('wire-expert: idle breathing', () => {
     const start = seen;
     await b.advance(1000, async () => { if (b.rec.tickWrites !== seen) { seen = b.rec.tickWrites; await b.band(); } }); // the host redraws on every write
     const redraws = b.rec.tickWrites - start;
-    expect(redraws).toBeGreaterThanOrEqual(4);
-    expect(redraws).toBeLessThanOrEqual(6);
+    expect(redraws).toBeGreaterThanOrEqual(8);
+    expect(redraws).toBeLessThanOrEqual(11); // the pill breathes at 10 Hz (round W L)
   });
 });
 
@@ -190,14 +190,14 @@ describe('wire-expert: the close controls', () => {
     expect(walk(await b.pane()).some((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toBe(false);
     expect(textOf(await b.pane())).not.toContain('[✕]');
   });
-  test('(e) the card has no control of its own: the band chip that opens it (`▴ health`, selected) closes it', async () => {
+  test('(e) the band chip that opens the card (`▾ health`, selected) closes it, as does the title chip', async () => {
     const b = await boot();
     await b.rest();
     await press(button(await b.band(), 'band:health', 'health'));
     const open = await b.band();
     expect(textOf(open)).toContain('HEALTH');
     expect(textOf(open)).not.toContain('hide');
-    expect(textOf(open)).toContain('▴ health');
+    expect(textOf(open)).toContain('▾ health');
     await press(button(open, 'band:health', 'health'));
     expect(textOf(await b.band())).not.toContain('HEALTH');
   });

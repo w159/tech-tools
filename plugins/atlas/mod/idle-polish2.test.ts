@@ -10,7 +10,7 @@ import { bodyLines, headerRows, lineText, ribbonRow, type PanelModel } from './p
 import { panelWorld } from '../contracts/panel-world';
 import { textWidth } from './theme';
 import type { Health } from './idle-health';
-import { shouldDock } from './register';
+import { shouldDockAsked } from './register';
 import { todoRows, agentRows } from './hud-surface';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -47,23 +47,23 @@ describe('1: the work state with no agent draws the health rows at every pane wi
 });
 
 describe('2: the idle band at 110 says more than one line of figures when no panel is up', () => {
-  test('an unasked pane docks from 144 columns, never at 110: the mod cannot show the panel there', () => {
-    expect(shouldDock({ isFullscreen: true, columns: 110 })).toBe(false);
-    expect(shouldDock({ isFullscreen: true, columns: 150 })).toBe(true);
+  test('K: the pane opens by asking (the first prompt) from 110 columns, and at no width at rest', () => {
+    expect(shouldDockAsked({ isFullscreen: true, columns: 110 })).toBe(true);
+    expect(shouldDockAsked({ isFullscreen: true, columns: 109 })).toBe(false);
   });
   for (const cols of [110, 150]) {
     test(`at ${cols} with no panel: one row, no tab chips under it (round 2 D9), no last run, event count or age line`, () => {
       const rows = rowsOf(model(cols));
       expect(rows).toHaveLength(1);
       expect(rows.join('\n')).not.toMatch(/last run|events|last \d+s ago|status/);
-      expect(rows[0]).toContain('gates ok');
+      expect(rows[0]).toContain('gates armed'); // round W G: not prompted yet, so the chip says armed
     });
   }
   test('with the panel up the band reads as it does closed (the uptime is the card\'s and the panel\'s)', () => {
     const rows = rowsOf(model(150, { panel: true }));
     expect(rows[0]).not.toContain('health'); // v1 frame spec: the health chip shows only with the pane closed
     expect(rows[0]).toMatch(/ctx +18%/);
-    expect(rows[0]).toContain('gates ok');
+    expect(rows[0]).toContain('gates armed'); // round W G: not prompted yet, so the chip says armed
     expect(rows.join('\n')).not.toMatch(/last run|events/);
   });
 });
@@ -135,7 +135,7 @@ describe('6: the team tab with only the lead draws no dead sparkline', () => {
     const top = rows.slice(rows.findIndex((l) => l.includes('── TEAM')), rows.findIndex((l) => l.includes('── TEAM')) + 5).join('\n'); // frame spec T1: the ribbon carries `off`, the lead row sits right under it
     expect(top).not.toMatch(/[⣀⣄⣤⣶⣿▁]/u);
     expect(top).toContain('lead');
-    expect(top).toContain('no workers registered');
+    expect(top).toContain('0 workers');
   });
 });
 
@@ -145,7 +145,7 @@ describe('7: the idle stepper is dim, bold only while a stage is live', () => {
 
 describe('8: the card has no second badge; the band row ends on one edge and one fill', () => {
   test('the HEALTH ribbon carries the one capsule and no control', () => {
-    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('').trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─+$/); // the fixed title of frame spec section 6
+    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('').trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/); // the fixed title of frame spec section 6
   });
   for (const cols of [150, 110]) {
     test(`at ${cols}: the band row is ${cols} cells, there is no strip row, and its last cell wears the chip's fill (flush before the host's [-])`, () => {

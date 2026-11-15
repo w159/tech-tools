@@ -107,8 +107,8 @@ describe('j: the team tab with nobody dispatched owns its body (D14)', () => {
   for (const cols of WIDTHS) test(`${cols}: the lead row, a ribbon with the live fact, a dim skeleton, the footer last`, () => {
     const m = panelWorld('team', cols, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: NOW, frame: 0 }, lead: { name: 'lead', role: 'lead', state: 'waiting', detail: '' }, health: health() } as never);
     const t = body(m);
-    expect(t.filter((l) => l.includes('no workers registered')).length).toBe(1);
-    expect(t.some((l) => l.includes('Team mode is off.'))).toBe(true);
+    expect(t.filter((l) => l.includes('0 workers')).length).toBe(1);
+    expect(t.some((l) => /worker +state|worker +st/.test(l))).toBe(true); // the dim skeleton's column heads
     expect(t.join('\n')).not.toMatch(/no workers yet/);
     expect(t.findIndex((l) => l.trim() === 'PULSE')).toBe(-1);
     expect(t.findIndex((l) => l.trim() === 'HEALTH')).toBe(-1);

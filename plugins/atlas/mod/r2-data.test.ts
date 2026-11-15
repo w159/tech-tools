@@ -50,8 +50,10 @@ describe('D4: gates report denials', () => {
   const chipOf = (h: Health, needle: RegExp): Run[] => frameRow(h).filter((x) => needle.test(x.t));
 
   test('band: ok is `● gates ok` on the chip; a gate that never fired changes nothing', () => {
-    expect(text(frameRow(okH))).toContain('● gates ok');
-    expect(chipOf(okH, /gates ok/)).toHaveLength(1);
+    expect(text(frameRow(okH))).toContain('gates armed'); // before the first prompt the chip only says armed (round W G)
+    const prompted = health([chk('routing', 8, 8), chk('tripwire', 3, 3), chk('header', 0, 0)], { hooks: { total: 3, byLabel: [{ label: 'prompt.submit', n: 1 }], recent: [], lastEventSecs: 1, runTools: 0 } as never });
+    expect(text(frameRow(prompted))).toContain('● gates ok');
+    expect(chipOf(prompted, /gates ok/)).toHaveLength(1);
   });
   test('band: denials read `■ N denied` on the red alert chip', () => {
     expect(text(frameRow(badH))).toContain('■ 2 denied');

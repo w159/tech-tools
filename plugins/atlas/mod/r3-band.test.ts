@@ -108,7 +108,7 @@ describe('E10: a narrow band (110 columns with the side pane open) keeps the hea
       const row = first(model(k, cols));
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
       expect(row).toMatch(/◌ idle|[◐◓◑◒] |● done/);
-      expect(row).toMatch(/● gates ok/);
+      expect(row).toMatch(/[●○] gates (ok|armed)/);
       expect(row).not.toContain('session started');
       expect(cols >= 62 ? /[▁▂▃▄▅▆▇█]{4,}|\d+\/5m/.test(row) : true).toBe(true);
     });
@@ -116,10 +116,10 @@ describe('E10: a narrow band (110 columns with the side pane open) keeps the hea
   test('the extras give way before the spark and the head go', () => {
     const at = (c: number) => first(model('working', c));
     expect(at(110)).toMatch(/ctx +6%/);
-    expect(at(98)).not.toMatch(/ctx +6%/);
-    expect(at(98)).toMatch(/\d+ ev\/5m/);
+    expect(at(96)).not.toMatch(/ctx +6%/);
+    expect(at(96)).toMatch(/\d+ ev\/5m/);
     expect(at(86)).toMatch(/implement 5\/6/);
-    expect(at(86)).toMatch(/\d+\/5m/);
+    expect(at(86)).toMatch(/\d+ (ev)?\/?5m|\d+\/5m/);
   });
 });
 

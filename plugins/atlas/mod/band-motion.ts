@@ -149,25 +149,29 @@ export function stepKind(h: KindHold, computed: KindWord, now: number): { hold: 
 export const beatDue = (o: { working: boolean; shown: KindWord | null; open: boolean; ended: boolean; flip: boolean; idleLive?: boolean; idleBeat?: number }): boolean =>
 	o.working || o.shown === 'working' || o.open || o.ended || o.flip || (o.idleLive === true && (o.idleBeat === undefined || o.idleBeat % IDLE_EVERY === 0));
 
-// ---- idle liveness (expert round 4, S-8) ------------------------------------------------------------------------------------
-// At rest the band breathes from data, not from a blinking glyph: the idle state dot and the events spark's newest cell ramp through 8 tones and back (a 14-phase triangle), one step per 200 ms (every 2nd 100 ms beat, 5 Hz).
+// ---- idle liveness (round W, L) ------------------------------------------------------------------------------------
+// At rest the band breathes slowly: the wordmark pill's background ramps from a dim violet to the accent and back, a 24-phase triangle (13 tones) with one step per 100 ms beat: a 2.4 s period.
 // Nothing else on the band moves. The phase is a pure function of the shared spinner clock, so a skipped beat never stalls it and every surface that reads it agrees.
-/** A beat is 100 ms; the visible step rides every 2nd one. */
-export const IDLE_EVERY = 2;
+/** A beat is 100 ms; the visible step rides every beat (the host redraws ten times a second at most). */
+export const IDLE_EVERY = 1;
 export const IDLE_STEP_MS = FRAME_MS * IDLE_EVERY;
-/** 0,1,..7,6,..1: the 14 phases of one breath. */
-export const IDLE_PHASES = 14;
+/** Tones per half breath: levels 0..IDLE_TOP. */
+export const IDLE_TOP = 12;
+/** 0,1,..12,11,..1: the 24 phases of one breath (2.4 s). */
+export const IDLE_PHASES = IDLE_TOP * 2;
 export const idlePhase = (nowMs: number): number => ((Math.floor(nowMs / IDLE_STEP_MS) % IDLE_PHASES) + IDLE_PHASES) % IDLE_PHASES;
-/** Tone level 0..7 of a phase. */
-export const idleLevel = (phase: number): number => (phase < 8 ? phase : IDLE_PHASES - phase);
-/** The 256-colour ramp: four stable xterm indices (each round-trips through the host's downsampler). */
-export const IDLE_RAMP_256: readonly number[] = [246, 146, 147, 183]; // checked: runHex(xtermHex(i), 256) returns xtermHex(i) for each (245, 103, 140 and 141 do not)
+/** Tone level 0..IDLE_TOP of a phase. */
+export const idleLevel = (phase: number): number => (phase <= IDLE_TOP ? phase : IDLE_PHASES - phase);
+/** The 256-colour pill ramp: four xterm indices (band.tsx PINNED_256 hands the host their pre-images, so each lands exactly). */
+export const IDLE_RAMP_256: readonly number[] = [97, 98, 135, 141];
+/** The dim end of the breath in truecolor (xterm 97); the bright end is the accent. */
+export const PILL_DIM_HEX = xtermHex(97);
 const lerpHex = (a: string, b: string, t: number): string => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) + (parseInt(b.slice(i, i + 2), 16) - parseInt(a.slice(i, i + 2), 16)) * t).toString(16).padStart(2, '0')).join('');
-/** The breathing tone at `nowMs`: `hex` is the foreground (muted grey rising to the accent), absent when nothing may move (NO_COLOR, reduced motion, TERM=dumb). 8 truecolor steps, 4 indices in 256 colours. */
+/** The breathing pill fill at `nowMs`: `hex` is the pill's background (dim violet rising to the accent), absent when nothing may move (NO_COLOR, reduced motion, TERM=dumb). 13 truecolor steps, 4 indices in 256 colours. */
 export function idleRamp(nowMs: number, ui: Pick<Ui, 'theme' | 'color'>, env: UiEnv = hostEnv(), still = false): { phase: number; level: number; hex?: string } {
 	const phase = idlePhase(nowMs);
 	const level = idleLevel(phase);
 	if (still || ui.color === 'none' || env.TERM === 'dumb' || reducedMotion(env)) return { phase, level };
 	const pal = PALETTES[ui.theme];
-	return { phase, level, hex: ui.color === '256' ? xtermHex(IDLE_RAMP_256[Math.floor(level / 2)]!) : lerpHex(pal.muted, pal.accent, level / 7) };
+	return { phase, level, hex: ui.color === '256' ? xtermHex(IDLE_RAMP_256[Math.min(IDLE_RAMP_256.length - 1, Math.floor((level * IDLE_RAMP_256.length) / (IDLE_TOP + 1)))]!) : lerpHex(ui.theme === 'latte' ? pal.muted : PILL_DIM_HEX, pal.accent, level / IDLE_TOP) };
 }

@@ -72,8 +72,8 @@ describe('D8: one chip idiom, inert uppercase headers', () => {
     const rows = healthCardRows(health(), { cols: 100, ui });
     const flat = rows.map((r) => r.map((x) => x.t).join(''));
     expect(flat.join('\n')).not.toContain('hide');
-    expect(rows.flat().filter((x) => x.press !== undefined)).toHaveLength(0);
-    expect(flat[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─+$/);
+    expect(new Set(rows.flat().filter((x) => x.press !== undefined).map((x) => x.press))).toEqual(new Set(['band:health'])); // round W M: the title chip is the toggle, nothing else is
+    expect(flat[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/);
   });
   test('the card keeps every health row when the panel is closed', () => {
     const flat = healthCardRows(health(), { cols: 100, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
@@ -273,13 +273,33 @@ describe('D1: card and panel never show at once', () => {
     expect(h.rec.opens).toContain('atlas');
     expect(textOf(await band(h))).not.toContain('HEALTH'); // the panel opened: the card is gone
     expect(all(await band(h)).some((n) => n.kind === 'Button' && n.props.key === 'band:health')).toBe(false); // v1 frame spec: with the panel up the band draws no health chip, so no card can open
-    expect(all(await band(h)).some((n) => n.kind === 'Button' && n.props.key === 'band:gates')).toBe(true); // the gates chip stays and opens the panel on its gates tab
+    expect(all(await band(h)).some((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:gates'))).toBe(true); // the gates chip stays and opens the panel on its gates tab
     expect(textOf(await band(h))).not.toContain('HEALTH');
     await h.one('ui.close')(h.$, { id: 'atlas', origin: { kind: 'person' } }, noopNext);
     await settle();
     expect(textOf(await band(h))).not.toContain('HEALTH'); // the card does not come back by itself
     await press(button(await band(h), 'band:health', 'health'));
     expect(textOf(await band(h))).toContain('HEALTH'); // panel closed: the chip opens the card again
+  });
+  test('round W M: the card title chip toggles too: it reads `▾ HEALTH` while open and a click closes the card; the band keeps a `▾ health` chip that closes it', async () => {
+    const h = bootHarness();
+    resetCore();
+    await register(h.onFn, {});
+    await h.one('session.start')(h.$, { cwd: ROOT, surface: 'terminal', isInteractive: true }, noopNext);
+    await settle();
+    await h.advance(20_000, async () => { await band(h); });
+    await press(button(await band(h), 'band:health', 'health'));
+    const open = await band(h);
+    const title = all(open).find((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:health') && textOf(n).includes('HEALTH'));
+    expect(title).toBeDefined();
+    expect(textOf(open)).toContain('▾ HEALTH');
+    expect(textOf(button(open, 'band:health', 'health'))).toContain('▾ health'); // the band chip stays, selected
+    await press(title!);
+    expect(textOf(await band(h))).not.toContain('HEALTH'); // the title click closed it
+    await press(button(await band(h), 'band:health', 'health'));
+    expect(textOf(await band(h))).toContain('▾ HEALTH'); // and the band chip opens it again
+    await press(button(await band(h), 'band:health', 'health'));
+    expect(textOf(await band(h))).not.toContain('HEALTH');
   });
   test('the card collapses from the band chip that opened it (key band:health), selected while open', async () => {
     const h = bootHarness();

@@ -50,7 +50,7 @@ describe('1: the checks row never repeats the gates figure', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols}, all green: the band says gates once and draws no checks row`, () => {
       const rows = rowsOf(model(cols));
-      expect(rows[0]).toContain('● gates ok');
+      expect(rows[0]).toContain('○ gates armed ›');
       expect(rows.join('\n')).not.toMatch(/checks|4\/4 green|completion/);
     });
     test(`at ${cols}, a gate not green brings the checks row back`, () => {
@@ -192,7 +192,7 @@ describe('11: the team tab has no orphan time axis when nothing ran', () => {
     const lead = { name: 'lead', state: 'waiting', detail: '', secs: 0 } as never;
     const t = body(world(57, { lead, workers: [], mates: [] }, 'team'));
     expect(t.join('\n')).not.toMatch(/^\s*\d+:\d\d\s+\d+:\d\d\s*$/m);
-    expect(t.join('\n')).toContain('no workers registered');
+    expect(t.join('\n')).toContain('0 workers');
     expect(t.join('\n')).not.toContain('0 running');
   });
 });
@@ -204,11 +204,11 @@ describe('12: the open card is one even block, spaced like the TODO box', () => 
     expect(new Set(w).size).toBe(1);
     expect(w[0]).toBe(110);
   });
-  test('the title is the fixed `HEALTH` label of the ribbon, with no control of its own (the band chip closes the card)', () => {
+  test('the title is the fixed `HEALTH` label of the ribbon, a toggle itself (the band chip closes the card too)', () => {
     const title = rows[0]!.find((x) => x.t.trim() === 'HEALTH')!;
     expect(title).toBeDefined();
     expect(title.bold).toBe(true);
-    expect(title.press).toBeUndefined();
+    expect(title.press).toBe('band:health'); // round W M: the title is the toggle
   });
   test('the slot leaves the blank row under the band a HUD block has', () => {
     const card = padRows(healthCardRows(h, { cols: 110, ui }), 110).map((r) => r.map((x) => ({ t: x.t })));

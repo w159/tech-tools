@@ -2,7 +2,7 @@
 // render with a viewport; /atlas-cc opens it on demand with focus and Esc-to-close.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { dockTick, register, shouldDock } from './register';
+import { register, shouldDockAsked } from './register';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
@@ -61,13 +61,12 @@ function stubEngine() {
 const noopNext: AnyNext = async (input) => input;
 
 describe('sidebar open requests', () => {
-  test('shouldDock: fullscreen and >= 144 columns only (the engine floor for unasked panes)', () => {
-    expect(shouldDock({ isFullscreen: true, columns: 160 })).toBe(true);
-    expect(shouldDock({ isFullscreen: true, columns: 144 })).toBe(true);
-    expect(shouldDock({ isFullscreen: true, columns: 143 })).toBe(false);
-    expect(shouldDock({ isFullscreen: true, columns: 110 })).toBe(false);
-    expect(shouldDock({ isFullscreen: false, columns: 160 })).toBe(false);
-    expect(shouldDock({ columns: 160 })).toBe(false);
+  test('shouldDockAsked: fullscreen and >= 110 columns only (the engine floor for asked panes); the pane never opens at rest', () => {
+    expect(shouldDockAsked({ isFullscreen: true, columns: 160 })).toBe(true);
+    expect(shouldDockAsked({ isFullscreen: true, columns: 110 })).toBe(true);
+    expect(shouldDockAsked({ isFullscreen: true, columns: 109 })).toBe(false);
+    expect(shouldDockAsked({ isFullscreen: false, columns: 160 })).toBe(false);
+    expect(shouldDockAsked(undefined)).toBe(false);
   });
 
   async function renderBand(viewport: { columns: number; rows: number; isFullscreen: boolean }) {
@@ -83,7 +82,6 @@ describe('sidebar open requests', () => {
     await pick('ui.render|AbovePrompt')(engine, e, noopNext).catch(() => undefined);
     guard.rendering = false;
     const denied = guard.deniedWrites;
-    await dockTick(engine); // the rebuild tick, where writes are allowed, performs the open
     return { opens, pick, engine, denied };
   }
 
@@ -92,22 +90,20 @@ describe('sidebar open requests', () => {
     expect((await renderBand({ columns: 100, rows: 40, isFullscreen: true })).opens).toEqual([]);
   });
 
-  test('critique 12 A1: a terminal that starts at 110 (the engine refuses an unasked pane) docks at the first render once it is widened to 150, and only once', async () => {
+  test('K: the pane opens at no width at rest (110 and 150 behave the same); only the first prompt opens it', async () => {
     const { on, pick } = captureOn();
     const { engine, opens } = stubEngine();
     await register(on, {});
     await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
     const at = (columns: number) => ({ surface: 'terminal', viewport: { columns, rows: 40, isFullscreen: true }, props: { hasSurvey: false, bodyColumns: columns } });
-    const draw = async (columns: number) => { guard.rendering = true; await pick('ui.render|AbovePrompt')(engine, at(columns), noopNext).catch(() => undefined); guard.rendering = false; await dockTick(engine); };
-    await draw(110);
-    await draw(110);
+    const draw = async (columns: number) => { guard.rendering = true; await pick('ui.render|AbovePrompt')(engine, at(columns), noopNext).catch(() => undefined); guard.rendering = false; };
+    for (const c of [110, 110, 150, 150, 110, 150]) await draw(c);
     expect(opens).toEqual([]);
-    await draw(150);
+    await pick('prompt.submit')(engine, { text: 'go' }, noopNext);
     expect(opens).toEqual([{ id: 'atlas', title: 'Atlas', columns: 56 }]);
     await draw(150);
-    await draw(110);
-    await draw(150);
-    expect(opens).toHaveLength(1); // docked once: a pane the person closed stays closed
+    await pick('prompt.submit')(engine, { text: 'again' }, noopNext);
+    expect(opens).toHaveLength(1); // opened once: a pane the person closed stays closed
   });
 
   // A2 (critique 14): the engine places an UNASKED pane from 144 columns, but an open made behind the person's prompt is "asked" and
@@ -119,7 +115,7 @@ describe('sidebar open requests', () => {
       const { engine, opens } = stubEngine();
       await register(on, {});
       await pick('session.start')(engine, { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true }, noopNext);
-      const draw = async (c = columns) => { guard.rendering = true; await pick('ui.render|AbovePrompt')(engine, at(c, isFullscreen), noopNext).catch(() => undefined); guard.rendering = false; await dockTick(engine); };
+      const draw = async (c = columns) => { guard.rendering = true; await pick('ui.render|AbovePrompt')(engine, at(c, isFullscreen), noopNext).catch(() => undefined); guard.rendering = false; };
       const submit = () => pick('prompt.submit')(engine, { text: 'go' }, noopNext);
       return { engine, opens, pick, draw, submit };
     }
@@ -132,11 +128,13 @@ describe('sidebar open requests', () => {
       await s.submit();
       expect(s.opens).toHaveLength(1);
     });
-    test('never below 110, never inline, never when the pane is already docked at 150', async () => {
+    test('never below 110, never inline; at 150 the render opens nothing and the first prompt opens the pane once, as at 110', async () => {
       for (const [columns, full] of [[100, true], [110, false], [109, true]] as const) { const s = await session(columns, full); await s.draw(); await s.submit(); expect(s.opens).toEqual([]); }
       const wide = await session(150);
       await wide.draw();
-      expect(wide.opens).toHaveLength(1); // docked by dockTick
+      expect(wide.opens).toEqual([]);
+      await wide.submit();
+      expect(wide.opens).toHaveLength(1);
       await wide.submit();
       expect(wide.opens).toHaveLength(1);
     });
@@ -161,11 +159,11 @@ describe('sidebar open requests', () => {
     expect((await renderBand({ columns: 160, rows: 40, isFullscreen: true })).denied).toBe(0);
   });
 
-  test('opens once docked at 160 fullscreen; /atlas-cc opens 12 rows with focus and Esc-close', async () => {
+  test('never opens at rest, at 160 or at 110 (round W K); /atlas-cc opens 12 rows with focus and Esc-close', async () => {
     const { opens, pick, engine } = await renderBand({ columns: 160, rows: 40, isFullscreen: true });
-    expect(opens).toEqual([{ id: 'atlas', title: 'Atlas', columns: 56 }]);
+    expect(opens).toEqual([]);
     await pick('command.run|atlas-cc')(engine, { args: '' }, noopNext);
-    expect(opens[1]).toMatchObject({ id: 'atlas', rows: 12, closeOnEscape: true, focus: true });
+    expect(opens[0]).toMatchObject({ id: 'atlas', rows: 12, closeOnEscape: true, focus: true });
   });
 
   test('closing the pane resets the tab to route', async () => {

@@ -34,12 +34,14 @@ describe('card: a flat ribbon, every row exactly cols wide', () => {
       const rows = rowsText(card(health(), cols, BUSY));
       for (const r of rows) expect(textWidth(r), r).toBe(cols);
       expect(rows.join('\n')).not.toMatch(/[╭╮╰╯]/);
-      expect(rows[0]).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─+$/); // frame spec section 6: a fixed title, the same ribbon the pane has
+      expect(rows[0]).toMatch(/^◖ ◆ ATLAS ◗ ▾ HEALTH ─+$/); // frame spec section 6: a fixed title, the same ribbon the pane has
       expect(rows[0]).not.toContain('hide');
     });
   }
-  test('the card has no control of its own: the band\'s `▴ health` chip closes it (frame spec section 6)', () => {
-    expect(card(health(), 100, BUSY).flat().filter((x) => x.press !== undefined)).toHaveLength(0);
+  test('the card title is its own toggle (round W M): `▾ HEALTH` closes it, as does the band\'s `▾ health` chip; no other run is pressable', () => {
+    const p = card(health(), 100, BUSY).flat().filter((x) => x.press !== undefined);
+    expect(new Set(p.map((x) => x.press))).toEqual(new Set(['band:health']));
+    expect(p.map((x) => x.t.trim()).sort()).toEqual(['HEALTH', '▾']);
   });
 });
 
