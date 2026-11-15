@@ -52,7 +52,9 @@ describe('card: a superset of the panel health rows', () => {
     const ids = healthRows(h, ui, { recent: true }).map((r) => r.label);
     const t = rowsText(card(health(), 100, BUSY)).join('\n');
     for (const id of ['gates', 'events', 'context', 'runs', 'session']) expect(ids).toContain(id);
-    for (const label of ids) expect(t, label).toMatch(new RegExp(`^ {2}${label} `, 'm'));
+    // round 3 (E11): the card says each one in its own section: ACTIVITY (events), CONTEXT, RUNS, GATES and the session row
+    for (const head of ['ACTIVITY', 'CONTEXT', 'RUNS', 'GATES']) expect(t, head).toMatch(new RegExp(`── ${head} `));
+    expect(t).toMatch(/\bsession +up /);
   });
 });
 
@@ -60,15 +62,15 @@ describe('card: team is its own item, never a note or a suffix', () => {
   test('`Team mode: off` is nowhere; `team off` is a field of the session row', () => {
     const rows = rowsText(card(health(), 110, BUSY));
     expect(rows.join('\n')).not.toContain('Team mode');
-    const session = rows.find((r) => /^ {2}session /.test(r))!;
+    const session = rows.find((r) => /\bsession +up /.test(r))!;
     expect(session).toContain('team off');
-    expect(session).toMatch(/up 0:09 · master · team off · atlas 17\.24\.0 · cost \$0\.04/);
+    expect(rowsText(card(health(), 88, BUSY)).find((r) => /\bsession +up /.test(r))).toMatch(/up 0:09 · master · team off · atlas 17\.24\.0 · cost \$0\.04/); // one column: the session row has the whole width
     const panel = healthRows({ ...health(), pulse: BUSY }, ui, { recent: true });
     expect(JSON.stringify(panel)).not.toContain('Team mode');
   });
   test('a Health with its own team field says it', () => {
     const rows = rowsText(card(health({ team: 'on' }), 110, BUSY));
-    expect(rows.find((r) => /^ {2}session /.test(r))).toContain('team on');
+    expect(rows.find((r) => /\bsession +up /.test(r))).toContain('team on');
   });
 });
 
@@ -99,33 +101,32 @@ describe('gates: one vocabulary', () => {
 describe('pulse rows', () => {
   test('events: a 28-cell spark of pulse.events and `N/5m`; context: framed gauge, `6% · 64k of 1M`; cost only when the pulse has it', () => {
     const rows = rowsText(card(health(), 110, BUSY));
-    const ev = rows.find((r) => /^ {2}events /.test(r))!;
-    expect(ev).toMatch(/[⣀-⣿]{28}/);
-    expect(ev).not.toMatch(/[⣀-⣿]{29}/);
-    expect(ev).toContain('8/5m');
-    const cx = rows.find((r) => /^ {2}context /.test(r))!;
-    expect(cx).toMatch(/ [█▏▎▍▌▋▊▉░]{20} 6% · 64k of 1M/);
-    expect(rows.join('\n')).toContain('cost $0.04');
-    const noCost = rowsText(card(health(), 110, { ...BUSY, cost: undefined } as Pulse)).join('\n');
+    expect(rows.find((r) => /^ {12}0 [⠀-⣿]{28}/.test(r))).toBeDefined(); // the ACTIVITY chart: the baseline row under the `0` of the y axis
+    expect(rows.find((r) => r.includes('── ACTIVITY'))).toContain('8 in 5m');
+    const cx = rows.join('\n');
+    expect(cx).toMatch(/[█▏▎▍▌▋▊▉░]{8,20} 6%/);
+    expect(cx).toContain('64k of 1M');
+    expect(rowsText(card(health(), 88, BUSY)).join('\n')).toContain('cost $0.04'); // the one-column card's session row has room for it
+    const noCost = rowsText(card(health(), 88, { ...BUSY, cost: undefined } as Pulse)).join('\n');
     expect(noCost).not.toMatch(/cost|\$/);
   });
   test('an empty pulse is a flat baseline, `0/5m` and an em dash, never `none yet` or an invented number', () => {
     const rows = rowsText(card(health({ ctxPct: undefined, tokens: undefined, window: undefined }), 110, IDLE));
-    const ev = rows.find((r) => /^ {2}events /.test(r))!;
-    expect(ev).toMatch(/⣀{28}/);
-    expect(ev).toContain('0/5m');
-    expect(rows.find((r) => /^ {2}runs /.test(r))).toContain('○ no runs this session');
-    expect(rows.find((r) => /^ {2}context /.test(r))).toMatch(/ ░{20} —/);
+    expect(rows.find((r) => /^ {12}0 ⣀{28}/.test(r))).toBeDefined();
+    expect(rows.find((r) => r.includes('── ACTIVITY'))).toContain('0 in 5m');
+    expect(rows.join('\n')).toMatch(/▁+ +no runs yet/);
+    expect(rows.join('\n')).toMatch(/ {14}░{8,20} —/);
     expect(rows.join('\n')).not.toContain('none yet');
     expect(rows.join('\n')).not.toMatch(/cost|\$/);
     const none = rowsText(card(health({ hooks: undefined }), 110)); // no pulse at all and no hook seen (a card built before the pulse is wired)
-    expect(none.find((r) => /^ {2}events /.test(r))).toContain('0/5m');
-    const seen = rowsText(card(health(), 110)).find((r) => /^ {2}events /.test(r))!; // no pulse yet but the hooks did fire: their own count, on a flat baseline
-    expect(seen).toMatch(/⣀{28}\s+6 events/);
+    expect(none.find((r) => r.includes('── ACTIVITY'))).toContain('0 in 5m');
+    const seen = rowsText(card(health(), 110)).find((r) => r.includes('── ACTIVITY'))!; // no pulse yet but the hooks did fire: the section still opens on its ribbon
+    expect(seen).toContain('in 5m');
   });
-  test('runs: an outcome dot per run (newest right), the count and the last run', () => {
-    const r = rowsText(card(health(), 110, BUSY)).find((x) => /^ {2}runs /.test(x))!;
-    expect(r).toMatch(/runs +● ● +2 runs · last 0:05/);
+  test('runs: a bar per run (newest right), the count and the average, no `last`', () => {
+    const r = rowsText(card(health(), 110, BUSY)).find((x) => /2 runs/.test(x))!;
+    expect(r).toMatch(/[▁-█]+ +2 runs · avg 0:\d\d/);
+    expect(r).not.toContain('last');
   });
 });
 
@@ -143,7 +144,7 @@ describe('the run duration prints once across band, panel and transcript card', 
   const flat = (tree: unknown): string => { const out: string[] = []; const walk = (n: unknown): void => { if (typeof n === 'string') out.push(n); else if (n && typeof n === 'object') for (const k of (n as { children?: unknown[] }).children ?? []) walk(k); }; walk(tree); return out.join(''); };
   const engine = (placed: string[]) => ({ ui: { place: async ({ id }: { id: string }) => { placed.push(id); return { isPlaced: true, requestId: id }; }, invalidate: () => undefined } }) as never;
 
-  test('one finished run of 0:05: the band says it, the panel says a `runs` row, the transcript card says its other facts', async () => {
+  test('one finished run of 0:05: the band says it, the panel says a `RUNS` section, the transcript card says its other facts', async () => {
     forgetPlaced();
     try {
       const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
@@ -153,7 +154,7 @@ describe('the run duration prints once across band, panel and transcript card', 
       const h = health({ panel: true, last: { secs: 5, done: 1, total: 1, agents: 1, failed: 0, endedAgo: 4, workers: [{ name: 'alpha-explorer', state: 'done', secs: 5 }] } });
       const world = panelWorld('route', 150, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'done', secs: 5, startMs: NOW }, health: { ...h, pulse: BUSY } } as never);
       const panelText = bodyLines(world).map(lineText).join('\n');
-      expect(panelText).toMatch(/\bruns\b/);
+      expect(panelText).toMatch(/\bRUNS\b/);
       expect(panelText).not.toContain('last run');
       const ids: string[] = [];
       noteRunFinal(5);
@@ -162,7 +163,7 @@ describe('the run duration prints once across band, panel and transcript card', 
       const cardText = flat(placedTree(runId, ui));
       expect(cardText).toMatch(/● done\s+1\/1 · 1 worker/);
       expect(bandText.match(/0:05/g)).toHaveLength(1); // the band's state word is the clock
-      expect(panelText.match(/0:05/g)).toHaveLength(1); // D7: the panel's runs row says `last 0:05`
+      expect(panelText.match(/0:05/g) ?? []).toHaveLength(0); // round 3 (E7): the runs row says the count and the average, never `last 0:05`; the clock is the band's alone
       expect(cardText).not.toContain('0:05'); // the transcript card says its other facts
     } finally { forgetPlaced(); }
   });

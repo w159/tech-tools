@@ -5,7 +5,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, markOf, runHex, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import { activeChipStyle, chipStyle, hoverStyle } from '../clickable';
-import { centred, chipText, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
+import { backWord, boardEmptyRows, centred, chipText, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../board-model';
@@ -40,9 +40,9 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
   };
   const tabEl = (it: StripTab): RenderElement => chip(it.label, keyOf(it), it.id === m.ui.view, pressOf(it));
   const row = (key: string, kids: RenderElement[]): RenderElement => els.Box({ key, flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: kids.flatMap((k, i) => (i ? [gap(f.gap), k] : [k])) });
-  const more = f.more ? [chip(moreWord(open, ui), 'tab:more', f.folded.some((it) => it.id === m.ui.view), () => on.toggle(MORE_KEY))] : [];
-  const rows = [row('tabs', [...f.rows[0]!.map(tabEl), ...more])];
-  if (f.more && open) stripRows(f.folded, inner, f.gap, 2 * f.pad).forEach((r, i) => rows.push(row(`tabs:${i + 1}`, r.map(tabEl))));
+  const more = f.more ? [chip(moreWord(false, ui), 'tab:more', f.folded.some((it) => it.id === m.ui.view), () => on.toggle(MORE_KEY))] : [];
+  // One row always (round 3, E8): `▸ more` swaps the visible set for the folded tabs, which end in a `‹ back` chip.
+  const rows = [row('tabs', f.more && open ? [...f.folded.map(tabEl), chip(backWord(ui), 'tab:back', false, () => on.toggle(MORE_KEY))] : [...f.rows[0]!.map(tabEl), ...more])];
   return rows; // no rule under the lit chip: it is the filled one
 }
 
@@ -121,7 +121,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
   const failedOwners = new Set(plan.filter((x) => x.owner && (x.state === 'failed' || markOf(x.state, x.word) === 'doubt' || ownerDown(x))).map((x) => x.owner as string));
   const lines = items.length
     ? boardLines(plan, { cols, ui, pane: true, ribbon: false, title: false, tick: m.tick ?? 0, ...(s.now === undefined ? {} : { nowMs: spinClock(s.now, m.tick ?? 0) }), motion: m.motion, folded: boardFolded(items), openFolded: boardOpenFolded(items), stopRefused: !!stop?.blocked })
-    : centred(pm, 'nothing on the board yet');
+    : pm.run ? boardEmptyRows(pm, max) : centred(pm, 'nothing on the board yet');
   // Wave 30 (critique 28): under the rows the pane is a chart, not a blank half. Sections, richest first, as many as the height holds: the timeline (a solid bar per agent, its activity row, the axis), the totals line, then the
   // last posts of the channel; what is left over is spread as one blank row between sections, and a dim hint closes the pane, so no run of blank rows is longer than three.
   const blankRow = { runs: [{ t: ' ', tone: 'text' as const }] };

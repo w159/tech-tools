@@ -79,7 +79,7 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
     forgetPhases();
     const t = render('route', 65, 45).join('\n');
     expect(t).not.toMatch(/T\d read|plan {2}▰|\+0:\d\d$/m); // 4d8d8eb1: `plan ▰▰▰▱ 3/5` and one row per item, which disagreed with the HUD
-    expect(t).toMatch(/^ {2}PHASE$/m); // wave 35: the status view's phase heading and, slice S3, its stepper
+    expect(t).toMatch(/^ {2,3}PHASE$/m); // wave 35: the status view's phase heading and, slice S3, its stepper
   });
   test('a phase is green only once the run was in it; an unentered phase is its 240 name, no mark (round 2)', () => {
     const t = walk(['research', 'implement', 'verify'], { kind: 'working', secs: 40, startMs: NOW - 40000 }).join('\n');

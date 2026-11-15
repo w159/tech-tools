@@ -9,7 +9,7 @@ import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } 
 import { world } from '../contracts/band-world';
 import { cells, runsString, stateWordTone, UI_STATES, type Ui } from './atlas-ui';
 import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, toastText, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, tabRows, toastText, type PanelModel, type PanelTab } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
@@ -52,11 +52,14 @@ describe('tab strip', () => {
       expect(lineText(next!)).not.toMatch(/━/);
     }
   });
-  test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (trailing tabs fold into `▸ more`, opened they show whole)', () => {
+  test('L21: one strip row at every width from 29 to 140, never wider than the pane; from 34 the closed set and the `▸ more` set together hold every tab, in order', () => {
+    const words = (m: ReturnType<typeof panelWorld>): string[] => tabRows(m).map(lineText).join(' ').split(/\s+/).filter((w) => w && !['▸', 'more', '‹', 'back'].includes(w));
     for (let cols = 29; cols <= 140; cols++) {
-      const rowsOut = headerRows(panelWorld('route', cols, mocha, { expanded: MORE_KEY })).slice(2).map(lineText).filter((l) => /^ (status|team|channel|gates|core|board|▸ more|▾ more)/.test(l) || /^ (status|team|channel|gates|core|board)/.test(l.trimEnd()));
-      for (const l of rowsOut) expect(cells(l)).toBeLessThanOrEqual(cols);
-      expect(rowsOut.join(' ').split(/\s+/).filter((w) => w && w !== '▸' && w !== '▾' && w !== 'more').join(' ')).toBe('status team channel gates core board'); // names only, in order
+      const closed = tabRows(panelWorld('route', cols, mocha, {}));
+      const open = tabRows(panelWorld('route', cols, mocha, { expanded: MORE_KEY }));
+      expect([closed.length, open.length]).toEqual([1, 1]);
+      for (const l of [...closed, ...open]) expect(cells(lineText(l))).toBeLessThanOrEqual(cols);
+      if (cols >= 34) expect(cols >= 48 ? words(panelWorld('route', cols, mocha, {})) : [...words(panelWorld('route', cols, mocha, {})), ...words(panelWorld('route', cols, mocha, { expanded: MORE_KEY }))]).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']); // names only, in order
     }
   });
 });
@@ -124,7 +127,7 @@ describe('team tab lists the subagents by name and state', () => {
       ['implementer-layout', 'implementer-gates', 'implementer-band', 'runner-land', 'implementer-live']);
   });
   test('the recipient takes the focus marker; without one the first running worker does', () => {
-    const marked = (r: string | null): string[] => bodyLines(panelWorld('team', 80, mocha, { recipient: r })).map(lineText).filter((l) => l.startsWith('▸'));
+    const marked = (r: string | null): string[] => bodyLines(panelWorld('team', 80, mocha, { recipient: r })).filter((l) => l.runs[0]?.t === '▸' && l.runs[0].bold).map(lineText); // Round 3 (E8): every expandable row carries `▸`; the recipient's is the bold accent one
     expect(marked(null)).toEqual([expect.stringContaining('implementer-band')]);
     expect(marked('runner-land')).toEqual([expect.stringContaining('runner-land')]);
   });

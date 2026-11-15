@@ -7,8 +7,8 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { chipRun, tileOf } from './clickable';
-import { agoText, fitFields, gateOf, healthRows, noteOf, recentEvents, type Health } from './idle-health';
-import { gateCounts, gateLine, gatesTotal } from './vocab';
+import { activitySection, contextSection, fitFields, gatesSection, healthRows, recentEvents, recentSection, ROW_AT, runsSection, sessionRow, teamOf, VALUE_AT, type Health } from './idle-health';
+import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from './vocab';
 import { chevron } from './clickable';
 import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
@@ -17,7 +17,7 @@ import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/
 import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runstate';
 import { displayName } from './hud';
-import { sortAgents } from './hud-surface';
+import { sectionRibbon, sortAgents } from './hud-surface';
 import type { GateGroup } from './pane/sidebar-types';
 import { ageWord, KILLED, sparkBraille, sparkOf, sparkOver, totalsOf, wordOf } from './pane/activity';
 
@@ -46,6 +46,8 @@ export const chipText = (label: string, f: Pick<StripForm, 'pad'> = STRIP_FORM):
 export const MORE_KEY = 'tabs:more';
 /** The `more` chip's words: `▸ more` closed, `▾ more` while its row is open. */
 export const moreWord = (open: boolean, ui: Pick<Ui, 'ascii'>): string => `${chevron(open, ui)} more`;
+/** The second tab set's chip: it swaps the first set back in place. */
+export const backWord = (ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? '< back' : '‹ back');
 const stripTabs = (): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t }));
 const chipsWidth = (tabs: readonly { label: string }[], f: StripForm): number => f.lead + tabs.reduce((n, t, i) => n + (i ? f.gap : 0) + 2 * f.pad + cells(t.label), 0);
 
@@ -70,9 +72,13 @@ export function stripLayout(cols: number, _lit?: string): StripForm & { rows: St
   const room = Math.max(1, cols);
   if (chipsWidth(words, f) <= room) return { ...f, rows: [words], folded: [], more: false, bare: true };
   const moreW = 2 * f.pad + cells('▸ more');
+  const backW = 2 * f.pad + cells('‹ back');
   let n = words.length - 1;
+  // Round 3 (E8): one row always. The first set ends in `▸ more`, the second (the folded tabs) in `‹ back`. The first set keeps as many tabs as fit; the folded set keeps as many of the rest as fit beside `‹ back` (a pane under ~36 cells cannot reach every tab).
   while (n > 1 && chipsWidth(words.slice(0, n), f) + f.gap + moreW > room) n--;
-  return { ...f, rows: [words.slice(0, n)], folded: words.slice(n), more: true, bare: true };
+  let folded = words.slice(n);
+  while (folded.length > 1 && chipsWidth(folded, f) + f.gap + backW > room) folded = folded.slice(0, -1);
+  return { ...f, rows: [words.slice(0, n)], folded, more: true, bare: true };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
@@ -253,10 +259,10 @@ export function tabRows(m: PanelModel): PanelLine[] {
   const strip = (tabs: readonly StripTab[]): Run[] => tabs.flatMap((t, i) => [...(i ? [gap] : []), chip(t)]);
   const open = m.expanded === MORE_KEY;
   const litFolded = f.folded.some((t) => t.id === m.tab);
-  const more: Run[] = f.more ? [gap, { ...chipRun(moreWord(open, m.ui), m.ui, MORE_KEY), ...(litFolded ? { tone: 'ink' as const, bg: 'accent' as const, bgHex: undefined } : {}) }] : [];
-  const rows = [line(fitRuns([...strip(f.rows[0]!), ...more], m.cols))];
-  if (f.more && open) for (const row of stripRows(f.folded, m.cols, f.gap, 2 * f.pad)) rows.push(line(fitRuns(strip(row), m.cols)));
-  return rows;
+  const more: Run[] = f.more ? [gap, { ...chipRun(moreWord(false, m.ui), m.ui, MORE_KEY), ...(litFolded ? { tone: 'ink' as const, bg: 'accent' as const, bgHex: undefined } : {}) }] : [];
+  // One row always: `▸ more` swaps the visible set for the folded tabs (and a `‹ back` chip) on the same row.
+  if (f.more && open) return [line(fitRuns([...strip(f.folded), gap, chipRun(backWord(m.ui), m.ui, MORE_KEY)], m.cols))];
+  return [line(fitRuns([...strip(f.rows[0]!), ...more], m.cols))];
 }
 
 /** Ribbon, blank, tab strip, rule, and (from 100 columns) a blank before the body; the 80-column design has none. */
@@ -651,160 +657,124 @@ function fitDetail(text: string, room: number): string {
 // ---- the status grid (S3) ---------------------------------------------------------------------------------------------------------------
 /** The grid of the status view: section headers in cell 2, rows in cell 4, one value column from cell 12; the slots are the same at idle, working and done. */
 const HEAD_AT = 2;
-const ROW_AT = 4;
-const VALUE_AT = 12;
 const RECENT_SLOTS = 3;
 /** Section headers of the status view are inert labels in dim uppercase (`PHASE`, `PULSE`, `HEALTH`, `RECENT`, the case of the card's `HEALTH` ribbon): plain text, never a press. */
 const sect = (title: string, m: PanelModel, figures: Run[] = []): PanelLine => line(fitRuns([r(`${' '.repeat(HEAD_AT)}${title.toUpperCase()}`, 'muted', { bold: true }), ...(figures.length ? [r('  '), ...figures] : [])], m.cols));
-const slotLabel = (t: string): Run => r(`${' '.repeat(ROW_AT)}${pad(t, VALUE_AT - ROW_AT)}`, 'muted');
 /** The spinner index of this render, the one the stepper and the phase mark both turn: the frame the run was built with (the band's own index, register.ts paneFrame), else the clock's (`spinFrameOf(now)`, the band's spinClock reading), else the tick. */
 const spinIdx = (m: Pick<PanelModel, 'now' | 'tick' | 'run'>): number => m.run?.frame ?? (m.now !== undefined ? spinFrameOf(m.now) : m.tick);
 
 /** Round 2 (D12): a pending stage reads one step above `dim` (the dim ink is 2.7:1 on the panel, this one about 3.9:1); the glyph and the name share it. */
 const PENDING_INK = { mocha: PALETTE5.pending, latte: PALETTES.latte.line } as const;
-/** At this width and under the stepper is dots and the current stage spelled out (`● ◐ ○ ○ ○ theory`), never an abbreviation. */
-const NARROW = 47;
-/** The phases as one row, one glyph per stage: `● research ◐ theory ○ test ○ implement ○ verify`: a stage the run passed is a green `●`, the current one the band's spinner in the accent, a pending one `○` (a stage the run
- * passed over is `–`). Done fills every stage the run entered. A pane of NARROW columns or less, or one the names do not fit, draws the dots and then the current (or last) stage spelled out. */
-function stepperRow(m: PanelModel): PanelLine {
+/** The phases as full stage names, one glyph each, wrapping to a second row where they do not fit (round 3, E9: one widget form at every width, never dots and never an abbreviation): `● research ◐ theory ○ test`.
+ * A stage the run passed is a green `●` and stays one after the run ends, until the next prompt starts; the current one is the band's spinner in the accent; a pending one is `○`. */
+function stepperRows(m: PanelModel): PanelLine[] {
   const lead = r(' '.repeat(ROW_AT));
-  if (!m.phases.length) return line([lead, r('no phases yet', 'dim')]);
+  if (!m.phases.length) return [line([lead, r('no phases yet', 'dim')])];
   const finished = m.todos.length > 0 && m.todos.every((t) => t.state === 'done');
   const kind = m.run?.kind === 'idle' && finished ? 'done' : m.run?.kind ?? 'working';
   const seen = m.entered ? new Set(m.entered) : null;
   const litAt = m.phases.indexOf(m.phase);
   const lastEntered = seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
   const lit = kind === 'done' || kind === 'idle' ? -1 : kind === 'blocked' ? Math.max(litAt, lastEntered, 0) : litAt >= 0 ? litAt : Math.max(0, lastEntered); // a working run always turns one stage: the band's spinner has a place on the panel
-  const entered = (p: string, i: number): boolean => (kind === 'idle' ? false : seen ? seen.has(p) : kind === 'done' || (litAt >= 0 && i < litAt));
+  // The stages the run entered stay done once it ends (done or idle after a run) until the next prompt clears them; a fresh idle pane has entered none.
+  const entered = (p: string, i: number): boolean => (seen ? seen.has(p) : kind === 'idle' ? false : kind === 'done' || (litAt >= 0 && i < litAt));
   const ink = PENDING_INK[m.ui.theme === 'latte' ? 'latte' : 'mocha'];
   const dim = (t: string): Run => ({ t, tone: 'dim', ...(m.ui.color === 'none' ? {} : { fg: ink }) });
   const skipped = (i: number): boolean => seen !== null && kind !== 'idle' && lit !== i && !entered(m.phases[i]!, i) && i < Math.max(lastEntered, lit);
   const glyph = (p: string, i: number): Run => (lit === i ? (kind === 'blocked' ? stateRun('blocked', m.ui) : { t: phaseGlyph('working', spinIdx(m), m.ui.ascii), tone: 'accent' }) : entered(p, i) ? stateRun('done', m.ui) : skipped(i) ? dim(m.ui.ascii ? '-' : '–') : dim(m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.queued));
   const named = (p: string, i: number): Run => (lit === i ? r(p, 'text', { bold: true }) : entered(p, i) ? r(p, 'sub') : dim(p));
-  const whole = m.phases.flatMap((p, i): Run[] => [...(i ? [r(' ')] : []), { ...glyph(p, i), t: `${glyph(p, i).t} ` }, named(p, i)]);
-  if (m.cols > NARROW && rowWidth(whole) + ROW_AT <= m.cols - 1) return line(fitRuns([lead, ...whole], m.cols));
-  const at = lit >= 0 ? lit : kind === 'done' ? (lastEntered >= 0 ? lastEntered : m.phases.length - 1) : lastEntered;
-  const spelled = at >= 0 ? named(m.phases[at]!, at) : kind === 'idle' ? dim('idle') : null;
-  const dots = m.phases.flatMap((p, i): Run[] => [...(i ? [r(' ')] : []), glyph(p, i)]);
-  return line(fitRuns([lead, ...dots, ...(spelled ? [r(' '), spelled] : [])], m.cols));
-}
-const phaseBlock = (m: PanelModel): PanelLine[] => [sect('phase', m), stepperRow(m)];
-
-/** The pulse block: `events` (a spark and `N/5m`), `context` (the gauge and `6% · 64k of 1M`, or an empty track and `—`), `runs` (a dot per run, `N runs · last m:ss`). Every shape is observed this session (idle-health healthRows). */
-function pulseBlock(m: PanelModel, h: Health): PanelLine[] {
-  const room = m.cols - 1 - VALUE_AT;
-  const rows = healthRows(h, m.ui, { footer: true, sparkW: Math.max(8, Math.min(20, room - 10)), gaugeW: Math.max(6, Math.min(14, room - 24)), ...(m.notes.length ? { messages: m.notes.length } : {}) });
-  const out: PanelLine[] = [sect('pulse', m)];
-  for (const id of ['events', 'context', 'runs'] as const) {
-    const row = rows.find((x) => x.id === id);
-    if (row) out.push(line(fitRuns([slotLabel(row.label), ...fitFields(row.fields, room)], m.cols)));
+  const items = m.phases.map((p, i): Run[] => [{ ...glyph(p, i), t: `${glyph(p, i).t} ` }, named(p, i)]);
+  const room = Math.max(8, m.cols - 1 - ROW_AT);
+  const rows: Run[][] = [[]];
+  for (const it of items) {
+    const cur = rows[rows.length - 1]!;
+    const w = rowWidth(it);
+    if (cur.length && rowWidth(cur) + 1 + w > room) rows.push([...it]);
+    else cur.push(...(cur.length ? [r(' ')] : []), ...it);
   }
-  return out;
+  return rows.map((x) => line(fitRuns([lead, ...x], m.cols)));
 }
 
-/** The press key of the HEALTH section's gates chip: the band's `▸ health` chip sets it (register.ts openHealthInPanel) while the panel is up. */
+/** A section header: the flat ribbon (`── ACTIVITY ───── 6 in 5m ──`) inside the pane's one-cell gutter. */
+const secHead = (title: string, figure: string, m: Pick<PanelModel, 'cols' | 'ui'>): PanelLine => line([r(' '), ...sectionRibbon(title, figure, Math.max(4, m.cols - 2), m.ui)]);
+
+/** The press key of the GATES section's chip: the band's `▸ health` chip sets it (register.ts openHealthInPanel) while the panel is up. */
 export const GATES_KEY = 'health:gates';
-type GatesMode = 'chip' | 'open' | 'list' | 'sum';
-const gateNote = (c: Health['gates']['checks'][number]): string => noteOf(c);
-
-/** `health`: the gates, then the session row. Wide: a `▸ gates` chip and the summary in words (`● ok · 0 denied · 4 gates · 1 not fired`), which opens to one `● name  8 pass · 0 deny` row per gate (with its note under it).
- * A narrow pane lists the gates, one named row each (round 2, D13: never bare dots, and there is nothing to click, so no chip). `sum`: the summary alone, when the pane has no rows for the list. */
-function healthSection(m: PanelModel, h: Health, mode: GatesMode, withSession = true): PanelLine[] {
-  const out: PanelLine[] = [sect('health', m)];
-  const rows = healthRows(h, m.ui, { footer: true, ...(m.notes.length ? { messages: m.notes.length } : {}) });
-  const checks = h.gates.checks;
-  const gatesRow = rows.find((x) => x.id === 'gates');
-  if (checks.length) {
-    const room = m.cols - 1 - VALUE_AT;
-    const summary = gatesRow ? fitFields(gatesRow.fields, room) : [];
-    if (mode === 'chip' || mode === 'open') {
-      const open = mode === 'open';
-      const key = GATES_KEY;
-      out.push(line(fitRuns([r(' '.repeat(HEAD_AT)), chipRun(`${chevron(open, m.ui)} gates`, m.ui, key), r(' '), ...summary], m.cols), { kind: 'toggle', key }));
-    } else if (mode === 'sum') out.push(line(fitRuns([slotLabel('gates'), ...summary], m.cols)));
-    if (mode === 'open' || mode === 'list') {
-      const nameW = Math.max(...checks.map((c) => cells(c.id)));
-      for (const c of checks) {
-        const g = gateOf(c, m.ui);
-        out.push(line(fitRuns([r(' '.repeat(ROW_AT)), r(g.glyph, g.tone), r(` ${pad(g.name, nameW)}  `), r(g.count, g.tone)], m.cols)));
-        if (mode === 'open' && gateNote(c)) out.push(line(fitRuns([r(' '.repeat(ROW_AT + 2)), r(gateNote(c), 'dim')], m.cols)));
-      }
-    }
-  }
-  const session = rows.find((x) => x.id === 'session');
-  if (withSession && session) out.push(line(fitRuns([slotLabel(session.label), ...fitFields(session.fields, m.cols - 1 - VALUE_AT)], m.cols)));
-  return out;
-}
-
-/** The one-glyph severity of a recent event (idle-health recentEvents): `·` info (dim), `●` ok (green), `✗` a denial or failure (red). */
-const SEV_GLYPH = { info: ['·', '.'], ok: ['●', '*'], bad: ['✗', 'x'] } as const;
-const SEV_TONE = { info: 'dim', ok: 'ok', bad: 'bad' } as const;
-
-/** `recent`: the newest hook events, newest first, `n` rows: the age in a 3-cell right-aligned column at cell 4 (` 9s`, `10s`, ` 3m`; no "ago"), a severity glyph, the readable label from the value column (cell 12). */
-function recentRowsOf(m: PanelModel, h: Health, n: number): PanelLine[] {
-  return recentEvents(h.hooks?.recent ?? [], n).map((e): PanelLine => {
-    const glyph = SEV_GLYPH[e.sev][m.ui.ascii ? 1 : 0];
-    const text = fitDetail(e.text, Math.max(4, m.cols - 1 - VALUE_AT));
-    return line(fitRuns([r(' '.repeat(ROW_AT)), r(agoText(e.ageSecs).padStart(3), 'dim'), r('   '), r(glyph, SEV_TONE[e.sev]), r(' '), r(text, 'sub')], m.cols));
-  });
-}
-
-/** The idle status view ends in a rule under its last row, so a pane with room to spare reads finished, not cut off. */
-const closingRule = (m: PanelModel): PanelLine => line([r(' '.repeat(HEAD_AT)), r((m.ui.ascii ? '-' : '─').repeat(Math.max(1, m.cols - 1 - 2 * HEAD_AT)), 'dim')]);
 
 /** The footer of the status view, pinned to the pane's last row: `atlas 17.24.0 · hooks loaded`. Real figures only; empty when the mod has none of them. */
 function healthFooter(h: Health): string {
-  return [h.version ? `atlas ${h.version}` : '', h.hooks ? 'hooks loaded' : ''].filter(Boolean).join(' · '); // the events count is the hooks row's, said once
+  return [h.version ? `atlas ${h.version}` : '', h.hooks ? 'hooks loaded' : ''].filter(Boolean).join(' · ');
 }
+const footerLine = (m: PanelModel, h?: Health): PanelLine | null => { const t = h ? healthFooter(h) : ''; return t ? line(fitRuns([r(' '.repeat(HEAD_AT)), r(t, 'dim')], m.cols)) : null; };
 
-/** The agents the run dispatched, under PHASE: one row each (mark, name, a spark over the run, its time), at most this many; the rest are on the team tab. */
+/** The agents the run dispatched: one row each (mark, name, a spark over the run, its time), at most this many; the rest are on the team tab. */
 const DASH_AGENTS = 5;
-function agentsBlock(m: PanelModel, ws: readonly PanelWorker[]): PanelLine[] {
-  if (!ws.length) return [];
+function agentsSection(m: PanelModel, ws: readonly PanelWorker[]): PanelLine[] {
   const shown = ws.slice(0, DASH_AGENTS);
-  return [BLANK, sect('agents', m, [r(`${ws.length}`, 'muted')]), ...statusAgentRows(m, shown), ...(ws.length > shown.length ? [dimLine(m, `+${ws.length - shown.length} more on the team tab`)] : [])];
+  return [secHead('AGENTS', `${ws.length}`, m), ...statusAgentRows(m, shown), ...(ws.length > shown.length ? [dimLine(m, `+${ws.length - shown.length} more on the team tab`)] : [])];
 }
 
-/** The status dashboard (round 2, D11, D14): PHASE, PULSE, HEALTH, RECENT, one blank row between sections, the pane's height filled exactly. RECENT takes every row the rest leaves free (newest first); a rule and the footer
- * are the last two rows. A pane too short gives up, in this order: RECENT, the gates list (to its summary), the leading blank, the rule, the session row, the agents. The footer is never given up. */
+/** The status view as an instrument (round 3, E1-E6): PHASE, ACTIVITY (a braille area chart with axes: the focal point), CONTEXT, RUNS, GATES with the session row, RECENT, the footer on the last row. Every section opens on a ribbon.
+ * The pane's height is filled exactly: the activity chart grows from 3 to 6 rows, RECENT takes every row the rest leaves free (newest first), and spare rows spread as single blank rows between sections. A pane too short gives up,
+ * in this order: the leading blank, the agents, the gates list (to one chip row), the context chart, the session row, the runs. The footer is never given up. */
 function dashboard(m: PanelModel, h: Health, ws: readonly PanelWorker[]): PanelLine[] {
   const room = m.rows > 0 ? m.rows - headerRows(m).length : 0;
-  const foot = healthFooter(h);
-  const wide = m.cols > NARROW;
-  const wanted: GatesMode = !h.gates.checks.length ? 'sum' : wide ? (m.expanded === GATES_KEY ? 'open' : 'chip') : 'list';
+  const footer = footerLine(m, h);
   const events = recentEvents(h.hooks?.recent ?? [], 64);
-  type Cfg = { gates: GatesMode; lead: boolean; rule: boolean; session: boolean; agents: boolean };
-  const base = (c: Cfg): PanelLine[] => [
-    ...(c.lead ? [BLANK] : []), ...phaseBlock(m), ...(c.agents ? agentsBlock(m, ws) : []),
-    BLANK, ...pulseBlock(m, h), BLANK, ...healthSection(m, h, c.gates, c.session),
-  ];
-  const tail = (c: Cfg): PanelLine[] => (foot ? [...(c.rule ? [closingRule(m)] : []), line(fitRuns([r(' '.repeat(HEAD_AT)), r(foot, 'dim')], m.cols))] : []);
-  const folded: GatesMode = wanted === 'chip' ? 'chip' : wanted === 'sum' ? 'sum' : wide ? 'chip' : 'sum';
+  const checks = h.gates.checks;
+  type Cfg = { gates: 'full' | 'chip'; lead: boolean; ctxChart: boolean; session: boolean; agents: boolean; runs: boolean };
+  const lines = (rows: Run[][]): PanelLine[] => rows.map((x) => line(fitRuns(x, m.cols)));
+  const gatesGroup = (c: Cfg): PanelLine[] => {
+    const g = gatesSection(h, m.ui, { cols: m.cols, notes: m.expanded === GATES_KEY });
+    const body: PanelLine[] = !checks.length ? [line(fitRuns([r(' '.repeat(ROW_AT)), r('no gates reported yet', 'dim')], m.cols))]
+      : c.gates === 'full' ? lines(g.rows)
+        : [line(fitRuns([r(' '.repeat(ROW_AT - 1)), chipRun(`${chevron(m.expanded === GATES_KEY, m.ui)} gates`, m.ui, GATES_KEY), r(' '), ...fitFields(healthRows(h, m.ui, { footer: true }).find((x) => x.id === 'gates')?.fields ?? [], m.cols - 1 - VALUE_AT)], m.cols), { kind: 'toggle', key: GATES_KEY }), ...(m.expanded === GATES_KEY ? lines(g.rows) : [])];
+    const session = c.session ? sessionRow(h, m.ui, { cols: m.cols, messages: m.notes.length }) : null;
+    return [secHead('GATES', checks.length ? g.figure : '', m), ...body, ...(session ? [line(fitRuns(session, m.cols))] : [])];
+  };
+  const sections = (c: Cfg, chartRows: number): PanelLine[][] => {
+    const a = activitySection(h, m.ui, { cols: m.cols, chartRows });
+    const x = contextSection(h, m.ui, { cols: m.cols, chartRows: c.ctxChart ? 2 : 0 });
+    return [
+      [secHead('PHASE', '', m), ...stepperRows(m)],
+      ...(c.agents && ws.length ? [agentsSection(m, ws)] : []),
+      [secHead('ACTIVITY', a.figure, m), ...lines(a.rows)],
+      [secHead('CONTEXT', x.figure, m), ...lines(x.rows)],
+      ...(c.runs ? [[secHead('RUNS', '', m), ...lines(runsSection(h, m.ui, { cols: m.cols }).rows)]] : []),
+      gatesGroup(c),
+    ];
+  };
   const cfgs: Cfg[] = [
-    { gates: wanted, lead: true, rule: true, session: true, agents: true },
-    { gates: folded, lead: true, rule: true, session: true, agents: true },
-    { gates: folded, lead: false, rule: true, session: true, agents: true },
-    { gates: folded, lead: false, rule: false, session: true, agents: true },
-    { gates: folded, lead: false, rule: false, session: false, agents: true },
-    { gates: folded, lead: false, rule: false, session: false, agents: false },
+    { gates: 'full', lead: true, ctxChart: true, session: true, agents: true, runs: true },
+    { gates: 'full', lead: false, ctxChart: true, session: true, agents: true, runs: true },
+    { gates: 'full', lead: false, ctxChart: true, session: true, agents: false, runs: true },
+    { gates: 'chip', lead: false, ctxChart: true, session: true, agents: false, runs: true },
+    { gates: 'chip', lead: false, ctxChart: false, session: true, agents: false, runs: true },
+    { gates: 'chip', lead: false, ctxChart: false, session: false, agents: false, runs: true },
+    { gates: 'chip', lead: false, ctxChart: false, session: false, agents: false, runs: false },
   ];
-  const cfg = room <= 0 ? cfgs[0]! : cfgs.find((c) => base(c).length + tail(c).length <= room) ?? cfgs[cfgs.length - 1]!;
-  const top = base(cfg);
-  const bottom = tail(cfg);
-  const free = room <= 0 ? RECENT_SLOTS + 2 : room - top.length - bottom.length; // rows left for the RECENT block (its blank and header included)
-  const rows = Math.min(events.length, Math.max(0, free - 2));
+  const need = (c: Cfg): number => sections(c, 3).flat().length + (c.lead ? 1 : 0) + (footer ? 1 : 0);
+  const cfg = room <= 0 ? cfgs[0]! : cfgs.find((c) => need(c) <= room) ?? cfgs[cfgs.length - 1]!;
+  let free = room <= 0 ? RECENT_SLOTS + 2 : room - need(cfg);
+  const recentMin = 1 + Math.min(3, Math.max(1, events.length));
+  const grow = Math.max(0, Math.min(3, free - recentMin));
+  free -= grow;
+  const rowsN = free >= 2 ? Math.min(Math.max(1, events.length), free - 1) : 0;
   const none = line(fitRuns([r(' '.repeat(ROW_AT)), r('no events yet', 'dim')], m.cols));
-  const recent: PanelLine[] = free >= 3 ? [BLANK, sect('recent', m), ...(rows > 0 ? recentRowsOf(m, h, rows) : [none])] : [];
-  const pad = room <= 0 ? [] : Array.from({ length: Math.max(0, room - top.length - recent.length - bottom.length) }, () => BLANK);
-  const all = [...top, ...recent, ...pad, ...bottom];
-  return room > 0 && all.length > room ? [...all.slice(0, room - bottom.length), ...bottom].slice(0, room) : all;
+  const recent: PanelLine[] = rowsN > 0 ? [secHead('RECENT', '', m), ...(events.length ? lines(recentSection(h, m.ui, { cols: m.cols, max: rowsN })) : [none])] : [];
+  free -= recent.length;
+  const groups = [...sections(cfg, 3 + grow), ...(recent.length ? [recent] : [])];
+  const gaps = new Array<number>(groups.length).fill(0); // blank rows after each group; the last sits above the footer
+  for (let k = 0; k < Math.max(0, free); k++) gaps[k % groups.length]!++;
+  const all = [...(cfg.lead ? [BLANK] : []), ...groups.flatMap((g, i) => [...g, ...Array.from({ length: gaps[i]! }, () => BLANK)]), ...(footer ? [footer] : [])];
+  return room > 0 && all.length > room ? [...all.slice(0, room - (footer ? 1 : 0)), ...(footer ? [footer] : [])].slice(0, room) : all;
 }
 
 function statusBody(m: PanelModel): PanelLine[] {
   const ws = workersByTask(m);
   if (m.health && (m.run?.kind === 'idle' || m.run?.kind === 'working' || m.run?.kind === 'done' || m.run?.kind === 'blocked')) return dashboard(m, m.health, ws);
   const gs = countedGates(gatesOf(m));
-  const phase = phaseBlock(m);
+  const phase = [sect('phase', m), ...stepperRows(m)];
   const room = Math.max(4, m.rows - headerRows(m).length - 1);
   let nA = Math.min(ws.length, STATUS_AGENTS);
   let nE = Math.min(statusEventCount(m), STATUS_EVENTS);
@@ -994,6 +964,18 @@ export const emptyHint = (m: PanelModel, text: string): PanelLine[] => {
   return [line([r(' '.repeat(Math.max(1, Math.floor((m.cols - cells(t)) / 2)))), r(t, 'muted')])];
 };
 
+/** Round 3 (E12): an empty tab on the Claude pane is its ribbon, the one live fact, and what will appear drawn as dim skeleton rows; the footer is pinned under it (bodyLines). The fact rides the ribbon where it fits, else its own row. */
+export function emptyTab(m: Pick<PanelModel, 'cols' | 'ui'>, title: string, fact: string, skeleton: readonly string[]): PanelLine[] {
+  const fits = m.cols - 2 >= 3 + title.length + 1 + 1 + [...fact].length + 1 + 2 + 1;
+  return [secHead(title, fits ? fact : '', m), ...(fits ? [] : [line(fitRuns([r(' '.repeat(ROW_AT)), r(fact, 'muted')], m.cols))]), ...skeleton.map((t) => line(fitRuns([r(' '.repeat(ROW_AT)), r(t, 'dim')], m.cols)))];
+}
+const SKEL = '···········';
+const TEAM_SKEL = ['agent        state     time', `○ ${SKEL}  ·······   ·:··`, `○ ${SKEL}  ·······   ·:··`];
+const CHANNEL_SKEL = ['time    from         message', `·:··    ${SKEL}  ··················`, `·:··    ${SKEL}  ··················`];
+const GATES_SKEL = ['gate          result', '○ completion   0 pass · 0 deny', '○ tripwire     0 pass · 0 deny'];
+const CORE_SKEL = ['evidence   0 of 0 done items', 'verified   0 of 0 done items', 'verdicts   0 verified · 0 refuted', 'reading    0 tokens read by workers'];
+const teamFact = (m: PanelModel, n: number): string => [m.health ? teamOf(m.health) ? `team ${teamOf(m.health)}` : '' : '', `${n} ${n === 1 ? 'worker' : 'workers'}`].filter(Boolean).join(' · ');
+
 function teamBody(m: PanelModel): PanelLine[] {
   const mates = m.mates ?? [];
   const lead = leadOf(m);
@@ -1002,12 +984,12 @@ function teamBody(m: PanelModel): PanelLine[] {
   const teamCalls = [...(m.lead?.calls ?? []), ...m.workers.flatMap((w) => w.calls ?? [])];
   const leadRow = lead ? { ...lead, calls: teamCalls, ...(m.run?.secs !== undefined ? { secs: m.run.secs } : {}), ...(m.run?.startMs !== undefined ? { startMs: m.run.startMs } : {}) } : undefined; // wave 32: the lead's time is the band's run clock (critique 30: lead 0:26, board 0:57)
   const everyone = [...(leadRow ? [leadRow] : []), ...workers, ...mates];
-  if (!everyone.length) return emptyHint(m, 'nobody dispatched yet');
+  if (!everyone.length) return m.run ? emptyTab(m, 'TEAM', teamFact(m, 0), TEAM_SKEL) : emptyHint(m, 'nobody dispatched yet');
   const alone = !!leadRow && !m.workers.length && !mates.length;
   const g = alone ? { ...teamGrid(m, everyone), sparkW: 0 } : teamGrid(m, everyone); // the lead alone has no pace to draw: no braille run until a worker gives it data
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[]): PanelLine[] => ws.flatMap((w) => workerRows(m, w, g, w.name === focusName));
-  if (leadRow && !m.workers.length && !mates.length) return [...rows([leadRow]), dimLine(m, 'no workers yet')]; // nothing ran: the lead's row and one labelled line, no empty time axis and no `0 running` total (the pulse, health and recent figures are the status tab's alone: round 2, D14)
+  if (leadRow && !m.workers.length && !mates.length) return m.run ? [secHead('TEAM', teamFact(m, 0), m), ...rows([leadRow]), ...emptyTab(m, '', '', TEAM_SKEL.slice(1)).slice(1)] : [...rows([leadRow]), dimLine(m, 'no workers yet')]; // nothing ran: the lead's row and one labelled line, no empty time axis and no `0 running` total (the pulse, health and recent figures are the status tab's alone: round 2, D14)
   const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet') : [];
   const head = [...(leadRow ? rows([leadRow]) : []), ...hint, ...rows(workers), ...rows(mates), ...sparkAxis(m, g)];
   const body = [...head, ...(m.lead ? [BLANK, ...leadSummary(m)] : [])]; // one row per agent, at every height
@@ -1131,6 +1113,10 @@ function channelLog(m: PanelModel): PanelLine[] {
   const title = channelLabel(m.channel);
   const head = line(fitRuns([r(`${ind}${title}  `, 'text', { bold: true }), r(count, 'muted')], m.cols));
   // Wave 32 (critique 30: `no messages yet` floated mid-pane over 90% blank): an empty channel is one left-aligned row straight under the head, the pane fill carries the surface to the foot.
+  if (!m.notes.length && m.run) {
+    const senders = quietSenders(m);
+    return [secHead('CHANNEL', '0 messages', m), head, ...(senders.length ? senders : emptyTab(m, '', '', CHANNEL_SKEL).slice(1))];
+  }
   if (!m.notes.length) {
     const senders = quietSenders(m);
     if (senders.length) return [head, ...senders, BLANK, dimLine(m, '0 messages')]; // truth 39 (live-110-1 tab-channel: `○ no messages` over a senders block): with senders shown the count sits under them, in the footer's own words
@@ -1218,12 +1204,16 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
   // The verified line says what the core tab says (one source, verifiedFigure): a short figure the Stop gate waives is `◇ 0/5 not required`, never a green `●` beside a core `verified 0/5`.
   const vf = ln.id === VERIFIED_GATE ? verifiedFigure(m) : null;
   const waived = !!vf?.waived;
-  const mk = ln.pending || waived ? stateRun('queued', m.ui) : ln.ok ? stateRun('done', m.ui) : gateMark(m.ui);
+  // Round 3 (E5): a check that is off (`Team mode: off`) is the grey `○` of a gate that has not fired, never the green dot.
+  const off = ln.ok && checkOff(ln.label, ln.detail);
+  const dot = gateDot(ln.ok ? 1 : 0, ln.ok ? 0 : 1, { off }, m.ui.ascii);
+  const mk = ln.pending || waived ? stateRun('queued', m.ui) : off ? { t: dot.glyph, tone: dot.tone } : ln.ok ? stateRun('done', m.ui) : gateMark(m.ui);
   const figure = waived && vf ? `${vf.ok}/${vf.total} not required` : '';
   const beside = figure && cells(first) + GRID_LEAD + 2 + 2 + cells(figure) <= m.cols - 1;
   return [
     // Design rev 5, C2: a check hangs under its group's title: the mark sits at the title's first letter, the label two cells on.
-    line(moving([r(' '.repeat(GRID_LEAD)), { ...mk, t: `${mk.t} ` }, r(first), ...(beside ? [r(`  ${figure}`, 'muted')] : [])], key, ln.ok && !waived ? 'done' : waived ? 'queued' : 'blocked', m), { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) }),
+    // A row with nothing to open (no detail, no fix) is a leaf: no press, so no caret (round 3, E8).
+    line(moving([r(' '.repeat(GRID_LEAD)), { ...mk, t: `${mk.t} ` }, r(first), ...(beside ? [r(`  ${figure}`, 'muted')] : [])], key, ln.ok && !waived ? 'done' : waived ? 'queued' : 'blocked', m), ln.detail || ln.fix ? { kind: 'toggle', key, ...(open && ln.fix ? { copy: ln.fix } : {}) } : undefined),
     ...(figure && !beside ? [note(`  ${figure}`, m)] : []),
     ...more.map((t) => note(`  ${t}`, m)), ...extra.map((t) => note(`  ${oneLine(t)}`, m)),
   ];
@@ -1269,7 +1259,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
 
 function gatesBody(m: PanelModel): PanelLine[] {
   const gs = countedGates(gatesOf(m)); // the groups the tally counts: one with no data is not a gate yet
-  if (!gs.length) return emptyHint(m, 'no gates reported yet');
+  if (!gs.length) return m.run ? emptyTab(m, 'GATES', '0 gates', GATES_SKEL) : emptyHint(m, 'no gates reported yet');
   const valueW = Math.max(0, ...gs.map((g) => cells(gateValue(g, m.ui))));
   const longest = Math.min(24, Math.max(1, ...gs.map((g) => cells(oneLine(g.title)))));
   // The failing count is the first column to go: the name keeps its whole width, the count moves into the row below.
@@ -1498,7 +1488,7 @@ function dispatchRows(c: CoreModel, m: PanelModel, cap = TEAM_CAP): PanelLine[] 
 }
 
 function coreBody(m: PanelModel): PanelLine[] {
-  if (!hasCore(m.core)) return emptyHint(m, 'no verdicts, workers or gates yet');
+  if (!hasCore(m.core)) return m.run ? emptyTab(m, 'CORE', '0 verdicts', CORE_SKEL) : emptyHint(m, 'no verdicts, workers or gates yet');
   const c = m.core;
   const build = (v: number, o: number, t: number): PanelLine[] => [...contractRows(c, m), BLANK, ...verdictRows(c, m, v), BLANK, ...offloadRows(c, m, o), BLANK, ...dispatchRows(c, m, t)];
   const base = build(VERDICT_CAP, OFFLOAD_CAP, TEAM_CAP);
@@ -1545,15 +1535,37 @@ function clickable(lines: PanelLine[], m: PanelModel): PanelLine[] {
     if (!l.press || l.runs.length === 0 || l.runs.some((x) => x.press)) return l;
     const [first, ...rest] = l.runs as [Run, ...Run[]];
     const blank = first.t.length > 0 && first.t.trim() === '';
-    // A worker row keeps the filled `▸` for the recipient (the focus cell, the one row the message goes to), so its own chevron is the hollow `▹` (open `▿`); every other row's is the filled one.
-    const glyph = l.press.kind === 'worker' ? (m.ui.ascii ? '+' : m.expanded === l.press.key ? '▿' : '▹') : chevron(m.expanded === l.press.key, m.ui);
+    // Round 3 (E8): one caret idiom, `▸` closed and `▾` open, on expandable rows only (the recipient's row keeps its focus `▸`, bold accent, in the same cell; another worker row's caret is the quiet one); no hollow `▹`.
+    const glyph = chevron(m.expanded === l.press.key, m.ui);
     const lead: Run[] = blank
-      ? [{ t: glyph, tone: 'accent', bold: true }, ...(first.t.length > 1 ? [{ ...first, t: first.t.slice(1) }] : [])]
+      ? [l.press.kind === 'worker' ? { t: glyph, tone: 'sub' as const } : { t: glyph, tone: 'accent' as const, bold: true }, ...(first.t.length > 1 ? [{ ...first, t: first.t.slice(1) }] : [])]
       : [first];
     return { ...l, runs: [...lead, ...rest].map((x) => ({ ...x, hover: true })) };
   });
 }
-export const bodyLines = (m: PanelModel): PanelLine[] => airy(m, clickable(BODIES[m.tab](m), m));
+/** The footer on the last body row of a Claude pane tab (the status tab pins its own): blank rows hold it down; a tab with no spare row for it keeps its body. */
+function pinFooter(m: PanelModel, lines: PanelLine[]): PanelLine[] {
+  const foot = m.health ? footerLine(m, m.health) : null;
+  const room = m.rows - headerRows(m).length - (m.tab === 'team' || m.tab === 'channel' ? 1 : 0); // the message field is the pane's last row on team and channel
+  if (!foot || m.rows <= 0 || lines.length + 1 > room) return lines;
+  return [...lines, ...Array.from({ length: room - lines.length - 1 }, () => BLANK), foot];
+}
+const BOARD_SKEL = ['item                state    owner', `○ T1 ${SKEL}   queued   ·······`, `○ T2 ${SKEL}   queued   ·······`];
+/** The board with nothing on it (Claude pane): the ribbon, the live fact `0 items`, the dim skeleton and the pinned footer, in the pane's gutter. `rows`: the body rows the pane has under its header. */
+export function boardEmptyRows(m: PanelModel, rows: number): PanelLine[] {
+  const inner: PanelModel = { ...m, cols: m.cols - 1 };
+  const body = emptyTab(inner, 'BOARD', '0 items', BOARD_SKEL);
+  const foot = m.health ? footerLine(inner, m.health) : null;
+  const all = foot && rows > body.length + 1 ? [...body, ...Array.from({ length: rows - body.length - 1 }, () => BLANK), foot] : body;
+  return all.map((l) => (l.runs.length ? { ...l, runs: [r(' '), ...l.runs] } : l));
+}
+/** The Claude pane's rows sit one cell in from the host's border (the gutter); the caret of an expandable row is the first cell after it. The status view draws its own gutter. */
+export function bodyLines(m: PanelModel): PanelLine[] {
+  if (!m.run || (m.tab === 'route' && m.health)) return airy(m, clickable(BODIES[m.tab](m), m));
+  const inner = { ...m, cols: m.cols - 1 };
+  const g: PanelModel = { ...inner, rows: m.rows - (headerRows(m).length - headerRows(inner).length) };
+  return pinFooter(g, airy(g, clickable(BODIES[m.tab](g), g))).map((l) => (l.runs.length ? { ...l, runs: [r(' '), ...l.runs] } : l));
+}
 /** Tabs whose body ends where its data does: they carry the panel surface down to the pane's foot row. */
 const FILLED_OLD: ReadonlySet<PanelTab> = new Set<PanelTab>(['team', 'channel', 'core']);
 /** The Claude pane (`m.run`) fills every tab to its foot row. */

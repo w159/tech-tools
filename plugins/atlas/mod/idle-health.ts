@@ -1,11 +1,11 @@
 // idle-health.ts: the health summary shown while Atlas has no run yet (wave 42). One pure model (`Health`) every surface reads: the band's segments, the HUD's expanded card, the side panel's rows.
 // It holds only what the mod really has; a figure it does not have is left out, never made up.
 import { elapsedClock, stateRun, type Run, type Ui } from './atlas-ui';
-import { textWidth } from './theme';
+import { fitText, textWidth } from './theme';
 import type { HookStats } from './hook-log';
-import type { Pulse } from './pulse';
-import { gaugeRuns, sparkRuns } from './spark';
-import { rateLabel } from './pulse';
+import { activityStats, BUCKETS, BUCKET_MS, ctxSeries, ctxText as pulseCtxText, RATE_BUCKETS, rateLabel, type Pulse } from './pulse';
+import { ctxInk, gaugeRuns, sparkRuns } from './spark';
+import { areaChartRuns, runBars, runsSummary } from './chart';
 import { gateCounts, gateLine, gatesTotal } from './vocab';
 
 export type HealthLast = { secs?: number; done: number; total: number; agents: number; failed: number; /** Whole seconds since the run ended (a clock with no zone read as a time of day only to its owner): drawn `ended 3m ago`. */ endedAgo?: number; /** Each worker of the run with how it ended and how long it ran. */ workers?: readonly { name: string; state: string; secs?: number }[] };
@@ -145,11 +145,9 @@ export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
     ]);
   }
   const seen = h.hooks?.total ?? 0; // no pulse wired yet: the hooks' own session count is real, and the baseline stays flat
-  const lastEvent = h.hooks?.lastEventSecs;
   const rate = p ? rateLabel(p.events) : seen > 0 ? plural(seen, 'event') : '0/5m';
   add('events', 'events', [
     { runs: [...sparkRuns(p?.events ?? [], o.sparkW ?? EVENTS_W, ui), r('  '), r(rate, rate.startsWith('0/') ? 'muted' : 'text')], keep: 9 },
-    ...(lastEvent !== undefined ? [f(`last ${agoText(lastEvent)}`, 4, 'sub')] : []),
   ]);
   if (!o.gauge) {
     const pct = h.ctxPct;
@@ -157,12 +155,10 @@ export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
     add('context', 'context', [{ runs: [...gaugeRuns(pct, o.gaugeW ?? 20, ui), r(` ${detail}`, pct === undefined ? 'muted' : 'text')], keep: 9 }]);
   }
   const done = p?.runs ?? [];
-  const lastRun = done.at(-1);
   const okGlyph = ui.ascii ? '*' : '●';
   add('runs', 'runs', done.length
     ? [
         { runs: [...done.flatMap((x, i): Run[] => [...(i ? [r(' ')] : []), r(okGlyph, x.ok ? 'ok' : 'bad')]), r('  '), r(plural(done.length, 'run'))], keep: 9 },
-        f(`last ${elapsedClock(lastRun!.secs)}`, 7),
         ...(h.last?.endedAgo !== undefined ? [f(`${agoText(h.last.endedAgo)} ago`, 5, 'sub')] : []),
       ]
     : [{ runs: [r(ui.ascii ? 'o' : '○', 'muted'), r(' no runs this session', 'muted')], keep: 9 }]);
@@ -205,4 +201,124 @@ export function healthDetail(h: Health, id: HealthRow['id'], o: RowOpts = {}): s
   }
   // runs: how each worker of the last run ended (its duration is the band's run clock, never repeated here)
   return (h.last?.workers ?? []).map((w) => `${w.name} ${w.state}`);
+}
+
+// ---- round 3 sections (E1-E5): the panel and the card draw these, each a list of rows on one grid ----------------------------------------------------------------------------------------
+
+/** The grid every section row follows: a label starts in cell 4, a value in cell 14. */
+export const ROW_AT = 4;
+export const VALUE_AT = 14;
+export type SectionRows = { figure: string; rows: Run[][] };
+const dim = (t: string): Run => r(t, 'dim');
+const spaces = (n: number): string => ' '.repeat(Math.max(0, n));
+
+/** `series` as exactly `slots` samples: more samples than slots keep each bin's highest, fewer repeat the nearest. */
+export function resample(series: readonly number[], slots: number): number[] {
+  const n = series.length;
+  const s = Math.max(0, Math.floor(slots));
+  if (s === 0) return [];
+  if (n === 0) return new Array<number>(s).fill(0);
+  return Array.from({ length: s }, (_, i) => {
+    const lo = Math.floor((i * n) / s);
+    const hi = Math.max(lo + 1, Math.floor(((i + 1) * n) / s));
+    return Math.max(0, ...series.slice(lo, hi));
+  });
+}
+
+/** Chart cells as rows: the y label right-aligned in the cells before the value column, the chart from cell 14. */
+function chartRowsOf(series: readonly number[], o: { width: number; rows: number; max?: number; yAxis?: boolean; ink?: Partial<Run> }, ui: Ui): { rows: Run[][]; max: number } {
+  const w = Math.max(1, Math.floor(o.width));
+  const { rows, max } = areaChartRuns(resample(series, w * 2), { width: w, rows: o.rows, ...(o.max !== undefined ? { max: o.max } : {}) }, ui);
+  const label = (i: number): string => (!o.yAxis ? '' : i === 0 ? String(max) : i === rows.length - 1 ? '0' : '');
+  return {
+    max,
+    rows: rows.map((cells, i): Run[] => [dim(spaces(VALUE_AT - 1 - label(i).length) + label(i) + ' '), ...cells.map((x) => (o.ink && x.tone === 'sub' ? { ...x, ...o.ink } : x))]),
+  };
+}
+
+/** The tool calls the run has made: the run's own count, else the session's `tool.call` events. */
+const toolsOf = (h: Pick<Health, 'hooks'>): number => h.hooks?.runTools ?? h.hooks?.byLabel.filter((e) => e.label.startsWith('tool.call')).reduce((n, e) => n + e.n, 0) ?? 0;
+
+/** ACTIVITY: the hook events of the last 7 minutes as a braille area chart `chartRows` tall (y max top left, `0` at the baseline, `-7m` and `now` under it), then the stats line. */
+export function activitySection(h: Health, ui: Ui, o: { cols: number; chartRows: number }): SectionRows {
+  const ev = h.pulse?.events ?? [];
+  const full = [...new Array<number>(Math.max(0, BUCKETS - ev.length)).fill(0), ...ev.slice(-BUCKETS)];
+  const w = Math.max(4, o.cols - 1 - VALUE_AT);
+  const labelled = chartRowsOf(full, { width: w, rows: Math.max(1, o.chartRows), yAxis: true }, ui).rows;
+  const left = `-${Math.round((BUCKETS * BUCKET_MS) / 60_000)}m`;
+  const right = 'now';
+  const useLeft = left.length + 1 + right.length <= w;
+  const axis: Run[] = [dim(spaces(VALUE_AT) + (useLeft ? left : '') + spaces(w - (useLeft ? left.length : 0) - right.length) + right)];
+  const parts = activityStats({ events: full }, toolsOf(h)).split(' · ');
+  while (parts.length > 1 && parts.join(' · ').length > o.cols - 1 - VALUE_AT) parts.pop();
+  const stats: Run[] = [r(spaces(VALUE_AT)), r(parts.join(' · '), 'sub')];
+  const fiveMin = full.slice(-RATE_BUCKETS).reduce((n, x) => n + x, 0);
+  return { figure: `${fiveMin} in 5m`, rows: [...labelled, axis, stats] };
+}
+
+/** CONTEXT: a 2-row chart of the context percent over the session's measures (first left, now right), the gauge and `6% · 64k of 1M · +12k/turn`. Data ink under 50, amber to 80, red above. */
+export function contextSection(h: Health, ui: Ui, o: { cols: number; chartRows?: number }): SectionRows {
+  const ctx = h.pulse?.ctx ?? [];
+  const series = ctxSeries({ ctx });
+  const pct = h.ctxPct ?? ctx.at(-1)?.pct;
+  const w = Math.max(4, o.cols - 1 - VALUE_AT);
+  const ink = ctxInk(pct ?? 0, ui);
+  const rows: Run[][] = o.chartRows === 0 ? [] : chartRowsOf(series.length ? series : pct !== undefined ? [pct] : [], { width: w, rows: o.chartRows ?? 2, max: 100, ink }, ui).rows;
+  const window = h.pulse?.window ?? h.window;
+  const text = ctx.length ? (pulseCtxText({ ctx, ...(window !== undefined ? { window } : {}) }) ?? '') : pct === undefined ? '' : h.tokens !== undefined ? `${Math.round(pct)}% · ${tokenText(h.tokens)}${window !== undefined ? ` of ${tokenText(window)}` : ' tokens'}` : `${Math.round(pct)}%`;
+  const room = o.cols - 1 - VALUE_AT;
+  const parts = text ? text.split(' · ') : [ui.ascii ? '-' : '—'];
+  const head = parts[0]!;
+  const rest = parts.slice(1).join(' · ');
+  if (text && room >= 8 + 1 + text.length) rows.push([r(spaces(VALUE_AT)), ...gaugeRuns(pct, 8, ui), r(` ${text}`, 'text')]);
+  else {
+    const gw = Math.max(3, Math.min(12, room - 1 - head.length));
+    rows.push([r(spaces(VALUE_AT)), ...gaugeRuns(pct, gw, ui), r(` ${head}`, pct === undefined ? 'muted' : 'text')]);
+    if (rest) rows.push([r(spaces(VALUE_AT)), r(rest, 'sub')]);
+  }
+  return { figure: '', rows };
+}
+
+/** RUNS: one eighth-block column per run (newest right, scaled to the longest, green ok, red failed) and `2 runs · avg 0:07 · 1 fail`; before any run a dim track and `no runs yet`. */
+export function runsSection(h: Health, ui: Ui, o: { cols: number }): SectionRows {
+  const runs = (h.pulse?.runs ?? []).map((x) => ({ secs: x.secs, ok: x.ok }));
+  const room = o.cols - 1 - VALUE_AT;
+  const text = runsSummary(runs, ui.ascii);
+  const bw = Math.min(12, Math.max(0, room - 2 - text.length));
+  if (bw >= 4) return { figure: '', rows: [[r(spaces(VALUE_AT)), ...runBars(runs, bw, ui), r('  '), r(text, runs.length ? 'sub' : 'muted')]] };
+  return { figure: '', rows: [[r(spaces(VALUE_AT)), ...runBars(runs, Math.min(12, Math.max(3, room)), ui)], [r(spaces(VALUE_AT)), r(text, runs.length ? 'sub' : 'muted')]] };
+}
+
+/** GATES: one row per gate, `● completion  1 pass · 0 deny`; the dot is green only with a pass and no deny, red with a deny, grey `○` for a gate that has not fired. The figure is the ribbon's `ok` or `N denied`. */
+export function gatesSection(h: Health, ui: Ui, o: { cols: number; notes?: boolean }): SectionRows {
+  const checks = h.gates.checks;
+  const sum = gatesSummary(h);
+  const nameW = Math.max(0, ...checks.map((c) => textWidth(c.id)));
+  const rows: Run[][] = [];
+  for (const c of checks) {
+    const g = gateOf(c, ui);
+    rows.push([r(spaces(ROW_AT)), r(g.glyph, g.tone), r(` ${g.name}${spaces(nameW - textWidth(g.name))}  `), r(g.count, g.tone === 'ok' ? 'sub' : g.tone)]);
+    if (o.notes && noteOf(c)) rows.push([r(spaces(ROW_AT + 2)), dim(noteOf(c))]);
+  }
+  return { figure: checks.length && sum.fired ? sum.text : '', rows };
+}
+
+/** The session row: `session  up 0:51 · master · team off · cost $0.01` (the version is the panel footer's; the card, which has no footer, passes `version` to say it here). */
+export function sessionRow(h: Health, ui: Ui, o: { cols: number; version?: boolean; messages?: number }): Run[] | null {
+  const row = healthRows(h, ui, { footer: !o.version, ...(o.messages ? { messages: o.messages } : {}) }).find((x) => x.id === 'session');
+  if (!row) return null;
+  return [r(`${spaces(ROW_AT)}${'session'.padEnd(VALUE_AT - ROW_AT)}`, 'muted'), ...fitFields(row.fields, o.cols - 1 - VALUE_AT)];
+}
+
+/** The hook events newest first as rows: age in cells 4-6, the severity glyph in cell 12, the readable label from cell 14. */
+export function recentSection(h: Health, ui: Ui, o: { cols: number; max: number }): Run[][] {
+  const SEV = { info: ['·', '.'], ok: ['●', '*'], bad: ['✗', 'x'] } as const;
+  const TONE = { info: 'dim', ok: 'ok', bad: 'bad' } as const;
+  return recentEvents(h.hooks?.recent ?? [], o.max).map((e): Run[] => {
+    const room = Math.max(4, o.cols - 1 - VALUE_AT);
+    let t = e.text;
+    while (textWidth(t) > room && t.includes(' · ')) t = t.slice(0, t.lastIndexOf(' · '));
+    if (textWidth(t) > room) t = fitText(t, room);
+    return [r(spaces(ROW_AT) + agoText(e.ageSecs).padStart(3) + spaces(VALUE_AT - 2 - ROW_AT - 3), 'dim'), r(SEV[e.sev][ui.ascii ? 1 : 0], TONE[e.sev]), r(' '), r(t, 'sub')];
+  });
 }

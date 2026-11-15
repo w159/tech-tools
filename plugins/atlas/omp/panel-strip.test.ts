@@ -53,7 +53,7 @@ describe('change 9: one tab strip on both hosts', () => {
       expect(said).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board'].slice(0, said.length)); // names only, whole, in order, the rest behind `▸ more`
       if (cols >= 48) expect(said).toHaveLength(6);
       expect(cc.join(' ')).not.toMatch(/\b[rtcgko]:/); // never a key letter in the strip
-      if (!L.stripLayout(cols).folded.some((t) => t.id === tab)) expect(cc.join(' ')).toMatch(new RegExp(`\\b${tab === "route" ? "status" : tab}\\b`)); // the lit tab keeps its word while it is not folded
+      if (L.stripLayout(cols).rows[0]!.some((t) => t.id === tab)) expect(cc.join(' ')).toMatch(new RegExp(`\\b${tab === "route" ? "status" : tab}\\b`)); // the lit tab keeps its word while it is not folded
       // words go from the right end only: once a tab shows its word, every tab to its left does too (the lit tab is the one exception)
     });
   }

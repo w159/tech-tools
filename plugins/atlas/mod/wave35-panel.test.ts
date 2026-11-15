@@ -241,11 +241,14 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
       }
     }
   });
-  test('at 110 the stepper is five dots and the current stage in words, the lit one on the spinner', () => {
-    const chain = stepperOf(rows(38));
-    expect(chain).toMatch(/[◐◓◑◒] ○ implement$/); // a narrow pane: dots plus the current stage, never `res thy tst imp ver` (D12)
+  test('at 110 the stepper spells every stage, wrapping to a second row, the lit one on the spinner', () => {
+    const t = rows(38);
+    const at = t.findIndex((l) => l.trim() === 'PHASE') + 1;
+    const stage = t.slice(at, t.findIndex((l, i) => i >= at && l.trim() === ''));
+    const chain = stage.join(' ');
+    expect(chain).toMatch(/[◐◓◑◒] implement/); // round 3 (E9): whole names at every width, never `res thy tst imp ver` (D12)
     expect(chain).not.toMatch(/\b(res|thy|tst|imp|ver)\b/);
-    expect(cells(chain)).toBeLessThanOrEqual(37);
+    for (const l of stage) expect(cells(l)).toBeLessThanOrEqual(37);
   });
   test('the keys of the merged tabs keep working: channel and gates still open their own views', () => {
     forgetPhases();
@@ -258,13 +261,13 @@ describe('item 3: the team tab\'s lead row says what the band says', () => {
   const leadDone = (): never => { const s = snap() as unknown as { activity: Record<string, unknown> }; s.activity.lead = act({ mood: 'done', toolCount: 5, startedAt: NOW - 27000 }); return s as never; };
   test('a blocked run: `▲ blocked`, never `done`', () => {
     forgetPhases();
-    const lead = withGates(leadDone(), 'team', 57, 40, BLOCKED).find((l) => /\blead\b/.test(l) && /^[▹▿ ]\s*\S+ lead\s/.test(l))!;
-    expect(lead).toMatch(/^[▹▿ ]\s*▲ lead\s+blocked/); // 4fef5d66: `● lead done` under a blocked band
+    const lead = withGates(leadDone(), 'team', 57, 40, BLOCKED).find((l) => /\blead\b/.test(l) && /^\s*[▸▾]?\s*\S+ lead\s/.test(l))!;
+    expect(lead).toMatch(/^\s*[▸▾]?\s*▲ lead\s+blocked/); // 4fef5d66: `● lead done` under a blocked band
     expect(lead).not.toMatch(/\bdone\b/);
   });
   test('a run that is done keeps `done`', () => {
     forgetPhases();
-    expect(withGates(leadDone(), 'team', 57, 40, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^[▹▿ ]\s*\S+ lead\s/.test(l))).toMatch(/● lead\s+done/);
+    expect(withGates(leadDone(), 'team', 57, 40, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*[▸▾]?\s*\S+ lead\s/.test(l))).toMatch(/● lead\s+done/);
   });
 });
 

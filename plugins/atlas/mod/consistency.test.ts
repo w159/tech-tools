@@ -178,7 +178,7 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
     f.agents = counts(/^ agents .*$/m.exec(text)?.[0] ?? '');
     f.items = stateRows(rows, new RegExp(`^[▸▾ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`));
   }
-  if (tab === 'team') f.workers = stateRows(rows.filter((r: string) => !/^[▹▿ ] ?◉ lead\b/.test(r)), new RegExp(`^[▸▹▿ ] ?(${G}) (\\S+)\\s+(?:\\S+\\s+)?(queued|running|done|failed|killed|blocked|waiting)\\b`));
+  if (tab === 'team') f.workers = stateRows(rows.filter((r: string) => !/^[▸▾ ] ?◉ lead\b/.test(r)), new RegExp(`^[▸▾ ] ?(${G}) (\\S+)\\s+(?:\\S+\\s+)?(queued|running|done|failed|killed|blocked|waiting)\\b`));
   if (tab === 'channel') { const m = /^ #\S+\s+(\d+) people(?: · (\d+) unread)?/m.exec(text); if (m) f.channel = { people: Number(m[1]), unread: Number(m[2] ?? 0) }; }
   if (tab === 'gates') {
     f.gates = gatePairs(text);

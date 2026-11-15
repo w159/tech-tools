@@ -20,23 +20,23 @@ const MANY = Array.from({ length: 40 }, (_, i) => ({ label: i % 3 ? 'tool.call B
 describe('1: a tall idle pane is not a slab of empty rows (D11: RECENT grows into the free rows, the footer is the last row)', () => {
   test('at 150 columns (pane 54 x 40) at most one blank row sits between the last event and the closing rule', () => {
     const t = body(world(54, { health: { ...h, hooks: { total: 40, byLabel: [{ label: 'tool.call', n: 40 }], recent: MANY } } }));
-    const rule = t.findIndex((l, i) => i > 3 && /^\s+─{20,}$/.test(l));
-    expect(rule).toBeGreaterThan(0);
+    const rule = t.length - 1; // round 3: the footer is the last row, no rule above it
+    expect(t[rule]!.trim()).toMatch(/^atlas /);
     let dead = 0;
     for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
     expect(dead).toBeLessThanOrEqual(1);
   });
   test('the same with no context figure yet (a fresh session, before the first measure): still no void', () => {
     const t = body(world(54, { health: { ...h, ctxPct: undefined, tokens: undefined, window: undefined, hooks: { total: 40, byLabel: [{ label: 'tool.call', n: 40 }], recent: MANY } } }));
-    const rule = t.findIndex((l, i) => i > 3 && /^\s+─{20,}$/.test(l));
+    const rule = t.length - 1;
     let dead = 0;
     for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
     expect(dead).toBeLessThanOrEqual(1);
-    expect(t.join('\n')).toMatch(/context {1,2}░+ —/); // D6: an empty track and an em dash, never `none yet`
+    expect(t.join('\n')).toMatch(/^ {14}░+ —/m); // D6: an empty track and an em dash, never `none yet`
   });
   test('the context gauge is a real row: `context ██░░░░░░ 6% · 63k of 1M`; an empty track and `—` without a context figure', () => {
-    expect(body(world(54)).join('\n')).toMatch(/context {1,2}[█▏▎▍▌▋▊▉░]+ 6% · 63k of 1M/); // slice S3: the gauge, the tokens and the window on one context row
-    expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).toMatch(/context {1,2}░+ —/);
+    expect(body(world(54)).join('\n')).toMatch(/^ {14}[█▏▎▍▌▋▊▉░]+ 6% · 63k of 1M/m); // the gauge, the percent, the tokens and the window on one CONTEXT row
+    expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).toMatch(/^ {14}░+ —/m);
   });
   test('slice S3: no `waiting for first prompt` line and no zero state; the stepper at rest is five `○` (the slots never move)', () => {
     const t = body(world(54)).join('\n');
@@ -88,7 +88,8 @@ describe('5: the recent list reads in words, collapsed, at most 3 rows', () => {
 describe('6: a narrow pane abbreviates the stages (slice S3: one glyph per stage, the lit one turning)', () => {
   test('at 37 columns the stepper is `◐ ○ ○ ○ ○ research`: dots plus the stage in words, never `res thy tst`', () => {
     const t = body(world(37, { run: { kind: 'working', secs: 3, startMs: NOW, frame: 0 }, phase: 'research', phases: ['research', 'theory', 'test', 'implement', 'verify'], entered: ['research'] })).join('\n');
-    expect(t).toMatch(/◐ ○ ○ ○ ○ research/);
+    expect(t).toMatch(/◐ research ○ theory/); // round 3 (E9): whole names at every width
+    expect(t).toContain('verify');
     expect(t).not.toMatch(/\b(res|thy|tst|imp|ver)\b/);
   });
 });
@@ -133,7 +134,8 @@ describe('10: the last run ended `Ns ago`, not a wall clock with no zone', () =>
   test('relative age on the last run row', () => {
     const last = { secs: 2, done: 0, total: 0, agents: 0, failed: 0, endedAgo: 125 };
     const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last, pulse: { events: [], ctx: [], runs: [{ secs: 2, ok: true, at: 1 }] } } })).join('\n');
-    expect(t).toContain(`${agoText(125)} ago`);
+    expect(t).toMatch(/1 run\b/); // round 3 (E7): the runs row says the count and the average; the `ago` clock is gone with `last`
+    expect(t).not.toMatch(/\blast \d/);
     expect(t).not.toMatch(/\d:\d\d [AP]M/);
   });
 });

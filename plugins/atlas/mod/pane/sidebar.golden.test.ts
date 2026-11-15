@@ -42,10 +42,10 @@ describe('sidebar golden text', () => {
   });
   test('team: the lead row first, then every subagent by name with its state word, in start order (critique 11 A3)', () => {
     const r = rows('team').slice(3).filter((l) => !/^ {4}\S/.test(l)).slice(0, 4); // the detail rows a tall pane adds sit under their agent
-    expect(r[0]).toMatch(/^▹ [◐◓◑◒] lead\s+running/);
+    expect(r[0]).toMatch(/^▸ [◐◓◑◒] lead\s+running/);
     expect(r[1]).toMatch(/^▸ [◐◓◑◒] explorer-1\s+running/);
-    expect(r[2]).toMatch(/^▹ ◉ impl-auth\s+(\S+\s+)?waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
-    expect(r[3]).toMatch(/^▹ ■ runner-1\s+(\S+\s+)?failed/);
+    expect(r[2]).toMatch(/^▸ ◉ impl-auth\s+(\S+\s+)?waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
+    expect(r[3]).toMatch(/^▸ ■ runner-1\s+(\S+\s+)?failed/);
   });
   test('team at 38 columns (the 110-column pane) draws the strip as one row of chips with the trailing tabs behind \`▸ more\` (D14), and keeps name and state', () => {
     const r = rows('cols38');

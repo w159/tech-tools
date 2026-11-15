@@ -175,10 +175,10 @@ describe('D7: runs are outcome dots', () => {
     const rs = row(h([{ secs: 9, ok: false, at: 1 }, { secs: 5, ok: true, at: 2 }], { last: { secs: 5, done: 0, total: 0, agents: 0, failed: 0, endedAgo: 18 } }));
     const dots = rs.filter((x) => x.t === '●');
     expect(dots.map((x) => x.tone)).toEqual(['bad', 'ok']);
-    expect(text(rs)).toContain('2 runs · last 0:05 · 18s ago');
+    expect(text(rs)).toContain('2 runs · 18s ago'); // round 3 (E7): no `last 0:05`
   });
   test('one run reads `1 run`', () => {
-    expect(text(row(h([{ secs: 65, ok: true, at: 1 }])))).toContain('1 run · last 1:05');
+    expect(text(row(h([{ secs: 65, ok: true, at: 1 }])))).toContain('1 run');
   });
   test('no spark glyph in the runs row', () => {
     expect(text(row(h([{ secs: 9, ok: true, at: 1 }, { secs: 5, ok: true, at: 2 }])))).not.toMatch(/[⣀⣄⣤⣦⣶⣷⣿]/);

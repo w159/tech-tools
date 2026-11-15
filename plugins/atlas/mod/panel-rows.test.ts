@@ -25,7 +25,7 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   }
   test('the lead row is first and the tally is last; the ribbon counts only the workers', () => {
     const out = body('team', 120, { lead, mates });
-    expect(out[0]!.startsWith('▹ ◉ lead')).toBe(true);
+    expect(out[0]!.startsWith('▸ ◉ lead')).toBe(true);
     expect(out.at(-1)).toBe('    workers  1 queued · 1 running · 2 done · 1 failed');
   });
   test('the tally always says running, and drops the other states with no worker', () => {
@@ -43,21 +43,21 @@ describe('team tab: lead row, roster rows, lead tally', () => {
     expect(out.filter((l) => /^ {4}last {2}wrote the summary/.test(l))).toHaveLength(1); // different words: kept
   });
   test('no workers and no roster keeps the hint, and the lead stays above it', () => {
-    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['▹ ◉ lead    waiting', '    no workers yet']); // round 2: a lead alone has no pace to draw, so no sparkline either; // wave 44: no orphan time axis (`0:00    0:01`) and no `0 running` total under it
+    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['▸ ◉ lead    waiting', '    no workers yet']); // round 2: a lead alone has no pace to draw, so no sparkline either; // wave 44: no orphan time axis (`0:00    0:01`) and no `0 running` total under it
     expect(body('team', 80, { lead: undefined, workers: [], mates: [] })).toEqual([' '.repeat(29) + 'nobody dispatched yet']);
   });
   test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
     const route = full('route', 120, { mates, lead }).join('\n');
     expect(route).toContain(' agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
-    expect(body('team', 120, { lead, mates }).some((l) => /^▹ ◇ leader +queued/.test(l))).toBe(true);
+    expect(body('team', 120, { lead, mates }).some((l) => /^▸ ◇ leader +queued/.test(l))).toBe(true);
   });
   test('a parked worker draws a queued row with its word instead of throwing', () => {
     const out = body('team', 80, { workers: [w('pk', 'queued', { detail: 'parked' })] });
-    expect(out).toEqual(['▹ ◇ pk      queued']);
+    expect(out).toEqual(['▸ ◇ pk      queued']);
   });
   test('the recipient can be the lead: it takes the focus marker', () => {
     expect(body('team', 80, { lead, mates, recipient: 'lead' })[0]!.startsWith('▸ ◉ lead')).toBe(true);
-    expect(body('team', 80, { lead, mates }).filter((l) => l.startsWith('▸'))).toHaveLength(1);
+    expect(bodyLines(panelWorld('team', 80, mocha, { rows: 24, lead, mates })).filter((l) => l.runs[0]?.t === '▸' && l.runs[0].bold)).toHaveLength(1); // round 3 (E8): every expandable row carries `▸`; the recipient's is the bold accent one
   });
   test('an open lead row has no age line (the lead has no start time)', () => {
     const out = body('team', 80, { lead, workers: [], mates: [], expanded: 'worker:lead' });

@@ -23,7 +23,7 @@ const strip = (rows: string[]): string[] => rows.map((l) => l.replace(/ +10:02$/
 
 describe('team tab focus mark', () => {
   const ws = [w('a', 'running'), w('b', 'waiting')];
-  const marked = (over: Partial<PanelModel>): string[] => body('team', 80, { lead, workers: ws, ...over }).filter((l) => l.startsWith('▸')).map((l) => l.split(/\s+/)[2]!);
+  const marked = (over: Partial<PanelModel>): string[] => bodyLines(panelWorld('team', 80, mocha, { lead, workers: ws, ...over })).filter((l) => l.runs[0]?.t === '▸' && l.runs[0].bold).map((l) => lineText(l).split(/\s+/)[2]!); // round 3 (E8): every expandable row carries `▸`; the focus is the bold accent one
   test('without a recipient the first running worker is marked', () => {
     expect(marked({ recipient: undefined })).toEqual(['a']);
   });

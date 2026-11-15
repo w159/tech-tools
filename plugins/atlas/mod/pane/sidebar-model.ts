@@ -94,12 +94,14 @@ function leadClock(s: LiveSnapshot, workers: readonly PanelWorker[], state: UiSt
 const entered = new Map<string, string[]>();
 const lastKind = new Map<string, string>();
 export const forgetPhases = (): void => { entered.clear(); lastKind.clear(); forgetStamps(); };
-function enteredOf(channel: string, ids: readonly string[], phase: string, kind: string | undefined): { entered: string[] } {
-  if (lastKind.get(channel) === 'done' && kind === 'working') entered.delete(channel);
+export function enteredOf(channel: string, ids: readonly string[], phase: string, kind: string | undefined): { entered: string[] } {
+  // Round 3 (E9): the stages a run passed stay passed after it ends (done, then idle) until the next prompt starts a run (idle or done, then working). A fresh idle pane has entered nothing, and an idle render never enters a phase.
+  const prev = lastKind.get(channel);
+  if ((prev === 'done' || prev === 'idle') && kind === 'working') entered.delete(channel);
   if (kind) lastKind.set(channel, kind);
   const seen = entered.get(channel) ?? [];
   entered.set(channel, seen);
-  if (ids.includes(phase) && !seen.includes(phase)) seen.push(phase);
+  if (kind !== 'idle' && ids.includes(phase) && !seen.includes(phase)) seen.push(phase);
   return { entered: [...seen] };
 }
 

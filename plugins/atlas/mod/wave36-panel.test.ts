@@ -246,14 +246,14 @@ describe('step 5: the status view (critique 35: `events · no events yet` over a
     const fixed = [{ id: 'routing', title: 'Tool routing', lines: [{ id: 'c', label: 'Dispatches followed the plan', ok: false, fix: 'dispatch through the planned team' }] }];
     expect(rows(snap(), RUN, fixed).find((l) => /Tool routing/.test(l))).toMatch(/warning\s+dispatch through/);
   });
-  test('an empty channel is one dim line, and the status view says `0 messages`', () => {
+  test('an empty channel is a ribbon and a dim skeleton, and the status view says `0 messages`', () => {
     const none = { ...(snap() as object), squad: [], todos: [], notes: [], activity: {}, comms: [], members: [] } as never;
     expect(rows(none, { kind: 'idle', secs: 0, startMs: NOW }).filter((l) => /^\s*0 messages\s*$/.test(l))).toHaveLength(1);
     forgetPhases();
     const ch = withGates(none, 'channel', 57, 41, RUN);
-    expect(ch.filter((l) => /no messages/.test(l))).toHaveLength(1);
+    expect(ch.filter((l) => /0 messages/.test(l))).toHaveLength(1); // round 3 (E12): the ribbon carries the live fact, a dim skeleton follows
     forgetPhases();
-    expect(texts(tree('channel', 57, 41, none)).find((x) => /no messages/.test(x.t))?.color).toBe(DIM);
+    expect(texts(tree('channel', 57, 41, none)).find((x) => /···/.test(x.t))?.color).toBe(DIM);
   });
   test('the pane keeps one width in every state and its rules are the 236 grey', () => {
     for (const run of [RUN, { kind: 'blocked', secs: 20, startMs: NOW - 20000 } as Run, { kind: 'done', secs: 52, startMs: NOW - 52000 } as Run, { kind: 'idle', secs: 0, startMs: NOW } as Run]) {

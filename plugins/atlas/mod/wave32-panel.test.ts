@@ -68,7 +68,7 @@ describe('item 1: the route tab carries the phase timeline (critique 30: the tab
   test('a `timeline` head and one chain of the phases, the current one on the spinner with its elapsed time', () => {
     forgetPhases();
     const t = render('route', 66, 45).join('\n');
-    expect(t).toMatch(/^ {2}PHASE$/m);
+    expect(t).toMatch(/^ {2,3}PHASE$/m); // the Claude pane's rows sit one cell in from the host's border (round 3 gutter)
     expect(t).toMatch(/[●–○] research [●–○] theory [●–○] test [◐◓◑◒] implement ○ verify/); // slice S3: the stepper, one glyph per stage // the run clock is the phase row's, said once (idle polish 3) // wave 34: a phase is green only once the run was in it (round 2: an unentered phase is its dim name, with no `·` mark beside the `›`)
   });
   test('the plan is not drawn here (wave 34: the HUD above the prompt and the board tab list it)', () => {
@@ -79,13 +79,13 @@ describe('item 1: the route tab carries the phase timeline (critique 30: the tab
 
 describe('item 2: the channel tab (critique 30: `no messages yet` floated mid-pane)', () => {
   const empty = () => render('channel', 66, 45, { ...(snap({ notes: false }) as object), squad: [], todos: [], activity: {} } as never);
-  test('one `○ no messages` row, left on the rows indent, right under the head', () => {
+  test('a ribbon with the live fact `0 messages`, then a dim skeleton (round 3 E12), right under the head', () => {
     const rows = empty();
-    const at = rows.findIndex((l) => l.includes('○ no messages'));
-    expect(at).toBeGreaterThan(3);
-    expect(rows.filter((l) => l.includes('no messages'))).toHaveLength(1);
-    expect(rows[at]!.length - rows[at]!.trimStart().length).toBe(4);
-    expect(rows.join('\n')).not.toContain('no messages yet');
+    const at = rows.findIndex((l) => l.includes('0 messages'));
+    expect(at).toBeGreaterThanOrEqual(3);
+    expect(rows.filter((l) => l.includes('0 messages'))).toHaveLength(1);
+    expect(rows.slice(at + 1).some((l) => l.includes('···'))).toBe(true);
+    expect(rows.join('\n')).not.toContain('no messages');
   });
   test('the pane keeps its height with nothing to say', () => {
     expect(empty()).toHaveLength(45);
