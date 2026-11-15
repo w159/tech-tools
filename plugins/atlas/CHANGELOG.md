@@ -33,6 +33,7 @@ Round 3: decision models in routing and verification, Ollama as a worker provide
 - Tests no longer touch the real `~/.atlas`: the decision and provider tests point `ATLAS_HOME` at a temp dir before they reset the `decision-down.json` and `provider-health.json` caches.
 - Crew and bench cost: a Claude worker stopped before its `result` event (no `total_cost_usd`) is reported as unknown, not 0.0000. `usage_of` returns `cost_known`; worker rows carry `cost_known` and a null `cost_usd`, `tokens_workers` carries `cost_complete` (and a null `cost_usd` when false), local Ollama workers stay a known 0.0, and `bench` prints n/a and writes null.
 - `RealCliWiringTests` skips when the `claude` CLI is not on PATH (the CI `full` runner has none).
+- `mod/transcript/wave24-cards.test.tsx` no longer fails under `bun test` depending on file order: `resume.test.tsx` left the restyle module's run-health (a failed worker) set, so a later superseded done chip drew as `blocked` without the word `superseded`; the test wrapper now calls `forgetHealth()` after each test.
 
 ## 17.21.1 - 2026-11-14
 

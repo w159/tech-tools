@@ -4,12 +4,12 @@
 import { expect, test as base } from 'claude-code/testing'
 import type { AgentInfo, EngineInterface, On } from 'claude-code'
 import type { AtlasSnapshot, SquadAgent } from '../contract'
-import { registerRestyle } from '../restyle'
+import { forgetHealth, registerRestyle } from '../restyle'
 import { memState } from '../test_helpers'
 import { noteFailed } from './outcome'
 import { forgetPlaced } from './placed'
 
-const test = ((name: string, fn: () => Promise<unknown> | unknown) => base(name, async () => { forgetPlaced(); try { await fn() } finally { forgetPlaced() } })) as unknown as typeof base
+const test = ((name: string, fn: () => Promise<unknown> | unknown) => base(name, async () => { forgetPlaced(); try { await fn() } finally { forgetPlaced(); forgetHealth() } })) as unknown as typeof base
 const snap = (now: number, squad: SquadAgent[], activity: Record<string, unknown> = {}): AtlasSnapshot => ({
   root: null, sessionId: 's1', channel: 'c', todos: [], notes: [], members: [], squad, contextPct: 0, now,
   contract: { phases: [], todoPhases: [], headerFirstLinePattern: '^ATLAS', itemPhasePrefix: '[<phase>] ' },
