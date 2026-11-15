@@ -12,9 +12,11 @@ import { eventMinutes, hookLatencyRings, seedHookLatency } from './hook-log';
 export type HistRun = { secs: number; ok: boolean; tools: number; at: number };
 export type HistCtx = { at: number; pcts: number[] };
 export type HistMinute = { m: number; n: number };
-export type History = { v: 1; runs: HistRun[]; lat: Record<string, number[]>; min: HistMinute[]; ctx: HistCtx | null };
+/** AA4: the pass and deny counts each gate showed when the last session's run ended. */
+export type HistGate = { id: string; pass: number; deny: number };
+export type History = { v: 1; runs: HistRun[]; lat: Record<string, number[]>; min: HistMinute[]; ctx: HistCtx | null; gates: HistGate[] };
 /** What the surfaces read of the persisted part: the earlier sessions' runs and minutes, and the context of the last session that measured. */
-export type HistView = { runs: HistRun[]; minutes: HistMinute[]; ctx?: HistCtx };
+export type HistView = { runs: HistRun[]; minutes: HistMinute[]; ctx?: HistCtx; gates?: HistGate[] };
 
 export const HIST_RUNS = 50;
 export const HIST_LAT = 64;
@@ -24,7 +26,7 @@ const MIN_MS = 60_000;
 /** The file is rewritten at most this often while the session runs (a run end writes at once). */
 const WRITE_EVERY_MS = 10_000;
 
-export const emptyHistory = (): History => ({ v: 1, runs: [], lat: {}, min: [], ctx: null });
+export const emptyHistory = (): History => ({ v: 1, runs: [], lat: {}, min: [], ctx: null, gates: [] });
 const fin = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 
 /** The history a file holds; anything unreadable is dropped entry by entry, a file that is not JSON (or not an object) is empty. Never throws. */
@@ -51,7 +53,11 @@ export function parseHistory(text: string | null | undefined): History {
     const c = doc.ctx as Partial<HistCtx> | null | undefined;
     const pcts = c && Array.isArray(c.pcts) ? c.pcts.filter((x): x is number => fin(x) && x >= 0 && x <= 100).slice(-24) : [];
     const ctx = c && fin(c.at) && pcts.length ? { at: c.at, pcts } : null;
-    return { v: 1, runs, lat, min, ctx };
+    const gates = (Array.isArray(doc.gates) ? doc.gates : [])
+      .filter((x): x is HistGate => !!x && typeof x === 'object' && typeof (x as HistGate).id === 'string' && fin((x as HistGate).pass) && fin((x as HistGate).deny) && (x as HistGate).pass >= 0 && (x as HistGate).deny >= 0)
+      .map((x) => ({ id: x.id, pass: Math.round(x.pass), deny: Math.round(x.deny) }))
+      .slice(0, 16);
+    return { v: 1, runs, lat, min, ctx, gates };
   } catch {
     return emptyHistory();
   }
@@ -65,6 +71,7 @@ let base: History = emptyHistory();
 let startMin = 0;
 let sessionRuns: HistRun[] = [];
 let sessionCtx: HistCtx | null = null;
+let sessionGates: HistGate[] | null = null;
 let lastWritten = '';
 let wroteAt = -Infinity;
 let dirFor = '';
@@ -75,6 +82,7 @@ export function resetHistory(startMs = 0): void {
   startMin = Math.floor(startMs / MIN_MS);
   sessionRuns = [];
   sessionCtx = null;
+  sessionGates = null;
   lastWritten = '';
   wroteAt = -Infinity;
   dirFor = '';
@@ -92,12 +100,18 @@ export function noteHistoryCtx(pcts: readonly number[], at: number): void {
   sessionCtx = ok.length && fin(at) ? { at, pcts: ok } : sessionCtx;
 }
 
+/** AA4: the gate counts at the end of a run (a gate with no lines yet is not recorded); the next session shows them as `prev`. */
+export function noteHistoryGates(gates: readonly HistGate[]): void {
+  const ok = gates.filter((g) => g.id && fin(g.pass) && fin(g.deny) && g.pass + g.deny > 0).map((g) => ({ id: g.id, pass: Math.round(g.pass), deny: Math.round(g.deny) }));
+  if (ok.length) sessionGates = ok;
+}
+
 /** What the surfaces draw as `prev`: the runs of earlier sessions, the per-minute counts of the minutes before this session (inside the last hour at `now`), and the last measured context. */
 export function historyView(now: number): HistView | undefined {
   const nowMin = Math.floor(now / MIN_MS);
   const minutes = base.min.filter((x) => x.m < startMin && x.m >= nowMin - HIST_MINUTES);
-  if (!base.runs.length && !minutes.length && !base.ctx) return undefined;
-  return { runs: base.runs.map((r) => ({ ...r })), minutes: minutes.map((x) => ({ ...x })), ...(base.ctx ? { ctx: { ...base.ctx, pcts: [...base.ctx.pcts] } } : {}) };
+  if (!base.runs.length && !minutes.length && !base.ctx && !base.gates.length) return undefined;
+  return { runs: base.runs.map((r) => ({ ...r })), minutes: minutes.map((x) => ({ ...x })), ...(base.ctx ? { ctx: { ...base.ctx, pcts: [...base.ctx.pcts] } } : {}), ...(base.gates.length ? { gates: base.gates.map((g) => ({ ...g })) } : {}) };
 }
 
 /** The whole history as the file would hold it at `now`: the loaded part and this session's runs, the hook rings (seeded from the loaded part), the minutes, the context. */
@@ -109,7 +123,7 @@ export function composeHistory(now: number): History {
   const lat: Record<string, number[]> = {};
   for (const [k, v] of Object.entries(hookLatencyRings())) lat[k] = v.slice(-HIST_LAT);
   for (const [k, v] of Object.entries(base.lat)) if (!lat[k]) lat[k] = v.slice(-HIST_LAT);
-  return { v: 1, runs: [...base.runs, ...sessionRuns].slice(-HIST_RUNS), lat, min, ctx: sessionCtx ?? base.ctx };
+  return { v: 1, runs: [...base.runs, ...sessionRuns].slice(-HIST_RUNS), lat, min, ctx: sessionCtx ?? base.ctx, gates: sessionGates ?? base.gates };
 }
 
 const dirOf = (root: string): string => `${root.replace(/\/+$/, '')}/.atlas/.run`;

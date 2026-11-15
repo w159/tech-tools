@@ -22,7 +22,7 @@ describe('1: the tab strip never blanks a label', () => {
       const text = rows.join('\n');
       expect(text).not.toMatch(/\b[rtcgko]: /); // the words alone (the keys stay bound by the host layer)
       const all = ['status', 'team', 'channel', 'gates', 'core', 'board'];
-      const shown = all.filter((w) => text.includes(w));
+      const shown = all.filter((w) => text.includes(w === 'channel' ? 'chan' : w)); // AA5: the one short label
       expect(shown).toEqual(all.slice(0, shown.length)); // whole words, in order, from the left
       if (shown.length < all.length) expect(text).toContain('more ›');
       expect(shown.length).toBeGreaterThanOrEqual(2);

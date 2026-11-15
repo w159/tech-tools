@@ -56,9 +56,10 @@ describe('idle band shows live health', () => {
     const bad = [...GATES.slice(0, 3), { id: 'header', title: 'header', lines: [{ id: 'header', label: 'header', ok: false }] }] as any;
     expect(firstRow(model(150, { gates: bad }))).toContain('■ 1 denied');
   });
-  test('an unknown context is omitted, never made up', () => {
+  test('an unknown context is a dim dash in its fixed slot, never made up (AA2)', () => {
     const row = firstRow(model(150, { snapshot: idleSnap({ contextPct: 0 }), health: { ...HEALTH, tokens: null } }));
-    expect(row).not.toContain('ctx');
+    expect(row).toMatch(/ctx +—/);
+    expect(row).not.toMatch(/ctx +\d/);
     expect(row).not.toContain('tok');
   });
   test('a run that ended this session adds no `last run` line (slice S2: the run seconds are the state word\'s alone, `done 2:14`)', () => {
@@ -67,10 +68,10 @@ describe('idle band shows live health', () => {
     expect(rest).not.toContain('2:14');
     expect(firstRow(model(150, { snapshot: idleSnap({ phase: 'done' }), ranSecs: 134, restSecs: 4 }))).toContain('● done 6/6');
   });
-  test('the idle head ticks: seconds since the last hook event (round 2 D2)', () => {
+  test('AA2: the band no longer carries a `last Ns` clock: the idle head is the uptime, the hook slot the latency', () => {
     const at = (secs: number) => firstRow(model(150, { health: { ...HEALTH, hooks: { total: 1, byLabel: [], recent: [], lastEventSecs: secs } } }));
-    expect(at(7)).toContain('last 7s');
-    expect(at(8)).toContain('last 8s');
+    expect(at(7)).not.toContain('last');
+    expect(at(7)).toContain('up 12:04');
   });
 });
 
@@ -122,7 +123,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
     expect(working(150, true).trimEnd()).toBe(WORKING_150);
   });
 });
-const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement 5/6              │  ● gates ok ›    │ ctx  12%' + ' '.repeat(71) + '▸ health';
+const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement 5/6              │  ● gates ok ›    │ ▁▁▁▁▁▁▁▁ peak —       │ hook p50   —   │ ctx  12%' + ' '.repeat(30) + '▸ health'; // AA2: every slot is there before its first datum, dim
 
 describe('the expanded health card (HUD)', () => {
   const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };
@@ -130,14 +131,13 @@ describe('the expanded health card (HUD)', () => {
   test('ribbon, rows and closing rule', () => {
     const t = text();
     expect(t[0]!.trimEnd()).toMatch(/^ +▾ HEALTH +─+$/); // X4: the one title chip and a flat rule; the band under the card carries the pill
-    expect(t.some((l) => /○ completion +0 +0 +—/.test(l))).toBe(true); // nothing fired yet (no prompt, no run): every gate is `○ name  0  0  —`, one per row (in the card's middle column)
-    expect(t.some((l) => /○ tripwire +0 +0 +—/.test(l))).toBe(true);
+    expect(t.some((l) => /○ 4 gates armed · 0 checks yet/.test(l))).toBe(true); // AA4: nothing fired yet: one summary line, not four hollow rows
     expect(t.some((l) => /▰+▱+ 18%/.test(l)) && t.join('\n').includes('42k')).toBe(true);
     expect(t.some((l) => /last run/.test(l))).toBe(false); // the band says the run
   });
   test('a finished run is the runs row: a bar per run, the count and the one value (Z2: never the same figure as median and p90)', () => {
     const t = text({ pulse: { events: [], ctx: [], runs: [{ secs: 134, ok: true, at: 1 }] } });
-    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+1 run · 2:14(?! · )/.test(l))).toBe(true);
+    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+2:14 ok/.test(l))).toBe(true); // AA3: fewer than 3 runs is a one-line list
     expect(t.join('\n')).not.toMatch(/last run/);
   });
   test('only values the mod has: no ctx, no tokens, no branch', () => {

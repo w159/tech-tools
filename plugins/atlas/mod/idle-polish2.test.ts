@@ -117,7 +117,7 @@ describe('5: each fact once across the band, the card and the panel', () => {
   test('the card with the panel up holds only what opening a row adds: no `last run none`, no hooks line that the recent list says', () => {
     const t = healthCardRows({ ...one, panel: true }, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     expect(t).not.toMatch(/last run|session started/);
-    expect(t).toMatch(/[●○] completion +(?:3 +0 +\S+|0 +0 +—)/);
+    expect(t).toMatch(/[●○] completion +(?:3 +0 +\S+|0 +0 +—)|○ \d+ gates armed · 0 checks yet/);
   });
   test('the card has no last run line (the version is the pane\'s footer); the band has no last run or event line any more', () => {
     const t = healthCardRows(one, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');

@@ -55,13 +55,13 @@ describe('(a) the band is one row of a fixed order; the head and the cap always 
       if (panel) expect(ids).not.toContain('health');
       else if (cols >= 80) expect(ids.at(-1)).toBe('health');
       expect(row).toContain('◖ ◆ ATLAS ◗ ');
-      expect(row).toMatch(kind === 'idle' ? (panel && cols <= 60 ? /◌ idle (up [\d:]+ )?│/ : /◌ idle up/) : kind === 'working' ? /[◐◓◑◒] implement/ : /● done/);
+      expect(row).toMatch(kind === 'idle' ? /◌ idle( up [\d:]+)? +│/ : kind === 'working' ? /[◐◓◑◒] implement/ : /● done/);
     });
   }
   test('the wide band reads like the frame spec', () => {
-    expect(first(model('idle', 150, false)).trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ◌ idle up 0:09 +│  ○ gates armed › │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
-    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement 5\/6 +│  ● gates ok › +│ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
-    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 6\/6 +ended 1s +│  ● gates ok › +│ [▁-█]{20} +12 ev\/5m │ ctx +6% .*▸ health$/); // Y1c: no `last 0s` beside `ended 1s`
+    expect(first(model('idle', 150, false)).trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ◌ idle up 0:09 +│  ○ gates armed › │ [▁-█]{8} peak 5 \/ 5s +│ hook p50 +— +│ ctx +6% +.*▸ health$/);
+    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement 5\/6 +│  ● gates ok › +│ [▁-█]{8} peak 5 \/ 5s +│ hook p50 +— +│ ctx +6% +.*▸ health$/);
+    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 6\/6 · ended 1s +│  ● gates ok › +│ [▁-█]{8} peak 5 \/ 5s +│ hook p50 +— +│ ctx +6% +.*▸ health$/); // Y1c: no `last 0s` beside `ended 1s`
   });
 });
 
@@ -72,10 +72,11 @@ describe('(b) with the pane open the band is the same row without the health chi
       const open = first(model(kind, cols, true));
       expect(open).not.toContain('health');
       if (kind === 'idle') {
-        // Z6: the idle band beside the open pane gives its empty detail slot to one live health figure (the context here: this health has no hook latency), the spark keeps its unit
-        expect(open.trimEnd()).toMatch(/[▁-█]{3,} +\d+ ev\/5m │ ctx +6%$/);
+        // AA2: beside the open pane the band is the same slots without the detail; the spark is 8 cells and says its peak; at 150 hook and ctx slots are always there
+        expect(open.trimEnd()).toMatch(cols >= 110 ? /[▁-█]{8} peak 5 \/ 5s +│ hook p50 +— +│ ctx +6%$/ : /[▁-█]{8} peak 5 \/ 5s +│ hook p50 +— +│ ctx +6%$/);
         expect(open.trimEnd()).not.toMatch(/last \d|\$\d/);
-      } else expect(closed.trimEnd()).toBe(open.trimEnd());
+      } else if (cols < 121) expect(closed.slice(0, 62)).toBe(open.slice(0, 62)); // AA2: the same slots at the same columns, the chip after them
+      else expect(open.slice(0, 12)).toBe(closed.slice(0, 12));
     });
   }
 });
@@ -192,7 +193,7 @@ describe('(f) at 110 with the pane closed the band is one row (round 2 D9: tabs 
   test('a run that ended adds no `last run m:ss` to the band', () => {
     const joined = rows(model('done', 110, false)).join('\n');
     expect(joined).not.toMatch(/last run/);
-    expect(joined).toMatch(/done 6\/6 +ended 1s/);
+    expect(joined).toMatch(/done 6\/6 +│/); // AA2: below 121 the band has no detail slot, the panel says `ended`
   });
 });
 
@@ -201,7 +202,8 @@ describe('(g) no pulse, no spark', () => {
     const { pulse: _p, ...noPulse } = HEALTH;
     for (const kind of ['idle', 'working', 'done'] as Kind[]) {
       const row = first({ ...model(kind, 150, false), health: noPulse });
-      expect(row).not.toMatch(/[⣀-⣿▁-█]/);
+      expect(row).not.toMatch(/[⣀-⣿]|[▂-█]/); // AA2: the spark slot is a fixed 8 cells, all dim baseline `▁`, with `peak —`; nothing is invented
+      expect(row).toMatch(/▁{8} peak —/);
       expect(row).toMatch(/gates (ok|armed)/);
       expect(row).toMatch(/ctx +6%/);
     }

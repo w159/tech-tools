@@ -68,7 +68,7 @@ describe('2: the expanded card says each gate in the one vocabulary, never a sec
     expect(t).not.toMatch(/session\s+up /);
   });
   test('each gate is one row of the GATES section: `● name  ok fail` once it fired, `○ name  n armed` before', () => {
-    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`[●○] ${id} +(?:3 +0 +\\S+|0 +0 +—)`).test(l)), id).toBe(true);
+    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`[●○] ${id} +(?:3 +0 +\\S+|0 +0 +—)`).test(l)) || card.some((l) => /○ \d+ gates armed · 0 checks yet/.test(l)), id).toBe(true); // AA4: unfired gates are one summary line
     expect(card.join('\n')).not.toContain('Last Stop allowed'); // round 3 (E11): the card's GATES column holds the rows and their numbers; a gate's note stays on the panel
   });
 });

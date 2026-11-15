@@ -78,6 +78,14 @@ function oneLine(kit: Kit, variants: readonly string[]): Run[] {
   return kit.row([kit.txt(text)]);
 }
 
+/** AA6: one raised chip spanning the usable width, `left` and `right` inside its fill (the semantic colours of the runs stay, the fill is the chip's); `alert` is the failing row's tile. The row presses as a whole (the caller's `press`). */
+function chipRow(kit: Kit, left: readonly Run[], right: readonly Run[], alert = false): Run[] {
+  const bg = alert ? kit.k.alertBg : kit.k.chipBg;
+  const paint = (x: Run): Run => ({ ...x, bgHex: bg, hover: true });
+  const gap = Math.max(0, kit.u - 2 - kit.w(left) - kit.w(right));
+  return [kit.sp(1), paint(kit.sp(1)), ...left.map(paint), paint(kit.sp(gap)), ...right.map(paint), paint(kit.sp(1))];
+}
+
 const WORD: Record<UiState, string> = { running: 'working', done: 'done', failed: 'failed', blocked: 'blocked', waiting: 'waiting', queued: 'queued' } as Record<UiState, string>;
 const stateGlyph = (kit: Kit, s: UiState): string => (s === 'done' ? kit.g('●', '*') : s === 'failed' || s === 'blocked' ? kit.g('■', 'x') : s === 'running' ? kit.g('◆', '#') : kit.g('○', 'o'));
 const alertOf = (s: UiState): boolean => s === 'failed' || s === 'blocked';
@@ -114,7 +122,7 @@ function sharedNote(lines: readonly { ok: boolean; detail?: string }[]): string 
 
 /** `force`: every group with lines opens (the core tab's GATES), not only the ones that fired; a flip still toggles it. */
 function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted: boolean, force = false): Part {
-  const { g, dim, txt, red, green, sp, row, ribbon, metaText, cell } = kit;
+  const { g, dim, txt, red, green, sp, row, ribbon, metaText, on } = kit;
   const h = a.health;
   const flips = new Set(a.flips);
   const pad = (t: string): string => t.padStart(GATE_COL);
@@ -135,10 +143,10 @@ function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted:
       ? [n.pass > 0 ? green(pad(String(n.pass))) : dim(pad('0')), deny > 0 ? red(pad(String(deny))) : dim(pad('0')), dim(pad(lastSecs !== undefined ? agoText(lastSecs) : none))]
       : [dim(pad('0')), dim(pad('0')), dim(pad(none))];
     const mark = deny > 0 ? red(g('■', 'x')) : fired ? green(g('●', '*')) : dim(g('○', 'o'));
-    // Y2c: the caret cell is the chip (the raised tile, the alert tile on a failing group); a group with nothing under it has a blank cell; the row presses as a whole
+    // AA6: a group that opens is one raised chip across the row (`▸`/`▾` inside the fill, the numbers inside it too; the alert tile on a failing group); a group with nothing under it is a plain row; the row presses as a whole
     const caret = canOpen ? (open ? g('▾', 'v') : g('▸', '>')) : ' ';
-    const head = canOpen ? cell(` ${caret} `, deny > 0 ? 'alert' : 'idle') : sp(3);
-    lines.push({ runs: row([head, sp(1), mark, fired ? txt(` ${c.id}`) : dim(` ${c.id}`)], right, 0), ...(canOpen ? { press: { kind: 'flip', key } } : {}) });
+    if (canOpen) lines.push({ runs: chipRow(kit, [on(caret, kit.k.chipFg, { tone: 'accent' }), sp(1), mark, fired ? txt(` ${c.id}`) : dim(` ${c.id}`)], right, deny > 0), press: { kind: 'flip', key } });
+    else lines.push({ runs: row([sp(3), sp(1), mark, fired ? txt(` ${c.id}`) : dim(` ${c.id}`)], right, 0) });
     if (!open || !grp) continue;
     // identical rows merge into one (`×8`); the value column is short and right-aligned (flush with the chip's own numbers); the label takes the rest and is cut at its END with `…`.
     const merged: { l: (typeof grp.lines)[number]; n: number }[] = [];
@@ -316,10 +324,23 @@ function corePart(a: TabIn, kit: Kit): Part {
   return { lines, order: [] };
 }
 
+/** AA7: the core tab's routing data: one row per recorded route (its name, the class and effort it ran at, how it ran); nothing when the mod recorded none. */
+function routingPart(a: TabIn, kit: Kit): Run[][] {
+  const { dim, txt, row, ribbon, metaText } = kit;
+  const routes = a.core?.routes ?? [];
+  if (!routes.length) return [];
+  const out: Run[][] = [ribbon('ROUTING', metaText(`${routes.length} ${routes.length === 1 ? 'route' : 'routes'}`))];
+  for (const r of routes.slice(0, 6)) {
+    const how = `${r.cls}/${r.effort} · ${r.transport ?? 'unknown'}`;
+    out.push(row([txt(fitText(r.name, Math.max(4, kit.u - 6 - textWidth(how))))], [dim(how)]));
+  }
+  return out;
+}
+
 // ---- the frame -----------------------------------------------------------------------------------------------------------------------------
 
 /** The view that holds each shared section when a short pane drops it (`route` is the status tab). */
-const HOLDER: Record<TabId, string> = { board: 'route', team: 'route', channel: 'route', core: 'gates', gates: 'route' };
+const HOLDER: Record<TabId, string> = { board: 'route', team: 'route', channel: 'route', core: 'route', gates: 'route' };
 
 /** One tab as rows (each starts with the gutter cell): the tab's content, then its ONE shared section (Y2b), the footer on the last row. A short pane drops the shared section whole and ends the body in `+1 more ›` (Y2a). */
 export function tabFrame(a: TabIn): TabLine[] {
@@ -334,8 +355,9 @@ export function tabFrame(a: TabIn): TabLine[] {
   const label = `${kit.g('✎', '>')} message the ${name}`;
   const chipW = textWidth(label) + 2;
   const fieldW = Math.max(0, u - chipW - 1);
-  // Y2c: the compose line is the chip, then the input field drawn after it (an underline across the rest of the width)
-  const compose: TabLine = { runs: [...kit.chip(label, '', 'idle', chipW), ...(fieldW > 0 ? [kit.sp(1), kit.dim(kit.g('▁', '_').repeat(fieldW))] : [])], press: { kind: 'compose', key: 'compose', ...(a.recipient ? { name: a.recipient } : {}) } };
+  // AA6: the compose line is the chip, then a bordered one-row input field (dim box, a visible cursor cell at its start)
+  const box = (n: number): Run[] => (n >= 4 ? [kit.dim(kit.g('│', '|')), kit.on(kit.g('▌', '|'), kit.k.chipFg, { tone: 'accent' }), kit.sp(n - 3), kit.dim(kit.g('│', '|'))] : n > 0 ? [kit.dim(kit.g('▁', '_').repeat(n))] : []);
+  const compose: TabLine = { runs: [...kit.chip(label, '', 'idle', chipW), ...(fieldW > 0 ? [kit.sp(1), ...box(fieldW)] : [])], press: { kind: 'compose', key: 'compose', ...(a.recipient ? { name: a.recipient } : {}) } };
   const build = (collapse: number, take: number): Part => {
     const none = new Set<string>();
     const first = a.tab === 'gates' ? gatesPart(a, kit, none, prompted) : a.tab === 'team' ? teamPart(a, kit, none) : a.tab === 'board' ? boardPart(a, kit, none) : a.tab === 'core' ? corePart(a, kit) : chatPart(a, kit, take);
@@ -344,19 +366,16 @@ export function tabFrame(a: TabIn): TabLine[] {
     const again = a.tab === 'gates' ? gatesPart(a, kit, gone, prompted) : a.tab === 'team' ? teamPart(a, kit, gone) : boardPart(a, kit, gone);
     return { lines: again.lines, order: first.order };
   };
-  /** The shared sections at `extra` rows beyond the least that can stand (`shared(0)`): the elastic one takes them (the RUNS chart grows, the logs lengthen), so the tab fills to the footer while data lasts; the result is never longer than `shared(0)` + `extra`. */
-  const recentAt = (n: number): TabLine[] => (feed.length && n >= 2 ? statusRecentRows(kit, h, feed, Math.min(feed.length, n - 1)).map(plain) : []);
-  /** `base`, then (given at least a blank, the rule and a row of room) the RECENT log in the rest of `extra`. */
-  const withRecent = (base: TabLine[], extra: number): TabLine[] => { const log = recentAt(extra - 1); return log.length ? [...base, plain(kit.blank), ...log] : base; };
-  const gatesOpen = (): TabLine[] => gatesPart(a, kit, new Set<string>(), prompted, true).lines;
-  const gatesShut = (): TabLine[] => gatesPart(a, kit, new Set(h.gates.checks.map((c) => `gate:${c.id}`)), prompted).lines;
+  /** The tab's own second section at `extra` rows beyond the least that can stand (`shared(0)`): the elastic ones take them (the RUNS chart grows to its cap, the channel log lengthens). */
+  // AA7: each tab owns its sections and no other tab repeats them: RECENT only on status and channel, GATES and HOOKS on gates, ROUTING on core, ACTIVITY on team, RUNS on board
+  const routing = (): TabLine[] => routingPart(a, kit).map(plain);
   const shared = (extra: number): TabLine[] => {
     switch (a.tab) {
       case 'board': return statusRunsChart(kit, h, RUNS_MIN - 2 + Math.max(0, extra)).map(plain);
-      case 'team': return withRecent(statusActivityRows(kit, h, chartRows(a.room)).map(plain), extra);
+      case 'team': return statusActivityRows(kit, h, chartRows(a.room)).map(plain);
       case 'channel': return feed.length ? statusRecentRows(kit, h, feed, Math.min(feed.length, Math.max(2, 2 + extra))).map(plain) : [];
-      case 'core': { const shut = gatesShut(); const open = gatesOpen(); return open.length - shut.length <= extra ? withRecent(open, extra - (open.length - shut.length)) : shut; }
-      default: return withRecent(statusHooksRows(kit, h).map(plain), extra);
+      case 'core': return routing();
+      default: return statusHooksRows(kit, h).map(plain);
     }
   };
   const lead = a.lead ? 1 : 0;

@@ -123,12 +123,13 @@ describe('D5: one wall-clock event series on a fixed scale', () => {
     const sparkOfRow = (w: number): string => sparkText(healthRows(h, ui, { sparkW: w }).find((x) => x.id === 'events')!.runs);
     const panel = sparkOfRow(20);
     const card = sparkOfRow(28);
-    expect(band.length).toBe(20); // v1 frame spec: 20 cells at the wide band
+    expect(band.length).toBe(8); // AA2: the band's spark is always 8 cells
     expect(panel.length).toBe(20);
     expect(card.length).toBe(28);
     // the band draws eighth blocks (round 3, E10), the panel and card braille: the same series, so the baseline cells (`▁` / `⣀`) fall on the same samples
     const base = (x: string): string => [...x].map((c) => (c === '▁' || c === '⣀' ? '_' : '#')).join('');
-    expect(base(panel).endsWith(base(band))).toBe(true);
+    // AA1: the band reads the metrics series (round buckets of the session window), not the pulse's 15 s buckets, so it is no longer the tail of the panel's series; the panel and card still are one
+    expect(base(band)).toHaveLength(8);
     expect(card.endsWith(panel)).toBe(true);
   });
   test('the rate is labelled `N/5m` over the last 5 minutes', () => {

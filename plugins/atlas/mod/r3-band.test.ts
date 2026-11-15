@@ -82,7 +82,7 @@ describe('E10: the state slot (v1 frame spec: a fixed 17-cell head, the same in 
     expect(dot).toBeDefined();
     expect(dot.bgHex).toBe(BAND_FILL);
     for (const x of rs) expect(x.bgHex).not.toBe(PALETTES.mocha.ok);
-    expect(first(model('done', 150))).toMatch(/● done 6\/6 +ended 1s/);
+    expect(first(model('done', 150))).toMatch(/● done 6\/6 · ended 1s/);
   });
   test('working head sits on the band fill with the spinner in the accent', () => {
     const rs = afterCap(bandRuns(model('working', 150), true));
@@ -93,10 +93,10 @@ describe('E10: the state slot (v1 frame spec: a fixed 17-cell head, the same in 
 });
 
 describe('E10: the band spark is eighth blocks', () => {
-  for (const k of KINDS) test(`${k} at 150: 20 block cells with a \`▁\` baseline, rate \`N ev/5m\`, no braille`, () => {
+  for (const k of KINDS) test(`${k} at 150: an 8-cell block spark with a \`▁\` baseline, the peak \`peak N / Ns\`, no braille`, () => {
     const row = first(model(k, 150));
     expect(row).not.toMatch(/[⠀-⣿]/);
-    expect(row).toMatch(/[▁▂▃▄▅▆▇█]{20} +\d+ ev\/5m/);
+    expect(row).toMatch(/[▁▂▃▄▅▆▇█]{8} peak \d+ \/ \d+s/);
     const rs = afterCap(bandRuns(model(k, 150), true));
     expect(rs.some((x) => /^▁+$/.test(x.t))).toBe(true);
   });
@@ -110,16 +110,16 @@ describe('E10: a narrow band (110 columns with the side pane open) keeps the hea
       expect(row).toMatch(/◌ idle|[◐◓◑◒] |● done/);
       expect(row).toMatch(/[●○] gates (ok|armed)/);
       expect(row).not.toContain('session started');
-      expect(cols >= 62 ? /[▁▂▃▄▅▆▇█]{4,}|\d+\/5m/.test(row) : true).toBe(true);
+      expect(cols >= 63 ? /[▁▂▃▄▅▆▇█]{8}/.test(row) : true).toBe(true);
     });
   }
   test('the extras give way before the spark and the head go', () => {
     const at = (c: number) => first(model('working', c));
     expect(at(110)).toMatch(/ctx +6%/);
     expect(at(96)).not.toMatch(/ctx +6%/);
-    expect(at(96)).toMatch(/\d+ ev\/5m/);
+    expect(at(96)).toMatch(/peak \d+ \/ \d+s/);
     expect(at(86)).toMatch(/implement 5\/6/);
-    expect(at(86)).toMatch(/\d+ (ev)?\/?5m|\d+\/5m/);
+    expect(at(86)).toMatch(/peak \d+ \/ \d+s/);
   });
 });
 

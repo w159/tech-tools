@@ -31,7 +31,7 @@ const ccRows = (tab: PanelTab, cols: number): string[] => {
 const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '').trimEnd();
 
 describe('change 9: one tab strip on both hosts', () => {
-  const WORDS = new Set(['status', 'team', 'channel', 'gates', 'core', 'board', 'more', '›', '▸', '▾']);
+  const WORDS = new Set(['status', 'team', 'channel', 'chan', 'gates', 'core', 'board', 'more', '›', '▸', '▾']);
   // A strip row is only keys and tab words: `r: route  t: team ...`, or the bare words alone (a narrow pane draws no `k: ` and binds the keys itself).
   const stripOf = (rows: readonly string[]): string[] => rows.filter((l) => { const tk = l.trim().split(/\s+/); return tk.length > 0 && tk[0] !== '' && tk.every((w) => /^[rtcgko]:$/.test(w) || WORDS.has(w)); });
   test('the strip tabs are status team channel gates core board, no keys', () => {
@@ -49,14 +49,13 @@ describe('change 9: one tab strip on both hosts', () => {
       expect(om).toEqual(cc);
       expect(cc).toHaveLength(1); // D14: one strip row at every width; the trailing tabs fold into `more ›` rather than wrap
       expect(cc[0]!).toMatch(/^ \S/); // one cell of padding from the left rule
-      const said = cc.join(' ').trim().split(/\s+/).filter((w) => w !== '▸' && w !== 'more' && w !== '›');
+      const said = cc.join(' ').trim().split(/\s+/).filter((w) => w !== '▸' && w !== 'more' && w !== '›').map((w) => (w === 'chan' ? 'channel' : w)); // AA5: the one short label
       const ALL = ['status', 'team', 'channel', 'gates', 'core', 'board'];
       expect(said.every((w) => ALL.includes(w))).toBe(true); // names only, whole
-      expect(said).toEqual(ALL.filter((w) => said.includes(w))); // in order; Z5: the lit tab takes the last place when it was folded, the rest behind `more ›`
-      expect(said).toContain(tab === 'route' ? 'status' : tab);
-      if (cols >= 48) expect(said).toHaveLength(6);
+      expect(said).toEqual(ALL.filter((w) => said.includes(w))); // in order; AA5: never a swapped tab, the rest behind `more ›`
+      if (cols >= 45) expect(said).toHaveLength(6); // AA5: all six on one row from 45 cells, the short `chan` below 48
       expect(cc.join(' ')).not.toMatch(/\b[rtcgko]:/); // never a key letter in the strip
-      if (L.stripLayout(cols, tab).rows[0]!.some((t) => t.id === tab)) expect(cc.join(' ')).toMatch(new RegExp(`\\b${tab === "route" ? "status" : tab}\\b`)); // the lit tab keeps its word while it is not folded
+      if (L.stripLayout(cols, tab).rows[0]!.some((t) => t.id === tab)) expect(said).toContain(tab === 'route' ? 'status' : tab); // the lit tab keeps its word while it is not folded
       // words go from the right end only: once a tab shows its word, every tab to its left does too (the lit tab is the one exception)
     });
   }
@@ -69,9 +68,9 @@ describe('change 9: one tab strip on both hosts', () => {
     }
     expect(stripOf(ccRows('route', 60))[0]!.trim()).toBe('status   team   channel   gates   core   board');
     expect(stripOf(ccRows('route', 30)).map((x) => x.trim())).toEqual(['status   team   more ›']);
-    expect(stripOf(ccRows('route', 40)).map((x) => x.trim())).toEqual(['status   team   channel   more ›']);
-    expect(stripOf(ccRows('route', 38)).map((x) => x.trim())).toEqual(['status   team   channel   more ›']);
-    expect(stripOf(ccRows('route', 46)).map((x) => x.trim())).toEqual(['status   team   channel   gates   more ›']);
+    expect(stripOf(ccRows('route', 40)).map((x) => x.trim())).toEqual(['status   team   chan   gates   more ›']); // AA5: the short label, never a swapped tab
+    expect(stripOf(ccRows('route', 38)).map((x) => x.trim())).toEqual(['status   team   chan   more ›']);
+    expect(stripOf(ccRows('route', 46)).map((x) => x.trim())).toEqual(['status   team   chan   gates   core   board']); // all six on one row from 45 cells
     expect(stripOf(ccRows('route', 52)).map((x) => x.trim())).toEqual(['status   team   channel   gates   core   board']);
     expect(stripOf(ccRows('route', 110)).map((x) => x.trim())).toEqual(['status   team   channel   gates   core   board']);
   });

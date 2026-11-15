@@ -13,7 +13,8 @@ import type { Pulse } from './pulse';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const NOW = 4_000_000_000_000; // a multiple of 1600 ms: tick 0 is heartbeat frame 0 and spinner frame 0
-const FRAME_END = 4; // ` [-]`: the host's handle after the band, as the spec draws it
+// AA2: the band is slots of one fixed width each (state 17 or 28, gates chip 16, spark 8, `peak 3 / 5s` 12, `hook p50 7ms` 14, `ctx 6%` 8); a line here is the whole band row, padded to its width.
+const fill = (line: string, cols: number): string => line.padEnd(cols);
 
 /** The heartbeat ramp only moves on a capable terminal; pin the env so the ramp tests do not depend on how the suite was launched. */
 function pinMotionEnv(): () => void {
@@ -46,8 +47,6 @@ function model(o: Over): BandModel {
 }
 const text = (runs: Run[]): string => runs.map((x) => x.t).join('');
 const row = (o: Over): string => text(bandRuns(model(o), true));
-/** The spec's line without the host handle. */
-const frame = (line: string): string => line.slice(0, line.length - FRAME_END);
 
 // B3, B5, B7 spark data: the last ten buckets that draw `▁▁▁▂▁▅▃▁▂█` (15 events) and `▁▅▆▃▁▁▂▂█▇` (26).
 const SPARK15 = [0, 0, 0, 1, 0, 4, 2, 0, 1, 7];
@@ -56,15 +55,15 @@ const WORK_HOOKS = { runTool: 'Bash', runTools: 6, lastEventSecs: 5 };
 
 describe('B1: 150, pane open, idle: the heartbeat ramps ◌ ◎ ◌ ◌ and the clock rolls', () => {
   const frames = [
-    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
-    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
-    '◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
-    '◖ ◆ ATLAS ◗ ◌ idle up 0:42               │  ○ gates armed › │ ▁▁▁▂▁   1 ev/5m             [-]',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:41    │  ○ gates armed › │ ▁▁▁▅▁▁▁▁ peak 1 / 5s  │ hook p50   —  ',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:41    │  ○ gates armed › │ ▁▁▁▅▁▁▁▁ peak 1 / 5s  │ hook p50   —  ',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:41    │  ○ gates armed › │ ▁▁▁▅▁▁▁▁ peak 1 / 5s  │ hook p50   —  ',
+    '◖ ◆ ATLAS ◗ ◌ idle up 0:42    │  ○ gates armed › │ ▁▁▁▅▁▁▁▁ peak 1 / 5s  │ hook p50   —  ',
   ];
   frames.forEach((f, i) => {
-    test(`frame ${i + 1} is the spec line, 89 cells`, () => {
+    test(`frame ${i + 1} is the band line, 89 cells`, () => {
       const got = row({ kind: 'idle', cols: 89, panel: true, tick: i * 4, upSecs: i === 3 ? 42 : 41, gates: GATES_ARMED as never[], health: { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]), hooks: hooks() } });
-      expect(got).toBe(frame(f));
+      expect(got).toBe(fill(f, 89));
       expect(textWidth(got)).toBe(89);
     });
   });
@@ -110,43 +109,46 @@ describe('B1: 150, pane open, idle: the heartbeat ramps ◌ ◎ ◌ ◌ and the 
 });
 
 describe('B2: 110, pane open, idle', () => {
-  test('X5: the idle uptime gives way so the state, the gates chip and the spark with its unit all stay', () => {
+  test('AA2: the idle uptime gives way, the state slot is 11 cells, and the gates chip and the 8-cell spark stay', () => {
     const got = row({ kind: 'idle', cols: 55, panel: true, gates: GATES_ARMED as never[], health: { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 1, 0]) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle │  ○ gates armed › │ ▁▁▁▂▁ 1 ev/5m   [-]'));
+    expect(got).toBe(fill('◖ ◆ ATLAS ◗ ◌ idle      │  ○ gates armed › │ ▁▁▁▅▁▁▁▁', 55));
     expect(textWidth(got)).toBe(55);
   });
 });
 
 describe('B3 and B4: working', () => {
   const h = { pulse: pulse(SPARK15), hooks: hooks(WORK_HOOKS) };
-  test('B3 150 pane open: the spinner turns ◐ then ◓ on the shared frame (100 ms here; the spec draws 200 ms, see the report), the newest tool in the detail slot', () => {
-    const f1 = '◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok ›    │ ▅▃▁▂█  15 ev/5m             [-]';
+  test('B3 150 pane open: the spinner turns ◐ then ◓ on the shared frame; the pane says the tool, so the band has no detail', () => {
+    const f1 = '◖ ◆ ATLAS ◗ ◐ test 3/6        │  ● gates ok ›    │ ▁▁▁▂▁▁█▁ peak 7 / 5s  │ hook p50   —  ';
     const f2 = f1.replace('◐', '◓');
-    expect(row({ kind: 'working', cols: 89, panel: true, tick: 0, ctx: 6, health: h })).toBe(frame(f1));
-    expect(row({ kind: 'working', cols: 89, panel: true, tick: 1, ctx: 6, health: h })).toBe(frame(f2));
+    expect(row({ kind: 'working', cols: 89, panel: true, tick: 0, ctx: 6, health: h })).toBe(fill(f1, 89));
+    expect(row({ kind: 'working', cols: 89, panel: true, tick: 1, ctx: 6, health: h })).toBe(fill(f2, 89));
   });
   test('B4 110 pane open', () => {
-    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ● gates ok › │ ▅▃▁▂█ 15 ev/5m [-]'));
+    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, health: h })).toBe(fill('◖ ◆ ATLAS ◗ ◐ test 3/6  │  ● gates ok ›    │ ▁▁▁▂▁▁█▁', 55));
   });
   test('the head names the contract phase out of six, not the five-step rail', () => {
     expect(row({ kind: 'working', cols: 89, panel: true, phase: 'implement', health: h })).toContain('◐ implement 5/6');
     expect(row({ kind: 'working', cols: 89, panel: true, phase: 'verify', health: h })).toContain('◐ verify 6/6');
   });
-  test('an mcp tool reads as its bare name, and a long one is cut inside the 10-cell slot', () => {
-    const got = row({ kind: 'working', cols: 89, panel: true, health: { ...h, hooks: hooks({ ...WORK_HOOKS, runTool: 'mcp__lean-ctx__ctx_compose_all_things' }) } });
-    expect(got.slice(30, 40)).toBe('ctx_compo…');
-    expect(textWidth(got)).toBe(89);
+  test('an mcp tool reads as its bare name, closed up after the head, and a long one is cut inside the 28-cell state slot', () => {
+    const got = row({ kind: 'working', cols: 145, panel: false, health: { ...h, hooks: hooks({ ...WORK_HOOKS, runTool: 'mcp__lean-ctx__ctx_compose_all_things' }) } });
+    expect(got.slice(12, 40)).toBe('◐ test 3/6 · ctx_compose_al…');
+    expect(textWidth(got)).toBe(145);
   });
 });
 
 describe('B5 and B6: done', () => {
   const h = { pulse: pulse(SPARK26), hooks: hooks({ ...WORK_HOOKS, lastEventSecs: 10 }) };
   test('B5 150 pane open: `ended Ns` ticks each second', () => {
-    expect(row({ kind: 'done', cols: 89, panel: true, rest: 12, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok ›    │ ▁▂▂█▇  26 ev/5m             [-]'));
-    expect(row({ kind: 'done', cols: 89, panel: true, rest: 13, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 13s  │  ● gates ok ›    │ ▁▂▂█▇  26 ev/5m             [-]'));
+    expect(row({ kind: 'done', cols: 145, panel: false, rest: 12, ctx: 6, health: h }).slice(0, 41)).toBe('◖ ◆ ATLAS ◗ ● done 6/6 · ended 12s       ');
+    expect(row({ kind: 'done', cols: 145, panel: false, rest: 13, ctx: 6, health: h }).slice(0, 41)).toBe('◖ ◆ ATLAS ◗ ● done 6/6 · ended 13s       ');
+  });
+  test('B5 150 pane open: no detail beside the pane, the figures take its room', () => {
+    expect(row({ kind: 'done', cols: 89, panel: true, rest: 12, ctx: 6, health: h })).toBe(fill('◖ ◆ ATLAS ◗ ● done 6/6        │  ● gates ok ›    │ ▂▁▁█▁▁▇▁ peak 7 / 5s  │ hook p50   —  ', 89));
   });
   test('B6 110 pane open', () => {
-    expect(row({ kind: 'done', cols: 55, panel: true, ctx: 6, health: h })).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6 │  ● gates ok › │ ▁▂▂█▇ 26 ev/5m [-]'));
+    expect(row({ kind: 'done', cols: 55, panel: true, ctx: 6, health: h })).toBe(fill('◖ ◆ ATLAS ◗ ● done 6/6  │  ● gates ok ›    │ ▂▁▁█▁▁▇▁', 55));
   });
   test('only the done glyph is ok green', () => {
     const rs = bandRuns(model({ kind: 'done', cols: 89, panel: true, ctx: 6, health: h }), true);
@@ -155,7 +157,7 @@ describe('B5 and B6: done', () => {
     expect(rs.find((x) => x.t === '●')!.fg).toBe(xtermHex(78));
   });
   test('the head returns to idle with the session uptime after 60 s', () => {
-    expect(row({ kind: 'done', cols: 89, panel: true, rest: 59, health: h })).toContain('● done 6/6        ended 59s');
+    expect(row({ kind: 'done', cols: 145, panel: false, rest: 59, health: h })).toContain('● done 6/6 · ended 59s');
     const idle = row({ kind: 'idle', cols: 89, panel: true, upSecs: 125, health: h });
     expect(idle).toContain('idle up 2:05');
     expect(idle).not.toContain('ended');
@@ -165,10 +167,10 @@ describe('B5 and B6: done', () => {
 describe('B7 and B8: gate denial', () => {
   const h = { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, runTool: 'Grep' }) };
   test('B7 150 pane open: `■ 2 denied` counts denied calls, not failing checks', () => {
-    expect(row({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Grep       │  ■ 2 denied ›    │ ▅▃▁▂█  15 ev/5m             [-]'));
+    expect(row({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(fill('◖ ◆ ATLAS ◗ ◐ test 3/6        │  ■ 2 denied ›    │ ▁▁▁▂▁▁█▁ peak 7 / 5s  │ hook p50   —  ', 89));
   });
   test('B8 110 pane open', () => {
-    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6 │  ■ 2 denied › │ ▅▃▁▂█ 15 ev/5m [-]'));
+    expect(row({ kind: 'working', cols: 55, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h })).toBe(fill('◖ ◆ ATLAS ◗ ◐ test 3/6  │  ■ 2 denied ›    │ ▁▁▁▂▁▁█▁', 55));
   });
   test('the denial chip is an alert chip (bg 52, fg 210) while the run works', () => {
     const rs = bandRuns(model({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h }), true);
@@ -210,20 +212,20 @@ describe('B7 and B8: gate denial', () => {
 
 describe('B9: 150, pane closed (band 145): idle, working, done; the health chip is the card toggle', () => {
   const idleH = { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]), hooks: hooks({ latency: { n: 1, p50: 2, p95: 2 } }) };
-  test('idle: hook latency from the handlers, no ctx and no cost before their first datum', () => {
+  test('idle: hook latency from the handlers, the ctx slot reads a dim dash before its first datum', () => {
     const got = row({ kind: 'idle', cols: 145, panel: false, gates: GATES_ARMED as never[], health: idleH });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▁▁   1 ev/5m │ hook   2ms                               ▸ health  [-]'));
+    expect(got).toBe(fill('◖ ◆ ATLAS ◗ ◌ idle up 0:41               │  ○ gates armed › │ ▁▁▁▁▁▁▁▁ peak 1 / 5s  │ hook p50   2ms │ ctx   —                          ▸ health ', 145));
     expect(textWidth(got)).toBe(145);
   });
   const lat = { n: 8, p50: 3, p95: 5 };
   // The spec's own counts (15 and 26) are not the sum of the 20 cells it draws at its own scale (21 and 28); the band prints the real sum, so those two figures are the only cells that differ.
-  test('working: ctx, hook, last and cost join as they fit, the chip stays right-anchored', () => {
+  test('working: hook and ctx fill their slots, the detail closes up after the head, the chip stays right-anchored', () => {
     const got = row({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 3, 3, 3, 0, 0, 0, 0, 1, 7, 3], 0.01), hooks: hooks({ ...WORK_HOOKS, latency: lat }) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok ›    │ ▁▁▁▁▁▁▁▂▁▁▄▄▄▁▁▁▁▂█▄  15 ev/5m │ ctx   6% │ hook   3ms │ last 5s  │ $0.01 ▸ health  [-]').replace('15 ev/5m', '21 ev/5m'));
+    expect(got).toBe(fill('◖ ◆ ATLAS ◗ ◐ test 3/6 · Bash            │  ● gates ok ›    │ ▂▁▁█▁▁▄▁ peak 7 / 5s  │ hook p50   3ms │ ctx   6%                         ▸ health ', 145));
   });
   test('done', () => {
     const got = row({ kind: 'done', cols: 145, panel: false, rest: 12, ctx: 6, health: { pulse: pulse([0, 0, 2, 2, 3, 2, 2, 0, 0, 0, 0, 0, 1, 0, 0, 1, 5, 3, 7, 0], 0.01), hooks: hooks({ ...WORK_HOOKS, lastEventSecs: 10, latency: lat }) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ● done 6/6        ended 12s  │  ● gates ok ›    │ ▁▁▃▃▄▃▃▁▁▁▁▁▂▁▁▂▆▄█▁  26 ev/5m │ ctx   6% │ hook   3ms │ $0.01            ▸ health  [-]').replace('26 ev/5m', '28 ev/5m')); // Y1c: `last 10s` is left out, `ended 12s` already says when
+    expect(got).toBe(fill('◖ ◆ ATLAS ◗ ● done 6/6 · ended 12s       │  ● gates ok ›    │ ▄▁▁█▁▁▁▁ peak 7 / 5s  │ hook p50   3ms │ ctx   6%                         ▸ health ', 145)); // Y1c: one age per state
   });
   test('the chips: gates opens the gates tab, health toggles the card; both on the 239 fill, one chip each', () => {
     const calls: string[] = [];
@@ -250,9 +252,9 @@ describe('B9: 150, pane closed (band 145): idle, working, done; the health chip 
 });
 
 describe('B10: 110, pane closed (band 100): working', () => {
-  test('ctx fits, hook does not, the chip is right-anchored', () => {
+  test('AA2: hook fits, ctx is shed first, the chip is right-anchored', () => {
     const got = row({ kind: 'working', cols: 100, panel: false, ctx: 6, health: { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }) } });
-    expect(got).toBe(frame('◖ ◆ ATLAS ◗ ◐ test 3/6        Bash       │  ● gates ok ›    │ ▅▃▁▂█  15 ev/5m │ ctx   6%   ▸ health  [-]'));
+    expect(got).toBe(fill('◖ ◆ ATLAS ◗ ◐ test 3/6        │  ● gates ok ›    │ ▁▁▁▂▁▁█▁ peak 7 / 5s  │ hook p50   3ms  ▸ health ', 100));
   });
 });
 
@@ -269,13 +271,15 @@ describe('the rules the frames rest on', () => {
     const rows = ((bandTree(els, b, { openView() {}, toggleTodos() {} }) as unknown as { props: { children: unknown[] } }).props.children);
     expect(rows).toHaveLength(1);
   });
-  test('slot widths never move: the gates chip is 12 cells whatever it says, the dividers keep their columns', () => {
+  test('AA2: slot widths never move: the gates chip is 16 cells whatever it says, the dividers keep their columns', () => {
     const cols = (o: Partial<Over>, extra: object = {}): number[] => { const t = row({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { ...h, ...extra }, ...o }); return [...t].map((c, i) => (c === '│' ? i + 1 : 0)).filter(Boolean); };
     const base = cols({});
     expect(cols({ ctx: 100 })).toEqual(base);
     expect(cols({ gates: GATES_DENY as never[] })).toEqual(base);
     expect(cols({ gates: GATES_ARMED as never[] })).toEqual(base);
     expect(cols({}, { pulse: pulse([0, 0, 0, 0, 0, 0, 0, 0, 0, 120]) })).toEqual(base);
+    expect(cols({ kind: 'idle' } as never)).toEqual(base);
+    expect(cols({ kind: 'done' } as never)).toEqual(base);
   });
   test('amber only for ctx >= 70 % and a hook p50 over 100 ms (Z3: the latency thresholds, red over 500)', () => {
     const amber = (o: Partial<Over>, extra: object = {}): string[] => bandRuns(model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { ...h, ...extra }, ...o }), true).filter((x) => x.fg === xtermHex(214)).map((x) => x.t);
@@ -286,18 +290,17 @@ describe('the rules the frames rest on', () => {
     const red = bandRuns(model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { ...h, hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 600, p95: 700 } }) } }), true).filter((x) => x.fg === xtermHex(203)).map((x) => x.t);
     expect(red).toEqual(['600ms']);
   });
-  test('narrowing: the detail slot drops under 85, the spark shrinks 20 / 10 / 5, the extras drop from the end', () => {
+  test('AA2: narrowing: the spark is always 8 cells, the detail drops under 121, ctx then hook are shed below 110, nothing overflows', () => {
     const w = (cols: number, panel = false): string => row({ kind: 'working', cols, panel, ctx: 6, health: { pulse: pulse(SPARK15, 0.01), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }) } });
-    expect([...w(120).match(/[▁-█]+/)![0]]).toHaveLength(20);
-    expect([...w(110).match(/[▁-█]+/)![0]]).toHaveLength(10);
-    expect([...w(100).match(/[▁-█]+/)![0]]).toHaveLength(5);
-    expect([...w(84).match(/[▁-█]+/)![0]]).toHaveLength(5);
-    expect(w(84)).not.toContain('Bash');
-    expect(w(100)).toContain('Bash');
+    for (const cols of [145, 121, 120, 110, 100, 89, 70]) expect([...w(cols).match(/[▁-█]+/)![0]]).toHaveLength(8);
+    expect(w(121)).toContain('Bash');
+    expect(w(120)).not.toContain('Bash');
+    for (const cols of [145, 121, 120, 110]) { expect(w(cols)).toContain('hook p50'); expect(w(cols)).toContain('ctx'); }
+    expect(w(100)).toContain('hook p50');
+    expect(w(100)).not.toContain('ctx');
+    expect(w(89)).not.toContain('hook');
     for (const cols of [145, 120, 100, 89, 84, 70, 55, 44, 40, 29, 20]) expect(textWidth(w(cols))).toBeLessThanOrEqual(cols);
-    expect(w(145)).toContain('$0.01');
-    expect(w(125)).not.toContain('$0.01');
-    expect(w(100)).not.toContain('hook');
+    expect(w(145)).not.toContain('$0.01');
   });
   test('no printed key hints and no private-use glyphs in any frame', () => {
     for (const cols of [145, 100, 89, 55]) for (const kind of ['idle', 'working', 'done'] as Kind[]) {

@@ -10,44 +10,46 @@ import { headerRows, lineText, stripLayout, tabRows, type PanelTab } from './pan
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 
-describe('C5 (D14): the tab strip is one row of chips at every width; the trailing tabs fold into `more ›`', () => {
+describe('C5 (D14, AA5): the tab strip is one row of chips in one fixed order; a pane too narrow even for the short labels folds its trailing tabs into `more ›`', () => {
   for (const cols of [37, 38, 40, 44]) {
     for (const tab of TABS) {
-      test(`${cols} cells, ${tab} lit: one strip row, whole words, the rest behind \`more ›\``, () => {
+      test(`${cols} cells, ${tab} lit: one strip row, the same leading tabs whichever is lit, the rest behind \`more ›\``, () => {
         const rows = tabRows(panelWorld(tab, cols, ui)).map(lineText);
         expect(rows).toHaveLength(1); // the strip alone: no rule under the lit tab, no wrapped second strip
-        // Z5: the lit tab is always on the strip: a lit tab that lives in the folded set takes the place of the last regular one
-        const base = cols >= 44 ? ['status', 'team', 'channel', 'gates'] : ['status', 'team', 'channel'];
-        const want = tab === 'core' || (tab === 'gates' && cols < 44) ? [...base.slice(0, -1), tab] : base;
+        // AA5: no tab swapping; the lit tab may be folded, the header names it
+        const want = cols >= 39 ? ['status', 'team', 'chan', 'gates'] : ['status', 'team', 'chan'];
         expect(rows[0]!.trim()).toMatch(new RegExp(`^${want.join(' {1,3}')} {1,3}more ›$`));
         for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       });
     }
   }
-  test('the same form on every tab at a width (no tab drops its words to fit while another wraps): the chip shape never changes, only which tab holds the last place (Z5)', () => {
+  test('the same form on every tab at a width: the chip shape and the tab set never change with the lit tab (AA5)', () => {
     for (const cols of [37, 38, 44, 52, 60]) {
-      const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => { const f = stripLayout(cols, t); return JSON.stringify({ ...f, rows: f.rows.map((r) => r.length), folded: f.folded.length }); });
+      const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => { const f = stripLayout(cols, t); return JSON.stringify({ ...f, rows: f.rows.map((r) => r.map((x) => x.label)), folded: f.folded.map((x) => x.label) }); });
       expect([cols, new Set(forms).size]).toEqual([cols, 1]);
     }
   });
-  test('Z5: the visible strip holds the lit tab at every width, `more ›` stays last', () => {
-    for (const cols of [30, 37, 38, 40, 44, 47]) {
+  test('AA5: the lit tab is never swapped in: `more ›` stays last and the order stays', () => {
+    for (const cols of [30, 37, 38, 40, 44]) {
+      const base = stripLayout(cols, 'route').rows[0]!.map((t) => t.id);
       for (const tab of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) {
         const f = stripLayout(cols, tab);
-        expect([cols, tab, f.rows[0]!.some((t) => t.id === tab)]).toEqual([cols, tab, true]);
+        expect([cols, tab, f.rows[0]!.map((t) => t.id)]).toEqual([cols, tab, base]);
         expect(f.more).toBe(true);
-        expect(f.folded.some((t) => t.id === tab)).toBe(false);
       }
     }
   });
-  test('the keys are never drawn in the strip, at any width (48 cells and up show all six whole words)', () => {
+  test('the keys are never drawn in the strip: 48 cells and up show all six whole words, 45 to 47 the short `chan`', () => {
     expect(headerRows(panelWorld('route', 120, ui)).slice(2, 3).map(lineText)[0]!.trim()).toBe('status   team   channel   gates   core   board');
     expect(lineText(tabRows(panelWorld('team', 54, ui))[0]!).trim()).toBe('status   team   channel   gates   core   board');
+    expect(lineText(tabRows(panelWorld('team', 47, ui))[0]!).trim()).toBe('status   team   chan   gates   core   board');
   });
-  test('all six words on one row down to 48 cells; below that the trailing tabs fold into `more ›` (never a shortened word, never a second strip row while closed)', () => {
+  test('all six tabs on one row down to 45 cells (the short labels); below that the trailing tabs fold into `more ›` (never a second strip row while closed)', () => {
     expect(stripLayout(48, 'route').rows).toHaveLength(1);
     expect(stripLayout(48, 'route').more).toBe(false);
-    expect(stripLayout(47, 'route').more).toBe(true);
+    expect(stripLayout(47, 'route').more).toBe(false);
+    expect(stripLayout(45, 'route').more).toBe(false);
+    expect(stripLayout(44, 'route').more).toBe(true);
     expect(stripLayout(30, 'route').rows).toHaveLength(1);
     expect(stripLayout(30, 'route').folded.length).toBeGreaterThan(0);
     expect(stripLayout(37, 'route').bare).toBe(true);

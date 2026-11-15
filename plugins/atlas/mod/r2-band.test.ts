@@ -44,30 +44,29 @@ const SPARK = /[▁-█]+/;
 
 describe('D2: the head', () => {
   for (const cols of [150, 110]) {
-    test(`(a) working at ${cols}: the phase word with n/6 in the 17-cell head, the newest tool in the detail slot, no clock`, () => {
+    test(`(a) working at ${cols}: the phase word with n/6 in the head, the newest tool after it where the detail slot exists, no clock`, () => {
       const row = first(model('working', cols));
-      expect(row).toMatch(/[◐◓◑◒] implement 5\/6 +Bash +│/);
+      expect(row).toMatch(cols >= 121 ? /[◐◓◑◒] implement 5\/6 · Bash +│/ : /[◐◓◑◒] implement 5\/6 +│/); // AA2: the tool closes up after the head, only where the 28-cell state slot exists
       expect(row).not.toMatch(/\d:\d\d/);
     });
-    test(`(a) working at ${cols}: no known tool leaves the detail slot blank, a tool name is clipped to its 10 cells`, () => {
-      expect(first(model('working', cols, {}, { hooks: hooks({ runTool: undefined }) }))).toMatch(/implement 5\/6 {5,}│/);
-      expect(first(model('working', cols, {}, { hooks: hooks({ runTool: 'a_very_long_tool_name_indeed' }) }))).toMatch(/implement 5\/6 +a_very_lo… +│/);
+    test(`(a) working at ${cols}: no known tool leaves the detail blank, a tool name is clipped inside the slot`, () => {
+      expect(first(model('working', cols, {}, { hooks: hooks({ runTool: undefined }) }))).toMatch(/implement 5\/6 {3,}│/);
+      expect(first(model('working', cols, {}, { hooks: hooks({ runTool: 'a_very_long_tool_name_indeed' }) }))).toMatch(cols >= 121 ? /implement 5\/6 · a_very_lo… +│/ : /implement 5\/6 +│/);
     });
     test(`(b) done at ${cols}: \`● done 6/6\` and \`ended 1s\`, no run clock`, () => {
       const row = first(model('done', cols));
-      expect(row).toMatch(/● done 6\/6 +ended 1s +│/);
+      expect(row).toMatch(cols >= 121 ? /● done 6\/6 · ended 1s +│/ : /● done 6\/6 +│/);
       expect(row).not.toMatch(/\d:\d\d/);
     });
     test(`the run clock appears nowhere on the band at ${cols} (the idle head's uptime is the one \`m:ss\`)`, () => {
       for (const k of KINDS) expect((rows(model(k, cols)).join('\n').match(/\d:\d\d/g) ?? []).length).toBe(k === 'idle' ? 1 : 0);
     });
   }
-  test('(c) idle head is `up M:SS`; the newest hook event is the `last` extra and advances with it', () => {
-    const at = (s: number): string => first(model('idle', 150, {}, { hooks: hooks({ lastEventSecs: s }) }));
+  test('(c) idle head is `up M:SS`; AA2: the band carries no `last` clock, the hook slot reads the latency median', () => {
+    const at = (secs: number): string => first(model('idle', 150, {}, { hooks: hooks({ lastEventSecs: secs }) }));
     expect(at(12)).toMatch(/◌ idle up 0:09/);
-    expect(at(12)).toMatch(/last 12s(?!\w)/);
-    expect(at(13)).toMatch(/last 13s(?!\w)/);
-    expect(at(65)).toMatch(/last 1m5s|last 1m/);
+    expect(at(12)).not.toContain('last');
+    expect(at(12)).toMatch(/hook p50 +—/);
   });
   test('idle with no event seen draws no `last` extra', () => {
     const row = first(model('idle', 150, {}, { hooks: hooks({ lastEventSecs: undefined }) }));
@@ -108,30 +107,28 @@ describe('D9: fixed slots', () => {
   });
 });
 
-describe('D10: narrowing (frame spec 2.7: extras from the end, the spark shrinks 20/10/5 then gives way to the count, the head stays)', () => {
+describe('D10 (AA2): narrowing: slots are shed whole from the end, the spark is 8 cells at every width, the head stays', () => {
   const WIDTHS = Array.from({ length: 111 }, (_, i) => 150 - i); // 150 down to 40, every width
   const feats = (cols: number, k: Kind) => {
     const row = first(model(k, cols));
     const spark = (row.match(SPARK)?.[0] ?? '').length;
-    return { row, ctx: /ctx +\d+%/.test(row), rate: /\d+ ev\/5m/.test(row), count: /\d+\/5m/.test(row), spark, chip: row.includes('▸ health'), head: /◌ idle|[◐◓◑◒] |● done/.test(row) };
+    return { row, ctx: /ctx +[\d—]+%?/.test(row), hook: /hook p50/.test(row), rate: /peak [\d—]/.test(row), spark, chip: row.includes('▸ health'), head: /◌ idle|[◐◓◑◒] |● done/.test(row) };
   };
-  for (const k of KINDS) test(`(g) ${k}: ctx goes before the spark gives way; the head stays and no row is wider than its band`, () => {
+  for (const k of KINDS) test(`(g) ${k}: ctx goes first, then hook, then the peak figure; the head stays and no row is wider than its band`, () => {
     const f = WIDTHS.map((c) => feats(c, k));
-    expect(f[0]).toMatchObject({ ctx: true, rate: true, spark: 20 });
+    expect(f[0]).toMatchObject({ ctx: true, hook: true, rate: true, spark: 8 });
     for (const [i, x] of f.entries()) {
       expect(textWidth(x.row)).toBeLessThanOrEqual(WIDTHS[i]!);
       expect(x.head).toBe(true);
-      if (x.spark === 20) expect(x.ctx).toBe(true);
+      if (x.spark > 0) expect(x.spark).toBe(8);
+      if (x.ctx) expect(x.hook).toBe(true); // ctx never outlives hook
+      if (x.hook) expect(x.rate).toBe(true);
     }
     const at = (c: number) => f[WIDTHS.indexOf(c)]!;
-    expect(at(110)).toMatchObject({ ctx: true, rate: true, spark: 10, chip: true });
-    expect(at(100)).toMatchObject({ ctx: true, rate: true, spark: 5, chip: true }); // the 16-cell gates chip (round W) narrows the spark at 109 and below
-    expect(at(96)).toMatchObject({ ctx: false, rate: true, spark: 5, chip: true });
+    expect(at(110)).toMatchObject({ ctx: true, hook: true, rate: true, spark: 8, chip: true }); // AA2: at 110 and up every slot is there
+    expect(at(100)).toMatchObject({ ctx: false, hook: true, rate: true, spark: 8, chip: true });
     expect(at(86).chip).toBe(true);
-    expect(at(86).rate || at(86).count).toBe(true); // one cell short of the 5-cell spark: a 3-cell spark keeps its unit
-    expect(at(84).spark).toBe(5);
-    expect(at(62)).toMatchObject({ rate: false, chip: true });
-    expect(f.filter((x) => x.spark === 20 && !x.ctx)).toEqual([]);
+    expect(at(62)).toMatchObject({ hook: false, chip: true });
   });
   test('the state head never depends on width: same kind at every width', () => {
     for (const c of WIDTHS) {

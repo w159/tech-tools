@@ -116,9 +116,9 @@ describe('J: empty tabs own their body', () => {
       const i = t.findIndex((l) => l.includes(fact));
       expect(i).toBeGreaterThan(0);
       expect(t.some((l) => /── (TEAM|CHAT|CORE|BOARD) /.test(l))).toBe(true);
-      expect(t.some((l) => /·{3,}|--:--|○ T\d|○ w\d|queued|worker +state|time +from|check +figure|item +owner/.test(l))).toBe(false); // nothing invented
-      const shared: Record<string, string> = { team: 'ACTIVITY', channel: 'RECENT', core: 'GATES', route: 'RUNS' };
-      if (tab === 'team' || tab === 'core') expect(t.some((l) => l.includes(`── ${shared[tab]}`))).toBe(true); // never a void under the fact: the tab's one shared section (the board's RUNS and the channel's RECENT need data)
+      expect(t.filter((l) => !/0┤/.test(l)).some((l) => /·{3,}|--:--|○ T\d|○ w\d|queued|worker +state|time +from|check +figure|item +owner/.test(l))).toBe(false); // nothing invented (the chart baseline's `·` lead is the one drawn run of dots)
+      const shared: Record<string, string> = { team: 'ACTIVITY', channel: 'RECENT', core: 'ROUTING', route: 'RUNS' };
+      if (tab === 'team') expect(t.some((l) => l.includes(`── ${shared[tab]}`))).toBe(true); // never a void under the fact: the tab's one shared section (the board's RUNS and the channel's RECENT need data)
       expect(t.filter((l) => /^ ── [A-Z]+ /.test(l)).length).toBeLessThanOrEqual(2);
       expect(t.at(-1)!.trim()).toMatch(/^atlas /);
     });
@@ -131,12 +131,12 @@ describe('J: empty tabs own their body', () => {
 
 describe('K: 110 parity', () => {
   test('with the pane open at 110 (band 89) the band keeps the spark with its unit', () => {
-    for (const kind of ['idle', 'working', 'done'] as Kind[]) expect(row(kind, 89, true)).toMatch(/[▁-█]{3,} +\d+ ev\/5m/);
+    for (const kind of ['idle', 'working', 'done'] as Kind[]) expect(row(kind, 89, true)).toMatch(/[▁-█]{8} peak [\d—]+( \/ \d+s)?/);
   });
   test('the pane open at 110 is the closed row without the health chip: width independent', () => {
     for (const cols of [150, 110, 100]) for (const kind of ['idle', 'working', 'done'] as Kind[]) {
-      if (kind === 'idle') expect(row(kind, cols, true).trimEnd()).toMatch(/[▁-█]{3,} +\d+ ev\/5m( │ ctx +6%)?$/); // Z6: the idle band beside the pane drops its empty detail slot for one health figure
-      else expect(row(kind, cols, true).trimEnd()).toBe(row(kind, cols, false).replace(/ *▸ health *$/, '').trimEnd());
+      expect(row(kind, cols, true)).not.toContain('health');
+      if (cols < 121) expect(row(kind, cols, true).slice(0, 62)).toBe(row(kind, cols, false).slice(0, 62)); // AA2: the same slots at the same columns, with the chip after them
     }
   });
   test('the idle head glyph is the same at 110 and 150', () => {

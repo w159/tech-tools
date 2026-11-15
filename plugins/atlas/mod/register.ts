@@ -20,8 +20,8 @@ import { healthLine, type HealthIn } from './idle-health';
 import { hookDone, hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
 import { denyAgeSecs, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
 import { healthStripRows, STRIP_ROWS, stripWanted } from './strip-frame';
-import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryRun } from './history';
-import { deniedCalls } from './vocab';
+import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryGates, noteHistoryRun } from './history';
+import { deniedCalls, gateCounts } from './vocab';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
@@ -1204,6 +1204,10 @@ async function frameBeat($: EngineInterface): Promise<void> {
 		const ranSecs = Math.floor((runClock.ranMs ?? now - before.startMs!) / 1000);
 		noteRunEnd(ranSecs, !stopRefused, now); // the run's own seconds and verdict join the pulse's `runs` row
 		noteHistoryRun({ secs: ranSecs, ok: !stopRefused, tools: hookStats(now, 0, before.startMs!).runTools ?? 0, at: now }); // Y1a: and the persisted history
+		try { // AA4: the gate counts at the run's end, shown as `prev` rows by the next session's idle GATES
+			const checks = gateTally(withCoreTally(await gateGroups($), await read($, coreState))).checks;
+			noteHistoryGates(checks.map((c) => { const n = gateCounts(c); return { id: c.id, pass: n.pass, deny: n.total - n.pass }; }));
+		} catch { /* the history keeps what it had */ }
 		void syncHistory($, now, true).catch(() => undefined);
 	}
 	beatN++;

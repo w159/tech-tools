@@ -50,17 +50,19 @@ describe('X1: one widget set', () => {
     }
   });
   // Y2b: a tab shows its own body and exactly ONE related shared section (the status tab's own builder): board RUNS, team ACTIVITY, channel RECENT, core GATES, gates HOOKS
-  const SHARED: Record<string, [string, RegExp]> = {
-    team: ['ACTIVITY', /-\d+m +-[\d.]+m +now/], channel: ['RECENT', /\d+s · /], gates: ['HOOKS', /hook(?: · last 64 calls)? +n +p50 +p95 +last/], core: ['GATES', /pass deny last/], board: ['RUNS', /\d+ runs? · med/],
+  // AA7: tabs do not repeat each other: RECENT only on status and channel, core is routing data only (its ROUTING section needs routes), gates owns GATES and HOOKS
+  const SHARED: Record<string, [string, RegExp] | null> = {
+    team: ['ACTIVITY', /-\d+m +-[\d.]+m +now/], channel: ['RECENT', /\d+s · /], gates: ['HOOKS', /hook(?: · last 64 calls)? +n +p50(?: +p95)? +last|hooks wired/], core: null, board: ['RUNS', /\d:\d\d (ok|failed)/],
   };
   for (const cols of WIDTHS) for (const t of ['team', 'channel', 'gates', 'core', 'board'] as TabId[]) {
-    test(`${t} at ${cols}: its own body plus the shared section ${SHARED[t]![0]} (then RECENT as the elastic log, Z4), drawn by the status tab's builder`, () => {
+    test(`${t} at ${cols}: its own body plus ${SHARED[t] ? `the shared section ${SHARED[t]![0]}` : 'no shared section (AA7)'}, drawn by the status tab's builder`, () => {
       const rows = text(tab(t, cols, { workers: t === 'team' ? [{ name: 'w', state: 'running', detail: 'x', secs: 3 }] : [] }));
       const all = rows.join('\n');
       const ribbons = rows.filter((l) => /^ ── [A-Z]+ /.test(l)).map((l) => l.match(/^ ── ([A-Z]+) /)![1]!);
+      if (!SHARED[t]) { expect(ribbons, `${t}@${cols}`).toEqual(['CORE']); return; }
       expect(ribbons.length, `${t}@${cols}`).toBeGreaterThanOrEqual(2); // the tab's own ribbon, then the shared section
       expect(ribbons[1]).toBe(SHARED[t]![0]);
-      expect(ribbons.slice(2).every((x) => x === 'RECENT'), `${t}@${cols}`).toBe(true); // Z4: only the log follows, and only where the tab has rows to fill
+      expect(ribbons.slice(2).every((x) => x === 'RECENT'), `${t}@${cols}`).toBe(t === 'channel' || ribbons.length === 2); // AA7: RECENT only on status and channel
       expect(all).toMatch(SHARED[t]![1]);
       expect(all).not.toMatch(/── CONTEXT |0└5m|checks +ok fail|\d+ seen · \d+ms|no calls/);
     });
@@ -74,13 +76,13 @@ describe('X1: one widget set', () => {
     const tb = text(tab('team', u + 2));
     const a = chartRows(st).slice(0, 3), b = chartRows(tb).slice(0, 3);
     expect(b[0]).toBe(a[0]); // the y gutter and the first chart row at the same width
-    expect(st.join('\n')).toMatch(/hook(?: · last 64 calls)? +n +p50 +p95 +last/);
+    expect(st.join('\n')).toMatch(/── HOOKS /);
   });
   test('the card holds the same sections by the same names', () => {
     const t = cardFrame(health(), { cols: 150, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     for (const s of ['ACTIVITY', 'CONTEXT', 'RUNS', 'GATES', 'HOOKS']) expect(t).toContain(`── ${s} `);
-    expect(t).toMatch(/pass deny last/);
-    expect(t).toMatch(/hook(?: · last 64 calls)? +n +p50 +p95 +last/);
+    expect(t).toMatch(/○ 4 gates armed · 0 checks yet|pass deny last/); // AA4: idle summarises
+    expect(t).toMatch(/hooks wired|hook(?: · last 64 calls)? +n +p50(?: +p95)? +last/);
     expect(t).not.toMatch(/checks +ok fail|0└5m/);
   });
 });
@@ -94,7 +96,7 @@ describe('X2: no invented rows; an empty tab is never a void', () => {
       const all = rows.join('\n');
       expect(all).toMatch(fact);
       expect(all).toMatch(/(?:appear|adds?)/);
-      expect(all).not.toMatch(EMPTY);
+      expect(rows.filter((l) => !/0┤/.test(l)).join('\n')).not.toMatch(EMPTY); // the chart baseline's `·` lead is not a placeholder
       expect(rows.at(-1)).toMatch(/^ +atlas /);
     });
   }
@@ -252,6 +254,6 @@ describe('X5: the band at the pane-open width keeps state, gates chip and the sp
     expect(textWidth(row)).toBeLessThanOrEqual(cols);
     expect(row).toContain('◌ idle');
     expect(row).toContain('gates');
-    expect(row).toMatch(/[▁-█]+ +\d+ ev\/5m/);
+    expect(row).toMatch(/[▁-█]{8}/); // AA2: the 8-cell spark fits from 53 cells
   });
 });

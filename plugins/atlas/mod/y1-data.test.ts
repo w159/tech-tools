@@ -27,6 +27,7 @@ const SAMPLE: History = {
   lat: { 'tool.call': [3, 5, 8], 'classic.Stop': [4] },
   min: [{ m: 10, n: 3 }, { m: 12, n: 7 }],
   ctx: { at: 5, pcts: [4, 6] },
+  gates: [],
 };
 
 describe('Y1a: the history file', () => {
@@ -236,15 +237,15 @@ describe('Y1a: idle RUNS and HOOKS are the persisted figures, labelled', () => {
     const rows = statusHooksRows(frameKit(ui, 60), h);
     expect(text(rows[1]!)).toMatch(/hook · last 64 calls +n +p50 +p95 +last/);
     const tool = rows.find((r) => text(r).includes('tool.call'))!;
-    expect(text(tool)).toMatch(/tool\.call +0 +8ms +13ms/);
+    expect(text(tool)).toMatch(/tool\.call +0 +8ms +13ms +prev$/); // AA4: the persisted row is tagged `prev` and dimmed
     const cells = tool.filter((x) => x.t.trim() === '8ms' || x.t.trim() === '13ms');
     expect(cells).toHaveLength(2);
-    for (const c of cells) expect(c.tone).toBe('ok'); // Z3: the latency colours hold whatever session the samples are from (green to 100 ms)
+    for (const c of cells) expect(c.tone).toBe('sub'); // AA4: an earlier session's row is dimmed whole, the figures read grey
   });
 
-  test('HOOKS: with no latency anywhere the head is just `hook` (nothing to label)', () => {
+  test('HOOKS: with nothing fired and no latency anywhere idle is one summary line (AA4)', () => {
     const rows = statusHooksRows(frameKit(ui, 60), health());
-    expect(text(rows[1]!)).toMatch(/^ {5}hook +n +p50/);
+    expect(rowsText(rows)[1]).toMatch(/^ {5}○ 6 hooks wired · none fired yet$/);
   });
 });
 
@@ -299,9 +300,9 @@ describe('Y1b: the chart window fits the data', () => {
     expect(rows.slice(1, 4).join('')).toMatch(/[▁-▇]/); // the two-event bar ends in a part block (sub-row resolution)
   });
 
-  test('Z1: the y axis never tops out below 4 events per bucket: one event is a short bar under a `4┤` axis, the rule still says the real peak', () => {
+  test('AA3: the y axis never tops out below 2 events per bucket: one event is a half-height bar under a `2┤` axis, the rule still says the real peak', () => {
     const rows = rowsText(statusActivityRows(kit, withAge(60, [AT - 5000]), 3));
-    expect(rows[1]).toMatch(/^ {5} ?4┤/);
+    expect(rows[1]).toMatch(/^ {5} ?2┤/); // AA3: the axis tops out at max(peak, 2), and the top label is that maximum
     expect(rows[0]).toMatch(/1 ev · peak 1 \/ /);
     expect(rows[1]).not.toContain('█'); // the single event does not reach the top row
   });
@@ -347,14 +348,15 @@ describe('Y1c: one age per state', () => {
     expect(same).not.toMatch(/last \d/);
     expect(same.match(/42s/g)).toHaveLength(1);
     expect(band('done', full(41), 42)).not.toMatch(/last \d/); // one second apart is the same instant
-    expect(band('done', full(5), 42)).toContain('last 5s');
+    expect(band('done', full(5), 42)).not.toMatch(/last \d/); // AA2: the band says one age per state, never a `last` clock
   });
 
-  test('band: working has no clock of its own (the host prints elapsed), idle keeps `last` beside `up`', () => {
+  test('band: working has no clock of its own (the host prints elapsed), idle keeps `up` only (AA2)', () => {
     const working = band('working', full(3));
     expect(working).toMatch(/◐ test 3\/6/);
     expect(working).not.toMatch(/\bended\b|\b\d+:\d\d\b/);
-    expect(band('idle', full(3))).toMatch(/up 6:40.*last 3s/);
+    expect(band('idle', full(3))).toMatch(/up 6:40/);
+    expect(band('idle', full(3))).not.toMatch(/last \d/);
   });
 
   test('panel NOW and ACTIVITY say a finished run`s age once', () => {
@@ -400,11 +402,11 @@ describe('Y1d: the narrow idle health strip', () => {
     expect(w({ kind: 'done' })).toBe(false);
   });
 
-  test('two rows: the state, the last run and the runs figures over the gates, hooks p95, context and the events spark', () => {
+  test('two rows: the state, the last run and the runs figures over the gates, hooks p50, context and the events spark (AA1: the one hook figure is the median)', () => {
     const rows = rowsText(strip(idle));
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatch(/^ ◌ idle · last run 1:30 failed · 3 runs · med 0:41 · 1 failed +▸ details $|^ ◌ idle · last run 1:30 failed · 3 runs · med 0:41 · 1 failed +▸ details$/);
-    expect(rows[1]).toMatch(/^ gates ok · hooks p95 13ms · ctx 6% · [▁-█]{5} 2 ev\/5m/);
+    expect(rows[1]).toMatch(/^ gates ok · hooks p50 \d+ms · ctx 6% · [▁-█]{8} 2 ev · peak \d+ \/ \d+s/);
     for (const r of strip(idle)) expect(r.reduce((n, x) => n + [...x.t].length, 0)).toBe(110); // each row fills the width exactly
   });
 
@@ -414,7 +416,7 @@ describe('Y1d: the narrow idle health strip', () => {
     expect(row1.find((x) => x.t === 'failed')!.fg).toBe(k.bad);
     const ok = strip({ ...idle, pulse: { ...idle.pulse!, runs: [{ secs: 5, ok: true, at: 1 }] } })[0]!;
     expect(ok.find((x) => x.t === 'ok')!.fg).toBe(k.ok);
-    const row2 = strip({ ...idle, ctxPct: 85, hooks: { ...idle.hooks!, latency: { n: 6, p50: 3, p95: 700 } } })[1]!;
+    const row2 = strip({ ...idle, ctxPct: 85, hooks: { ...idle.hooks!, latency: { n: 6, p50: 700, p95: 800 } } })[1]!;
     expect(row2.find((x) => x.t === '700ms')!.fg).toBe(k.bad);
     expect(row2.find((x) => x.t === '85%')!.fg).toBe(k.warn);
     expect(strip(idle)[1]!.find((x) => x.t === 'gates ')!.fg).toBe(k.dim);

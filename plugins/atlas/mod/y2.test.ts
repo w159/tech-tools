@@ -79,12 +79,13 @@ describe('Y2a: whole sections only, under every row budget', () => {
 });
 
 describe('Y2b: each tab shows its own body plus one related shared section (Z4: then the elastic RECENT log)', () => {
-  const OWN: Record<string, [string, string]> = { team: ['TEAM', 'ACTIVITY'], board: ['BOARD', 'RUNS'], channel: ['CHAT', 'RECENT'], core: ['CORE', 'GATES'], gates: ['GATES', 'HOOKS'] };
+  const OWN: Record<string, [string, string]> = { team: ['TEAM', 'ACTIVITY'], board: ['BOARD', 'RUNS'], channel: ['CHAT', 'RECENT'], core: ['CORE', 'ROUTING'], gates: ['GATES', 'HOOKS'] };
   for (const cols of [48, 41]) for (const t of Object.keys(OWN) as TabId[]) {
     test(`${t} at ${cols}: ribbons are [own, ${OWN[t]![1]}]`, () => {
       const r = tabText(tabFrame(tab(t, cols, { room: 45 }))).filter((l) => SECTION.test(l)).map((l) => l.match(SECTION)![1]!);
-      expect(r.length).toBeGreaterThanOrEqual(2);
       expect(r[0]).toBe(OWN[t]![0]);
+      if (t === 'core') { expect(r).not.toContain('GATES'); expect(r).not.toContain('RECENT'); return; } // AA7: core is routing data only, and only when there are routes
+      expect(r.length).toBeGreaterThanOrEqual(2);
       expect(r[1]).toBe(OWN[t]![1]);
       expect(r.slice(2).every((x) => x === 'RECENT')).toBe(true);
     });
@@ -122,7 +123,7 @@ describe('Y2c: chips read as buttons', () => {
       const c = lines.find((l) => l.press?.kind === 'compose')!;
       const t = rowText(c.runs);
       expect(t, String(cols)).toMatch(/✎ message/);
-      expect(t.slice(t.indexOf('message')), String(cols)).toMatch(/[▁_]{4,}/);
+      expect(t.slice(t.indexOf('message')), String(cols)).toMatch(/│▌ +│$/); // AA6: a bordered one-row field with a visible cursor cell
     }
   });
 });

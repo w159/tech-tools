@@ -49,7 +49,7 @@ describe('sidebar golden text', () => {
   });
   test('team at 38 columns (the 110-column pane) draws the strip as one row of chips with the trailing tabs behind \`more ›\` (D14), and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]!.trimEnd()).toBe(' status   team   channel   more ›');
+    expect(r[2]!.trimEnd()).toBe(' status   team   chan   more ›');
     expect(r.join('')).not.toContain('━'); // no rule under the lit team tab
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);

@@ -105,7 +105,7 @@ describe('D14: tabs', () => {
   }
   test('37 columns: trailing tabs fold into a `more ›` chip; the folded ones are not in the first row', () => {
     const [row] = rowsAt(37);
-    expect(row).toMatch(/^ status {3}team {3}channel {3}more ›$/);
+    expect(row).toMatch(/^ status {3}team {3}chan {3}more ›$/); // AA5: the short label, no swapping
     expect(row).not.toMatch(/gates|core|board/);
     const chip = tabRows(world(37, 40))[0]!.runs.find((x) => x.t === ' more › ')!;
     expect(chip.press).toBe('tabs:more');
@@ -119,7 +119,7 @@ describe('D14: tabs', () => {
   test('the chips are the same shape at every width: only the count of visible chips changes', () => {
     const shapes = new Set<string>();
     for (let cols = 24; cols <= 120; cols++) for (const c of tabRows(world(cols, 40))[0]!.runs.filter((x) => x.t.trim() !== '' && !x.t.includes('more'))) shapes.add(c.t);
-    expect([...shapes].sort()).toEqual([' channel ', ' core ', ' gates ', ' status ', ' team ', ' board '].sort());
+    expect([...shapes].sort()).toEqual([' chan ', ' channel ', ' core ', ' gates ', ' status ', ' team ', ' board '].sort());
   });
   test('the active tab is named in the header: `▸ SIDEPANEL · <tab>` (the marker stays)', () => {
     for (const [tab, label] of [['route', 'status'], ['team', 'team'], ['channel', 'channel'], ['gates', 'gates'], ['core', 'core']] as const) {

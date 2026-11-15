@@ -130,6 +130,7 @@ describe('the status tab body, round W1', () => {
     for (const [, cols, kind, h, bad] of CASES) {
       const rows = body(render(cols, kind, h(), bad));
       const head = rows.find((l) => l.includes('── GATES'))!;
+      if (rows.some((l) => /○ 4 gates armed · 0 checks yet/.test(l))) continue; // AA4: before any check the section is one summary line, no table
       expect(head).toMatch(/ pass deny last$/);
       const names = rows.filter((l) => /^ {5}[○●■] (completion|tripwire|routing|header)/.test(l));
       expect(names).toHaveLength(4);
@@ -143,13 +144,11 @@ describe('the status tab body, round W1', () => {
       }
     }
   });
-  test('B: before any check a row is a hollow grey ○ with dim `0 0 —`; the word armed sits in no number column', () => {
+  test('B (AA4): before any check GATES is one summary line, `○ 4 gates armed · 0 checks yet`, not four hollow rows', () => {
     const m = render(W150, 'idle', IDLE(EV.idle, []));
     const rows = body(m);
-    const gates = rows.filter((l) => /^ {5}○ (completion|tripwire|routing|header)/.test(l));
-    expect(gates).toHaveLength(4);
-    for (const r of gates) expect(r.slice(-15)).toBe('    0    0    —');
-    expect(rows.filter((l) => /armed/.test(l)).map((l) => l.trim())).toEqual(['armed: 4 gates · 6 hooks · team off']);
+    expect(rows.filter((l) => /^ {5}○ (completion|tripwire|routing|header)/.test(l))).toHaveLength(0);
+    expect(rows.filter((l) => /armed/.test(l)).map((l) => l.trim())).toEqual(['armed: 4 gates · 6 hooks · team off', '○ 4 gates armed · 0 checks yet']);
     expect(runsOf(m, '○').every((x) => x.tone === 'sub')).toBe(true);
   });
   test('B: after the first prompt the rows count pass and deny and say when they last ran', () => {
@@ -168,8 +167,9 @@ describe('the status tab body, round W1', () => {
       expect(textWidth(base)).toBe(u + 1); // Y2f: right-aligned, so the last cell is col U
       const cells = [...base.slice(8)];
       expect(cells.length).toBe(u - 7);
-      expect(cells.filter((c) => c !== ' ').every((c) => c === BLOCKS[0])).toBe(true); // idle: the dim zero glyph in every drawn column, the band spark's own
-      expect(cells.filter((c) => c === BLOCKS[0]).length).toBe(24); // Y2f: the idle health's 2-minute window is 5 s buckets: only those 24 columns are drawn, the rest stays blank at the left
+      expect(cells.every((c) => c === '·' || c === '─')).toBe(true); // AA3: zero buckets are a dim `─` on the baseline, the region before the session a dim `·` on it: the plot spans the full width
+      expect(cells.filter((c) => c === '─').length).toBe(24); // Y2f: the idle health's 2-minute window is 5 s buckets: only those 24 columns are the session, the rest is the `·` lead
+      expect(cells.filter((c) => c === '·').length).toBe(u - 7 - 24);
     }
   });
   test('C: the y gutter reads the scale on the top row and 0 on the baseline; the x labels sit under the chart\'s first and last columns', () => {
@@ -225,10 +225,10 @@ describe('the status tab body, round W1', () => {
     const rows = body(m);
     for (const name of WIRED_HOOKS) expect(rows.some((l) => l.trim().startsWith(name))).toBe(true);
     const never = rows.find((l) => l.trim().startsWith('prompt.submit'))!;
-    expect(never).toMatch(/ 0 +— +— +—$/);
+    expect(never).toMatch(/ 0 +— +—$/); // AA4: no p95 column until some row has 5 samples
     expect(runsOf(m, 'prompt.submit').every((x) => x.tone === 'sub')).toBe(true);
     expect(rows.find((l) => l.includes('── HOOKS'))).toMatch(/amber>100ms red>500ms$/);
-    expect(rows.find((l) => /^ {5}hook /.test(l))).toMatch(/ n {3}p50 {3}p95 last$/);
+    expect(rows.find((l) => /^ {5}hook /.test(l))).toMatch(/ n {3}p50 last$/);
   });
   test('D: a fired hook shows its own count, latency and age; the figures come from the hook log per kind', () => {
     resetHookLog();
@@ -238,7 +238,8 @@ describe('the status tab body, round W1', () => {
     noteHookMs('tool.call Read', 2000, 2010);
     const h = health({ hooks: hookStats(5000) });
     const row = hookTable(h).find((x) => x.name === 'tool.call')!;
-    expect(row).toEqual({ name: 'tool.call', n: 2, p50: 4, p95: 10, lastSecs: 3, samples: 2 });
+    expect(row).toMatchObject({ name: 'tool.call', n: 2, p50: 4, p95: 10, lastSecs: 3, samples: 2 });
+    expect(row.ring).toEqual([4, 10]);
     expect(hookTable(h).find((x) => x.name === 'prompt.submit')).toEqual({ name: 'prompt.submit', n: 0 });
     resetHookLog();
   });

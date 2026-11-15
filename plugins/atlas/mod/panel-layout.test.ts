@@ -59,7 +59,7 @@ describe('tab strip', () => {
       const open = tabRows(panelWorld('route', cols, mocha, { expanded: MORE_KEY }));
       expect([closed.length, open.length]).toEqual([1, 1]);
       for (const l of [...closed, ...open]) expect(cells(lineText(l))).toBeLessThanOrEqual(cols);
-      if (cols >= 34) expect(cols >= 48 ? words(panelWorld('route', cols, mocha, {})) : [...words(panelWorld('route', cols, mocha, {})), ...words(panelWorld('route', cols, mocha, { expanded: MORE_KEY }))]).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']); // names only, in order
+      if (cols >= 34) expect(cols >= 45 ? words(panelWorld('route', cols, mocha, {})) : [...words(panelWorld('route', cols, mocha, {})), ...words(panelWorld('route', cols, mocha, { expanded: MORE_KEY }))]).toEqual(['status', 'team', cols >= 48 ? 'channel' : 'chan', 'gates', 'core', 'board']); // names only, in order (AA5: the short `chan` from 45 to 47 cells and in the folded sets)
     }
   });
 });

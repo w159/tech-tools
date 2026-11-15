@@ -91,7 +91,7 @@ describe('2. the tab strip fits the pane and the lit tab is the filled chip', ()
         const lit = prows.flatMap((p) => p.runs).filter((x) => x.bg === 'accent').map((x) => x.t.trim());
         expect(rows.join('\n')).not.toMatch(/\b[rtcgko]: /); // wave 43: no key letter is drawn
         expect(lit).toHaveLength(1);
-        expect(['status', 'team', 'channel', 'gates', 'core', 'more ›']).toContain(lit[0]); // a lit tab folded behind `more ›` fills that chip
+        expect(['status', 'team', 'chan', 'channel', 'gates', 'core', 'more ›']).toContain(lit[0]); // a lit tab folded behind `more ›` fills that chip
         if (cols >= 55) expect(lit[0]).toBe(entry.label);
       });
     }

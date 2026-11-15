@@ -107,7 +107,7 @@ describe('pulse rows', () => {
   test('runs: a bar per run (newest right), the count and the median; the p90 only from 5 runs (Z2)', () => {
     const t = rowsText(card(health(), 110, BUSY)).join('\n');
     expect(t).toMatch(/── RUNS /);
-    expect(t).toMatch(/[▁-█]+ +2 runs · med 0:\d\d · 1 failed/);
+    expect(t).toMatch(/[▁-█] \d:\d\d (ok|failed) · [▁-█] \d:\d\d (ok|failed)/); // AA3: fewer than 3 runs is a one-line list, no chart
   });
 });
 
@@ -131,7 +131,7 @@ describe('the run duration prints once across band, panel and transcript card', 
       const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
       const band: BandModel = { snapshot: doneSnap(NOW), live: [], gates: ['completion', 'tripwire', 'routing', 'header'].map(green), columns: 150, tick: 0, maxRows: 12, ui, ranSecs: 5, restSecs: 1, health: { upSecs: 30, version: '17.24.0', branch: 'master', panel: true, open: false } } as never;
       const bandText = kids(bandTree(els, band, handlers) as unknown as N).map(textOf).join('\n');
-      expect(bandText).toContain('done'); expect(bandText).toMatch(/ended \d+s/);
+      expect(bandText).toContain('done'); expect(bandText).toMatch(/done 5\/5/); // AA2: the pane is open here, so the band has no `ended` detail
       const h = health({ panel: true, last: { secs: 5, done: 1, total: 1, agents: 1, failed: 0, endedAgo: 4, workers: [{ name: 'alpha-explorer', state: 'done', secs: 5 }] } });
       const world = panelWorld('route', 150, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'done', secs: 5, startMs: NOW }, health: { ...h, pulse: BUSY } } as never);
       const panelText = bodyLines(world).map(lineText).join('\n');
@@ -144,7 +144,7 @@ describe('the run duration prints once across band, panel and transcript card', 
       const cardText = flat(placedTree(runId, ui));
       expect(cardText).toMatch(/● done\s+1\/1 · 1 worker/);
       expect(bandText).not.toContain('0:05'); // v1 frame spec: the band's head is `done n/n` and `ended Ns`, the run clock is the panel's
-      expect(panelText.match(/0:05/g) ?? []).toHaveLength(0); // round 3 (E7): the runs row says the count and the average, never `last 0:05`; the clock is the band's alone
+      expect(panelText.match(/0:05/g) ?? []).toHaveLength(1); // AA1: the RUNS list says the run's one m:ss text, once (the band has no run clock)
       expect(cardText).not.toContain('0:05'); // the transcript card says its other facts
     } finally { forgetPlaced(); }
   });

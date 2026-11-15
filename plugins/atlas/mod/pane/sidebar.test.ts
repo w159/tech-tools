@@ -100,7 +100,7 @@ describe('sidebar shell', () => {
     const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
     expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs']); // one strip row, never `tabs:1`
     const visible = rowsOf.flatMap((r) => kids(r).filter((c) => c.kind === 'Button'));
-    expect(visible.map((b) => b.props.label)).toEqual(['status', 'team', 'gates', 'more ›']); // Z5: the lit tab (gates) took the last regular place
+    expect(visible.map((b) => b.props.label)).toEqual(['status', 'team', 'chan', 'more ›']); // AA5: the order never changes and the lit tab (gates) is not swapped in; the header names it
     expect(visible.map((b) => b.props.hotkey)).toEqual([undefined, undefined, undefined, undefined]); // the host draws no `k: ` for a Button without a hotkey
     visible.find((b) => b.props.label === 'team')!.props.onPress();
     expect(calls).toContain('view:team');

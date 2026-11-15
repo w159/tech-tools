@@ -72,16 +72,18 @@ describe('E8: carets, tabs and the gates tab', () => {
     expect(fixable.trimStart().slice(0, 4)).toBe('└ ■ ');
     expect(t.some((l) => l.includes('fix: run it'))).toBe(true);
   });
-  test('tabs are one row at 47 columns: `more ›` swaps the set in place and the second set ends in `‹ back`', () => {
+  test('AA5: tabs are one row at 46 columns with all six (the short `chan`); a narrower pane folds its trailing tabs: `more ›` swaps the set in place and the second set ends in `‹ back`', () => {
     const closed = tabRows(world(46, 40));
     expect(closed).toHaveLength(1);
-    expect(lineText(closed[0]!).trimEnd()).toMatch(/^ status {3}team {3}channel {3}gates {3}more ›$/);
-    const open = tabRows({ ...world(46, 40), expanded: MORE_KEY });
+    expect(lineText(closed[0]!).trimEnd()).toMatch(/^ status {3}team {3}chan {3}gates {3}core {3}board$/);
+    const narrow = tabRows(world(40, 40));
+    expect(lineText(narrow[0]!).trimEnd()).toMatch(/^ status {3}team {3}chan {3}gates {3}more ›$/);
+    const open = tabRows({ ...world(40, 40), expanded: MORE_KEY });
     expect(open).toHaveLength(1);
     expect(lineText(open[0]!).trimEnd()).toMatch(/^ core {3}board {3}‹ back$/);
     expect(open[0]!.runs.find((x) => x.t === ' ‹ back ')!.press).toBe(MORE_KEY);
     for (const cols of [54, 46, 36]) for (const expanded of [null, MORE_KEY]) expect(tabRows({ ...world(cols, 40), expanded })).toHaveLength(1);
-    expect(headerRows({ ...world(46, 40), expanded: MORE_KEY })).toHaveLength(headerRows(world(46, 40)).length);
+    expect(headerRows({ ...world(40, 40), expanded: MORE_KEY })).toHaveLength(headerRows(world(40, 40)).length);
   });
 });
 
@@ -123,7 +125,8 @@ describe('E11/X4: the card is two equal columns from 120 and one below (round X)
     const second = t.find((l) => l.includes('── CONTEXT'))!;
     expect(second).toContain('── HOOKS');
     expect(t.indexOf(second)).toBe(t.findIndex((l) => l.includes('── HOOKS')));
-    for (const word of ['completion', 'tripwire', 'routing', 'header', '2 runs', '64k of 1M']) expect(t.join('\n')).toContain(word);
+    for (const word of ['completion', 'tripwire', 'routing', 'header', '64k of 1M']) expect(t.join('\n')).toContain(word);
+    expect(t.join('\n')).toMatch(/\d:\d\d (ok|failed) · /); // AA3: two runs are a one-line list
   });
   test('110 columns: one column, the sections stacked, each on its own rows', () => {
     const t = flat(110);

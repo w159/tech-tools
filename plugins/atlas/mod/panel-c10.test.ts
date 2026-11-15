@@ -53,9 +53,9 @@ describe('C1: the team LAST reads as the HUD LAST (`read gamma.py`)', () => {
   });
 });
 
-describe('C2: one word, `channel`', () => {
-  test('no strip form shortens it, at any width', () => {
-    for (let cols = 20; cols <= 140; cols++) for (const row of stripLayout(cols).rows) for (const t of row) expect([cols, t.id === 'channel' ? t.label : 'channel']).toEqual([cols, 'channel']);
+describe('C2 (AA5): `channel` is whole from 48 cells; only the one short label `chan` below it', () => {
+  test('no strip form shortens it but `chan`, and never below the labels of 48 cells and up', () => {
+    for (let cols = 20; cols <= 140; cols++) for (const row of stripLayout(cols).rows) for (const t of row) expect([cols, t.id === 'channel' ? (cols >= 48 ? t.label : ['channel', 'chan'].includes(t.label) ? 'channel' : t.label) : 'channel']).toEqual([cols, 'channel']);
   });
   test('the drawn strip never reads `chan`', () => {
     for (const cols of [40, 50, 53, 55, 58, 80, 120]) expect([cols, tabRows(panelWorld('route', cols, mocha)).map(lineText).join('\n').includes('c: chan ')]).toEqual([cols, false]);

@@ -12,6 +12,8 @@ const GUTTER = 3; // blank cells between the two columns
 /** Two columns from this width; below it one. */
 export const CARD_COL2 = 120;
 const ONE_COL_MAX = 76;
+/** AA2: the widest a table section (GATES, HOOKS) is drawn, in usable cells. */
+export const TABLE_MAX = 48;
 /** The press key of the card's title chip: the band's own health key, so one handler toggles the card from either place. */
 export const CARD_KEY = 'band:health';
 
@@ -39,13 +41,14 @@ export function cardFrame(h: Health, o: { cols: number; ui: Ui; maxRows?: number
   const two = cols >= CARD_COL2;
   const u = two ? Math.floor((cols - 4) / 2) - 1 : Math.max(10, Math.min(cols - 2, ONE_COL_MAX));
   const kit = frameKit(o.ui, u);
+  const tableKit = frameKit(o.ui, Math.min(u, TABLE_MAX)); // AA2: a table is never wider than 48 cells, so a value sits next to its label
   const prompted = promptedOf('idle', h);
   const secs = {
     act: statusActivityRows(kit, h, 3),
     ctx: statusContextRows(kit, h),
     runs: statusRunsRows(kit, h),
-    gates: statusGatesRows(kit, h, { gates: [], prompted }, false),
-    hooks: statusHooksRows(kit, h),
+    gates: statusGatesRows(tableKit, h, { gates: [], prompted }, false),
+    hooks: statusHooksRows(tableKit, h),
   };
   type Key = keyof typeof secs;
   const DROP: readonly Key[] = ['hooks', 'gates', 'runs', 'ctx', 'act']; // Z7: the order sections give way is the reverse of the status tab's, so a short card shows a prefix of ACTIVITY, CONTEXT, RUNS, GATES, HOOKS, never a gap in it

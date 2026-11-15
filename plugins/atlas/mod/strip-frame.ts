@@ -8,8 +8,8 @@ import { elapsedClock, type Run, type Ui } from './atlas-ui';
 import { blockSpark } from './chart';
 import { CARD_KEY } from './card-frame';
 import { fitFields, gatesSummary, promptedOf, type Health, type HealthField } from './idle-health';
-import { RATE_BUCKETS } from './pulse';
-import { frameKit, latencyLevel, P95_MIN_SAMPLES, runFigures, runsOf } from './status-frame';
+import { metricsOf, runFigures, runsOf } from './metrics';
+import { frameKit, latencyLevel } from './status-frame';
 import { textWidth } from './theme';
 import { WIRED_HOOKS } from './hook-log';
 
@@ -44,11 +44,12 @@ export function healthStripRows(h: Health, o: { cols: number; ui: Ui }): Run[][]
   };
 
   // ---- row 1: the state and the runs ----
+  const m = metricsOf(h);
   const runs = runsOf(h);
-  const last = runs.at(-1);
+  const last = m.run;
   const heart = on(g('◌', '.'), k.dim, { tone: 'sub' });
   const state = field([heart, dim(' idle')], 9);
-  const lastRun = field(last ? [dim(`${last.prev ? 'prev' : 'last'} run `), txt(elapsedClock(last.secs)), dim(' '), last.ok ? green('ok') : red('failed')] : [dim('no runs yet')], 8);
+  const lastRun = field(last ? [dim(`${last.prev ? 'prev' : 'last'} run `), txt(last.text), dim(' '), last.ok ? green('ok') : red('failed')] : [dim('no runs yet')], 8);
   const count = runs.length;
   const figs = field(count ? [txt(`${count}`), dim(` ${count === 1 ? 'run' : 'runs'}`), ...(count >= 2 ? [dim(' · med '), txt(elapsedClock(runFigures(runs.map((x) => x.secs)).med))] : []), ...(runs.some((x) => !x.ok) ? [dim(' · '), red(`${runs.filter((x) => !x.ok).length} failed`)] : [])] : [], 5);
   const chipText = ` ${ascii ? '>' : '▸'} details `;
@@ -61,16 +62,13 @@ export function healthStripRows(h: Health, o: { cols: number; ui: Ui }): Run[][]
   const armed = sum.fired === 0 || !promptedOf('idle', h);
   const gatesField = field(denied > 0 ? [dim('gates '), red(`${denied} denied`)] : armed ? [dim('gates '), txt(`${h.gates.checks.length || sum.fired} armed`)] : [dim('gates '), green('ok')], 9);
   // Z2, Z3: the p95 only from 5 samples (else the median, named p50), in the one latency colour
-  const lat = h.hooks?.latency;
+  const lat = m.hook;
   const paint = (ms: number): Run => ({ ok: green, warn: amber, bad: red }[latencyLevel(ms)])(`${ms}ms`);
-  const hooksField = field(lat ? [dim(lat.n >= P95_MIN_SAMPLES ? 'hooks p95 ' : 'hooks p50 '), paint(lat.n >= P95_MIN_SAMPLES ? lat.p95 : lat.p50)] : [dim('hooks '), txt(`${WIRED_HOOKS.length} armed`)], 6);
-  const ctxNow = h.ctxPct ?? h.pulse?.ctx.at(-1)?.pct;
-  const ctxPrev = ctxNow === undefined ? h.hist?.ctx?.pcts.at(-1) : undefined;
-  const ctxVal = ctxNow ?? ctxPrev;
-  const ctxField = field(ctxVal === undefined ? [] : [dim('ctx '), (ctxVal >= 90 ? red : ctxVal >= 70 ? amber : green)(`${Math.round(ctxVal)}%`), ...(ctxPrev !== undefined ? [dim(' prev')] : [])], 7);
-  const ev = h.pulse?.events.slice(-RATE_BUCKETS) ?? [];
-  const evN = ev.reduce((n, x) => n + x, 0);
-  const evField = field(h.pulse ? [on(blockSpark(ev, 5, { ascii, min: 7 }), k.ramp[1]!, { tone: 'accent' }), txt(` ${evN}`), dim(' ev/5m')] : [], 5);
+  const hooksField = field(lat ? [dim('hooks p50 '), paint(lat.p50)] : [dim('hooks '), txt(`${WIRED_HOOKS.length} armed`)], 6);
+  const ctxVal = m.ctx?.pct;
+  const ctxField = field(ctxVal === undefined ? [] : [dim('ctx '), (ctxVal >= 90 ? red : ctxVal >= 70 ? amber : green)(m.ctx!.text), ...(m.ctx!.prev ? [dim(' prev')] : [])], 7);
+  const ev = m.activity.vals.slice(-8);
+  const evField = field(h.pulse ? [on(blockSpark(ev, 8, { ascii, min: m.scale }), k.ramp[1]!, { tone: 'accent' }), txt(` ${m.activity.total}`), dim(` ev · ${m.peakText}`)] : [], 5);
   const row2 = line([gatesField, hooksField, ctxField, evField], []);
 
   return [row1, row2];
