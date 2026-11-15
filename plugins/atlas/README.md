@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.24.2 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.25.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -1005,32 +1005,57 @@ text, from `contracts/band-golden.ts`:
  checks  ● lint  ● test  △ doctor  2/3 green
 ```
 
-**Idle health.** An idle session shows what is healthy instead of an empty band
-(`mod/idle-health.ts`). The band reads the state, the gate count, the uptime and
-a `▸ health` toggle, and the uptime ticks every second:
+**Idle health.** An idle session shows what is healthy, with history, instead of an
+empty band (`mod/idle-health.ts`, figures from `mod/metrics.ts`). The band is built
+from fixed-width slots, so the separators do not move between idle, working and done:
 
 ```
-◖ ◆ ATLAS ◗ ○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health
+◖ ◆ ATLAS ◗ ◌ idle up 0:13    │  ○ gates armed › │ ▁▁▁▁▅▁▁▁ peak 1 / 5s
+◖ ◆ ATLAS ◗ ● done 6/6        │  ● gates ok ›    │ ▁▁▆█▁▁▁▁ peak 3 / 5s
 ```
 
-`context N%` joins the row once the host has measured it. At 110 columns with no
-side panel a second row adds `last run none · 1 event`; its phase row names the
-current stage and `n/5` (`◑ research 1/5`). With the side panel open
-the band is `◖ ◆ ATLAS ◗ ○ idle ▌ ▸ health` and drops its tab chips, because the
-panel already shows them. Click `▸ health` to open a HEALTH card above the prompt
-(per-gate state and pass counts, session tokens and the window); click `▾ health`
-to close it. The context figure is the last response's input tokens over the
-model window (the host's `session.measure`), not a session total, and the card
-says so. With no plan and no agents the TODO line reads `no plan yet · 0 agents`,
-the team tab reads `no workers yet`, and the phase chain is dim. The HEALTH card
-has one row schema at 150 and 110 columns: a check is `name state n/m pass`, its
-note sits on its own line, and the version is always shown.
+The head is the state and the uptime (idle) or the stage count (`done 6/6`). The
+`gates` chip opens the gates tab. The spark is the session's events in 8 cells.
+At 110 columns and wider the band also carries `hook p50` and `ctx` slots (a dash
+before data) and sheds them below 110, ctx first. The context figure is the last
+response's input tokens over the model window (the host's `session.measure`), not
+a session total. With the pane closed, a `▸ health` chip opens the HEALTH card above
+the prompt; the card's title (`▾ HEALTH`) and the band's `▾ health` chip close it.
+Below 144 columns the host does not dock the side pane at rest, so a two-row idle
+strip above the band (`mod/strip-frame.ts`) shows the last run, run count and
+median, gates, hook p95, context and a spark; a click anywhere on it opens the card.
 
-![Idle band at 150 columns with the side panel showing health rows](img/showcase/cc-idle-health-150.png)
+The status tab, the card and the other tabs draw the same sections from
+`mod/status-frame.ts`: NOW (state, stepper `●●◆○○○ 3/6`), ACTIVITY (column chart
+with a y axis, baseline and time axis; the rule names the bucket, `peak 3 / 5s`),
+CONTEXT, RUNS (bars, `N runs · med 0:41 · 1 failed`), GATES (a table with `pass`,
+`deny` and `last` columns) and HOOKS (`n`, `p50` and `last` per hook; the rule says
+`amber>100ms red>500ms`). Tabs with their own content draw it first and the shared
+sections under it; a tab with nothing to show draws its header and one honest line,
+never invented rows. At idle the sections summarise (`○ 4 gates armed · 0 checks
+yet`) instead of tabulating zeros.
 
-![Idle band at 110 columns with the last-run row and the tab chips](img/showcase/cc-idle-health-110.png)
+History is kept in `.atlas/.run/history.json` (project runtime state, written
+atomically, never under `plugins/`): the last 50 runs, the last 64 latency samples
+per hook, events per minute for the last 60 minutes, the last session's context and
+each gate's counts. A returning project therefore shows its last run, run count and
+median at idle, and the earlier session's activity left of a `│` marker in the
+chart. Anything from an earlier session is labelled `prev`; a missing or corrupt
+file is an empty history. The wordmark pill breathes slowly at idle (2.4 second
+cycle) and stays still under `NO_COLOR`, reduced motion or `TERM=dumb`. A run's
+duration is printed once per view, in RUNS.
+
+![Idle band at 150 columns with the side panel](img/showcase/cc-idle-health-150.png)
+
+![Idle band at 150 columns in a project with history from an earlier session](img/showcase/cc-seeded-idle-150.png)
+
+![Idle band at 110 columns with the side panel docked](img/showcase/cc-idle-health-110.png)
 
 ![The HEALTH card open above the prompt](img/showcase/cc-health-open.png)
+
+The mods were scored against btop and htop by four Claude models in paired runs; Atlas
+reached a mean of 5.33 in a fresh session and 5.75 with history, btop 7.75, so the
+target of 8 was not met ([audit](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md)).
 
 **Clickable controls, no key hints.** Every control is drawn to look clickable:
 tabs are chips on a raised tile with one cell between them, on the band and in the panel (the lit tab is filled), toggles use `▸` closed and `▾` open, and
@@ -1153,19 +1178,14 @@ of clickable chips with the lit tab filled, and one view under it. The strip nam
 six tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/panel-layout.ts`): status, team,
 channel, gates, core and board. Click a chip to open that view; no key hint is
 printed; each tab is its own chip with one cell between chips, and no rule is
-drawn under the lit one. At idle with no workers the status view shows a dim
-phase chain, a `● waiting for first prompt` line that pulses with the idle redraw
-(about once a second), a `health` block (`hooks` event count, `gates`
-`4/4 green · 11 checks pass`, `session` `up 0:08`, `branch`, `last run`) and a
-`recent` list in words (`session started`, `prompt sent`, `tool call Bash`, `turn
-finished · 3 events`): events of the same second collapse into one row and the list
-shows at most three. A `checks` section has one row per gate, and a footer pinned
-to the last row reads `atlas <version> · hooks loaded`. Once the host has measured
-context, the `session` block gains a gauge row (`context ▕█░░░░░░░░░▏ 6%` over
-`64k of 1M tokens`). The run duration is said once: live as `phase ◒ working 0:01`,
-finished as `phase ● done` plus `last run 0:05 · ended 12s ago` (relative, no
-clock time). The `▸` rows expand to one to three detail lines. At 150 by 45 an
-idle panel leaves 10 blank rows above the footer, down from 19.
+drawn under the lit one. All six chips fit one row at 110 columns (`channel` is drawn as `chan` there). At idle
+with no prompt yet the status view reads `◌ idle · no prompt yet` and `armed: 4
+gates · 6 hooks · team off`, then ACTIVITY, GATES, HOOKS and RECENT; after a
+run it shows the stepper, CONTEXT, RUNS, GATES and HOOKS tables as described under
+*Idle health*. A footer pinned to the last row reads `atlas <version> · <branch>`
+(the version comes from the plugin's own manifest) with the session cost flush
+right once the host has measured one. The run duration is said once, in RUNS; NOW
+says `ended 17s ago`.
 The panel draws the snapshot as it is, with no hold: the Stop verdict is read on
 every frame beat, and the phase is never `done` while a dispatch row is open or a
 worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
@@ -1513,7 +1533,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.24.2
+|-- .claude-plugin/plugin.json   manifest, version 17.25.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1542,7 +1562,7 @@ atlas/
 
 ## Release notes and license
 
-Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.24.0 adds the deterministic done-claim gate, git worktree isolation for overlapping workers, a verifier claim-evidence rule, a stock Ollama chat protocol and a history benchmark harness ([audit](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
+Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.25.0 reworks the mods: idle health with persisted history, a status tab with ACTIVITY, GATES, HOOKS and RUNS widgets, one metric source, fixed band geometry, clickable chips, all six tabs at 110 columns and a narrow idle strip ([audit](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). 17.24.0 adds the deterministic done-claim gate, git worktree isolation for overlapping workers, a verifier claim-evidence rule, a stock Ollama chat protocol and a history benchmark harness ([audit](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
 for 16.0.0:
 [docs/audits/2026-10-27_atlas-16.0.0-evidence.md](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md).
 

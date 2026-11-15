@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 17.25.0 - 2026-11-15
+
+- atlas 17.25.0: the Claude Code mods were reworked over nine rounds against paired critic scoring ([audit](audits/2026-11-15_atlas-mods-expert-rounds.md)). An idle session shows real figures with history: last run, run count and median, gate counts and hook latency from the last session (labelled `prev`), kept in `.atlas/.run/history.json` (last 50 runs, 64 latency samples per hook, 60 minutes of events). The status tab is an instrument: a stepper that agrees with its count, an ACTIVITY column chart with axes and a named bucket, a GATES table, a HOOKS table with p50 and its colour thresholds, RUNS bars. One module (`mod/metrics.ts`) computes every figure, so the band, panel, tabs, card and strip show the same number. The band has fixed-width slots, a `health` chip and a `gates ok ›` chip that open the card and the gates tab, and the card closes from its title. All six tabs fit at 110 columns, below 144 columns a two-row idle strip carries the summary, the idle animation is a slow breathe of the pill instead of a 1 per second pulse, and the last run's time is printed once per view. The critic panel mean did not reach 8 (Atlas 5.33 fresh, 5.75 with history; btop 7.75 and htop 6.53 in the same runs). Marketplace 5.30.0.
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
+## marketplace 5.30.0 - 2026-11-15
+
+- marketplace 5.30.0: atlas 17.25.0. armada and programmer are unchanged.
+
 ## atlas 17.24.2 - 2026-11-15
 
 - atlas 17.24.2: the isolation bench no longer leaks its git identity into the process environment on import, and the parity rig sets its own identity per git call. Marketplace 5.29.2.

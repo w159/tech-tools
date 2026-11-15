@@ -1,5 +1,33 @@
 # Changelog
 
+## 17.25.0 - 2026-11-15
+
+The Claude Code mods (band, side panel, HEALTH card) were reworked over nine rounds against paired critic scoring (Atlas next to btop and htop, four Claude models, one scale). The audit is [2026-11-15_atlas-mods-expert-rounds.md](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md). The panel mean of 8 was not reached: Atlas moved from 4.97 to 5.33 in a fresh session and 5.75 in a session with history, against 7.75 and 7.80 for btop. What changed is below.
+
+### Added
+
+- Idle health with history. At rest the status tab has real figures instead of dashes: the last run and the run count with median duration, the gate counts and hook latency from the last session (labelled `prev`), and the previous session's event minutes dimmed left of `now` in the ACTIVITY chart.
+- Persisted history in `.atlas/.run/history.json` (project runtime state, never under `plugins/`). It keeps the last 50 finished runs (seconds, outcome, tool count), the last 64 latency samples per hook, events per minute for the last 60 minutes, the last session's context percents and each gate's pass and deny counts. It is written atomically at most every 10 seconds and at each run end, read at session start, and a missing or corrupt file is an empty history.
+- Status tab as an instrument. A stepper that agrees with its count (`●●◆○○○ 3/6`, all filled when done), then NOW, ACTIVITY, CONTEXT, RUNS, GATES and HOOKS sections with ribbon headers. ACTIVITY is a column chart with a y axis, a baseline, a time axis and a rule that names the bucket (`peak 3 / 5s`). GATES is a table with `pass`, `deny` and `last` columns. HOOKS is a table with `n`, `p50` and `last` columns, and its rule states the thresholds (`amber>100ms red>500ms`). RUNS shows the last runs as bars with the median.
+- Narrow idle strip. Below 144 columns the host does not dock the side pane at rest, so two rows above the band now carry the idle summary (last run, run count, median, gates, hook p95, context, a spark) and open the HEALTH card when clicked.
+- Clickable chips on the band: `gates ok ›` opens the gates tab, `health` opens the card, and the card's title toggles it closed. The card shows the same sections as the status tab in two columns.
+- All six tabs (`status team channel gates core board`) fit the pane at 110 columns; `channel` is shortened to `chan` there. The `more ›` and `‹ back` chips are gone.
+
+### Changed
+
+- One metric source. `mod/metrics.ts` computes the event buckets, peak, rate, last run duration, context percent and hook p50 and p95 once per snapshot; the band, panel, tabs, card and strip only format that result, so the same number reads the same everywhere. The chart picks one round bucket size (1s, 2s, 5s, 10s, 15s, 30s, 1m or 2m) for all of them.
+- Fixed band geometry. The band's slots keep their width between idle, working and done, so separators do not move; the spark is always 8 cells; at 110 columns and wider the band carries `hook p50` and `ctx` slots (a dash before data) and sheds them only below 110, ctx first.
+- Every tab and the card draw the same widgets as the status tab. Empty tabs show their header, one honest line (`team off · 0 workers`) and the shared sections, never invented rows.
+- The idle animation is a slow breathe of the wordmark pill (a 2.4 second cycle in 13 tones in truecolor, 8 in 256 colours) in place of the 1 per second pulse. `NO_COLOR`, reduced motion and `TERM=dumb` keep it still.
+- The last run's duration is printed once per view (the RUNS row). The band says `done 6/6` and the age (`ended 17s ago`); the chat card and the band no longer repeat the clock.
+- Version footer: the panel and card footer reads `atlas <version> · <branch>` from the plugin's own manifest.
+
+### Tests and checks
+
+- New suites: `round-aa.test.ts`, `round-x.test.ts`, `round-z.test.ts`, `y1-data.test.ts`, `y2.test.ts`, `v2-status.test.ts`, `v3-tabs.test.ts`, `r2-band.test.ts`, `r2-panel.test.ts`, `r3-band.test.ts`, `r3-panel.test.ts`, `band-expert.test.ts`, `card-expert.test.ts` and `panel-expert.test.ts`. Counts: `bun test mod omp` runs 5008 tests in 290 files (4975 pass, 33 skip, 0 fail) with `COLORTERM=truecolor`, with `COLORTERM` unset, and with `COLORTERM` unset and `TERM=dumb`.
+- Real SGR mouse clicks in tmux on Claude Code 2.1.325 (frames in the audit): at 150 columns every tab chip, the band `gates ok` chip, the host close mark, the `health` chip and the card title toggle work. At 110 columns every tab chip, the band chips and the card open work; collapsing the card with a click at 110 was not exercised (the capture's click landed on the `+N more` chip and opened the panel).
+- Known gaps (see `docs/ROADMAP.md`): critic scores below target, control idioms still mixed in the critics' view, tabs with little data in a fresh session, sections that move between states, chart encoding.
+
 ## 17.24.2 - 2026-11-15
 
 ### Fixed

@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.24.2, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.25.0, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -112,8 +112,7 @@ frame, so the band keeps its screen row.
 
 The side panel has six clickable tabs: `status`, `team`, `channel`, `gates`, `core` and
 `board`. No key hints are printed; every control is a chip or a `▸`/`▾` toggle. The board tab lists the plan items and draws a Gantt
-timeline, one lane per agent with the lead first. The status tab's phase row
-shows the band's own glyph, word and clock. The panel never says `done`
+timeline, one lane per agent with the lead first. The status tab opens with the band's own glyph and word and the phase stepper. The panel never says `done`
 while a dispatch is open or a worker runs. The transcript gets one-row cards: a
 finish card per worker (`▌ ◆ ATLAS  ● done  beta-explorer  0:13 · 3 calls`), one
 run card per clean run, and one blocked card per blocked spell. 256-colour
@@ -128,12 +127,34 @@ and then settles into `idle · 1:08`, with the gate chip still shown.
 
 ![Idle band after a wave, with the gate warning and the finished TODO and SUBAGENTS boxes](img/showcase/cc-band-idle.png)
 
-An idle session shows a live health summary instead of an empty band:
-`◖ ◆ ATLAS ◗ ○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health`. Click `▸ health` to open a
-card with per-gate state and pass counts; the side panel's status tab shows the
-same facts as `health` rows with a `recent` hook-event list.
+An idle session shows live health with history instead of an empty band. The band
+reads `◖ ◆ ATLAS ◗ ◌ idle up 0:13 │ ○ gates armed › │ ▁▁▁▁▅▁▁▁ peak 1 / 5s`; the
+`gates` chip opens the gates tab and the `▸ health` chip opens a HEALTH card with
+the same sections as the status tab. The status tab is an instrument: a stepper
+(`●●◆○○○ 3/6`), an ACTIVITY column chart with axes and a named bucket, a GATES
+table (`pass`, `deny`, `last`), a HOOKS table with p50 and its colour thresholds,
+and RUNS bars with the median. One module computes every figure, so the band,
+panel, tabs and card show the same number. A small history (last 50 runs, hook
+latency, events per minute, gate counts) is kept in `.atlas/.run/history.json`, so
+a returning project shows its last run and median at idle, labelled `prev`. Below
+144 columns, where the host does not dock the side pane at rest, a two-row idle
+strip above the band carries the summary. All six tabs fit at 110 columns. The idle
+animation is a slow breathe of the wordmark pill, and a run's time is printed once
+per view.
 
-![Idle band and side panel health rows at 150 columns](plugins/atlas/img/showcase/cc-idle-health-150.png)
+![Idle band and side panel at 150 columns](plugins/atlas/img/showcase/cc-idle-health-150.png)
+
+The same project after an earlier session, with its last runs and gate counts shown as `prev`:
+
+![Idle band and side panel at 150 columns in a project with history](plugins/atlas/img/showcase/cc-seeded-idle-150.png)
+
+![Idle band and side panel at 110 columns](plugins/atlas/img/showcase/cc-idle-health-110.png)
+
+![The HEALTH card open above the prompt at 150 columns](plugins/atlas/img/showcase/cc-health-open.png)
+
+In paired scoring against btop and htop the mods reach a mean of 5.33 in a fresh
+session and 5.75 with history, against 7.75 for btop; the target of 8 was not met
+([audit](docs/audits/2026-11-15_atlas-mods-expert-rounds.md)).
 
 **Parallel teams.** Two or more workers run side by side in one tmux window,
 each pane headed by its role, with tool and peer chips.

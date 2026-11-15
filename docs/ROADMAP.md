@@ -200,6 +200,17 @@ Shipped in `plugins/atlas/CHANGELOG.md` (17.24.0); audits: `docs/audits/2026-11-
 - [planned] Run the verifier held-out tier on haiku and opus; only sonnet was run (30/30 false claims caught, 2/30 false refutes).
 - [planned] Show the doctor fix on a fresh install: the SessionStart "gates are INERT" warning still comes from the installed copy.
 
+### Atlas 17.25.0 follow-ups (added 2026-11-15)
+
+Shipped in `plugins/atlas/CHANGELOG.md` (17.25.0); audit: `docs/audits/2026-11-15_atlas-mods-expert-rounds.md`.
+
+- [planned] The critic scores did not reach the mean-8 target: Atlas 5.33 in a fresh session and 5.75 in a seeded one, against btop 7.75 and htop 6.53 (btop itself averages about 7.8 on this panel). The audit has the per-round table.
+- [planned] Control idioms: the critics still count more than one (chips, `▸` toggles, `›` suffixes, the `[-]` host mark beside the band).
+- [planned] Sparse tabs in a fresh session: team, channel, core and board show a header, one line and the shared sections; with no history they read thin.
+- [planned] Section reflow between states: sections still change count and order between idle, working and done.
+- [planned] Chart encoding: the ACTIVITY chart's bucket, axis and prev marker are still read as unclear by the critics, and the spark flattens after about 40 seconds.
+- [planned] Card collapse at 110 columns has not been tested with a real click: the capture's click landed on the `+N more ›` chip and opened the panel instead.
+
 ### Atlas 17.23.0 follow-ups (added 2026-11-15)
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-14-idle-health.md`.
@@ -210,8 +221,8 @@ Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-1
 - [done] The side panel middle is no longer empty on a fresh session (cad6fe65): `● waiting for first prompt`, a `checks` section and a context gauge fill it; blank rows above the footer at 150 by 45 went from 19 to 10.
 - [done] `cc-health-open.png`, `cc-idle-health-150.png` and `cc-idle-health-110.png` recaptured from the final frames (the band no longer shows tab chips beside the open panel).
 - [done] Run facts are said once in the panel (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`), `recent` reads in words, and the `0 messages` orphan is removed.
-- [planned] The chat card `▸ run 0:05` and the band `done 0:05` still repeat the panel's run duration.
-- [planned] The `waiting for first prompt` pulse runs at about 1 Hz with the idle redraw; a faster pulse needs a timing change in `register.ts`.
+- [done] The run duration is printed once per view (17.25.0). Checked in the final captures: `aa-150/work-12.txt` has `█ 0:06 ok` once (RUNS row) and the band reads `● done 6/6` with no clock; `aa-150/c-5-health-card.txt` has `█ 0:05 ok` once, band `● done 6/6 · ended 42s`; the 110-column frames match. No chat card `▸ run 0:05` is drawn.
+- [done] The idle animation is a slow breathe, not a 1 per second pulse (17.25.0). Checked: `mod/band-motion.ts` `idleRamp` is a 24-phase triangle (2.4 s, 13 truecolor tones, 8 in 256 colours, one step per 100 ms beat); in the 256-colour captures `aa-150/idle-0`, `idle-1` and `idle-2` the pill fill is xterm 97, 135 and 55 on three successive frames. The `waiting for first prompt` line was replaced by a static `◌ idle · no prompt yet`.
 - [planned] The `ATLAS` pill on the band is kept as it was; whether it should say more at idle is undecided.
 - [planned] Host-drawn, not changeable from the plugin: tmux PgUp/PgDn scrolling and the weekly-limit line under the band.
 
