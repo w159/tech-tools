@@ -152,6 +152,7 @@ function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTa
     ...(typeof h.tokens === 'number' && h.tokens > 0 ? { tokens: h.tokens } : {}),
     ...(typeof h.window === 'number' && h.window > 0 ? { window: h.window } : {}),
     ...(h.hooks ? { hooks: h.hooks } : {}),
+    ...(h.pulse ? { pulse: h.pulse } : {}),
     ...(h.upSecs !== undefined ? { upSecs: h.upSecs } : {}),
     ...(h.branch ? { branch: h.branch } : {}),
     ...(h.version ? { version: h.version } : {}),
@@ -249,7 +250,7 @@ function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, 
 /** The footer with its tab chips (a row of real clickable chips, accent and bold, lit under the pointer). */
 function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui): RenderElement {
   const bg = panelBg(ui);
-  const strip = l.edge && ui.color !== 'none' ? healthStripBg(ui) : undefined; // under the health band the chips sit on the band's own last fill, to its right edge
+  const strip = l.edge && ui.color !== 'none' ? healthStripBg(ui) : undefined; // under the band the chips sit on the band's own last fill, to its right edge
   const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
   const left = segs(l, ui);
   const used = left.reduce((n, x) => n + textWidth(x.t), 0);
@@ -259,12 +260,15 @@ function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, u
     key: `band:${b.id}`, plain: true, label: b.label, onPress: press(b.id),
     children: [els.Text({ color: accent, backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}), bold: true, hover: hoverStyle(ui, `band:${b.id}`), children: chipText(b.label) })],
   })]);
+  if (l.edge) {
+    // Expert round 4: under the health band the chips are the band's own second row: left-aligned from its left edge, on the band's last fill, to the right edge.
+    const fill = strip ?? bg;
+    return els.Box({ flexDirection: 'row', flexShrink: 0, children: [...buttons, els.Text({ backgroundColor: fill, children: ' '.repeat(Math.max(0, cols - KEYS_W)) })] });
+  }
   const gap = cols - used - KEYS_W - 1; // one cell of margin after the last chip
   return els.Box({
     flexDirection: 'row', flexShrink: 0,
-    children: strip
-      ? [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap - 1)) }), els.Text({ backgroundColor: strip, children: ' ' }), ...buttons, els.Text({ backgroundColor: strip, children: ' ' })]
-      : [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap)) }), ...buttons, els.Text({ backgroundColor: bg, children: ' ' })],
+    children: [...fitRuns(els, left, cols), els.Text({ backgroundColor: bg, children: ' '.repeat(Math.max(0, gap)) }), ...buttons, els.Text({ backgroundColor: bg, children: ' ' })],
   });
 }
 

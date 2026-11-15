@@ -167,7 +167,7 @@ describe('5: rows fit by dropping the lowest-value field, never by cutting', () 
 describe('6: ctx and tokens are one measure, labelled so', () => {
   test('band: `context 18%` (round 2: the tokens are the session detail, never beside the figure)', () => {
     const row = rowsOf(model(150))[0]!;
-    expect(row).toContain('context 18%');
+    expect(row).toContain('ctx 18%'); // slice S2: the band says `ctx 18%`
     expect(row).not.toContain('42k tok');
   });
   test('the panel session row reads the same words', () => {
@@ -188,10 +188,10 @@ describe('6: ctx and tokens are one measure, labelled so', () => {
 
 describe('7: the idle band carries one more live figure, the age of the last event (round 2: on its second line)', () => {
   test('`last 12s ago` when a hook has fired since boot', () => {
-    expect(rowsOf(model(150))[1]).toContain('last 12s ago');
+    expect(rowsOf(model(150)).join('\n')).not.toContain('last 12s ago'); // slice S2: the band has no event-age line; the health card's events row says it
   });
   test('the age ticks', () => {
-    expect(rowsOf(model(150, { health: { ...HEALTH, hooks: { ...HOOKS, lastEventSecs: 13 } } }))[1]).toContain('last 13s ago');
+    expect(rowsOf(model(150, { health: { ...HEALTH, hooks: { ...HOOKS, lastEventSecs: 13 } } })).join('\n')).not.toContain('last 13s ago');
   });
   test('absent when only the session start has fired (it would only repeat the uptime)', () => {
     resetHookLog();

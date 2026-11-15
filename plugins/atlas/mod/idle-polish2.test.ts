@@ -60,16 +60,19 @@ describe('2: the idle band at 110 says more than one line of figures when no pan
     expect(shouldDock({ isFullscreen: true, columns: 150 })).toBe(true);
   });
   for (const cols of [110, 150]) {
-    test(`at ${cols} with no panel: a second line holds the last run, the events and their age`, () => {
+    test(`at ${cols} with no panel: the second line is the tab chips, left-aligned; no last run, event count or age line (slice S2)`, () => {
       const rows = rowsOf(model(cols));
-      expect(rows[1]).toMatch(/^\s+last run none · 6 events · last 12s ago/);
+      expect(rows[1]).toMatch(/^ status +team +channel/);
+      expect(rows.join('\n')).not.toMatch(/last run|events|last \d+s ago/);
       expect(rows[0]).toContain('gates 4/4');
     });
   }
-  test('with the panel up the band is the state and the button only', () => {
+  test('with the panel up the band reads as it does closed, minus `up` (the panel owns the uptime)', () => {
     const rows = rowsOf(model(150, { panel: true }));
     expect(rows[0]).toContain('▸ health');
-    expect(rows.join('\n')).not.toMatch(/gates 4\/4|up 12:04|context|last run|events/);
+    expect(rows[0]).toContain('gates 4/4');
+    expect(rows[0]).toContain('ctx 18%');
+    expect(rows.join('\n')).not.toMatch(/up 12:04|last run|events/);
   });
 });
 
@@ -134,14 +137,14 @@ describe('5: each fact once across the band, the card and the panel', () => {
     expect(t).toContain('atlas 17.21.1'); // idle polish 3: the card is one schema at every width, version included
     expect(t).toContain('● completion 3/3');
   });
-  test('the card with no panel leaves the last run and the events to the band`s second line, and keeps the version', () => {
+  test('the card with no panel keeps the version; the band has no last run or event line any more', () => {
     const t = healthCardRows(one, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     expect(t).not.toMatch(/last run none|session\.start/);
     expect(t).toContain('atlas 17.21.1');
-    expect(rowsOf(model(110, { hooks: ONE }))[1]).toMatch(/last run none · 1 event · last 7s ago/);
+    expect(rowsOf(model(110, { hooks: ONE })).join('\n')).not.toMatch(/last run|1 event|last 7s ago/);
   });
-  test('the band with the panel up repeats none of the panel`s figures', () => {
-    expect(rowsOf(model(150, { panel: true, hooks: ONE }))[0]).not.toMatch(/gates|up \d|context|event/);
+  test('the band with the panel up repeats neither the panel`s uptime nor its events', () => {
+    expect(rowsOf(model(150, { panel: true, hooks: ONE }))[0]).not.toMatch(/up \d|event/); // slice S2: the band reads the same open or closed, so it keeps gates and ctx; only `up` is the panel's
   });
 });
 
@@ -221,7 +224,7 @@ describe('11: the status tab`s ribbon does not repeat the lit chip', () => {
 describe('12: `context 6%` on the band; the tokens and the window only in the session detail', () => {
   test('band says `context 18%` with no tokens', () => {
     const r = rowsOf(model(150, { panel: false }))[0]!;
-    expect(r).toContain('context 18%');
+    expect(r).toContain('ctx 18%'); // slice S2: the band says `ctx 18%`
     expect(r).not.toMatch(/tok/);
   });
   test('the context row says the gauge and `63k of 1M`', () => {

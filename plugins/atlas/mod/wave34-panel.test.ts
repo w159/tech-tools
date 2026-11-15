@@ -253,12 +253,12 @@ describe('item 5: every card number is true (critique 33)', () => {
     expect(cleanRun(clean(NOW))).toMatchObject({ done: 5, total: 5, workers: 2 });
   });
 
-  test('one footer per run: a turn that ends with agents working draws none; the closing one reads the run clock', () => {
+  test('one footer per run: a turn that ends with agents working draws none; the closing one prints no run time', () => {
     const open = durationTree(running(NOW), { durationMs: 5000 }, { turnStart: NOW - 5000, runStart: NOW - 52000 }, NOW, ui);
     expect(flat(open)).toBe('');
     const tracker = { turnStart: NOW - 13000, runStart: NOW - 52000 };
     const last = flat(durationTree(clean(NOW), { durationMs: 13000 }, tracker, NOW, ui));
-    expect(last).toMatch(/^▸ run 0:52\b/); // 4d8d8eb1: `turn 0:05` and `turn 0:13` in one run, against the band's 0:52
+    expect(last).toBe(''); // slice S2: the closing footer prints no run time (the band's 0:52 is the one); 4d8d8eb1: never `turn 0:05` and `turn 0:13` in one run
     expect(last).not.toMatch(/turn/);
   });
 });

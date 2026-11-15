@@ -149,13 +149,12 @@ describe('step 3: one clock (critique 35: board 0:31, team axis 0:34, footers 0:
     expect(withBand('team').find((l) => /^\s+0:00\s+0:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:39\s*$/); // 28d53608: 0:34
     expect(withBand('route').join('\n')).not.toMatch(/phase.*\d:\d\d/); // slice S3: the stepper carries no clock; the run's seconds are the band's alone
   });
-  test('the `▸ run` footer prints the band\'s clock and no partial `+N done`', () => {
+  test('the closing footer prints no run time (the band\'s clock is the one) and no partial `+N done` beside a band clock', () => {
     const s = { ...(snap('done') as object), counts: { done: 5, total: 5, byPhase: {} }, squad: [], activity: {} } as never;
     const own = flat(durationTree(s, { durationMs: 8000 }, { turnStart: NOW - 8000, runStart: NOW - 8000, done: 1 }, NOW, ui));
-    expect(own).toMatch(/run 0:08 · \+4 done/); // no band clock known: the run's own
+    expect(own).toBe('▸ +4 done'); // no band clock known: the closing footer keeps its other fact and prints no run time (slice S2)
     const banded = flat(durationTree(s, { durationMs: 8000 }, { turnStart: NOW - 8000, runStart: NOW - 8000, done: 1 }, NOW, ui, 39));
-    expect(banded).toMatch(/^▸ run 0:39\b/); // 28d53608: `▸ run 0:08 · +4 done`
-    expect(banded).not.toMatch(/\+\d+ done/);
+    expect(banded).toBe(''); // slice S2: the run's seconds are the band's `done 0:39` alone, the footer says no time and no partial `+N done` (28d53608)
   });
 });
 

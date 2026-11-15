@@ -2,7 +2,8 @@
 // current glide: the value it started from, the value it heads for and the clock reading when it began. The ticks in
 // register.ts retarget a Move when the figure changes and ask `settled` when to stop; the render only reads
 // `displayed`. Nothing here keeps a timer, so an unchanged gauge costs nothing.
-import { EASE_MS, easedValue } from './atlas-ui';
+import { EASE_MS, easedValue, hostEnv, PALETTES, xtermHex, type Ui, type UiEnv } from './atlas-ui';
+import { reducedMotion } from './motion';
 import { todoCounts } from './data/todos';
 import type { LiveSnapshot } from './orchestra-types';
 
@@ -143,5 +144,30 @@ export function stepKind(h: KindHold, computed: KindWord, now: number): { hold: 
 }
 
 /** Truth 41 (stoprun-110-2 f0096-f0097: `⠹ working 0:38` drawn twice, 1.81 s apart): whether a beat redraws the surfaces. A frame is due while Atlas works, while the band's drawn word is `working` (whatever holds it: the idle hold, a blocked verdict
- * still in its debounce), while a run clock is open, and on the beats a run ends or a finished run flips to idle. So a working glyph on screen advances on every beat, and a word that stops being worked is redrawn the beat it ends. */
-export const beatDue = (o: { working: boolean; shown: KindWord | null; open: boolean; ended: boolean; flip: boolean }): boolean => o.working || o.shown === 'working' || o.open || o.ended || o.flip;
+ * still in its debounce), while a run clock is open, and on the beats a run ends or a finished run flips to idle. So a working glyph on screen advances on every beat, and a word that stops being worked is redrawn the beat it ends.
+ * Expert round 4 (S-8): `idleLive` (the band is on screen at rest) lets the idle liveness through at 5 Hz: with `idleBeat` (the beat counter) only every IDLE_EVERY-th beat is due, without it every beat is. */
+export const beatDue = (o: { working: boolean; shown: KindWord | null; open: boolean; ended: boolean; flip: boolean; idleLive?: boolean; idleBeat?: number }): boolean =>
+	o.working || o.shown === 'working' || o.open || o.ended || o.flip || (o.idleLive === true && (o.idleBeat === undefined || o.idleBeat % IDLE_EVERY === 0));
+
+// ---- idle liveness (expert round 4, S-8) ------------------------------------------------------------------------------------
+// At rest the band breathes from data, not from a blinking glyph: the idle state dot and the events spark's newest cell ramp through 8 tones and back (a 14-phase triangle), one step per 200 ms (every 2nd 100 ms beat, 5 Hz).
+// Nothing else on the band moves. The phase is a pure function of the shared spinner clock, so a skipped beat never stalls it and every surface that reads it agrees.
+/** A beat is 100 ms; the visible step rides every 2nd one. */
+export const IDLE_EVERY = 2;
+export const IDLE_STEP_MS = FRAME_MS * IDLE_EVERY;
+/** 0,1,..7,6,..1: the 14 phases of one breath. */
+export const IDLE_PHASES = 14;
+export const idlePhase = (nowMs: number): number => ((Math.floor(nowMs / IDLE_STEP_MS) % IDLE_PHASES) + IDLE_PHASES) % IDLE_PHASES;
+/** Tone level 0..7 of a phase. */
+export const idleLevel = (phase: number): number => (phase < 8 ? phase : IDLE_PHASES - phase);
+/** The 256-colour ramp: four stable xterm indices (each round-trips through the host's downsampler). */
+export const IDLE_RAMP_256: readonly number[] = [246, 146, 147, 183]; // checked: runHex(xtermHex(i), 256) returns xtermHex(i) for each (245, 103, 140 and 141 do not)
+const lerpHex = (a: string, b: string, t: number): string => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) + (parseInt(b.slice(i, i + 2), 16) - parseInt(a.slice(i, i + 2), 16)) * t).toString(16).padStart(2, '0')).join('');
+/** The breathing tone at `nowMs`: `hex` is the foreground (muted grey rising to the accent), absent when nothing may move (NO_COLOR, reduced motion, TERM=dumb). 8 truecolor steps, 4 indices in 256 colours. */
+export function idleRamp(nowMs: number, ui: Pick<Ui, 'theme' | 'color'>, env: UiEnv = hostEnv(), still = false): { phase: number; level: number; hex?: string } {
+	const phase = idlePhase(nowMs);
+	const level = idleLevel(phase);
+	if (still || ui.color === 'none' || env.TERM === 'dumb' || reducedMotion(env)) return { phase, level };
+	const pal = PALETTES[ui.theme];
+	return { phase, level, hex: ui.color === '256' ? xtermHex(IDLE_RAMP_256[Math.floor(level / 2)]!) : lerpHex(pal.muted, pal.accent, level / 7) };
+}

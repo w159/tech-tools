@@ -111,7 +111,7 @@ describe('step 2: uniform cards (critique 36: beta without a count beside gamma 
 });
 
 describe('step 3: the run card clock (critique 36: card 0:42, band 0:43)', () => {
-  test('the card prints the band\'s run seconds, as the closing footer does', async () => {
+  test('the card and the closing footer print no run seconds; the band\'s are the one', async () => {
     forgetPlaced();
     noteRunSecs(43);
     const ids: string[] = [];
@@ -119,7 +119,7 @@ describe('step 3: the run card clock (critique 36: card 0:42, band 0:43)', () =>
     const card = flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui));
     const footer = flat(durationTree(rec({ counts: { done: 5, total: 5, byPhase: {} }, squad: [], activity: {} }), { durationMs: 8000 }, {}, NOW, ui, 43));
     expect(card).not.toMatch(/\d:\d\d/); // slice S4: the run card prints no time; the band's 0:43 is the one
-    expect(footer).toMatch(/run 0:43\b/);
+    expect(footer).not.toMatch(/\d:\d\d/); // slice S2: the closing footer prints no run time either; the band's 0:43 is the one
     noteRunSecs(44); // the band moved on: a placed card keeps what it said (truth 39)
     expect(flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/3 workers$/); // slice S4: the card says no time
     forgetPlaced();

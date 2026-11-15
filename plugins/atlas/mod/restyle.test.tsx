@@ -280,7 +280,7 @@ test('the receipt never prints dollars, even when the engine reports a session c
   expect(text).not.toContain('$')
 })
 
-test('receipt duration is capped by the mod-owned turn timer when the host figure is larger', async () => {
+test('receipt prints no run time at all, so a host figure larger than the mod timer is never shown (slice S2: the band says the run)', async () => {
   noteRunSecs(undefined) // no pane is saying the band's clock in these receipts (a pane in another file would leak it)
   const regs: Reg[] = []
   registerRestyle(fakeOn(regs))
@@ -289,7 +289,7 @@ test('receipt duration is capped by the mod-owned turn timer when the host figur
   const $ = { ...(harness.$ as object), clock: { now: async () => ticks.shift() } } as unknown as EngineInterface
   await regs[4]?.hook($, {}, echoNext)
   const text = stringsOf(await regs[3]?.hook($, fakeE('TurnDuration', { durationMs: 542_000 }), echoNext))
-  expect(text).toContain('1:17')
+  expect(text).not.toMatch(/\d:\d\d/)
   expect(text).not.toContain('9m02s')
 })
 

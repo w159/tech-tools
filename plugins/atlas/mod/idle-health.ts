@@ -2,7 +2,6 @@
 // It holds only what the mod really has; a figure it does not have is left out, never made up.
 import { elapsedClock, stateRun, type Run, type Ui } from './atlas-ui';
 import { textWidth } from './theme';
-import { clickRun } from './clickable';
 import type { HookStats } from './hook-log';
 import type { Pulse } from './pulse';
 import { spark, gaugeFramed } from './spark';
@@ -38,7 +37,7 @@ export type Health = {
 };
 
 /** The raw inputs register.ts hands the band; band.tsx completes them from the snapshot, the gates and the run clocks. */
-export type HealthIn = { panel?: boolean; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
+export type HealthIn = { panel?: boolean; /** The observed history (pulse.ts pulseOf); absent until register.ts wires it: the band then draws no events spark. */ pulse?: Pulse; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
 
 const r = (t: string, tone: Run['tone'] = 'text', o: Partial<Run> = {}): Run => ({ t, tone, ...o });
 const glue = (): Run => r(' · ', 'sub');
@@ -55,30 +54,6 @@ export const gatesMark = (h: Pick<Health, 'gates'>, ui: Ui): Run => stateRun(gat
 export const agoText = (secs: number): string => (secs < 60 ? `${Math.max(0, Math.floor(secs))}s` : secs < 3600 ? `${Math.floor(secs / 60)}m` : `${Math.floor(secs / 3600)}h`);
 /** The one wording of the context figure on every surface: `context 6%`. The tokens it is made of and the window are the session row's detail, never beside it. */
 export const ctxText = (h: Pick<Health, 'ctxPct'>): string => (h.ctxPct === undefined ? '' : `context ${Math.round(h.ctxPct)}%`);
-
-/** The band's segments, in priority order: each is a list of runs (the painter lays each on its own fill). The button is last and never dropped while any form shows. */
-export type BandSegments = { gates: Run[]; ctxFull: Run[]; ctxShort: Run[]; up: Run[]; event: Run[]; last: Run[]; button: Run[] };
-export function bandSegments(h: Health, ui: Ui, lastRun: { secs?: number; done: number; total: number } | undefined): BandSegments {
-  const own = !h.panel; // the side panel beside the transcript says the figures itself: the band keeps only its state and the button
-  const gates = own && h.gates.total > 0 ? [gatesMark(h, ui), r(` gates ${h.gates.green}/${h.gates.total}`)] : [];
-  const ctxFull = own && ctxText(h) ? [r(ctxText(h))] : [];
-  const ctxShort = own && h.ctxPct !== undefined ? [r(`ctx ${Math.round(h.ctxPct)}%`)] : [];
-  const up = own && h.upSecs !== undefined ? [r(`up ${elapsedClock(h.upSecs)}`, 'sub')] : [];
-  const event: Run[] = []; // the events and the last run are the band's second line (bandDetail), not a segment of its first
-  const last: Run[] = [];
-  void lastRun;
-  const button = h.button ? [clickRun('health', !!h.open, ui, 'band:health')] : [];
-  return { gates, ctxFull, ctxShort, up, event, last, button };
-}
-
-/** The band's second line while no side panel shows (a terminal under 144 columns docks none unasked): the last run and the events the hooks saw, `last run none · 1 event · last 7s ago`. Empty when the panel is drawn (it has them) or the mod has neither. */
-export function bandDetail(h: Health, lastRun: { secs?: number; done: number; total: number } | undefined): Run[] {
-  if (h.panel) return [];
-  const ev = h.hooks;
-  const run = lastRun && lastRun.secs !== undefined ? `last run ${elapsedClock(lastRun.secs)}${lastRun.total > 0 ? ` · ${lastRun.done}/${lastRun.total} done` : ''}` : 'last run none';
-  const bits = [run, ...(ev && ev.total > 0 ? [plural(ev.total, 'event')] : []), ...(ev?.lastEventSecs !== undefined ? [`last ${agoText(ev.lastEventSecs)} ago`] : [])];
-  return [r(bits.join(' · '), 'sub')];
-}
 
 /** A row's fields in drawing order; `keep` says how long a field survives a narrow pane (the lowest goes first, a field is dropped whole, never cut). */
 export type HealthField = { runs: Run[]; keep: number };

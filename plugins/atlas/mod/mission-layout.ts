@@ -9,13 +9,15 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clipEll, hostEnv, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
 import { displayName } from './hud';
 import { fitText, textWidth } from './theme';
-import { bandDetail, bandSegments, type Health } from './idle-health';
+import { bandSegments, type BandSeg } from './band-segments';
+import { idleRamp } from './band-motion';
+import type { Health } from './idle-health';
 
 export type { Run, Tone };
 /** One row, on the theme's panel colour. `keys`: the footer, where the band appends its key buttons in `keysWidth`
@@ -380,9 +382,9 @@ function stateFillToken(st: ReturnType<typeof runStateOf>): Token {
   if (st.kind === 'blocked') return 'bad';
   return st.kind === 'working' ? 'accent' : 'ok';
 }
-/** Runs laid on a fill: the fill rides `bgHex`, a motion tint (`fg`) is dropped; `ink` the one text tone of the whole segment (the state fill's dark ink); absent, each run keeps its own tone. */
-const onFill = (runs: readonly Run[], bgHex: string, ink?: Tone): Run[] =>
-  runs.filter((x) => x.t !== '').map((x): Run => { const { fg: _fg, bg: _bg, ...rest } = x; return { ...rest, tone: ink ?? x.tone, bgHex }; });
+/** Runs laid on a fill: the fill rides `bgHex`, a motion tint (`fg`) is dropped; `ink` the one text tone of the whole segment (the state fill's dark ink); absent, each run keeps its own tone. `keep`: runs (by reference) whose own `fg` stays (the idle breathing tone). */
+const onFill = (runs: readonly Run[], bgHex: string, ink?: Tone, keep?: ReadonlySet<Run>): Run[] =>
+  runs.filter((x) => x.t !== '').map((x): Run => { const { fg: _fg, bg: _bg, ...rest } = x; return { ...rest, ...(keep?.has(x) && x.fg !== undefined ? { fg: x.fg } : {}), tone: ink ?? x.tone, bgHex }; });
 /** `lead | plan | work` as the three segments after the wordmark (wave 37: all three are always drawn). */
 function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], plan: Run[], work: Run[]): Run[] {
   const pal = PALETTES[ui.theme];
@@ -397,15 +399,17 @@ function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: 
   out.push(edge(fill, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg), edge(planBg, workBg), ...onFill([r(' '), ...work, r(' ')], workBg));
   return out; // the last fill runs on to the last cell (withHandle pads it), right up to the host's `[-]`
 }
-/** Idle health (wave 42): `lead | seg | seg | ...` on the alternating plan and worker fills; the last seg is the clickable button. */
-function healthSegmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], segs: Run[][]): Run[] {
-  const fill = SEG_IDLE[ui.theme];
+/** The one band: `state | seg | seg | ... | chip` on the alternating plan and worker fills, the state on its own colour (idle the slab, working the accent, done the green); the last seg is the clickable chip. `keep`: runs that wear their own tone (the breathing dot and cell). */
+function healthSegmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], segs: Run[][], keep?: ReadonlySet<Run>): Run[] {
+  const idle = st.kind === 'idle';
+  const token = stateFillToken(st);
+  const fill = idle ? SEG_IDLE[ui.theme] : PALETTES[ui.theme][token];
   const fills = [SEG_PLAN[ui.theme], SEG_WORK[ui.theme]];
-  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, st.kind === 'idle' ? 'text' : undefined)];
+  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, idle ? 'text' : inkFor(token, ui.theme, ui.color), keep)];
   let prev = fill;
   segs.forEach((seg, i) => {
-    const next = fills[(segs.length - 1 - i) % 2 === 0 ? 1 : 0]!; // counted from the button: it is always the strip's fill, the segments before it alternate
-    out.push(edge(prev, next), ...onFill([r(' '), ...seg, r(' ')], next));
+    const next = fills[(segs.length - 1 - i) % 2 === 0 ? 1 : 0]!; // counted from the chip: it is always the strip's fill, the segments before it alternate
+    out.push(edge(prev, next), ...onFill([r(' '), ...seg, r(' ')], next, undefined, keep));
     prev = next;
   });
   return out;
@@ -510,29 +514,44 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     { o: { clock: false, reason: 'none', fix: true }, open: false, bw: false, counts: 'none', warn: 'none' },
     { o: { clock: false, reason: 'none', fix: false }, open: false, bw: false, counts: 'none', warn: 'none' },
   ];
-  // Wave 42: idle with no run yet (no plan, no worker) the plan and worker segments hold live health instead of `todo -` and `no agents`: gates, context, uptime, the last run, then the button.
-  const health: Form[] = [];
-  if (m.health && st.kind === 'idle' && !m.total && workBody(false).every((x) => x.t === '-')) {
-    const ranFor = m.ranSecs ?? m.lastRun?.secs;
-    const sg = bandSegments(m.health, ui, ranFor !== undefined ? { secs: ranFor, done: m.done, total: m.total } : undefined);
-    const leadFor = (): Run[] => lead({ ...F, clock: false });
-    const combos: Run[][][] = [
-      [sg.gates, sg.ctxFull, sg.up, sg.event, sg.last, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.event, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.last, sg.button], [sg.gates, sg.ctxFull, sg.up, sg.button],
-      [sg.gates, sg.ctxFull, sg.event, sg.button], [sg.gates, sg.ctxFull, sg.button],
-      [sg.gates, sg.ctxShort, sg.up, sg.button], [sg.gates, sg.ctxShort, sg.button], [sg.gates, sg.up, sg.button], [sg.gates, sg.button], [sg.button],
+  // Expert round 4 (P2, S-1, S-2): ONE band for every width and pane state while the mod has health: `state | todo | workers | gates | events | ctx | up | chip`, a segment with nothing to say is not drawn
+  // (`todo -` and `no agents` never exist), and a narrower band drops segments from the right by priority, never switching form. The state word and the chip always stay. Blocked keeps its own forms below.
+  if (m.health && st.kind !== 'blocked') {
+    const idleKind = st.kind === 'idle';
+    const ramp = idleKind && m.now !== undefined ? idleRamp(m.now, ui, hostEnv(), m.still) : undefined;
+    const keep = new Set<Run>();
+    const bs = bandSegments(m.health, ui, { working: st.kind === 'working', ramp: ramp?.hex });
+    const withPlan: { runs: Run[]; live?: Run[] }[] = [
+      ...(m.total ? [{ runs: planFig(false) }] : []),
+      ...(workBody(false).every((x) => x.t === '-') ? [] : [{ runs: workBody(true) }]),
+      ...bs.filter((x) => x.id !== 'health'),
     ];
-    const seen = new Set<string>();
-    for (const c of combos) {
-      const segs = c.filter((x) => x.length > 0);
-      const key = segs.map((x) => x.map((y) => y.t).join('')).join('|');
-      if (!segs.length || seen.has(key)) continue;
-      seen.add(key);
-      health.push({ min: 0, runs: seg ? healthSegmented(ui, st, cap, leadFor(), segs) : [...cap, r(' '), ...leadFor(), ...segs.flatMap((x) => [glue, ...x])] });
+    const chip: BandSeg | undefined = bs.find((x) => x.id === 'health');
+    const leadU = (o: LeadOpts): Run[] => {
+      const runs = lead(o);
+      if (ramp?.hex && idleKind && runs[0]) { const dot = { ...runs[0], fg: ramp.hex }; keep.add(dot); return [dot, ...runs.slice(1)]; }
+      return runs;
+    };
+    const build = (leadRuns_: Run[], segs: { runs: Run[]; live?: Run[] }[]): Form => {
+      for (const sg of segs) for (const x of sg.live ?? []) keep.add(x);
+      const lists = segs.map((x) => x.runs);
+      return { min: 0, runs: seg ? healthSegmented(ui, st, cap, leadRuns_, lists, keep) : [...cap, r(' '), ...leadRuns_, ...lists.flatMap((x) => [glue, ...x])] };
+    };
+    const full = leadU({ ...F, clock: !idleKind });
+    const forms: Form[] = [];
+    for (let k = withPlan.length; k >= 0; k--) {
+      const segs = [...withPlan.slice(0, k), ...(chip ? [chip] : [])];
+      if (segs.length || k === 0) forms.push(segs.length ? build(full, segs) : { min: 0, runs: [...cap, r(' '), ...full] });
     }
+    const words = new Set(['working', 'done', 'idle']);
+    for (const k of idleKind ? (['glyph'] as const) : (['clock', 'glyph'] as const)) {
+      const tiny = lead({ clock: k === 'clock', reason: 'none', fix: true }).filter((x) => x.t !== ' ' && !words.has(x.t.trim()));
+      forms.push(chip ? build(tiny, [chip]) : { min: 0, runs: [...cap, r(' '), ...tiny] });
+    }
+    return [...forms, { runs: [...cap], min: 0 }];
   }
   // State 38: a blocked band's run clock (`▲ blocked · stop refused 0:37`) goes before the reason, the word `todo` or a count does: only the word forms keep it.
   const out: Form[] = [
-    ...health,
     { runs: wide(10, '   '), min: GAUGE_MIN }, { runs: wide(8, '  '), min: GAUGE_MIN },
     ...levels.map((v) => row(v, v.bare !== true)),
     // Wave 37: below that the state word goes, never a segment: glyph and clock, then the glyph alone (the fill still says which state), each beside `n/m` and the worker count.
@@ -752,14 +771,12 @@ function checkRuns(checks: readonly MissionCheck[] | null, room: number, ui: Ui,
  * pads their gap itself). Fewer rows when only one has content; none when neither. */
 function footerLines(m: MissionModel): Line[] {
   const keys = m.keysWidth ?? 0;
-  // The idle health band carries `● gates 4/4` itself: with every gate green the checks row would say it a second time, so it shows only when a gate needs attention.
-  const healthShows = !!m.health && runStateOf(m).kind === 'idle' && !m.total && m.workers.length === 0;
+  // The band carries `● gates 4/4` itself: with every gate green the checks row would say it a second time, so it shows only when a gate needs attention.
+  const healthShows = !!m.health && runStateOf(m).kind !== 'blocked';
   const allGreen = !!m.checks?.length && m.checks.every((c) => c.ok && !c.pending);
   const checks = healthShows && allGreen ? [] : checkRuns(m.checks, m.cols, uiOf(m));
-  // No side panel beside the transcript (under 144 columns nothing docks unasked): a second compact line says the last run and the events, so an idle band is more than one line of figures.
-  const ranFor = m.ranSecs ?? m.lastRun?.secs;
-  const detail = healthShows && m.health ? bandDetail(m.health, { ...(ranFor !== undefined ? { secs: ranFor } : {}), done: m.done, total: m.total }) : [];
-  return [...(detail.length ? [{ runs: fitRuns([r('  '), ...detail], m.cols, uiOf(m)) }] : []), ...(checks.length ? [{ runs: fitRuns(checks, m.cols, uiOf(m)) }] : []), ...(keys > 0 ? [{ runs: [], keys: true, ...(healthShows ? { edge: true } : {}) }] : [])];
+  // The key chips are the band's own second row (left-aligned on the band's fill, `edge`); there is no `last run` line: the run's seconds are the state word's alone.
+  return [...(checks.length ? [{ runs: fitRuns(checks, m.cols, uiOf(m)) }] : []), ...(keys > 0 ? [{ runs: [], keys: true, ...(healthShows ? { edge: true } : {}) }] : [])];
 }
 
 // ---- row budget -----------------------------------------------------------------------
@@ -791,7 +808,7 @@ const blank = (cols: number): Line => ({ runs: [r(' '.repeat(cols))] });
 
 function idleLines(m: MissionModel): Line[] {
   const band = bandLines(m);
-  const last = lastRunRuns(m.lastRun, runStateOf(m).flagged || (m.checks ?? []).some((c) => !c.ok)); // `all ok` never sits under a BLOCKED header, nor beside a failing check, busy lead or not
+  const last = m.health ? [] : lastRunRuns(m.lastRun, runStateOf(m).flagged || (m.checks ?? []).some((c) => !c.ok)); // the health band's state word says the run's seconds; no second `last run` row; `all ok` never sits under a BLOCKED header, nor beside a failing check, busy lead or not
   const foot = footerLines(m);
   // The last run rides the core row when both fit one row (`verdicts ... last run 3 workers`), so a 110 and a 150 band draw the same rows (critique 11: 110 had no last-run row).
   // "Fit" is a fixed width (JOIN_MAX), not `cols`: the 110 body (105) and the docked 150 body (93) joined or split the same snapshot differently (critique 12 A3).

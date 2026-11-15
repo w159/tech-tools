@@ -265,7 +265,7 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
  return { type: 'Box', props: { flexDirection: 'column' }, children: [row, { type: 'Markdown', props: { text: rest } }] }
 }
 
-// ---- TurnDuration: `▸ run 4:12 · +3 done · 2 workers · ctx 41%` (the band's clock format, frozen once drawn) ----
+// ---- TurnDuration: `▸ +3 done` (no run time: the band's `done 4:12` says it once; an un-clocked turn keeps `turn 4:12`) ----
 
 export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null, ui: Ui = uiFromEnv(), band?: number): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
@@ -278,13 +278,15 @@ export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, 
  if (active > 0) return { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] }
  const runMs = tracker.runStart != null && now != null ? Math.max(0, now - tracker.runStart) : null
  if (runMs !== null) tracker.settled = true
- // Wave 36 (critique 35: `run 0:08 · +4 done` and `run 0:31` under a band at 0:39): where the pane says the band's run clock, the footer prints that value and no partial `+N done` beside it.
+ // Expert round 4 (P1, S-3): the run's seconds are printed once, by the band's `done 0:05`. The closing footer keeps its other facts (`+N done` where no band clock is given) and says no run time and no context (the band says both); a closing footer with no fact left draws nothing.
+ const closing = band !== undefined || runMs !== null
  const parts = [
-  band !== undefined ? `run ${elapsedClock(band)}` : runMs !== null ? `run ${elapsedClock(runMs / 1000)}` : `turn ${elapsedClock(durationMs / 1000)}`, // wave 32 (critique 30: an unlabelled `0:17` in the footer): the time says what it times
+  closing ? null : `turn ${elapsedClock(durationMs / 1000)}`, // an un-clocked turn keeps its own labelled time (critique 30: an unlabelled `0:17` in the footer)
   delta > 0 && band === undefined ? `+${delta} done` : null,
   active > 0 ? `${active} ${active === 1 ? 'worker' : 'workers'}` : null, // critique 15 B6: `1 workers` in 69 frames
-  snap.contextPct > 0 ? `ctx ${snap.contextPct}%` : null,
+  snap.contextPct > 0 && !closing ? `ctx ${snap.contextPct}%` : null,
  ].filter((part): part is string => part !== null)
+ if (parts.length === 0) { tracker.done = snap.counts.done; return { type: 'Box', props: { flexShrink: 0, height: 0 }, children: [] } }
  tracker.done = snap.counts.done
  return txt({ dimColor: true },
   txt({ color: hexIn(PALETTE5.dim, ui) }, `${MARK} `),
