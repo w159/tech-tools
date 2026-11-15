@@ -55,7 +55,7 @@ describe('1: the checks row never repeats the gates figure', () => {
     });
     test(`at ${cols}, a gate not green brings the checks row back`, () => {
       const rows = rowsOf(model(cols, { gates: [...GATES.slice(0, 3), green('header', false)] }));
-      expect(rows.join('\n')).toMatch(/checks .*header/);
+      expect(rows.join('\n')).toMatch(/■ 1 denied/); // v1 frame spec: the gates chip carries the denial, the checks row stays out of the band
     });
   }
 });
@@ -166,7 +166,7 @@ describe('5: rows fit by dropping the lowest-value field, never by cutting', () 
 describe('6: ctx and tokens are one measure, labelled so', () => {
   test('band: `context 18%` (round 2: the tokens are the session detail, never beside the figure)', () => {
     const row = rowsOf(model(150))[0]!;
-    expect(row).toContain('ctx 18%'); // slice S2: the band says `ctx 18%`
+    expect(row).toMatch(/ctx +18%/); // slice S2: the band says `ctx 18%`
     expect(row).not.toContain('42k tok');
   });
   test('the panel session row reads the same words', () => {
@@ -239,7 +239,7 @@ describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither fo
     expect(tiles[0]).not.toBe('#181825');
   });
   test('the band has no footer chips (round 2 D9: tabs live only in the panel)', () => {
-    const chips = all(bandTree(els, model(150), handlers) as unknown as Node).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:') && n.props.key !== 'band:health');
+    const chips = all(bandTree(els, model(150), handlers) as unknown as Node).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:') && !/^band:(health|gates)/.test(String(n.props.key)));
     expect(chips.length).toBe(0); // round 2 D9: the tab chips live only in the panel; the band keeps the one `▸ health` chip
     for (const c of chips) expect(all(c).find((x) => x.kind === 'Text')!.props.backgroundColor).not.toBe('#181825');
   });

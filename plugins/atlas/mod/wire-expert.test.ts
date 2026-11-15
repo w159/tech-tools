@@ -131,7 +131,7 @@ describe('wire-expert: the pulse', () => {
     await b.tool(3);
     await b.advance(600); // the poll rebuilds the snapshot with the new usage
     const band = textOf(await b.band());
-    expect(band).toContain('ctx 6%');
+    expect(band).toMatch(/ctx +6%/);
     expect(band).toMatch(/[▁-█]{8}/); // the events spark (eighth blocks, round 3 E10)
     await press(button(await b.band(), 'band:health'));
     const card = textOf(await b.band());
@@ -204,7 +204,7 @@ describe('wire-expert: the close controls', () => {
 });
 
 describe('wire-expert: tools per run', () => {
-  test('(f) the band counts the tool calls of the current run, not the session', async () => {
+  test('(f) v1 frame spec: the band names the newest tool in its detail slot and carries no tool count, so a count never leaks across runs', async () => {
     const b = await boot();
     await b.rest();
     const run = async (calls: number): Promise<string> => {
@@ -216,13 +216,13 @@ describe('wire-expert: tools per run', () => {
       return textOf(await b.band());
     };
     const first = await run(3);
-    expect(first).toContain('3 tools');
+    expect(first).toContain('Bash');
+    expect(first).not.toMatch(/\d+ tools?/);
     await b.cap.one('classic.Stop')(b.$, { stop_hook_active: false }, async (e) => e);
     b.props.working = false;
     await b.advance(3000, async () => { await b.band(); });
     const second = await run(1);
-    expect(second).toContain('1 tool');
-    expect(second).not.toContain('1 tools');
-    expect(second).not.toContain('4 tools');
+    expect(second).toContain('Bash');
+    expect(second).not.toMatch(/\d+ tools?/);
   });
 });

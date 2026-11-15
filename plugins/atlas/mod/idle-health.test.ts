@@ -37,9 +37,9 @@ describe('idle band shows live health', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols}: idle, gates, ctx and the health button replace \`todo -\` and \`no agents\``, () => {
       const row = firstRow(model(cols));
-      expect(row).toContain('◖ ◆ ATLAS ◗ ○ idle');
+      expect(row).toContain('◖ ◆ ATLAS ◗ ◌ idle up 12:04');
       expect(row).toContain('● gates ok');
-      expect(row).toContain('ctx 18%'); // slice S2: the one band says `ctx 18%` (the panel and the card say `context`)
+      expect(row).toMatch(/ctx +18%/); // v1 frame spec: the ctx figure is right-aligned in a fixed slot
       expect(row).toContain('▸ health');
       expect(row).not.toContain('todo -');
       expect(row).not.toContain('no agents');
@@ -48,13 +48,13 @@ describe('idle band shows live health', () => {
   }
   test('at 150 the context (no tokens, round 2) shows; the uptime is the card\'s, never the band\'s (round 2 D9: fixed slots, no `up`)', () => {
     const row = firstRow(model(150));
-    expect(row).toContain('ctx 18%');
+    expect(row).toMatch(/ctx +18%/);
     expect(row).not.toContain('tok');
-    expect(row).not.toContain('up 12:04');
+    expect(row).toContain('up 12:04'); // v1 frame spec: the idle head carries the uptime
   });
   test('a denied gate reads ✗ and the count', () => {
     const bad = [...GATES.slice(0, 3), { id: 'header', title: 'header', lines: [{ id: 'header', label: 'header', ok: false }] }] as any;
-    expect(firstRow(model(150, { gates: bad }))).toContain('✗ 1 denied');
+    expect(firstRow(model(150, { gates: bad }))).toContain('■ 1 denied');
   });
   test('an unknown context is omitted, never made up', () => {
     const row = firstRow(model(150, { snapshot: idleSnap({ contextPct: 0 }), health: { ...HEALTH, tokens: null } }));
@@ -65,12 +65,12 @@ describe('idle band shows live health', () => {
     const rest = kids(bandTree(els, model(150, { ranSecs: 134, restSecs: 40 }), handlers) as unknown as Node).map(textOf).join('\n');
     expect(rest).not.toContain('last run');
     expect(rest).not.toContain('2:14');
-    expect(firstRow(model(150, { snapshot: idleSnap({ phase: 'done' }), ranSecs: 134, restSecs: 4 }))).toContain('done 2:14');
+    expect(firstRow(model(150, { snapshot: idleSnap({ phase: 'done' }), ranSecs: 134, restSecs: 4 }))).toContain('● done 6/6');
   });
   test('the idle head ticks: seconds since the last hook event (round 2 D2)', () => {
     const at = (secs: number) => firstRow(model(150, { health: { ...HEALTH, hooks: { total: 1, byLabel: [], recent: [], lastEventSecs: secs } } }));
-    expect(at(7)).toContain('○ idle 7s');
-    expect(at(8)).toContain('○ idle 8s');
+    expect(at(7)).toContain('last 7s');
+    expect(at(8)).toContain('last 8s');
   });
 });
 
@@ -108,10 +108,13 @@ describe('the working band keeps its facts and adds the health segments', () => 
     return firstRow({ snapshot, live: liveWorkers(snapshot, NOW), gates: GATES, columns, tick: 0, maxRows: 12, ui, ...(health ? { health: HEALTH } : {}) });
   };
   for (const cols of [150, 110]) {
-    test(`at ${cols} a running band keeps its state, plan and workers and adds the health segments after them (slice S2: one band)`, () => {
+    test(`at ${cols} a running band shows the phase head with n/6, the gates chip and ctx, and the health chip (v1 frame spec)`, () => {
       const row = working(cols, true);
-      expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ implement              ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ')).toBe(true); // round 2 D2: the working head is the phase (no clock; the host prints elapsed), padded to its fixed 24-cell slot (round 3, E10)
+      expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ implement 5/6 ')).toBe(true);
+      expect(row).toContain('● gates ok');
+      expect(row).toMatch(/ctx +12%/);
       expect(row).toContain('▸ health');
+      expect(textWidth(row)).toBeLessThanOrEqual(cols);
       expect(working(cols, false)).not.toContain('health');
     });
   }
@@ -119,7 +122,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
     expect(working(150, true).trimEnd()).toBe(WORKING_150);
   });
 });
-const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement              ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ● gates ok   ▌ ctx 12%  ▌' + ' '.repeat(44) + '▸ health';
+const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement 5/6              │  ● gates ok  │ ctx  12%' + ' '.repeat(75) + '▸ health';
 
 describe('the expanded health card (HUD)', () => {
   const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };

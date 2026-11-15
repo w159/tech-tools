@@ -93,7 +93,7 @@ describe('L19: the board key opens the Board pane', () => {
   test('wave 31: the band draws no `r: route ...` key row any more, so the `o` Button is gone from it (the Board still opens through ui.open from the pane footer)', async () => {
     const b = await boot();
     const tree = await band(b);
-    expect(walk(tree).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:') && n.props.key !== 'band:health')).toEqual([]); // slice S2: the `▸ health` chip is the band's own last segment in every state
+    expect(walk(tree).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:') && !/^band:(health|gates)/.test(String(n.props.key)))).toEqual([]); // slice S2: the `▸ health` chip is the band's own last segment in every state
   });
   test('the Pane hook for atlas-board draws the ribbon, the header and one row per todo', async () => {
     const b = await boot();

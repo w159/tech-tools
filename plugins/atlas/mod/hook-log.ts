@@ -15,6 +15,8 @@ export type HookStats = {
   runTools?: number;
   /** The tool of the newest `tool.call` event of this run (the label's word after `tool.call`, as `Bash`); absent when the run has seen none or the label carried no name. The band's `◓ research · Bash`. */
   runTool?: string;
+  /** How long the mod's own handlers held an event before handing it on (N1): the median and p95 over every sample of the session, `n` samples; absent before the first. */
+  latency?: { n: number; p50: number; p95: number };
 };
 
 const KEEP = 64;
@@ -27,6 +29,8 @@ let toolStamps: number[] = [];
 let lastTool: { name: string; at: number } | null = null;
 let newest = -Infinity;
 const counts = new Map<string, number>();
+/** Handler latency samples in ms, a ring of KEEP per label (N1). */
+const latencies = new Map<string, number[]>();
 
 /** A new session starts an empty log. */
 export function resetHookLog(): void {
@@ -36,6 +40,7 @@ export function resetHookLog(): void {
   lastTool = null;
   newest = -Infinity;
   counts.clear();
+  latencies.clear();
 }
 
 /** Record one event the handlers saw, at the engine clock `at` (ms); an event with no clock reading is not recorded. */
@@ -55,12 +60,32 @@ export function noteHook(label: string, at: number | undefined): void {
   counts.set(kind, (counts.get(kind) ?? 0) + 1);
 }
 
+/**
+ * N1: one handler's own latency, `endAt - startAt` in whole ms of the engine clock, kept per label (a ring of KEEP). Handlers stamp at entry (the `at` they give noteHook) and again right before they hand
+ * the event on with `next`, so the figure is the mod's work, never the tool or turn the host runs after it. The clock's resolution is the engine's own (whole ms): a sub-millisecond handler reads 0.
+ */
+export function noteHookMs(label: string, startAt: number | undefined, endAt: number | undefined): void {
+  if (startAt === undefined || endAt === undefined || !Number.isFinite(startAt) || !Number.isFinite(endAt)) return;
+  const ring = latencies.get(label) ?? [];
+  ring.push(Math.max(0, Math.round(endAt - startAt)));
+  if (ring.length > KEEP) ring.shift();
+  latencies.set(label, ring);
+}
+
+/** `noteHookMs` with the exit stamp read here; call it right before `next(e)`. */
+export async function hookDone($: EngineInterface, label: string, startAt: number | undefined): Promise<void> {
+  noteHookMs(label, startAt, await hookStamp($));
+}
+
 /** The engine clock for a handler; undefined when it cannot be read (a hook never fails for it). */
 export async function hookStamp($: EngineInterface): Promise<number | undefined> {
   try { return await $.clock.now(); } catch { return undefined; }
 }
 
+const rank = (sorted: readonly number[], p: number): number => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))]!;
+
 export function hookStats(now: number, max = 8, since?: number): HookStats {
+  const samples = [...latencies.values()].flat().sort((a, b) => a - b);
   const recent = [...log].reverse().slice(0, max).map((e) => ({ label: e.label, ageSecs: Math.max(0, Math.floor((now - e.at) / 1000)) }));
   const last = [...log].reverse().find((e) => e.label !== 'session.start');
   return {
@@ -68,6 +93,7 @@ export function hookStats(now: number, max = 8, since?: number): HookStats {
     byLabel: [...counts].map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label)),
     recent,
     ...(last ? { lastEventSecs: Math.max(0, Math.floor((now - last.at) / 1000)) } : {}),
+    ...(samples.length ? { latency: { n: samples.length, p50: rank(samples, 0.5), p95: rank(samples, 0.95) } } : {}),
     ...(since !== undefined ? { runTools: toolStamps.filter((t) => t >= since).length } : {}),
     ...(since !== undefined && lastTool && lastTool.at >= since ? { runTool: lastTool.name } : {}),
   };

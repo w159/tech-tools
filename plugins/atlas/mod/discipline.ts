@@ -10,7 +10,7 @@ import type { On, EngineInterface } from 'claude-code';
 import type { AtlasSnapshot } from './contract';
 import { headerPhaseOf } from './restyle';
 import type { HeaderCheck } from './gates';
-import { hookStamp, noteHook } from './hook-log';
+import { hookDone, hookStamp, noteHook } from './hook-log';
 import { EMPTY_ORCH, LEAD, onStep, onToolEnd, onToolStart } from './data/orchestration';
 
 /** Inline tool output at or above this many chars (~1k tokens) counts as heavy. */
@@ -269,8 +269,10 @@ async function markStopped($: EngineInterface, e: unknown): Promise<void> {
 export function registerDiscipline(on: On, deps: DisciplineDeps): void {
   on('tool.call', async ($, e, next) => {
     const agent = e.agentId ?? LEAD;
-    noteHook(`tool.call ${e.tool}`, await hookStamp($));
+    const at = await hookStamp($);
+    noteHook(`tool.call ${e.tool}`, at);
     await trackToolStart($, agent, e.tool, e); // tool args ride flat on the event, like routing.ts reads Agent args
+    await hookDone($, `tool.call ${e.tool}`, at); // N1: the mod's own work before the call runs, never the tool itself
     const result = await next(e);
     if (e.tool === 'TaskStop') await markStopped($, e);
     await trackToolEnd($, agent);

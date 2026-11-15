@@ -69,10 +69,10 @@ describe('2: the idle band at 110 says more than one line of figures when no pan
   }
   test('with the panel up the band reads as it does closed (the uptime is the card\'s and the panel\'s)', () => {
     const rows = rowsOf(model(150, { panel: true }));
-    expect(rows[0]).toContain('▸ health');
+    expect(rows[0]).not.toContain('health'); // v1 frame spec: the health chip shows only with the pane closed
+    expect(rows[0]).toMatch(/ctx +18%/);
     expect(rows[0]).toContain('gates ok');
-    expect(rows[0]).toContain('ctx 18%');
-    expect(rows.join('\n')).not.toMatch(/up 12:04|last run|events/);
+    expect(rows.join('\n')).not.toMatch(/last run|events/);
   });
 });
 
@@ -141,7 +141,7 @@ describe('5: each fact once across the band, the card and the panel', () => {
     expect(rowsOf(model(110, { hooks: ONE })).join('\n')).not.toMatch(/last run|1 event|last 7s ago/);
   });
   test('the band with the panel up repeats neither the panel`s uptime nor its events', () => {
-    expect(rowsOf(model(150, { panel: true, hooks: ONE }))[0]).not.toMatch(/up \d|event/); // slice S2: the band reads the same open or closed, so it keeps gates and ctx; only `up` is the panel's
+    expect(rowsOf(model(150, { panel: true, hooks: ONE }))[0]).not.toMatch(/event/); // v1 frame spec: the idle head carries `up M:SS` open or closed
   });
 });
 
@@ -187,7 +187,7 @@ describe('9: one accent, for what answers a click', () => {
   test('the health button is the accent (the band has no tab chips any more, round 2 D9)', () => {
     const t = bandTree(els, model(150), handlers) as unknown as Node;
     const btn = leaves(t).find((n) => String(n.props.children).includes('health'))!;
-    expect(btn.props.color).toBe('#af87ff');
+    expect(btn.props.color).toBe('#d7afff');
     expect(leaves(t).some((n) => String(n.props.children).includes('team'))).toBe(false);
   });
   test('the panel`s row labels and chevrons are the same accent', () => {
@@ -218,7 +218,7 @@ describe('11: the status tab`s ribbon does not repeat the lit chip', () => {
 describe('12: `context 6%` on the band; the tokens and the window only in the session detail', () => {
   test('band says `context 18%` with no tokens', () => {
     const r = rowsOf(model(150, { panel: false }))[0]!;
-    expect(r).toContain('ctx 18%'); // slice S2: the band says `ctx 18%`
+    expect(r).toMatch(/ctx +18%/); // slice S2: the band says `ctx 18%`
     expect(r).not.toMatch(/tok/);
   });
   test('the context row says the gauge and `63k of 1M`', () => {

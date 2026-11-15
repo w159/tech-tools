@@ -55,3 +55,8 @@ export function gatesTotal(gates: readonly { pass: number; total: number }[]): G
   const fired = lines.filter((g) => g.fired).length;
   return { pass, total, deny, fired, notFired: lines.length - fired, text: deny > 0 ? `${deny} denied` : 'ok', tone: deny > 0 ? 'bad' : fired > 0 ? 'ok' : 'sub' };
 }
+
+/** Denied calls over failing gate lines: a line's own detail says `2 calls denied` (the leading count); a failing line that does not say counts one. Lines whose id is `skip` (the Stop verdict) are not counted. */
+export function deniedCalls(groups: readonly { lines: readonly { id: string; ok: boolean; detail?: string }[] }[], skip = 'stop-verdict'): number {
+  return groups.flatMap((g) => g.lines).filter((l) => !l.ok && l.id !== skip).reduce((n, l) => n + (Number(/(\d+)\s+(?:calls?\s+)?denied/i.exec(l.detail ?? '')?.[1]) || 1), 0);
+}

@@ -2,7 +2,6 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandTree, type BandHandlers, type BandModel } from './band';
-import { bandSegments, SEG_ORDER } from './band-segments';
 import { beatDue, idleLevel, idlePhase, idleRamp, IDLE_PHASES, IDLE_RAMP_256 } from './band-motion';
 import { runHex, uiFromEnv, xtermHex, type Ui } from './atlas-ui';
 import { busySnap, NOW } from './live_fixture';
@@ -41,43 +40,37 @@ const first = (b: BandModel): string => rows(b)[0]!;
 
 /** The segments the band row draws, by id, in the order they appear. */
 const idsIn = (row: string): string[] => [
-  ['gates', /gates ok|\d+ denied|not fired/], ['events', /[▁-█]{4,}/], ['ctx', /ctx \d+%/], ['health', /▸ health/],
+  ['gates', /gates ok|\d+ denied|○ gates/], ['events', /[▁-█]{4,}/], ['ctx', /ctx +\d+%/], ['health', /▸ health/],
 ].map(([id, re]) => ({ id: id as string, at: row.search(re as RegExp) })).filter((x) => x.at >= 0).sort((a, b) => a.at - b.at).map((x) => x.id);
 
-describe('(a) segments are a priority-ordered prefix; state and the chip always stay', () => {
-  for (const cols of [150, 110, 100, 80, 60, 40]) for (const panel of [false, true]) for (const kind of ['idle', 'working', 'done'] as Kind[]) {
+const ORDER = ['gates', 'events', 'ctx', 'health'];
+
+describe('(a) the band is one row of a fixed order; the head and the cap always stay, the health chip only with the pane closed', () => {
+  for (const cols of [150, 110, 100, 89, 80, 60, 55]) for (const panel of [false, true]) for (const kind of ['idle', 'working', 'done'] as Kind[]) {
     test(`${kind} at ${cols} ${panel ? 'pane open' : 'pane closed'}`, () => {
       const row = first(model(kind, cols, panel));
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
       const ids = idsIn(row);
-      expect(ids.at(-1)).toBe('health'); // the chip is last and never dropped
-      const body = ids.slice(0, -1);
-      const wanted = SEG_ORDER.filter((id) => id !== 'health');
-      expect(body).toEqual(wanted.slice(0, body.length)); // a narrower band drops from the right: what stays is a prefix of the priority list
+      expect(ids).toEqual(ORDER.filter((id) => ids.includes(id))); // what stays keeps the fixed order of the frame spec
+      if (panel) expect(ids).not.toContain('health');
+      else if (cols >= 80) expect(ids.at(-1)).toBe('health');
       expect(row).toContain('◖ ◆ ATLAS ◗ ');
-      expect(row).toMatch(kind === 'idle' ? /○ idle/ : kind === 'working' ? /[◐◓◑◒] implement/ : /● done( 0:05)?/); // round 2 D2: the working head is the phase, no clock
+      expect(row).toMatch(kind === 'idle' ? /◌ idle up/ : kind === 'working' ? /[◐◓◑◒] implement/ : /● done/);
     });
   }
-  test('bandSegments lists only segments that have something to say, in SEG_ORDER', () => {
-    const h = { gates: { total: 4, green: 4, checks: GATES.map((g: any) => ({ id: g.id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 6, upSecs: 9, pulse: PULSE, button: true } as Health;
-    expect(bandSegments(h, ui).map((s) => s.id)).toEqual([...SEG_ORDER]);
-    expect(bandSegments({ ...h, panel: true }, ui).map((s) => s.id)).toEqual(['gates', 'events', 'ctx', 'health']); // round 2: `up` left the band for good
-    expect(bandSegments({ gates: { total: 0, green: 0, checks: [] } } as Health, ui)).toEqual([]);
-  });
-  test('the wide idle band reads like the mock', () => {
-    const row = first(model('idle', 150, false)).trimEnd();
-    expect(row).toMatch(/^◖ ◆ ATLAS ◗ ○ idle 2s +▌ ● gates ok +▌ [▁-█]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
-    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement · 3 tools +▌ ● gates ok +▌ [▁-█]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
-    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 0:05 +▌ ● gates ok +▌ [▁-█]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
+  test('the wide band reads like the frame spec', () => {
+    expect(first(model('idle', 150, false)).trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ◌ idle up 0:09 +│  ● gates ok  │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
+    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement 5\/6 +│  ● gates ok  │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
+    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 6\/6 +ended 1s +│  ● gates ok  │ [▁-█]{20} +12 ev\/5m │ ctx +6% │ .*▸ health$/);
   });
 });
 
-describe('(b) the band reads the same with the pane open or closed (round 2: no `up` to differ)', () => {
-  for (const kind of ['idle', 'working', 'done'] as Kind[]) for (const cols of [150, 100, 90]) {
+describe('(b) with the pane open the band is the same row without the health chip', () => {
+  for (const kind of ['idle', 'working', 'done'] as Kind[]) for (const cols of [150, 100]) {
     test(`${kind} at ${cols}`, () => {
-      const closed = first(model(kind, cols, false));
+      const closed = first(model(kind, cols, false)).replace(/ *▸ health *$/, '');
       const open = first(model(kind, cols, true));
-      expect(closed).not.toMatch(/\bup \d/);
+      expect(open).not.toContain('health');
       expect(closed.trimEnd()).toBe(open.trimEnd());
     });
   }
@@ -145,7 +138,7 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
       const rest = new Set<string>();
       for (let tick = 0; tick < 30; tick += 2) {
         const texts = all(bandTree(els, model(kind, 150, false, { tick }), handlers) as unknown as Node).filter((n) => n.kind === 'Text');
-        const d = texts.find((n) => /^[○]/.test(textOf(n).trim()) || /○ idle/.test(textOf(n)));
+        const d = texts.find((n) => /^[◌◎]/.test(textOf(n).trim()));
         const c = texts.filter((n) => /[▁-█]$/.test(textOf(n).trimEnd()) && /[▁-█]/.test(textOf(n)));
         dot.add(d?.props.color);
         cell.add(c.at(-1)?.props.color);
@@ -153,10 +146,10 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
       }
       return { dot, cell, rest };
     };
-    test('idle: the dot and the newest cell take 8 tones over 3 s while the other segments hold still', () => {
+    test('idle: the heartbeat glyph breathes through the ramp over 3 s while the spark and the other segments hold still (v1 frame spec)', () => {
       const c = withEnv({ TERM: undefined, ATLAS_REDUCED_MOTION: undefined, NO_COLOR: undefined }, () => colours('idle'));
-      expect(c.dot.size).toBe(8);
-      expect(c.cell.size).toBeGreaterThanOrEqual(2);
+      expect(c.dot.size).toBeGreaterThanOrEqual(3);
+      expect(c.cell.size).toBe(1);
       expect(c.rest.size).toBe(1);
     });
     test('working and done do not breathe', () => {
@@ -173,13 +166,13 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
 
 describe('(e) the run seconds appear once across the band and the closing footer', () => {
   const flat = (tree: unknown): string => { const out: string[] = []; const walk = (n: unknown): void => { if (typeof n === 'string') out.push(n); else if (n && typeof n === 'object') for (const k of (n as { children?: unknown[] }).children ?? []) walk(k); }; walk(tree); return out.join(''); };
-  test('a finished 0:05 run: `done 0:05` on the band, nothing on the closing footer', () => {
+  test('a finished 0:05 run: `done n/n` and `ended Ns` on the band, nothing on the closing footer', () => {
     const band = rows(model('done', 150, false)).join('\n');
     const s = snap({ phase: 'done', counts: { done: 1, total: 1, byPhase: {} } }) as never;
     const footer = flat(durationTree(s, { durationMs: 8000 }, { turnStart: NOW - 8000, runStart: NOW - 5000, done: 1 }, NOW, ui, 5));
     const banded = flat(durationTree(s, { durationMs: 8000 }, { turnStart: NOW - 8000, runStart: NOW - 5000, done: 0 }, NOW, ui, 5));
     for (const f of [footer, banded]) { expect(f).not.toMatch(/\d:\d\d/); expect(f).not.toContain('run '); }
-    expect((`${band}\n${footer}\n${banded}`).match(/0:05/g)).toHaveLength(1);
+    expect(band).not.toContain('0:05'); // v1 frame spec: the band says `done 6/6` and `ended 1s`; the run clock is the panel's
   });
 });
 
@@ -188,13 +181,13 @@ describe('(f) at 110 with the pane closed the band is one row (round 2 D9: tabs 
   test('no chip row under the band, no `last run` line', () => {
     const rs = kids(bandTree(els, b, handlers) as unknown as Node);
     expect(rs).toHaveLength(1);
-    expect(all(rs[0]!).filter((n) => n.kind === 'Button').map((n) => n.props.key)).toEqual(['band:health']);
+    expect(all(rs[0]!).filter((n) => n.kind === 'Button').map((n) => n.props.key)).toEqual(['band:gates', 'band:health']);
     for (const r of rows(b)) expect(r).not.toMatch(/last run|last \d+s ago| events?\b|status/);
   });
   test('a run that ended adds no `last run m:ss` to the band', () => {
     const joined = rows(model('done', 110, false)).join('\n');
     expect(joined).not.toMatch(/last run/);
-    expect(joined.match(/0:05/g)).toHaveLength(1);
+    expect(joined).toMatch(/done 6\/6 +ended 1s/);
   });
 });
 
@@ -205,7 +198,7 @@ describe('(g) no pulse, no spark', () => {
       const row = first({ ...model(kind, 150, false), health: noPulse });
       expect(row).not.toMatch(/[⣀-⣿▁-█]/);
       expect(row).toContain('gates ok');
-      expect(row).toContain('ctx 6%');
+      expect(row).toMatch(/ctx +6%/);
     }
   });
 });

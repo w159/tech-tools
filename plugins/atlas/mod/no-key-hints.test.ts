@@ -80,7 +80,7 @@ describe('every Button looks clickable', () => {
     else expect(String(first.children), String(b.props.key)).toMatch(CHEVRON);
   };
   for (const cols of [150, 110]) {
-    test(`band buttons at ${cols}`, () => { const bs = buttons(bandOf(cols, false)); expect(bs.map((b) => b.props.key)).toEqual(['band:health']); bs.forEach(looks); }); // round 2 D9: the tab chips live only in the panel
+    test(`band buttons at ${cols}`, () => { const bs = buttons(bandOf(cols, false)); expect(bs.map((b) => b.props.key)).toEqual(['band:gates','band:health']); bs.forEach(looks); }); // round 2 D9: the tab chips live only in the panel
     for (const view of VIEWS) {
       test(`side panel ${view} buttons at ${cols}`, () => { const bs = buttons(pane(cols, view, true)); expect(bs.length).toBeGreaterThan(0); bs.forEach(looks); });
     }

@@ -9,7 +9,7 @@
 //   areaChartRuns(series, { width, rows, max?, ascii? }, ui) -> { rows: Run[][], max }   the same cells as runs: body in the data ink, the newest cell column in the peak ink, baseline cells dim
 //   chartFrame(chart, { yMax, xLeft, xRight, width }) -> string[]   the y label column (`yMax` on the first row, `0` on the last, right-aligned) + the chart rows + one x-axis row
 //       (`xLeft` under the first chart cell, `xRight` ending on the last); every row is exactly `width` cells (a wider `width` pads on the right); xLeft drops when both labels do not fit
-//   blockSpark(series, width, { ascii? }) -> string   eighth blocks `▁▂▃▄▅▆▇█`, the event scale max(4, max); a zero sample is the `▁` baseline, a positive one is at least `▂`
+//   blockSpark(series, width, { ascii?, min? }) -> string   eighth blocks `▁▂▃▄▅▆▇█`, the event scale max(min = 4, max); a zero sample is the `▁` baseline, a positive one is at least `▂`
 //   blockSparkRuns(series, width, ui, { newest? }) -> Run[]   the blocks in the data ink (baseline dim, the highest newest cell one step brighter); `newest` (a style) replaces the last cell's run (returned last)
 //   runBars(runs, width, ui?) -> Run[]   one eighth-block cell per run, newest right, height scaled to the longest run, `ok` green and failed `bad`; the left is the dim `▁` track
 //   runsSummary(runs, ascii?) -> `2 runs · avg 0:07 · 1 fail` (no fail part at 0), `no runs yet` when empty
@@ -111,10 +111,10 @@ export function chartFrame(chart: Chart, o: { yMax: string; xLeft: string; xRigh
 
 const levelOf = (v: number, max: number): number => (v <= 0 || max <= 0 ? 0 : Math.min(7, Math.max(1, Math.round((v / max) * 7))));
 
-export function blockSpark(series: readonly number[], width: number, o: { ascii?: boolean } = {}): string {
+export function blockSpark(series: readonly number[], width: number, o: { ascii?: boolean; /** The scale's floor (default CHART_MIN_SCALE): the band's spark uses 7 so one event reads `▂`, not `▃`. */ min?: number } = {}): string {
   const ramp = [...(o.ascii ? BLOCKS_ASCII : BLOCKS)];
   const w = wholeW(width);
-  const max = Math.max(CHART_MIN_SCALE, ...series.map((v) => Math.max(0, num(v))));
+  const max = Math.max(o.min ?? CHART_MIN_SCALE, ...series.map((v) => Math.max(0, num(v))));
   const vals = w === 0 ? [] : series.slice(-w).map((v) => Math.max(0, num(v)));
   return ramp[0]!.repeat(Math.max(0, w - vals.length)) + vals.map((v) => ramp[levelOf(v, max)]!).join('');
 }

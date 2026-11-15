@@ -39,6 +39,9 @@ let ctx: CtxSample[] = [];
 let runs: RunSample[] = [];
 let windowTokens: number | undefined;
 let cost: { usd: number } | undefined;
+/** N3: the denied-call count last seen and the clock reading at which it last ROSE (a count that falls to 0 forgets the rise). */
+let denied = 0;
+let deniedRoseAt: number | undefined;
 
 const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
 
@@ -47,7 +50,20 @@ export function resetPulse(): void {
   runs = [];
   windowTokens = undefined;
   cost = undefined;
+  denied = 0;
+  deniedRoseAt = undefined;
 }
+
+/** Record the denied-call count the gates show at engine clock `at`: a rise stamps the clock, a fall to 0 clears it. */
+export function noteDenied(count: number, at: number): void {
+  if (!finite(count) || !finite(at)) return;
+  if (count > denied) deniedRoseAt = at;
+  else if (count <= 0) deniedRoseAt = undefined;
+  denied = Math.max(0, count);
+}
+
+/** Whole seconds since the denied count last rose; undefined when none is shown or none was seen rising. */
+export const denyAgeSecs = (now: number): number | undefined => (denied > 0 && deniedRoseAt !== undefined ? Math.max(0, Math.floor((now - deniedRoseAt) / 1000)) : undefined);
 
 export function noteMeasure(e: MeasureLike, at: number): void {
   const { tokens, percent, window } = e.context;

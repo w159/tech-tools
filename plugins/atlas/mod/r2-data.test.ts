@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { Run, Ui } from './atlas-ui';
 import { dataInk } from './atlas-ui';
 import { newKindHold, stepKind } from './band-motion';
-import { bandSegments } from './band-segments';
+import { bandFrameRuns } from './band-frame';
 import { eventBuckets, noteHook, resetHookLog } from './hook-log';
 import { bandLines, runsText, runStateOf, type MissionModel } from './mission-layout';
 import { healthCardRows } from './hud-surface';
@@ -16,6 +16,8 @@ import { gatesTotal } from './vocab';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (rs: readonly Run[]): string => rs.map((x) => x.t).join('');
+/** The band's row for a health (v1 frame spec): the idle frame at the closed-pane width. */
+const frameRow = (h: Health, cols = 145): Run[] => bandFrameRuns({ cols, ui, cap: [{ t: '◖ ◆ ATLAS ◗', tone: 'accent' }], kind: 'idle', clockMs: 0, spin: '◐', still: true, phase: { word: '', n: 0, of: 6 }, health: h });
 const GLYPHS = /^[⣀⣄⣤⣦⣶⣷⣿▁▂▃▄▅▆▇█]+$/; // braille (panel, card) and the band's eighth blocks
 /** The spark's cells of a row: the leading runs that are braille. */
 const sparkText = (rs: readonly Run[]): string => text(rs.filter((x) => GLYPHS.test(x.t)));
@@ -45,15 +47,16 @@ describe('D4: gates report denials', () => {
   const health = (checks: ReturnType<typeof chk>[], over: Partial<Health> = {}): Health => ({ gates: { total: checks.length, green: checks.filter((c) => c.ok).length, checks }, upSecs: 36, button: true, ...over });
   const okH = health([chk('routing', 8, 8), chk('tripwire', 3, 3), chk('header', 0, 0)]);
   const badH = health([chk('routing', 8, 8), chk('completion', 3, 1), chk('header', 0, 0)]);
-  const seg = (h: Health): Run[] => bandSegments(h, ui).find((s) => s.id === 'gates')!.runs;
+  const chipOf = (h: Health, needle: RegExp): Run[] => frameRow(h).filter((x) => needle.test(x.t));
 
-  test('band: ok is a green dot and `gates ok`; a gate that never fired changes nothing', () => {
-    expect(text(seg(okH)).trimEnd()).toBe('● gates ok'); // round 2 D9: the slot is padded to a fixed width
-    expect(seg(okH)[0]!.tone).toBe('ok');
+  test('band: ok is `● gates ok` on the chip; a gate that never fired changes nothing', () => {
+    expect(text(frameRow(okH))).toContain('● gates ok');
+    expect(chipOf(okH, /gates ok/)).toHaveLength(1);
   });
-  test('band: denials read `✗ N denied` in the bad tone', () => {
-    expect(text(seg(badH)).trimEnd()).toBe('✗ 2 denied');
-    expect(seg(badH).filter((x) => x.t.trim() !== '').every((x) => x.tone === 'bad')).toBe(true);
+  test('band: denials read `■ N denied` on the red alert chip', () => {
+    expect(text(frameRow(badH))).toContain('■ 2 denied');
+    const c = chipOf(badH, /denied/)[0]!;
+    expect(c.bgHex).toBe('#5f0000'); // xterm 52: the alert fill
   });
   test('row form: pass and deny counts; a gate that never fired is grey `not fired`', () => {
     const a = gateOf(chk('routing', 8, 8), ui);
@@ -81,7 +84,7 @@ describe('D4: gates report denials', () => {
     const gateRatio = /(gates?|routing|tripwire|completion|header)[^\n]*\d+\/\d+/;
     const panel = bodyLines(panelWorld('route', 57, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: 0 }, health: badH, expanded: 'health:gates' } as never)).map(lineText);
     const all = [
-      text(seg(okH)), text(seg(badH)),
+      text(frameRow(okH)), text(frameRow(badH)),
       ...healthRows(badH, ui).map((x) => text(x.runs)),
       ...healthDetail(badH, 'gates'),
       ...healthCardRows(badH, { cols: 110, ui }).map(text),
@@ -114,11 +117,11 @@ describe('D5: one wall-clock event series on a fixed scale', () => {
   test('band 8, panel 20 and card 28 cells are the last N of the same series', () => {
     const events = Array.from({ length: BUCKETS }, (_, i) => (i % 5 === 0 ? 1 : i % 7 === 0 ? 3 : 0));
     const h: Health = { gates: { total: 0, green: 0, checks: [] }, pulse: { events, ctx: [], runs: [] } };
-    const band = sparkText(bandSegments(h, ui).find((s) => s.id === 'events')!.runs);
+    const band = sparkText(frameRow(h, 145).filter((x) => /^[▁-█]+$/.test(x.t)));
     const sparkOfRow = (w: number): string => sparkText(healthRows(h, ui, { sparkW: w }).find((x) => x.id === 'events')!.runs);
     const panel = sparkOfRow(20);
     const card = sparkOfRow(28);
-    expect(band.length).toBe(8);
+    expect(band.length).toBe(20); // v1 frame spec: 20 cells at the wide band
     expect(panel.length).toBe(20);
     expect(card.length).toBe(28);
     // the band draws eighth blocks (round 3, E10), the panel and card braille: the same series, so the baseline cells (`▁` / `⣀`) fall on the same samples

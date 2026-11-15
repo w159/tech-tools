@@ -44,37 +44,35 @@ const SPARK = /[▁-█]+/;
 
 describe('D2: the head', () => {
   for (const cols of [150, 110]) {
-    test(`(a) working at ${cols}: phase and count in the 24-cell slot (the tool gives way to the count), no clock`, () => {
+    test(`(a) working at ${cols}: the phase word with n/6 in the 17-cell head, the newest tool in the detail slot, no clock`, () => {
       const row = first(model('working', cols));
-      expect(row).toMatch(/[◐◓◑◒] implement · 3 tools/);
+      expect(row).toMatch(/[◐◓◑◒] implement 5\/6 +Bash +│/);
       expect(row).not.toMatch(/\d:\d\d/);
     });
-    test(`(a) working at ${cols}: one tool reads \`1 tool\`, no known tool omits that part, a short phase keeps both`, () => {
-      expect(first(model('working', cols, {}, { hooks: hooks({ runTools: 1 }) }))).toMatch(/implement · 1 tool\b(?!s)/);
-      expect(first({ ...model('working', cols), snapshot: snap({ phase: 'test' }) })).toMatch(/test · Bash · 3 tools/);
-      const none = first(model('working', cols, {}, { hooks: hooks({ runTool: undefined }) }));
-      expect(none).toMatch(/implement · 3 tools/);
-      expect(none).not.toMatch(/Bash/);
+    test(`(a) working at ${cols}: no known tool leaves the detail slot blank, a tool name is clipped to its 10 cells`, () => {
+      expect(first(model('working', cols, {}, { hooks: hooks({ runTool: undefined }) }))).toMatch(/implement 5\/6 {5,}│/);
+      expect(first(model('working', cols, {}, { hooks: hooks({ runTool: 'a_very_long_tool_name_indeed' }) }))).toMatch(/implement 5\/6 +a_very_lo… +│/);
     });
-    test(`(b) done at ${cols}: \`● done 0:05\` with no separator`, () => {
+    test(`(b) done at ${cols}: \`● done 6/6\` and \`ended 1s\`, no run clock`, () => {
       const row = first(model('done', cols));
-      expect(row).toMatch(/● done 0:05(?! ·)/);
-      expect(row).not.toMatch(/done ·/);
+      expect(row).toMatch(/● done 6\/6 +ended 1s +│/);
+      expect(row).not.toMatch(/\d:\d\d/);
     });
-    test(`run time appears once per frame (done only) at ${cols}`, () => {
-      for (const k of KINDS) expect((rows(model(k, cols)).join('\n').match(/\d:\d\d/g) ?? []).length).toBe(k === 'done' ? 1 : 0);
+    test(`the run clock appears nowhere on the band at ${cols} (the idle head's uptime is the one \`m:ss\`)`, () => {
+      for (const k of KINDS) expect((rows(model(k, cols)).join('\n').match(/\d:\d\d/g) ?? []).length).toBe(k === 'idle' ? 1 : 0);
     });
   }
-  test('(c) idle head is seconds since the last hook event and advances with it', () => {
+  test('(c) idle head is `up M:SS`; the newest hook event is the `last` extra and advances with it', () => {
     const at = (s: number): string => first(model('idle', 150, {}, { hooks: hooks({ lastEventSecs: s }) }));
-    expect(at(12)).toMatch(/○ idle 12s(?!\w)/);
-    expect(at(13)).toMatch(/○ idle 13s(?!\w)/);
-    expect(at(65)).toMatch(/○ idle 1m 05s/);
-    expect(at(12)).not.toMatch(/\d:\d\d/);
+    expect(at(12)).toMatch(/◌ idle up 0:09/);
+    expect(at(12)).toMatch(/last 12s(?!\w)/);
+    expect(at(13)).toMatch(/last 13s(?!\w)/);
+    expect(at(65)).toMatch(/last 1m5s|last 1m/);
   });
-  test('idle with no event seen reads `○ idle` alone', () => {
+  test('idle with no event seen draws no `last` extra', () => {
     const row = first(model('idle', 150, {}, { hooks: hooks({ lastEventSecs: undefined }) }));
-    expect(row).toMatch(/○ idle(?! \d)/);
+    expect(row).toMatch(/◌ idle up/);
+    expect(row).not.toContain('last');
   });
 });
 
@@ -110,59 +108,55 @@ describe('D9: fixed slots', () => {
   });
 });
 
-describe('D10: narrowing', () => {
+describe('D10: narrowing (frame spec 2.7: extras from the end, the spark shrinks 20/10/5 then gives way to the count, the head stays)', () => {
   const WIDTHS = Array.from({ length: 111 }, (_, i) => 150 - i); // 150 down to 40, every width
   const feats = (cols: number, k: Kind) => {
     const row = first(model(k, cols));
     const spark = (row.match(SPARK)?.[0] ?? '').length;
-    return { row, ctx: /ctx \d+%/.test(row), rate: /\d+\/5m/.test(row), spark, chip: row.includes('▸ health'), head: /○ idle|[◐◓◑◒] |● done/.test(row) };
+    return { row, ctx: /ctx +\d+%/.test(row), rate: /\d+ ev\/5m/.test(row), count: /\d+\/5m/.test(row), spark, chip: row.includes('▸ health'), head: /◌ idle|[◐◓◑◒] |● done/.test(row) };
   };
-  for (const k of KINDS) test(`(g) ${k}: ctx goes first, then the rate text, then the spark shrinks 8 to 4; head and chip stay`, () => {
+  for (const k of KINDS) test(`(g) ${k}: ctx goes before the spark gives way; the head stays and no row is wider than its band`, () => {
     const f = WIDTHS.map((c) => feats(c, k));
-    expect(f[0]).toMatchObject({ ctx: true, rate: true, spark: 8 });
+    expect(f[0]).toMatchObject({ ctx: true, rate: true, spark: 20 });
     for (const [i, x] of f.entries()) {
       expect(textWidth(x.row)).toBeLessThanOrEqual(WIDTHS[i]!);
-      expect(x.chip && x.head).toBe(true);
-      if (!x.ctx) expect(f.slice(i).every((y) => !y.ctx)).toBe(true); // once gone, gone
-      if (x.ctx) expect(x.rate && x.spark === 8).toBe(true); // ctx outlasts nothing: it is the first to go
-      if (!x.rate) expect(x.ctx).toBe(false);
-      if (x.spark < 8) expect(x.rate).toBe(false);
+      expect(x.head).toBe(true);
+      if (x.spark === 20) expect(x.ctx).toBe(true);
     }
-    expect(f.some((x) => !x.ctx && x.rate)).toBe(true);
-    expect(f.some((x) => !x.rate && x.spark === 8)).toBe(true);
-    expect(f.some((x) => x.spark === 4)).toBe(true);
     const at = (c: number) => f[WIDTHS.indexOf(c)]!;
-    expect(at(110)).toMatchObject({ ctx: true, rate: true, spark: 8 });
-    expect(at(84)).toMatchObject({ ctx: true, rate: true, spark: 8 }); // round 3 (E10): the state slot shrinks to its minimum before ctx goes
-    expect(at(78)).toMatchObject({ ctx: false, rate: true, spark: 8 });
-    expect(at(66)).toMatchObject({ ctx: false, rate: false, spark: 8 });
-    expect(at(60).spark).toBeLessThan(8);
+    expect(at(110)).toMatchObject({ ctx: true, rate: true, spark: 10, chip: true });
+    expect(at(100)).toMatchObject({ ctx: true, rate: true, spark: 10, chip: true });
+    expect(at(96)).toMatchObject({ ctx: false, rate: true, spark: 10, chip: true });
+    expect(at(86)).toMatchObject({ rate: false, count: true, spark: 0, chip: true }); // one cell short of the 10-cell spark: the count alone
+    expect(at(84).spark).toBe(5);
+    expect(at(62)).toMatchObject({ rate: false, count: false, chip: true });
+    expect(f.filter((x) => x.spark === 20 && !x.ctx)).toEqual([]);
   });
   test('the state head never depends on width: same kind at every width', () => {
     for (const c of WIDTHS) {
-      expect(feats(c, 'idle').row).toMatch(/○ idle/);
+      expect(feats(c, 'idle').row).toMatch(/◌ idle/);
       expect(feats(c, 'working').row).toMatch(/[◐◓◑◒] /);
       expect(feats(c, 'done').row).toMatch(/● done/);
     }
   });
 });
 
-describe('D1 (band half): the chip with the side panel up', () => {
-  const press = (b: BandModel, on: BandHandlers): void => {
+describe('D1 (band half): the chips', () => {
+  const press = (b: BandModel, on: BandHandlers, key: string): void => {
     const root = bandTree(els, b, on) as unknown as Node;
-    const btn = all(root).find((n) => n.kind === 'Button' && String(n.props.key) === 'band:health')!;
+    const btn = all(root).find((n) => n.kind === 'Button' && String(n.props.key) === key)!;
     btn.props.onPress();
   };
-  test('(h) panel open: the press opens the panel gates row and never toggles the card', () => {
+  test('(h) pane closed: the health chip toggles the card, the gates chip opens the pane on its gates tab', () => {
     const calls: string[] = [];
-    const on: BandHandlers = { ...handlers, toggleHealth: () => calls.push('card'), openHealthInPanel: () => calls.push('panel') };
-    press(model('idle', 150, {}, { panel: true }), on);
-    expect(calls).toEqual(['panel']);
+    const on: BandHandlers = { openView: (v: string) => calls.push(`view:${v}`), toggleTodos() {}, toggleHealth: () => calls.push('card') };
+    press(model('idle', 150), on, 'band:health');
+    press(model('idle', 150), on, 'band:gates');
+    expect(calls).toEqual(['card', 'view:gates']);
   });
-  test('(h) panel closed: the press toggles the card', () => {
-    const calls: string[] = [];
-    const on: BandHandlers = { ...handlers, toggleHealth: () => calls.push('card'), openHealthInPanel: () => calls.push('panel') };
-    press(model('idle', 150), on);
-    expect(calls).toEqual(['card']);
+  test('(h) pane open: the band draws no health chip, so a card can never open beside the panel; the gates chip stays', () => {
+    const root = bandTree(els, model('idle', 150, {}, { panel: true }), handlers) as unknown as Node;
+    const keys = all(root).filter((n) => n.kind === 'Button').map((n) => String(n.props.key));
+    expect(keys).toEqual(['band:gates']);
   });
 });

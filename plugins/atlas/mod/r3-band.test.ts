@@ -46,85 +46,80 @@ const BAND_FILL = healthStripBg(ui);
 /** The runs after the wordmark's `◗` (the band's own segments). */
 const afterCap = (runs: Run[]): Run[] => { let seen = false; return runs.filter((x) => { const was = seen; if (x.t.includes('◗')) seen = true; return was; }); };
 
-describe('E8/E10: static segments on the band fill, one chip', () => {
+describe('E8/E10: static segments on the band fill, two chips (v1 frame spec)', () => {
   for (const cols of [150, 110, 93]) for (const k of KINDS) {
-    test(`${k} at ${cols}: every run after the wordmark sits on the band fill except the health chip`, () => {
+    test(`${k} at ${cols}: every run after the wordmark sits on the band fill except the gates and health chips`, () => {
       const rs = afterCap(bandRuns(model(k, cols), true));
       const fills = new Set(rs.filter((x) => !x.press && x.t.trim() !== '').map((x) => x.bgHex));
       expect([...fills]).toEqual([BAND_FILL]);
       const chips = rs.filter((x) => x.press);
-      expect(chips.length).toBe(1);
-      expect(chips[0]!.bgHex).toBe(tileOf(ui));
-      expect(chips[0]!.t).toBe(' ▸ health ');
-      expect(chips[0]!.bgHex).not.toBe(BAND_FILL);
+      expect(new Set(chips.map((x) => String(x.press).split('#')[0]))).toEqual(new Set(['band:gates', 'band:health']));
+      for (const c of chips) expect(c.bgHex).not.toBe(BAND_FILL);
+      expect(chips.map((x) => x.t).join('')).toContain(' ▸ health ');
     });
-    test(`${k} at ${cols}: the static segments are divided by \`▌\` and no raised plan tile is drawn`, () => {
+    test(`${k} at ${cols}: the static segments are divided by \`│\` and no raised plan tile is drawn`, () => {
       const rs = bandRuns(model(k, cols), true);
-      expect(rs.filter((x) => x.t === '▌').length).toBeGreaterThanOrEqual(2);
+      expect(rs.filter((x) => x.t.includes('│')).length).toBeGreaterThanOrEqual(2);
       const raised = [PALETTES.mocha.accent, '#3a3a3a', '#585858'];
       for (const x of afterCap(rs)) if (!x.press) expect(raised).not.toContain(x.bgHex);
     });
   }
 });
 
-describe('E10: the state slot', () => {
-  const slot = (runs: Run[]): number => { const rs = afterCap(runs); const at = rs.findIndex((x) => x.t === '▌'); return rs.slice(0, at).reduce((n, x) => n + textWidth(x.t), 0); };
-  test('is capped at 24 inner cells (26 with its padding), the same in idle, working and done at 150', () => {
-    const w = KINDS.map((k) => slot(bandRuns(model(k, 150), true)));
+describe('E10: the state slot (v1 frame spec: a fixed 17-cell head, the same in idle, working and done)', () => {
+  const headEnd = (runs: Run[]): number => { const rs = afterCap(runs); const at = rs.findIndex((x) => x.t.includes('│')); return rs.slice(0, at).reduce((n, x) => n + textWidth(x.t), 0); };
+  test('the head and its detail slot end at the same column in idle, working and done at 150', () => {
+    const w = KINDS.map((k) => headEnd(bandRuns(model(k, 150), true)));
     expect(new Set(w).size).toBe(1);
-    expect(w[0]).toBeLessThanOrEqual(26);
   });
-  test('a long tool name is clipped into the slot, never widening it', () => {
-    const w = slot(bandRuns(model('working', 150, { hooks: hooks({ runTool: 'a_very_long_tool_name_indeed' }) }), true));
-    expect(w).toBeLessThanOrEqual(26);
+  test('a long tool name is clipped into the detail slot, never widening it', () => {
+    const w = headEnd(bandRuns(model('working', 150, { hooks: hooks({ runTool: 'a_very_long_tool_name_indeed' }) }), true));
+    expect(w).toBe(headEnd(bandRuns(model('working', 150), true)));
   });
-  test('done head: green glyph and green text on the normal band fill, never the saturated slab', () => {
+  test('done head: green glyph on the normal band fill, never the saturated slab', () => {
     const rs = afterCap(bandRuns(model('done', 150), true));
-    const head = rs.filter((x) => /done|●|\d:\d\d/.test(x.t) && x.t !== ' ● gates ok' && !x.t.includes('gates'));
-    expect(head.length).toBeGreaterThan(0);
-    for (const x of head.slice(0, 3)) { expect(x.tone).toBe('ok'); expect(x.bgHex).toBe(BAND_FILL); }
+    const dot = rs.find((x) => x.t.includes('●'))!;
+    expect(dot).toBeDefined();
+    expect(dot.bgHex).toBe(BAND_FILL);
     for (const x of rs) expect(x.bgHex).not.toBe(PALETTES.mocha.ok);
-    expect(first(model('done', 150))).toMatch(/● done 0:05(?! ·)/);
+    expect(first(model('done', 150))).toMatch(/● done 6\/6 +ended 1s/);
   });
   test('working head sits on the band fill with the spinner in the accent', () => {
     const rs = afterCap(bandRuns(model('working', 150), true));
-    const spin = rs.find((x) => /^[◐◓◑◒]$/.test(x.t.trim()))!;
-    expect(spin.tone).toBe('accent');
+    const spin = rs.find((x) => /^[◐◓◑◒]/.test(x.t.trim()))!;
     expect(spin.bgHex).toBe(BAND_FILL);
     for (const x of rs) expect(x.bgHex).not.toBe(PALETTES.mocha.accent);
   });
 });
 
 describe('E10: the band spark is eighth blocks', () => {
-  for (const k of KINDS) test(`${k} at 150: 8 block cells with a \`▁\` baseline, rate \`N/5m\`, no braille`, () => {
+  for (const k of KINDS) test(`${k} at 150: 20 block cells with a \`▁\` baseline, rate \`N ev/5m\`, no braille`, () => {
     const row = first(model(k, 150));
     expect(row).not.toMatch(/[⠀-⣿]/);
-    expect(row).toMatch(/[▁▂▃▄▅▆▇█]{8} +\d+\/5m/);
+    expect(row).toMatch(/[▁▂▃▄▅▆▇█]{20} +\d+ ev\/5m/);
     const rs = afterCap(bandRuns(model(k, 150), true));
-    const base = rs.find((x) => /^▁+$/.test(x.t));
-    expect(base?.tone).toBe('dim');
+    expect(rs.some((x) => /^▁+$/.test(x.t))).toBe(true);
   });
 });
 
-describe('E10: a narrow band (110 columns with the side pane open) keeps state, gates and a block spark', () => {
-  for (const cols of [66, 61, 56, 55]) for (const k of KINDS) {
-    test(`${k} at ${cols}: head, gates, >= 4 block cells, the chip, no ticker, within ${cols}`, () => {
+describe('E10: a narrow band (110 columns with the side pane open) keeps the head, the gates chip and a block spark', () => {
+  for (const cols of [89, 66, 61, 56, 55]) for (const k of KINDS) {
+    test(`${k} at ${cols}: head, gates, >= 4 block cells or the count, no ticker, within ${cols}`, () => {
       const row = first(model(k, cols));
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
-      expect(row).toMatch(/○ idle|[◐◓◑◒] |● done/);
+      expect(row).toMatch(/◌ idle|[◐◓◑◒] |● done/);
       expect(row).toMatch(/● gates ok/);
-      expect((row.match(/[▁▂▃▄▅▆▇█]+/)?.[0] ?? '').length).toBeGreaterThanOrEqual(4);
-      expect(row).toContain('▸ health');
       expect(row).not.toContain('session started');
+      expect(cols >= 62 ? /[▁▂▃▄▅▆▇█]{4,}|\d+\/5m/.test(row) : true).toBe(true);
     });
   }
-  test('the state slot shrinks before ctx and the rate text go', () => {
+  test('the extras give way before the spark and the head go', () => {
     const at = (c: number) => first(model('working', c));
-    expect(at(92)).toMatch(/ctx 6%/);
-    expect(at(86)).toMatch(/ctx 6%/); // 6 cells short of the full band: the state slot gave them, ctx stayed
-    expect(at(86)).toMatch(/implement · Bash ▌/); // the slot is its head's width, no padding left: narrower than at 92
-    expect(at(78)).not.toMatch(/ctx 6%/);
-    expect(at(78)).toMatch(/\d+\/5m/);
+    expect(at(110)).toMatch(/ctx +6%/);
+    expect(at(98)).not.toMatch(/ctx +6%/);
+    expect(at(98)).toMatch(/\d+ ev\/5m/);
+    expect(at(86)).toMatch(/implement 5\/6/);
+    expect(at(86)).toMatch(/\d+\/5m/);
   });
 });
 

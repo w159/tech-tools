@@ -12,7 +12,7 @@ export type HealthLast = { secs?: number; done: number; total: number; agents: n
 /** One gate group: its mark, and (from the gate groups the mod reads) how many of its lines pass and the first line's own words. */
 export type HealthCheck = { id: string; ok: boolean; pending?: boolean; title?: string; lines?: number; pass?: number; note?: string };
 export type Health = {
-  gates: { total: number; green: number; checks: readonly HealthCheck[] };
+  gates: { total: number; green: number; checks: readonly HealthCheck[]; /** Denied calls over the failing gate lines (vocab.deniedCalls); absent: the band counts failing lines. */ denied?: number };
   /** Context used, 0..100; absent when unknown. Both this and `tokens` are the host's measure of the LAST response (`session.measure` context.percent / context.tokens): the input side now in the window, not a session total. */
   ctxPct?: number;
   /** Input tokens the last response was answered over (the figure `ctxPct` is a share of). */
@@ -33,12 +33,14 @@ export type Health = {
   team?: string;
   /** The observed-only history (pulse.ts) the events, context and runs rows draw their shapes from; absent: flat baselines and `—`. */
   pulse?: Pulse;
+  /** Seconds since the denied count last rose (pulse.denyAgeSecs); absent when no denial has been seen. The band's gates chip reads red for DENY_RED_SECS after it. */
+  denyAgeSecs?: number;
   /** The side panel is drawn beside the transcript: it already says the gates, the uptime, the context, the events and the last run, so the band and the card say only what it does not. */
   panel?: boolean;
 };
 
 /** The raw inputs register.ts hands the band; band.tsx completes them from the snapshot, the gates and the run clocks. */
-export type HealthIn = { panel?: boolean; /** The observed history (pulse.ts pulseOf); absent until register.ts wires it: the band then draws no events spark. */ pulse?: Pulse; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
+export type HealthIn = { panel?: boolean; /** Seconds since the denied-call count last rose (pulse.denyAgeSecs). */ denyAgeSecs?: number; /** The observed history (pulse.ts pulseOf); absent until register.ts wires it: the band then draws no events spark. */ pulse?: Pulse; upSecs?: number; version?: string; branch?: string; tokens?: number | null; window?: number | null; hooks?: HookStats; open?: boolean };
 
 const r = (t: string, tone: Run['tone'] = 'text', o: Partial<Run> = {}): Run => ({ t, tone, ...o });
 const glue = (): Run => r(' · ', 'sub');

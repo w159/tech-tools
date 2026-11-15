@@ -11,6 +11,7 @@ import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } fro
 import { agentTally, hudAgents, planProgress } from './hud';
 import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
+import { deniedCalls } from './vocab';
 import { gateTally, leadBusy, planBusy, ranWorkers, STOP_LINE, withCoreTally } from './data/runstate';
 import { fillHex, hostEnv, LINGER_MS, preImage, spinClock, surfaceHex, uiFromEnv, xtermHex, type Ui, runHex } from './atlas-ui';
 import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
@@ -24,6 +25,7 @@ import { chipText, STRIP_TABS } from './panel-layout';
 import { fitText, textWidth } from './theme';
 import { chipStyle, hoverStyle } from './clickable';
 import type { Health, HealthIn } from './idle-health';
+import { BAND_GATES_KEY } from './band-frame';
 
 export { planRows } from './mission-layout';
 
@@ -38,8 +40,8 @@ export type BandModel = { /** Wave 42: idle health inputs (uptime, version, bran
 const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
-/** Footer button presses: open (or focus) the Atlas pane on a view, or open the Board pane (`toggleTodos`, the `o` key). Absent in fixtures that wire neither. */
-export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; /** Wave 42: the `▸ health` button opens and closes the HUD's health card. */ toggleHealth?(): void; /** Round 2 (D1): with the side panel up the `▸ health` chip opens the panel's status tab with its gates row expanded instead of the card. */ openHealthInPanel?(): void };
+/** Press handlers: `openView` opens (or focuses) the Atlas pane on a view (the gates chip, and the footer tabs); `toggleTodos` opens the Board pane; `toggleHealth` opens and closes the HUD's health card (the `▸ health` chip, drawn only while the pane is closed). Absent in fixtures that wire neither. */
+export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; toggleHealth?(): void };
 /** The band's controls: click chips, one per tab of the side panel's strip (wave 43: no key letters are drawn or bound). */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
 const buttonWidth = (b: { label: string }): number => textWidth(chipText(b.label)); // a chip is its label with a space each side
@@ -147,7 +149,8 @@ function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTa
     return { id: c.id, ok: c.ok, ...(c.pending ? { pending: true as const } : {}), ...(g ? { title: g.title, lines: lines.length, pass: lines.filter((l) => l.ok).length } : {}), ...(note ? { note } : {}) };
   };
   return {
-    gates: { total: tally.total, green: tally.green, checks: tally.checks.map(check) },
+    gates: { total: tally.total, green: tally.green, checks: tally.checks.map(check), denied: deniedCalls(groups) },
+    ...(h.denyAgeSecs !== undefined ? { denyAgeSecs: h.denyAgeSecs } : {}),
     ...(s.contextPct > 0 ? { ctxPct: s.contextPct } : {}),
     ...(typeof h.tokens === 'number' && h.tokens > 0 ? { tokens: h.tokens } : {}),
     ...(typeof h.window === 'number' && h.window > 0 ? { window: h.window } : {}),
@@ -186,7 +189,7 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
   return {
     cols: Math.max(1, b.columns), maxRows: b.maxRows, tick: b.tick, now: spinClock(now, b.tick), // the one spinner clock: the band turns the frame the HUD and the panel turn (critique 19)
     project: boardOf(s), scope: b.team,
-    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), blocked: s.phase === 'blocked', ...(s.phase === 'blocked' ? blockedWhyOf(plan) : {}), ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
+    phases: railFor(s, b.lastPhase).ids, phase: railPhase(s, b.lastPhase), todoPhases: s.contract.todoPhases, leadPhase: s.phase, blocked: s.phase === 'blocked', ...(s.phase === 'blocked' ? blockedWhyOf(plan) : {}), ...(tally.stop?.blocked ? { stopGates: tally.stop.gates.length ? tally.stop.gates : ['stop refused'] } : {}),
     done, total, ...openRows(s, owners), todoBlocked: blockedCount(plan, owners),
     // The host's own `isWorking: false` is the turn end: stale lead or plan marks do not keep the band working past it. An agent the host lists as running (a resumed native agent whose activity record still reads done)
     // or one the HUD draws running keeps it working at every width: the band never reads idle beside a turning spinner (wave 33).
@@ -233,17 +236,18 @@ export function bandRows(m: MissionModel): string[] {
   return bandLines(m).map((l) => l.runs.map((x) => x.t).join(''));
 }
 
-/** A row that holds clickable runs (wave 42, `▸ health`): the runs around a control are Texts, the control is a Button of one Text in the accent with the hover style. */
-function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui, panel = false): RenderElement {
+/** A row that holds clickable runs: the runs around a control are Texts, a control is a Button of one Text with the hover style. The gates chip opens the pane on its gates tab, the `▸ health` chip toggles the card
+ * (band-frame.ts keys); a chip of several pieces keys each `<key>#<n>` and the hover scope is the key before the `#`, so the whole chip lights together. */
+function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui): RenderElement {
   const ss = segs(l, ui);
-  const press = (): void => { if (panel && on.openHealthInPanel) on.openHealthInPanel(); else on.toggleHealth?.(); };
+  const press = (key: string): (() => void) => (key.startsWith(BAND_GATES_KEY) ? () => on.openView('gates') : () => on.toggleHealth?.());
   let left = Math.max(1, cols);
   const children = l.runs.flatMap((x, i): RenderElement[] => {
     const sg = ss[i]!;
     const room = left;
     left -= textWidth(sg.t);
     if (!x.press) return fitRuns(els, [sg], room);
-    return [els.Button({ key: x.press, plain: true, onPress: press, children: [els.Text({ color: sg.color, backgroundColor: sg.bg, bold: true, hover: hoverStyle(ui, x.press), children: fitText(sg.t, room) })] })];
+    return [els.Button({ key: x.press, plain: true, onPress: press(x.press), children: [els.Text({ color: sg.color, backgroundColor: sg.bg, bold: true, hover: hoverStyle(ui, x.press.split('#')[0]!), children: fitText(sg.t, room) })] })];
   });
   return els.Box({ flexDirection: 'row', flexShrink: 0, children });
 }
@@ -280,7 +284,7 @@ const panel = (els: ClientElements, rows: Row[], cols: number, ui: Ui): RenderEl
 /** Any MissionModel as the band tree (the shared-world goldens and the renderer feed models directly). */
 export function missionTree(els: ClientElements, m: MissionModel, todoRows: (rows: number) => Segment[][] = () => [], on?: BandHandlers): RenderElement {
   const ui = m.ui ?? uiFromEnv();
-  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui, !!m.health?.panel)] : [segs(l, ui)]));
+  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui)] : [segs(l, ui)]));
   return panel(els, rows, m.cols, ui);
 }
 
@@ -336,7 +340,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
     if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
-    if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui, !!m.health?.panel)];
+    if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });
   return panel(els, rows, cols, ui);

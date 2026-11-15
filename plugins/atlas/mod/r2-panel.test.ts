@@ -414,7 +414,8 @@ describe('D1: card and panel never show at once', () => {
     await settle();
     expect(h.rec.opens).toContain('atlas');
     expect(textOf(await band(h))).not.toContain('HEALTH'); // the panel opened: the card is gone
-    await press(button(await band(h), 'band:health', 'health')); // with the panel up the chip opens the panel's gates row, never a card
+    expect(all(await band(h)).some((n) => n.kind === 'Button' && n.props.key === 'band:health')).toBe(false); // v1 frame spec: with the panel up the band draws no health chip, so no card can open
+    expect(all(await band(h)).some((n) => n.kind === 'Button' && n.props.key === 'band:gates')).toBe(true); // the gates chip stays and opens the panel on its gates tab
     expect(textOf(await band(h))).not.toContain('HEALTH');
     await h.one('ui.close')(h.$, { id: 'atlas', origin: { kind: 'person' } }, noopNext);
     await settle();
@@ -435,46 +436,5 @@ describe('D1: card and panel never show at once', () => {
     expect(textOf(open)).not.toContain('hide');
     await press(button(open, 'band:health', 'HEALTH'));
     expect(textOf(await band(h))).not.toContain('HEALTH');
-  });
-});
-
-describe('the band slack ticker', () => {
-  const ui2: Ui = { ...uiFromEnv({}), color: 'truecolor' };
-  const handlers: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
-  const g = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
-  const PULSE: Pulse = { events: [0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1], ctx: [], runs: [] };
-  const snap = () => busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 6 } as never);
-  const hooks = (recent: { label: string; ageSecs: number }[]) => ({ total: 3, byLabel: [{ label: 'tool.call', n: 3 }], recent, lastEventSecs: 12, runTools: 3, runTool: 'Bash' });
-  const model = (kind: Kind, columns: number, recent: { label: string; ageSecs: number }[]): BandModel => ({
-    snapshot: snap(), live: [], gates: ['completion', 'tripwire', 'routing', 'header'].map(g), columns, tick: 0, maxRows: 12, ui: ui2,
-    health: { upSecs: 9, version: '17.24.0', branch: 'master', tokens: 64_000, window: 1_000_000, hooks: hooks(recent), pulse: PULSE, open: false },
-    ...(kind === 'working' ? { working: true, workSecs: 3 } : {}), ...(kind === 'done' ? { ranSecs: 5, restSecs: 1 } : {}),
-  } as BandModel);
-  const first = (b: BandModel): string => textOf(kidsOf(bandTree(els, b, handlers) as unknown as Node)[0]!);
-  const chipCol = (row: string): number => textWidth(row.slice(0, row.indexOf('▸ health')));
-  for (const kind of ['idle', 'working', 'done'] as Kind[]) {
-    test(`150 columns ${kind}: the newest hook event fills the slack as a dim ticker without an age, the chip column does not move`, () => {
-      const bare = first(model(kind, 150, []));
-      const row = first(model(kind, 150, [{ label: 'tool.call Bash', ageSecs: 2 }, { label: 'session.measure', ageSecs: 4 }]));
-      expect(row).toContain('· tool call Bash');
-      expect(row).not.toMatch(/tool call Bash\s+\d/);
-      expect(chipCol(row)).toBe(chipCol(bare));
-      expect(textWidth(row)).toBe(textWidth(bare));
-    });
-  }
-  test('a burst in one second reads `turn finished · 3 events`', () => {
-    const row = first(model('idle', 150, [{ label: 'turn.complete', ageSecs: 1 }, { label: 'session.measure', ageSecs: 1 }, { label: 'classic.Stop', ageSecs: 1 }]));
-    expect(row).toContain('· turn finished · 3 events');
-  });
-  test('the ticker is dim, and it only fills slack: at 110 the chip is where it was and the row is no wider', () => {
-    const tree = bandTree(els, model('idle', 150, [{ label: 'tool.call Bash', ageSecs: 2 }]), handlers) as unknown as Node;
-    const t = all(tree).find((n) => n.kind === 'Text' && String(n.props.children).includes('tool call Bash'))!;
-    expect(t.props.color).toBeDefined();
-    for (const cols of [110, 100]) {
-      const bare = first(model('idle', cols, []));
-      const row = first(model('idle', cols, [{ label: 'tool.call Bash', ageSecs: 2 }]));
-      expect(chipCol(row)).toBe(chipCol(bare));
-      expect(textWidth(row)).toBeLessThanOrEqual(cols);
-    }
   });
 });

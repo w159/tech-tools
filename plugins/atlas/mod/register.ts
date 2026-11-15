@@ -16,8 +16,9 @@ import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot } from './slot';
 import { healthCardRows } from './hud-surface';
 import { healthLine, type HealthIn } from './idle-health';
-import { hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
-import { noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
+import { hookDone, hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
+import { denyAgeSecs, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
+import { deniedCalls } from './vocab';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
@@ -871,7 +872,10 @@ async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthI
 	const usage = await read($, usageState);
 	const panelUp = await read($, paneOpenedState);
 	if (panelUp) healthOpenNow = false; // round 2 (D1): card and panel never show at once; a card open when the panel opens is closed (and stays closed when the panel closes)
+	noteDenied(deniedCalls(await gateGroups($)), clockNow); // N3: the gates chip reads red until DENY_RED_SECS after the denied count last rose
+	const denyAge = denyAgeSecs(clockNow);
 	return {
+		...(denyAge !== undefined ? { denyAgeSecs: denyAge } : {}),
 		...(sessionStartMs !== null ? { upSecs: Math.max(0, Math.floor((clockNow - sessionStartMs) / 1000)) } : {}),
 		...(pluginVersion ? { version: pluginVersion } : {}),
 		...(branchName ? { branch: branchName } : {}),
@@ -898,8 +902,6 @@ function bandHandlers($: EngineInterface): BandHandlers {
 			}),
 		toggleTodos: () => guarded(() => openBoard($)),
 		toggleHealth: () => guarded(() => { healthOpenNow = !healthOpenNow; return update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; }); }),
-		// Round 2 (D1): with the side panel up the chip shows the panel's status tab with its gates row open; the card stays shut (card and panel never show at once).
-		openHealthInPanel: () => guarded(async () => { healthOpenNow = false; await update($, viewState, () => 'route'); await update($, expandedState, () => 'health:gates'); return update($, spinnerTickState, (n) => { beatFrame = n + 1; return n + 1; }); }),
 	};
 }
 
@@ -1329,10 +1331,12 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		stopSeen = false; // a new prompt (or a background task's notification) starts a new turn
 		stopRefused = false;
 		const opening = dockOnPrompt($);
-		noteHook('prompt.submit', await hookStamp($));
+		const at = await hookStamp($);
+		noteHook('prompt.submit', at);
 		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') { armedAt = await $.clock.now().catch(() => null); resumedAt = null; } // a background task's notification is not the person's prompt: it starts no run
 		else { resumedAt = await $.clock.now().catch(() => null); await noteNotified($, (e as { text?: string }).text ?? ''); } // the notification that draws the card also ends the worker in the HUD rows, on this very render
 		await update($, headerPhaseState, () => null).catch(() => undefined); // a person's prompt starts new work: the last reply's header phase is not this run's (a turn.start also fires for subagents and Stop-hook continuations, which keep it)
+		await hookDone($, 'prompt.submit', at); // N1: the mod's own work before it hands the prompt on
 		const out = disciplinePrompt($, e, next, disciplineDeps);
 		await opening;
 		return out;
@@ -1349,7 +1353,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// snapshot, start timers and register commands — interactive sessions only;
 	// headless (-p / SDK) stays inert.
 	on('session.start', async ($, e, next) => {
-		await boot($, e.cwd, e.isInteractive);
+		await boot($, e.cwd, e.isInteractive); // boot time is the session's setup, not a hook's work: no N1 latency sample, so a slow boot never paints the hook p50 amber at idle
 		return next(e);
 	});
 	on('classic.SessionStart', async ($, e, next) => {
@@ -1360,7 +1364,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// A refused Stop is blocked on the update that carries it (critique 28): the completion gate answers `block`, and this hook writes the refusal into the gate groups and bumps the band's
 	// ticks before the host draws its Stop error. The verdict file poll that follows replaces the line with the recorded one.
 	on('classic.Stop', async ($, e, next) => {
-		noteHook('classic.Stop', await hookStamp($));
+		const at = await hookStamp($);
+		noteHook('classic.Stop', at);
+		await hookDone($, 'classic.Stop', at);
 		const r = await next(e);
 		if (!(r && typeof (r as { block?: unknown }).block === 'string') && (await read($, isModOn))) {
 			// An allowed Stop is the turn's end: the band, the HUD and the panel read done on the render this write asks for, and the hook holds its return one frame so that render is on screen before the host's prompt returns
@@ -1400,6 +1406,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 				contextPct: e.context.percent ?? usage.contextPct,
 			}));
 		}
+		await hookDone($, 'session.measure', at);
 		return next(e);
 	});
 
@@ -1408,8 +1415,9 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// turn.complete drift counter); task agents finish per turn; queued
 	// routing-drift lines reach the debug log here, where `$` exists.
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
+		let at: number | undefined;
 		try {
-			if (e.agentId === undefined) noteHook('turn.complete', await hookStamp($));
+			if (e.agentId === undefined) noteHook('turn.complete', (at = await hookStamp($)));
 			if (!(await read($, isModOn))) return next(e);
 			for (const msg of pendingDrift.splice(0)) $.ui.log(msg, { to: 'debug' });
 			if (e.agentId === undefined) {
@@ -1428,6 +1436,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		} catch {
 			// a drift check never blocks the answer
 		}
+		await hookDone($, 'turn.complete', at);
 		return next(e);
 	});
 
