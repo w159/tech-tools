@@ -31,7 +31,7 @@ export function gateLine(name: string, pass: number, total: number, ascii = fals
   const deny = t - p;
   const fired = t > 0;
   const glyph = fired ? (ascii ? '*' : '●') : ascii ? 'o' : '○';
-  const words = fired ? `${p} pass · ${deny} deny` : 'not fired';
+  const words = fired ? `${p} pass ${ascii ? '-' : '·'} ${deny} deny` : 'not fired';
   return { glyph, text: `${glyph} ${name} ${words}`, count: words, tone: !fired ? 'sub' : deny > 0 ? 'bad' : 'ok', pass: p, total: t, deny, fired };
 }
 

@@ -103,7 +103,7 @@ describe('3: a health row opens only when it has real detail', () => {
       expect([id, row.press]).toEqual([id, undefined]);
       expect(lineText(row)).not.toMatch(/[▸▾]/);
     }
-    expect(ls.find((l) => /^ {2}▸ gates/.test(lineText(l)))!.press).toEqual({ kind: 'toggle', key: 'health:gates' });
+    expect(ls.find((l) => /^ {3}▸ gates/.test(lineText(l)))!.press).toEqual({ kind: 'toggle', key: 'health:gates' });
     expect(body(world(57)).join('\n').match(/atlas 17\.21\.1/g)?.length).toBe(1); // the version is said once, in the pinned footer
   });
   test('the session row says the uptime and the branch (slice S4); the version is said once, in the pinned footer', () => {
@@ -121,16 +121,16 @@ describe('3: a health row opens only when it has real detail', () => {
 describe('4: the idle panel ends finished, with live content from real events', () => {
   test('a recent list of the hook events with their ages, then a closing rule', () => {
     const t = body(world(57));
-    const i = t.findIndex((l) => l.includes('recent'));
+    const i = t.findIndex((l) => l.trim() === 'RECENT');
     expect(i).toBeGreaterThan(0);
-    expect(t.slice(i + 1, i + 3).map((l) => l.trim())).toEqual(['12s  tool call Bash', '40s  context measured']); // slice S3: a fixed three-cell age, no `ago`
+    expect(t.slice(i + 1, i + 3).map((l) => l.trim().replace(/\s+/g, ' '))).toEqual(['12s · tool call Bash', '40s · context measured']); // a fixed three-cell age, a severity glyph, no `ago`
     const tail = t.filter((l) => l.trim() !== '');
     expect(tail.at(-2)).toMatch(/^\s+─{20,}$/); // round 2: the rule, then the pinned footer
     expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1 · hooks loaded$/);
   });
   test('with no events the panel still ends in the rule; the recent slots stay (a heading never moves)', () => {
     const t = body(world(57, { health: { ...h, hooks: undefined } }));
-    expect(t.some((l) => l.trim() === 'recent')).toBe(true);
+    expect(t.some((l) => l.trim() === 'RECENT')).toBe(true);
     expect(t.join('\n')).not.toMatch(/\bago\b/);
     const tail = t.filter((l) => l.trim() !== '');
     expect(tail.at(-2)).toMatch(/^\s+─{20,}$/);
@@ -212,10 +212,10 @@ describe('7: the idle band carries one more live figure, the age of the last eve
 });
 
 describe('8: a narrow pane names the stages, it does not print bare dots', () => {
-  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /res .*thy .*tst .*imp .*ver/]] as const) {
-    test(`the idle stepper at ${cols} cells reads ${cols === 54 ? 'whole names' : 'the three-letter stages (slice S3)'}`, () => {
+  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /^ +○ ○ ○ ○ ○ idle$/]] as const) {
+    test(`the idle stepper at ${cols} cells reads ${cols === 54 ? 'whole names' : 'five dots and the stage in words (D12), never `res thy tst`'}`, () => {
       const rows = body(world(cols, { phases: ['research', 'theory', 'test', 'implement', 'verify'], phase: 'research' }));
-      const t = rows[rows.findIndex((l) => l.trim() === 'phase') + 1]!;
+      const t = rows[rows.findIndex((l) => l.trim() === 'PHASE') + 1]!;
       expect(t).toMatch(names);
       expect(t).not.toContain('· · ·');
       expect(textWidth(t)).toBeLessThanOrEqual(cols);
@@ -248,7 +248,7 @@ describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither fo
     expect(String(input.props.label)).not.toMatch(/[▸▾]/);
   });
   test('the `phase` label row is plain text, not a control', () => {
-    const phase = bodyLines(world(57)).find((l) => lineText(l).includes('phase'))!;
+    const phase = bodyLines(world(57)).find((l) => lineText(l).includes('PHASE'))!;
     expect(phase.press).toBeUndefined();
     expect(lineText(phase)).not.toMatch(/[▸▾]/);
   });
@@ -272,9 +272,10 @@ describe('12: the open card is one even block, spaced like the TODO box', () => 
     expect(w[0]).toBe(110);
   });
   test('the title is bold body text, not dimmed', () => {
-    const title = rows[0]!.find((x) => x.t === '▾ HEALTH')!;
-    expect(title.tone).toBe('text');
+    const title = rows[0]!.find((x) => x.t.trim() === '▾ HEALTH')!; // D8: the one collapse control is a chip
+    expect(title.tone).toBe('accent');
     expect(title.bold).toBe(true);
+    expect(title.press).toBe('band:health');
   });
   test('the slot leaves the blank row under the band a HUD block has', () => {
     const card = padRows(healthCardRows(h, { cols: 110, ui }), 110).map((r) => r.map((x) => ({ t: x.t })));

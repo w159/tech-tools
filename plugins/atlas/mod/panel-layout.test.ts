@@ -9,7 +9,7 @@ import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } 
 import { world } from '../contracts/band-world';
 import { cells, runsString, stateWordTone, UI_STATES, type Ui } from './atlas-ui';
 import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, cardLines, headerRows, lineText, PANEL_TABS, panelText, STRIP_TABS, stripLayout, toastText, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, toastText, type PanelModel, type PanelTab } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
@@ -52,11 +52,11 @@ describe('tab strip', () => {
       expect(lineText(next!)).not.toMatch(/━/);
     }
   });
-  test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (it wraps)', () => {
+  test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (trailing tabs fold into `▸ more`, opened they show whole)', () => {
     for (let cols = 29; cols <= 140; cols++) {
-      const rowsOut = headerRows(panelWorld('route', cols, mocha)).slice(2).map(lineText).filter((l) => /^ (status|team|channel|gates|core|board)/.test(l));
+      const rowsOut = headerRows(panelWorld('route', cols, mocha, { expanded: MORE_KEY })).slice(2).map(lineText).filter((l) => /^ (status|team|channel|gates|core|board|▸ more|▾ more)/.test(l) || /^ (status|team|channel|gates|core|board)/.test(l.trimEnd()));
       for (const l of rowsOut) expect(cells(l)).toBeLessThanOrEqual(cols);
-      expect(rowsOut.join(' ').split(/\s+/).filter(Boolean).join(' ')).toBe('status team channel gates core board'); // C1: names only, in order, wrapped whole when the pane is narrower than the row
+      expect(rowsOut.join(' ').split(/\s+/).filter((w) => w && w !== '▸' && w !== '▾' && w !== 'more').join(' ')).toBe('status team channel gates core board'); // names only, in order
     }
   });
 });
@@ -103,8 +103,8 @@ describe('route tab', () => {
     expect(out.length).toBeLessThanOrEqual(21);
     expect(out.some((l) => /\d+ more tasks on the board$/.test(l))).toBe(true);
   });
-  test('names that do not fit the gates row fold to a labelled count', () => {
-    expect(rows('route', 30).find((l) => l.startsWith(' gates ') && !l.includes('core'))).toContain('2/3 green');
+  test('names that do not fit the gates row fold to a labelled figure', () => {
+    expect(rows('route', 30).find((l) => l.startsWith(' gates ') && !l.includes('core'))).toContain('1 denied');
   });
 });
 
@@ -159,7 +159,7 @@ describe('gates tab', () => {
   const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
   test('a group says how many fail in words and shows the first fix', () => {
     const row = rows('gates', 100, { gates: g() }).at(-1)!;
-    expect(row).toMatch(/^▸ △ Completion gate {2}warning run the hooks suite +1\/2$/);
+    expect(row).toMatch(/^▸ △ Completion gate {2}warning run the hooks suite +1 pass · 1 deny$/);
     expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });
   test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {
@@ -231,12 +231,12 @@ describe('core tab', () => {
       expect(out).toMatch(/(\d+) verified|verified \d+ of \d+/); // the live scorer's verdict-line pattern (tools/live_capture.py)
     }
   });
-  test('B3: the gates figure is n/m in the route tab and on the group row, as the header has it', () => {
+  test('B3: the gates figure is `N denied` in the route tab and `1 pass · 1 deny` on the group row, never a ratio', () => {
     const gates = [{ id: 'lint', title: 'Lint', lines: [{ id: 'l1', label: 'style', ok: true }] }, { id: 'doctor', title: 'Doctor', lines: [{ id: 'd1', label: 'x', ok: false }, { id: 'd2', label: 'y', ok: true }] }];
     for (const cols of [150, 110, 80]) {
       const route = rows('route', cols, { gates }).join('\n');
-      expect([cols, route]).toEqual([cols, expect.stringContaining('1/2 green')]);
-      expect(route).not.toMatch(/\d+ of \d+ green/);
+      expect([cols, route]).toEqual([cols, expect.stringContaining('1 denied')]);
+      expect(route).not.toMatch(/\d+ of \d+ green|\d+\/\d+ green/);
       expect(rows('gates', cols, { gates }).join('\n')).not.toMatch(/\d+ of \d+ green/);
     }
   });
@@ -301,7 +301,7 @@ describe('shared invariants', () => {
     const route = rows('route', 120).join('\n');
     expect(route).toContain('3/7');
     expect(route).toMatch(/phase +◐ research\n/); // the phase word alone, no n/m beside it (critique 17 A5)
-    expect(route).toContain('2/3 green');
+    expect(route).toContain('1 denied');
     expect(route).toMatch(/1 running/);
     for (const l of rows('route', 120).slice(0, 9)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/);
   });

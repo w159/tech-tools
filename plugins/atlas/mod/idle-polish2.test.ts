@@ -47,7 +47,7 @@ describe('1: the work state with no agent draws the health rows at every pane wi
   for (const cols of [37, 57, 80]) {
     test(`at ${cols}: hooks, gates, session and last run; none of the old placeholders`, () => {
       const t = body(world(cols, { run: working })).join('\n');
-      for (const k of ['hooks', 'gates', 'session']) expect(t, k).toContain(k);
+      for (const k of cols > 47 ? ['hooks', 'gates', 'session'] : ['hooks', 'completion', 'session']) expect(t, k).toContain(k); // 47 or less names each gate on its own row (D13)
       expect(t).not.toContain('last run'); // the live run's clock is the phase row's: a `last run` row would be the same run twice
       expect(t).not.toMatch(/no agents yet|no events yet|Completion gate|Dispatch tripwire|Header contract/);
     });
@@ -95,13 +95,13 @@ describe('3: the idle panel is one finished card: the rule and the footer close 
   test('the last two rows are the rule and `atlas version · hooks loaded` (slice S3: under the reserved slots, not at the pane foot; the pane\'s own surface fills the rest)', () => {
     const m = world(57);
     const t = body(m);
-    expect(t.length).toBeLessThan(m.rows - headerRows(m).length - 1);
+    expect(t.length).toBe(m.rows - headerRows(m).length); // D11: the body fills the pane, the footer on its last row
     expect(t.at(-1)).toMatch(/^\s+atlas 17\.21\.1 · hooks loaded$/);
     expect(t.at(-2)).toMatch(/^\s+─{20,}$/);
   });
   test('no invented footer: with no version and no hooks stats the pane ends in the rule alone', () => {
     const t = body(world(57, { health: { ...h, version: undefined, hooks: undefined } }));
-    expect(t.filter((l) => l.trim() !== '').at(-1)).toMatch(/^\s+─{20,}$/);
+    expect(t.join('\n')).not.toMatch(/atlas \d|hooks loaded/); // nothing invented at the foot
   });
 });
 
@@ -157,7 +157,7 @@ describe('6: the team tab with only the lead draws no dead sparkline', () => {
 });
 
 describe('7: the idle stepper is dim, bold only while a stage is live', () => {
-  const stepper = (m: PanelModel) => { const ls = bodyLines(m); return ls[ls.findIndex((l) => lineText(l).trim() === 'phase') + 1]!; };
+  const stepper = (m: PanelModel) => { const ls = bodyLines(m); return ls[ls.findIndex((l) => lineText(l).trim() === 'PHASE') + 1]!; };
   test('idle: no bold run in the stepper and the first stage is not the body tone', () => {
     const l = stepper(world(57));
     expect(l.runs.some((x) => x.bold)).toBe(false);
@@ -171,7 +171,7 @@ describe('7: the idle stepper is dim, bold only while a stage is live', () => {
 
 describe('8: the card has no second badge; the band row ends on one edge and one fill', () => {
   test('HEALTH ribbon carries no `◖ ◆ ATLAS ◗`', () => {
-    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('')).toMatch(/^── ▾ HEALTH ─+ ▾ hide ──$/); // slice S4: a flat ribbon with its close chip
+    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('')).toMatch(/^── ▾ HEALTH ─+$/); // a flat ribbon whose one control is the title chip (D8)
   });
   for (const cols of [150, 110]) {
     test(`at ${cols}: the band row is ${cols} cells, there is no strip row, and its last cell wears the chip's fill (flush before the host's [-])`, () => {
@@ -199,12 +199,12 @@ describe('9: one accent, for what answers a click', () => {
 
 describe('10: one abbreviation set for the stepper at every width', () => {
   for (const cols of [37, 44, 57, 80, 110]) {
-    test(`at ${cols}: one glyph per stage, names whole where they fit, else the three-letter set`, () => {
+    test(`at ${cols}: one glyph per stage, names whole where they fit, else dots plus the stage in words`, () => {
       const rows = body(world(cols));
-      const t = rows[rows.findIndex((l) => l.trim() === 'phase') + 1]!;
+      const t = rows[rows.findIndex((l) => l.trim() === 'PHASE') + 1]!;
       expect(t).not.toMatch(/[›·]/);
       expect(t.match(/[○●◐◓◑◒]/g)!.length).toBe(world(cols).phases.length);
-      expect(/research/.test(t) ? /\bres\b/.test(t) : /\bres\b/.test(t)).toBe(!/research/.test(t)); // whole names, or the three-letter set, never a mix
+      expect(t).not.toMatch(/\b(res|thy|tst|imp|ver)\b/); // never the three-letter set (D12)
     });
   }
 });

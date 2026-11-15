@@ -126,7 +126,7 @@ describe('the expanded health card (HUD)', () => {
   const text = (over: Record<string, unknown> = {}): string[] => healthCardRows({ ...h, ...over } as never, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
   test('ribbon, rows and closing rule', () => {
     const t = text();
-    expect(t[0]).toMatch(/^── ▾ HEALTH ─+ ▾ hide ──$/); // slice S4: a flat ribbon with its close chip, no corners and no second badge (the TODO and SUBAGENTS ribbons keep theirs)
+    expect(t[0]).toMatch(/^── ▾ HEALTH ─+$/); // a flat ribbon whose one control is the title chip (D8), no corners and no second badge (the TODO and SUBAGENTS ribbons keep theirs)
     expect(t.some((l) => /gates\s+● completion +1 pass · 0 deny/.test(l))).toBe(true); // every gate is `● name 1 pass · 0 deny`, one per row
     expect(t.some((l) => /^\s+● tripwire +1 pass · 0 deny/.test(l))).toBe(true);
     expect(t.some((l) => /context\s+▕.*▏ 18% · 42k tokens/.test(l))).toBe(true);
@@ -166,7 +166,7 @@ describe('the side panel status view, idle', () => {
   const rows = (m: PanelModel) => bodyLines(m);
   test('health rows replace the bare placeholders', () => {
     const t = rows(world()).map(lineText).join('\n');
-    expect(t).not.toMatch(/no agents yet|no events yet/);
+    expect(t).not.toMatch(/no agents yet/); // `no events yet` is the RECENT list's own empty line, the only placeholder left
     for (const label of ['events', 'gates', 'session', 'runs']) expect(t).toContain(label);
     expect(t).toContain('up 12:04');
   });

@@ -30,23 +30,26 @@ const ruleAt = (t: string[]): number => t.findIndex((l, i) => i > 3 && /^ {2}─
 const WIDTHS = [54, 47] as const;
 const KINDS: Kind[] = ['idle', 'working', 'done'];
 
-describe('a: the gates are one collapsed row, no `checks` section', () => {
-  for (const cols of WIDTHS) for (const kind of KINDS) test(`${cols} ${kind}: no checks heading; the collapsed row has names or dots only`, () => {
+describe('a: the gates, named, never a ratio (D13)', () => {
+  for (const cols of WIDTHS) for (const kind of KINDS) test(`${cols} ${kind}: no checks heading, no n/m; 54 folds the gates into one chip row, 47 names each gate on its own row`, () => {
     const t = body(world(cols, kind));
-    expect(t.join('\n')).not.toMatch(/^\s+checks\s*$/m);
-    expect(t.join('\n')).not.toMatch(/\d+\/\d+ pass/);
-    const row = t.find((l) => /▸ gates/.test(l))!;
-    expect(row).toBeDefined();
-    expect(row).not.toMatch(/\d\/\d/);
-    if (cols >= 54) for (const n of ['completion', 'tripwire', 'routing']) expect(row).toContain(`● ${n}`);
-    if (cols >= 54) expect(row).toContain('○ header'); // a gate that never fired is a grey hollow dot
-    else expect(row).toMatch(/● ● ● ○/);
+    const text = t.join('\n');
+    expect(text).not.toMatch(/^\s+checks\s*$/m);
+    expect(text).not.toMatch(/\d+\/\d+ pass/);
+    if (cols >= 54) {
+      const row = t.find((l) => /▸ gates/.test(l))!;
+      expect(row).toBeDefined();
+      expect(row).not.toMatch(/\d\/\d/);
+      expect(row).toContain('ok');
+    } else {
+      for (const [g, n, c] of [['●', 'completion', '1 pass · 0 deny'], ['●', 'tripwire', '2 pass · 0 deny'], ['●', 'routing', '8 pass · 0 deny'], ['○', 'header', 'not fired']] as const) expect(text).toMatch(new RegExp(`^ {4}${g} ${n} +${c}$`, 'm'));
+    }
   });
-  for (const cols of WIDTHS) test(`${cols}: opened, each gate is one \`● name 8 pass · 0 deny\` row once, its note on its own indented line`, () => {
-    const t = body(world(cols, 'idle', { expanded: 'health:gates' }));
+  test('54: opened, each gate is one `● name 8 pass · 0 deny` row once, its note on its own indented line', () => {
+    const t = body(world(54, 'idle', { expanded: 'health:gates' }));
     const text = t.join('\n');
     expect(text).toContain('▾ gates');
-    for (const [g, n, c] of [['●', 'completion', '1 pass · 0 deny'], ['●', 'tripwire', '2 pass · 0 deny'], ['●', 'routing', '8 pass · 0 deny'], ['○', 'header', 'not fired']] as const) expect(text.match(new RegExp(`${g} ${n}\\s+${c}`, 'g'))?.length, n).toBe(1);
+    for (const [g, n, c] of [['●', 'completion', '1 pass · 0 deny'], ['●', 'tripwire', '2 pass · 0 deny'], ['●', 'routing', '8 pass · 0 deny'], ['○', 'header', 'not fired']] as const) expect(text.match(new RegExp(`${g} ${n} +${c}`, 'g'))?.length, n).toBe(1);
     const note = t.findIndex((l) => l.includes('Last Stop allowed'));
     expect(note).toBeGreaterThan(t.findIndex((l) => /● completion/.test(l)));
     expect(edge(t[note]!)).toBeGreaterThan(4);
@@ -58,13 +61,13 @@ describe('b: the grid — headers in cell 2, rows in cell 4, one value column', 
   for (const cols of WIDTHS) for (const kind of KINDS) test(`${cols} ${kind}: every body row starts in cell 2 or 4; labelled values start in cell 12`, () => {
     const t = body(world(cols, kind)).filter((l) => l.trim() !== '');
     for (const l of t) {
-      const age = /^ {4}( \d|\d\d)[smh]  \S/.test(l); // an age cell is fixed three cells wide in cell 4
-      expect([2, 4], l).toContain(age ? 4 : edge(l));
+      const age = /^ {4}( \d|\d\d)[smh] +\S/.test(l); // an age cell is fixed three cells wide in cell 4
+      expect([2, 3, 4], l).toContain(age ? 4 : edge(l)); // a chip's own pad puts its glyph in cell 3
     }
-    for (const label of ['events', 'context', 'runs', 'gates', 'session']) {
+    for (const label of ['events', 'context', 'runs', ...(cols >= 54 ? ['gates'] : []), 'session']) {
       const l = t.find((x) => new RegExp(`^ {2,4}(▸ |▾ )?${label}\\b`).test(x))!;
       expect(l, label).toBeDefined();
-      expect(l.search(/\S/) === 2 || l.search(/\S/) === 4).toBe(true);
+      expect([2, 3, 4]).toContain(l.search(/\S/));
       expect(l.slice(12).search(/\S/), `${label} value`).toBe(0);
       expect(l.slice(0, 12).trim().replace(/^[▸▾] /, ''), label).toBe(label);
     }
@@ -74,10 +77,9 @@ describe('b: the grid — headers in cell 2, rows in cell 4, one value column', 
 describe('c: recent ages sit in a fixed three-cell column', () => {
   for (const cols of WIDTHS) test(`${cols}: 9s and 10s share the message column, no "ago"`, () => {
     const t = body(world(cols, 'idle'));
-    const at = t.findIndex((l) => l.trim() === 'recent');
+    const at = t.findIndex((l) => l.trim() === 'RECENT');
     const rows = t.slice(at + 1).filter((l) => /^ {4}( \d|\d\d)[smh]/.test(l));
-    expect(rows.length).toBeGreaterThanOrEqual(2);
-    expect(rows.length).toBeLessThanOrEqual(3);
+    expect(rows.length).toBeGreaterThanOrEqual(3); // RECENT grows into the free rows: every event shows
     expect(rows[0]!.slice(4, 7)).toBe(' 9s');
     expect(rows[1]!.slice(4, 7)).toBe('10s');
     expect(rows[0]!.search(/[a-z]{3,}/)).toBe(rows[1]!.search(/[a-z]{3,}/));
@@ -91,36 +93,36 @@ describe('d: the phase is one stepper row of five stages', () => {
   for (const cols of WIDTHS) {
     test(`${cols}: idle is five ○, no \`phase ○ idle\` row`, () => {
       const t = body(world(cols, 'idle'));
-      const at = t.findIndex((l) => l.trim() === 'phase');
+      const at = t.findIndex((l) => l.trim() === 'PHASE');
       expect(at).toBeGreaterThanOrEqual(0);
       expect(glyphs(t[at + 1]!)).toEqual(['○', '○', '○', '○', '○']);
-      expect(t.join('\n')).not.toMatch(/phase +[○●◐]/);
-      expect(t.join('\n')).not.toContain(' idle');
+      expect(t.join('\n')).not.toMatch(/phase +[○●◐]/i);
+      if (cols >= 54) expect(t.join('\n')).not.toContain(' idle');
     });
     test(`${cols}: working is ● ● ◐ ○ ○ (the spinner is the band's frame), done is five ●`, () => {
       const w = body(world(cols, 'working'));
-      const wi = w.findIndex((l) => l.trim() === 'phase');
+      const wi = w.findIndex((l) => l.trim() === 'PHASE');
       expect(glyphs(w[wi + 1]!).map((g, i) => (i === 2 ? ('◐◓◑◒'.includes(g) ? 'spin' : g) : g))).toEqual(['●', '●', 'spin', '○', '○']);
       const d = body(world(cols, 'done'));
-      expect(glyphs(d[d.findIndex((l) => l.trim() === 'phase') + 1]!)).toEqual(['●', '●', '●', '●', '●']);
+      expect(glyphs(d[d.findIndex((l) => l.trim() === 'PHASE') + 1]!)).toEqual(['●', '●', '●', '●', '●']);
     });
   }
-  test('54 names the stages whole, 47 abbreviates them', () => {
-    const row = (cols: number): string => { const t = body(world(cols, 'idle')); return t[t.findIndex((l) => l.trim() === 'phase') + 1]!; };
+  test('54 names the stages whole; 47 or less is dots plus the current stage spelled out, never `res thy tst imp ver` (D12)', () => {
+    const row = (cols: number, kind: Kind = 'idle'): string => { const t = body(world(cols, kind)); return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!; };
     expect(row(54)).toContain('implement');
-    expect(row(47)).toContain('res');
-    expect(row(47)).toMatch(/res .*thy .*tst .*imp .*ver/);
-    expect(row(47)).not.toContain('implement');
+    expect(row(47, 'working')).toMatch(/● ● [◐◓◑◒] ○ ○ test$/);
+    expect(row(47, 'done')).toMatch(/● ● ● ● ● verify$/);
+    expect(row(47)).not.toMatch(/res|thy|tst|imp|ver/);
   });
   test('the spinner turns the frame the band turns (the run frame), not a reading of its own', () => {
-    const at = (frame: number): string => { const t = body(world(54, 'working', { run: { kind: 'working', secs: 5, startMs: NOW, frame } })); return glyphs(t[t.findIndex((l) => l.trim() === 'phase') + 1]!)[2]!; };
+    const at = (frame: number): string => { const t = body(world(54, 'working', { run: { kind: 'working', secs: 5, startMs: NOW, frame } })); return glyphs(t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!)[2]!; };
     const frames = [0, 1, 2, 3].map(at);
     expect(new Set(frames).size).toBe(4);
   });
 });
 
 describe('d2: one spin index for the stepper and the band', () => {
-  const glyph = (m: PanelModel): string => { const t = body(m); return [...t[t.findIndex((l) => l.trim() === 'phase') + 1]!].find((c) => '◐◓◑◒'.includes(c))!; };
+  const glyph = (m: PanelModel): string => { const t = body(m); return [...t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!].find((c) => '◐◓◑◒'.includes(c))!; };
   test('the run frame (the band\'s own index) wins, as the phase mark always did', () => {
     expect([0, 1, 2, 3, 4, 7].map((frame) => glyph(world(54, 'working', { now: 123_456, run: { kind: 'working', secs: 5, startMs: NOW, frame } })))).toEqual(['◐', '◓', '◑', '◒', '◐', '◒']);
   });
@@ -130,23 +132,23 @@ describe('d2: one spin index for the stepper and the band', () => {
   });
 });
 
-describe('e: at most three blank rows above the closing rule', () => {
+describe('e: the footer is pinned to the last row, the rule above it (D11)', () => {
   for (const cols of WIDTHS) for (const kind of KINDS) test(`${cols} ${kind}`, () => {
     const t = body(world(cols, kind));
-    const rule = ruleAt(t);
-    expect(rule).toBeGreaterThan(0);
-    expect(blankRunAbove(t, rule)).toBeLessThanOrEqual(3);
-    expect(t[rule + 1]).toBe('  atlas 17.24.0 · hooks loaded');
+    expect(t.length).toBe(40 - headerRows(world(cols, kind)).length);
+    expect(t.at(-1)).toBe('  atlas 17.24.0 · hooks loaded');
+    expect(t.at(-2)).toMatch(/^ {2}─{20,}$/);
+    expect(ruleAt(t)).toBe(t.length - 2);
   });
-  test('with no hook events yet the recent slots stay and the gap is still at most three', () => {
+  test('with no hook events yet the footer is still the last row', () => {
     const t = body(world(54, 'idle', {}, health({ hooks: undefined })));
-    expect(blankRunAbove(t, ruleAt(t))).toBeLessThanOrEqual(3);
+    expect(t.at(-2)).toMatch(/^ {2}─{20,}$/);
   });
 });
 
 describe('f: headings never move between idle, working and done', () => {
   for (const cols of WIDTHS) test(`${cols}: the line index of each heading is equal`, () => {
-    const idx = (kind: Kind): number[] => { const t = body(world(cols, kind)); return ['phase', 'pulse', 'health', 'recent'].map((h) => t.findIndex((l) => l.trim() === h)); };
+    const idx = (kind: Kind): number[] => { const t = body(world(cols, kind)); return ['PHASE', 'PULSE', 'HEALTH', 'RECENT'].map((h) => t.findIndex((l) => l.trim() === h)); };
     const a = idx('idle');
     expect(a.every((i) => i >= 0)).toBe(true);
     expect(idx('working')).toEqual(a);
@@ -181,37 +183,27 @@ describe('h: one chip idiom for the tabs', () => {
   });
 });
 
-describe('i: the close chip is on the pill row and is a press target', () => {
-  test('`[✕]` ends the pill row, one cell in from the edge; no separate row', () => {
+describe('i: the pill row has no close chip of its own (the host draws `✕`)', () => {
+  test('the pill row is the title and the active tab, filled with a rule to the edge', () => {
     for (const cols of [54, 47]) {
-      const m = world(cols, 'idle', { close: true } as never);
-      const row = ribbonRow(m);
-      const text = lineText(row);
-      expect(text.startsWith('◖ ◆ ATLAS ◗ ▸ SIDEPANEL')).toBe(true);
-      expect(text.endsWith('[✕] ')).toBe(true);
+      const m = world(cols, 'idle');
+      const text = lineText(ribbonRow(m));
+      expect(text.startsWith('◖ ◆ ATLAS ◗ ▸ SIDEPANEL · status')).toBe(true);
       expect(text.length).toBe(cols);
-      const chip = row.runs.find((x) => x.t === '[✕]')!;
-      expect(chip).toMatchObject({ press: 'panel:close', tone: 'accent', bold: true });
-      expect(headerRows(m).map(lineText).filter((l) => l.includes('✕')).length).toBe(1);
+      expect(headerRows(m).map(lineText).join('\n')).not.toContain('✕');
     }
-  });
-  test('without a close handler the pill row is as it was', () => {
-    expect(lineText(ribbonRow(world(54, 'idle')))).not.toContain('✕');
   });
 });
 
-describe('j: the team tab with nobody dispatched shows the same summary', () => {
+describe('j: the team tab with nobody dispatched owns its body (D14)', () => {
   for (const cols of WIDTHS) test(`${cols}: one \`no workers yet\` line, then pulse and health, at most three blanks over the rule`, () => {
     const m = panelWorld('team', cols, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: NOW, frame: 0 }, lead: { name: 'lead', role: 'lead', state: 'waiting', detail: '' }, health: health() } as never);
     const t = body(m);
     expect(t.filter((l) => l.includes('no workers yet')).length).toBe(1);
-    expect(t.findIndex((l) => l.trim() === 'pulse')).toBeGreaterThan(t.findIndex((l) => l.includes('no workers yet')));
-    expect(t.findIndex((l) => l.trim() === 'health')).toBeGreaterThan(0);
-    const rule = ruleAt(t);
-    expect(rule).toBeGreaterThan(0);
-    expect(blankRunAbove(t, rule)).toBeLessThanOrEqual(3);
+    expect(t.findIndex((l) => l.trim() === 'PULSE')).toBe(-1);
+    expect(t.findIndex((l) => l.trim() === 'HEALTH')).toBe(-1);
     const lines: PanelLine[] = bodyLines(m);
-    expect(lines.length).toBeLessThan(40);
+    expect(lines.length).toBeLessThanOrEqual(40);
   });
 });
 
@@ -221,19 +213,12 @@ describe('elements: the pill row Button and the one chip idiom on screen', () =>
   const els = { Box: mk('Box'), Text: mk('Text'), Button: mk('Button'), Input: mk('Input') } as unknown as ClientElements;
   const kids = (n: Node): Node[] => { const c = n.props.children; return (Array.isArray(c) ? c : c == null ? [] : [c]).filter((x: unknown): x is Node => typeof x === 'object' && x !== null); };
   const all = (n: Node): Node[] => [n, ...kids(n).flatMap(all)];
-  const calls: string[] = [];
-  const on: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, close: () => calls.push('close') };
+  const on: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {} };
   const model: SidebarModel = { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'route' }, columns: 55, rows: 40, look: ui };
   const tree = (h: SidebarHandlers): Node => sidebarTree(els, model, h) as unknown as Node;
-  test('the close chip is a dismiss Button on the pill row (the first row of the pane) and presses the close handler', () => {
-    const root = tree(on);
-    const first = kids(root)[0]!;
-    const b = all(first).find((n) => n.kind === 'Button')!;
-    expect(b.props).toMatchObject({ key: 'panel:close', role: 'dismiss', plain: true });
-    expect(all(b).find((n) => n.kind === 'Text')!.props.children).toBe('[✕]');
-    b.props.onPress();
-    expect(calls).toEqual(['close']);
-    expect(all(tree({ ...on, close: undefined })).filter((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toEqual([]);
+  test('the pane draws no close Button of its own', () => {
+    expect(all(tree(on)).filter((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toEqual([]);
+    expect(all(tree(on)).some((n) => n.kind === 'Text' && n.props.children === '[✕]')).toBe(false);
   });
   test('the lit tab wears activeChipStyle, the others the raised tile (chipStyle) with a hover style', () => {
     const root = tree(on);

@@ -47,12 +47,12 @@ describe('B1: the blocker has one name on the band, the gates tab and the tally'
     const rows = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');
     expect(rows).toContain('Team gate');
   });
-  test('the checks row counts n/m, the figure the gates tab header prints, from one snapshot', () => {
+  test('the checks row counts n/m; the gates tab says the same group in the one gate vocabulary (`1 pass · 1 deny`), from one snapshot', () => {
     const t = gateTally(teamGate);
     const row = missionLines(mission({ checks: t.checks })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
     const tab = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');
     expect(row).toContain('1/2');
-    expect(tab).toContain('1/2');
+    expect(tab).toContain('1 pass · 1 deny');
     expect(row).not.toMatch(/\d of \d green/);
     const pass = missionLines(mission({ checks: [{ id: 'a', ok: true }, { id: 'b', ok: true }, { id: 'c', ok: true }] })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
     expect(pass).toContain('3/3 green');
@@ -80,9 +80,9 @@ describe('B1: the gates tab never says a thing twice or parts a label from its v
     const text = body(panelWorld('gates', 110, ui, { rows: 24, gates: groups as never })).join('\n');
     expect(text.match(/Inline ops since last dispatch/g)?.length).toBe(1);
   });
-  test('the group figure is the bare n/m', () => {
+  test('the group figure is `N pass · M deny`', () => {
     const text = body(panelWorld('gates', 150, ui, { rows: 24, gates: groups as never })).join('\n');
-    expect(text).toMatch(/warning .*1\/2\n/);
+    expect(text).toMatch(/warning .*1 pass · 1 deny\n/);
     expect(text).not.toMatch(/\d+ of \d+ failing/);
   });
 });

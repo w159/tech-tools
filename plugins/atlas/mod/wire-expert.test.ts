@@ -185,19 +185,20 @@ describe('wire-expert: one spinner', () => {
   });
 });
 
-describe('wire-expert: the close chips', () => {
-  test('(d) the panel close chip closes the Atlas pane', async () => {
+describe('wire-expert: the close controls', () => {
+  test('(d) the Atlas pane draws no close chip of its own: the host draws the `✕`', async () => {
     const b = await boot();
-    await press(button(await b.pane(), 'panel:close'));
-    expect(b.rec.closes).toEqual([{ id: 'atlas' }]);
+    expect(walk(await b.pane()).some((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toBe(false);
+    expect(textOf(await b.pane())).not.toContain('[✕]');
   });
-  test('(e) the card hide chip closes the card like the band chip opens it', async () => {
+  test('(e) the card title chip closes the card like the band chip opens it', async () => {
     const b = await boot();
     await b.rest();
     await press(button(await b.band(), 'band:health', 'health'));
     const open = await b.band();
     expect(textOf(open)).toContain('HEALTH');
-    await press(button(open, 'band:health', 'hide'));
+    expect(textOf(open)).not.toContain('hide');
+    await press(button(open, 'band:health', 'HEALTH'));
     expect(textOf(await b.band())).not.toContain('HEALTH');
   });
 });

@@ -17,7 +17,7 @@ const bandGlyph = (now: number): string => runsText(bandLines(bandModel(now))[0]
 const phaseGlyph = (now: number): string => {
   const m: PanelModel = panelWorld('route', 150, ui, { now, tick: 0, run: { kind: 'working', secs: 42 } });
   const t = bodyLines(m).map(lineText);
-  const row = t[t.findIndex((l) => l.trim() === 'phase') + 1] ?? ''; // slice S3: the stepper row
+  const row = t[t.findIndex((l) => l.trim() === 'PHASE') + 1] ?? ''; // slice S3: the stepper row
   return row.match(SPIN_MARK)?.[0] ?? '';
 };
 

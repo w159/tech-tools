@@ -26,22 +26,23 @@
 // against the grammar of mod/panel-polish.test.ts and the rendered PNGs; the properties that matter (one state column, whole figures,
 // the strip on both hosts) are asserted independently there, so a layout regression fails both.
 export const sidepanelDesign: Record<number, string[]> = {
- "80": [
-  "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────",
-  "",
-  "status   team   channel   gates   core   board",
-  " phase  ◐ research",
-  " gates  ● lint   ● test   △ doctor   2/3 green",
- ],
- "120": [
-  "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────────────────────────",
-  "",
-  "status   team   channel   gates   core   board",
-  "",
-  " phase  ◐ research",
-  " gates  ● lint   ● test   △ doctor   2/3 green",
- ],
+  80: [
+    "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · status ──────────────────────────────────────────────",
+    "",
+    " status   team   channel   gates   core   board",
+    " phase  ◐ research",
+    " gates  ● lint   ● test   △ doctor   1 denied",
+  ],
+  120: [
+    "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · status ──────────────────────────────────────────────────────────────────────────────────────",
+    "",
+    " status   team   channel   gates   core   board",
+    "",
+    " phase  ◐ research",
+    " gates  ● lint   ● test   △ doctor   1 denied",
+  ],
 };
+
 export const cardDesign: Record<number, string[]> = {
  "80": [
   "┌─ ◆ running implementer-band ────── opus ─┐",
@@ -65,30 +66,31 @@ export const toastDesign: string[] = [
   "▌ ■ failed   implementer-live  tests red 3"
 ];
 export const subagentsDesign: Record<number, string[]> = {
- "80": [
-  "▹ ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
-  "▹ ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
-  "▸ ◐ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
-  "▹ ◇ runner-land         queued",
-  "▹ ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁"
- ],
- "120": [
-  "▹ ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  9 of 9 steps",
-  "▹ ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  golden tests written",
-  "▸ ◐ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  read runs.ts:17",
-  "▹ ◇ runner-land         queued                       waits on implementer-live",
-  "▹ ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3"
- ]
+  80: [
+    "▹ ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
+    "▹ ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
+    "▸ ◐ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
+    "▹ ◇ runner-land         queued",
+    "▹ ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
+  ],
+  120: [
+    "▹ ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  9 of 9 steps",
+    "▹ ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  golden tests written",
+    "▸ ◐ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  read runs.ts:17",
+    "▹ ◇ runner-land         queued                       waits on implementer-live",
+    "▹ ■ implementer-live    failed   0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  tests red 3",
+  ],
 };
+
 export const tabGolden: Record<string, Record<number, string[]>> = {
   route: {
     120: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────────────────────────",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · status ──────────────────────────────────────────────────────────────────────────────────────",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "",
       " phase  ◐ research",
-      " gates  ● lint   ● test   △ doctor   2/3 green",
+      " gates  ● lint   ● test   △ doctor   1 denied",
       " agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed",
       "    ● implementer-layout done    9 of 9 steps",
       "    ● implementer-gates  done    golden tests written",
@@ -106,11 +108,11 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "▸ ▲ Ship board mod        blocked needs your approval                                                                you",
     ],
     80: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · status ──────────────────────────────────────────────",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       " phase  ◐ research",
-      " gates  ● lint   ● test   △ doctor   2/3 green",
+      " gates  ● lint   ● test   △ doctor   1 denied",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
@@ -128,11 +130,11 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "▸ ▲ Ship board mod        blocked                                            you",
     ],
     56: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · status ──────────────────────",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       " phase  ◐ research",
-      " gates  ● lint   ● test   △ doctor   2/3 green",
+      " gates  ● lint   ● test   △ doctor   1 denied",
       " agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed",
       "    ● implementer-layout done",
       "    ● implementer-gates  done",
@@ -152,9 +154,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
   },
   team: {
     120: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────── 1 queued · 1 running · 2 done · 1 failed",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · team ────────────────────────────────────────────── 1 queued · 1 running · 2 done · 1 failed",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "",
       "▹ ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  9 of 9 steps",
       "▹ ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁  golden tests written",
@@ -168,9 +170,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    10:07  implementer-layout  T1 and T2 merged",
     ],
     80: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── 1 queued · 1 running · 2 done · 1 failed",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · team ────── 1 queued · 1 running · 2 done · 1 failed",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "▹ ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▹ ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▸ ◐ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
@@ -183,9 +185,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    10:07  implementer-layout  T1 and T2 merged",
     ],
     56: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · team ────────────────────────",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "▹ ● implementer-layout  done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▹ ● implementer-gates   done     0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
       "▸ ◐ implementer-band    running  0:42  ▁▁▁▁▁▁▁▁▁▁▁▁",
@@ -200,9 +202,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
   },
   channel: {
     120: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────── #atlas-board-mod",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · channel ─────────────────────────────────────────────────────────────────── #atlas-board-mod",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                        ▸ implementer-band take T4, then run the gate tests                                10:02",
@@ -210,9 +212,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● implementer-layout  handoff T1 and T2 merged                                                                   10:07",
     ],
     80: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────── #atlas-board-mod",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · channel ─────────────────────────── #atlas-board-mod",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                                                   10:02",
       "    ▸ implementer-band take T4, then run the gate tests",
@@ -221,9 +223,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "  ● implementer-layout  handoff T1 and T2 merged                           10:07",
     ],
     56: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────── #atlas-board-mod",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · channel ─── #atlas-board-mod",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "    #atlas-board-mod  5 people · 2 unread",
       "    lead                                           10:02",
       "    ▸ implementer-band take T4, then run the gate",
@@ -236,45 +238,45 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
   },
   gates: {
     120: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ────────────────────────────────────────────────────────────────────────────────────────── 2/3",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · gates ───────────────────────────────────────────────────────────────────────────── 1 denied",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "",
-      "▸ ● lint    passing                                                                                                  1/1",
+      "▸ ● lint    passing                                                                                      1 pass · 0 deny",
       "▸   ● lint",
-      "▸ ● test    passing                                                                                                  1/1",
+      "▸ ● test    passing                                                                                      1 pass · 0 deny",
       "▸   ● test",
-      "▸ △ doctor  warning                                                                                                  0/1",
+      "▸ △ doctor  warning                                                                                      0 pass · 1 deny",
       "▸   △ doctor",
     ],
     80: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ────────────────────────────────────────────────── 2/3",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · gates ───────────────────────────────────── 1 denied",
       "",
-      "status   team   channel   gates   core   board",
-      "▸ ● lint    passing                                                          1/1",
+      " status   team   channel   gates   core   board",
+      "▸ ● lint    passing                                              1 pass · 0 deny",
       "▸   ● lint",
-      "▸ ● test    passing                                                          1/1",
+      "▸ ● test    passing                                              1 pass · 0 deny",
       "▸   ● test",
-      "▸ △ doctor  warning                                                          0/1",
+      "▸ △ doctor  warning                                              0 pass · 1 deny",
       "▸   △ doctor",
     ],
     56: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ────────────────────────── 2/3",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · gates ───────────── 1 denied",
       "",
-      "status   team   channel   gates   core   board",
-      "▸ ● lint    passing                                  1/1",
+      " status   team   channel   gates   core   board",
+      "▸ ● lint    passing                      1 pass · 0 deny",
       "▸   ● lint",
-      "▸ ● test    passing                                  1/1",
+      "▸ ● test    passing                      1 pass · 0 deny",
       "▸   ● test",
-      "▸ △ doctor  warning                                  0/1",
+      "▸ △ doctor  warning                      0 pass · 1 deny",
       "▸   △ doctor",
     ],
   },
   core: {
     120: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────────────────────────────────────────────",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · core ────────────────────────────────────────────────────────────────────────────────────────",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
@@ -299,9 +301,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    in-process dispatches are not shown here",
     ],
     80: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────────────────────────",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · core ────────────────────────────────────────────────",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",
@@ -326,9 +328,9 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
       "    in-process dispatches are not shown here",
     ],
     56: [
-      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────",
+      "◖ ◆ ATLAS ◗ ▸ SIDEPANEL · core ────────────────────────",
       "",
-      "status   team   channel   gates   core   board",
+      " status   team   channel   gates   core   board",
       "    done items  0 of 7",
       "  ◇ evidence none yet",
       "  ◇ verified none yet",
@@ -361,9 +363,6 @@ export const tabGolden: Record<string, Record<number, string[]>> = {
   },
 };
 
-/** The Team tab as the live adapter builds it (mod/pane/sidebar-model.ts): the lead's row first, the workers, the roster members the squad
- * does not list, and the lead's tally last. HAND-WRITTEN literal text (no design mock covers it); the world is panelWorld('team') plus a
- * waiting lead (role lead, detail idle) and one roster member `leader` (queued, idle). Trailing spaces trimmed; spinner frame 0. */
 export const teamLiveGolden: Record<number, string[]> = {
   120: [
     "▹ ◉ lead                waiting        ▁▁▁▁▁▁▁▁▁▁▁▁  idle",

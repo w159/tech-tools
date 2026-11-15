@@ -15,7 +15,7 @@ import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
 import { displayName } from './hud';
 import { fitText, textWidth } from './theme';
-import { bandSegments, BAND_SPARK_W, type BandSeg } from './band-segments';
+import { bandSegments, BAND_SPARK_W, tickerRuns, type BandSeg } from './band-segments';
 import { idleRamp } from './band-motion';
 import type { Health } from './idle-health';
 
@@ -561,7 +561,9 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
       const lists = [...(o.plan && m.total ? [planFig(false)] : []), ...(o.work && !workBody(false).every((x) => x.t === '-') ? [workBody(true)] : []), ...body.map((x) => x.runs)];
       const chipRuns = chip?.runs ?? [];
       const assemble = (gap: number): Run[] => {
-        const tail: Run[][] = chipRuns.length ? [[...(gap > 0 ? [r(' '.repeat(gap))] : []), ...chipRuns]] : [];
+        const tick = gap > 0 ? tickerRuns(h, gap) : [];
+        const pad = (gap > 0 ? [r(' '.repeat(gap - runsWidth(tick) - (tick.length ? 2 : 0)))] : []);
+        const tail: Run[][] = chipRuns.length ? [[...(tick.length ? [r('  '), ...tick] : []), ...pad, ...chipRuns]] : [];
         const all = [...lists, ...tail];
         return seg ? healthSegmented(ui, st, cap, head_, all, keep) : [...cap, r(' '), ...head_, ...all.flatMap((x) => [glue, ...x])];
       };

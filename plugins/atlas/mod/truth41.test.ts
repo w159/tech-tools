@@ -95,8 +95,8 @@ describe('step 2: one run total on the band, the panel, the board and the axis (
     expect(board.find((l) => /^\s+0:00\s.*\d:\d\d\s*$/.test(l))).toMatch(/0:46\s*$/);
     expect(render('team', RUN).find((l) => /^\s+0:00\s+\d:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:46\s*$/);
     const route = render('route', RUN);
-    expect(route.slice(route.findIndex((l) => l.trim() === 'phase'), route.findIndex((l) => l.trim() === 'phase') + 2).join('\n')).not.toMatch(/\b0:46\b/); // slice S3: a run's time prints once, on the band; the panel's phase is the stepper
-    expect(route[route.findIndex((l) => l.trim() === 'phase') + 1]!.match(/[●○◐◓◑◒]/g)).toHaveLength(5); // five stages, none turning (this run entered none of them)
+    expect(route.slice(route.findIndex((l) => l.trim() === 'PHASE'), route.findIndex((l) => l.trim() === 'PHASE') + 2).join('\n')).not.toMatch(/\b0:46\b/); // slice S3: a run's time prints once, on the band; the panel's phase is the stepper
+    expect(route[route.findIndex((l) => l.trim() === 'PHASE') + 1]!.match(/[●○◐◓◑◒]/g)).toHaveLength(5); // five stages, none turning (this run entered none of them)
   });
   test('the band prints the same total as the panel: `● done 0:46`', () => {
     const m: MissionModel = { cols: 150, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'done', done: 5, total: 5, workers: [], checks: null, ui, ranSecs: 46, restSecs: 0 };
@@ -138,7 +138,7 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
   ];
   const lead = (t: string) => { const x = t.match(/ATLAS ◗ +(\S) (working|done|idle|blocked)\b[^\d]*(\d+:\d\d)?/); return x ? { glyph: x[1], word: x[2], clock: x[3] } : null; };
   /** Slice S3: the panel's phase is the stepper (one glyph per stage, no word, no clock): the current stage wears the band's glyph. */
-  const stepper = (t: string[]): string[] => (t[t.findIndex((l) => l.trim() === 'phase') + 1] ?? '').match(/[●○◐◓◑◒▲■]/g) ?? [];
+  const stepper = (t: string[]): string[] => (t[t.findIndex((l) => l.trim() === 'PHASE') + 1] ?? '').match(/[●○◐◓◑◒▲■]/g) ?? [];
   for (const tick of [0, 3, 7, 9, 10, 13]) { // 10 and 13: the frame is the unwrapped beat count, which the band and the panel both wrap to the same four marks
     for (const c of cases) {
       test(`${c.name} at frame ${tick}: the stepper wears the band's glyph; no word, no clock on the panel`, () => {
@@ -154,7 +154,7 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
         if (c.word === 'working' || c.word === 'blocked') expect(glyphs.filter((g) => g === band!.glyph)).toHaveLength(1);
         else expect(new Set(glyphs)).toEqual(new Set([band!.glyph])); // done: every stage `●`; idle: every stage `○`
         expect(text.join('\n')).not.toMatch(new RegExp(`\\b${c.word}\\b`));
-        expect(text.slice(text.findIndex((l) => l.trim() === 'phase'), text.findIndex((l) => l.trim() === 'phase') + 2).join('\n')).not.toMatch(/\d+:\d\d/); // one clock, on the band
+        expect(text.slice(text.findIndex((l) => l.trim() === 'PHASE'), text.findIndex((l) => l.trim() === 'PHASE') + 2).join('\n')).not.toMatch(/\d+:\d\d/); // one clock, on the band
         expect(band!.clock).toBeDefined();
       });
     }

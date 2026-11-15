@@ -10,20 +10,21 @@ const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 const word = (t: PanelTab): string => (t === 'route' ? 'status' : t); // the first tab's id is `route`; it reads `status`
 const NAMES = 'status   team   channel   gates   core   board';
 
-describe('C1: the strip is names only at every width', () => {
+describe('C1 (D14): the strip is chips with one fixed shape at every width', () => {
   for (const cols of [38, 44, 52, 80, 120, 150]) {
     for (const tab of TABS) {
-      test(`${cols} cells, ${tab} lit: chips (one space between where the pane is narrow), no key letters, one rule row`, () => {
+      test(`${cols} cells, ${tab} lit: chips with a 1-cell pad and gap, no key letters, one row; below 48 the trailing tabs fold into \`▸ more\``, () => {
         const rows = tabRows(panelWorld(tab, cols, ui));
         const text = rows.map(lineText);
         expect(rows).toHaveLength(1);
-        expect(text[0]!.trim()).toBe(cols >= 48 ? NAMES : NAMES.replace(/ {3}/g, ' ')); // below 48: one-cell gap and no chip padding, still one row
+        const names = stripLayout(cols).rows[0]!.map((t) => t.label).join('   ') + (stripLayout(cols).more ? '   ▸ more' : '');
+        expect(text[0]!.trim()).toBe(names); // the same chip shape at every width: pad 1, gap 1 around the chip, so the text reads three apart
         expect(text[0]).not.toMatch(/\b[rtcgko]:/);
         for (const t of text) expect(cells(t)).toBeLessThanOrEqual(cols);
-        const lit = rows[0]!.runs.find((x) => x.t.trim() === word(tab))!;
-        expect([lit.bold, lit.bg]).toEqual([true, 'accent']); // the lit chip is filled
+        const lit = rows[0]!.runs.find((x) => x.t.trim() === word(tab));
+        if (lit) expect([lit.bold, lit.bg]).toEqual([true, 'accent']); // the lit chip is filled (a lit tab behind `▸ more` fills that chip instead)
         const rest = rows[0]!.runs.filter((x) => x.t.trim() && x.t.trim() !== word(tab));
-        expect(rest.every((x) => !x.bold && x.tone === 'accent' && !!x.bgHex)).toBe(true); // the others are raised tiles
+        expect(rest.every((x) => x.tone === 'accent' && !!x.bgHex || x.bg === 'accent')).toBe(true); // the others are raised tiles
         expect(text.join('')).not.toMatch(/[━]/);
       });
     }
@@ -31,9 +32,9 @@ describe('C1: the strip is names only at every width', () => {
   test('the layout is always the bare one row form (the keys are never drawn in the strip)', () => {
     for (const cols of [37, 40, 60, 150]) expect([cols, stripLayout(cols).bare, stripLayout(cols).rows.length]).toEqual([cols, true, 1]);
   });
-  test('the strip rows are identical at 110 (38 cells) and 150 (49 cells) but for the gap and padding', () => {
-    const at = (cols: number): string => lineText(tabRows(panelWorld('team', cols, ui))[0]!).trim().replace(/ +/g, ' ');
-    expect(at(38)).toBe(at(52));
+  test('the chip shape is the same at 49 and 150 cells: only the fold differs', () => {
+    const at = (cols: number): string => lineText(tabRows(panelWorld('team', cols, ui))[0]!);
+    expect(at(49)).toBe(at(150).trimEnd().padEnd(at(49).length));
   });
 });
 

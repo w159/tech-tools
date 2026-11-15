@@ -5,7 +5,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, markOf, runHex, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import { activeChipStyle, chipStyle, hoverStyle } from '../clickable';
-import { centred, chipText, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel } from '../panel-layout';
+import { centred, chipText, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../board-model';
@@ -23,21 +23,27 @@ export { stripRows };
 function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, ui: Ui): RenderElement[] {
   const bg = panelBg(ui);
   const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
-  const f = stripLayout(inner, m.ui.view); // the whole names as chips that fit one row (mod/panel-layout.ts); the rule is as wide as the lit chip
-  return f.rows.flatMap((row, ri): RenderElement[] => {
-    const pressOf = (it: { id: string }) => (it.id === 'board' ? () => on.toggleTodos?.() : () => on.setView(it.id as SidebarView));
-    const keyOf = (it: { id: string }): string => (it.id === 'board' ? 'tab:todos' : `tab:${it.id}`);
-    const tabs = row.map((it): RenderElement => {
-      const on_ = it.id === m.ui.view;
-      // The chip (mod/clickable.ts): accent bold text with the hover style; the lit tab is filled (inverse) so it reads as pressed in.
-      const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
-      const tile = chipStyle(ui);
-      const label = els.Text(on_ ? { ...activeChipStyle(ui), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) } : { color: accent, bold: true, backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) });
-      return els.Button({ key: keyOf(it), plain: true, children: [label], label: it.label, onPress: pressOf(it) });
-    });
-    const between = (i: number): RenderElement[] => (i && f.gap ? [gap(f.gap)] : []);
-    return [els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: [...(f.lead ? [gap(f.lead)] : []), ...tabs.flatMap((t, i) => [...between(i), t])] })]; // no rule under the lit chip: it is the filled one
-  });
+  const f = stripLayout(inner, m.ui.view); // every tab as a ` label ` chip on one row where they fit, else the leading ones and a `▸ more` chip (mod/panel-layout.ts)
+  const open = m.ui.expanded === MORE_KEY;
+  const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
+  const tile = chipStyle(ui);
+  const folded = (it: StripTab): boolean => f.folded.some((x) => x.id === it.id);
+  const pressOf = (it: StripTab) => () => {
+    if (open && folded(it)) on.toggle(MORE_KEY); // a pick from the folded row closes it
+    if (it.id === 'board') on.toggleTodos?.();
+    else on.setView(it.id as SidebarView);
+  };
+  const keyOf = (it: { id: string }): string => (it.id === 'board' ? 'tab:todos' : `tab:${it.id}`);
+  const chip = (label: string, key: string, lit: boolean, onPress: () => void): RenderElement => {
+    const text = els.Text(lit ? { ...activeChipStyle(ui), hover: hoverStyle(ui, key), children: chipText(label) } : { color: accent, bold: true, backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}), hover: hoverStyle(ui, key), children: chipText(label) });
+    return els.Button({ key, plain: true, children: [text], label, onPress });
+  };
+  const tabEl = (it: StripTab): RenderElement => chip(it.label, keyOf(it), it.id === m.ui.view, pressOf(it));
+  const row = (key: string, kids: RenderElement[]): RenderElement => els.Box({ key, flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: kids.flatMap((k, i) => (i ? [gap(f.gap), k] : [k])) });
+  const more = f.more ? [chip(moreWord(open, ui), 'tab:more', f.folded.some((it) => it.id === m.ui.view), () => on.toggle(MORE_KEY))] : [];
+  const rows = [row('tabs', [...f.rows[0]!.map(tabEl), ...more])];
+  if (f.more && open) stripRows(f.folded, inner, f.gap, 2 * f.pad).forEach((r, i) => rows.push(row(`tabs:${i + 1}`, r.map(tabEl))));
+  return rows; // no rule under the lit chip: it is the filled one
 }
 
 /** The `o` tab: the board (mod/todo-panel.tsx) drawn inside the Atlas pane, which is the pane the host shows (a second pane opens behind it). */
@@ -166,7 +172,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
   const ui = model.look ?? uiFromEnv(); // the host's one read (register.ts); the process environment only where a fixture sets none
   const cols = Math.max(10, model.columns - 1);
-  const pm = { ...panelModelOf(model, ui, cols), ...(on.close ? { close: true } : {}) }; // the close chip only where the close handler is wired
+  const pm = panelModelOf(model, ui, cols);
   noteRunSecs(model.run?.secs); // the run card prints the band's clock (transcript/placed.ts)
   noteStopVerdict(!!gateTally(model.gates as never).stop?.blocked); // the transcript's done chips read it: a refusal supersedes the ones drawn before it
   const blank = (): RenderElement => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, model, on, ui);

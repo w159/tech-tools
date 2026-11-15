@@ -12,7 +12,7 @@ describe('follow-up A: the side panel tick is the band tick', () => {
   const phaseRowOf = (over: Partial<PanelModel>): string => {
     const m = panelWorld('route', 110, ui, { rows: 40, now: 1_000_000, run: { kind: 'working', secs: 41 }, phase: 'implement', ...over });
     const t = panelLines(m).map(lineText);
-    return t[t.findIndex((l) => l.trim() === 'phase') + 1]!; // slice S3: the stepper row
+    return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!; // slice S3: the stepper row
   };
   test('a run that carries frame f and 0:42 prints that spinner glyph and that clock, whatever now is (truth 41: no copy of the band\'s last note)', () => {
     const now = 1_000_000;

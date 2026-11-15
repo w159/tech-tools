@@ -36,12 +36,13 @@ describe('card: a flat ribbon, every row exactly cols wide', () => {
       expect(rows.join('\n')).not.toMatch(/[╭╮╰╯]/);
       expect(rows[0]).toMatch(/^── /);
       expect(rows[0]).toContain('▾ HEALTH');
-      expect(rows[0]).toContain('▾ hide');
+      expect(rows[0]).not.toContain('hide'); // D8: one collapse control, the title chip
     });
   }
-  test('the hide chip is a Button target that closes the card (the band\'s own key)', () => {
-    const chip = card(health(), 100, BUSY)[0]!.find((x) => x.t.includes('▾ hide'));
+  test('the title chip `▾ HEALTH` is the one Button target that closes the card (the band\'s own key)', () => {
+    const chip = card(health(), 100, BUSY)[0]!.find((x) => x.t.includes('▾ HEALTH'));
     expect(chip).toMatchObject({ press: 'band:health', tone: 'accent', bold: true });
+    expect(card(health(), 100, BUSY)[0]!.filter((x) => x.press !== undefined)).toHaveLength(1);
   });
 });
 

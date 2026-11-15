@@ -24,13 +24,13 @@ const rows = (view: SidebarView, columns: number): string[] =>
     ui: { recipient: null, expanded: null, draft: '', view }, columns, rows: 40, look: ui,
   } as SidebarModel, on) as unknown as Node).map(textOf);
 
-describe('the board view in a narrow pane draws the one-row word strip (critique 18)', () => {
+describe('the board view in a narrow pane draws the one-row chip strip (critique 18, D14)', () => {
   for (const columns of [38, 39, 43]) {
-    test(`pane ${columns}: the six words are one row, the ▸ BOARD ribbon names the pane, no rule under the strip, no row is wider than the pane`, () => {
+    test(`pane ${columns}: the strip is one row of chips, the ▸ BOARD ribbon names the pane, no rule under the strip, no row is wider than the pane`, () => {
       const r = rows('board', columns).join('\n').split('\n');
       expect(r[0]).toContain('▸ BOARD');
       expect(r[0]).toContain('▸ SIDEPANEL'); // the scorer's pane marker (live_capture.py: `r: route` or `▸ SIDEPANEL`)
-      expect(r[2]!.trim().replace(/ +/g, ' ')).toBe('status team channel gates core board');
+      expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^status team channel( gates)? ▸ more$/); // D14: the trailing tabs fold behind `▸ more`
       expect(r.findIndex((l, i) => i > 1 && /^ *━+ *$/.test(l))).toBe(-1); // one idiom: the lit chip is filled, nothing is ruled under it
       expect(r[3]!.includes('━')).toBe(false); // the strip is not wrapped: the row under it is the body
       for (const l of r.slice(0, 3)) expect([...l].length).toBeLessThanOrEqual(columns);
@@ -38,7 +38,7 @@ describe('the board view in a narrow pane draws the one-row word strip (critique
   }
   test('every view draws the same strip row at 38 columns (critique 17 B5: one form on every tab)', () => {
     const first = (v: SidebarView): string => rows(v, 38)[2]!.trimEnd();
-    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ' status team channel gates core board']);
+    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ' status   team   channel   ▸ more']);
   });
 });
 

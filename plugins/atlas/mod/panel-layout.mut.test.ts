@@ -52,8 +52,8 @@ describe('gates tab: the first fix or detail stays on the group row once it fits
       expect([cols, rows.some((t) => t.includes(title) && t.includes(tail))]).toEqual([cols, cols >= from]);
     }
   };
-  test('a failing group (with its green count) holds the first fix', () => {
-    wholeAt(failing, 'lint', 'run the formatter now', 43); // C2: the group count is the bare `1/2` (six cells shorter than `1/2 green`), so the first fix fits whole from 43 cells
+  test('a failing group (with its pass and deny count) holds the first fix', () => {
+    wholeAt(failing, 'lint', 'run the formatter now', 55); // the group count is `1 pass · 1 deny` (D4), so the first fix fits whole from 55 cells
   });
   test('a passing group never carries a check\'s detail: it stays with its own row (critique 6, label and value apart)', () => {
     for (let cols = 30; cols <= 160; cols++) {

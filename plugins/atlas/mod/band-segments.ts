@@ -12,7 +12,7 @@
 //   bandDetail is gone: the second line of the band at 110 is the tab chips (mission-layout footerLines), and the last run's seconds are the band's state word alone.
 import { type Run, type Ui } from './atlas-ui';
 import { clickRun } from './clickable';
-import { gatesSummary, type Health } from './idle-health';
+import { gatesSummary, recentEvents, type Health } from './idle-health';
 import { rateLabel } from './pulse';
 import { ctxTone, sparkRuns } from './spark';
 import { textWidth } from './theme';
@@ -54,4 +54,12 @@ export function bandSegments(h: Health, ui: Ui, o: SegOpts = {}): BandSeg[] {
   }
   if (h.button) out.push({ id: 'health', runs: [clickRun('health', !!h.open, ui, 'band:health')] });
   return out;
+}
+
+/** The band's slack ticker: the newest hook event (`· tool call Bash`, `· turn finished · 3 events`) as one dim run, no age; `[]` when there is no event or it does not fit `room` cells (the caller keeps two cells before it and one after). */
+export function tickerRuns(h: Pick<Health, 'hooks'>, room: number): Run[] {
+  const e = recentEvents(h.hooks?.recent ?? [], 1)[0];
+  if (!e) return [];
+  const t = `· ${e.text}`;
+  return textWidth(t) + 3 <= room ? [{ t, tone: 'sub' }] : [];
 }

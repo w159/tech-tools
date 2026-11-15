@@ -41,18 +41,17 @@ describe('gates figure: the band and the side panel read gateTally', () => {
     const ok = Number(/(\d+) ok/.exec(checks)![1]);
     return [ok, ok + (checks.match(/[▲△]/g) ?? []).length];
   };
-  const figure = (text: string): [number, number] | undefined => {
-    const m = /(\d+)(?: of |\/)(\d+)(?: green)?\s*$/.exec(text); // the route row reads `n of m green`, the gates ribbon `n/m`
-    return m ? [Number(m[1]), Number(m[2])] : undefined;
-  };
+  /** The panel's one gate figure: `ok` (0 denied) or `N denied` (the gates ribbon and the route tab's gates row). */
+  const denied = (text: string): number | undefined => { const m = /(?:\bok|(\d+) denied)\s*$/.exec(text.trimEnd()); return m ? Number(m[1] ?? 0) : undefined; };
   const panel = (tab: PanelTab) => panelText(panelModelOf({ ...worldSidebar(tab, 80, snap), gates: groups }, ui, 80));
 
-  test('the band, the gates tab ribbon and the route tab say the same N of M for one snapshot', () => {
+  test('the band, the gates tab ribbon and the route tab say the same gates for one snapshot (`N denied`)', () => {
     const tally = gateTally(groups);
     expect(tally.total).toBe(4); // the header group with no reply yet counts, pending
     expect(bandFigure()).toEqual([tally.green, tally.total]);
-    expect(figure(panel('gates')[0]!)).toEqual([tally.green, tally.total]);
-    expect(figure(panel('route').find((l) => l.startsWith(' gates'))!)).toEqual([tally.green, tally.total]);
+    const failing = 1; // the world's doctor group; the header group with no reply yet is pending, never a denial
+    expect(denied(panel('gates')[0]!)).toBe(failing);
+    expect(denied(panel('route').find((l) => l.startsWith(' gates'))!)).toBe(failing);
   });
 
   test('a pending header group is listed on the route row as a passing gate, so the names add up to the figure', () => {
@@ -62,9 +61,9 @@ describe('gates figure: the band and the side panel read gateTally', () => {
 
   test('every gate group with an error is a failing check, not a green one', () => {
     const bad: GateGroup[] = [{ id: 'tripwire', title: 'tripwire', lines: [], error: 'hook log unreadable' }, ...worldGates().slice(0, 1)];
-    const f = figure(panelText(panelModelOf({ ...worldSidebar('gates', 80, snap), gates: bad }, ui, 80))[0]!);
-    expect(f).toEqual([gateTally(bad).green, gateTally(bad).total]);
-    expect(f).toEqual([1, 2]);
+    const f = denied(panelText(panelModelOf({ ...worldSidebar('gates', 80, snap), gates: bad }, ui, 80))[0]!);
+    expect(f).toBe(gateTally(bad).total - gateTally(bad).green);
+    expect(f).toBe(1);
   });
 });
 

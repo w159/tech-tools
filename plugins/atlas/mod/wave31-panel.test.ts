@@ -112,7 +112,7 @@ describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: 
 });
 
 describe('wave 31 item 2 (slice S3: the stepper): the panel phase is the band\'s glyph on its stage (critique 29: `phase ● done` under a working band)', () => {
-  const stepper = (run: Run): string => { const t = body('route', 65, 45, run); return t[t.findIndex((l) => l.trim() === 'phase') + 1]!; };
+  const stepper = (run: Run): string => { const t = body('route', 65, 45, run); return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!; };
   const glyphs = (run: Run): string[] => stepper(run).match(/[●○◐◓◑◒▲■]/g) ?? [];
   test('working: one spinner on the current stage', () => {
     expect(glyphs({ kind: 'working' }).filter((g) => '◐◓◑◒'.includes(g))).toHaveLength(1);
@@ -136,7 +136,7 @@ describe('wave 31 item 2 (slice S3: the stepper): the panel phase is the band\'s
     const tone = (kind: Run['kind'], glyph: RegExp): string | undefined => {
       forgetRefusals();
       const lines = bodyLines(panelModelOf(model('route', 66, 45, { kind }), ui, 65));
-      const row = lines[lines.findIndex((l) => lineText(l).trim() === 'phase') + 1]!;
+      const row = lines[lines.findIndex((l) => lineText(l).trim() === 'PHASE') + 1]!;
       return row.runs.find((x) => glyph.test(x.t))?.tone;
     };
     expect([tone('working', /[◐◓◑◒]/), tone('done', /●/), tone('idle', /○/), tone('blocked', /▲/)]).toEqual(['accent', 'ok', 'dim', 'block']);

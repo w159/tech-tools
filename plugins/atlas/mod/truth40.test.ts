@@ -90,7 +90,7 @@ describe('step 4: the panel stepper is the band\'s last frame', () => {
   const rowOf = (now: number, over: Partial<PanelModel> = {}): string => {
     const m = panelWorld('route', 150, ui, { rows: 40, now, run: { kind: 'working', secs: 24 }, phase: 'research', ...over });
     const t = panelLines(m).map(lineText);
-    return t[t.findIndex((l) => l.trim() === 'phase') + 1]!.replace(/\s+/g, ' ').trim();
+    return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!.replace(/\s+/g, ' ').trim();
   };
   test('the panel stepper turns the frame its run carries: the same glyph as the band for that frame, on every beat', () => {
     for (const frame of [0, 3, 5, 9]) {
@@ -106,7 +106,7 @@ describe('step 4: the panel stepper is the band\'s last frame', () => {
     noteBandFrame(2, 41, NOW, 'blocked');
     const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'blocked', secs: 41 }, phase: 'research', entered: ['plan', 'research', 'build'] });
     const t = panelLines(m).map(lineText);
-    const chain = t[t.findIndex((l) => l.trim() === 'phase') + 1]!;
+    const chain = t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!;
     expect(chain).toMatch(/▲ build/);
     expect(chain).not.toMatch(/▲ research/);
     forgetBandFrame();

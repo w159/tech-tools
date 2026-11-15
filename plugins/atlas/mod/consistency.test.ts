@@ -168,12 +168,13 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
     : paintPanel(panelWorld(tab, 80, ui, { core })).map(strip);
   const text = rows.join('\n');
   const f: Facts = {};
+  const greenOf = (row: string, gates: Facts['gates']): string | undefined => { const m = /(?:\bok|(\d+) denied)\s*$/.exec(row.trimEnd()); const n = gates ? Object.keys(gates).length : 0; return m && n > 0 ? `${n - Number(m[1] ?? 0)}/${n}` : undefined; };
   if (tab === 'route') {
     const word = /phase\s+(?:[◐●○▲]\s+)?(\S+)/.exec(text)?.[1]; // the route names the phase by its word alone (critique 17 A5); its place on the rail is read back from the world's rail
     f.phase = word !== undefined && expected.rail.ids.includes(word) ? `${expected.rail.ids.indexOf(word) + 1}/${expected.rail.ids.length}` : undefined;
     f.todo = todoOf(/^ todo .*$/m.exec(text)?.[0] ?? ''); // the labels sit one cell in (the tab indent)
     f.gates = gatePairs(/^ gates .*$/m.exec(text)?.[0] ?? '');
-    f.gatesGreen = /(\d+)(?: of |\/)(\d+) green\s*$/m.exec(/^ gates .*$/m.exec(text)?.[0] ?? '')?.slice(1, 3).join('/');
+    f.gatesGreen = greenOf(/^ gates .*$/m.exec(text)?.[0] ?? '', f.gates); // the one gate vocabulary: `ok` or `N denied`, the green count is the gates listed less the denied
     f.agents = counts(/^ agents .*$/m.exec(text)?.[0] ?? '');
     f.items = stateRows(rows, new RegExp(`^[▸▾ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`));
   }
@@ -181,7 +182,7 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
   if (tab === 'channel') { const m = /^ #\S+\s+(\d+) people(?: · (\d+) unread)?/m.exec(text); if (m) f.channel = { people: Number(m[1]), unread: Number(m[2] ?? 0) }; }
   if (tab === 'gates') {
     f.gates = gatePairs(text);
-    f.gatesGreen = /SIDEPANEL\D*(\d+)\/(\d+)/.exec(text)?.slice(1, 3).join('/'); // the ribbon's figure is `n/m` at every width
+    f.gatesGreen = greenOf(rows[0] ?? '', f.gates); // the ribbon's figure is `ok` or `N denied`
   }
   // the core tab's evidence figure is `n/m` over the plan (critique 10 B4): only its m is the plan total; its n counts evidence, not done rows, so the done count is the world's own
   if (tab === 'core') f.todo = [done, Number(/evidence\s+\d+\/(\d+)/.exec(text)?.[1])];

@@ -26,10 +26,10 @@ describe('sidebar golden text', () => {
     expect(rows('route').join('')).not.toContain('━');
     expect(rows('team').join('')).not.toContain('━');
   });
-  test('route: phase, gates, todo gauge with N of M, agents in words', () => {
+  test('route: phase, gates in words, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
     expect(r).toContain(' phase  ◐ implement');
-    expect(r.some((l) => l.startsWith(' gates ') && l.endsWith('0/2 green'))).toBe(true); // the tool-routing group holds no data: it is not a third gate (gateTally)
+    expect(r.some((l) => l.startsWith(' gates ') && l.endsWith('2 denied'))).toBe(true); // the tool-routing group holds no data: it is not a third gate (gateTally)
     expect(r.some((l) => l.startsWith(' todo ') && l.includes('1/7'))).toBe(true);
     expect(r.some((l) => l.startsWith(' agents ') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);
   });
@@ -47,9 +47,9 @@ describe('sidebar golden text', () => {
     expect(r[2]).toMatch(/^▹ ◉ impl-auth\s+(\S+\s+)?waiting/); // the HUD's order (hud-surface sortAgents): no task, so the squad's start order
     expect(r[3]).toMatch(/^▹ ■ runner-1\s+(\S+\s+)?failed/);
   });
-  test('team at 38 columns (the 110-column pane) draws the six whole words on one row (critique 18; one form on every tab), and keeps name and state', () => {
+  test('team at 38 columns (the 110-column pane) draws the strip as one row of chips with the trailing tabs behind \`▸ more\` (D14), and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]!.trimEnd()).toBe(' status team channel gates core board');
+    expect(r[2]!.trimEnd()).toBe(' status   team   channel   ▸ more');
     expect(r.join('')).not.toContain('━'); // no rule under the lit team tab
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
@@ -66,7 +66,7 @@ describe('sidebar golden text', () => {
   test('gates: group rows with failing lines in words, copy fix when expanded', () => {
     const t = goldenText('gates');
     expect(t).toContain('Completion gate');
-    expect(t).toMatch(/Completion gate.* 1\/2\n/);
+    expect(t).toMatch(/Completion gate.* 1 pass · 1 deny\n/);
     expect(goldenText('gatesExpanded')).toContain('verification coverage');
     expect(goldenText('gatesExpanded')).toContain('run the hooks suite');
   });

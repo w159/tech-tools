@@ -167,7 +167,7 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
 describe('item 3: the status view (critique 34: route about 80% empty, channel about 95%, gates 3/4 against the band\'s 2/4)', () => {
   const rows = (cols = 57, run: Run = RUN, s: never = snap(), gates: unknown[] = GATES): string[] => { forgetPhases(); return withGates(s, 'route', cols, 40, run, gates); };
 
-  const stepperOf = (t: string[]): string => t[t.findIndex((l) => l.trim() === 'phase') + 1]!;
+  const stepperOf = (t: string[]): string => t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!;
   test('the ribbon names the view, and the phase stepper carries the band\'s glyph (slice S3: no word, no clock)', () => {
     const t = rows();
     expect(t[0]).toMatch(/SIDEPANEL/);
@@ -178,7 +178,7 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
   });
   test('phases are the true ones: only the entered ones are green, the lit one wears the clock', () => {
     const chain = stepperOf(rows(70));
-    expect(chain).toMatch(/research [●○] theory [●○] test [◐◓◑◒] implement ○ verify/);
+    expect(chain).toMatch(/[–●] research [–●] theory [–●] test [◐◓◑◒] implement ○ verify/); // passed ●, skipped –, current turning, pending ○ (D12)
   });
   test('one 12-cell braille line per agent, with its name and its time', () => {
     const t = rows();
@@ -197,8 +197,8 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
   test('the gates checklist counts what the band counts: the same gateTally over withCoreTally', () => {
     const tally = gateTally(withCoreTally(GATES, null) as never);
     const t = rows();
-    const head = t.find((l) => /^\s*gates\s/.test(l))!;
-    expect(head).toMatch(new RegExp(`gates\\s+${tally.green}/${tally.total} green$`)); // 4fef5d66: `3/4 green` on the tab against the band's `gates 2/4`
+    const head = t.find((l) => /^\s*GATES\s/.test(l))!;
+    expect(head).toMatch(new RegExp(`GATES\\s+${tally.total - tally.green > 0 ? `${tally.total - tally.green} denied` : 'ok'}$`)); // D4: the one vocabulary, never `3/4 green`
     const at = t.indexOf(head);
     const list = t.slice(at + 1, at + 1 + tally.total);
     expect(list.filter((l) => /^\s+[●△◇] /.test(l))).toHaveLength(tally.total);
@@ -209,7 +209,7 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
     const pending = [{ id: 'completion', title: 'Completion', lines: [{ id: 'a', label: 'Todos drained', ok: true }, { id: 'v', label: 'Verified', ok: false }] }];
     const tally = gateTally(withCoreTally(pending, null) as never);
     const t = rows(57, RUN, snap(), pending);
-    expect(t.find((l) => /^\s*gates\s/.test(l))).toMatch(new RegExp(`${tally.green}/${tally.total} green$`));
+    expect(t.find((l) => /^\s*GATES\s/.test(l))).toMatch(new RegExp(`${tally.total - tally.green > 0 ? `${tally.total - tally.green} denied` : 'ok'}$`));
   });
   test('the last five events, on the run clock', () => {
     const many = { ...(snap() as object), notes: Array.from({ length: 8 }, (_, i) => ({ seq: i + 1, ts: new Date(NOW - 50000 + i * 6000).toISOString(), owner: i % 2 ? 'alpha-explorer' : 'lead', to: 'all', text: `post number ${i + 1}` })) } as never;
@@ -241,9 +241,10 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
       }
     }
   });
-  test('at 110 the stepper names the five stages in three letters, the lit one on the spinner', () => {
+  test('at 110 the stepper is five dots and the current stage in words, the lit one on the spinner', () => {
     const chain = stepperOf(rows(38));
-    expect(chain).toMatch(/res .*thy .*tst .*[◐◓◑◒] imp .*ver/); // a narrow pane: three-letter stages, one glyph each
+    expect(chain).toMatch(/[◐◓◑◒] ○ implement$/); // a narrow pane: dots plus the current stage, never `res thy tst imp ver` (D12)
+    expect(chain).not.toMatch(/\b(res|thy|tst|imp|ver)\b/);
     expect(cells(chain)).toBeLessThanOrEqual(37);
   });
   test('the keys of the merged tabs keep working: channel and gates still open their own views', () => {

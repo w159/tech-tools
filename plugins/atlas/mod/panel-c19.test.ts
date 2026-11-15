@@ -37,12 +37,12 @@ describe('critique 19 C4: the gates tab counts the replies it checked', () => {
     const tally = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 7, total: 8 }, openGates: 3 });
     const rows = body('gates', 80, { gates: [header(7, 8)], core: tally });
     const g = rows.find((l) => l.includes('Header contract'))!;
-    expect(g).toMatch(/7\/8 replies$/);
+    expect(g).toMatch(/7 pass · 1 deny$/); // the reply tally in the one gate vocabulary
     expect(g).not.toContain('green');
   });
-  test('a plain failing group keeps `n/m green`', () => {
+  test('a plain failing group says `0 pass · 1 deny`', () => {
     const rows = body('gates', 80, { gates: [{ id: 'doctor', title: 'doctor', lines: [{ id: 'd', label: 'doctor', ok: false, fix: 'run it' }] }] });
-    expect(rows[0]).toMatch(/0\/1$/);
+    expect(rows[0]).toMatch(/0 pass · 1 deny$/);
   });
 });
 

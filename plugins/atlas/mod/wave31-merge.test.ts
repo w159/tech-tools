@@ -43,9 +43,9 @@ describe('c: every tab is a click chip and pressing it acts (no key is bound)', 
     expect(calls.sort()).toEqual(['board', 'view:channel', 'view:core', 'view:gates', 'view:route', 'view:team']);
   });
   test('the chips stay on a 56-column strip and on a 36-column one, still without a hotkey', () => {
-    for (const cols of [56, 36]) {
+    for (const [cols, count] of [[56, 6], [36, 3 + 1]] as const) { // 36: three tab chips and the `▸ more` chip (D14)
       const chips = all(pane(cols)).filter((x) => x.kind === 'Button' && String(x.props.key).startsWith('tab:'));
-      expect(chips, `${cols}`).toHaveLength(6);
+      expect(chips, `${cols}`).toHaveLength(count);
       expect(chips.every((b) => b.props.hotkey === undefined)).toBe(true);
     }
   });

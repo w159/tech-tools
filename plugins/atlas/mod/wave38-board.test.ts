@@ -203,7 +203,7 @@ describe('step 5: the side panel lists agents in the SUBAGENTS dispatch order (c
     const run: Run = { kind: 'done', secs: 31, startMs: NOW - 31000 };
     const agentsBlock = (view: SidebarView): string[] => {
       const t = render(s, view, 57, 41, run);
-      const at = t.findIndex((l) => /^\s+agents\b/.test(l) || /^\s+(alpha|ghost|beta)-explorer/.test(l));
+      const at = t.findIndex((l) => /^\s+AGENTS\b/.test(l) || /^\s+(alpha|ghost|beta)-explorer/.test(l));
       return namesOf(t.slice(at, at + 4)).slice(0, 3);
     };
     expect(agentsBlock('route')).toEqual(subagents);

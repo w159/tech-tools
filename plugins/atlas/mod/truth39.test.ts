@@ -203,7 +203,7 @@ describe('step 2: the side panel stepper wears the band\'s glyph (slice S3: no w
   const rowOf = (over: Partial<PanelModel>): string => {
     const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'working', secs: 37 }, phase: 'research', ...over });
     const t = panelLines(m).map(lineText);
-    return t[t.findIndex((l) => l.trim() === 'phase') + 1]!; // the stepper: one glyph per stage
+    return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!; // the stepper: one glyph per stage
   };
   test('the band note carries the state word', () => {
     noteBandFrame(2, 36, NOW, 'blocked');
@@ -227,7 +227,7 @@ describe('step 2: the side panel stepper wears the band\'s glyph (slice S3: no w
     noteBandFrame(2, 39, NOW, 'idle');
     const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'idle', secs: 39 }, phase: 'research', todos });
     const t = panelLines(m).map(lineText);
-    const chain = t[t.findIndex((l) => l.trim() === 'phase') + 1]!;
+    const chain = t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!;
     expect(chain).toMatch(/● research/);
     expect(chain).not.toMatch(/○ research/);
     forgetBandFrame();

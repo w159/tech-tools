@@ -836,7 +836,6 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
 		setView: (v) => guarded(() => update($, viewState, () => v)),
 		toggleTodos: () => guarded(() => openBoard($)),
-		close: () => guarded(() => $.ui.close({ id: PANE_ID })),
 		expand: (key) =>
 			guarded(async () => {
 				await update($, expandedState, () => key);
@@ -870,16 +869,18 @@ export async function openBoard($: EngineInterface): Promise<void> {
 /** Wave 42: the idle health's raw inputs: uptime on the clock, the version and branch read at boot, the tokens the host measured, whether the card is open. */
 async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthIn> {
 	const usage = await read($, usageState);
+	const panelUp = await read($, paneOpenedState);
+	if (panelUp) healthOpenNow = false; // round 2 (D1): card and panel never show at once; a card open when the panel opens is closed (and stays closed when the panel closes)
 	return {
 		...(sessionStartMs !== null ? { upSecs: Math.max(0, Math.floor((clockNow - sessionStartMs) / 1000)) } : {}),
 		...(pluginVersion ? { version: pluginVersion } : {}),
 		...(branchName ? { branch: branchName } : {}),
 		...(typeof usage.tokens === 'number' ? { tokens: usage.tokens } : {}),
 		...(typeof usageWindow === 'number' ? { window: usageWindow } : {}),
-		hooks: hookStats(clockNow, 8, runClock.startMs ?? undefined),
+		hooks: hookStats(clockNow, 40, runClock.startMs ?? undefined), // the panel's RECENT grows into the free rows of a tall pane
 		pulse: pulseOf(clockNow),
 		open: healthOpenNow,
-		...((await read($, paneOpenedState)) ? { panel: true } : {}), // the side panel is up: it says the gates, the uptime, the context and the events; the band and the card say only what it does not
+		...(panelUp ? { panel: true } : {}), // the side panel is up: it says the gates, the uptime, the context and the events; the band and the card say only what it does not
 	};
 }
 

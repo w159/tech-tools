@@ -140,7 +140,7 @@ describe('2. working whenever an agent runs (not a queued dispatch): a 141 spinn
     expect(f.band).toMatch(/▲ blocked/);
     const m = { snapshot: snapshotOf(STOP), gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'route' }, columns: 94, rows: 45, look: ui, run: { kind: bandKind(f.model), secs: 58 } } as unknown as SidebarModel;
     const rows = bodyLines(panelModelOf(m, ui, 93)).map((l) => lineText(l).trimEnd());
-    expect(rows[rows.findIndex((l) => l.trim() === 'phase') + 1]).toMatch(/▲/); // the stepper's `▲` on the stage the blocked run is in
+    expect(rows[rows.findIndex((l) => l.trim() === 'PHASE') + 1]).toMatch(/▲/); // the stepper's `▲` on the stage the blocked run is in
   });
 });
 

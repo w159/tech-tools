@@ -6,10 +6,11 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
-import { chipStyle } from './clickable';
+import { chipRun, tileOf } from './clickable';
 import { agoText, fitFields, gateOf, healthRows, noteOf, recentEvents, type Health } from './idle-health';
+import { gateCounts, gateLine, gatesTotal } from './vocab';
 import { chevron } from './clickable';
-import { brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
+import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
@@ -36,14 +37,17 @@ export const CHIP_PAD = 2;
 export type StripTab = { id: PanelTab | 'board'; label: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** The strip's form: a chip is its label with `pad` cells of padding each side (the chips touch, so `pad` is also the gap), `gap` cells between tabs and `lead` before the first. */
+/** The strip's one shape (round 2, D14): a chip is its label with one cell of padding each side, one cell between chips, nothing before the first. It is the same at every width: a strip that does not fit folds its trailing tabs into `▸ more`, it never changes the chips. */
 export type StripForm = { pad: number; gap: number; lead: number };
-/** Forms of the strip, widest first: chips (` status   team   channel ...`: one space each side and one cell between, so each chip is its own raised tile; the lit one filled with the accent); the same words with one space between and no padding, for a narrow pane (the 110 column pane). */
-const STRIP_FORMS: readonly StripForm[] = [{ pad: 1, gap: 1, lead: 0 }, { pad: 0, gap: 1, lead: STRIP_PAD }];
-/** The text a tab is drawn as under a form: the label with its padding. */
-export const chipText = (label: string, f: Pick<StripForm, 'pad'> = STRIP_FORMS[0]!): string => `${' '.repeat(f.pad)}${label}${' '.repeat(f.pad)}`;
+const STRIP_FORM: StripForm = { pad: 1, gap: 1, lead: 0 };
+/** The text a tab is drawn as: the label with its padding. */
+export const chipText = (label: string, f: Pick<StripForm, 'pad'> = STRIP_FORM): string => `${' '.repeat(f.pad)}${label}${' '.repeat(f.pad)}`;
+/** The `more` chip's press key (and the `expanded` key that opens the folded row). */
+export const MORE_KEY = 'tabs:more';
+/** The `more` chip's words: `▸ more` closed, `▾ more` while its row is open. */
+export const moreWord = (open: boolean, ui: Pick<Ui, 'ascii'>): string => `${chevron(open, ui)} more`;
 const stripTabs = (): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t }));
-const stripWidth = (tabs: readonly { label: string }[], f: StripForm): number => f.lead + tabs.reduce((n, t, i) => n + (i ? f.gap : 0) + 2 * f.pad + cells(t.label), 0);
+const chipsWidth = (tabs: readonly { label: string }[], f: StripForm): number => f.lead + tabs.reduce((n, t, i) => n + (i ? f.gap : 0) + 2 * f.pad + cells(t.label), 0);
 
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus `prefix` cells and `gap` cells between; the rest wrap. */
 export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = 0, prefix: number = CHIP_PAD): T[][] {
@@ -58,14 +62,17 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
   return rows;
 }
 
-/** The strip both hosts draw at `cols` cells (design rev 5, C1; chips in wave 43): the whole names on one row as chips where they fit (43 cells), else the same words one space apart (37), else the chips wrapped.
- * The lit tab is filled, the rest are accent text; no key letter is drawn or bound. The form depends on the width only, never on the lit tab. `bare` is always true: no prefix is drawn. */
-export function stripLayout(cols: number, _lit?: string): StripForm & { rows: StripTab[][]; /** Always true: no key prefix is drawn. */ bare: boolean } {
+/** The strip both hosts draw at `cols` cells (round 2, D14): every tab as a chip on one row where they fit (48 cells), else the leading tabs that fit beside a `▸ more` chip and the rest in `folded`
+ * (shown on a second row while the `more` chip is open). `rows` is the visible row; `more` says the chip is there. The lit tab is filled; no key letter is drawn or bound. The form never depends on the lit tab. */
+export function stripLayout(cols: number, _lit?: string): StripForm & { rows: StripTab[][]; folded: StripTab[]; more: boolean; /** Always true: no key prefix is drawn. */ bare: boolean } {
   const words = stripTabs();
-  const form = STRIP_FORMS.find((f) => stripWidth(words, f) <= Math.max(1, cols));
-  if (form) return { ...form, rows: [words], bare: true };
-  const wide = STRIP_FORMS[0]!;
-  return { ...wide, rows: stripRows(words, Math.max(1, cols), wide.gap, 2 * wide.pad), bare: true };
+  const f = STRIP_FORM;
+  const room = Math.max(1, cols);
+  if (chipsWidth(words, f) <= room) return { ...f, rows: [words], folded: [], more: false, bare: true };
+  const moreW = 2 * f.pad + cells('▸ more');
+  let n = words.length - 1;
+  while (n > 1 && chipsWidth(words.slice(0, n), f) + f.gap + moreW > room) n--;
+  return { ...f, rows: [words.slice(0, n)], folded: words.slice(n), more: true, bare: true };
 }
 
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
@@ -114,8 +121,6 @@ export type PanelModel = {
   run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
   /** Wave 42: the idle health (register.ts builds it from the band's own inputs): an idle status view with no agent draws these rows, each a pressable row that opens 1-3 detail lines, instead of `no agents yet` and `no events yet`. Absent: the view as before. */
   health?: Health;
-  /** The pill row carries the close chip `[✕]` (a press target, key `panel:close`): the Claude pane sets it when its close handler is wired; omp has no pointer and never does. */
-  close?: boolean;
 };
 
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
@@ -205,20 +210,26 @@ const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
 /** A channel as a person reads it: a generated id (`lc-opl0e60i`, a launch code, with or without its `@master` branch) is no name, so it reads `this run`; a named channel keeps its `#name` (critique 12). */
 export const channelLabel = (name: string | undefined, fallback = 'channel'): string => (name && /^lc-[\w-]{4,}(@[\w./-]+)?$/i.test(name) ? 'this run' : `#${name ?? fallback}`);
 
+/** The gates in the one vocabulary (mod/vocab.ts): denials summed over the groups that fired, `ok` or `N denied`; never a pass ratio. `fired` counts the groups that hold lines. */
+function gatesFigure(m: Pick<PanelModel, 'gates' | 'core'>): { text: string; tone: Tone; deny: number; fired: number } {
+  const t = gatesTotal(countedGates(gatesOf(m)).map((g) => gateCounts({ ok: groupOk(g), pending: groupPending(g), lines: g.lines.length, pass: g.lines.length - groupFailing(g) })));
+  return { text: t.text, tone: t.tone, deny: t.deny, fired: t.fired };
+}
+
 /** The ribbon's right-hand text: what the active tab counts, always with its word. */
 function ribbonRight(m: PanelModel): string {
   if (m.tab === 'team') return m.lead ? '' : m.workers.length ? countWords(m.workers, m.ui) : ''; // with a lead the tally is the `workers` row under it: once, at every width (critique 14: `3 done` twice)
-  if (m.tab === 'gates') { const t = tallyOf(gatesOf(m)); return t.total ? `${t.green}/${t.total}` : ''; } // `n/m` at every width: `2/4` at 110 and `1 of 4 green` at 150 was one figure in two formats (critique 11)
+  if (m.tab === 'gates') { const g = gatesFigure(m); return g.fired ? g.text : ''; } // `ok` or `2 denied` at every width, never a pass ratio (round 2, D4)
   // the lit chip already says `status`: the ribbon's right-hand text is a figure (a count, a tally, a channel), never the tab's own name
   if (m.tab === 'channel') return m.channel && channelLabel(m.channel) !== 'this run' ? channelLabel(m.channel) : ''; // the head row says `this run` once; the ribbon names only a real channel
   return '';
 }
 
-/** The close chip's press key (sidebar-paint draws the run with this key as the pane's dismiss Button). */
-export const CLOSE_KEY = 'panel:close';
 const runsWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
+/** The active tab's word in the header: `SIDEPANEL · status` (the route tab is the status view). */
+const tabWord = (tab: PanelTab): string => PANEL_TABS.find((t) => t.id === tab)?.label ?? tab;
 
-/** `view`: another view in the panel's ribbon (the board: `▸ BOARD  5 items`, critique 15 B5); absent: the SIDEPANEL ribbon of the lit tab. */
+/** `view`: another view in the panel's ribbon (the board: `▸ BOARD  5 items`, critique 15 B5); absent: the SIDEPANEL ribbon of the lit tab. The pane's close is the host's own `✕` mark: no close chip here (round 2, D8). */
 export function ribbonRow(m: PanelModel, view?: { title: string; right: string }): PanelLine {
   if (m.cols < 34) {
     const cap = capsule(m.ui);
@@ -227,29 +238,25 @@ export function ribbonRow(m: PanelModel, view?: { title: string; right: string }
   }
   const right = view ? view.right : ribbonRight(m);
   const fitsRight = right && m.cols >= 40 + cells(right);
-  // The gates figure (`17/18`) never drops from the header while the capsule and title fit beside it.
+  // The gates figure (`ok`, `2 denied`) never drops from the header while the capsule and title fit beside it.
   const keep = !view && m.tab === 'gates' && !!right && m.cols >= 32 + cells(right);
-  const chip = m.close ? [r(m.ui.ascii ? '[x]' : '[✕]', 'accent', { bold: true, press: CLOSE_KEY, hover: true }), r(' ')] : []; // the close chip ends the pill row, one cell in from the edge (S-15: no row of its own)
-  const bar = lightRibbon(ribbon(m.cols - runsWidth(chip), view?.title ?? 'SIDEPANEL', fitsRight || keep ? right : '', m.ui), m.ui);
-  return line([...bar, ...chip]);
+  return line(lightRibbon(ribbon(m.cols, view?.title ?? `SIDEPANEL ${dot(m.ui)} ${tabWord(m.tab)}`, fitsRight || keep ? right : '', m.ui), m.ui));
 }
 
-/** The tab strip and the rule under the lit tab (design rev 5, C1): ` status  team  channel  gates  core  board ` as chips, every one on its own tile (the lit one filled with the accent), no rule under the lit one.
- * The rest are accent text. No key letters (see stripLayout). A strip too narrow for one row wraps (the rule sits under the row that holds the lit tab). */
+/** The tab strip (round 2, D14): every tab as a ` label ` chip, the lit one filled with the accent, one cell between chips. A strip that does not fit ends in a `▸ more` chip (key `tabs:more`)
+ * that opens a second row with the folded tabs (`▾ more`); the chip is filled while the lit tab is one of the folded. */
 export function tabRows(m: PanelModel): PanelLine[] {
   const f = stripLayout(m.cols, m.tab);
-  const lead = r(' '.repeat(f.lead));
   const gap = r(' '.repeat(f.gap));
-  const tile = chipStyle(m.ui).backgroundColor;
-  return f.rows.map((row): PanelLine => {
-    const strip: Run[] = f.lead ? [lead] : [];
-    row.forEach((t, i) => {
-      if (i && f.gap) strip.push(gap);
-      const text = chipText(t.label, f);
-      strip.push(t.id === m.tab ? r(text, 'ink', { bold: true, bg: 'accent' }) : r(text, 'accent', tile ? { bgHex: tile } : {})); // the lit chip is filled, every other one is raised on a tile one step off the panel
-    });
-    return line(fitRuns(strip, m.cols));
-  });
+  const tile = tileOf(m.ui);
+  const chip = (t: StripTab): Run => { const text = chipText(t.label, f); return t.id === m.tab ? r(text, 'ink', { bold: true, bg: 'accent' }) : r(text, 'accent', { ...(tile ? { bgHex: tile } : {}) }); }; // the lit chip is filled, every other one is raised on a tile one step off the panel
+  const strip = (tabs: readonly StripTab[]): Run[] => tabs.flatMap((t, i) => [...(i ? [gap] : []), chip(t)]);
+  const open = m.expanded === MORE_KEY;
+  const litFolded = f.folded.some((t) => t.id === m.tab);
+  const more: Run[] = f.more ? [gap, { ...chipRun(moreWord(open, m.ui), m.ui, MORE_KEY), ...(litFolded ? { tone: 'ink' as const, bg: 'accent' as const, bgHex: undefined } : {}) }] : [];
+  const rows = [line(fitRuns([...strip(f.rows[0]!), ...more], m.cols))];
+  if (f.more && open) for (const row of stripRows(f.folded, m.cols, f.gap, 2 * f.pad)) rows.push(line(fitRuns(strip(row), m.cols)));
+  return rows;
 }
 
 /** Ribbon, blank, tab strip, rule, and (from 100 columns) a blank before the body; the 80-column design has none. */
@@ -291,12 +298,12 @@ function phaseRow(m0: PanelModel, named = true): PanelLine {
   return line([label('phase', m.cols), r(`${m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.queued} `, 'muted'), r('idle', 'muted'), r(` ${dot(m.ui)} ${m.phase}`, 'muted')]);
 }
 
-/** `gates   ● lint   ● test   ▲ doctor   2/3 green`; names that do not fit fold to the count alone. `n/m` like the ribbon's figure (critique 12 B3). */
+/** `gates   ● lint   ● test   ▲ doctor   ok`; names that do not fit fold to the word alone: `ok` or `1 denied`, never a pass ratio (round 2, D4). */
 function gatesRow(m: PanelModel): PanelLine | null {
   const t = tallyOf(gatesOf(m));
   const gs = countedGates(gatesOf(m));
   if (!t.total) return null;
-  const word = `${t.green}/${t.total} green`;
+  const word = gatesFigure(m).text;
   const names: Run[] = gs.flatMap((g, i): Run[] => [...(i ? [r('   ')] : []), groupPending(g) ? { ...stateRun('queued', m.ui), t: `${stateRun('queued', m.ui).t} ` } : groupOk(g) ? mark('done', m) : { ...gateMark(m.ui), t: `${gateMark(m.ui).t} ` }, r(g.id)]);
   const full = [label('gates', m.cols), ...names, r(`   ${word}`)];
   if (rowWidth(full) <= m.cols) return line(full);
@@ -641,26 +648,24 @@ function fitDetail(text: string, room: number): string {
   while (cells(t) > room && t.includes(' · ')) t = t.slice(0, t.lastIndexOf(' · '));
   return cells(t) > room ? clipE(t, room) : t;
 }
-/** The context gauge: `▕██░░░░░░░░▏ 6%` (ASCII `[##........] 6%`); one cell filled from 1% so a used window never reads empty. */
-export function contextGauge(pct: number, ui: Pick<Ui, 'ascii'>, w = 10): string {
-  const p = Math.max(0, Math.min(100, pct));
-  const on = p <= 0 ? 0 : Math.max(1, Math.round((p / 100) * w));
-  return ui.ascii ? `[${'#'.repeat(on)}${'.'.repeat(w - on)}] ${Math.round(p)}%` : `▕${'█'.repeat(on)}${'░'.repeat(w - on)}▏ ${Math.round(p)}%`;
-}
 // ---- the status grid (S3) ---------------------------------------------------------------------------------------------------------------
 /** The grid of the status view: section headers in cell 2, rows in cell 4, one value column from cell 12; the slots are the same at idle, working and done. */
 const HEAD_AT = 2;
 const ROW_AT = 4;
 const VALUE_AT = 12;
 const RECENT_SLOTS = 3;
-const sect = (title: string, m: PanelModel, figures: Run[] = []): PanelLine => line(fitRuns([r(`${' '.repeat(HEAD_AT)}${title}`, 'muted', { bold: true }), ...(figures.length ? [r('  '), ...figures] : [])], m.cols));
+/** Section headers of the status view are inert labels in dim uppercase (`PHASE`, `PULSE`, `HEALTH`, `RECENT`, the case of the card's `HEALTH` ribbon): plain text, never a press. */
+const sect = (title: string, m: PanelModel, figures: Run[] = []): PanelLine => line(fitRuns([r(`${' '.repeat(HEAD_AT)}${title.toUpperCase()}`, 'muted', { bold: true }), ...(figures.length ? [r('  '), ...figures] : [])], m.cols));
 const slotLabel = (t: string): Run => r(`${' '.repeat(ROW_AT)}${pad(t, VALUE_AT - ROW_AT)}`, 'muted');
 /** The spinner index of this render, the one the stepper and the phase mark both turn: the frame the run was built with (the band's own index, register.ts paneFrame), else the clock's (`spinFrameOf(now)`, the band's spinClock reading), else the tick. */
 const spinIdx = (m: Pick<PanelModel, 'now' | 'tick' | 'run'>): number => m.run?.frame ?? (m.now !== undefined ? spinFrameOf(m.now) : m.tick);
 
-/** The phases as one row, one glyph per stage: `● research ◐ theory ○ test ○ implement ○ verify` (done green, the current stage the band's spinner in the accent, pending dim). A pane too narrow for the whole names takes three-letter ones. */
-const SHORT3: Record<string, string> = { research: 'res', theory: 'thy', test: 'tst', implement: 'imp', verify: 'ver', review: 'rev', design: 'dsn', document: 'doc', deliver: 'dlv' };
-export const stageAbbr = (p: string): string => SHORT3[p] ?? (cells(p) <= 3 ? p : p.slice(0, 3));
+/** Round 2 (D12): a pending stage reads one step above `dim` (the dim ink is 2.7:1 on the panel, this one about 3.9:1); the glyph and the name share it. */
+const PENDING_INK = { mocha: PALETTE5.pending, latte: PALETTES.latte.line } as const;
+/** At this width and under the stepper is dots and the current stage spelled out (`● ◐ ○ ○ ○ theory`), never an abbreviation. */
+const NARROW = 47;
+/** The phases as one row, one glyph per stage: `● research ◐ theory ○ test ○ implement ○ verify`: a stage the run passed is a green `●`, the current one the band's spinner in the accent, a pending one `○` (a stage the run
+ * passed over is `–`). Done fills every stage the run entered. A pane of NARROW columns or less, or one the names do not fit, draws the dots and then the current (or last) stage spelled out. */
 function stepperRow(m: PanelModel): PanelLine {
   const lead = r(' '.repeat(ROW_AT));
   if (!m.phases.length) return line([lead, r('no phases yet', 'dim')]);
@@ -671,14 +676,17 @@ function stepperRow(m: PanelModel): PanelLine {
   const lastEntered = seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
   const lit = kind === 'done' || kind === 'idle' ? -1 : kind === 'blocked' ? Math.max(litAt, lastEntered, 0) : litAt >= 0 ? litAt : Math.max(0, lastEntered); // a working run always turns one stage: the band's spinner has a place on the panel
   const entered = (p: string, i: number): boolean => (kind === 'idle' ? false : seen ? seen.has(p) : kind === 'done' || (litAt >= 0 && i < litAt));
-  const build = (name: (p: string) => string): Run[] => m.phases.flatMap((p, i): Run[] => {
-    const cur = lit === i;
-    const done = !cur && entered(p, i);
-    const g: Run = cur ? (kind === 'blocked' ? stateRun('blocked', m.ui) : { t: phaseGlyph('working', spinIdx(m), m.ui.ascii), tone: 'accent' }) : done ? stateRun('done', m.ui) : { t: m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.queued, tone: 'dim' };
-    return [...(i ? [r(' ')] : []), { ...g, t: `${g.t} ` }, r(name(p), cur ? 'text' : done ? 'sub' : 'dim', cur ? { bold: true } : {})];
-  });
-  const whole = build((p) => p);
-  return line(fitRuns([lead, ...(rowWidth(whole) + ROW_AT <= m.cols - 1 ? whole : build(stageAbbr))], m.cols));
+  const ink = PENDING_INK[m.ui.theme === 'latte' ? 'latte' : 'mocha'];
+  const dim = (t: string): Run => ({ t, tone: 'dim', ...(m.ui.color === 'none' ? {} : { fg: ink }) });
+  const skipped = (i: number): boolean => seen !== null && kind !== 'idle' && lit !== i && !entered(m.phases[i]!, i) && i < Math.max(lastEntered, lit);
+  const glyph = (p: string, i: number): Run => (lit === i ? (kind === 'blocked' ? stateRun('blocked', m.ui) : { t: phaseGlyph('working', spinIdx(m), m.ui.ascii), tone: 'accent' }) : entered(p, i) ? stateRun('done', m.ui) : skipped(i) ? dim(m.ui.ascii ? '-' : '–') : dim(m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.queued));
+  const named = (p: string, i: number): Run => (lit === i ? r(p, 'text', { bold: true }) : entered(p, i) ? r(p, 'sub') : dim(p));
+  const whole = m.phases.flatMap((p, i): Run[] => [...(i ? [r(' ')] : []), { ...glyph(p, i), t: `${glyph(p, i).t} ` }, named(p, i)]);
+  if (m.cols > NARROW && rowWidth(whole) + ROW_AT <= m.cols - 1) return line(fitRuns([lead, ...whole], m.cols));
+  const at = lit >= 0 ? lit : kind === 'done' ? (lastEntered >= 0 ? lastEntered : m.phases.length - 1) : lastEntered;
+  const spelled = at >= 0 ? named(m.phases[at]!, at) : kind === 'idle' ? dim('idle') : null;
+  const dots = m.phases.flatMap((p, i): Run[] => [...(i ? [r(' ')] : []), glyph(p, i)]);
+  return line(fitRuns([lead, ...dots, ...(spelled ? [r(' '), spelled] : [])], m.cols));
 }
 const phaseBlock = (m: PanelModel): PanelLine[] => [sect('phase', m), stepperRow(m)];
 
@@ -694,71 +702,107 @@ function pulseBlock(m: PanelModel, h: Health): PanelLine[] {
   return out;
 }
 
-/** `health`: the gates as one collapsed row (`▸ gates  ● completion ● tripwire ● routing ● header`, dots only on a narrow pane) that opens to one `● name  n/m` row per gate with its note on an indented line, and the session row. */
-function healthSection(m: PanelModel, h: Health): PanelLine[] {
+/** The press key of the HEALTH section's gates chip: the band's `▸ health` chip sets it (register.ts openHealthInPanel) while the panel is up. */
+export const GATES_KEY = 'health:gates';
+type GatesMode = 'chip' | 'open' | 'list' | 'sum';
+const gateNote = (c: Health['gates']['checks'][number]): string => noteOf(c);
+
+/** `health`: the gates, then the session row. Wide: a `▸ gates` chip and the summary in words (`● ok · 0 denied · 4 gates · 1 not fired`), which opens to one `● name  8 pass · 0 deny` row per gate (with its note under it).
+ * A narrow pane lists the gates, one named row each (round 2, D13: never bare dots, and there is nothing to click, so no chip). `sum`: the summary alone, when the pane has no rows for the list. */
+function healthSection(m: PanelModel, h: Health, mode: GatesMode, withSession = true): PanelLine[] {
   const out: PanelLine[] = [sect('health', m)];
   const rows = healthRows(h, m.ui, { footer: true, ...(m.notes.length ? { messages: m.notes.length } : {}) });
   const checks = h.gates.checks;
+  const gatesRow = rows.find((x) => x.id === 'gates');
   if (checks.length) {
-    const key = 'health:gates';
-    const open = m.expanded === key;
-    const head = [r(' '.repeat(HEAD_AT)), r(chevron(open, m.ui), 'accent', { bold: true, press: key, hover: true }), r(` ${pad('gates', VALUE_AT - HEAD_AT - 2)}`, 'accent', { bold: true, press: key, hover: true })];
-    const room = m.cols - VALUE_AT;
-    const named = checks.flatMap((c, i): Run[] => { const g = gateOf(c, m.ui); return [...(i ? [r(' ')] : []), r(g.glyph, g.tone), r(` ${g.name}`)]; });
-    const dots = checks.flatMap((c, i): Run[] => { const g = gateOf(c, m.ui); return [...(i ? [r(' ')] : []), r(g.glyph, g.tone)]; });
-    const value = open ? [] : rowWidth(named) <= room ? named : dots;
-    out.push(line(fitRuns([...head, ...value], m.cols), { kind: 'toggle', key }));
-    if (open) {
+    const room = m.cols - 1 - VALUE_AT;
+    const summary = gatesRow ? fitFields(gatesRow.fields, room) : [];
+    if (mode === 'chip' || mode === 'open') {
+      const open = mode === 'open';
+      const key = GATES_KEY;
+      out.push(line(fitRuns([r(' '.repeat(HEAD_AT)), chipRun(`${chevron(open, m.ui)} gates`, m.ui, key), r(' '), ...summary], m.cols), { kind: 'toggle', key }));
+    } else if (mode === 'sum') out.push(line(fitRuns([slotLabel('gates'), ...summary], m.cols)));
+    if (mode === 'open' || mode === 'list') {
       const nameW = Math.max(...checks.map((c) => cells(c.id)));
       for (const c of checks) {
         const g = gateOf(c, m.ui);
         out.push(line(fitRuns([r(' '.repeat(ROW_AT)), r(g.glyph, g.tone), r(` ${pad(g.name, nameW)}  `), r(g.count, g.tone)], m.cols)));
-        if (noteOf(c)) out.push(line(fitRuns([r(' '.repeat(ROW_AT + 2)), r(noteOf(c), 'dim')], m.cols)));
+        if (mode === 'open' && gateNote(c)) out.push(line(fitRuns([r(' '.repeat(ROW_AT + 2)), r(gateNote(c), 'dim')], m.cols)));
       }
     }
   }
   const session = rows.find((x) => x.id === 'session');
-  if (session) out.push(line(fitRuns([slotLabel(session.label), ...fitFields(session.fields, m.cols - 1 - VALUE_AT)], m.cols)));
+  if (withSession && session) out.push(line(fitRuns([slotLabel(session.label), ...fitFields(session.fields, m.cols - 1 - VALUE_AT)], m.cols)));
   return out;
 }
 
-/** `recent`: the newest hook events, three slots always (an empty one is a blank row), each with its age in a fixed three-cell right-aligned column (` 9s`, `10s`, ` 3m`; no "ago") and a readable label. */
-function recentBlock(m: PanelModel, h: Health, slots: number = RECENT_SLOTS): PanelLine[] {
-  if (slots < 1) return [];
-  const ev = recentEvents(h.hooks?.recent ?? [], slots);
-  const rows = Array.from({ length: slots }, (_, k): PanelLine => {
-    const e = ev[k];
-    if (!e) return BLANK;
-    const text = fitDetail(e.text, Math.max(4, m.cols - 1 - ROW_AT - 5));
-    return line(fitRuns([r(' '.repeat(ROW_AT)), r(agoText(e.ageSecs).padStart(3), 'dim'), r('  '), r(text, 'sub')], m.cols));
+/** The one-glyph severity of a recent event (idle-health recentEvents): `·` info (dim), `●` ok (green), `✗` a denial or failure (red). */
+const SEV_GLYPH = { info: ['·', '.'], ok: ['●', '*'], bad: ['✗', 'x'] } as const;
+const SEV_TONE = { info: 'dim', ok: 'ok', bad: 'bad' } as const;
+
+/** `recent`: the newest hook events, newest first, `n` rows: the age in a 3-cell right-aligned column at cell 4 (` 9s`, `10s`, ` 3m`; no "ago"), a severity glyph, the readable label from the value column (cell 12). */
+function recentRowsOf(m: PanelModel, h: Health, n: number): PanelLine[] {
+  return recentEvents(h.hooks?.recent ?? [], n).map((e): PanelLine => {
+    const glyph = SEV_GLYPH[e.sev][m.ui.ascii ? 1 : 0];
+    const text = fitDetail(e.text, Math.max(4, m.cols - 1 - VALUE_AT));
+    return line(fitRuns([r(' '.repeat(ROW_AT)), r(agoText(e.ageSecs).padStart(3), 'dim'), r('   '), r(glyph, SEV_TONE[e.sev]), r(' '), r(text, 'sub')], m.cols));
   });
-  return [sect('recent', m), ...rows];
 }
 
 /** The idle status view ends in a rule under its last row, so a pane with room to spare reads finished, not cut off. */
 const closingRule = (m: PanelModel): PanelLine => line([r(' '.repeat(HEAD_AT)), r((m.ui.ascii ? '-' : '─').repeat(Math.max(1, m.cols - 1 - 2 * HEAD_AT)), 'dim')]);
 
-/** The footer of the health view, pinned to the pane's last body row: `atlas 17.21.1 · hooks loaded`. Real figures only; empty when the mod has none of them. */
-function healthFooter(m: PanelModel, h: Health): string {
-  const ev = h.hooks;
-  return [h.version ? `atlas ${h.version}` : '', ev ? 'hooks loaded' : ''].filter(Boolean).join(' · '); // the events count is the hooks row's, said once
+/** The footer of the status view, pinned to the pane's last row: `atlas 17.24.0 · hooks loaded`. Real figures only; empty when the mod has none of them. */
+function healthFooter(h: Health): string {
+  return [h.version ? `atlas ${h.version}` : '', h.hooks ? 'hooks loaded' : ''].filter(Boolean).join(' · '); // the events count is the hooks row's, said once
 }
 
-/** Pulse, health and recent under the rule and the pinned footer, in `room` rows: a short pane gives up the recent slots first, then the footer. The same rows at idle, working and done, so no heading moves. */
-function healthSummary(m: PanelModel, hh: Health, room: number): PanelLine[] {
-  const foot = healthFooter(m, hh);
-  const fixed = [...pulseBlock(m, hh), ...healthSection(m, hh)];
-  const tail = (withFoot: boolean): PanelLine[] => [closingRule(m), ...(withFoot && foot ? [line(fitRuns([r(' '.repeat(HEAD_AT)), r(foot, 'dim')], m.cols))] : [])];
-  const slots = Math.max(0, Math.min(RECENT_SLOTS, room - fixed.length - 1 - tail(true).length));
-  return [...fixed, ...recentBlock(m, hh, slots), ...tail(room >= fixed.length + 2 || slots > 0)];
+/** The agents the run dispatched, under PHASE: one row each (mark, name, a spark over the run, its time), at most this many; the rest are on the team tab. */
+const DASH_AGENTS = 5;
+function agentsBlock(m: PanelModel, ws: readonly PanelWorker[]): PanelLine[] {
+  if (!ws.length) return [];
+  const shown = ws.slice(0, DASH_AGENTS);
+  return [BLANK, sect('agents', m, [r(`${ws.length}`, 'muted')]), ...statusAgentRows(m, shown), ...(ws.length > shown.length ? [dimLine(m, `+${ws.length - shown.length} more on the team tab`)] : [])];
+}
+
+/** The status dashboard (round 2, D11, D14): PHASE, PULSE, HEALTH, RECENT, one blank row between sections, the pane's height filled exactly. RECENT takes every row the rest leaves free (newest first); a rule and the footer
+ * are the last two rows. A pane too short gives up, in this order: RECENT, the gates list (to its summary), the leading blank, the rule, the session row, the agents. The footer is never given up. */
+function dashboard(m: PanelModel, h: Health, ws: readonly PanelWorker[]): PanelLine[] {
+  const room = m.rows > 0 ? m.rows - headerRows(m).length : 0;
+  const foot = healthFooter(h);
+  const wide = m.cols > NARROW;
+  const wanted: GatesMode = !h.gates.checks.length ? 'sum' : wide ? (m.expanded === GATES_KEY ? 'open' : 'chip') : 'list';
+  const events = recentEvents(h.hooks?.recent ?? [], 64);
+  type Cfg = { gates: GatesMode; lead: boolean; rule: boolean; session: boolean; agents: boolean };
+  const base = (c: Cfg): PanelLine[] => [
+    ...(c.lead ? [BLANK] : []), ...phaseBlock(m), ...(c.agents ? agentsBlock(m, ws) : []),
+    BLANK, ...pulseBlock(m, h), BLANK, ...healthSection(m, h, c.gates, c.session),
+  ];
+  const tail = (c: Cfg): PanelLine[] => (foot ? [...(c.rule ? [closingRule(m)] : []), line(fitRuns([r(' '.repeat(HEAD_AT)), r(foot, 'dim')], m.cols))] : []);
+  const folded: GatesMode = wanted === 'chip' ? 'chip' : wanted === 'sum' ? 'sum' : wide ? 'chip' : 'sum';
+  const cfgs: Cfg[] = [
+    { gates: wanted, lead: true, rule: true, session: true, agents: true },
+    { gates: folded, lead: true, rule: true, session: true, agents: true },
+    { gates: folded, lead: false, rule: true, session: true, agents: true },
+    { gates: folded, lead: false, rule: false, session: true, agents: true },
+    { gates: folded, lead: false, rule: false, session: false, agents: true },
+    { gates: folded, lead: false, rule: false, session: false, agents: false },
+  ];
+  const cfg = room <= 0 ? cfgs[0]! : cfgs.find((c) => base(c).length + tail(c).length <= room) ?? cfgs[cfgs.length - 1]!;
+  const top = base(cfg);
+  const bottom = tail(cfg);
+  const free = room <= 0 ? RECENT_SLOTS + 2 : room - top.length - bottom.length; // rows left for the RECENT block (its blank and header included)
+  const rows = Math.min(events.length, Math.max(0, free - 2));
+  const none = line(fitRuns([r(' '.repeat(ROW_AT)), r('no events yet', 'dim')], m.cols));
+  const recent: PanelLine[] = free >= 3 ? [BLANK, sect('recent', m), ...(rows > 0 ? recentRowsOf(m, h, rows) : [none])] : [];
+  const pad = room <= 0 ? [] : Array.from({ length: Math.max(0, room - top.length - recent.length - bottom.length) }, () => BLANK);
+  const all = [...top, ...recent, ...pad, ...bottom];
+  return room > 0 && all.length > room ? [...all.slice(0, room - bottom.length), ...bottom].slice(0, room) : all;
 }
 
 function statusBody(m: PanelModel): PanelLine[] {
   const ws = workersByTask(m);
-  if (m.health && ws.length === 0 && (m.run?.kind === 'idle' || m.run?.kind === 'working' || m.run?.kind === 'done' || m.run?.kind === 'blocked')) {
-    const phase = phaseBlock(m);
-    return [...phase, ...healthSummary(m, m.health, m.rows - headerRows(m).length - 1 - phase.length)];
-  }
+  if (m.health && (m.run?.kind === 'idle' || m.run?.kind === 'working' || m.run?.kind === 'done' || m.run?.kind === 'blocked')) return dashboard(m, m.health, ws);
   const gs = countedGates(gatesOf(m));
   const phase = phaseBlock(m);
   const room = Math.max(4, m.rows - headerRows(m).length - 1);
@@ -767,14 +811,13 @@ function statusBody(m: PanelModel): PanelLine[] {
   const nG = gs.length;
   const total = (): number => phase.length + 1 + 1 + Math.max(1, nA) + (ws.length > nA ? 1 : 0) + 1 + 1 + Math.max(1, nG) + 1 + 1 + Math.max(1, nE) + 1 + 1;
   while (total() > room && (nE > 0 || nA > 1)) { if (nE > 0) nE--; else nA--; }
-  const t = tallyOf(gatesOf(m));
   const agents = ws.length ? statusAgentRows(m, ws.slice(0, nA)) : [dimLine(m, 'no agents yet')];
   const gates = nG ? statusGateRows(m, gs) : [dimLine(m, 'no gates reported yet')];
   const events = nE > 0 ? statusEventRows(m, nE) : [dimLine(m, statusEventCount(m) ? 'events fold on a short pane' : 'no events yet')];
   return [
     ...phase, BLANK,
     sect('agents', m, ws.length ? [r(`${ws.length}`, 'muted')] : []), ...agents, ...(ws.length > nA ? [dimLine(m, `+${ws.length - nA} more on the team tab`)] : []), BLANK,
-    sect('gates', m, t.total ? [r(`${t.green}/${t.total} green`, tallyTone(t.green, t.total))] : []), ...gates, BLANK,
+    sect('gates', m, gatesFigure(m).fired ? [r(gatesFigure(m).text, gatesFigure(m).tone)] : []), ...gates, BLANK,
     sect('events', m), ...events, BLANK,
     dimLine(m, `${m.notes.length} ${m.notes.length === 1 ? 'message' : 'messages'}`), // wave 36: the channel's own count, one dim footer row (an empty channel says `0 messages`)
   ];
@@ -964,10 +1007,7 @@ function teamBody(m: PanelModel): PanelLine[] {
   const g = alone ? { ...teamGrid(m, everyone), sparkW: 0 } : teamGrid(m, everyone); // the lead alone has no pace to draw: no braille run until a worker gives it data
   const focusName = m.recipient && everyone.some((w) => w.name === m.recipient) ? m.recipient : workers.find((w) => w.state === 'running')?.name;
   const rows = (ws: readonly PanelWorker[]): PanelLine[] => ws.flatMap((w) => workerRows(m, w, g, w.name === focusName));
-  if (leadRow && !m.workers.length && !mates.length) { // nothing ran: the lead's row and one labelled line, no empty time axis and no `0 running` total; the pulse and health summary under it (not 33 blank rows)
-    const top = [...rows([leadRow]), dimLine(m, 'no workers yet')];
-    return m.health ? [...top, BLANK, ...healthSummary(m, m.health, m.rows - headerRows(m).length - 1 - top.length - 1)] : top;
-  }
+  if (leadRow && !m.workers.length && !mates.length) return [...rows([leadRow]), dimLine(m, 'no workers yet')]; // nothing ran: the lead's row and one labelled line, no empty time axis and no `0 running` total (the pulse, health and recent figures are the status tab's alone: round 2, D14)
   const hint = !m.workers.length && !mates.length ? emptyHint(m, 'nobody dispatched yet') : [];
   const head = [...(leadRow ? rows([leadRow]) : []), ...hint, ...rows(workers), ...rows(mates), ...sparkAxis(m, g)];
   const body = [...head, ...(m.lead ? [BLANK, ...leadSummary(m)] : [])]; // one row per agent, at every height
@@ -1190,13 +1230,14 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
 }
 
 const GATE_WORD_W = 7; // `passing` and `warning`
-/** `2/3`: the group's checks that pass over its checks, the value column of every group (design rev 5, C2: a count per group, dim while the group passes, warn while it fails). */
-const gateValue = (g: PanelGate): string => {
+/** `8 pass · 0 deny`: the group's checks in the one vocabulary (mod/vocab.ts), the value column of every group (a count per group, dim while the group passes, warn while it fails). */
+const gateValue = (g: PanelGate, ui: Ui): string => {
   if (!g.lines.length) return '';
-  // Critique 19 C4: the header contract is judged over replies, not lines: `7/8 replies` (the transcript's own tally, the unit named while it fails), never `0/1` beside 7 chips.
+  // Critique 19 C4: the header contract is judged over replies, not lines: its own tally (the transcript's), never `0/1` beside 7 chips. Round 2 (D4): the one vocabulary, `8 pass · 0 deny`, never a ratio.
   const tally = g.id === 'header' ? /^(\d+) of (\d+)$/.exec(g.lines.find((l) => l.id === 'header-matched')?.detail ?? '') : null;
-  if (tally) return groupFailing(g) ? `${tally[1]}/${tally[2]} replies` : `${tally[1]}/${tally[2]}`;
-  return `${g.lines.length - groupFailing(g)}/${g.lines.length}`;
+  const pass = tally ? Number(tally[1]) : g.lines.length - groupFailing(g);
+  const total = tally ? Number(tally[2]) : g.lines.length;
+  return gateLine('', pass, total, ui.ascii).count;
 };
 
 function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: boolean, all = false): PanelLine[] {
@@ -1210,7 +1251,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
   const pend = groupPending(g);
   const word = bad || g.error ? 'warning' : pend ? 'pending' : 'passing';
   // The green count is the right-aligned value; the tail follows the word when it fits whole, else wraps under.
-  const value = showValue ? gateValue(g) : '';
+  const value = showValue ? gateValue(g, m.ui) : '';
   const fixed = GRID_LEAD + nameW + 2 + GATE_WORD_W + (value ? cells(value) + 1 : 0) + 1;
   const fits = !tail || cells(tail) <= m.cols - fixed;
   const runs = gridRow({
@@ -1220,7 +1261,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
   });
   return [
     line(fitRuns(moving(runs, key, groupOk(g) ? 'done' : 'blocked', m), m.cols), { kind: 'toggle', key }),
-    ...(!showValue && gateValue(g) ? [note(gateValue(g), m)] : []),
+    ...(!showValue && gateValue(g, m.ui) ? [note(gateValue(g, m.ui), m)] : []),
     ...(fits ? [] : wrap(tail, Math.max(8, m.cols - 6)).map((t) => note(t, m))),
     ...(open ? g.lines.flatMap((l) => gateLineRows(m, l)) : []),
   ];
@@ -1229,7 +1270,7 @@ function gateGroupRows(m: PanelModel, g: PanelGate, nameW: number, showValue: bo
 function gatesBody(m: PanelModel): PanelLine[] {
   const gs = countedGates(gatesOf(m)); // the groups the tally counts: one with no data is not a gate yet
   if (!gs.length) return emptyHint(m, 'no gates reported yet');
-  const valueW = Math.max(0, ...gs.map((g) => cells(gateValue(g))));
+  const valueW = Math.max(0, ...gs.map((g) => cells(gateValue(g, m.ui))));
   const longest = Math.min(24, Math.max(1, ...gs.map((g) => cells(oneLine(g.title)))));
   // The failing count is the first column to go: the name keeps its whole width, the count moves into the row below.
   const plan = gridPlan(m.cols, { names: gs.map((g) => oneLine(g.title)), word: GATE_WORD_W, gap: 2, value: valueW, optional: true, min: longest, max: 24 });

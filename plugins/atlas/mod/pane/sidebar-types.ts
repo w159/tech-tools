@@ -44,8 +44,6 @@ export type SidebarHandlers = {
   setView(v: SidebarView): void;
   /** Collapse or expand the band's board panel (the board chip); absent in fixtures that do not wire it. */
   toggleTodos?(): void;
-  /** Close the pane (the `[✕]` chip on the pill row: `$.ui.close({ id })`); absent: the pill row draws no chip. */
-  close?(): void;
 };
 
 export const pad = (s: string, n: number): string => s + ' '.repeat(Math.max(0, n - textWidth(s)));

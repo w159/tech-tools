@@ -17,12 +17,15 @@ const MIDDLE = /[A-Za-z0-9]\.\.\.[A-Za-z0-9]/;
 
 describe('1: the tab strip never blanks a label', () => {
   for (const cols of [26, 30, 40, 60]) {
-    test(`at ${cols} every key keeps a word`, () => {
+    test(`at ${cols} every shown tab keeps a word, the rest sit behind \`▸ more\``, () => {
       const rows = tabRows(model('route', cols)).map((l) => lineText(l));
       const text = rows.join('\n');
-      const bare = !/\b[rtcgko]: /.test(text); // A1: 36 cells and up draw the words alone (the keys stay bound by the host layer)
-      if (bare) for (const w of ['status', 'team', 'channel', 'gates', 'core', 'board']) expect(text).toContain(w);
-      else for (const k of ['r', 't', 'c', 'g', 'k', 'o']) expect(text).toMatch(new RegExp(`${k}: [a-z]{2,}`));
+      expect(text).not.toMatch(/\b[rtcgko]: /); // the words alone (the keys stay bound by the host layer)
+      const all = ['status', 'team', 'channel', 'gates', 'core', 'board'];
+      const shown = all.filter((w) => text.includes(w));
+      expect(shown).toEqual(all.slice(0, shown.length)); // whole words, in order, from the left
+      if (shown.length < all.length) expect(text).toContain('▸ more');
+      expect(shown.length).toBeGreaterThanOrEqual(2);
       expect(text).not.toMatch(/[a-z]: {2,}/);
       expect(text).not.toMatch(/[a-z]: *$/m);
       for (const l of rows) expect(l.length).toBeLessThanOrEqual(cols);
@@ -49,16 +52,16 @@ describe('2: no middle ellipsis on a name the panel owns', () => {
     const gates = [{ id: 'g1', title: 'Completion gate', lines: [{ id: 'a', label: 'x', ok: false }, { id: 'b', label: 'y', ok: true }] }];
     const rows = body('gates', 45, { gates });
     expect(rows[0]).toContain('Completion gate');
-    expect(rows.join('\n')).toContain('1/2');
+    expect(rows.join('\n')).toContain('1 pass · 1 deny');
   });
 });
 
-describe('3: one count format, `n/m`, inside the panel (critique 12 B3)', () => {
+describe('3: one count vocabulary inside the panel (`N denied`, `8 pass · 0 deny`), never a ratio', () => {
   for (const cols of [150, 80, 60, 45, 38]) {
     test(`no \`n of m\` on the route tab at ${cols}`, () => {
       const rows = body('route', cols);
       expect(rows.filter((l) => /^ (phase|gates|todo) /.test(l)).join('\n')).not.toMatch(/\b\d+ of \d+\b/);
-      expect(rows.find((l) => l.startsWith(' gates'))).toMatch(/\d\/\d green/);
+      expect(rows.find((l) => l.startsWith(' gates'))).toMatch(/\d+ denied|\bok\b/);
     });
   }
   test('the phase row is the phase word alone, never an `n/m` beside it (critique 17 A5: it shared the todo format and went stale beside the chip)', () => {

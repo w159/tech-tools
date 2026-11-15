@@ -16,21 +16,22 @@ const world = (cols: number, over: Partial<PanelModel> = {}): PanelModel =>
 const body = (m: PanelModel): string[] => bodyLines(m).map(lineText);
 const idleHealth: Health = h;
 
-describe('1: a tall idle pane is not a slab of empty rows', () => {
-  test('at 150 columns (pane 54 x 40) at most 10 blank rows sit between the last content row and the closing rule', () => {
-    const t = body(world(54));
+const MANY = Array.from({ length: 40 }, (_, i) => ({ label: i % 3 ? 'tool.call Bash' : 'session.measure', ageSecs: 4 + i * 5 }));
+describe('1: a tall idle pane is not a slab of empty rows (D11: RECENT grows into the free rows, the footer is the last row)', () => {
+  test('at 150 columns (pane 54 x 40) at most one blank row sits between the last event and the closing rule', () => {
+    const t = body(world(54, { health: { ...h, hooks: { total: 40, byLabel: [{ label: 'tool.call', n: 40 }], recent: MANY } } }));
     const rule = t.findIndex((l, i) => i > 3 && /^\s+─{20,}$/.test(l));
     expect(rule).toBeGreaterThan(0);
     let dead = 0;
     for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
-    expect(dead).toBeLessThanOrEqual(10);
+    expect(dead).toBeLessThanOrEqual(1);
   });
-  test('the same with no context figure yet (a fresh session, before the first measure): still at most 10 blank rows', () => {
-    const t = body(world(54, { health: { ...h, ctxPct: undefined, tokens: undefined, window: undefined } }));
+  test('the same with no context figure yet (a fresh session, before the first measure): still no void', () => {
+    const t = body(world(54, { health: { ...h, ctxPct: undefined, tokens: undefined, window: undefined, hooks: { total: 40, byLabel: [{ label: 'tool.call', n: 40 }], recent: MANY } } }));
     const rule = t.findIndex((l, i) => i > 3 && /^\s+─{20,}$/.test(l));
     let dead = 0;
     for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
-    expect(dead).toBeLessThanOrEqual(10);
+    expect(dead).toBeLessThanOrEqual(1);
     expect(t.join('\n')).toMatch(/context {1,2}▕░+▏ —/); // D6: an empty track and an em dash, never `none yet`
   });
   test('the context gauge is a real row: `context ▕██░░░░░░▏ 6% · 63k of 1M`; an empty track and `—` without a context figure', () => {
@@ -52,7 +53,7 @@ describe('4: the run duration is said once', () => {
   });
   test('a live run: the phase row never reads idle, carries no clock, and no `last run` row repeats it', () => {
     const t = body(world(54, { run: { kind: 'working', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last } }));
-    const phase = t.find((l) => /phase/.test(l))!;
+    const phase = t.find((l) => /PHASE/.test(l))!;
     expect(phase).not.toContain('idle');
     expect(t.join('\n').match(/0:02/g)).toBeNull();
     expect(t.join('\n')).not.toContain('last run');
@@ -85,10 +86,10 @@ describe('5: the recent list reads in words, collapsed, at most 3 rows', () => {
 });
 
 describe('6: a narrow pane abbreviates the stages (slice S3: one glyph per stage, the lit one turning)', () => {
-  test('at 37 columns the stepper is `◐ res ○ thy ○ tst ○ imp ○ ver`', () => {
+  test('at 37 columns the stepper is `◐ ○ ○ ○ ○ research`: dots plus the stage in words, never `res thy tst`', () => {
     const t = body(world(37, { run: { kind: 'working', secs: 3, startMs: NOW, frame: 0 }, phase: 'research', phases: ['research', 'theory', 'test', 'implement', 'verify'], entered: ['research'] })).join('\n');
-    expect(t).toMatch(/◐ res ○ thy ○ tst ○ imp ○ ver/);
-    expect(t).not.toMatch(/research|implement/);
+    expect(t).toMatch(/◐ ○ ○ ○ ○ research/);
+    expect(t).not.toMatch(/\b(res|thy|tst|imp|ver)\b/);
   });
 });
 

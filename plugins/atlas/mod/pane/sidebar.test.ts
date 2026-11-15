@@ -95,13 +95,13 @@ describe('sidebar shell', () => {
     }
   });
 
-  test('critique 18: at 110 columns (38 inner) the strip is one row of the six whole words, no key layer', () => {
+  test('critique 18, D14: at 110 columns (38 inner) the strip is one row of chips, the trailing tabs behind `▸ more`, no key layer', () => {
     const t = tree({ columns: 38 }, 'gates');
     const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
     expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs']); // one strip row, never `tabs:1`
     const visible = rowsOf.flatMap((r) => kids(r).filter((c) => c.kind === 'Button'));
-    expect(visible.map((b) => b.props.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
-    expect(visible.map((b) => b.props.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined]); // the host draws no `k: ` for a Button without a hotkey
+    expect(visible.map((b) => b.props.label)).toEqual(['status', 'team', 'channel', '▸ more']);
+    expect(visible.map((b) => b.props.hotkey)).toEqual([undefined, undefined, undefined, undefined]); // the host draws no `k: ` for a Button without a hotkey
     visible.find((b) => b.props.label === 'team')!.props.onPress();
     expect(calls).toContain('view:team');
   });
@@ -118,14 +118,14 @@ describe('sidebar shell', () => {
     expect(stripRows(items, 30, 1).length).toBe(2);
   });
 
-  test('L21: a narrow pane wraps the strip onto a second row of whole words and draws no rule under the lit tab', () => {
-    for (const [columns, label, wrapped] of [[32, 'gates', true], [56, 'gates', false]] as const) {
+  test('L21 (D14): a narrow pane keeps the strip on one row with a `▸ more` chip and draws no rule under the lit tab; the folded tabs open on a second row', () => {
+    for (const [columns, label, folded] of [[32, '▸ more', true], [56, 'gates', false]] as const) {
       const t = tree({ columns }, 'gates');
       const rowsOf = kids(t).filter((n) => n.kind === 'Box');
-      expect(rowsOf.filter((r) => String(r.props.key ?? '').startsWith('tabs:')).length > 0).toBe(wrapped); // 32 cells: not even the bare words fit one row, so a second strip row, never two-letter words
+      expect(rowsOf.filter((r) => String(r.props.key ?? '').startsWith('tabs:')).length).toBe(0); // closed: never a second strip row
       expect(rowsOf.some((r) => textOf(r).includes('━'))).toBe(false);
-      const lit = kids(t).flatMap((n) => (String(n.props.key ?? '').startsWith('tabs') ? kids(n) : [])).find((n) => n.kind === 'Button' && String(n.props.key) === 'tab:gates');
-      expect(lit && String(kids(lit)[0]!.props.children).trim()).toBe(label);
+      const lit = kids(t).flatMap((n) => (String(n.props.key ?? '').startsWith('tabs') ? kids(n) : [])).find((n) => n.kind === 'Button' && String(n.props.key) === (folded ? 'tab:more' : 'tab:gates'));
+      expect(lit && String(kids(lit)[0]!.props.children).trim()).toBe(label); // a lit tab behind `▸ more` fills that chip
     }
   });
 

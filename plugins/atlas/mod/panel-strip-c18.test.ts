@@ -10,30 +10,33 @@ import { headerRows, lineText, stripLayout, tabRows, type PanelTab } from './pan
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 
-describe('C5: the tab strip stays on one line at the 110 column pane', () => {
+describe('C5 (D14): the tab strip is one row of chips at every width; the trailing tabs fold into `▸ more`', () => {
   for (const cols of [37, 38, 40, 44]) {
     for (const tab of TABS) {
-      test(`${cols} cells, ${tab} lit: one strip row, the whole words, no rule under the lit tab`, () => {
+      test(`${cols} cells, ${tab} lit: one strip row, whole words, the rest behind \`▸ more\``, () => {
         const rows = tabRows(panelWorld(tab, cols, ui)).map(lineText);
         expect(rows).toHaveLength(1); // the strip alone: no rule under the lit tab, no wrapped second strip
-        expect(rows[0]!.trim()).toMatch(/^status {1,3}team {1,3}channel {1,3}gates {1,3}core {1,3}board$/);
+        expect(rows[0]!.trim()).toMatch(/^status {1,3}team {1,3}channel( {1,3}gates)? {1,3}▸ more$/);
         for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       });
     }
   }
-  test('the same form on every tab at a width (no tab drops its keys to fit while another wraps)', () => {
+  test('the same form on every tab at a width (no tab drops its words to fit while another wraps)', () => {
     for (const cols of [37, 38, 44, 52, 60]) {
       const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => JSON.stringify(stripLayout(cols, t)));
       expect([cols, new Set(forms).size]).toEqual([cols, 1]);
     }
   });
-  test('design rev 5 C1: the keys are never drawn in the strip, at any width (53 cells and up too)', () => {
+  test('the keys are never drawn in the strip, at any width (48 cells and up show all six whole words)', () => {
     expect(headerRows(panelWorld('route', 120, ui)).slice(2, 3).map(lineText)[0]!.trim()).toBe('status   team   channel   gates   core   board');
     expect(lineText(tabRows(panelWorld('team', 54, ui))[0]!).trim()).toBe('status   team   channel   gates   core   board');
   });
-  test('words alone on one row down to 36 cells (wave 36: `status` is one cell wider than `route` was), then the full words wrap (never a shortened word)', () => {
-    expect(stripLayout(37, 'route').rows).toHaveLength(1);
+  test('all six words on one row down to 48 cells; below that the trailing tabs fold into `▸ more` (never a shortened word, never a second strip row while closed)', () => {
+    expect(stripLayout(48, 'route').rows).toHaveLength(1);
+    expect(stripLayout(48, 'route').more).toBe(false);
+    expect(stripLayout(47, 'route').more).toBe(true);
+    expect(stripLayout(30, 'route').rows).toHaveLength(1);
+    expect(stripLayout(30, 'route').folded.length).toBeGreaterThan(0);
     expect(stripLayout(37, 'route').bare).toBe(true);
-    expect(stripLayout(30, 'route').rows.length).toBeGreaterThan(1);
   });
 });

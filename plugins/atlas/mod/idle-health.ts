@@ -99,19 +99,25 @@ export const humanEvent = (label: string): string => EVENT_WORDS[label] ?? label
 /** Which of several events in one second names the row (the one that says most). */
 const EVENT_RANK = ['turn.complete', 'classic.Stop', 'prompt.submit', 'tool.call', 'session.measure', 'session.start'];
 const rankOf = (label: string): number => { const k = EVENT_RANK.indexOf(label.split(' ')[0]!); return k < 0 ? EVENT_RANK.length : k; };
-/** The recent list as rows: events of one second are one row (`turn finished · 3 events`; the same event twice is `tool call Bash x2`), newest first, at most `max` rows. */
-export type RecentRow = { ageSecs: number; n: number; text: string };
+/** How a recent event reads at a glance: `info` (a call, a prompt), `ok` (a turn that finished), `bad` (a label that says a denial, a block or a failure). */
+export type Sev = 'info' | 'ok' | 'bad';
+export const severityOf = (label: string): Sev => (/\b(block(ed)?|den(y|ied)|fail(ed|ure)?|refus(ed|al)|error)\b/i.test(label) ? 'bad' : label.startsWith('turn.complete') ? 'ok' : 'info');
+const SEV_RANK: Record<Sev, number> = { info: 0, ok: 1, bad: 2 };
+/** The recent list as rows: events of one second are one row (`turn finished · 3 events`; the same event twice is `tool call Bash x2`), newest first, at most `max` rows; `sev` is the worst severity of the row's events. */
+export type RecentRow = { ageSecs: number; n: number; text: string; sev: Sev };
 export function recentEvents(recent: readonly { label: string; ageSecs: number }[], max: number): RecentRow[] {
-  const out: RecentRow[] = [];
+  const groups: { ageSecs: number; labels: string[] }[] = [];
   for (const e of recent) {
-    const at = out.at(-1);
-    if (at && at.ageSecs === e.ageSecs) { (at as RecentRow & { labels: string[] }).labels.push(e.label); at.n++; } else out.push({ ageSecs: e.ageSecs, n: 1, text: '', labels: [e.label] } as RecentRow & { labels: string[] });
+    const at = groups.at(-1);
+    if (at && at.ageSecs === e.ageSecs) at.labels.push(e.label);
+    else groups.push({ ageSecs: e.ageSecs, labels: [e.label] });
   }
-  return out.slice(0, Math.max(0, max)).map((row) => {
-    const labels = (row as RecentRow & { labels: string[] }).labels;
+  return groups.slice(0, Math.max(0, max)).map(({ ageSecs, labels }): RecentRow => {
     const best = [...labels].sort((a, b) => rankOf(a) - rankOf(b))[0]!;
-    const text = row.n === 1 ? humanEvent(best) : labels.every((l) => l === best) ? `${humanEvent(best)} ×${row.n}` : `${humanEvent(best)} · ${row.n} events`;
-    return { ageSecs: row.ageSecs, n: row.n, text };
+    const n = labels.length;
+    const text = n === 1 ? humanEvent(best) : labels.every((l) => l === best) ? `${humanEvent(best)} ×${n}` : `${humanEvent(best)} · ${n} events`;
+    const sev = labels.map(severityOf).reduce((w, x) => (SEV_RANK[x] > SEV_RANK[w] ? x : w), 'info' as Sev);
+    return { ageSecs, n, text, sev };
   });
 }
 

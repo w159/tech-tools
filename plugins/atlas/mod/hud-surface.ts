@@ -7,7 +7,7 @@ import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { fitFields, gateOf, healthRows, noteOf, type Health } from './idle-health';
-import { chevron, clickRun } from './clickable';
+import { chevron, chipRun } from './clickable';
 import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
@@ -166,7 +166,6 @@ export function windowRows<T extends { state: UiState; word?: string; doneAt?: n
 
 /** An empty block of the fixed shape: the closed box with one quiet row (critique 28: bare rows under a box). */
 /** A run with no plan row and no agent yet (the health band is on): ONE ribbon line, `── ATLAS ▸ TODO  no plan yet · 0 agents ───`, in place of two boxes that each say they are empty. */
-export const emptyRibbon = (o: SurfaceOpts): Run[] => titleRow(o.cols, 'TODO', '', [t('no plan yet', 'sub'), dimRun(o.ui.ascii ? ' . ' : ' · ', o.ui), t('0 agents', 'sub')], o.ui, true);
 const emptyBox = (o: SurfaceOpts, title: string, text: string): Run[][] => [titleRow(o.cols, title, '', [], o.ui, false), [t(`  ${text}`, 'muted')], bottomRule(o.cols, o.ui)];
 
 /** One overflow idiom for every block (state 39): the rows a block cannot draw are counted on ONE dim summary row, the last row inside its box, never on the title: `● 2 done  ■ 1 failed  ◇ 1 queued`, and a hidden open row is
@@ -850,10 +849,10 @@ function clipRuns(runs: Run[], cols: number): Run[] {
   return out;
 }
 
-/** The expanded health card the band's `▾ health` button opens (slice S4): a FLAT ribbon like the TODO and SUBAGENTS ones (`── ▾ HEALTH ──── ▾ hide ──`, no corners), every row exactly `cols` wide, and the rows are a superset of the
+/** The expanded health card the band's `▾ health` button opens (slice S4): a FLAT ribbon like the TODO and SUBAGENTS ones (`── ▾ HEALTH ────`, no corners), every row exactly `cols` wide, and the rows are a superset of the
  * panel's health rows: gates (the one `● name n/m` vocabulary, each with its note, two to a row when they fit), the events spark (28 cells of 15 s buckets) with `N in 5m`, the context gauge with `64k of 1M` and a short spark, the runs
- * (bars and counts, never seconds: the band owns the run clock) and the session row (`up · branch · team · version · cost`). The history is `h.pulse` (observed this session; absent: baselines and `—`). The `▾ hide` chip carries the band's
- * own `band:health` press key, so a click closes the card. */
+ * (bars and counts, never seconds: the band owns the run clock) and the session row (`up · branch · team · version · cost`). The history is `h.pulse` (observed this session; absent: baselines and `—`). The `▾ HEALTH` title is a chip carrying the band's
+ * own `band:health` press key: the card's one collapse control (a click closes it). */
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
   const { cols, ui } = o;
   const LABEL = 8;
@@ -872,11 +871,10 @@ export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): 
       body.push(row(i === 0 ? hr.label : '', [t(g.glyph, g.tone), t(` ${g.name.padEnd(nameW)} ${g.count}`), ...(note ? [t(` · ${note}`, 'sub')] : [])]));
     });
   }
-  // the ribbon: `── ▾ HEALTH ───── ▾ hide ──` (ASCII `-- v HEALTH ----- v hide --`)
+  // the ribbon: `── ▾ HEALTH ─────────────` (ASCII `-- v HEALTH -------------`): the title is the card's one control, a chip (key `band:health`) that collapses it (round 2, D8)
   const rule = ui.ascii ? '-' : RULE;
-  const hide = clickRun('hide', true, ui, 'band:health');
-  const head: Run[] = [dimRun(`${rule}${rule} `, ui), titleRun(`${chevron(true, ui)} HEALTH`, ui), dimRun(' ', ui)];
-  const tail: Run[] = [dimRun(' ', ui), hide, dimRun(` ${rule}${rule}`, ui)];
-  const ribbon = [...head, dimRun(rule.repeat(Math.max(1, cols - runsCells(head) - runsCells(tail))), ui), ...tail];
+  const title = chipRun(`${chevron(true, ui)} HEALTH`, ui, 'band:health');
+  const head: Run[] = [dimRun(`${rule}${rule}`, ui), title];
+  const ribbon = [...head, dimRun(rule.repeat(Math.max(1, cols - runsCells(head))), ui)];
   return padRows([clipRuns(ribbon, cols), ...body.map((b) => clipRuns(b, cols)), [dimRun(rule.repeat(cols), ui)]], cols);
 }

@@ -47,9 +47,11 @@ describe('no rule under the lit tab (idle polish 3: the lit chip is the filled o
       const rowIdx = c.map((n, i) => (isTabsRow(n) ? i : -1)).filter((i) => i >= 0);
       if (rowIdx.length > 1) wrapped++;
       expect([columns, view, c.some((n) => /━/.test(textOf(n)))]).toEqual([columns, view, false]);
-      expect([columns, view, rowIdx.flatMap((i) => all(c[i]!)).filter((n) => n.kind === 'Button' && n.props.key === `tab:${view}`).length]).toEqual([columns, view, 1]);
+      const btns = rowIdx.flatMap((i) => all(c[i]!)).filter((n) => n.kind === 'Button');
+      const own = btns.filter((n) => n.props.key === `tab:${view}`).length;
+      expect([columns, view, own + (own === 0 && btns.some((n) => n.props.key === 'tab:more') ? 1 : 0)]).toEqual([columns, view, 1]); // a lit tab folded behind \`▸ more\` is that chip
     }
-    expect(wrapped).toBeGreaterThan(0); // the narrow widths do wrap
+    expect(wrapped).toBe(0); // D14: the strip is one row at every width; the trailing tabs fold behind `▸ more`
   });
 });
 

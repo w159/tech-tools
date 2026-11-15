@@ -18,7 +18,7 @@ describe('gateLine', () => {
     expect(g.fired).toBe(false);
   });
   test('ASCII swaps the dot', () => {
-    expect(gateLine('routing', 8, 8, true).text).toBe('* routing 8 pass · 0 deny');
+    expect(gateLine('routing', 8, 8, true).text).toBe('* routing 8 pass - 0 deny');
     expect(gateLine('header', 0, 0, true).text).toBe('o header not fired');
   });
   test('unreadable counts clamp to zero', () => {

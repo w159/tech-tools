@@ -26,3 +26,12 @@ export function chipStyle(ui: Pick<Ui, 'color' | 'theme'>): { backgroundColor?: 
   if (ui.color === 'none') return { underline: true };
   return { backgroundColor: xtermHex(ui.theme === 'latte' ? 253 : 237) };
 }
+
+/** The raised tile a chip sits on (chipStyle's fill). No colour: none (the chip's padding and its glyph still read as a button). */
+export const tileOf = (ui: Pick<Ui, 'color' | 'theme'>): string | undefined => chipStyle(ui).backgroundColor;
+
+/** A clickable as one run (round 2, D8): one cell of padding each side, the glyph inside, the accent on a raised tile, a hover key. */
+export const chipRun = (glyphed: string, ui: Pick<Ui, 'color' | 'theme'>, key: string, extra: Partial<Run> = {}): Run => {
+  const tile = tileOf(ui);
+  return { t: ` ${glyphed} `, tone: 'accent', bold: true, press: key, hover: true, ...(tile ? { bgHex: tile } : {}), ...extra };
+};

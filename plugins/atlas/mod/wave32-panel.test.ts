@@ -68,8 +68,8 @@ describe('item 1: the route tab carries the phase timeline (critique 30: the tab
   test('a `timeline` head and one chain of the phases, the current one on the spinner with its elapsed time', () => {
     forgetPhases();
     const t = render('route', 66, 45).join('\n');
-    expect(t).toMatch(/^ {2}phase$/m);
-    expect(t).toMatch(/[●○] research [●○] theory [●○] test [◐◓◑◒] implement ○ verify/); // slice S3: the stepper, one glyph per stage // the run clock is the phase row's, said once (idle polish 3) // wave 34: a phase is green only once the run was in it (round 2: an unentered phase is its dim name, with no `·` mark beside the `›`)
+    expect(t).toMatch(/^ {2}PHASE$/m);
+    expect(t).toMatch(/[●–○] research [●–○] theory [●–○] test [◐◓◑◒] implement ○ verify/); // slice S3: the stepper, one glyph per stage // the run clock is the phase row's, said once (idle polish 3) // wave 34: a phase is green only once the run was in it (round 2: an unentered phase is its dim name, with no `·` mark beside the `›`)
   });
   test('the plan is not drawn here (wave 34: the HUD above the prompt and the board tab list it)', () => {
     const t = render('route', 66, 45).join('\n');
@@ -144,7 +144,7 @@ describe('item 4: the board (critique 30: colliding axis labels, ticks past the 
 describe('item 5: one spinner vocabulary (critique 30: circles in the panel, braille in the band; now the circle quarters on both)', () => {
   test('the route stepper and the team lead row wear the one spinner, never braille', () => {
     const route = render('route', 66, 45);
-    const stepper = route[route.findIndex((l) => l.trim() === 'phase') + 1]!;
+    const stepper = route[route.findIndex((l) => l.trim() === 'PHASE') + 1]!;
     expect(stepper).toMatch(SPIN_MARK);
     expect(stepper).not.toMatch(NO_BRAILLE);
     const team = render('team', 66, 45, snap({ running: true }));
