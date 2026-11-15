@@ -10,7 +10,7 @@ import { gateCounts, gateLine, gatesTotal } from './vocab';
 
 export type HealthLast = { secs?: number; done: number; total: number; agents: number; failed: number; /** Whole seconds since the run ended (a clock with no zone read as a time of day only to its owner): drawn `ended 3m ago`. */ endedAgo?: number; /** Each worker of the run with how it ended and how long it ran. */ workers?: readonly { name: string; state: string; secs?: number }[] };
 /** One gate group: its mark, and (from the gate groups the mod reads) how many of its lines pass and the first line's own words. */
-export type HealthCheck = { id: string; ok: boolean; pending?: boolean; title?: string; lines?: number; pass?: number; note?: string };
+export type HealthCheck = { id: string; ok: boolean; pending?: boolean; title?: string; lines?: number; pass?: number; note?: string; /** Whole seconds since this gate last ran a check; absent when the mod stamps none (the status table then reads the newest hook event's age). */ lastSecs?: number };
 export type Health = {
   gates: { total: number; green: number; checks: readonly HealthCheck[]; /** Denied calls over the failing gate lines (vocab.deniedCalls); absent: the band counts failing lines. */ denied?: number };
   /** Context used, 0..100; absent when unknown. Both this and `tokens` are the host's measure of the LAST response (`session.measure` context.percent / context.tokens): the input side now in the window, not a session total. */

@@ -19,11 +19,11 @@
 //   ctxText(pulse)        `6% · 64k of 1M · +12k/turn` (the window and the delta ride only when known); undefined before the first measure
 //   activityStats(pulse, runTools) -> `6 events · 1.2/min · peak 4 · 3 tools`   the events of the window, per minute over the window's span, the busiest bucket, the tools the run has called
 //   resetPulse()         a new session: empty rings, no cost (the event stamps are cleared by hook-log's resetHookLog)
-import { eventBuckets } from './hook-log';
+import { eventBuckets, eventStamps } from './hook-log';
 
 export type CtxSample = { tokens: number; pct: number; at: number };
 export type RunSample = { secs: number; ok: boolean; at: number };
-export type Pulse = { events: number[]; ctx: CtxSample[]; runs: RunSample[]; window?: number; cost?: { usd: number } };
+export type Pulse = { events: number[]; ctx: CtxSample[]; runs: RunSample[]; window?: number; cost?: { usd: number }; /** The raw event clock readings of the last 5 minutes (oldest first) and the clock `now` they were read at: the status chart buckets them to its own width. Absent: it spreads `events`. */ stamps?: number[]; at?: number };
 /** The fields of the host's `session.measure` input the pulse reads (a structural subset of SessionMeasureInput). */
 export type MeasureLike = { context: { tokens?: number; percent?: number; window?: number }; cost?: { usd: number } };
 
@@ -84,6 +84,8 @@ export function noteRunEnd(secs: number, ok: boolean, at: number): void {
 export function pulseOf(now: number): Pulse {
   return {
     events: eventBuckets(now, BUCKETS, BUCKET_MS),
+    stamps: eventStamps(now),
+    at: now,
     ctx: ctx.map((s) => ({ ...s })),
     runs: runs.map((r) => ({ ...r })),
     ...(windowTokens !== undefined ? { window: windowTokens } : {}),

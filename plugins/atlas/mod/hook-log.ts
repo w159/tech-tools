@@ -17,6 +17,8 @@ export type HookStats = {
   runTool?: string;
   /** How long the mod's own handlers held an event before handing it on (N1): the median and p95 over every sample of the session, `n` samples; absent before the first. */
   latency?: { n: number; p50: number; p95: number };
+  /** Per label kind (the label's first word: `tool.call` for `tool.call Bash`): events seen, the handler latency median and p95 over that kind's samples (absent while unmeasured), and the age in whole seconds of its newest event (absent when it never fired). The status tab's HOOKS table reads it. */
+  perHook?: { label: string; n: number; p50?: number; p95?: number; lastSecs?: number }[];
 };
 
 /** N2: the hooks the mod wires and stamps (`6 hooks` armed on the status tab): session start, prompt, tool call, Stop, measure, turn end. */
@@ -32,6 +34,8 @@ let toolStamps: number[] = [];
 let lastTool: { name: string; at: number } | null = null;
 let newest = -Infinity;
 const counts = new Map<string, number>();
+/** The engine clock of the newest event of each kind (the label's first word). */
+const lastAtKind = new Map<string, number>();
 /** Handler latency samples in ms, a ring of KEEP per label (N1). */
 const latencies = new Map<string, number[]>();
 
@@ -43,6 +47,7 @@ export function resetHookLog(): void {
   lastTool = null;
   newest = -Infinity;
   counts.clear();
+  lastAtKind.clear();
   latencies.clear();
 }
 
@@ -61,6 +66,7 @@ export function noteHook(label: string, at: number | undefined): void {
     lastTool = name ? { name, at } : null;
   }
   counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  lastAtKind.set(kind, Math.max(lastAtKind.get(kind) ?? -Infinity, at));
 }
 
 /**
@@ -96,7 +102,13 @@ export function hookStats(now: number, max = 8, since?: number): HookStats {
   const samples = [...latencies.values()].flat().sort((a, b) => a - b);
   const recent = [...log].reverse().slice(0, max).map((e) => ({ label: e.label, ageSecs: Math.max(0, Math.floor((now - e.at) / 1000)), ...(e.ms !== undefined ? { ms: e.ms } : {}) }));
   const last = [...log].reverse().find((e) => e.label !== 'session.start');
+  const perHook = [...counts].map(([label, n]) => {
+    const ms = [...latencies].filter(([l]) => l.split(' ')[0] === label).flatMap(([, v]) => v).sort((a, b) => a - b);
+    const at = lastAtKind.get(label);
+    return { label, n, ...(ms.length ? { p50: rank(ms, 0.5), p95: rank(ms, 0.95) } : {}), ...(at !== undefined ? { lastSecs: Math.max(0, Math.floor((now - at) / 1000)) } : {}) };
+  });
   return {
+    perHook,
     total: [...counts.values()].reduce((n, x) => n + x, 0),
     byLabel: [...counts].map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label)),
     recent,
@@ -120,4 +132,9 @@ export function eventBuckets(now: number, buckets = 28, bucketMs = 15_000): numb
     if (slot >= 0) out[slot]!++;
   }
   return out;
+}
+
+/** The raw event clock readings of the last `spanMs` before `now` (oldest first): the status chart buckets them itself, to its own width, aligned to the wall clock. */
+export function eventStamps(now: number, spanMs = 300_000): number[] {
+  return stamps.filter((t) => t >= now - spanMs - 1000 && t <= now + 1000);
 }

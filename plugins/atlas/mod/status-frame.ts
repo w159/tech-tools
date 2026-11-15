@@ -241,6 +241,193 @@ export function hooksRows(kit: Kit, h: Health, feed: readonly FeedRow[], rows: n
   return [ribbon('HOOKS', meta), ...feed.slice(0, Math.max(0, rows)).map(hookRow)];
 }
 
+// ---- the W1 status tab builders (round W spec, items A-E): full-width chart, gates table, wired-hooks table, recent log ----
+
+const WINDOW_MS = 300_000;
+const GUTTER = 3; // y gutter of the chart: a two-cell label and the `┤` tick
+const GATE_COL = 5;
+/** The y gutter and the last chart row of one stack are the most the chart takes; spare rows beyond the spec's 8 go to it only when nothing else can use them (no blank void above the footer). */
+const CHART_SPEC_MAX = 8;
+const CHART_MAX = 12;
+const CHART_MIN = 3;
+
+/** Merge neighbouring cells of one style into one run (a 46-cell chart row is a handful of runs, not 46). */
+const merge = (runs: readonly Run[]): Run[] => {
+  const out: Run[] = [];
+  for (const x of runs) {
+    const p = out.at(-1);
+    if (p && !p.hover && !x.hover && p.tone === x.tone && p.fg === x.fg && !p.bold === !x.bold && p.bgHex === x.bgHex) out[out.length - 1] = { ...p, t: p.t + x.t };
+    else out.push(x);
+  }
+  return out;
+};
+
+/** The chart's series at `cols` columns: events per column, bucket width = 5 min / cols, aligned to the wall clock (`pulse.stamps`); a pulse with only the 20 x 15 s series spreads each bucket's count to the column at its centre. */
+export function chartSeries(h: Health, cols: number): { vals: number[]; total: number; peak15: number } {
+  const vals = new Array<number>(cols).fill(0);
+  const p = h.pulse;
+  let peak15 = 0;
+  if (p?.stamps && p.at !== undefined) {
+    const bms = WINDOW_MS / cols;
+    const cur = Math.floor(p.at / bms);
+    const wide = new Map<number, number>();
+    for (const at of p.stamps) {
+      const slot = cols - 1 - Math.max(0, cur - Math.floor(at / bms));
+      if (slot < 0) continue;
+      vals[slot]!++;
+      const k = Math.floor(at / 15_000);
+      wide.set(k, (wide.get(k) ?? 0) + 1);
+    }
+    peak15 = Math.max(0, ...wide.values());
+  } else {
+    const ev = [...new Array<number>(Math.max(0, STATUS_BUCKETS - (p?.events.length ?? 0))).fill(0), ...(p?.events ?? []).slice(-STATUS_BUCKETS)];
+    ev.forEach((v, i) => { if (v > 0) vals[Math.min(cols - 1, Math.floor(((i + 0.5) * cols) / STATUS_BUCKETS))]! += v; });
+    peak15 = Math.max(0, ...ev);
+  }
+  return { vals, total: sum(vals), peak15 };
+}
+
+/** ACTIVITY (C): the section rule carries the stats (`6 ev · peak 4/15s · last 1s`, idle `0 ev · waiting`); under it `rows` chart rows of eighth blocks, one bucket per column across the whole content width after a 3-cell y gutter (`4┤` on the top row, `0┤` on the baseline), an empty baseline cell the dim zero glyph; then the x labels aligned to the chart's own first and last columns. */
+export function statusActivityRows(kit: Kit, h: Health, rows: number): Run[][] {
+  const { on, dim, txt, row, ribbon, metaText, g, k, ascii, sp } = kit;
+  const w = Math.max(8, kit.u - INDENT - GUTTER);
+  const { vals, total, peak15 } = chartSeries(h, w);
+  const ramp = ascii ? BLOCKS_ASCII : BLOCKS;
+  const scale = Math.max(4, ...vals);
+  const levels = rows * 8;
+  const level = (v: number): number => (v <= 0 ? 0 : Math.max(1, Math.min(levels, Math.round((v / scale) * levels))));
+  const lastSecs = h.hooks?.lastEventSecs;
+  const meta = total > 0 ? `${total} ev · peak ${peak15}/15s${lastSecs !== undefined ? ` · last ${agoText(lastSecs)}` : ''}` : '0 ev · waiting';
+  const out: Run[][] = [ribbon('ACTIVITY', metaText(meta))];
+  for (let r = 0; r < rows; r++) {
+    const bottom = rows - 1 - r;
+    const gutter = r === 0 ? `${String(Math.min(99, scale)).padStart(2)}${g('┤', '|')}` : bottom === 0 ? ` 0${g('┤', '|')}` : `  ${g('│', '|')}`;
+    const cells: Run[] = vals.map((v, i): Run => {
+      const lv = Math.max(0, Math.min(8, level(v) - bottom * 8));
+      if (lv === 0) return bottom === 0 ? on(ramp[1]!, k.rule, { tone: 'dim' }) : { t: ' ', tone: 'text' };
+      return on(ramp[lv]!, k.ramp[Math.min(2, Math.floor((i * 3) / vals.length))]!, { tone: 'accent' });
+    });
+    out.push(row([dim(gutter), ...merge(cells)], [], INDENT));
+  }
+  const axis = new Array<string>(w).fill(' ');
+  const put = (at: number, t: string): void => { for (let i = 0; i < t.length; i++) if (at + i >= 0 && at + i < w) axis[at + i] = t[i]!; };
+  put(0, '-5m');
+  put(w - 3, 'now');
+  if (w >= 24) put(Math.floor((w - 5) / 2), '-2.5m');
+  out.push(row([sp(GUTTER), dim(axis.join(''))], [], INDENT));
+  void txt;
+  return out;
+}
+
+/** CONTEXT (E): the ribbon carries the runway; one row, the gauge and `6% · 64k of 1M · +12k/turn` (the delta from two measures on). Absent before the first measure. */
+export function statusContextRows(kit: Kit, h: Health): Run[][] {
+  const { dim, txt, amber, violet, row, ribbon, metaText, g } = kit;
+  const ctxs = h.pulse?.ctx ?? [];
+  const pct = h.ctxPct ?? ctxs.at(-1)?.pct;
+  if (pct === undefined) return [];
+  const tokens = h.tokens ?? ctxs.at(-1)?.tokens;
+  const window = h.pulse?.window ?? h.window;
+  const delta = h.pulse && ctxs.length >= 2 ? ctxDelta({ ctx: ctxs }) : undefined;
+  const text = [`${Math.round(pct)}%`, ...(tokens !== undefined ? [`${tokenText(tokens)}${window !== undefined ? ` of ${tokenText(window)}` : ' tokens'}`] : []), ...(delta ? [delta] : [])].join(' · ');
+  const gw = Math.max(6, Math.min(GAUGE_W, kit.u - INDENT - 1 - textWidth(text)));
+  const hot = pct >= 70;
+  const filled = pct > 0 ? Math.max(1, Math.min(gw, Math.round((pct / 100) * gw))) : 0;
+  const gauge: Run[] = [hot ? amber(g('▰', '#').repeat(filled)) : violet(g('▰', '#').repeat(filled), 1), dim(g('▱', '-').repeat(gw - filled))].filter((x) => x.t !== '');
+  const runway = h.pulse ? ctxRunway({ ctx: ctxs, ...(window !== undefined ? { window } : {}) }) : undefined;
+  return [ribbon('CONTEXT', runway !== undefined ? metaText(`~${runway} ${runway === 1 ? 'turn' : 'turns'} left`) : []), row([...gauge, hot ? amber(` ${text}`) : txt(` ${text}`)])];
+}
+
+/** RUNS (E): one bar per run scaled to the longest (green ok, red failed), then `1 run · med 0:05 · max 0:05`. */
+export function statusRunsRows(kit: Kit, h: Health): Run[][] {
+  const { on, dim, red, sp, row, ribbon, k, ascii } = kit;
+  const ramp = ascii ? BLOCKS_ASCII : BLOCKS;
+  const runs = h.pulse?.runs ?? [];
+  if (!runs.length) return [];
+  const longest = Math.max(1, ...runs.map((x) => x.secs));
+  const bars: Run[] = merge(runs.slice(-12).map((x) => on(ramp[Math.max(1, Math.min(8, Math.round((x.secs / longest) * 7) + 1))]!, x.ok ? k.ok : k.bad, { tone: x.ok ? 'ok' : 'bad' })));
+  const sorted = runs.map((x) => x.secs).sort((p, q) => p - q);
+  const med = sorted.length % 2 ? sorted[(sorted.length - 1) / 2]! : Math.round((sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2);
+  const failed = runs.filter((x) => !x.ok).length;
+  return [ribbon('RUNS'), row([...bars, sp(2), dim(`${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · med ${elapsedClock(med)} · max ${elapsedClock(longest)}${failed ? ' · ' : ''}`), ...(failed ? [red(`${failed} failed`)] : [])])];
+}
+
+/** GATES (B): a real table. Columns: state dot, name, then right-aligned `pass deny last` (5 cells each, flush right) named in the section rule. Before any check a row reads dim `0 0 —` with the hollow `○`. A failing group's failing lines hang under its row when `children`. `last` is the check's own age (`lastSecs`), else the age of the newest hook event the gates ran on. */
+export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boolean): Run[][] {
+  const { dim, txt, green, red, row, ribbon, metaText, g } = kit;
+  const u = kit.u;
+  const cell = (t: string): string => t.padStart(GATE_COL);
+  const nameW = Math.max(4, Math.min(12, u - INDENT - 2 - GATE_COL * 3 - 1));
+  const out: Run[][] = [ribbon('GATES', metaText(`${cell('pass')}${cell('deny')}${cell('last')}`))];
+  const none = g('—', '-');
+  for (const c of h.gates.checks) {
+    const n = gateCounts(c);
+    const deny = n.total - n.pass;
+    const fired = n.total > 0 && (src.prompted || deny > 0);
+    const mark = deny > 0 ? red(g('■', 'x')) : fired ? green(g('●', '*')) : dim(g('○', 'o'));
+    const lastSecs = fired ? c.lastSecs ?? h.hooks?.lastEventSecs : undefined;
+    const right: Run[] = fired
+      ? [txt(cell(String(n.pass))), deny > 0 ? red(cell(String(deny))) : txt(cell('0')), lastSecs !== undefined ? dim(cell(agoText(lastSecs))) : dim(cell(none))]
+      : [dim(cell('0')), dim(cell('0')), dim(cell(none))];
+    out.push(row([mark, fired ? txt(` ${fitText(c.id, nameW)}`) : dim(` ${fitText(c.id, nameW)}`)], right));
+    if (deny > 0 && children) {
+      const grp = src.gates.find((x) => x.id === c.id);
+      const bad = (grp?.lines ?? []).filter((l) => !l.ok);
+      bad.forEach((l, i) => {
+        const last = i === bad.length - 1;
+        const detail = (l.detail ?? '').trim();
+        const rw = detail ? textWidth(detail) + 2 : 0;
+        const label = fitText(l.label, Math.max(4, u - 9 - rw));
+        out.push(row([dim(`${last ? g('└', '+') : g('├', '+')} `), red(g('■', 'x')), txt(` ${label}`)], detail ? [red(detail)] : [], 5));
+        if (l.fix) out.push(row([dim(`${last ? ' ' : g('│', '|')}   fix: ${l.fix}`)], [], 5));
+      });
+    }
+  }
+  return out;
+}
+
+export type HookRow = { name: string; n: number; p50?: number; p95?: number; lastSecs?: number };
+/** One row per wired hook (every hook in WIRED_HOOKS, fired or not) from the hook log's per-kind figures; a health without `perHook` gets them from `byLabel` and the recent events. */
+export function hookTable(h: Health): HookRow[] {
+  const hk = h.hooks;
+  return WIRED_HOOKS.map((name): HookRow => {
+    const ph = hk?.perHook?.find((x) => x.label === name);
+    if (ph) return { name, n: ph.n, ...(ph.p50 !== undefined ? { p50: ph.p50 } : {}), ...(ph.p95 !== undefined ? { p95: ph.p95 } : {}), ...(ph.lastSecs !== undefined ? { lastSecs: ph.lastSecs } : {}) };
+    const mine = (hk?.recent ?? []).filter((e) => e.label.split(' ')[0] === name);
+    const ms = mine.flatMap((e) => (e.ms !== undefined ? [e.ms] : [])).sort((a, b) => a - b);
+    const rank = (p: number): number => ms[Math.min(ms.length - 1, Math.max(0, Math.ceil(ms.length * p) - 1))]!;
+    const n = (hk?.byLabel ?? []).find((x) => x.label === name)?.n ?? mine.length;
+    return { name, n, ...(ms.length ? { p50: rank(0.5), p95: rank(0.95) } : {}), ...(mine.length ? { lastSecs: Math.min(...mine.map((e) => e.ageSecs)) } : {}) };
+  });
+}
+
+/** HOOKS (D): the fixed table of the wired hooks, header row then one row each: name, count, p50, p95, last (right-aligned, flush right). A hook that never fired is dim `0 — — —`. The rule states the latency colours once (amber over 100 ms, red over 500 ms); only the latency cells take them. `rows` cuts the table from the end on a short pane. */
+export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length): Run[][] {
+  const { dim, txt, red, amber, row, ribbon, metaText, g } = kit;
+  const narrow = kit.u < 44;
+  const wl = narrow ? 5 : 6;
+  const pad = (t: string, n: number): string => t.padStart(n);
+  const none = g('—', '-');
+  const ms = (v: number | undefined): Run => (v === undefined ? dim(pad(none, wl)) : v > 500 ? red(pad(`${v}ms`, wl)) : v > 100 ? amber(pad(`${v}ms`, wl)) : txt(pad(`${v}ms`, wl)));
+  const out: Run[][] = [ribbon('HOOKS', metaText('p95 amber>100ms red>500ms')), row([dim('hook')], [dim(pad('n', 4)), dim(pad('p50', wl)), dim(pad('p95', wl)), dim(pad('last', 5))])];
+  for (const e of hookTable(h).slice(0, Math.max(0, rows))) {
+    const fired = e.n > 0;
+    out.push(row([fired ? txt(e.name) : dim(e.name)], [fired ? txt(pad(String(e.n), 4)) : dim(pad('0', 4)), ms(e.p50), ms(e.p95), e.lastSecs !== undefined ? dim(pad(agoText(e.lastSecs), 5)) : dim(pad(none, 5))]));
+  }
+  return out;
+}
+
+/** RECENT (D): the newest hook events (age, glyph, event, `×N` for one label in one second) fill the rows the sections leave. */
+export function statusRecentRows(kit: Kit, h: Health, feed: readonly FeedRow[], n: number): Run[][] {
+  const { dim, txt, red, green, sp, row, ribbon, metaText, g } = kit;
+  const SEV = { info: [dim, '·', '.'], ok: [green, '●', '*'], bad: [red, '■', 'x'] } as const;
+  const shown = feed.slice(0, Math.max(0, n));
+  return [ribbon('RECENT', metaText(`${h.hooks?.total ?? 0} seen`)), ...shown.map((e): Run[] => {
+    const [paint, full, plain] = SEV[severityOf(e.label)];
+    const text = `${e.label}${e.n > 1 ? ` ×${e.n}` : ''}`;
+    return row([dim(agoText(e.ageSecs).padStart(3)), sp(1), paint(g(full, plain)), sp(1), txt(text)]);
+  })];
+}
+
 /** The footer pinned to the last row: `atlas 17.23.0 · master`, the session cost flush right. */
 export function footerRow(kit: Kit, h: Health): Run[] {
   const left = [h.version ? `atlas ${h.version}` : '', h.branch ?? ''].filter(Boolean).join(' · ');
@@ -264,12 +451,13 @@ export function statusFrame(a: StatusIn): Run[][] {
   const idx = a.phases.indexOf(a.phase);
   const stepper = (): Run[] => {
     if (!a.phases.length) return [];
-    // A stage fills only when the run passed it: the phases it entered before the lit one (or, done, every one it entered). With no record of the run's phases (a fresh pane on a finished run) the position decides.
+    // A: a passed stage `●` (green), the current one `◆` (violet), the rest `○`; done fills every pip. A stage counts as passed only when the run entered it (the panel's memo; with no record the position decides); the figure is passed + current, so it always agrees with the pips.
     const seen = a.entered && a.entered.length > 0 ? new Set(a.entered) : null;
-    const passed = (p: string, i: number): boolean => (kind === 'done' ? (seen ? seen.has(p) : true) : i < Math.max(0, idx) && (seen ? seen.has(p) : true));
-    const cells: Run[] = a.phases.map((p, i): Run => (passed(p, i) ? green(g('●', '*')) : i === idx && kind !== 'done' ? violet(g('◆', '#'), 1) : dim(g('○', 'o'))));
-    const n = kind === 'done' ? a.phases.length : idx < 0 ? 0 : idx + 1;
-    return [...cells, dim(` ${n}/${a.phases.length}`)];
+    const passed = (p: string, i: number): boolean => kind === 'done' || (i < Math.max(0, idx) && (seen ? seen.has(p) : true));
+    const isNow = (i: number): boolean => kind !== 'done' && i === idx;
+    const cells: Run[] = a.phases.map((p, i): Run => (passed(p, i) ? green(g('●', '*')) : isNow(i) ? violet(g('◆', '#'), 1) : dim(g('○', 'o'))));
+    const n = a.phases.filter((p, i) => passed(p, i) || isNow(i)).length;
+    return [...merge(cells), dim(` ${n}/${a.phases.length}`)];
   };
   const toolsRun = h.hooks?.runTools;
   const lastRun = h.pulse?.runs.at(-1);
@@ -301,36 +489,37 @@ export function statusFrame(a: StatusIn): Run[][] {
     }
   }
 
-  const activity = activityRows(kit, h);
-  const context = contextRows(kit, h);
-  const runsSec = runsRows(kit, h);
   const src: GateSrc = { gates: a.gates, prompted };
   const feed = hookFeed(h);
   const footer = footerRow(kit, h);
+  const context = statusContextRows(kit, h);
+  const runsSec = statusRunsRows(kit, h);
 
-  // ---- the stack: HOOKS shrink first, then RUNS, then gate children (2.8) ----
-  const hooksSec = (rows: number): Run[][] => hooksRows(kit, h, feed, rows);
-  const stack = (withRuns: boolean, children: boolean, ctxRows: number): Run[][][] => [now, activity, ...(context.length ? [context.slice(0, ctxRows)] : []), ...(withRuns && runsSec.length ? [runsSec] : []), gatesRows(kit, h, src, children)];
-  const lead = a.lead ? 1 : 0;
+  // ---- the stack (D): sections, then every spare row down to the pinned footer goes to the chart (to 8), then the RECENT log, then the chart again (to 12); a short pane gives up hooks rows, RUNS, gate children, CONTEXT in that order ----
+  type Plan = { chart: number; recent: number; hooks: number; runs: boolean; children: boolean; ctx: boolean };
+  const sectionsOf = (o: Plan): Run[][][] => [
+    now, statusActivityRows(kit, h, o.chart), ...(o.ctx && context.length ? [context] : []), ...(o.runs && runsSec.length ? [runsSec] : []),
+    statusGatesRows(kit, h, src, o.children), statusHooksRows(kit, h, o.hooks), ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
+  ];
+  const sizeOf = (o: Plan): number => { const s = sectionsOf(o); return (a.lead ? 1 : 0) + sum(s.map((x) => x.length)) + s.length - 1; };
   const foot = footer.length ? 1 : 0;
-  const used = (s: Run[][][], hooks: number): number => lead + sum(s.map((x) => x.length)) + s.length /* a blank after each */ + 1 + hooks + foot;
-  const want = a.room > 0 ? feed.length : Math.min(feed.length, 5);
-  let sections = stack(true, true, 3);
-  let hookRows = want;
+  const cap = a.room > 0 ? a.room - foot : Infinity;
+  let plan: Plan = { chart: a.room > 0 ? CHART_MIN : 4, recent: 0, hooks: WIRED_HOOKS.length, runs: true, children: true, ctx: true };
   if (a.room > 0) {
-    const levels: [boolean, boolean, number][] = [[true, true, 3], [false, true, 3], [false, false, 3], [false, false, 2]];
-    let pick = 0;
-    for (; pick < levels.length - 1; pick++) {
-      sections = stack(...levels[pick]!);
-      if (used(sections, Math.min(1, feed.length)) <= a.room) break;
+    const fits = (o: Plan): boolean => sizeOf(o) <= cap;
+    while (!fits(plan) && plan.hooks > 1) plan = { ...plan, hooks: plan.hooks - 1 };
+    if (!fits(plan)) plan = { ...plan, runs: false };
+    if (!fits(plan)) plan = { ...plan, children: false };
+    if (!fits(plan)) plan = { ...plan, ctx: false };
+    if (fits(plan)) {
+      while (plan.chart < CHART_SPEC_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
+      while (plan.recent < feed.length && fits({ ...plan, recent: plan.recent + 1 })) plan = { ...plan, recent: plan.recent + 1 };
+      while (plan.chart < CHART_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
     }
-    sections = stack(...levels[pick]!);
-    hookRows = Math.max(0, Math.min(want, a.room - used(sections, 0)));
-    if (feed.length > 0 && hookRows < 1 && used(sections, 1) <= a.room) hookRows = 1;
   }
-  const body: Run[][] = [...(a.lead ? [blank] : []), ...[...sections, hooksSec(hookRows)].flatMap((s, i, all) => [...s, ...(i < all.length - 1 ? [blank] : [])])];
+  const secs = sectionsOf(plan);
+  const body: Run[][] = [...(a.lead ? [blank] : []), ...secs.flatMap((s, i) => [...s, ...(i < secs.length - 1 ? [blank] : [])])];
   if (a.room > 0) {
-    const cap = a.room - foot;
     const cut = body.slice(0, cap);
     return [...cut, ...Array.from({ length: Math.max(0, cap - cut.length) }, () => blank), ...(foot ? [footer] : [])];
   }

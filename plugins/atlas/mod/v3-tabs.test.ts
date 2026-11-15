@@ -785,8 +785,8 @@ describe('one phase count: the band and the panel read the contract phases (fram
   test('the stepper fills only the entered stages; a skipped stage stays empty', () => {
     const mk = (entered: string[], kind: 'working' | 'done', phase: string) => panelWorld('route', 80, ui, { rows: 40, phases: PHASES, phase, entered, run: { kind, secs: 5, startMs: NOW, frame: 0 }, health: WORKING(), workers: [], todos: [], notes: [], gates: [] } as never);
     const row = (m: PanelModel) => lines(m).find((l) => /\d\/6$/.test(l.trimEnd()))!.trimEnd();
-    expect(row(mk(['research', 'implement'], 'working', 'verify'))).toMatch(/●○○○●◆ 6\/6$/);
-    expect(row(mk(['research', 'implement'], 'done', 'done'))).toMatch(/●○○○●○ 6\/6$/);
+    expect(row(mk(['research', 'implement'], 'working', 'verify'))).toMatch(/●○○○●◆ 3\/6$/); // passed + current: two passed, one current
+    expect(row(mk(['research', 'implement'], 'done', 'done'))).toMatch(/●●●●●● 6\/6$/); // done fills every pip, whatever the run entered
   });
 });
 

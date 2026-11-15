@@ -121,7 +121,7 @@ describe('6: ctx and tokens are one measure, labelled so', () => {
     expect(row).not.toContain('42k tok');
   });
   test('the panel session row reads the same words', () => {
-    expect(body(world(57, { rows: 24 })).find((l) => l.includes('of 1M'))).toContain('63k of 1M'); // the CONTEXT gauge row: `6% · 63k of 1M`
+    expect(body(world(57, { rows: 28 })).find((l) => l.includes('of 1M'))).toContain('63k of 1M'); // the CONTEXT gauge row: `6% · 63k of 1M`
   });
   test('the detail says what the figure is', () => {
     expect(ih.healthDetail(h, 'context')).toContain('measured on the last response, not a session total');
