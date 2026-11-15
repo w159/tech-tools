@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import functools
 import os
 import shutil
 import subprocess
@@ -30,7 +31,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-os.environ.update(GIT_AUTHOR_NAME="bench", GIT_AUTHOR_EMAIL="b@b", GIT_COMMITTER_NAME="bench", GIT_COMMITTER_EMAIL="b@b")
+_IDENT = dict(GIT_AUTHOR_NAME="bench", GIT_AUTHOR_EMAIL="b@b", GIT_COMMITTER_NAME="bench", GIT_COMMITTER_EMAIL="b@b")
 if "ATLAS_HOME" not in os.environ:
     _HOME = tempfile.mkdtemp(prefix="atlas-bench-home-")
     os.environ["ATLAS_HOME"] = _HOME
@@ -58,10 +59,28 @@ def build_cases() -> list:
     return cases
 
 
+def _with_identity(fn):
+    """Run fn with the bench git identity in os.environ, restoring the prior values (no process-wide leak)."""
+    @functools.wraps(fn)
+    def wrapper(*a, **kw):
+        saved = {k: os.environ.get(k) for k in _IDENT}
+        os.environ.update(_IDENT)
+        try:
+            return fn(*a, **kw)
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+    return wrapper
+
+
 def _git(repo: str, *a: str) -> str:
     return subprocess.run(["git", "-C", repo, *a], check=True, capture_output=True, text=True).stdout.strip()
 
 
+@_with_identity
 def _repo(tmp: str, files: dict) -> str:
     repo = os.path.join(tmp, "repo")
     os.mkdir(repo)
@@ -137,6 +156,7 @@ def run_shared(files: dict, edits_a: list, edits_b: list) -> dict:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@_with_identity
 def run_worktree(files: dict, edits_a: list, edits_b: list) -> dict:
     tmp = tempfile.mkdtemp()
     try:

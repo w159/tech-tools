@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 17.24.2 - 2026-11-15
+
+- atlas 17.24.2: the isolation bench no longer leaks its git identity into the process environment on import, and the parity rig sets its own identity per git call. Marketplace 5.29.2.
+
 ## atlas 17.24.1 - 2026-11-15
 
 - atlas 17.24.1: the omp verifier agent carries the 17.24.0 claim-evidence rule, and the verifier eval runs pytest as a module so it works without a `pytest` command on PATH. Marketplace 5.29.1.

@@ -614,6 +614,8 @@ def _git(cwd: str, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", "-c", "user.name=parity", "-c", "user.email=parity@example.invalid", *args],
         cwd=cwd,
+        env={**os.environ, "GIT_AUTHOR_NAME": "parity", "GIT_AUTHOR_EMAIL": "parity@example.invalid",
+             "GIT_COMMITTER_NAME": "parity", "GIT_COMMITTER_EMAIL": "parity@example.invalid"},
         capture_output=True,
         text=True,
         check=True,

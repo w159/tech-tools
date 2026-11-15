@@ -1,5 +1,12 @@
 # Changelog
 
+## 17.24.2 - 2026-11-15
+
+### Fixed
+
+- `atlas_isolation_bench.py` no longer sets a git identity (`GIT_AUTHOR_*`, `GIT_COMMITTER_*`) in the process environment when imported. It sets it only for the calls that commit or merge and restores the old values after. Before, importing it made later git commits in the same process carry the bench identity (CI `full` job failed `test_make_project_creates_everything` on this).
+- `atlas_parity_rig.py` passes its own git identity to each git call, so a pre-set identity in the environment cannot change its commits.
+
 ## 17.24.1 - 2026-11-15
 
 ### Fixed
