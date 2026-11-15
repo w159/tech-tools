@@ -1727,7 +1727,8 @@ def _deny_capable(cwd):
     """True when the native Grep/Glob deny can fire for sessions in `cwd`: the tripwire's own preconditions
     (hooks/dispatch_tripwire_core._native_tool_policy) are a docs/ dir at the project root, ATLAS_TRIPWIRE_HARD
     not off, the lean-ctx binary on PATH and a lean-ctx MCP server configured for the project. Anywhere else the
-    gate only nudges, so a native call there says nothing about whether the gate works. Unreadable: True (count it)."""
+    gate only nudges, so a native call there says nothing about whether the gate works. Unreadable: False (not counted:
+    a doctor-side error must not inflate the INERT verdict)."""
     if os.environ.get("ATLAS_TRIPWIRE_HARD", "on").lower() == "off":
         return False
     try:
@@ -1742,8 +1743,8 @@ def _deny_capable(cwd):
         if root is None or not (root / "docs").is_dir():
             return False
         return bool(shutil.which("lean-ctx")) and dt._lean_ctx_server_key(root) is not None
-    except Exception:  # noqa: BLE001 -- fail toward counting
-        return True
+    except Exception:  # noqa: BLE001 -- an unprovable cwd is not counted
+        return False
 
 
 def _live_faults(faults, version):

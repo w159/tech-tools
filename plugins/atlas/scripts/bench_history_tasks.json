@@ -1,0 +1,222 @@
+{
+ "version": 1,
+ "model": "claude-sonnet-5-5",
+ "tasks": [
+  {
+   "id": "gate-nested-evidence",
+   "commit": "41d62501b7a9fcea4257f393a7e669dcb2a0311f",
+   "parent": "fc6ee70cd2f7b7775e5d5532a204d7d03878257a",
+   "subject": "fix(atlas): completion gate counts nested evidence run dirs",
+   "src_files": [
+    "plugins/atlas/hooks/completion_gate_core.py"
+   ],
+   "test_files": [
+    "plugins/atlas/hooks/test_completion_gate.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/hooks/test_completion_gate.py::HelperUnitTest::test_check_evidence_counts_fresh_nested_file",
+    "plugins/atlas/hooks/test_completion_gate.py::HelperUnitTest::test_check_evidence_nested_started_none_failopen",
+    "plugins/atlas/hooks/test_completion_gate.py::HelperUnitTest::test_check_evidence_oserror_failopen"
+   ],
+   "statement": "The completion gate (plugins/atlas/hooks/completion_gate_core.py, evidence check) does not count evidence files that sit in nested run directories, so a run with fresh evidence under a nested dir is treated as having none. The failing tests are in plugins/atlas/hooks/test_completion_gate.py (HelperUnitTest, test_check_evidence_*).",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/hooks/test_completion_gate.py::HelperUnitTest::test_check_evidence_counts_fresh_nested_file",
+     "plugins/atlas/hooks/test_completion_gate.py::HelperUnitTest::test_check_evidence_nested_started_none_failopen",
+     "plugins/atlas/hooks/test_completion_gate.py::HelperUnitTest::test_check_evidence_oserror_failopen"
+    ],
+    "after_failed": [],
+    "n_tests_after": 480
+   }
+  },
+  {
+   "id": "gate-escaped-newline-regex",
+   "commit": "255897d61081d9d361e69689a575e656fc3cf2b3",
+   "parent": "bf92e8afb5173c7b44db0d45ce7ad842e6c36502",
+   "subject": "fix(atlas-gate): match JSON-escaped newlines in _TEST_RUNNER_RE",
+   "src_files": [
+    "plugins/atlas/hooks/completion_gate.py"
+   ],
+   "test_files": [
+    "plugins/atlas/hooks/test_completion_gate.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/hooks/test_completion_gate.py::TestRunPairsAnImplementerTest::test_ctx_execute_multiline_code_earns_credit"
+   ],
+   "statement": "The completion gate's test-runner detection (_TEST_RUNNER_RE in plugins/atlas/hooks/completion_gate.py) never credits an honest multi-line context-mode ctx_execute test run: both callers search json.dumps output, where an embedded newline in the code string is the two literal characters backslash and n, not a newline byte. The failing test is test_ctx_execute_multiline_code_earns_credit in plugins/atlas/hooks/test_completion_gate.py.",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/hooks/test_completion_gate.py::TestRunPairsAnImplementerTest::test_ctx_execute_multiline_code_earns_credit"
+    ],
+    "after_failed": [],
+    "n_tests_after": 215
+   }
+  },
+  {
+   "id": "doctor-config-dir",
+   "commit": "8b7e75c480dd9aedef0b40295172cf9ff73f7a1f",
+   "parent": "280a065554125d877763ce45b3719989025ce9ab",
+   "subject": "fix(atlas): doctor reads the plugin registry under CLAUDE_CONFIG_DIR",
+   "src_files": [
+    "plugins/atlas/scripts/atlas_doctor.py"
+   ],
+   "test_files": [
+    "plugins/atlas/scripts/test_atlas_doctor_config_dir.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/scripts/test_atlas_doctor_config_dir.py::test_claude_config_dir_moves_plugins_dir"
+   ],
+   "statement": "atlas_doctor always looks for the plugin registry under ~/.claude/plugins, so every install under a custom CLAUDE_CONFIG_DIR warns 'atlas not found in installed_plugins.json' at SessionStart. The failing test is plugins/atlas/scripts/test_atlas_doctor_config_dir.py.",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/scripts/test_atlas_doctor_config_dir.py::test_claude_config_dir_moves_plugins_dir"
+    ],
+    "after_failed": [],
+    "n_tests_after": 3
+   }
+  },
+  {
+   "id": "gates-team-row",
+   "commit": "34a55f23dca3d2fded59bcef9e5ba00dcdb34007",
+   "parent": "dc72b796c0cf62d38314d975a2b3af0b890fd89c",
+   "subject": "fix(atlas): one blocker from the Stop gate's own evaluation, one reason string, ",
+   "src_files": [
+    "plugins/atlas/scripts/atlas_gates.py"
+   ],
+   "test_files": [
+    "plugins/atlas/hooks/test_atlas_gates.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/hooks/test_atlas_gates.py::AtlasGatesInProcess::test_team_row_is_the_stop_gates_own_team_gate"
+   ],
+   "statement": "The Stop gate's own team gate evaluation and the board team row disagree: the board row built in plugins/atlas/scripts/atlas_gates.py does not equal the Stop gate's own blocker and reason string. The failing test is test_team_row_is_the_stop_gates_own_team_gate in plugins/atlas/hooks/test_atlas_gates.py.",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/hooks/test_atlas_gates.py::AtlasGatesInProcess::test_team_row_is_the_stop_gates_own_team_gate"
+    ],
+    "after_failed": [],
+    "n_tests_after": 17
+   }
+  },
+  {
+   "id": "format-hook-outside-cwd",
+   "commit": "da5649d1034f614d12c76af5185f0172447e5607",
+   "parent": "fb7cedcc11c3492fc611b4e6dbbbdb072b124be0",
+   "subject": "fix(atlas): format_after_edit skips files outside cwd, no friction row without a",
+   "src_files": [
+    "plugins/atlas/hooks/format_after_edit.py"
+   ],
+   "test_files": [
+    "plugins/atlas/hooks/test_format_after_edit.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/hooks/test_format_after_edit.py::MainInProcessTest::test_file_outside_cwd_does_nothing",
+    "plugins/atlas/hooks/test_format_after_edit.py::MainInProcessTest::test_no_candidate_formatter_is_silent_per_session_and_ext"
+   ],
+   "statement": "The format_after_edit hook (plugins/atlas/hooks/format_after_edit.py) does work and writes friction rows for edits of files outside the payload cwd (other repos, OneDrive), producing hundreds of rows a day, and it also logs a row when no candidate formatter exists for the extension. The failing tests are in plugins/atlas/hooks/test_format_after_edit.py (MainInProcessTest).",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/hooks/test_format_after_edit.py::MainInProcessTest::test_file_outside_cwd_does_nothing",
+     "plugins/atlas/hooks/test_format_after_edit.py::MainInProcessTest::test_no_candidate_formatter_is_silent_per_session_and_ext"
+    ],
+    "after_failed": [],
+    "n_tests_after": 53
+   }
+  },
+  {
+   "id": "gates-shell-wrap-and-report",
+   "commit": "2de0710d6a80f0e6bbdde50e1aae19bbe336bb7a",
+   "parent": "fe6381f2674785d47cbb61a98341683a071bbdf4",
+   "subject": "fix(atlas): gate probe mismatches to zero",
+   "src_files": [
+    "plugins/atlas/hooks/bash_advisor.py",
+    "plugins/atlas/hooks/worker_report_gate.py"
+   ],
+   "test_files": [
+    "plugins/atlas/hooks/test_fallow_gate.py",
+    "plugins/atlas/hooks/test_worker_report_gate.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/hooks/test_fallow_gate.py::PatternTests::test_shell_c_wrapped_git_is_gated",
+    "plugins/atlas/hooks/test_worker_report_gate.py::WorkerReportGateTest::test_done_with_failing_test_evidence_blocks",
+    "plugins/atlas/hooks/test_worker_report_gate.py::WorkerReportGateTest::test_missing_agent_id_does_not_share_one_marker"
+   ],
+   "statement": "Three gate defects: (1) fallow_gate does not see git commit or git push when wrapped in sh -c, bash -c or zsh -c; (2) worker_report_gate lets a DONE report through even though its EVIDENCE shows failing tests; (3) worker_report_gate shares one marker across agents when the payload has no agent_id. Failing tests: plugins/atlas/hooks/test_fallow_gate.py (PatternTests) and plugins/atlas/hooks/test_worker_report_gate.py (WorkerReportGateTest). Source files: plugins/atlas/hooks/bash_advisor.py and worker_report_gate.py.",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/hooks/test_fallow_gate.py::PatternTests::test_shell_c_wrapped_git_is_gated",
+     "plugins/atlas/hooks/test_worker_report_gate.py::WorkerReportGateTest::test_done_with_failing_test_evidence_blocks",
+     "plugins/atlas/hooks/test_worker_report_gate.py::WorkerReportGateTest::test_missing_agent_id_does_not_share_one_marker"
+    ],
+    "after_failed": [],
+    "n_tests_after": 46
+   }
+  },
+  {
+   "id": "friction-window-and-classifier",
+   "commit": "e483ba56b571ae7f67bf990cd413e9700fdd3c06",
+   "parent": "707fe2995dd4be1d3427fd94b4751a233646c19d",
+   "subject": "fix(atlas-doctor,friction): window the friction metric, guard the classifier aga",
+   "src_files": [
+    "plugins/atlas/scripts/atlas_doctor.py",
+    "plugins/atlas/scripts/session_ingest.py"
+   ],
+   "test_files": [
+    "plugins/atlas/scripts/test_atlas_doctor.py",
+    "plugins/atlas/scripts/test_session_ingest.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/scripts/test_atlas_doctor.py::AtlasDoctorMiningTest::test_gate_block_silences_capture_miner",
+    "plugins/atlas/scripts/test_atlas_doctor.py::AtlasDoctorMiningTest::test_recurring_friction_miner_window",
+    "plugins/atlas/scripts/test_session_ingest.py::DetectSignalsTest::test_fenced_code_is_not_a_signal",
+    "plugins/atlas/scripts/test_session_ingest.py::DetectSignalsTest::test_markdown_table_row_is_not_a_signal",
+    "plugins/atlas/scripts/test_session_ingest.py::DetectSignalsTest::test_stop_condition_boilerplate_is_not_a_correction"
+   ],
+   "statement": "Two defects in the friction tooling. (1) The recurring-friction miner in plugins/atlas/scripts/atlas_doctor.py counts lifetime rows, so baselines can never be met; it should count a recent 14-day window shared with the missing-facets miner, and a gate block should silence the capture miner. (2) The signal classifier in plugins/atlas/scripts/session_ingest.py matches text inside fenced code and markdown table rows, and CORRECTION matches the boilerplate phrase 'no stop condition was hit'. Failing tests: plugins/atlas/scripts/test_atlas_doctor.py (AtlasDoctorMiningTest) and plugins/atlas/scripts/test_session_ingest.py (DetectSignalsTest).",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/scripts/test_atlas_doctor.py::AtlasDoctorMiningTest::test_gate_block_silences_capture_miner",
+     "plugins/atlas/scripts/test_atlas_doctor.py::AtlasDoctorMiningTest::test_recurring_friction_miner_window",
+     "plugins/atlas/scripts/test_session_ingest.py::DetectSignalsTest::test_fenced_code_is_not_a_signal",
+     "plugins/atlas/scripts/test_session_ingest.py::DetectSignalsTest::test_markdown_table_row_is_not_a_signal",
+     "plugins/atlas/scripts/test_session_ingest.py::DetectSignalsTest::test_stop_condition_boilerplate_is_not_a_correction"
+    ],
+    "after_failed": [],
+    "n_tests_after": 165
+   }
+  },
+  {
+   "id": "doctor-layout-containment",
+   "commit": "a71a4cd85abbe7378cc06f7283ad6419b38a5cc9",
+   "parent": "0fdfa333af7f786c92e6f94d59599a875ad4014e",
+   "subject": "fix(atlas): doctor layout repair cannot leave its project; containers are report",
+   "src_files": [
+    "plugins/atlas/scripts/atlas_doctor.py",
+    "plugins/atlas/scripts/doctor_layout.py"
+   ],
+   "test_files": [
+    "plugins/atlas/scripts/test_atlas_doctor.py",
+    "plugins/atlas/scripts/test_atlas_doctor_layout.py"
+   ],
+   "fail_to_pass": [
+    "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_container_atlas_is_found_from_a_child_repo",
+    "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_destination_outside_project_and_home_is_refused",
+    "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_home_run_outside_given_home_is_refused",
+    "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_stray_outside_root_is_never_moved_even_with_apply",
+    "plugins/atlas/scripts/test_atlas_doctor_layout.py::SuiteIsolationTest::test_doctor_suites_leave_ancestor_sentinel_and_project_alone"
+   ],
+   "statement": "The doctor layout repair (plugins/atlas/scripts/doctor_layout.py, called from atlas_doctor.py) can move stray .atlas state out of its project: a destination outside the project and HOME is accepted, a stray outside the root is moved even with apply, and a run in HOME outside the given home is not refused. A container .atlas found from a child repo should be reported, not moved. The failing tests are in plugins/atlas/scripts/test_atlas_doctor_layout.py (StrayDetectionTest, SuiteIsolationTest).",
+   "validation": {
+    "before_failed": [
+     "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_container_atlas_is_found_from_a_child_repo",
+     "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_destination_outside_project_and_home_is_refused",
+     "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_home_run_outside_given_home_is_refused",
+     "plugins/atlas/scripts/test_atlas_doctor_layout.py::StrayDetectionTest::test_stray_outside_root_is_never_moved_even_with_apply",
+     "plugins/atlas/scripts/test_atlas_doctor_layout.py::SuiteIsolationTest::test_doctor_suites_leave_ancestor_sentinel_and_project_alone"
+    ],
+    "after_failed": [],
+    "n_tests_after": 158
+   }
+  }
+ ]
+}

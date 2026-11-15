@@ -183,6 +183,23 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.24.0 follow-ups (added 2026-11-15)
+
+Shipped in `plugins/atlas/CHANGELOG.md` (17.24.0); audits: `docs/audits/2026-11-15_atlas-round4-expert-gaps.md`, `docs/audits/2026-11-15_atlas-round4-post-review.md`.
+
+- [planned] Run the history bench (`plugins/atlas/scripts/atlas_history_bench.py`, 8 validated tasks from this repo's history): 48 runs, Atlas against plain Claude Code, sonnet, n=3. Needs the owner's go-ahead because it spends up to USD 40. The harness gives each arm an empty scratch CLAUDE_CONFIG_DIR and strips CLAUDE* env vars, so check on the target machine that the CLI still authenticates before the 48-run launch.
+- [planned] A real Ollama run: the decision protocol and the provider bench have only met a stub that follows the documented API; no model has answered.
+- [planned] Learned or outcome-fed model routing per seat: seats still use the fixed models in `contracts/scope-matrix.json`.
+- [planned] Best-of-N attempts in worktrees, chosen by tests and the verifier (worktree isolation exists; N attempts do not).
+- [planned] Gate ablation: run the same tasks with each group of gate conditions off and drop any condition that shows no effect.
+- [planned] A public benchmark (SWE-bench Verified subset or Terminal-Bench) when its hosts are reachable from the build environment.
+- [planned] More real unsupported-claim rows for the done-claim corpus: only 3 exist, so real-world recall of the blocking path is measured on n=3 (real rows n=131 TP 1 FP 0 FN 2) and most blocking true positives are seeded.
+- [planned] Per-agent identity for in-process dispatches: an in-process verifier still stamps as `lead`, so gate (b) credit depends on the dispatch row and a lead can pair a real verifier dispatch with a self-stamped row.
+- [planned] `ATLAS_WORKER_NAME` trust: the process environment can set it, so a worker name used as `stamped_by` is not proof of identity.
+- [planned] Run the isolation measurement through `spawn-team` with real workers; the current bench is a simulation (shared tree modeled with Edit semantics) and 6 same-line conflicts stay on kept branches for the lead.
+- [planned] Run the verifier held-out tier on haiku and opus; only sonnet was run (30/30 false claims caught, 2/30 false refutes).
+- [planned] Show the doctor fix on a fresh install: the SessionStart "gates are INERT" warning still comes from the installed copy.
+
 ### Atlas 17.23.0 follow-ups (added 2026-11-15)
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-14-idle-health.md`.

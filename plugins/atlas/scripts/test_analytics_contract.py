@@ -82,6 +82,7 @@ CALL_SITES = {
     "decision.verify.{verifyres}": [
         ("hooks/completion_gate_core.py", '"decision.verify.block"'),
         ("hooks/completion_gate_core.py", '"decision.verify.block-would"'),
+        ("hooks/completion_gate_core.py", '"decision.verify.cleared"'),
         ("hooks/completion_gate_core.py", '"decision.verify.pass"'),
         ("hooks/completion_gate_core.py", '"decision.verify.skip"'),
     ],

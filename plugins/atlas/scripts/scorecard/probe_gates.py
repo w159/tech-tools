@@ -886,6 +886,7 @@ class Gates:
                     {
                         "id": "s1",
                         "status": "verified",
+                        "verified_by": "atlas:verifier",
                         "evidence": "pytest",
                         "reproduction": "pytest",
                         "verified_at": time.strftime(

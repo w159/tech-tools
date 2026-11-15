@@ -129,6 +129,9 @@ def build_entry(args: argparse.Namespace) -> dict:
         "status": args.status,
         "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "verified_by": _writer(args.by),
+        # who actually ran this stamper (--by cannot change it): the completion gate reads
+        # verified_by == stamped_by as a self-stamp.
+        "stamped_by": _writer(None),
     }
 
 

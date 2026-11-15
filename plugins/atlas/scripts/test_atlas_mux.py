@@ -1375,6 +1375,28 @@ class LogTmuxFailureTests(unittest.TestCase):
                 os.chdir(old)
             self.assertFalse(os.path.exists(os.path.join(d, ".atlas")))
 
+    def test_bare_temp_root_atlas_is_not_a_project(self):
+        import atlas_mux
+
+        res = subprocess.CompletedProcess([], 1, "", "boom")
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_PROJECT_ROOT"}
+        with tempfile.TemporaryDirectory() as d:
+            (pathlib.Path(d) / ".atlas" / ".run").mkdir(parents=True)
+            sub = pathlib.Path(d) / "work"
+            sub.mkdir()
+            old = os.getcwd()
+            os.chdir(sub)
+            try:
+                with mock.patch.dict(os.environ, env, clear=True), mock.patch(
+                    "tempfile.gettempdir", return_value=os.path.realpath(d)
+                ):
+                    atlas_mux._log_tmux_failure(("new-session",), res)
+            finally:
+                os.chdir(old)
+            self.assertFalse(
+                (pathlib.Path(d) / ".atlas/.run/logs/atlas_mux.log").exists()
+            )
+
     def test_subdir_logs_to_repo_root(self):
         import atlas_mux
 
@@ -3501,7 +3523,7 @@ class WorktreeIsolationTests(unittest.TestCase):
             print(json.dumps({"ok": True, "name": ns.name}))
             return 0
 
-        env = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on"}
+        env = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on", "ATLAS_ISOLATION": "shared" if shipped else ""}
         cells = contextlib.nullcontext() if shipped else _worktree_cells()
         with cells, mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-wt")), \
@@ -4224,8 +4246,9 @@ class WorktreeReapTests(unittest.TestCase):
 
         buf = io.StringIO()
         fail = subprocess.CompletedProcess([], 1, "", "")
+        # merge-back (reap merging committed branches into the lead) is covered by WorktreeMergeBackTests
         with mock.patch.object(atlas_mux, "_tmux", return_value=fail), mock.patch.object(atlas_mux, "_kill_notes"), \
-                contextlib.redirect_stdout(buf):
+                mock.patch.object(atlas_mux, "_merge_back", return_value=([], [], [])), contextlib.redirect_stdout(buf):
             self.assertEqual(0, atlas_mux.main(["reap", "--json", "--team", "tr", "--root", self.repo]))
         out = json.loads(buf.getvalue().strip().splitlines()[-1])
 
@@ -4651,3 +4674,200 @@ class ReliabilityBaselineTests(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertIn("atlas:explorer", reason)
         self.assertIn("plugin", reason)
+
+
+_GIT_ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+
+
+class IsolationSelectorTests(unittest.TestCase):
+    """ATLAS_ISOLATION=auto|shared|worktree: auto picks worktrees when 2+ editors could write the same files."""
+
+    def setUp(self):
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = os.path.join(self.tmp, "repo")
+        os.mkdir(self.repo)
+        subprocess.run(["git", "-C", self.repo, "init", "-q", "-b", "main"], check=True, capture_output=True)
+
+    @staticmethod
+    def _rec(members, scope=(), cell="shared"):
+        return {"isolation": cell, "team_id": "tsel", "file_scope": list(scope), "members": members}
+
+    def _select(self, rec, env=None, root=None):
+        import atlas_mux
+
+        e = {"ATLAS_ISOLATION": ""}
+        e.update(env or {})
+        with mock.patch.dict(os.environ, e):
+            atlas_mux.resolve_isolation(rec, root or self.repo)
+        return rec
+
+    def test_auto_picks_worktree_for_two_implementers_with_overlapping_paths(self):
+        ms = [{"name": "i1", "role": "implementer", "paths": ["src/a"]}, {"name": "i2", "role": "implementer", "paths": ["src/a/b.py"]}]
+        rec = self._select(self._rec(ms))
+        self.assertEqual("worktree", rec["isolation"])
+        self.assertIn("overlap", rec["isolation_reason"])
+
+    def test_auto_picks_worktree_when_an_editor_declares_no_paths(self):
+        ms = [{"name": "i1", "role": "implementer", "paths": ["src/a"]}, {"name": "i2", "role": "implementer"}]
+        rec = self._select(self._rec(ms))
+        self.assertEqual("worktree", rec["isolation"])
+        self.assertIn("no declared paths", rec["isolation_reason"])
+
+    def test_auto_picks_worktree_when_team_scope_is_shared_by_both(self):
+        ms = [{"name": "i1", "role": "implementer"}, {"name": "i2", "role": "implementer"}]
+        rec = self._select(self._rec(ms, scope=["src"]))
+        self.assertEqual("worktree", rec["isolation"])
+
+    def test_auto_picks_shared_for_disjoint_paths(self):
+        ms = [{"name": "i1", "role": "implementer", "paths": ["src/a"]}, {"name": "i2", "role": "implementer", "paths": ["src/ab", "docs"]}]
+        rec = self._select(self._rec(ms))
+        self.assertEqual("shared", rec["isolation"])
+        self.assertTrue(rec["isolation_reason"])
+
+    def test_auto_picks_shared_for_a_single_editor(self):
+        ms = [{"name": "i1", "role": "implementer"}, {"name": "v1", "role": "verifier"}]
+        rec = self._select(self._rec(ms))
+        self.assertEqual("shared", rec["isolation"])
+
+    def test_auto_picks_shared_outside_a_git_repo(self):
+        plain = os.path.join(self.tmp, "plain")
+        os.mkdir(plain)
+        ms = [{"name": "i1", "role": "implementer"}, {"name": "i2", "role": "implementer"}]
+        rec = self._select(self._rec(ms), root=plain)
+        self.assertEqual("shared", rec["isolation"])
+        self.assertIn("git", rec["isolation_reason"])
+
+    def test_env_override_both_ways(self):
+        overlap = [{"name": "i1", "role": "implementer", "paths": ["a"]}, {"name": "i2", "role": "implementer", "paths": ["a"]}]
+        disjoint = [{"name": "i1", "role": "implementer", "paths": ["a"]}, {"name": "i2", "role": "implementer", "paths": ["b"]}]
+        self.assertEqual("shared", self._select(self._rec(overlap), {"ATLAS_ISOLATION": "shared"})["isolation"])
+        forced = self._select(self._rec(disjoint), {"ATLAS_ISOLATION": "worktree"})
+        self.assertEqual("worktree", forced["isolation"])
+        self.assertIn("ATLAS_ISOLATION", forced["isolation_reason"])
+
+    def test_explicit_cell_worktree_always_wins(self):
+        disjoint = [{"name": "i1", "role": "implementer", "paths": ["a"]}, {"name": "i2", "role": "implementer", "paths": ["b"]}]
+        rec = self._select(self._rec(disjoint, cell="worktree"), {"ATLAS_ISOLATION": "shared"})
+        self.assertEqual("worktree", rec["isolation"])
+
+    def test_dry_run_prints_choice_and_reason(self):
+        import atlas_mux
+
+        buf = io.StringIO()
+        env = {"ATLAS_ISOLATION": "", "ATLAS_MUX_WORKER_CMD": "true"}
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", "t",
+                                   "--paths", "src", "--root", self.repo, "--dry-run"])
+        self.assertEqual(0, code)
+        head = buf.getvalue().splitlines()[0]
+        self.assertIn("isolation worktree", head)
+        self.assertIn("overlap", head)
+
+    def test_member_paths_line_in_task_file_declares_disjoint_slices(self):
+        import atlas_mux
+
+        task = "## member: implementer\nPATHS: src/a\nwork a\n## member: implementer-2\nPATHS: src/b\nwork b\n"
+        tf = os.path.join(self.tmp, "task.md")
+        pathlib.Path(tf).write_text(task)
+        buf = io.StringIO()
+        env = {"ATLAS_ISOLATION": "", "ATLAS_MUX_WORKER_CMD": "true"}
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task-file", tf,
+                                   "--root", self.repo, "--dry-run"])
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertEqual(0, code, out)
+        self.assertEqual("shared", out["team"]["isolation"])
+        self.assertEqual({}, out["team"]["worktrees"])
+
+
+class WorktreeMergeBackTests(unittest.TestCase):
+    """reap merges each worker branch into the lead's branch one at a time; a conflict is aborted and kept."""
+
+    BASE = "".join(f"line {i}\n" for i in range(1, 31))
+
+    def setUp(self):
+        self.tmp = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.repo = os.path.join(self.tmp, "repo")
+        os.mkdir(self.repo)
+        self.git("init", "-q", "-b", "main")
+        pathlib.Path(self.repo, "f.txt").write_text(self.BASE)
+        self.git("add", "f.txt")
+        self.git("commit", "-q", "-m", "base")
+        os.makedirs(os.path.join(self.repo, ".atlas", ".run", "teams"))
+
+    def git(self, *a, cwd=None):
+        return subprocess.run(["git", "-C", cwd or self.repo, *a], check=True, capture_output=True, text=True, env=_GIT_ENV).stdout.strip()
+
+    def _team(self, team, edits):
+        """edits: {member: (old, new)}; each worker commits its replacement in its own worktree."""
+        import atlas_mux
+
+        rec = {"isolation": "worktree", "team_id": team, "members": [{"name": n, "role": "implementer"} for n in edits]}
+        plan = atlas_mux.worktree_plan(rec, self.repo)
+        for n, (old, new) in edits.items():
+            self.assertIsNone(atlas_mux.add_worktree(self.repo, plan[n]))
+            f = pathlib.Path(plan[n]["path"], "f.txt")
+            f.write_text(f.read_text().replace(old, new))
+            self.git("commit", "-q", "-am", f"{n} edit", cwd=plan[n]["path"])
+        rec.update(transport="tmux", created=time.time(), worktrees=plan)
+        pathlib.Path(self.repo, f".atlas/.run/teams/{team}.json").write_text(json.dumps(rec))
+        return plan
+
+    def _reap(self, team):
+        import atlas_mux
+
+        buf = io.StringIO()
+        fail = subprocess.CompletedProcess([], 1, "", "")
+        with mock.patch.object(atlas_mux, "_tmux", return_value=fail), mock.patch.object(atlas_mux, "_kill_notes"), \
+                mock.patch.dict(os.environ, _GIT_ENV), contextlib.redirect_stdout(buf):
+            code = atlas_mux.main(["reap", "--json", "--team", team, "--root", self.repo])
+        self.assertEqual(0, code)
+        return json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_different_hunks_of_one_file_merge_cleanly_and_worktrees_are_gone(self):
+        plan = self._team("tm", {"implementer-1": ("line 2\n", "line 2 A\n"), "implementer-2": ("line 28\n", "line 28 B\n")})
+        out = self._reap("tm")
+        self.assertEqual(["implementer-1", "implementer-2"], out["worktrees_merged"])
+        self.assertEqual([], out["worktrees_conflicted"])
+        self.assertEqual([], out["worktrees_kept"])
+        text = pathlib.Path(self.repo, "f.txt").read_text()
+        self.assertIn("line 2 A\n", text)
+        self.assertIn("line 28 B\n", text)
+        self.assertEqual("", self.git("status", "--porcelain", "--untracked-files=no"))
+        for wt in plan.values():
+            self.assertFalse(os.path.exists(wt["path"]))
+        self.assertEqual(["main"], self.git("branch", "--format=%(refname:short)").split())
+
+    def test_same_lines_report_one_conflict_and_leave_the_lead_branch_alone(self):
+        plan = self._team("tc", {"implementer-1": ("line 5\n", "line 5 A\n"), "implementer-2": ("line 5\n", "line 5 B\n")})
+        out = self._reap("tc")
+        self.assertEqual(["implementer-1"], out["worktrees_merged"])
+        self.assertEqual(1, len(out["worktrees_conflicted"]))
+        c = out["worktrees_conflicted"][0]
+        self.assertEqual(("implementer-2", ["f.txt"]), (c["member"], c["files"]))
+        # lead HEAD is the first worker's merge commit: the failed merge left nothing behind
+        self.assertEqual("implementer-1 edit", self.git("log", "-1", "--format=%s", "HEAD^2"))
+        self.assertFalse(os.path.exists(os.path.join(self.repo, ".git", "MERGE_HEAD")))
+        self.assertEqual("", self.git("status", "--porcelain", "--untracked-files=no"))
+        text = pathlib.Path(self.repo, "f.txt").read_text()
+        self.assertIn("line 5 A\n", text)
+        self.assertNotIn("<<<<<<<", text)
+        # the conflicting worker keeps its branch and worktree for the lead; the merged one is gone
+        self.assertIn(plan["implementer-2"]["branch"], self.git("branch", "--format=%(refname:short)").split())
+        self.assertTrue(os.path.isdir(plan["implementer-2"]["path"]))
+        self.assertFalse(os.path.exists(plan["implementer-1"]["path"]))
+        self.assertEqual(["implementer-2"], [k["member"] for k in out["worktrees_kept"]])
+
+    def test_a_dirty_lead_file_the_branch_touches_skips_the_merge(self):
+        plan = self._team("td", {"implementer-1": ("line 2\n", "line 2 A\n")})
+        f = pathlib.Path(self.repo, "f.txt")
+        f.write_text(f.read_text().replace("line 9\n", "line 9 lead wip\n"))
+        head = self.git("rev-parse", "HEAD")
+        out = self._reap("td")
+        self.assertEqual([], out["worktrees_merged"])
+        self.assertEqual(head, self.git("rev-parse", "HEAD"))
+        self.assertIn("line 9 lead wip\n", f.read_text())
+        self.assertTrue(os.path.isdir(plan["implementer-1"]["path"]))
+        self.assertEqual("lead tree has uncommitted changes to files the branch edits", out["worktrees_skipped"][0]["reason"])

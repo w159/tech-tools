@@ -79,6 +79,19 @@ def _seed_dispatch(db_path, session_id="sess-orch"):
         )
 
 
+def _seed_verifier_dispatch(db_path, session_id="sess-orch", ago=60):
+    """A hook-recorded atlas:verifier dispatch that started `ago` seconds ago: the record that backs a
+    findings row's `verified_by` for gate (b). Pairs one implementer for (g), like any verifier dispatch."""
+    with atlas_db.connect(db_path) as conn:
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        conn.execute(
+            "INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
+            (rid, time.time() - ago, "atlas:verifier"),
+        )
+
+
 def _lead_channel(root, session_id="sess-orch", members=()):
     """The run's lead subchannel (`<main>/lead-<first 6 of the session id>`) with
     `members` registered lead-side, as a dispatch/launch does; returns its name."""
@@ -125,7 +138,10 @@ class DecisionVerifyNegativeCacheTest(unittest.TestCase):
         with socket.socket() as sk:
             sk.bind(("127.0.0.1", 0))
             dead = "http://127.0.0.1:%d" % sk.getsockname()[1]
-        data = {"last_assistant_message": "All done, the fix is in and everything is working now. " * 4}
+        data = {
+            "last_assistant_message": "All done, the fix is in and everything is working now. "
+            * 4
+        }
         calls = []
         real = prompt_decision._urlopen
 
@@ -134,11 +150,19 @@ class DecisionVerifyNegativeCacheTest(unittest.TestCase):
             return real(req, timeout)
 
         prompt_decision.reset_cache()
-        env = {"ATLAS_DECISION": "on", "ATLAS_DECISION_URL": dead}
-        with mock.patch.dict(os.environ, env, clear=False), mock.patch.object(prompt_decision, "_urlopen", counting):
-            self.assertEqual(cgc._decision_verify_reason(data, False), "")
-            self.assertEqual(cgc._decision_verify_reason(data, False), "")
-            self.assertEqual(cgc._decision_verify_reason(data, False), "")
+        env = {
+            "ATLAS_DECISION": "on",
+            "ATLAS_DECISION_URL": dead,
+            "ATLAS_DONE_CLAIM": "block",
+        }
+        with (
+            mock.patch.dict(os.environ, env, clear=False),
+            mock.patch.object(prompt_decision, "_urlopen", counting),
+        ):
+            for _ in range(
+                3
+            ):  # no second opinion available: the deterministic block stands
+                self.assertIn("(v)", cgc._decision_verify_reason(data, False))
         prompt_decision.reset_cache()
         self.assertEqual(len(calls), 1, "one refused connection, then 60 s of skipping")
 
@@ -275,6 +299,7 @@ class GateOrchestrationTest(unittest.TestCase):
                     {
                         "claim": "x works",
                         "status": "verified",
+                        "verified_by": "atlas:verifier",
                         "verified_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
@@ -697,6 +722,329 @@ class CheckFindingsMalformedTest(unittest.TestCase):
         self.assertFalse(_check_findings(root))
 
 
+class FindingsSelfStampTest(unittest.TestCase):
+    """(b): a verified row satisfies the gate only when someone other than the claimant stamped it, or a
+    test-runner command it names really ran, and passed, in this session's transcript."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = Path(self.tmp)
+        (self.root / ".atlas" / ".run").mkdir(parents=True)
+        self.started = time.time() - 600
+        db = os.path.join(
+            self.tmp, "atlas.db"
+        )  # an initialised, empty db: no dispatch backs any row
+        conn = atlas_db.connect(db)
+        atlas_db.init(conn)
+        conn.close()
+        patcher = mock.patch.dict(os.environ, {"ATLAS_DB": db})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _row(self, **kw):
+        row = {
+            "id": "S1",
+            "status": "verified",
+            "title": "t",
+            "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "verified_by": "lead",
+            "stamped_by": "lead",
+        }
+        row.update(kw)
+        (self.root / ".atlas" / ".run" / "findings.json").write_text(json.dumps([row]))
+
+    def _transcript(self, cmd=None, out="36 passed in 2.1s", is_error=False):
+        path = self.root / "t.jsonl"
+        ts = datetime.now(timezone.utc).isoformat()
+        rows = [
+            {
+                "type": "user",
+                "timestamp": ts,
+                "message": {"role": "user", "content": "go"},
+            }
+        ]
+        if cmd:
+            rows.append(
+                {
+                    "type": "assistant",
+                    "timestamp": ts,
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "t1",
+                                "name": "Bash",
+                                "input": {"command": cmd},
+                            }
+                        ]
+                    },
+                }
+            )
+            rows.append(
+                {
+                    "type": "user",
+                    "timestamp": ts,
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "t1",
+                                "content": out,
+                                "is_error": is_error,
+                            }
+                        ]
+                    },
+                }
+            )
+        path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        return str(path)
+
+    def check(self, transcript):
+        return _check_findings(self.root, self.started, transcript, "sess-x")
+
+    def test_self_stamp_without_a_test_command_does_not_count(self):
+        self._row()
+        self.assertFalse(self.check(self._transcript()))
+        self.assertIn("self-stamp", completion_gate._FINDINGS_WHY["text"])
+
+    def test_bare_stamp_by_another_agent_does_not_count(self):
+        # a --by value is free text: only a hook-written record backs it (FindingsIdentityBackingTest)
+        self._row(verified_by="atlas:verifier")
+        self.assertFalse(self.check(self._transcript()))
+
+    def test_self_stamp_with_a_passing_test_run_counts(self):
+        self._row(reproduction="pytest hooks -q -p no:cacheprovider")
+        tp = self._transcript(cmd="cd /x && pytest hooks -q -p no:cacheprovider")
+        self.assertTrue(self.check(tp))
+
+    def test_evidence_entry_with_arrow_suffix_counts(self):
+        self._row(evidence=["pytest hooks -q -> 36 passed"])
+        self.assertTrue(self.check(self._transcript(cmd="pytest hooks -q")))
+
+    def test_failing_test_run_does_not_count(self):
+        self._row(reproduction="pytest hooks -q")
+        tp = self._transcript(
+            cmd="pytest hooks -q", out="Exit code 1\n1 failed, 4 passed", is_error=True
+        )
+        self.assertFalse(self.check(tp))
+
+    def test_named_command_that_never_ran_does_not_count(self):
+        self._row(reproduction="pytest hooks -q")
+        self.assertFalse(self.check(self._transcript(cmd="git status", out="clean")))
+
+    def test_non_test_command_in_evidence_does_not_count(self):
+        self._row(reproduction="ls -la")
+        self.assertFalse(self.check(self._transcript(cmd="ls -la", out="total 0")))
+
+    def test_legacy_row_without_stamped_by(self):
+        self._row(verified_by="lead", stamped_by=None)
+        self.assertFalse(self.check(self._transcript()))
+        self._row(verified_by="atlas:verifier", stamped_by=None)
+        self.assertFalse(self.check(self._transcript()))
+
+    def test_default_stamper_equal_to_verified_by_is_a_self_stamp(self):
+        self._row(verified_by="impl-auth", stamped_by="impl-auth")
+        self.assertFalse(self.check(self._transcript()))
+
+    def test_unreadable_transcript_fails_open(self):
+        self._row()
+        self.assertTrue(self.check(""))
+        self.assertTrue(self.check(str(self.root / "missing.jsonl")))
+
+
+class FindingsIdentityBackingTest(unittest.TestCase):
+    """(b): an independent `verified_by` is a CLI string anyone can type, so it only counts when a
+    hook-written record backs it: an atlas:verifier / completeness-critic dispatch row of this session's run
+    that started before the stamp, or a team/crew member record of this session whose stamper has a verifier
+    role. The test-command credit needs the exact normalized command, not a substring."""
+
+    SESSION = "sess-x"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = Path(self.tmp)
+        (self.root / ".atlas" / ".run").mkdir(parents=True)
+        self.started = time.time() - 600
+        self.db = os.path.join(self.tmp, "atlas.db")
+        patcher = mock.patch.dict(os.environ, {"ATLAS_DB": self.db})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        conn = atlas_db.connect(self.db)
+        atlas_db.init(conn)
+        self.pid = atlas_db.register_project(conn, self.tmp)
+        self.rid = atlas_db.start_run(conn, self.pid, self.SESSION)
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _dispatch(self, agent_type, ts):
+        conn = atlas_db.connect(self.db)
+        conn.execute(
+            "INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
+            (self.rid, ts, agent_type),
+        )
+        conn.commit()
+        conn.close()
+
+    def _row(self, **kw):
+        row = {
+            "id": "S1",
+            "status": "verified",
+            "title": "t",
+            "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "verified_by": "atlas:verifier",
+            "stamped_by": "lead",
+        }
+        row.update(kw)
+        (self.root / ".atlas" / ".run" / "findings.json").write_text(json.dumps([row]))
+
+    def _transcript(self, *cmds):
+        path = self.root / "t.jsonl"
+        ts = datetime.now(timezone.utc).isoformat()
+        rows = [
+            {
+                "type": "user",
+                "timestamp": ts,
+                "message": {"role": "user", "content": "go"},
+            }
+        ]
+        for i, cmd in enumerate(cmds):
+            rows.append(
+                {
+                    "type": "assistant",
+                    "timestamp": ts,
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": f"t{i}",
+                                "name": "Bash",
+                                "input": {"command": cmd},
+                            }
+                        ]
+                    },
+                }
+            )
+            rows.append(
+                {
+                    "type": "user",
+                    "timestamp": ts,
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": f"t{i}",
+                                "content": "36 passed in 2.1s",
+                                "is_error": False,
+                            }
+                        ]
+                    },
+                }
+            )
+        path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        return str(path)
+
+    def check(self, transcript=""):
+        return _check_findings(
+            self.root, self.started, transcript or self._transcript(), self.SESSION
+        )
+
+    def _team(self, members, team_id="t-v"):
+        teams = self.root / ".atlas" / ".run" / "teams"
+        teams.mkdir(parents=True, exist_ok=True)
+        rec = {
+            "team_id": team_id,
+            "lead": atlas_todo.lead_name(self.SESSION),
+            "members": members,
+        }
+        (teams / f"{team_id}.json").write_text(json.dumps(rec))
+
+    def test_verified_by_flag_without_a_verifier_dispatch_is_not_credited(self):
+        self._row()
+        self.assertFalse(self.check())
+        self.assertNotIn("--by", completion_gate._FINDINGS_WHY["text"])
+
+    def test_verified_by_flag_with_earlier_verifier_dispatch_is_credited(self):
+        self._dispatch("atlas:verifier", time.time() - 120)
+        self._row()
+        self.assertTrue(self.check())
+
+    def test_verifier_dispatch_after_the_stamp_is_not_credited(self):
+        self._dispatch("atlas:verifier", time.time() + 120)
+        self._row()
+        self.assertFalse(self.check())
+
+    def test_other_session_verifier_dispatch_is_not_credited(self):
+        conn = atlas_db.connect(self.db)
+        other = atlas_db.start_run(conn, self.pid, "sess-other")
+        conn.execute(
+            "INSERT INTO dispatches(run_id,ts,agent_type) VALUES(?,?,?)",
+            (other, time.time() - 120, "atlas:verifier"),
+        )
+        conn.commit()
+        conn.close()
+        self._row()
+        self.assertFalse(self.check())
+
+    def test_non_verifier_dispatch_does_not_back_a_verifier_claim(self):
+        self._dispatch("atlas:implementer", time.time() - 120)
+        self._row()
+        self.assertFalse(self.check())
+
+    def test_team_worker_with_verifier_role_is_credited(self):
+        self._team([{"name": "verifier-1a2b", "role": "verifier"}])
+        self._row(verified_by="verifier-1a2b", stamped_by="verifier-1a2b")
+        self.assertTrue(self.check())
+
+    def test_team_worker_with_other_role_is_not_credited(self):
+        self._team([{"name": "implementer-1a2b", "role": "implementer"}])
+        self._row(verified_by="atlas:verifier", stamped_by="implementer-1a2b")
+        self.assertFalse(self.check())
+
+    def test_crew_worker_with_verifier_role_is_credited(self):
+        rundir = self.root / ".atlas" / ".run" / "crew" / "r1"
+        rundir.mkdir(parents=True)
+        (rundir / "run.json").write_text(
+            json.dumps(
+                {
+                    "run_id": "r1",
+                    "lead_session": self.SESSION,
+                    "plan": {
+                        "workers": [{"name": "chk", "owns": [], "role": "verifier"}]
+                    },
+                }
+            )
+        )
+        self._row(verified_by="chk", stamped_by="chk")
+        self.assertTrue(self.check())
+
+    def test_reproduction_must_match_the_ran_command_exactly(self):
+        self._row(verified_by="lead", stamped_by="lead", reproduction="pytest -q")
+        self.assertFalse(self.check(self._transcript("pytest -q --collect-only")))
+
+    def test_reproduction_matches_after_whitespace_and_cd_prefix_normalization(self):
+        self._row(
+            verified_by="lead", stamped_by="lead", reproduction="pytest  hooks -q"
+        )
+        self.assertTrue(self.check(self._transcript("cd /x && pytest hooks   -q")))
+        self.assertTrue(
+            self.check(
+                self._transcript("env -u CLAUDE_PLUGIN_ROOT FOO=1 pytest hooks -q")
+            )
+        )
+
+    def test_block_text_no_longer_suggests_the_by_flag(self):
+        self._row(verified_by="lead", stamped_by="lead")
+        self.assertFalse(self.check())
+        why = completion_gate._FINDINGS_WHY["text"]
+        self.assertNotIn("--by", why)
+        self.assertIn("atlas:verifier", why)
+
+
 # ---------------------------------------------------------------------------
 # In-process main() tests -- these import completion_gate and invoke main()
 # directly with mocked sys.stdin / os.environ so the real code paths are
@@ -778,6 +1126,7 @@ class InProcessMainTest(unittest.TestCase):
                     {
                         "claim": "x works",
                         "status": "verified",
+                        "verified_by": "atlas:verifier",
                         "verified_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
@@ -1043,7 +1392,14 @@ class InProcessMainTest(unittest.TestCase):
         findings_path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
         with open(findings_path, "w") as f:
             json.dump(
-                [{"claim": "x works", "status": "verified", "verified_at": stale_iso}],
+                [
+                    {
+                        "claim": "x works",
+                        "status": "verified",
+                        "verified_by": "atlas:verifier",
+                        "verified_at": stale_iso,
+                    }
+                ],
                 f,
             )
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
@@ -1060,7 +1416,14 @@ class InProcessMainTest(unittest.TestCase):
         findings_path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
         with open(findings_path, "w") as f:
             json.dump(
-                [{"claim": "x works", "status": "verified", "verified_at": fresh_iso}],
+                [
+                    {
+                        "claim": "x works",
+                        "status": "verified",
+                        "verified_by": "atlas:verifier",
+                        "verified_at": fresh_iso,
+                    }
+                ],
                 f,
             )
         rc, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
@@ -1076,7 +1439,16 @@ class InProcessMainTest(unittest.TestCase):
         self._stage_mixed_diff()
         findings_path = os.path.join(self.tmp, ".atlas", ".run", "findings.json")
         with open(findings_path, "w") as f:
-            json.dump([{"claim": "x works", "status": "verified"}], f)
+            json.dump(
+                [
+                    {
+                        "claim": "x works",
+                        "status": "verified",
+                        "verified_by": "atlas:verifier",
+                    }
+                ],
+                f,
+            )
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("findings.json", out)
@@ -1382,7 +1754,13 @@ class HelperUnitTest(unittest.TestCase):
             root = Path(tmp)
             (root / ".atlas" / ".run").mkdir(parents=True)
             (root / ".atlas" / ".run" / "findings.json").write_text(
-                json.dumps({"findings": [{"status": "verified"}]})
+                json.dumps(
+                    {
+                        "findings": [
+                            {"status": "verified", "verified_by": "atlas:verifier"}
+                        ]
+                    }
+                )
             )
             self.assertTrue(_check_findings(root))
         finally:
@@ -1702,6 +2080,7 @@ class GateConditionIJTest(GateOrchestrationTest):
                     {
                         "id": "S1",
                         "status": "verified",
+                        "verified_by": "atlas:verifier",
                         "verified_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
@@ -1717,6 +2096,9 @@ class GateConditionIJTest(GateOrchestrationTest):
         self._log_run_write("src/app.py")
         _seed_plan(self.tmp)
         _seed_dispatch(self.env["ATLAS_DB"])
+        _seed_verifier_dispatch(
+            self.env["ATLAS_DB"]
+        )  # backs the row's verified_by for (b)
 
     def test_open_todos_block_the_stop(self):
         self._satisfy_everything_else()
@@ -2105,6 +2487,28 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         with open(path, "w") as f:
             json.dump(entries, f)
 
+    def _pass_result(self, transcript):
+        """Append the passing tool_result of the transcript's id-less command: (b) credits a self-stamped
+        row only for a command that ran AND passed, and names it exactly in the row's reproduction."""
+        with open(transcript, "a", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "",
+                                    "content": "5 passed in 0.1s",
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+
     def _stamp(self, offset_seconds):
         """ISO-8601 UTC stamp offset from the run's start."""
         import datetime as _dt
@@ -2188,6 +2592,7 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
                 {
                     "id": "S1",
                     "status": "verified",
+                    "verified_by": "atlas:verifier",
                     "verified_at": self._stamp(1),
                     "reproduction": "pytest -q",
                 }
@@ -2208,7 +2613,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
             server="lean-ctx",
         )
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
@@ -2224,7 +2636,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
             server="context-mode",
         )
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
@@ -2260,8 +2679,17 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
                 )
                 + "\n"
             )
+        self._pass_result(transcript)
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "lead",
+                    "reproduction": "pytest -q",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate(
             {
@@ -2303,7 +2731,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
                 + "\n"
             )
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate(
             {
@@ -2351,7 +2786,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         c.commit()
         c.close()
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertEqual(r.stdout.strip(), "", r.stdout)
@@ -2389,8 +2831,17 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
                 )
                 + "\n"
             )
+        self._pass_result(transcript)
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "lead",
+                    "reproduction": "python3 -m pytest scripts/ hooks/ -q",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate(
             {
@@ -2431,7 +2882,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
                 + "\n"
             )
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate(
             {
@@ -2450,7 +2908,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         self._commit_and_make_mixed_diff()
         self._log_dispatches(implementers=1, verifiers=0)
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn("verification coverage", r.stdout)
@@ -2461,7 +2926,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         self._commit_and_make_mixed_diff()
         self._log_dispatches(implementers=1, verifiers=0)
         self._write_findings(
-            [{"id": "OLD", "status": "verified", "verified_at": self._stamp(-86400)}]
+            [
+                {
+                    "id": "OLD",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(-86400),
+                }
+            ]
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn("verification coverage", r.stdout)
@@ -2470,7 +2942,9 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         """No verified_at means it cannot be proven to belong to this run."""
         self._commit_and_make_mixed_diff()
         self._log_dispatches(implementers=1, verifiers=0)
-        self._write_findings([{"id": "S1", "status": "verified"}])
+        self._write_findings(
+            [{"id": "S1", "status": "verified", "verified_by": "atlas:verifier"}]
+        )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn("verification coverage", r.stdout)
 
@@ -2480,7 +2954,14 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         self._log_dispatches(implementers=3, verifiers=0)
         self._exec_test_command()
         self._write_findings(
-            [{"id": "S1", "status": "verified", "verified_at": self._stamp(1)}]
+            [
+                {
+                    "id": "S1",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(1),
+                }
+            ]
         )
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn("2 implementer", r.stdout)
@@ -2490,7 +2971,12 @@ class TestRunPairsAnImplementerTest(GateOrchestrationTest):
         self._log_dispatches(implementers=1, verifiers=0)
         self._write_findings(
             [
-                {"id": "S0", "status": "verified", "verified_at": self._stamp(-86400)},
+                {
+                    "id": "S0",
+                    "status": "verified",
+                    "verified_by": "atlas:verifier",
+                    "verified_at": self._stamp(-86400),
+                },
                 {
                     "id": "S1",
                     "status": "needs-evidence",
@@ -2818,6 +3304,7 @@ class GatePlanMandateTest(GateConditionIJTest):
                     {
                         "id": "S1",
                         "status": "verified",
+                        "verified_by": "atlas:verifier",
                         "verified_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
@@ -3668,6 +4155,7 @@ class ContractVisibilityTest(unittest.TestCase):
                     {
                         "claim": "x works",
                         "status": "verified",
+                        "verified_by": "atlas:verifier",
                         "verified_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
@@ -4555,7 +5043,7 @@ class ContractVisibilityTest(unittest.TestCase):
     def test_docstring_names_s_as_one_shot(self):
         doc = completion_gate.__doc__ or ""
         self.assertIn("(o), (p) and (s) once per session", doc)
-        self.assertIn("Nineteen conditions, (a) through (s)", doc)
+        self.assertIn("Twenty conditions, (a) through (s) and (v)", doc)
 
     def test_working_role_rule(self):
         for role in (
@@ -5026,7 +5514,9 @@ def _run_entry_with_broken_core(entry, hook):
             os.path.join(tmp, "scripts"),
         )
         home = os.path.join(tmp, "home")
-        env = dict(os.environ, ATLAS_HOME=home, ATLAS_HOOKSTATE_DIR=os.path.join(tmp, "hs"))
+        env = dict(
+            os.environ, ATLAS_HOME=home, ATLAS_HOOKSTATE_DIR=os.path.join(tmp, "hs")
+        )
         r = subprocess.run(
             [sys.executable, "-S", os.path.join(hooks, os.path.basename(entry))],
             input=json.dumps({"session_id": "s", "hook_event_name": hook}),
@@ -5042,6 +5532,7 @@ def _run_entry_with_broken_core(entry, hook):
         return r, rows
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
 
 class EntryImportCrashTest(unittest.TestCase):
     """A crash importing completion_gate_core must not disarm the Stop gate
@@ -5458,7 +5949,11 @@ class DecisionVerifyTest(unittest.TestCase):
     def stop(self, url, reply=None, **extra):
         env = dict(self.env, ATLAS_DECISION_URL=url)
         env.update(extra.pop("env", {}))
-        payload = {"session_id": "sess-dv", "cwd": self.tmp, "last_assistant_message": reply or self.REPLY}
+        payload = {
+            "session_id": "sess-dv",
+            "cwd": self.tmp,
+            "last_assistant_message": reply or self.REPLY,
+        }
         payload.update(extra)
         return _run_gate(payload, env).stdout
 
@@ -5484,19 +5979,25 @@ class DecisionVerifyTest(unittest.TestCase):
     def _enable_analytics(self, ah):
         full = dict(self.env, ATLAS_HOME=ah)
         full.pop("ATLAS_ANALYTICS", None)
-        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        scripts = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "scripts"
+        )
         subprocess.run(
             [sys.executable, os.path.join(scripts, "atlas_analytics.py"), "enable"],
-            env=full, check=True, capture_output=True,
+            env=full,
+            check=True,
+            capture_output=True,
         )
 
-    def test_default_is_shadow_records_but_never_blocks(self):
+    def test_shadow_records_but_never_blocks(self):
         ah = os.path.join(self.tmp, "ah-shadow")
         self._enable_analytics(ah)
         with self.Stub(self.answers(0.95, 0.05)) as srv:
             out = self.stop(srv.url, env={"ATLAS_HOME": ah})
         self.assertEqual(out, "")
-        self.assertEqual(len(srv.requests), 1, "shadow still asks the model")
+        self.assertEqual(
+            srv.requests, [], "shadow is deterministic and never asks the model"
+        )
         ev = self._events(ah)
         self.assertIn('"k":"decision.verify.block-would"', ev)
         self.assertNotIn('"k":"decision.verify.block"', ev)
@@ -5511,23 +6012,22 @@ class DecisionVerifyTest(unittest.TestCase):
         self.assertIn('"k":"decision.verify.block"', self._events(ah))
 
     def test_claim_with_evidence_passes(self):
-        with self.Stub(self.answers(0.95, 0.9)) as srv:
-            self.assertEqual(self.stop(srv.url), "")
-        self.assertEqual(len(srv.requests), 1)
+        supported = self.REPLY + " `pytest hooks -q` -> 36 passed in 2.1s, exit 0."
+        with self.Stub(self.answers(0.95, 0.1)) as srv:
+            self.assertEqual(self.stop(srv.url, reply=supported, env=BLOCK), "")
+        self.assertEqual(
+            len(srv.requests), 0, "a supported reply never reaches the model"
+        )
 
     def test_no_claim_passes(self):
         with self.Stub(self.answers(0.2, 0.0)) as srv:
             self.assertEqual(self.stop(srv.url), "")
 
-    def test_thresholds_are_inclusive_at_the_edges(self):
-        for claims, observed, blocks in (
-            (0.8, 0.3, True),
-            (0.79, 0.3, False),
-            (0.8, 0.31, False),
-        ):
-            with self.Stub(self.answers(claims, observed)) as srv:
+    def test_clear_threshold_is_inclusive_at_the_edge(self):
+        for observed, blocks in ((0.8, False), (0.79, True), (0.1, True)):
+            with self.Stub(self.answers(0.95, observed)) as srv:
                 out = self.stop(srv.url, env=BLOCK)
-            self.assertEqual("(v)" in out, blocks, (claims, observed, out))
+            self.assertEqual("(v)" in out, blocks, (observed, out))
 
     def test_refused_connection_fails_open(self):
         self.assertEqual(self.stop("http://127.0.0.1:%d" % self.free_port()), "")
@@ -5568,18 +6068,370 @@ class DecisionVerifyTest(unittest.TestCase):
     def test_counters_recorded(self):
         ah = os.path.join(self.tmp, "ah")
         env = {"ATLAS_HOME": ah}
-        scripts = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        scripts = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "scripts"
+        )
         full = dict(self.env, **env)
         full.pop("ATLAS_ANALYTICS", None)
         subprocess.run(
             [sys.executable, os.path.join(scripts, "atlas_analytics.py"), "enable"],
-            env=full, check=True, capture_output=True,
+            env=full,
+            check=True,
+            capture_output=True,
         )
         with self.Stub(self.answers(0.95, 0.1)) as srv:
             self.stop(srv.url, env=dict(env, **BLOCK))
         with self.Stub(self.answers(0.95, 0.9)) as srv:
-            self.stop(srv.url, env=env)
-        self.stop("http://127.0.0.1:%d" % self.free_port(), env=env)
+            self.stop(srv.url, env=dict(env, **BLOCK))
+        self.stop(
+            srv.url, reply=self.REPLY + " `pytest -q` -> 36 passed, exit 0.", env=env
+        )
+        self.stop("http://127.0.0.1:%d" % self.free_port(), reply="done", env=env)
         ev = Path(ah, "analytics", "events.jsonl").read_text()
-        for key in ("decision.verify.block", "decision.verify.pass", "decision.verify.skip"):
+        for key in (
+            "decision.verify.block",
+            "decision.verify.cleared",
+            "decision.verify.pass",
+            "decision.verify.skip",
+        ):
             self.assertIn('"k":"%s"' % key, ev)
+
+
+class DoneClaimGateTest(unittest.TestCase):
+    """Deterministic done-claim gate (v): done_claim.py is the primary check, so no model runs here
+    unless a test starts a loopback stub. ATLAS_DONE_CLAIM=block|shadow|off; the model may only clear."""
+
+    UNSUPPORTED = (
+        "ATLAS | verify | done\n\nFixed the retry bug in client.py and everything works now, "
+        "the whole flow is finished and ready to ship."
+    )
+    SUPPORTED = (
+        "ATLAS | verify | done\n\nFixed the retry bug in client.py. `pytest hooks -q` -> 36 passed in "
+        "2.1s, exit 0, and the diff is one hunk at client.py:44."
+    )
+    ADVISORY_ONLY = (
+        "ATLAS | verify | done\n\nFixed the retry bug in client.py: 42 passed, the change is done "
+        "and ready to ship."
+    )
+    NO_CLAIM = (
+        "ATLAS | implement | planning\n\nNext step is to reproduce the retry bug in client.py. "
+        "I have not changed anything yet and will report once the failing test exists."
+    )
+
+    def setUp(self):
+        from _decision_stub import StubDecisionServer, free_port, noul
+
+        self.noul, self.free_port, self.Stub = noul, free_port, StubDecisionServer
+        self.tmp = tempfile.mkdtemp()
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        self.env = dict(
+            os.environ,
+            ATLAS_DB=os.path.join(self.tmp, "atlas.db"),
+            ATLAS_HOOKSTATE_DIR=os.path.join(self.tmp, "hookstate"),
+            ATLAS_CONTRACT_GATE_DIR=os.path.join(self.tmp, "markers"),
+            ATLAS_DECISION="on",
+            ATLAS_DECISION_URL="http://127.0.0.1:%d"
+            % free_port(),  # nothing listens: no model runs
+        )
+        for k in ("ATLAS_DECISION_VERIFY", "ATLAS_DONE_CLAIM"):
+            self.env.pop(k, None)
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.init(c)
+        atlas_db.start_run(c, atlas_db.register_project(c, self.tmp), "sess-dc")
+        c.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def stop(self, reply, mode="block", env=None, **extra):
+        full = dict(self.env)
+        if mode:
+            full["ATLAS_DONE_CLAIM"] = mode
+        full.update(env or {})
+        payload = {
+            "session_id": "sess-dc",
+            "cwd": self.tmp,
+            "last_assistant_message": reply,
+        }
+        payload.update(extra)
+        return _run_gate(payload, full).stdout
+
+    def _analytics(self, name):
+        ah = os.path.join(self.tmp, name)
+        full = dict(self.env, ATLAS_HOME=ah)
+        full.pop("ATLAS_ANALYTICS", None)
+        scripts = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "scripts"
+        )
+        subprocess.run(
+            [sys.executable, os.path.join(scripts, "atlas_analytics.py"), "enable"],
+            env=full,
+            check=True,
+            capture_output=True,
+        )
+        return ah
+
+    def _events(self, ah):
+        return Path(ah, "analytics", "events.jsonl").read_text()
+
+    def test_unsupported_done_blocks_with_no_model_running(self):
+        out = json.loads(self.stop(self.UNSUPPORTED))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("(v)", out["reason"])
+        self.assertIn("observed result", out["reason"])
+
+    def test_supported_done_passes(self):
+        self.assertEqual(self.stop(self.SUPPORTED), "")
+
+    def test_no_claim_passes(self):
+        self.assertEqual(self.stop(self.NO_CLAIM), "")
+
+    def test_shadow_records_block_would_and_never_blocks(self):
+        ah = self._analytics("ah-shadow")
+        self.assertEqual(
+            self.stop(self.UNSUPPORTED, mode="shadow", env={"ATLAS_HOME": ah}), ""
+        )
+        ev = self._events(ah)
+        self.assertIn('"k":"decision.verify.block-would"', ev)
+        self.assertNotIn('"k":"decision.verify.block"', ev)
+
+    def test_default_mode_is_auto(self):
+        import done_claim
+
+        self.assertEqual(done_claim.DEFAULT_MODE, "auto")
+
+    def _ls_transcript(self):
+        path = os.path.join(self.tmp, "t-advisory.jsonl")
+        ts = "2026-11-15T00:00:00+00:00"
+        rows = [
+            {
+                "type": "user",
+                "timestamp": ts,
+                "message": {"role": "user", "content": "go"},
+            },
+            {
+                "type": "assistant",
+                "timestamp": ts,
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "t0",
+                            "name": "Bash",
+                            "input": {"command": "ls docs"},
+                        }
+                    ]
+                },
+            },
+            {
+                "type": "user",
+                "timestamp": ts,
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "t0",
+                            "content": "README.md",
+                            "is_error": False,
+                        }
+                    ]
+                },
+            },
+        ]
+        with open(path, "w") as fh:
+            fh.write("\n".join(json.dumps(r) for r in rows) + "\n")
+        return path
+
+    def test_block_mode_blocks_on_an_advisory_only_claim_and_names_it(self):
+        # "42 passed" with no test run this turn is an advisory (count_no_test_run), not a finding.
+        t = self._ls_transcript()
+        out = json.loads(self.stop(self.ADVISORY_ONLY, mode="block", transcript_path=t))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("42", out["reason"])
+        self.assertIn("no test run this turn", out["reason"])
+
+    def test_auto_mode_passes_on_the_same_advisory_only_claim(self):
+        t = self._ls_transcript()
+        self.assertEqual(
+            self.stop(self.ADVISORY_ONLY, mode="auto", transcript_path=t), ""
+        )
+
+    def test_auto_text_only_claim_passes_with_a_shadow_record(self):
+        ah = self._analytics("ah-auto-text")
+        self.assertEqual(
+            self.stop(self.UNSUPPORTED, mode="auto", env={"ATLAS_HOME": ah}), ""
+        )
+        ev = self._events(ah)
+        self.assertIn('"k":"decision.verify.block-would"', ev)
+        self.assertNotIn('"k":"decision.verify.block"', ev)
+
+    def test_default_text_only_claim_passes(self):
+        self.assertEqual(self.stop(self.UNSUPPORTED, mode=None), "")
+
+    def test_default_contradiction_blocks_and_names_the_finding(self):
+        reply = "ATLAS | verify | done\n\nFixed it. `pytest hooks -q` -> 99 passed in 2.1s, exit 0."
+        real = self._transcript("....\n5 passed in 0.3s\n")
+        for mode in (None, "auto", "block"):
+            out = json.loads(self.stop(reply, mode=mode, transcript_path=real))
+            self.assertEqual(out["decision"], "block", mode)
+            self.assertIn("count 99 not in tool results", out["reason"])
+            self.assertIn("re-run", out["reason"])
+        self.assertEqual(self.stop(reply, mode="shadow", transcript_path=real), "")
+        self.assertEqual(self.stop(reply, mode="off", transcript_path=real), "")
+
+    def test_auto_model_cannot_clear_a_transcript_finding(self):
+        reply = "ATLAS | verify | done\n\nFixed it. `pytest hooks -q` -> 99 passed in 2.1s, exit 0."
+        real = self._transcript("....\n5 passed in 0.3s\n")
+        with self.Stub(self._answers(0.95, 0.95)) as srv:
+            out = self.stop(
+                reply,
+                mode="auto",
+                env={"ATLAS_DECISION_URL": srv.url},
+                transcript_path=real,
+            )
+            self.assertEqual(srv.requests, [])
+        self.assertIn("(v)", out)
+
+    def test_auto_stop_hook_active_and_sidechain_still_skip(self):
+        reply = "ATLAS | verify | done\n\nFixed it. `pytest hooks -q` -> 99 passed in 2.1s, exit 0."
+        real = self._transcript("....\n5 passed in 0.3s\n")
+        self.assertEqual(
+            self.stop(reply, mode="auto", transcript_path=real, stop_hook_active=True),
+            "",
+        )
+        self.assertEqual(
+            self.stop(reply, mode="auto", transcript_path=real, agent_id="w1"), ""
+        )
+
+    def test_off_disables_the_check(self):
+        ah = self._analytics("ah-off")
+        self.assertEqual(
+            self.stop(self.UNSUPPORTED, mode="off", env={"ATLAS_HOME": ah}), ""
+        )
+        ev = Path(ah, "analytics", "events.jsonl")
+        self.assertFalse(ev.exists() and "decision.verify" in ev.read_text())
+
+    def test_stop_hook_active_never_loops(self):
+        self.assertEqual(json.loads(self.stop(self.UNSUPPORTED))["decision"], "block")
+        self.assertEqual(self.stop(self.UNSUPPORTED, stop_hook_active=True), "")
+
+    def test_short_reply_and_sidechain_skip(self):
+        self.assertEqual(self.stop("All fixed, done."), "")
+        self.assertEqual(self.stop(self.UNSUPPORTED, agent_id="w1"), "")
+
+    def test_legacy_env_is_an_alias(self):
+        self.assertIn(
+            "(v)",
+            self.stop(
+                self.UNSUPPORTED, mode=None, env={"ATLAS_DECISION_VERIFY": "block"}
+            ),
+        )
+        self.assertEqual(
+            self.stop(
+                self.UNSUPPORTED, mode=None, env={"ATLAS_DECISION_VERIFY": "auto"}
+            ),
+            "",
+        )
+        self.assertEqual(
+            self.stop(
+                self.UNSUPPORTED, mode=None, env={"ATLAS_DECISION_VERIFY": "off"}
+            ),
+            "",
+        )
+        # the new knob wins over the alias
+        self.assertEqual(
+            self.stop(
+                self.UNSUPPORTED, mode="off", env={"ATLAS_DECISION_VERIFY": "block"}
+            ),
+            "",
+        )
+
+    def _answers(self, claims, observed):
+        return lambda body: {
+            "asserts_success": self.noul(claims),
+            "names_observed_result": self.noul(observed),
+        }
+
+    def test_model_can_clear_a_deterministic_block(self):
+        ah = self._analytics("ah-clear")
+        with self.Stub(self._answers(0.95, 0.95)) as srv:
+            out = self.stop(
+                self.UNSUPPORTED, env={"ATLAS_DECISION_URL": srv.url, "ATLAS_HOME": ah}
+            )
+            asked = len(srv.requests)
+        self.assertEqual(out, "")
+        self.assertEqual(asked, 1)
+        self.assertIn('"k":"decision.verify.cleared"', self._events(ah))
+
+    def test_model_unsure_leaves_the_block(self):
+        with self.Stub(self._answers(0.95, 0.5)) as srv:
+            out = self.stop(self.UNSUPPORTED, env={"ATLAS_DECISION_URL": srv.url})
+        self.assertIn("(v)", out)
+
+    def test_model_never_adds_a_block(self):
+        with self.Stub(self._answers(0.99, 0.0)) as srv:
+            out = self.stop(self.SUPPORTED, env={"ATLAS_DECISION_URL": srv.url})
+            self.assertEqual(
+                srv.requests, [], "a supported reply never reaches the model"
+            )
+        self.assertEqual(out, "")
+        with self.Stub(self._answers(0.99, 0.0)) as srv:
+            self.assertEqual(
+                self.stop(self.NO_CLAIM, env={"ATLAS_DECISION_URL": srv.url}), ""
+            )
+            self.assertEqual(srv.requests, [])
+
+    def test_shadow_does_not_call_the_model(self):
+        with self.Stub(self._answers(0.99, 0.0)) as srv:
+            self.stop(
+                self.UNSUPPORTED, mode="shadow", env={"ATLAS_DECISION_URL": srv.url}
+            )
+            self.assertEqual(srv.requests, [])
+
+    def _transcript(self, output):
+        path = os.path.join(self.tmp, "t.jsonl")
+        rows = [
+            {"type": "user", "message": {"role": "user", "content": "fix the bug"}},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_use",
+                            "id": "t1",
+                            "name": "Bash",
+                            "input": {"command": "pytest hooks -q"},
+                        }
+                    ]
+                },
+            },
+            {
+                "type": "user",
+                "message": {
+                    "content": [
+                        {"type": "tool_result", "tool_use_id": "t1", "content": output}
+                    ]
+                },
+            },
+        ]
+        Path(path).write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        return path
+
+    def test_quoted_count_missing_from_the_transcript_blocks(self):
+        reply = "ATLAS | verify | done\n\nFixed it. `pytest hooks -q` -> 99 passed in 2.1s, exit 0."
+        real = self._transcript("....\n5 passed in 0.3s\n")
+        self.assertIn("(v)", self.stop(reply, transcript_path=real))
+        self.assertEqual(self.stop(reply.replace("99", "5"), transcript_path=real), "")
+
+    def test_pass_claimed_after_failing_run_blocks(self):
+        reply = "ATLAS | verify | done\n\nFixed the retry bug in client.py. the suite is green now, exit 0, ready to merge."
+        failing = self._transcript(
+            "FAILED hooks/test_x.py::test_a - AssertionError\n1 failed, 4 passed\n"
+        )
+        self.assertIn("(v)", self.stop(reply, transcript_path=failing))
+
+    def test_unreadable_transcript_fails_open_to_the_text_check(self):
+        out = self.stop(
+            self.SUPPORTED, transcript_path=os.path.join(self.tmp, "missing.jsonl")
+        )
+        self.assertEqual(out, "")

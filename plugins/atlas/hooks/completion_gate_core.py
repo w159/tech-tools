@@ -19,7 +19,7 @@ work is still running, so the gate does not fire once per wave-Stop. A
 long-running `shell` or `monitor` task does not suppress it. Two conditions
 are about the reply itself and are checked even then: (n) and (r).
 
-Nineteen conditions, (a) through (s), must ALL hold before the gate passes. A
+Twenty conditions, (a) through (s) and (v), must ALL hold before the gate passes. A
 failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
 (n) included, on each Stop up to the loop cap. (q), unmerged worker branches, is documented on
 `_unmerged_worker_branches`; the rest are listed here:
@@ -35,6 +35,17 @@ failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
       status "verified" whose `verified_at` stamp is at or after THIS RUN's
       start. Same scoping and same "any entry" fallback as (a): a `verified`
       row stamped during an earlier session must not satisfy today's gate.
+      The row must also be independent of the claimant, and a CLI string is
+      not proof: `verified_by` (free text) never counts alone. Credit needs a
+      record this session's hooks or mux wrote -- an atlas:verifier or
+      completeness-critic `dispatches` row of this run whose ts is at or
+      before the stamp, or a team/crew member record of this session whose
+      name is the row's `stamped_by` (ATLAS_WORKER_NAME) with a verifier role
+      -- or the row's `reproduction`/`evidence` names a test-runner command
+      that ran and passed in this session's transcript, matched by exact
+      normalized equality (whitespace collapsed, leading `cd X &&`, `env`
+      and `K=V` prefixes dropped; never a substring). Unreadable records
+      fail open with a stderr line saying why.
   (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
   (d) `docs/ROADMAP.md` exists and is non-empty.
   (e) `README.md` at the project root exists and is non-empty.
@@ -140,6 +151,16 @@ failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
       keeps the old behavior. Re-blocks each Stop (subject to the loop cap).
       Kill switch ATLAS_GATE_DONE=off. Skips sidechains, and fails open on
       an unreadable contract or any error.
+  (v) Done-claim check (`_decision_verify_reason`, engine `done_claim.py`): the
+      final reply claims the work is done or fixed with no observed result,
+      or quotes evidence this turn's tool results contradict. Mode via
+      ATLAS_DONE_CLAIM=auto|block|shadow|off (legacy alias
+      ATLAS_DECISION_VERIFY). auto, the default, blocks only on transcript
+      findings (a contradicted claim); a text-only unsupported claim is
+      recorded as decision.verify.block-would (shadow) and does not block.
+      block blocks both kinds, shadow only records, off disables. Fresh
+      Stops only (a stop_hook_active continuation passes), sidechains and
+      short replies are skipped, and any error fails open.
 
 (o) and (p) ask the model to repair presentation, not to produce work, so
 each blocks AT MOST ONCE per session: an O_EXCL marker `<cond>-<session>` under
@@ -270,9 +291,209 @@ def _check_evidence(root: Path, started: float | None = None) -> bool:
         return True  # can't read -> fail open  # can't read -> fail open
 
 
-def _check_findings(root: Path, started: float | None = None) -> bool:
+from atlas_lazyre import lre  # noqa: E402
+
+_FINDINGS_WHY = {
+    "text": ""
+}  # why (b) rejected a verified row this Stop; read by the (b) block text
+_EVIDENCE_TEST_RE = lre(
+    r"(?:^|[\s;&|(])(?:python3?\s+-m\s+)?(?:pytest|py\.test|unittest|vitest|bun\s+test|go\s+test|"
+    r"cargo\s+test|npm\s+(?:run\s+)?test|yarn\s+test)\b",
+    re.I,
+)
+_NOT_INDEPENDENT = {"", "?", "lead"}
+
+
+def _norm_cmd(text: str) -> str:
+    return " ".join(str(text).replace("`", " ").split())
+
+
+_VERIFIER_ROLES = frozenset({"verifier", "completeness-critic"})
+_CMD_PREFIX_RE = lre(
+    r"^(?:cd\s+\S+\s*&&\s*|env\s+(?:-u\s+\S+\s+|[A-Za-z_]\w*=\S*\s+)*|[A-Za-z_]\w*=\S*\s+)+"
+)
+
+
+def _canon_cmd(cmd: str) -> str:
+    """Whitespace-collapsed command with leading `cd X &&`, `env [-u V] [K=V]` and `K=V` prefixes dropped,
+    so a reproduction compares equal to the command that ran (never a superset of it)."""
+    cmd = _norm_cmd(cmd).lstrip("$ ")
+    return _CMD_PREFIX_RE.sub("", cmd, count=1).strip()
+
+
+def _log_gate_fail_open(why: str) -> None:
+    print(f"completion_gate (b): {why}; crediting the row fail-open", file=sys.stderr)
+
+
+def _verifier_backing(root: Path, session_id: str, item: dict, started) -> bool | None:
+    """(b) True when a hook- or mux-written record of THIS session backs the row's verifier identity,
+    False when none does, None when the records could not be read (caller fails open, logged).
+
+    `--by` is free text, so it never counts alone. Two records can back a row:
+      1. a team/crew member record (`.atlas/.run/teams`, `.atlas/.run/crew`) of this session whose name equals
+         the row's `stamped_by` (ATLAS_WORKER_NAME, pinned by the mux, not a flag) with a verifier role;
+      2. a `dispatches` row of this session's run, agent_type atlas:verifier (or completeness-critic) matching
+         the row's `verified_by`, whose ts is at or before the stamp (an in-process verifier stamps as "lead").
+    """
+    by = str(item.get("verified_by") or item.get("verifier") or "").strip().lower()
+    stamper = str(item.get("stamped_by") or "").strip().lower()
+    when = _parse_iso_epoch(item.get("verified_at"))
+    try:
+        if stamper and stamper not in _NOT_INDEPENDENT:
+            for rec in _team_records(root, session_id):
+                created = rec.get("created")
+                if (
+                    isinstance(created, (int, float))
+                    and started is not None
+                    and created < started - 1
+                ):
+                    continue
+                for name, role in (rec.get("roles") or {}).items():
+                    if (
+                        str(name).strip().lower() == stamper
+                        and _role_name(role).lower() in _VERIFIER_ROLES
+                    ):
+                        return True
+        role = _role_name(by)
+        if role not in _VERIFIER_ROLES or when is None or not session_id:
+            return False
+        import atlas_db
+
+        conn = atlas_db.connect()
+        try:
+            rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+                conn, session_id
+            )
+            if rid is None:
+                return False
+            row = conn.execute(
+                "SELECT 1 FROM dispatches WHERE run_id=? AND ts<=? AND lower(agent_type) IN (?,?) LIMIT 1",
+                (rid, when + 1.0, "atlas:" + role, role),
+            ).fetchone()
+            return row is not None
+        finally:
+            conn.close()
+    except Exception as exc:  # unreadable records cannot prove a forgery
+        _log_gate_fail_open(
+            f"could not read dispatch/team records ({type(exc).__name__}: {exc})"
+        )
+        return None
+
+
+def _finding_independent(
+    item: dict, session_id: str, root: Path | None = None, started=None
+) -> bool | None:
+    """(b) True when a recorded verifier, not the claimant, stamped the row: see `_verifier_backing`.
+    A bare `verified_by` never counts; "lead", "?" and the session id are the claimant by definition.
+    None means the backing records were unreadable (fail open, already logged)."""
+    by = str(item.get("verified_by") or item.get("verifier") or "").strip().lower()
+    stamper = str(item.get("stamped_by") or "").strip().lower()
+    if root is None or not session_id:
+        return False
+    if (
+        by in _NOT_INDEPENDENT and stamper in _NOT_INDEPENDENT
+    ) or by == session_id.strip().lower():
+        return False
+    return _verifier_backing(root, session_id, item, started)
+
+
+def _evidence_test_commands(item: dict) -> list:
+    """Test-runner commands a finding names in `reproduction` or `evidence` (text after ` -> ` dropped)."""
+    raw = [item.get("reproduction")]
+    ev = item.get("evidence")
+    raw.extend(ev if isinstance(ev, list) else [ev])
+    out = []
+    for r in raw:
+        if not isinstance(r, str):
+            continue
+        cmd = _canon_cmd(re.split(r"\s(?:->|=>|#)\s", r, maxsplit=1)[0])
+        if cmd and _EVIDENCE_TEST_RE.search(cmd):
+            out.append(cmd)
+    return out
+
+
+def _passing_shell_commands(transcript_path: str, started: float | None) -> list | None:
+    """Normalized shell commands of this session's transcript whose result did not fail (no is_error,
+    no `Exit code N`, no failure signature in the output), or None when the transcript is unreadable.
+    Reuses done_claim's failure signature; same shell tools as `_transcript_test_commands`."""
+    if not transcript_path:
+        return None
+    try:
+        import done_claim
+
+        shell = {
+            "Bash",
+            "ctx_shell",
+            "ctx_execute",
+            "ctx_batch_execute",
+            "ctx_execute_file",
+        }
+        calls: dict = {}
+        passing: list = []
+        with open(transcript_path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if '"tool_use"' not in line and '"tool_result"' not in line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                content = (rec.get("message") or {}).get("content")
+                if not isinstance(content, list):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    if block.get("type") == "tool_use":
+                        if (
+                            str(block.get("name") or "").rsplit("__", 1)[-1]
+                            not in shell
+                        ):
+                            continue
+                        if started is not None:
+                            when = _parse_iso_epoch(rec.get("timestamp"))
+                            if when is None or when < started:
+                                continue
+                        inp = block.get("input") or {}
+                        parts = [inp.get("command"), inp.get("code")]
+                        parts += [
+                            c.get("command")
+                            for c in inp.get("commands") or []
+                            if isinstance(c, dict)
+                        ]
+                        calls[block.get("id", "")] = _canon_cmd(
+                            " ".join(str(x) for x in parts if x)
+                        )
+                    elif block.get("type") == "tool_result":
+                        cmd = calls.pop(block.get("tool_use_id", ""), None)
+                        if cmd is None:
+                            continue
+                        body = block.get("content")
+                        if isinstance(body, list):
+                            body = "\n".join(
+                                b.get("text", "") for b in body if isinstance(b, dict)
+                            )
+                        body = body if isinstance(body, str) else ""
+                        if block.get("is_error") or re.match(
+                            r"\s*Exit code [1-9]", body
+                        ):
+                            continue
+                        if done_claim._FAIL_OUT.search(body):
+                            continue
+                        passing.append(cmd)
+        return passing
+    except Exception:
+        return None
+
+
+def _check_findings(
+    root: Path,
+    started: float | None = None,
+    transcript_path: str = "",
+    session_id: str = "",
+) -> bool:
     """(b) .atlas/.run/findings.json has a 'verified' entry produced during
-    THIS RUN.
+    THIS RUN that is not a bare self-stamp.
 
     When `started` is known, an entry only counts if its `verified_at` stamp
     parses and falls at or after it -- a `verified` row inherited from an
@@ -281,13 +502,24 @@ def _check_findings(root: Path, started: float | None = None) -> bool:
     earns no credit once `started` is known, same rule (g) already applies via
     `_test_verified_this_run`. When `started` is None, falls back to "any
     verified entry exists": fail-open by design.
+
+    A fresh row counts only if (i) someone other than the stamper wrote it
+    (`_finding_independent`), or (ii) it names a test-runner command (pytest,
+    unittest, vitest, bun test, go test, cargo test, npm/yarn test) that ran
+    with a passing result in this session's transcript. A session stamping its
+    own claim with no such command is a self-stamp and earns nothing; the
+    reason lands in `_FINDINGS_WHY`. An absent or unreadable transcript cannot
+    prove either way, so it fails open.
     """
+    _FINDINGS_WHY["text"] = ""
     findings = root / ".atlas" / ".run" / "findings.json"
     try:
         if not findings.is_file():
             return False
         data = json.loads(findings.read_text(encoding="utf-8"))
         items = data if isinstance(data, list) else data.get("findings", [])
+        ran = None
+        self_stamped = 0
         for item in items if isinstance(items, list) else []:
             if not isinstance(item, dict):
                 continue
@@ -296,13 +528,32 @@ def _check_findings(root: Path, started: float | None = None) -> bool:
             if started is None:
                 return True
             when = _parse_iso_epoch(item.get("verified_at"))
-            if when is not None and when >= started:
+            if when is None or when < started:
+                continue
+            backed = _finding_independent(item, session_id, root, started)
+            if backed is None or backed:
                 return True
+            if ran is None:
+                ran = _passing_shell_commands(transcript_path, started)
+                if ran is None:
+                    return True  # transcript unreadable: cannot prove a self-stamp, fail open
+            if set(_evidence_test_commands(item)) & set(ran):
+                return True
+            self_stamped += 1
+        if self_stamped:
+            _FINDINGS_WHY["text"] = (
+                f" {self_stamped} verified row(s) this run are self-stamps: no hook-recorded verifier "
+                "backs them (a verified_by value alone never counts) and no test-runner command (pytest, "
+                "unittest, vitest, bun test, go test, cargo test, npm/yarn test) named by the row ran "
+                "with a passing result in this session, byte-for-byte as the row names it. Dispatch "
+                "atlas:verifier, or run the test command so it shows passing, then stamp the row with "
+                "that exact command as --reproduction."
+            )
         return False
     except OSError:
         return True  # genuine read failure -> fail open
     except (json.JSONDecodeError, ValueError, AttributeError):
-        return False  # structural malformation -> does NOT count as verified  # structural malformation -> does NOT count as verified
+        return False  # structural malformation -> does NOT count as verified
 
 
 def _check_nonempty(path: Path) -> bool:
@@ -1183,7 +1434,8 @@ def _reason(
             f'python3 "{SCRIPTS_DIR / "atlas_finding.py"}" --id <stage> '
             "--status verified --title '<one line>' --evidence '<path or test id>' "
             "--reproduction '<exact command>'. --title is required. Only dispatch "
-            "atlas:verifier if no independent check has actually run yet.",
+            "atlas:verifier if no independent check has actually run yet."
+            + _FINDINGS_WHY["text"],
         )
     if missing_c:
         emit(
@@ -1413,8 +1665,14 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         proof = gate_rerun.valid_proof(
             root, session, started_early, run_paths
         ) or gate_rerun.crew_proof(
-            root, session, started_early, run_paths, str(data.get("transcript_path") or ""),
-            display=bool(data.get("display_only")),  # set by atlas_gates.py, never by a Stop payload
+            root,
+            session,
+            started_early,
+            run_paths,
+            str(data.get("transcript_path") or ""),
+            display=bool(
+                data.get("display_only")
+            ),  # set by atlas_gates.py, never by a Stop payload
             cwd=str(data.get("cwd") or ""),
         )
     if proof:
@@ -1430,7 +1688,11 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # left over from an earlier session must not satisfy today's gate.
     started = started_early
     ok_a = _check_evidence(root, started) if code_changed and not proof else True
-    ok_b = _check_findings(root, started) if code_changed and not proof else True
+    ok_b = (
+        _check_findings(root, started, str(data.get("transcript_path") or ""), session)
+        if code_changed and not proof
+        else True
+    )
     docs_check = code_changed and docs_exist
     ok_c = _check_changelog(root) if docs_check else True
     ok_d = _check_roadmap(root) if docs_check else True
@@ -1472,10 +1734,14 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # (k) Plan mandate. (i) enforces draining a list, so a run that never
     # made one passed it trivially -- an absent list has zero open items.
     # (k) closes that gap on code-shipping runs only.
-    missing_plan = code_changed and not proof and not _has_todo_plan(
-        str(data.get("transcript_path") or ""),
-        root,
-        str(data.get("session_id") or ""),
+    missing_plan = (
+        code_changed
+        and not proof
+        and not _has_todo_plan(
+            str(data.get("transcript_path") or ""),
+            root,
+            str(data.get("session_id") or ""),
+        )
     )
     worktrees = (
         _leftover_worktrees(root)
@@ -1849,7 +2115,9 @@ def _main() -> int:
         # here, in the hook, and let its exit code decide. Never inside evaluate(): the band polls that.
         rerun_note = ""
         shortcut_note = False  # no test command found: the one-line "run the tests" reason replaces the essay
-        skip_shortcut = False  # a timed-out command: the re-run shortcut note would mislead
+        skip_shortcut = (
+            False  # a timed-out command: the re-run shortcut note would mislead
+        )
         red_signal = False  # an independent red: the crew's global check or this gate's own re-run
         # An honest `blocked` report backed by a red signal owes no paperwork: with one in hand the
         # re-run is skipped entirely (it could only repeat what the engine already saw).
@@ -1860,8 +2128,12 @@ def _main() -> int:
             and not gate_rerun.switched_off()
         ):
             if blocked_reply and gate_rerun.crew_red(
-                root, session, ev.get("started"), _run_paths_for(session, root),
-                str(data.get("transcript_path") or ""), str(data.get("cwd") or ""),
+                root,
+                session,
+                ev.get("started"),
+                _run_paths_for(session, root),
+                str(data.get("transcript_path") or ""),
+                str(data.get("cwd") or ""),
             ):
                 red_signal = True
             else:
@@ -1878,7 +2150,9 @@ def _main() -> int:
                 elif result and result.get("inconclusive"):
                     # A timeout, a missing runner or no interpreter that can import pytest says nothing
                     # about the code: no "fix the failure", no repeat of the same wait next Stop.
-                    gate_rerun.note_timed_out(root, session, result["command"])  # 124, 127, pytest 4/5
+                    gate_rerun.note_timed_out(
+                        root, session, result["command"]
+                    )  # 124, 127, pytest 4/5
                     rerun_note = (
                         f"[atlas] The gate could not re-run `{result['command']}` ({result['tail'].strip()}); "
                         "that is inconclusive, not a failure, and it will not retry this command this session.\n"
@@ -1964,7 +2238,9 @@ def _main() -> int:
         # (g) and (o) keep their full clauses: (g) names how many implementer dispatches went unchecked,
         # (o) which phases are missing.
         cleared_by_tests = (
-            [x for x in failed if x in _RERUN_LETTERS and x not in "go"] if shortcut_note else []
+            [x for x in failed if x in _RERUN_LETTERS and x not in "go"]
+            if shortcut_note
+            else []
         )
         for letter in failed:
             if letter in ("o", "p", "s"):
@@ -2867,66 +3143,98 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
         return ""
 
 
-_SWITCH_DECISION_VERIFY = "ATLAS_DECISION_VERIFY"
+_SWITCH_DECISION_VERIFY = "ATLAS_DECISION_VERIFY"  # legacy alias of ATLAS_DONE_CLAIM
+_SWITCH_DONE_CLAIM = "ATLAS_DONE_CLAIM"
 _VERIFY_MIN_CHARS = 80
 
 
+def _done_claim_mode() -> str:
+    """auto | block | shadow | off. ATLAS_DONE_CLAIM wins; the legacy ATLAS_DECISION_VERIFY is an alias
+    (off/0/false, shadow, block, auto); otherwise done_claim.DEFAULT_MODE."""
+    import done_claim
+
+    for name in (_SWITCH_DONE_CLAIM, _SWITCH_DECISION_VERIFY):
+        value = os.environ.get(name, "").strip().lower()
+        if value in {"off", "0", "false"}:
+            return "off"
+        if value in {"auto", "block", "shadow"}:
+            return value
+    return done_claim.DEFAULT_MODE
+
+
 def _decision_verify_reason(data: dict, continuation: bool) -> str:
-    """Block text when the decision model says the final reply claims the work is done or fixed AND
-    quotes no observed result (command output, a test count, a file:line, query rows); "" otherwise.
+    """Block text (gate letter v) when the final reply claims the work is done or fixed AND shows no
+    observed result (command output, a test count, a file:line, query rows) or quotes evidence this
+    turn's tool results contradict; "" otherwise.
 
-    Advisory by construction: it runs only on a Stop the deterministic checks already allowed, only on
-    a fresh Stop (a stop_hook_active continuation always passes, so it can block at most once per
-    turn and never loops), and the call is capped at prompt_decision.VERIFY_TIMEOUT_S. It does NOT need
-    an endpoint to be configured: decision_url() defaults to loopback (Ollama on 127.0.0.1:11434), so the
-    call is attempted on every fresh Stop unless ATLAS_DECISION=off or ATLAS_DECISION_VERIFY=off. A
-    machine without a model pays the refused connection at most once a minute (prompt_decision's 60 s
-    negative cache, in process and in a small file under ATLAS_HOME). Any error, timeout, refused
-    connection, unreadable answer, a sidechain or a short reply fails open. Counters: decision.verify.*.
-
-    The 0.8/0.3 thresholds are uncalibrated, so the default is shadow: ask the model and record
-    decision.verify.block-would, never block. ATLAS_DECISION_VERIFY=block restores the block."""
+    The primary check is done_claim.py: deterministic, offline, no model. It reads the reply and, when
+    transcript_path is readable, the tail of this turn's tool results. ATLAS_DONE_CLAIM=auto (the
+    default) blocks only a claim this turn's tool results contradict (a transcript finding) and records
+    a text-only claim as decision.verify.block-would; block blocks both kinds, shadow only records
+    block-would, off disables. The local decision model
+    (prompt_decision.verify_reply) is an optional second opinion in block mode: it can CLEAR a text-only
+    block when it is confident the reply quotes an observed result, it never adds one, and a block that
+    rests on a transcript finding is never cleared. It runs only on a fresh Stop (a stop_hook_active
+    continuation always passes, so at most one block per turn and no loop); a short reply or a sidechain
+    is skipped. Any error fails open. Counters: decision.verify.{block,block-would,pass,skip,cleared}."""
     try:
-        if _switch_off(_SWITCH_DECISION_VERIFY):
+        mode = _done_claim_mode()
+        if mode == "off":
             return ""
-        blocking = (
-            os.environ.get(_SWITCH_DECISION_VERIFY, "").strip().lower() == "block"
-        )
         text = data.get("last_assistant_message")
         if (
             continuation
             or _payload_is_sidechain(data)
             or not isinstance(text, str)
             or len(text.strip()) < _VERIFY_MIN_CHARS
-            or os.environ.get("ATLAS_DECISION", "on").strip().lower() == "off"
         ):
             _record_analytics("decision.verify.skip")
             return ""
-        import prompt_decision
+        import done_claim
 
-        verdict = prompt_decision.verify_reply(text)
-        if verdict is None:
-            _record_analytics("decision.verify.skip")
+        path = data.get("transcript_path")
+        tools = (
+            done_claim.tools_from_transcript(path)
+            if isinstance(path, str) and path
+            else None
+        )
+        result = done_claim.analyze(text, tools)
+        if result["label"] != "unsupported_done":
+            _record_analytics("decision.verify.pass")
             return ""
-        claims, observed = verdict
+        blocking = done_claim.blocking_findings(result, mode)
+        if mode == "shadow" or (mode == "auto" and not blocking):
+            _record_analytics("decision.verify.block-would")
+            return ""
         if (
-            claims >= prompt_decision.VERIFY_CLAIMS_MIN
-            and observed <= prompt_decision.VERIFY_OBSERVED_MAX
+            not blocking
+            and os.environ.get("ATLAS_DECISION", "on").strip().lower() != "off"
         ):
-            if not blocking:
-                _record_analytics("decision.verify.block-would")
+            import prompt_decision
+
+            verdict = prompt_decision.verify_reply(text)
+            if (
+                verdict is not None
+                and verdict[1] >= prompt_decision.VERIFY_CLEAR_OBSERVED_MIN
+            ):
+                _record_analytics("decision.verify.cleared")
                 return ""
-            _record_analytics("decision.verify.block")
+        _record_analytics("decision.verify.block")
+        if blocking:
             return (
-                "  (v) Done claimed without evidence: the decision model reads this reply as "
-                f"claiming the work is finished or fixed (p={claims:.2f}) while quoting no observed "
-                f"result (p={observed:.2f}). -> Re-send the final reply with the proof inline: the "
-                "command you ran and its output, the test count, the file:line, or the query rows. "
-                "This check blocks once per turn; if the claim is already backed, state it and "
-                "stop again."
+                "  (v) Done claim contradicted by this turn's tool results: "
+                + "; ".join(blocking)
+                + ". -> Quote this turn's real output (the command you ran and what it printed), "
+                "or re-run the command and report what it actually shows; fix or drop the claim "
+                "the output does not support. This check blocks once per turn."
             )
-        _record_analytics("decision.verify.pass")
-        return ""
+        why = "it claims the work is finished or fixed and quotes no observed result"
+        return (
+            f"  (v) Done claimed without evidence: {why}. -> Show the observed result in the final "
+            "reply (the command you ran and its output, the test count, the file:line, or the query "
+            "rows), or drop the done claim and say what is still unverified. This check blocks once "
+            "per turn; if the claim is already backed, state the evidence and stop again."
+        )
     except Exception:
         return ""
 
@@ -3073,6 +3381,10 @@ def _team_records(root, session_id: str, started: float | None = None) -> list:
                     "id": str(team.get("team_id") or rec_path.stem),
                     "channel": team.get("channel"),
                     "members": {m["name"] for m in team.get("members") or []},
+                    "roles": {
+                        m["name"]: m.get("role") for m in team.get("members") or []
+                    },
+                    "created": team.get("created"),
                     "irc": None,
                 }
             )
@@ -3092,6 +3404,11 @@ def _team_records(root, session_id: str, started: float | None = None) -> list:
                     "members": {
                         w["name"] for w in (meta.get("plan") or {}).get("workers") or []
                     },
+                    "roles": {
+                        w["name"]: w.get("role") or "implementer"
+                        for w in (meta.get("plan") or {}).get("workers") or []
+                    },
+                    "created": meta.get("started"),
                     "irc": meta_path.parent / "irc" / "log.jsonl",
                 }
             )

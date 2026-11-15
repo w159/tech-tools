@@ -1443,6 +1443,13 @@ class AtlasDoctorTest(unittest.TestCase):
             self.assertNotIn("INERT", c["detail"], name)
             self.assertIn("0 ran", c["detail"], name)
 
+    def test_deny_capable_error_does_not_count_the_cwd(self):
+        # a doctor-side error while probing the deny preconditions must not inflate the INERT verdict
+        proj = os.path.join(self.tmp, "proj-err")
+        os.makedirs(os.path.join(proj, "docs"))
+        with mock.patch("os.path.isdir", side_effect=RuntimeError("boom")):
+            self.assertFalse(atlas_doctor._deny_capable(proj))
+
     def test_inert_enforcement_is_reported_from_the_db(self):
         proj = os.path.join(self.tmp, "proj")
         os.makedirs(os.path.join(proj, ".git"))

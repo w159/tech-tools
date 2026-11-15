@@ -14,7 +14,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
 import prompt_decision  # noqa: E402
-from _decision_stub import StubDecisionServer, choice, free_port, noul  # noqa: E402
+from _decision_stub import StubDecisionServer, StubOllamaServer, choice, free_port, noul  # noqa: E402
 
 
 class _Resp:
@@ -375,6 +375,132 @@ class NegativeCacheTests(unittest.TestCase):
             prompt_decision.ask("s", {"a": {"type": "noul"}})
         with StubDecisionServer(lambda b: {"a": noul(0.5)}) as srv, _env(srv.url):
             self.assertIsNotNone(prompt_decision.ask("s", {"a": {"type": "noul"}}))
+
+
+class OllamaProtocolTests(unittest.TestCase):
+    """Stock Ollama: /api/tags probe, then POST /api/chat with a JSON-schema `format` (docs: structured
+    outputs; message.content holds the JSON string). Stub implements the documented request/response."""
+
+    def setUp(self):
+        prompt_decision.reset_cache()
+
+    def _good(self, body):
+        props = body["format"]["properties"]
+        out = {}
+        for qid, sch in props.items():
+            if "noul" in sch["properties"]:
+                out[qid] = {"noul": 0.9}
+            else:
+                labels = sch["properties"]["choice"]["enum"]
+                out[qid] = {"choice": "fix" if "fix" in labels else labels[0], "confidence": 0.95}
+        return out
+
+    def test_auto_picks_ollama_when_tags_answers_and_routes_label(self):
+        with StubOllamaServer(self._good) as srv, _env(srv.url):
+            os.environ.pop("ATLAS_DECISION_PROTOCOL", None)
+            os.environ.pop("ATLAS_DECISION_MODEL", None)
+            routed = prompt_decision.route_choice("fix the crash in a.py")
+            answers = prompt_decision.prompt_answers("fix the crash in a.py")
+        self.assertEqual(routed["task_class"], "fix")
+        self.assertEqual(answers["task_class"]["choice"], "fix")
+        self.assertEqual(len(srv.requests), 1, "one /api/chat round trip, cached for the second call")
+        self.assertGreaterEqual(srv.tag_hits, 1)
+        body = srv.requests[0]
+        self.assertEqual(body["model"], prompt_decision.OLLAMA_DEFAULT_MODEL)
+        self.assertIs(body["stream"], False)
+        self.assertEqual(body["options"]["temperature"], 0)
+        self.assertIn("keep_alive", body)
+        self.assertEqual(body["format"]["type"], "object")
+        self.assertEqual(set(body["format"]["properties"]), {"prompt_class", "effort", "task_class"})
+        self.assertEqual(body["messages"][-1]["role"], "user")
+
+    def test_model_env_overrides_default(self):
+        with StubOllamaServer(self._good) as srv, _env(srv.url, ATLAS_DECISION_MODEL="qwen3:4b"):
+            prompt_decision.ask("s", {"q": {"type": "noul", "instructions": "x"}})
+        self.assertEqual(srv.requests[0]["model"], "qwen3:4b")
+
+    def test_noul_question_filled_from_schema(self):
+        qs = prompt_decision.VERIFY_QUESTIONS
+        with StubOllamaServer(self._good) as srv, _env(srv.url):
+            self.assertEqual(prompt_decision.verify_reply("All tests pass."), (0.9, 0.9))
+        self.assertEqual(srv.requests[0]["format"]["properties"]["asserts_success"]["properties"]["noul"]["maximum"], 1)
+        self.assertEqual(set(srv.requests[0]["format"]["properties"]), set(qs))
+
+    def test_malformed_or_out_of_schema_is_no_answer(self):
+        bad = [
+            "not json at all",
+            "[1, 2]",
+            "{}",
+            json.dumps({"task_class": {"choice": "bogus", "confidence": 0.99}}),
+            json.dumps({"task_class": {"choice": "fix", "confidence": 7}}),
+            json.dumps({"task_class": {"choice": "fix", "confidence": True}}),
+            json.dumps({"task_class": {"choice": "fix"}}),
+            json.dumps({"task_class": "fix"}),
+        ]
+        for content in bad:
+            prompt_decision.reset_cache()
+            with StubOllamaServer(lambda b, c=content: c) as srv, _env(srv.url):
+                self.assertEqual(
+                    prompt_decision.route_choice("fix the crash"),
+                    {"task_class": None, "effort": None},
+                    content,
+                )
+                self.assertIsNone(prompt_decision.verify_reply("done"), content)
+
+    def test_noul_out_of_range_rejected(self):
+        with StubOllamaServer(lambda b: {k: {"noul": 1.5} for k in b["format"]["properties"]}) as srv, _env(srv.url):
+            self.assertIsNone(prompt_decision.verify_reply("done"))
+
+    def test_one_bad_question_does_not_poison_the_others(self):
+        def respond(body):
+            out = self._good(body)
+            out["effort"] = {"choice": "enormous", "confidence": 0.99}
+            return out
+
+        with StubOllamaServer(respond) as srv, _env(srv.url):
+            routed = prompt_decision.route_choice("fix the crash")
+        self.assertEqual(routed, {"task_class": "fix", "effort": None})
+
+    def test_http_error_from_chat_is_no_answer(self):
+        class Err(StubOllamaServer):
+            pass
+
+        with StubOllamaServer(self._good) as srv, _env(srv.url, ATLAS_DECISION_PROTOCOL="ollama"):
+            os.environ["ATLAS_DECISION_URL"] = srv.url + "/nope"  # path is not stripped: /nope/api/chat is 404
+            self.assertIsNone(prompt_decision.ask("s", {"q": {"type": "noul", "instructions": "x"}}))
+
+    def test_explicit_systemone_skips_probe_and_uses_stub(self):
+        with StubDecisionServer(lambda b: {"q": noul(0.4)}) as srv, _env(srv.url, ATLAS_DECISION_PROTOCOL="systemone"):
+            answers = prompt_decision.ask("s", {"q": {"type": "noul", "instructions": "x"}})
+        self.assertEqual(answers, {"q": noul(0.4)})
+        self.assertEqual(srv.requests[0]["model"], "nimble")
+
+    def test_auto_falls_back_to_systemone_when_tags_is_not_ollama(self):
+        # the TypeSafe-style stub answers GET with 501: not Ollama
+        with StubDecisionServer(lambda b: {"q": noul(0.4)}) as srv, _env(srv.url):
+            os.environ.pop("ATLAS_DECISION_PROTOCOL", None)
+            answers = prompt_decision.ask("s", {"q": {"type": "noul", "instructions": "x"}})
+        self.assertEqual(answers, {"q": noul(0.4)})
+
+    def test_explicit_ollama_skips_probe(self):
+        with StubOllamaServer(self._good) as srv, _env(srv.url, ATLAS_DECISION_PROTOCOL="ollama"):
+            self.assertIsNotNone(prompt_decision.ask("s", {"q": {"type": "noul", "instructions": "x"}}))
+        self.assertEqual(srv.tag_hits, 0)
+
+    def test_probe_result_is_cached(self):
+        with StubOllamaServer(self._good) as srv, _env(srv.url):
+            for i in range(3):
+                prompt_decision.ask("s%d" % i, {"q": {"type": "noul", "instructions": "x"}})
+        self.assertEqual(srv.tag_hits, 1)
+
+    def test_full_chat_url_is_normalized_to_base(self):
+        with mock.patch.dict(os.environ, {"ATLAS_DECISION_URL": "http://127.0.0.1:11434/api/chat"}):
+            self.assertEqual(prompt_decision.decision_url(), "http://127.0.0.1:11434")
+
+    def test_refused_connection_arms_negative_cache_under_auto(self):
+        with _env("http://127.0.0.1:%d" % free_port()) as _:
+            self.assertIsNone(prompt_decision.ask("s", {"q": {"type": "noul", "instructions": "x"}}))
+            self.assertTrue(prompt_decision._neg_active(os.environ["ATLAS_DECISION_URL"]))
 
 
 class StateIsolationTests(unittest.TestCase):

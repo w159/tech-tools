@@ -66,6 +66,7 @@ import tempfile
 from pathlib import Path
 
 import atlas_panefeed
+import atlas_paths
 import atlas_provider
 import atlas_resolve
 import atlas_todo
@@ -228,7 +229,7 @@ def _brief_spawn_team(out: dict) -> str:
         team = out["team"]
         head = (
             f"dry-run team {team['team_id']} {team['class']}/{team['effort']}: {len(team['members'])} members, "
-            f"max_parallel {team['max_parallel']}, isolation {team['isolation']}, "
+            f"max_parallel {team['max_parallel']}, isolation {team['isolation']} ({team.get('isolation_reason', 'n/a')}), "
             f"scope {', '.join(team['file_scope']) or 'whole project'}"
         )
         return "\n".join([head] + [f"  {m['name']} {m['role']}" for m in team["members"]])
@@ -237,6 +238,7 @@ def _brief_spawn_team(out: dict) -> str:
     lines = [
         f"team {out['team_id']} {'ok' if out['ok'] else 'FAILED'}: {started}/{len(rows)} spawned on {out['transport']}, "
         f"session {out['session']}, channel {out['channel']}, max_parallel {out['max_parallel']}"
+        + (f", isolation {out['isolation']} ({out.get('isolation_reason')})" if out.get("isolation") else "")
     ]
     for r in rows:
         if not r.get("ok"):
@@ -282,6 +284,12 @@ def _brief_reap(out: dict) -> str:
         f"{len(out['members'])} members, {session}, {out['prompts_removed']} prompts removed, "
         f"{out['channels_reaped'] or 0} channels reaped"
     ]
+    if out.get("worktrees_merged"):
+        lines.append(f"worktrees merged: {', '.join(out['worktrees_merged'])}")
+    for c in out.get("worktrees_conflicted") or []:
+        lines.append(f"MERGE CONFLICT: {c['member']} {c['branch']} kept; conflicting files: {', '.join(c['files'])}")
+    for k in out.get("worktrees_skipped") or []:
+        lines.append(f"merge skipped: {k['member']} {k['branch']}: {k['reason']}")
     if out["worktrees_removed"]:
         lines.append(f"worktrees removed: {', '.join(out['worktrees_removed'])}")
     for k in out["worktrees_kept"]:  # holding work: the lead merges these
@@ -360,9 +368,15 @@ def _log_tmux_failure(args, res) -> None:
         return
     try:
         start = Path(os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()).resolve()
-        # nearest ancestor with a real .atlas/.run; never create .atlas itself
+        # nearest ancestor with a real .atlas/.run; never create .atlas itself. $HOME, ~/Downloads and bare
+        # temp roots are not projects: a stray /tmp/.atlas/.run must not collect logs from every temp cwd.
         root = next(
-            (p for p in (start, *start.parents) if (p / ".atlas" / ".run").is_dir()),
+            (
+                p
+                for p in (start, *start.parents)
+                if (p / ".atlas" / ".run").is_dir()
+                and not atlas_paths._is_non_project(str(p))
+            ),
             None,
         )
         if root is None:
@@ -2253,6 +2267,56 @@ def _is_git_repo(root: str) -> bool:
     return res.returncode == 0
 
 
+def _norm_path(p: str) -> str:
+    p = str(p).strip().replace("\\", "/")
+    while p.startswith("./"):
+        p = p[2:]
+    return p.strip("/")
+
+
+def _paths_overlap(a: list, b: list) -> bool:
+    """True when any path of `a` equals, contains or sits under any path of `b` (prefix overlap on whole segments)."""
+    for x in map(_norm_path, a):
+        for y in map(_norm_path, b):
+            if not x or not y or x == y or x.startswith(y + "/") or y.startswith(x + "/"):
+                return True
+    return False
+
+
+def resolve_isolation(rec: dict, root: str) -> None:
+    """Set rec["isolation"] (shared|worktree) and rec["isolation_reason"] for a team record.
+
+    Order: a resolved cell of "worktree" always wins; then ATLAS_ISOLATION=shared|worktree; else (auto, the
+    default) worktree when the root is a git repo and 2+ edit-capable members could write the same files:
+    their declared paths (member["paths"], else the team file_scope) overlap, or one declares none."""
+    cell = rec.get("isolation")
+    rec["isolation_cell"] = cell
+    env = os.environ.get("ATLAS_ISOLATION", "").strip().lower()
+
+    def done(mode: str, why: str) -> None:
+        rec["isolation"], rec["isolation_reason"] = mode, why
+
+    if cell == "worktree":
+        return done("worktree", "scope-matrix cell says worktree")
+    if env in ("shared", "worktree"):
+        return done(env, f"ATLAS_ISOLATION={env}")
+    editors = [m for m in rec["members"] if m["role"] in _EDIT_ROLES]
+    if len(editors) < 2:
+        return done("shared", f"{len(editors)} edit-capable member: nothing to collide")
+    if not _is_git_repo(root):
+        return done("shared", "root is not a git repo: no worktrees possible")
+    scope = list(rec.get("file_scope") or [])
+    sets = [(m["name"], list(m.get("paths") or scope)) for m in editors]
+    bare = [n for n, ps in sets if not ps]
+    if bare:
+        return done("worktree", f"auto: {bare[0]} has no declared paths")
+    for i, (na, pa) in enumerate(sets):
+        for nb, pb in sets[i + 1 :]:
+            if _paths_overlap(pa, pb):
+                return done("worktree", f"auto: paths of {na} and {nb} overlap")
+    return done("shared", "auto: edit members have disjoint declared paths")
+
+
 def worktree_plan(rec: dict, root: str) -> dict:
     """{member name: {path, branch}} for edit-capable members when the resolved team says
     isolation=worktree and root is a git repo; {} otherwise. Pure: creates nothing.
@@ -2303,6 +2367,54 @@ def _ahead_of_others(root: str, branch: str) -> int | None:
         text=True,
     )
     return int(res.stdout.strip()) if res.returncode == 0 and res.stdout.strip().isdigit() else None
+
+
+def _git(root: str, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+
+
+def _merge_back(root: str, rec: dict) -> tuple:
+    """(merged members, conflicted rows, skipped rows): merge each worker branch of a team into the lead's
+    current branch, one at a time in member-name order. Called from reap, before _reap_worktrees (which then
+    removes the merged, clean worktrees). A branch is merged only when its worktree is clean and it is ahead
+    of HEAD, and the lead branch is attached and has no uncommitted change to a file the branch edits. A
+    conflicting merge is aborted (git merge --abort), HEAD is verified unchanged, and the branch and worktree
+    stay for the lead; the conflicting files are reported. Never forces, pushes or deletes a branch."""
+    merged, conflicted, skipped = [], [], []
+    wts = rec.get("worktrees") or {}
+    if not wts or _git(root, "symbolic-ref", "-q", "HEAD").returncode != 0:
+        return merged, conflicted, ([{"member": m, "reason": "lead HEAD is detached"} for m in sorted(wts)] if wts else [])
+    for member in sorted(wts):
+        path, branch = wts[member]["path"], wts[member]["branch"]
+        row = {"member": member, "branch": branch}
+        if _git(root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode != 0:
+            continue
+        if Path(path).is_dir() and _git(path, "status", "--porcelain").stdout.strip():
+            skipped.append(dict(row, reason="worker worktree has uncommitted changes"))
+            continue
+        if _git(root, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0:
+            continue  # nothing ahead: _reap_worktrees cleans it
+        theirs = set(_git(root, "diff", "--name-only", f"HEAD...{branch}").stdout.split("\n")) - {""}
+        dirty = {ln[3:].split(" -> ")[-1] for ln in _git(root, "status", "--porcelain", "--untracked-files=no").stdout.splitlines()}
+        if theirs & dirty:
+            skipped.append(dict(row, reason="lead tree has uncommitted changes to files the branch edits"))
+            continue
+        before = _git(root, "rev-parse", "HEAD").stdout.strip()
+        res = _git(root, "merge", "--no-ff", "-m", f"Merge {branch} (atlas reap)", branch)
+        if res.returncode == 0:
+            merged.append(member)
+            continue
+        files = sorted(set(_git(root, "diff", "--name-only", "--diff-filter=U").stdout.split("\n")) - {""})
+        if _git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD").returncode == 0:  # a merge is in progress
+            _git(root, "merge", "--abort")
+        if _git(root, "rev-parse", "HEAD").stdout.strip() != before:  # cannot happen: a failed merge commits nothing
+            skipped.append(dict(row, reason="HEAD moved during a failed merge; stopped"))
+            break
+        if files:
+            conflicted.append(dict(row, files=files))
+        else:
+            skipped.append(dict(row, reason="merge failed: " + (res.stderr or res.stdout).strip()[-200:]))
+    return merged, conflicted, skipped
 
 
 def _reap_worktrees(root: str, rec: dict) -> tuple:
@@ -2581,6 +2693,11 @@ def cmd_spawn_team(args) -> int:
                 2,
             )
         rec["name"] = team_name
+    for m in rec["members"]:  # an optional `PATHS: a, b` line in a member's task slice declares its own file set
+        hit = re.search(r"^PATHS:\s*(.+?)\s*$", rec["member_tasks"].get(m["name"], ""), re.M)
+        if hit:
+            m["paths"] = [x.strip() for x in hit.group(1).split(",") if x.strip()]
+    resolve_isolation(rec, root)
     rec["worktrees"] = worktree_plan(rec, root)
     try:
         assign_team_providers(rec, getattr(args, "harness", "claude"))
@@ -2697,6 +2814,8 @@ def cmd_spawn_team(args) -> int:
             "run_id": run_id,
             "channel": chan,
             "max_parallel": rec["max_parallel"],
+            "isolation": rec["isolation"],
+            "isolation_reason": rec.get("isolation_reason"),
             "members": results,
             "worktrees": rec["worktrees"],
         },
@@ -2924,6 +3043,7 @@ def cmd_reap(args) -> int:
     if state == "live":
         arch.mkdir(parents=True, exist_ok=True)
         (_team_dir(root) / f"{rec['team_id']}.json").replace(archived_path)
+    wt_merged, wt_conflicted, wt_skipped = _merge_back(root, rec)
     wt_removed, wt_kept = _reap_worktrees(root, rec)
     prompts = [_team_dir(root) / f"{rec['team_id']}-{n}.prompt" for n in names]
     removed = 0
@@ -2944,6 +3064,9 @@ def cmd_reap(args) -> int:
             "channels_reaped": reaped.get("reaped"),
             "prompts_removed": removed,
             "worktrees": rec.get("worktrees") or {},
+            "worktrees_merged": wt_merged,  # merged into the lead branch by reap, then removed below
+            "worktrees_conflicted": wt_conflicted,  # merge aborted, lead branch untouched: branch + worktree kept
+            "worktrees_skipped": wt_skipped,  # not attempted (dirty worker, dirty lead files, detached HEAD)
             "worktrees_removed": wt_removed,  # clean and nothing unique on the branch: gone
             # holding work: left for the lead to merge (atlas_wt.py merge worker/<team>-<member>)
             "worktrees_kept": wt_kept,

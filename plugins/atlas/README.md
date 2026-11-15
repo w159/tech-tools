@@ -1,14 +1,17 @@
 # Atlas
 
 Atlas is a Claude Code plugin that runs coding work under a written operating
-contract. One model does the work, a separate model in a fresh context tries to
-refute it, and a Stop hook refuses a "done" claim until evidence and an
-independent verdict exist. Parallel work runs as tmux workers outside your
+contract. One agent does the work, a verifier from the same model family in a fresh
+context re-checks it (its claim-evidence rule is measured in
+[2026-11-15_atlas-verifier-seeded-eval.md](../../docs/audits/2026-11-15_atlas-verifier-seeded-eval.md)),
+and a Stop hook blocks a "done" claim while no evidence file or independently
+verified finding exists, or while the claim contradicts this turn's own tool
+results. Parallel work runs as tmux workers outside your
 session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.23.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.24.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -40,15 +43,15 @@ session, so your context window holds reports instead of raw output.
 
 ## What Atlas does
 
-Atlas is built on four ideas. Each one is enforced by code, not only described
-in a prompt.
+Atlas is built on four ideas. Hooks and scripts check parts of each one, as
+stated in the table; none of them judges the quality of the work.
 
 | Pillar                   | What it means in practice                                                                                                                         | Enforced by                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Operating contract       | Every task follows research, document, implement, verify, report. Every reply carries a phase header. "Done" needs evidence.                      | `references/operating-contract.md`, `contracts/operating-contract.json`, `hooks/completion_gate.py`           |
-| Adversarial verification | The agent that writes code never grades it. A verifier with no write tools re-derives the check in a fresh context and confirms or refutes.       | `agents/verifier.md`, `scripts/atlas_finding.py`, completion gate conditions (b) and (g)                      |
+| Operating contract       | The contract asks for research, document, implement, verify, report and a phase header on every reply. The Stop gate checks that the markers, a plan and an evidence file exist; it does not judge their quality. | `references/operating-contract.md`, `contracts/operating-contract.json`, `hooks/completion_gate.py`           |
+| Adversarial verification | Gate (b) credits a verified finding only when a hook-written record backs it for this session and run: an `atlas:verifier` or `atlas:completeness-critic` dispatch row at about the time of the stamp (role matching `verified_by`), or a team or crew member record of that role whose name equals `stamped_by`; or a test-runner command that matches a passing command of this session exactly. A bare `--by atlas:verifier` does not credit. Limits: an in-process verifier still stamps as `lead`, a lead can pair a real verifier dispatch with a self-stamped row, `ATLAS_WORKER_NAME` can be set from the process environment, and an unreadable DB fails open. The verifier is the same model family (Sonnet) in a fresh context with no write tools; its claim-evidence rule is measured, see Adversarial verification below. | `agents/verifier.md`, `scripts/atlas_finding.py`, completion gate conditions (b) and (g)                      |
 | Context offload          | Parallel workers run as separate harness processes in tmux. Each posts one fixed-format report; full output goes to a log file, not your session. | `scripts/atlas_mux.py`, `contracts/worker-protocol.json`, `hooks/worker_report_gate.py`                       |
-| Decision models          | Deterministic and model-backed choosers decide when to orchestrate, which team and model tier to use, and which technical option wins.            | `hooks/prompt_decision.py`, `scripts/atlas_resolve.py`, `contracts/scope-matrix.json`, `skills/atlas-bakeoff` |
+| Decision models          | Rules in code choose the orchestration mode, team and model tier. A local model (`ATLAS_DECISION_PROTOCOL=auto\|ollama\|systemone`) can be asked in their place; the Ollama call is tested only against a stub that follows the documented API, never a real model, and the default `llama3.2:3b` is not checked to be pulled. | `hooks/prompt_decision.py`, `scripts/atlas_resolve.py`, `contracts/scope-matrix.json`, `skills/atlas-bakeoff` |
 
 ## Quick start
 
@@ -107,8 +110,10 @@ it Atlas falls back to `claude --bg` workers.
    ```
 
    Output: `dry-run team <id> build/medium: 3 members, max_parallel 3, isolation
-   shared, scope src/a.py`, then two `implementer` lines and one `verifier` line.
-   Every member works in the one tree, with no worktree or branch. Add `--json` to
+   worktree (auto: paths of implementer-<x> and implementer-<y> overlap), scope
+   src/a.py`, then two `implementer` lines and one `verifier` line. Under the default
+   `auto` the two implementers share a path, so each gets its own worktree; set
+   `ATLAS_ISOLATION=shared` for one tree. Add `--json` to
    see each member's `tools_profile` (`edit` for implementers, `exec` for the
    verifier).
 
@@ -179,7 +184,7 @@ blocks, it names the letters:
 | Letter | Blocks when                                      | Letter | Blocks when                                |
 | ------ | ------------------------------------------------ | ------ | ------------------------------------------ |
 | a      | no `.atlas/evidence` artifact                    | j      | worktrees left open                        |
-| b      | no verified finding                              | k      | no plan (todo list) was made               |
+| b      | no verified finding backed by a hook record      | k      | no plan (todo list) was made               |
 | c      | CHANGELOG missing                                | l      | dated docs not named `<YYYY-MM-DD>_<slug>` |
 | d      | ROADMAP missing                                  | m      | code shipped with zero subagent dispatches |
 | e      | README missing                                   | n      | status header missing                      |
@@ -188,6 +193,7 @@ blocks, it names the letters:
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
 | i      | open todos                                       | r      | `done` header while work is open           |
 |        |                                                  | s      | 2+ in-process workers, no tmux team or crew |
+|        |                                                  | v      | done claim contradicted by this turn's tool results (`ATLAS_DONE_CLAIM=auto`, default; `block` also blocks text-only claims) |
 
 The gate checks the work itself before it asks for paperwork. When (a), (b),
 (g), (k), (m) or (o) would block, it re-runs the session's last plain test
@@ -246,8 +252,19 @@ codex reads.
 
 ## Adversarial verification
 
-Atlas does not let a model grade its own work. The pattern appears at several
-levels:
+Atlas separates the agent that writes a change from the one that checks it. The
+verifier is the same model family in a fresh context, not a different model, so
+this reduces self-grading but does not remove shared blind spots. The claim-evidence
+rule in `agents/verifier.md` raised false-claim catches from 3/18 (haiku, sonnet; opus
+8/18) to 17/18 (haiku) and 18/18 (sonnet, opus) with 0 of 81 good runs refuted per model,
+but that lift was measured on the 6 cases that motivated the rule. On a held-out tier
+written after the rule was frozen (20 cases, shipped seat prompt, MCP off in the sandbox,
+sonnet only, 3 trials): false-claim catch 30/30 runs (Wilson 88.6% to 100%) and 10/10
+cases over 10 mismatch kinds the rule does not name; false refutes on harmless divergence
+2/30 runs (1.8% to 21.3%), both on one ambiguous case, 0/27 without it. Other models were
+not run on that tier. Sonnet stays on the seat. Method and
+every run: [2026-11-15_atlas-verifier-seeded-eval.md](../../docs/audits/2026-11-15_atlas-verifier-seeded-eval.md).
+The pattern appears at several levels:
 
 | Where             | How the models are set against each other                                                                                                                                                                                                                                                                                                                                                          |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -302,7 +319,8 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
   worker's check and posts DONE only if it passes. Workers send each other bug
   reports (`irc say --to <nick>`) and wait with `irc wait`, never `sleep`.
 - Each worker owns a set of files on one tree. A hook denies edits to a peer's
-  file and names the owner to ask. No worktrees, so nothing waits on a merge.
+  file and names the owner to ask. The crew uses no worktrees, so nothing waits on a merge; tmux
+  teams (`atlas_mux.py spawn-team`) can, see Isolation under Team below.
   A file moves to a peer live: `irc give <path> <peer>` hands it over and
   announces `LEASE <path> -> <peer>` on the channel, `irc claim <path>` takes an
   unowned one, and fix rounds follow the moved lease.
@@ -346,14 +364,19 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
   only, tools `Bash,Edit`, a short system prompt. The lead's context gets one
   JSON summary (tokens, cost, wall time, gate refusals, channel counts).
 
-Measured on two spec-driven builds against one Claude prompt with the same
-model (claude-sonnet-5-5, effort medium) and the same task text; all runs
-passed every test. Numbers and method: [2026-10-28_atlas-16.4.0-crew-benchmark.md](../../docs/audits/2026-10-28_atlas-16.4.0-crew-benchmark.md).
+Latest measured figures (Atlas 17.21.0, n=3 per cell, claude-sonnet-5-5 at effort medium on the same
+harness, 4 CPUs, spec-driven module fixtures with 434 and 869 tests, every run green). Percentages are of
+the plain one-prompt arm on the same fixture (means).
+These are small samples on synthetic fixtures, not a claim about real repositories.
 
-| Task                                   | Single prompt (median) | Crew (median)       | Crew vs single |
-| -------------------------------------- | ---------------------- | ------------------- | -------------- |
-| 8 modules, 213 tests (3 runs each)     | 853k tokens, 144 s     | 137k tokens, 41 s   | 16% tokens, 28% time |
-| 18 modules, 469 tests (3 runs each)    | 2.29M tokens, 181 s    | 307k tokens, 55 s   | 13% tokens, 30% time |
+| Fixture                | Crew cold, mean | Crew warm, mean | Tokens vs plain          |
+| ---------------------- | --------------- | --------------- | ------------------------ |
+| 8 modules, 434 tests   | 28.1 s (53%)    | 25.1 s (49%)    | 57% cold, 46% warm       |
+| 16 modules, 869 tests  | 34.8 s (31%)    | 31.1 s (26%)    | 38% cold, 36% warm       |
+
+The older 16.4.0 figures (8 and 18 modules, n=3 medians) are in
+[2026-10-28_atlas-16.4.0-crew-benchmark.md](../../docs/audits/2026-10-28_atlas-16.4.0-crew-benchmark.md)
+and are not repeated here: the fixtures and the release differ from the table above.
 
 Routed from a plain prompt (17.17.0): the lead is told to start the crew and does it in one Bash call.
 Same model and flags, one task with 8 modules and 434 tests, two runs per cell with the 17.16.0 and 17.17.0
@@ -370,8 +393,7 @@ every run: [2026-11-14_atlas-17.17.0-silent-failures.md](../../docs/audits/2026-
 On the green fixtures 17.17.0 is 1 to 3 s faster, within the run-to-run spread: read it as no regression, not
 a speedup. On the red fixture the blocked-report fix saves two lead turns (17% of wall time, 15% of tokens).
 Against one plain prompt on fixture-p (51.7 and 55.7 s, 307,662 and 364,959 tokens), 17.17.0 cold is 51% of
-the wall time and 47% of the tokens; warm it is 48% of the wall time. 1/4 of the single prompt's wall time is
-still not met. The 17.16.0 numbers (cold 62% of the wall time and 53% of the tokens against one prompt) are in
+the wall time and 47% of the tokens; warm it is 48% of the wall time. The 17.16.0 numbers (cold 62% of the wall time and 53% of the tokens against one prompt) are in
 [2026-11-14_atlas-17.16.0-team-performance.md](../../docs/audits/2026-11-14_atlas-17.16.0-team-performance.md).
 
 Atlas 17.18.0 (same model, effort and harness; n=2 per cell at 8 modules, n=3 at 16 modules). 8 modules: cold
@@ -379,9 +401,9 @@ Atlas 17.18.0 (same model, effort and harness; n=2 per cell at 8 modules, n=3 at
 passed. 16 modules (842 tests): cold 25.4, 27.3, 27.1 s (mean 26.6 s, 29% of plain), warm 26.3, 25.8, 25.6 s
 (mean 25.9 s, 28%), 202-217k tokens (mean about 213k, 49%), all 842 passed. Plain one prompt: 55.9 s mean and
 353k tokens at 8 modules (n=4), 92.4 s mean and 438k tokens at 16 modules (n=4). 50% of the tokens is met at
-both sizes. 1/4 of the wall time is not met: the floor is the slowest worker's own model time (about 14 s) plus
+both sizes. A quarter of the plain wall time was not reached at either size: the floor is the slowest worker's own model time (about 14 s) plus
 about 11 s of lead time. Crew time stayed flat from 8 to 16 modules while plain time grew; that is a trend from
-two sizes, not a measured 1/4. Method and trials that did not help:
+two sizes, not a measured scaling law. Method and trials that did not help:
 [2026-11-14_atlas-17.18.0-crew-time.md](../../docs/audits/2026-11-14_atlas-17.18.0-crew-time.md).
 
 Atlas 17.21.0 (n=3 per cell, same model and harness, 4 CPUs, all runs green). 8 modules (434 tests): cold mean 28.1 s (53% of plain), warm mean 25.1 s (49%), tokens 57% cold and 46% warm. 16 modules (869 tests): cold mean 34.8 s (31%), warm mean 31.1 s (26%), tokens 38% cold and 36% warm. An interleaved A/B against the 17.20.0 tree showed no speed change from this release. Tables:
@@ -428,10 +450,29 @@ next command). Add `--json` for the full JSON object.
   EVIDENCE and NEXT report from `contracts/worker-protocol.json`. Full stdout and
   stderr go to `<project>/.atlas/.run/logs/<worker>.log`. The lead reads the
   report; the log stays on disk.
-- Every team works in the one tree (`isolation: shared` in every scope-matrix
-  cell): no worktree or branch per member, so nothing waits on a merge. Writers
-  that build together belong in a crew (below), where file leases keep them
-  apart and `irc give` hands a file to a peer live.
+- Isolation is chosen per team by `ATLAS_ISOLATION=auto|shared|worktree`
+  (default `auto`). Auto gives each edit-capable member (`implementer`,
+  `test-engineer`, `docs-curator`) its own git worktree and branch when the team
+  has 2 or more of them in a git repo and their declared paths overlap (path
+  prefix counts) or any has none; a `PATHS: a, b` line in a `## member:` task
+  slice declares one member's paths, else `--paths` applies to all. Disjoint
+  paths or a single editor stay in the one shared tree. A scope-matrix cell of
+  `worktree` always wins; `shared` or `worktree` in the env overrides auto.
+  The choice and its reason print on the spawn-team line. Read-only roles stay
+  in the main root. `atlas_mux.py reap` is the merge-back path: it merges each
+  worker branch into the lead's current branch one at a time (member-name
+  order) and removes a merged worker's worktree and branch. A conflicting merge
+  is aborted, the lead branch is left as it was, and the worker branch and
+  worktree are kept; reap reports the conflicting files. Reap never forces,
+  pushes or deletes an unmerged branch, and skips a branch whose worktree is
+  dirty or whose files the lead has uncommitted edits to. Evidence:
+  `python3 scripts/atlas_isolation_bench.py`, a simulation (not `spawn-team` with real
+  workers) of 20 overlap cases, 40 edits, with Claude Code Edit semantics for the shared
+  tree. Per edit: naive overwrite (upper bound) 26 merged, 14 lost; shared 26 merged,
+  14 refused for retry, 0 lost; worktree 34 merged, 6 conflicted (kept branch,
+  unmerged), 0 lost; auto chose shared for the 6 disjoint cases and worktree for the 14
+  same-file cases. Worktrees avoid 14 retries and leave 6 same-line conflicts on kept
+  branches for the lead to resolve.
 - Claude workers get `--allowedTools` scoped by their `tools_profile` (`read`,
   `edit`, `exec`), so an exec worker can run test runners and read-only git
   without a permission prompt.
@@ -458,12 +499,21 @@ judgment:
 
 1. When to orchestrate. `hooks/prompt_optimizer.py` classifies each prompt with a
    regex. Prompts the regex leaves ambiguous go to a local decision model
-   (`hooks/prompt_decision.py`): Ollama at `http://127.0.0.1:11434`, model
-   `nimble`, 4 second timeout. A confident `code_change` or `investigation`
+   (`hooks/prompt_decision.py`) on `http://127.0.0.1:11434`, 4 second timeout.
+   Two wire protocols, set by `ATLAS_DECISION_PROTOCOL`: `ollama` is stock
+   Ollama (`POST /api/chat`, `stream: false`, temperature 0, answers constrained
+   by a JSON-schema `format`, model `llama3.2:3b` unless `ATLAS_DECISION_MODEL`
+   names another); `systemone` is TypeSafe's `/v1/systemone` scoring protocol
+   (model `nimble`), which stock Ollama does not serve. The default `auto` asks
+   `GET /api/tags` once per endpoint (cached 10 minutes) and uses `ollama` when
+   it answers a model list, else `systemone`. An answer that is not valid JSON,
+   names an unknown label or has a number outside 0..1 counts as no answer.
+   A confident `code_change` or `investigation`
    label can arm a regex miss; a confident conversation label vetoes a regex
    arm, and only when the prompt also names an engineering object. Timeout, low
    confidence or `ATLAS_DECISION=off` keeps the regex answer. The default
-   endpoint is local; `ATLAS_DECISION_URL` and `ATLAS_DECISION_MODEL` change it.
+   endpoint is local; `ATLAS_DECISION_URL`, `ATLAS_DECISION_MODEL` and
+   `ATLAS_DECISION_PROTOCOL` change it.
    The class and effort in the arming nudge come from the same model:
    `route_scope` in `hooks/prompt_optimizer_core.py` asks `task_class` (a
    choice over the scope-matrix classes) and `effort` (low, medium, high) in
@@ -492,23 +542,44 @@ judgment:
    wording the corpus does not cover. No real Ollama model has answered a routing
    or verify question in development (model downloads were blocked in that
    environment); the model path is tested against a local stub endpoint only.
-   The done-claim check is record-only until its thresholds are calibrated from
-   the `decision.verify.*` counters.
-   Verify check: the completion gate (`hooks/completion_gate_core.py`, letter
-   `v`) sends the final reply to the same endpoint as two noul questions (the
-   reply claims the work is done or fixed; the reply quotes an observed result
-   such as command output, a test count, a file:line or query rows). By default
-   it runs in shadow: it asks the model and records `decision.verify.block-would`
-   when the claim is at least 0.8 and the observed result at most 0.3, but never
-   blocks, because those thresholds are uncalibrated. With
-   `ATLAS_DECISION_VERIFY=block` it blocks on that verdict, at most once per turn (the continuation Stop passes), and only after the
-   deterministic checks pass. The call has a 1.5 second budget; an endpoint
-   that is off, slow, refused or answers badly never blocks. The check needs no
-   configured endpoint: the default is loopback, so it is attempted on every
-   fresh Stop unless `ATLAS_DECISION=off` or `ATLAS_DECISION_VERIFY=off`; the
-   60 second negative cache bounds the cost on a machine without Ollama.
-   `ATLAS_DECISION_VERIFY=off` turns the check off. Counters
-   `decision.verify.block`, `.block-would`, `.pass` and `.skip`.
+   The done-claim check is deterministic first (see below); the model is only a second opinion.
+   Done-claim check (gate letter `v`): `hooks/done_claim.py` is a deterministic,
+   offline classifier (no model, no network). It scores the final reply for done
+   claims (fixed, shipped, "tests pass"; negation and hedges such as "not yet",
+   "should work", "once CI", "pending" cancel a claim) against evidence cues
+   (fenced command output, "N passed", exit code, run URL, sha with a push,
+   file:line, diff hunk, query rows). When `transcript_path` is readable it also
+   reads the last 256 KB of the transcript and cross-checks this turn's tool
+   results: a quoted test count absent from a test run of the turn, a pass claimed
+   after a failing last test run, a narrow test command claimed as the full
+   suite, and a push or CI result claimed with no matching tool call all count
+   as unsupported. Counts are checked only against test-run output of the turn;
+   a push needs a `git push` command with ref-update output; CI needs a `gh`
+   run, api, workflow or pr call or a CI tool; "0 failed" is not a hedge. `ATLAS_DONE_CLAIM=auto|block|shadow|off` (default `auto`): `auto`
+   blocks only a claim with a transcript finding of a kind in `BLOCKING_KINDS`
+   (dev-split precision 0.95 or better) and records a text-only claim, or the
+   advisory `count_no_test_run` finding, as `decision.verify.block-would`;
+   `block` blocks once per turn (the continuation Stop passes, so it cannot
+   loop); `shadow` only records `decision.verify.block-would`. The decision model
+   (`prompt_decision.verify_reply`) is an optional second opinion in block mode:
+   it can clear a text-only block when it is at least 0.8 sure the reply quotes
+   an observed result, it never adds a block, and it never clears a block that
+   rests on a transcript finding. `block` blocks both kinds. `ATLAS_DECISION_VERIFY` still works as an
+   alias. Counters `decision.verify.{block,block-would,cleared,pass,skip}`.
+   Measured on `hooks/done_claim_corpus.jsonl` (182 rows: 131 real final replies
+   from this machine's tech-tools and bench transcripts, 51 seeded; labels by
+   two models plus one adjudication pass, not human ground truth, kappa 0.767),
+   split by source transcript and seed template (109 dev, 73 test). Test split,
+   unsupported_done label metrics: precision 0.889, recall 1.000 (n=73). Blocking
+   path (the `--eval` "blocking path (findings)" rows): real rows n=131 TP 1 FP 0 FN 2
+   (precision 1.000, recall 0.333); seeded rows n=51 TP 31 FP 0 FN 10; all rows n=182
+   TP 32 FP 0 FN 12 (precision 1.000, recall 0.727). Only 3 real unsupported claims
+   exist in the corpus, so real-world recall is measured on n=3, and 31 of the 32
+   blocking true positives are seeded rows built from the detector's own rule kinds.
+   Text-only predictions (all rows: precision 0.913, recall 0.477) are not precise
+   enough to block, so they stay in shadow. `python3 hooks/done_claim.py --eval [--split test]` reprints the
+   numbers; `hooks/done_claim_rubric.md` is the label rubric. Hook cost: `analyze()` p95
+   1.40 ms, added hook latency (transcript tail parse plus analyze) p95 2.26 ms.
 2. Which team, at what cost. `scripts/atlas_resolve.py <class> <effort>` reads
    `contracts/scope-matrix.json` and returns the roles, counts, model tier,
    effort and isolation for the task. It is deterministic: the same input gives
@@ -778,7 +849,7 @@ fail-open when the CLI is absent).
 | `connector_credential_watch.py` | PostToolUse                                                        | On the first 401 or 403 from an armada connector, says to restart the server instead of retrying (`ATLAS_CONNECTOR_WATCH=off`)                                                                                                                                                                                                                                                                                                               |
 | `format_after_edit.py`          | PostToolUse (Edit, Write)                                          | Runs the repo's formatter                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `crew_worker.py`                | PreToolUse, PostToolUse, Stop (crew worker settings, not `hooks.json`) | In crew workers only, delivers IRC context, enforces file leases and the check/report gate; guarded by `ATLAS_CREW_WORKER` elsewhere |
-| `completion_gate.py`            | Stop                                                               | Blocks a premature "done" (conditions a to s above)                                                                                                                                                                                                                                                                                                                                                                                          |
+| `completion_gate.py`            | Stop                                                               | Blocks a premature "done" (conditions (a)-(s) and (v) above)                                                                                                                                                                                                                                                                                                                                                                                          |
 | `stop_tail.py`                  | Stop                                                               | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter                                                                                                                                                                                                                                                                                                                                        |
 | `ingest_session.py`             | SubagentStop, SessionEnd, PreCompact (and Stop via `stop_tail.py`) | Mirrors the transcript into the observability DB (`ATLAS_INGEST=off`)                                                                                                                                                                                                                                                                                                                                                                        |
 | `worker_report_gate.py`         | SubagentStop, PostToolUse (SubagentHandback)                       | Blocks an `atlas:*` subagent whose final message is not the fixed report (once per agent)                                                                                                                                                                                                                                                                                                                                                    |
@@ -1403,7 +1474,7 @@ switches:
 | `ATLAS_TEAM_GATE`                                              | on                       | `off` turns `dispatch_denied:team` and gate (s) into advisories |
 | `ATLAS_TRIPWIRE`, `ATLAS_TRIPWIRE_HARD`                        | on                       | `off` disables the tripwire, or only its deny tier            |
 | `ATLAS_ENGINE_ARM`                                             | on                       | `off` stops prompts from arming orchestration                 |
-| `ATLAS_DECISION`, `ATLAS_DECISION_URL`, `ATLAS_DECISION_MODEL` | on, loopback, `nimble`   | Local decision model                                          |
+| `ATLAS_DECISION`, `ATLAS_DECISION_URL`, `ATLAS_DECISION_MODEL`, `ATLAS_DECISION_PROTOCOL` | on, loopback, `llama3.2:3b` (`nimble` for systemone), `auto` | Local decision model |
 | `ATLAS_DECISION_VERIFY`                                        | shadow                   | `block` lets gate v block, `off` disables it                  |
 | `ATLAS_WORKER_PROVIDER`, `ATLAS_OLLAMA_MODEL`, `ATLAS_OLLAMA_ROLE_MODELS`                 | claude, none, none       | Local Ollama workers (see Local models)                       |
 | `ATLAS_OLLAMA_URL`, `ATLAS_OLLAMA_STRICT`, `ATLAS_ADVERSARIAL_PAIRING`                        | loopback, off, on        | Ollama endpoint, refuse instead of falling back, verifier pairing |
@@ -1442,7 +1513,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.23.0
+|-- .claude-plugin/plugin.json   manifest, version 17.24.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1471,7 +1542,7 @@ atlas/
 
 ## Release notes and license
 
-Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
+Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.24.0 adds the deterministic done-claim gate, git worktree isolation for overlapping workers, a verifier claim-evidence rule, a stock Ollama chat protocol and a history benchmark harness ([audit](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
 for 16.0.0:
 [docs/audits/2026-10-27_atlas-16.0.0-evidence.md](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md).
 

@@ -86,6 +86,7 @@
       "values": [
         "block",
         "block-would",
+        "cleared",
         "pass",
         "skip"
       ]

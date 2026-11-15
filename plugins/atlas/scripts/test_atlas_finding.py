@@ -86,6 +86,23 @@ class AtlasFindingCli(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertEqual(_findings(self.root)[-1]["verified_by"], want)
 
+    def test_entry_records_who_actually_ran_the_stamper(self):
+        """stamped_by is the caller even when --by names someone else, so the gate can tell a self-stamp."""
+        import os
+
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_WORKER_NAME"}
+        for args, want_by, want_stamped in (
+            (["--id", "L1"], "lead", "lead"),
+            (["--id", "V1", "--by", "atlas:verifier"], "atlas:verifier", "lead"),
+        ):
+            r = subprocess.run(
+                [sys.executable, str(SCRIPT), *args, "--status", "verified", "--title", "t"],
+                cwd=str(self.root), capture_output=True, text=True, env=env,
+            )
+            self.assertEqual(r.returncode, 0, r.stderr)
+            row = _findings(self.root)[-1]
+            self.assertEqual((row["verified_by"], row["stamped_by"]), (want_by, want_stamped))
+
     def test_verifier_prompts_pass_their_identity(self):
         """Both verifier definitions stamp --by atlas:verifier explicitly."""
         here = Path(__file__).resolve().parent.parent

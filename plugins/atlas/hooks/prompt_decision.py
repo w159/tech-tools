@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
-"""Local System One choice for prompts the regex leaves ambiguous.
+"""Local decision model for prompts the regex leaves ambiguous, routing, and the done-claim check.
 
-Posts one choice question to a loopback /v1/systemone endpoint. The default
-is Ollama on 127.0.0.1:11434 with the nimble model. The timeout is 4 seconds
-so a cold model load (about 3 seconds on the machine this was measured on)
-can answer; a warm call is well under a second. A timeout, a connection
-error, or a low-confidence answer returns None so the caller keeps the regex
-result. This module never calls https://api.typesafe.ai. Session scoring uses
-typesafe_client for that host, and only when TYPESAFE_API_KEY is set.
+Two wire protocols, chosen by ATLAS_DECISION_PROTOCOL (auto, ollama, systemone):
+
+- ollama: stock Ollama on 127.0.0.1:11434. One POST /api/chat with stream=false, temperature 0, keep_alive
+  and a JSON-schema `format` that has one property per question (a choice question is
+  {"choice": enum, "confidence": 0..1}, a noul question is {"noul": 0..1}); the answer is the JSON string in
+  message.content. It is validated strictly (enum member, numbers inside [0, 1], no bools); an answer that
+  fails validation is dropped, never treated as confident. Default model llama3.2:3b, ATLAS_DECISION_MODEL
+  overrides it.
+- systemone: TypeSafe's scoring protocol, POST /v1/systemone with model nimble. Stock Ollama does not
+  serve it.
+- auto (default): one GET /api/tags per endpoint, cached for 10 minutes (in process and through
+  decision-proto.json under ATLAS_HOME, mode 0600). A reply with a "models" list means ollama, anything
+  else means systemone.
+
+The timeout is 4 seconds so a cold model load can answer; a warm call is well under a second. A timeout,
+a connection error, a malformed answer, or a low-confidence answer returns None so the caller keeps the
+regex result. This module never calls https://api.typesafe.ai. Session scoring uses typesafe_client for
+that host, and only when TYPESAFE_API_KEY is set.
 
 ATLAS_DECISION_URL must name a loopback host (127.0.0.0/8, ::1, localhost); the
 prompt text (first 4000 chars) is sent there, so any other host is refused and
@@ -19,7 +30,7 @@ environment can never carry a prompt or a final reply off the machine. After a r
 is made for 60 seconds (in process, and through decision-down.json under ATLAS_HOME or ~/.atlas, mode
 0600), so a machine without Ollama pays that cost at most once a minute.
 
-Criteria values are strings. Local nimble rejects the object form
+Systemone criteria values are strings. Local nimble rejects the object form
 ({definition, includes}) that the hosted API accepts.
 """
 
@@ -115,8 +126,10 @@ def decision_url() -> str | None:
             return None
         base = explicit.rstrip("/")
         # A pasted full endpoint works too: the path is appended once in local_decision().
-        if base.lower().endswith("/v1/systemone"):
-            base = base[: -len("/v1/systemone")].rstrip("/")
+        for suffix in ("/v1/systemone", "/api/chat", "/api/tags"):
+            if base.lower().endswith(suffix):
+                base = base[: -len(suffix)].rstrip("/")
+                break
         return base
     if os.environ.get("ATLAS_DECISION", "on").strip().lower() == "off":
         return None
@@ -179,25 +192,194 @@ def _urlopen(req, timeout: float):
     return opener.open(req, timeout=timeout)
 
 
+OLLAMA_DEFAULT_MODEL = "llama3.2:3b"
+SYSTEMONE_DEFAULT_MODEL = "nimble"
+PROBE_TTL_S = 600.0
+_PROTO_MEM: dict = {}  # base url -> (protocol, time.monotonic() deadline)
+
+
+def _proto_path() -> str:
+    base = os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas")
+    return os.path.join(base, "decision-proto.json")
+
+
+def _proto_cached(base: str) -> str | None:
+    hit = _PROTO_MEM.get(base)
+    if hit and hit[1] > time.monotonic():
+        return hit[0]
+    try:
+        with open(_proto_path(), encoding="utf-8") as fh:
+            rec = json.load(fh)
+        until = float(rec["until"])
+        if rec.get("base") == base and rec.get("protocol") in ("ollama", "systemone") and until > time.time():
+            _PROTO_MEM[base] = (rec["protocol"], time.monotonic() + (until - time.time()))
+            return rec["protocol"]
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def _proto_store(base: str, protocol: str) -> None:
+    _PROTO_MEM[base] = (protocol, time.monotonic() + PROBE_TTL_S)
+    path = _proto_path()
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump({"base": base, "protocol": protocol, "until": time.time() + PROBE_TTL_S}, fh)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def _probe(base: str, timeout: float) -> str | None:
+    """'ollama' when GET /api/tags answers a JSON object with a "models" list, else 'systemone'. None (and
+    the negative cache armed) when the connection is refused; nothing is cached on a timeout."""
+    try:
+        req = urllib.request.Request(base + "/api/tags", method="GET")
+        with _urlopen(req, min(timeout, 1.0)) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        found = isinstance(payload, dict) and isinstance(payload.get("models"), list)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError, http.client.HTTPException) as exc:
+        if _refused(exc):
+            _neg_arm(base)
+            return None
+        if isinstance(exc, TimeoutError) or (
+            isinstance(exc, urllib.error.URLError) and not isinstance(exc, urllib.error.HTTPError)
+        ):
+            return "systemone"  # unknown right now: do not cache, try the legacy path this once
+        found = False
+    protocol = "ollama" if found else "systemone"
+    _proto_store(base, protocol)
+    return protocol
+
+
+def protocol_for(base: str, timeout: float = TIMEOUT_S) -> str | None:
+    """ATLAS_DECISION_PROTOCOL: 'ollama' or 'systemone' as set, else (auto, the default) the probed one."""
+    forced = os.environ.get("ATLAS_DECISION_PROTOCOL", "auto").strip().lower()
+    if forced in ("ollama", "systemone"):
+        return forced
+    return _proto_cached(base) or _probe(base, timeout)
+
+
+def _ollama_schema(questions: dict) -> dict:
+    props: dict = {}
+    for qid, q in questions.items():
+        if not isinstance(q, dict):
+            continue
+        if q.get("type") == "choice" and isinstance(q.get("criteria"), dict) and q["criteria"]:
+            props[qid] = {
+                "type": "object",
+                "properties": {
+                    "choice": {"type": "string", "enum": list(q["criteria"])},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                },
+                "required": ["choice", "confidence"],
+            }
+        else:
+            props[qid] = {
+                "type": "object",
+                "properties": {"noul": {"type": "number", "minimum": 0, "maximum": 1}},
+                "required": ["noul"],
+            }
+    return {"type": "object", "properties": props, "required": list(props)}
+
+
+def _ollama_prompt(state: str, questions: dict) -> list:
+    lines = [
+        "Answer every question about the text the user sends. Reply with JSON only, matching the schema.",
+        "A choice question needs one label and your confidence from 0 to 1.",
+        "A noul question needs the probability from 0 to 1 that the statement is true.",
+        "",
+    ]
+    for qid, q in questions.items():
+        if not isinstance(q, dict):
+            continue
+        lines.append("%s: %s" % (qid, q.get("instructions", "")))
+        crit = q.get("criteria")
+        if isinstance(crit, dict):
+            for label, text in crit.items():
+                lines.append("  - %s: %s" % (label, text if isinstance(text, str) else ""))
+    return [
+        {"role": "system", "content": "\n".join(lines)},
+        {"role": "user", "content": state},
+    ]
+
+
+def _in_unit(value) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and not math.isnan(value)
+        and 0.0 <= value <= 1.0
+    )
+
+
+def _ollama_validate(content, questions: dict) -> dict | None:
+    """Strictly parse message.content. Each question that is absent or out of schema is dropped; None
+    when nothing valid is left. Numbers must be real numbers inside [0, 1] (no clamping, no bools)."""
+    try:
+        data = json.loads(content) if isinstance(content, str) else None
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    out: dict = {}
+    for qid, q in questions.items():
+        ans = data.get(qid)
+        if not isinstance(ans, dict) or not isinstance(q, dict):
+            continue
+        if q.get("type") == "choice" and isinstance(q.get("criteria"), dict):
+            label, conf = ans.get("choice"), ans.get("confidence")
+            if isinstance(label, str) and label in q["criteria"] and _in_unit(conf):
+                out[qid] = {"type": "choice", "choice": label, "confidence": float(conf)}
+        elif q.get("type") != "choice":
+            if _in_unit(ans.get("noul")):
+                out[qid] = {"type": "noul", "noul": float(ans["noul"])}
+    return out or None
+
+
 def ask(state: str, questions: dict, timeout: float = TIMEOUT_S) -> dict | None:
     """POST one request carrying `questions` about `state` and return the `answers` dict, or None.
 
     The shared transport for every decision call: loopback guard (decision_url), lazy urllib with proxies
     disabled, a 60 s negative cache after a refused connection, and fail-open (a refused connection, a
     timeout, a non-JSON, truncated or malformed HTTP body all return None, never raise). Several questions
-    belong in ONE call so a hook pays one round trip."""
+    belong in ONE call so a hook pays one round trip. The wire protocol is stock Ollama /api/chat or
+    TypeSafe /v1/systemone (see the module docstring); both return {question id: answer}."""
     base = decision_url()
     if not base or not questions:
         return None
     if _neg_active(base):
         return None
-    model = os.environ.get("ATLAS_DECISION_MODEL", "nimble").strip() or "nimble"
+    protocol = protocol_for(base, timeout)
+    if protocol is None:
+        return None
+    configured = os.environ.get("ATLAS_DECISION_MODEL", "").strip()
     try:
-        body = json.dumps(
-            {"model": model, "state": state, "questions": questions}
-        ).encode("utf-8")
+        if protocol == "ollama":
+            body = json.dumps(
+                {
+                    "model": configured or OLLAMA_DEFAULT_MODEL,
+                    "messages": _ollama_prompt(state, questions),
+                    "stream": False,
+                    "format": _ollama_schema(questions),
+                    "options": {"temperature": 0},
+                    "keep_alive": "10m",
+                }
+            ).encode("utf-8")
+            endpoint = "/api/chat"
+        else:
+            body = json.dumps(
+                {"model": configured or SYSTEMONE_DEFAULT_MODEL, "state": state, "questions": questions}
+            ).encode("utf-8")
+            endpoint = "/v1/systemone"
         req = urllib.request.Request(
-            base + "/v1/systemone",
+            base + endpoint,
             data=body,
             method="POST",
             headers={"Content-Type": "application/json"},
@@ -210,6 +392,10 @@ def ask(state: str, questions: dict, timeout: float = TIMEOUT_S) -> dict | None:
         return None
     if not isinstance(payload, dict):
         return None
+    if protocol == "ollama":
+        message = payload.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        return _ollama_validate(content, questions)
     answers = payload.get("answers")
     return answers if isinstance(answers, dict) else None
 
@@ -294,10 +480,12 @@ _PROMPT_CACHE_TTL_S = 10.0
 def reset_cache() -> None:
     _PROMPT_CACHE.update(key=None, at=0.0, answers=None)
     _NEG_MEM.clear()
-    try:
-        os.unlink(_neg_path())
-    except OSError:
-        pass
+    _PROTO_MEM.clear()
+    for stale in (_neg_path(), _proto_path()):
+        try:
+            os.unlink(stale)
+        except OSError:
+            pass
 
 
 def prompt_answers(prompt: str) -> dict | None:
@@ -309,7 +497,12 @@ def prompt_answers(prompt: str) -> dict | None:
     base = decision_url()
     if not base:
         return None
-    key = (prompt, base, os.environ.get("ATLAS_DECISION_MODEL", ""))
+    key = (
+        prompt,
+        base,
+        os.environ.get("ATLAS_DECISION_MODEL", ""),
+        os.environ.get("ATLAS_DECISION_PROTOCOL", ""),
+    )
     now = time.monotonic()
     if _PROMPT_CACHE["key"] == key and now - _PROMPT_CACHE["at"] < _PROMPT_CACHE_TTL_S:
         return _PROMPT_CACHE["answers"]
@@ -348,6 +541,8 @@ def route_choice(prompt: str) -> dict:
 VERIFY_TIMEOUT_S = 1.5
 VERIFY_CLAIMS_MIN = 0.8
 VERIFY_OBSERVED_MAX = 0.3
+# Second opinion on a deterministic done-claim block: clears it only at or above this observed-result noul.
+VERIFY_CLEAR_OBSERVED_MIN = 0.8
 VERIFY_QUESTIONS = {
     "asserts_success": {
         "type": "noul",

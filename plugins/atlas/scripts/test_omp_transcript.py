@@ -1069,6 +1069,7 @@ class GateConditionMatrixTest(GateEndToEndTest):
                     {
                         "id": "x",
                         "status": "verified",
+                        "verified_by": "atlas:verifier",
                         "verified_at": datetime.now(timezone.utc).isoformat(),
                     }
                 ],
@@ -1339,7 +1340,9 @@ class GateConditionMatrixTest(GateEndToEndTest):
         path = os.path.join(self.tmp, "src", "g.jsonl")
         _write_jsonl(path, entries)
         out, _ = self.convert(path)
-        self.assertEqual(self._letters(self.gate(out)), ["g"])
+        # no hook-recorded verifier dispatch: (g) blocks, and the finding's bare `verified_by` no longer
+        # satisfies (b) either (a --by string is not a record)
+        self.assertEqual(self._letters(self.gate(out)), ["b", "g"])
 
     def test_condition_j_blocks_only_when_a_worktree_dispatch_left_a_worktree_behind(
         self,

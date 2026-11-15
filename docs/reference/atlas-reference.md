@@ -262,13 +262,13 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
 `ATLAS_TRIPWIRE=off` disables the drift tiers (nudges); `ATLAS_TRIPWIRE_THRESHOLD`
 (default 4) sets the nudge tier.
 
-**Completion gate** (`hooks/completion_gate.py`, Stop). Nineteen conditions,
-(a) to (s). It engages only in a project with a `docs/` directory, stays silent
+**Completion gate** (`hooks/completion_gate.py`, Stop). Twenty conditions,
+(a) to (s) and (v). It engages only in a project with a `docs/` directory, stays silent
 while a dispatch is in flight, and prints one block message listing exactly
 which conditions are unmet:
 
 - (a) evidence saved under `.atlas/evidence/` during this run; nested dated folders (`.atlas/evidence/<date>-<slug>/...`) count
-- (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run
+- (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run and backed by a hook-written record for this session and run: an `atlas:verifier` or `atlas:completeness-critic` dispatch row with `ts` at most `verified_at` + 1 s and a role matching `verified_by`, or a team or crew member record (verifier or completeness-critic role) whose name equals `stamped_by`; or a `reproduction` or `evidence` that exactly matches (whitespace collapsed, leading `cd X &&` and env assignments stripped) a passing test-runner command of this session. A bare `--by atlas:verifier` does not credit. Residual limits: an in-process verifier stamps as `lead`, so credit depends on the dispatch row; a lead can pair a real verifier dispatch with a self-stamped row; `ATLAS_WORKER_NAME` can be set from the process environment; an unreadable DB fails open with a stderr line
 - (c) `docs/CHANGELOG.md` exists and is non-empty
 - (d) `docs/ROADMAP.md` exists and is non-empty
 - (e) root `README.md` exists and is non-empty
@@ -287,6 +287,7 @@ which conditions are unmet:
 - (q) unmerged worker branches: no `worker/*` branch holding commits that are not merged into the base, and no dirty worker worktree (`atlas_wt.py status`); merge with `atlas_wt.py merge <agent>`. Not limited to code-shipping runs; sidechains are exempt
 - (r) done claim: a final reply whose header phase is `done` while a dispatched subagent, workflow or teammate is still running
 - (s) team launch: a run that ends with two or more in-process working-role `atlas:*` dispatches and no team or crew record blocks once; skipped without tmux, an advisory with `ATLAS_TEAM_GATE=off`
+- (v) done claim contradicted by this turn's own tool results: `hooks/done_claim.py`, `ATLAS_DONE_CLAIM=auto|block|shadow|off` (see Environment variables). In `auto` only `BLOCKING_KINDS` findings block
 
 (a) to (i), (k) and (o) apply only when the run shipped non-docs code, so (c), (d), (e) and (h) (CHANGELOG, ROADMAP, README and stale ROADMAP items) are skipped on a run that shipped no code. (n), (o)
 and (p) ask for presentation repairs, so each blocks at most once per session;
@@ -319,8 +320,9 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_CONNECTOR_WATCH=off` | stale connector credential detection |
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
-| `ATLAS_DECISION=off` | model-based prompt-arm decision and scope routing (regex and keyword answers stay), and the done-claim check |
-| `ATLAS_DECISION_VERIFY=block\|off` | decision-model done-claim check at Stop (letter v). Default shadow: records `decision.verify.block-would`, never blocks; `block` blocks once per turn on a done claim with no observed result; `off` skips the call |
+| `ATLAS_DECISION=off` | model-based prompt-arm decision and scope routing (regex and keyword answers stay), and the model second opinion of the done-claim check |
+| `ATLAS_DONE_CLAIM=auto\|block\|shadow\|off` | done-claim check at Stop (letter v), primary check `hooks/done_claim.py` (deterministic, offline, reads the reply and the transcript tail). Default `auto`: blocks once per turn only when this turn's tool results contradict the claim in a `BLOCKING_KINDS` finding (dev-split precision 0.95 or better: `count_not_in_results`, `pass_after_failing_run`, `narrow_as_full_suite`, `push_unbacked`, `ci_unbacked`), naming the finding; a text-only unsupported claim and the advisory `count_no_test_run` finding are recorded as `decision.verify.block-would` and pass. `block` blocks both kinds, `shadow` records both, `off` disables. Blocking path on the 182-row corpus: real rows n=131 TP 1 FP 0 FN 2 (precision 1.000, recall 0.333); seeded n=51 TP 31 FP 0 FN 10; all n=182 TP 32 FP 0 FN 12 (precision 1.000, recall 0.727). Only 3 real unsupported claims exist, so real-world recall is measured on n=3; labels are model labels (kappa 0.767). Label metrics, test split (n=73): precision 0.889, recall 1.000 |
+| `ATLAS_DECISION_VERIFY=auto\|block\|shadow\|off` | legacy alias of `ATLAS_DONE_CLAIM`; the new knob wins when both are set. In block mode the decision model is an optional second opinion that can only clear a text-only block (observed result noul >= 0.8), recorded as `decision.verify.cleared` |
 | `ATLAS_MUX` | unset = mux mode on (default); `ATLAS_MUX=off` disables it (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
 | `ATLAS_COLONY_TRANSPORT` | `herdr` (the pane transport label), `tmux` or `claude-bg` forces that transport; unset = managed seats whenever the seat backend is up, else `claude-bg` for claude workers and tmux for omp workers |
 | `ATLAS_SEAT_BACKEND` | `rig` (OpenRig, default when Node 22/24 is present), `herdr`, or `off`; the agent runtime starts itself on first use (a spawn that finds it down launches it detached and runs on tmux that once), nothing is launched by hand (see `docs/architecture/atlas-colony.md`, "Seat backend") |
@@ -332,6 +334,9 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_LANDING=off` | the herdr web UI's redirect of a browser visit of `/` to the dashboard (`/atlas/#/herd`); the herdr app is then served at `/` |
 | `ATLAS_MAX_TEAM` | most workers one `atlas_mux.py spawn` team may start (default 6); a larger team is refused with a JSON error |
 | `ATLAS_WAIT_KILL=1` | `atlas_mux.py wait` kills the team's tmux session when its timeout expires, same as `wait --kill-on-timeout` (default off; not applied to claude-bg or herdr teams) |
+| `ATLAS_DECISION_PROTOCOL=auto\|ollama\|systemone` | wire protocol of the decision endpoint. `ollama`: stock Ollama `POST /api/chat` with a JSON-schema `format`, `stream: false`, temperature 0. `systemone`: TypeSafe `POST /v1/systemone`. Default `auto`: one `GET /api/tags` probe per endpoint (cached 10 minutes in `decision-proto.json` under `ATLAS_HOME`) picks `ollama` when it answers a model list, else `systemone` |
+| `ATLAS_DECISION_MODEL` | decision model tag. Default `llama3.2:3b` for `ollama`, `nimble` for `systemone` |
+| `ATLAS_DECISION_URL` | decision endpoint base (loopback unless `ATLAS_DECISION_ALLOW_REMOTE=1`); a pasted `/v1/systemone`, `/api/chat` or `/api/tags` suffix is stripped. Default `http://127.0.0.1:11434` |
 | `ATLAS_DECISION_ALLOW_REMOTE=1` | lets `ATLAS_DECISION_URL` name a non-loopback host; otherwise a remote URL is refused and the regex result is kept (default off) |
 | `ATLAS_WORKER_PROVIDER` | `claude` (default), `ollama` or `auto`: which provider launches crew and team workers; `auto` moves only the roles in `ATLAS_OLLAMA_AUTO_ROLES` (or with a role model), and only while Ollama is healthy |
 | `ATLAS_OLLAMA_MODEL` | default Ollama model for every worker role (a worker with no model resolves to claude with fallback `no_model`) |
@@ -465,7 +470,7 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 | `docs_drift_watch.py` | PostToolUse (Edit/Write) | Inline docs-drift warning. | `ATLAS_GATE=off` |
 | `delegation_prewarn.py` | PostToolUse (Edit/Write) | Once per session, warns that an inline code edit will trip gate condition (m). | `ATLAS_GATE=off` |
 | `connector_credential_watch.py` | PostToolUse (connector tools) | On the first 401/403 from a known connector, says to restart the server instead of sweeping endpoints. | `ATLAS_CONNECTOR_WATCH=off` |
-| `completion_gate.py` | Stop | Definition-of-done gate, conditions (a)-(s). | `ATLAS_GATE=off` (plus `ATLAS_GATE_HEADER`, `ATLAS_GATE_PHASES`, `ATLAS_GATE_COLONY`, `ATLAS_WT_GATE` and `ATLAS_TEAM_GATE` for single conditions) |
+| `completion_gate.py` | Stop | Definition-of-done gate, conditions (a)-(s) and (v). | `ATLAS_GATE=off` (plus `ATLAS_GATE_HEADER`, `ATLAS_GATE_PHASES`, `ATLAS_GATE_COLONY`, `ATLAS_WT_GATE` and `ATLAS_TEAM_GATE` for single conditions) |
 | `stop_tail.py` | Stop | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter. | n/a (each hosted hook keeps its own switch) |
 | `ingest_session.py` | SubagentStop, SessionEnd, PreCompact (and Stop via `stop_tail.py`) | Mirrors the transcript into the observability DB. | `ATLAS_INGEST=off` |
 | `worker_report_gate.py` | SubagentStop, PostToolUse (SubagentHandback) | Blocks an `atlas:*` subagent whose final message is not the fixed report container (`contracts/worker-protocol.json`); once per agent, fail-open. | n/a |
@@ -480,7 +485,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 80 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 84 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -580,7 +585,19 @@ Every `atlas:*` dispatch prompt must contain `GOAL:`, `DELIVERABLE:`, `SUCCESS
 CRITERIA:`, `OUT OF SCOPE:`, and `STOP CONDITIONS:` (exactly one GOAL); the full
 spec shape lives in
 `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md`. Parallel
-writers get `isolation: "worktree"`.
+writers get `isolation: "worktree"`. For tmux teams `ATLAS_ISOLATION=auto|shared|worktree`
+(default `auto`) decides: auto uses one worktree per edit-capable member (`implementer`,
+`test-engineer`, `docs-curator`) when 2 or more of them could write the same files
+(overlapping or undeclared `--paths` or per-member `PATHS:` lines, git repo required),
+else one shared tree; a cell value of `worktree` always wins, an env value of `shared`
+or `worktree` overrides auto. `atlas_mux.py reap` merges each worker branch into the
+lead's current branch one at a time, removes a merged worker's worktree and branch,
+and on a conflict aborts that merge, keeps the branch and worktree, and reports the
+files (`worktrees_merged`, `worktrees_conflicted`, `worktrees_skipped`). Measured by
+`scripts/atlas_isolation_bench.py`, a simulation (not `spawn-team` with real workers) with Edit
+semantics for the shared tree; per edit over 40 edits: naive overwrite 26 merged 14 lost, shared 26
+merged 14 refused for retry 0 lost, worktree 34 merged 6 conflicted (kept branch) 0 lost. Worktrees
+avoid 14 retries and leave 6 same-line conflicts on kept branches for the lead.
 
 You normally never touch the board by hand; say `atlas-orchestrate ship X
 across API and cache` and the workers use these commands automatically. The
@@ -942,7 +959,7 @@ tech-tools/
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 80 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 84 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator
