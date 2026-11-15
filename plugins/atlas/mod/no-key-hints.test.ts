@@ -75,7 +75,7 @@ describe('every Button looks clickable', () => {
     expect(texts.length, String(b.props.key)).toBeGreaterThan(0);
     for (const t of texts) expect(t.props.hover, `${b.props.key} hover`).toBeDefined();
     const first = texts[0]!.props;
-    const chip = /^(band|tab):/.test(String(b.props.key)) && !/^band:health$/.test(String(b.props.key));
+    const chip = /^(band|tab):/.test(String(b.props.key)); // round 3 (E8): the `▸ health` button is a chip too, the band's only one
     if (chip) { expect(String(first.children), String(b.props.key)).toMatch(/^ \S.* $/); expect(first.bold === true || first.inverse === true, `${b.props.key} bold`).toBe(true); }
     else expect(String(first.children), String(b.props.key)).toMatch(CHEVRON);
   };

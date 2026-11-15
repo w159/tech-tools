@@ -13,7 +13,7 @@
 //   SPARK_MIN_SCALE, sparkOf(series, width, { ascii? })   spark on the event scale max(4, the WHOLE series' max): one event is a low cell, four fill it, and every width (band 8, panel 20, card 28) is the last N cells of one series
 //   sparkRuns(series, width, ui, { newest? })   sparkOf as runs in the data-ink ramp (atlas-ui dataInk): baseline cells dim, the rest blue-grey, the newest highest cell one step brighter; `newest` (a style) replaces the last cell's run (returned last)
 //   ctxTone(pct)   `sub` (data ink via ctxInk, never green) under 50, `warn` 50 to 80, `bad` over 80
-//   gaugeRuns(pct, width, ui)   the gauge as runs, exactly `width` cells with no bracket glyphs: fill in ctxInk's colour, track in the dark track ink; an unmeasured gauge is all track
+//   gaugeRuns(pct, width, ui)   the gauge as runs, exactly `width` cells with no bracket glyphs: fill in ctxInk's colour, track as solid cells (`█`, `▁` with no colour, `.` in ascii) in the dark track ink, never `░`; an unmeasured gauge is all track
 import { dataInk, type Run, type Tone, type Ui } from './atlas-ui';
 
 export const SPARK_RAMP = '⣀⣄⣤⣦⣶⣷⣿';
@@ -92,15 +92,17 @@ export const ctxInk = (pct: number, ui: Pick<Ui, 'theme'>): Pick<Run, 'tone' | '
   return tone === 'sub' ? { tone, fg: dataInk(ui).body } : { tone };
 };
 
-export function gaugeRuns(pct: number | undefined, width: number, ui: Pick<Ui, 'theme' | 'ascii'>): Run[] {
+export function gaugeRuns(pct: number | undefined, width: number, ui: Pick<Ui, 'theme' | 'ascii' | 'color'>): Run[] {
   const ink = dataInk(ui);
   const g = gauge(pct === undefined ? 0 : pct, width, ui.ascii);
   const trackCh = ui.ascii ? '.' : TRACK;
   const at = g.indexOf(trackCh);
   const fill = at < 0 ? g : g.slice(0, at);
   const track = at < 0 ? '' : g.slice(at);
+  // Round 3 (E3): the empty part is solid dim cells (`█` in the track ink; with no colour the `▁` baseline), never the `░` hatching that read as grey dust.
+  const solid = ui.ascii ? track : [...track].map(() => (ui.color === 'none' ? '▁' : '█')).join('');
   return [
     ...(fill ? [{ t: fill, ...ctxInk(pct ?? 0, ui) } as Run] : []),
-    ...(track ? [{ t: track, tone: 'line', fg: ink.track } as Run] : []),
+    ...(solid ? [{ t: solid, tone: 'line', fg: ink.track } as Run] : []),
   ];
 }

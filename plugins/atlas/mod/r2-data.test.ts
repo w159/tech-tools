@@ -16,7 +16,7 @@ import { gatesTotal } from './vocab';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (rs: readonly Run[]): string => rs.map((x) => x.t).join('');
-const GLYPHS = /^[⣀⣄⣤⣦⣶⣷⣿]+$/;
+const GLYPHS = /^[⣀⣄⣤⣦⣶⣷⣿▁▂▃▄▅▆▇█]+$/; // braille (panel, card) and the band's eighth blocks
 /** The spark's cells of a row: the leading runs that are braille. */
 const sparkText = (rs: readonly Run[]): string => text(rs.filter((x) => GLYPHS.test(x.t)));
 
@@ -121,7 +121,9 @@ describe('D5: one wall-clock event series on a fixed scale', () => {
     expect(band.length).toBe(8);
     expect(panel.length).toBe(20);
     expect(card.length).toBe(28);
-    expect(panel.endsWith(band)).toBe(true);
+    // the band draws eighth blocks (round 3, E10), the panel and card braille: the same series, so the baseline cells (`▁` / `⣀`) fall on the same samples
+    const base = (x: string): string => [...x].map((c) => (c === '▁' || c === '⣀' ? '_' : '#')).join('');
+    expect(base(panel).endsWith(base(band))).toBe(true);
     expect(card.endsWith(panel)).toBe(true);
   });
   test('the rate is labelled `N/5m` over the last 5 minutes', () => {
@@ -154,7 +156,8 @@ describe('D6: the context gauge is semantic', () => {
   test('the track is dark and the text is `6% · 64k of 1M`', () => {
     const rs = ctxRow(6, { tokens: 64_000, window: 1_000_000 });
     expect(text(rs)).toContain('6% · 64k of 1M');
-    const track = rs.find((x) => x.t.includes('░'))!;
+    const track = rs.find((x) => x.tone === 'line')!; // round 3 (E3): solid dim cells, never `░`
+    expect(track.t).not.toContain('░');
     expect(track.fg).toBeDefined();
     expect(track.tone).not.toBe('ok');
   });
@@ -163,8 +166,9 @@ describe('D6: the context gauge is semantic', () => {
     const t = text(rs);
     expect(t).toContain('—');
     expect(t).not.toContain('none yet');
-    expect(t).not.toContain('█');
-    expect(t).toContain('░');
+    expect(t).not.toContain('░');
+    expect(ctxRow(undefined).every((x) => x.tone !== 'sub' && x.tone !== 'warn' && x.tone !== 'bad' || x.t.trim() === '' || x.t.startsWith(' '))).toBe(true); // no fill: the track alone
+    expect(ctxRow(undefined).some((x) => x.tone === 'line')).toBe(true);
   });
 });
 

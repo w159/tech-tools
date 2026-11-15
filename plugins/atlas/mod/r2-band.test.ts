@@ -40,17 +40,18 @@ const model = (kind: Kind, columns: number, over: Partial<BandModel> = {}, healt
 } as BandModel);
 /** The display column the `▸ health` chip starts at. */
 const chipCol = (row: string): number => textWidth(row.slice(0, row.indexOf('▸ health')));
-const SPARK = /[⣀-⣿]+/;
+const SPARK = /[▁-█]+/;
 
 describe('D2: the head', () => {
   for (const cols of [150, 110]) {
-    test(`(a) working at ${cols}: phase, tool and count, no clock`, () => {
+    test(`(a) working at ${cols}: phase and count in the 24-cell slot (the tool gives way to the count), no clock`, () => {
       const row = first(model('working', cols));
-      expect(row).toMatch(/[◐◓◑◒] implement · Bash · 3 tools/);
+      expect(row).toMatch(/[◐◓◑◒] implement · 3 tools/);
       expect(row).not.toMatch(/\d:\d\d/);
     });
-    test(`(a) working at ${cols}: one tool reads \`1 tool\`, no known tool omits that part`, () => {
-      expect(first(model('working', cols, {}, { hooks: hooks({ runTools: 1 }) }))).toMatch(/implement · Bash · 1 tool\b(?!s)/);
+    test(`(a) working at ${cols}: one tool reads \`1 tool\`, no known tool omits that part, a short phase keeps both`, () => {
+      expect(first(model('working', cols, {}, { hooks: hooks({ runTools: 1 }) }))).toMatch(/implement · 1 tool\b(?!s)/);
+      expect(first({ ...model('working', cols), snapshot: snap({ phase: 'test' }) })).toMatch(/test · Bash · 3 tools/);
       const none = first(model('working', cols, {}, { hooks: hooks({ runTool: undefined }) }));
       expect(none).toMatch(/implement · 3 tools/);
       expect(none).not.toMatch(/Bash/);
@@ -132,9 +133,10 @@ describe('D10: narrowing', () => {
     expect(f.some((x) => x.spark === 4)).toBe(true);
     const at = (c: number) => f[WIDTHS.indexOf(c)]!;
     expect(at(110)).toMatchObject({ ctx: true, rate: true, spark: 8 });
-    expect(at(90)).toMatchObject({ ctx: false, rate: true, spark: 8 });
-    expect(at(80)).toMatchObject({ ctx: false, rate: false, spark: 8 });
-    expect(at(70).spark).toBeLessThan(8);
+    expect(at(84)).toMatchObject({ ctx: true, rate: true, spark: 8 }); // round 3 (E10): the state slot shrinks to its minimum before ctx goes
+    expect(at(78)).toMatchObject({ ctx: false, rate: true, spark: 8 });
+    expect(at(66)).toMatchObject({ ctx: false, rate: false, spark: 8 });
+    expect(at(60).spark).toBeLessThan(8);
   });
   test('the state head never depends on width: same kind at every width', () => {
     for (const c of WIDTHS) {

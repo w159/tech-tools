@@ -10,7 +10,7 @@
 //   chartFrame(chart, { yMax, xLeft, xRight, width }) -> string[]   the y label column (`yMax` on the first row, `0` on the last, right-aligned) + the chart rows + one x-axis row
 //       (`xLeft` under the first chart cell, `xRight` ending on the last); every row is exactly `width` cells (a wider `width` pads on the right); xLeft drops when both labels do not fit
 //   blockSpark(series, width, { ascii? }) -> string   eighth blocks `▁▂▃▄▅▆▇█`, the event scale max(4, max); a zero sample is the `▁` baseline, a positive one is at least `▂`
-//   blockSparkRuns(series, width, ui) -> Run[]   the blocks in the data ink (baseline dim, the highest newest cell one step brighter)
+//   blockSparkRuns(series, width, ui, { newest? }) -> Run[]   the blocks in the data ink (baseline dim, the highest newest cell one step brighter); `newest` (a style) replaces the last cell's run (returned last)
 //   runBars(runs, width, ui?) -> Run[]   one eighth-block cell per run, newest right, height scaled to the longest run, `ok` green and failed `bad`; the left is the dim `▁` track
 //   runsSummary(runs, ascii?) -> `2 runs · avg 0:07 · 1 fail` (no fail part at 0), `no runs yet` when empty
 import { dataInk, type Run, type Ui } from './atlas-ui';
@@ -119,7 +119,7 @@ export function blockSpark(series: readonly number[], width: number, o: { ascii?
   return ramp[0]!.repeat(Math.max(0, w - vals.length)) + vals.map((v) => ramp[levelOf(v, max)]!).join('');
 }
 
-export function blockSparkRuns(series: readonly number[], width: number, ui: Pick<Ui, 'theme' | 'ascii'>): Run[] {
+export function blockSparkRuns(series: readonly number[], width: number, ui: Pick<Ui, 'theme' | 'ascii'>, o: { newest?: Partial<Run> } = {}): Run[] {
   const ink = dataInk(ui);
   const cells = [...blockSpark(series, width, { ascii: ui.ascii })];
   const vals = [...new Array<number>(Math.max(0, cells.length - series.length)).fill(0), ...series.slice(-cells.length || undefined)].map((v) => Math.max(0, num(v)));
@@ -127,6 +127,7 @@ export function blockSparkRuns(series: readonly number[], width: number, ui: Pic
   const peak = top > 0 ? vals.lastIndexOf(top) : -1;
   const out: Run[] = [];
   cells.forEach((ch, i) => {
+    if (o.newest && i === cells.length - 1) { out.push({ t: ch, tone: 'text', ...o.newest } as Run); return; } // the newest cell wears `newest` (the idle breathing hex), as its own run, last
     const style: Partial<Run> = vals[i]! <= 0 ? { tone: 'dim' } : { tone: 'sub', fg: i === peak ? ink.peak : ink.body };
     const prev = out.at(-1);
     if (prev && prev.tone === style.tone && prev.fg === style.fg) prev.t += ch;

@@ -115,7 +115,7 @@ describe('pulse rows', () => {
     expect(rows.find((r) => /^ {12}0 ⣀{28}/.test(r))).toBeDefined();
     expect(rows.find((r) => r.includes('── ACTIVITY'))).toContain('0 in 5m');
     expect(rows.join('\n')).toMatch(/▁+ +no runs yet/);
-    expect(rows.join('\n')).toMatch(/ {14}░{8,20} —/);
+    expect(rows.join('\n')).toMatch(/ {14}█{8,20} —/);
     expect(rows.join('\n')).not.toContain('none yet');
     expect(rows.join('\n')).not.toMatch(/cost|\$/);
     const none = rowsText(card(health({ hooks: undefined }), 110)); // no pulse at all and no hook seen (a card built before the pulse is wired)

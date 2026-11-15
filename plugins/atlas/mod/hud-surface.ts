@@ -866,7 +866,7 @@ function clipRuns(runs: Run[], cols: number): Run[] {
 /** The card is never wider than this, whatever the terminal (round 3, E11). */
 export const CARD_MAX_W = 96;
 /** The expanded health card the band's `▾ health` button opens: a FLAT ribbon like the TODO and SUBAGENTS ones (`── ▾ HEALTH ────`, no corners) capped at 96 cells, then the same sections the side panel draws, each under its own ribbon:
- * from 96 cells two columns (left ACTIVITY and CONTEXT, right GATES, RUNS and the session row), below that one column. Rows are padded to `cols`. The `▾ HEALTH` title is a chip carrying the band's own `band:health` press key:
+ * from 96 cells two columns (left ACTIVITY and CONTEXT, right GATES, RUNS and the SESSION row under its own ribbon), below that one column. Rows are padded to `cols`. The `▾ HEALTH` title is a chip carrying the band's own `band:health` press key:
  * the card's one collapse control (a click closes it). The history is `h.pulse` (observed this session; absent: flat baselines and `—`). */
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
   const { ui } = o;
@@ -886,19 +886,20 @@ export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): 
     activity: sect('ACTIVITY', act.figure, act.rows),
     context: sect('CONTEXT', ctx.figure, ctx.rows),
     runs: sect('RUNS', '', runs.rows),
-    gates: sect('GATES', gates.figure, [...gates.rows, ...(session ? [session] : [])]),
+    gates: sect('GATES', gates.figure, gates.rows),
+    session: session ? sect('SESSION', '', [session]) : [],
   };
   const body: Run[][] = [];
   if (two) {
     const left = [...sections.activity, ...sections.context];
-    const right = [...sections.gates, ...sections.runs];
+    const right = [...sections.gates, ...sections.runs, ...sections.session];
     const n = Math.max(left.length, right.length);
     for (let i = 0; i < n; i++) {
       const l = left[i] ?? [];
       const rr = right[i] ?? [];
       body.push([...l, t(' '.repeat(Math.max(0, colW - runsCells(l)) + (cols - 2 * colW))), ...rr]);
     }
-  } else body.push(...sections.activity, ...sections.context, ...sections.runs, ...sections.gates);
+  } else body.push(...sections.activity, ...sections.context, ...sections.runs, ...sections.gates, ...sections.session);
   // the ribbon: `── ▾ HEALTH ─────────────` (ASCII `-- v HEALTH -------------`): the title is the card's one control, a chip (key `band:health`) that collapses it (round 2, D8)
   const rule = ui.ascii ? '-' : RULE;
   const title = chipRun(`${chevron(true, ui)} HEALTH`, ui, 'band:health');

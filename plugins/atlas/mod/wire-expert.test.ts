@@ -132,7 +132,7 @@ describe('wire-expert: the pulse', () => {
     await b.advance(600); // the poll rebuilds the snapshot with the new usage
     const band = textOf(await b.band());
     expect(band).toContain('ctx 6%');
-    expect(band).toMatch(/[⠀-⣿]{8}/); // the events spark
+    expect(band).toMatch(/[▁-█]{8}/); // the events spark (eighth blocks, round 3 E10)
     await press(button(await b.band(), 'band:health'));
     const card = textOf(await b.band());
     expect(card).toContain('64k of 1M');

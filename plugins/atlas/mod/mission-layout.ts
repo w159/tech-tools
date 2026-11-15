@@ -400,16 +400,19 @@ function segmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: 
   out.push(edge(fill, planBg), ...onFill([r(' '), ...plan, r(' ')], planBg), edge(planBg, workBg), ...onFill([r(' '), ...work, r(' ')], workBg));
   return out; // the last fill runs on to the last cell (withHandle pads it), right up to the host's `[-]`
 }
-/** Round 2 (D9): the state slot's inner width: the longest head (`◓ implement · Bash · 12 tools`) fits, a shorter one is padded to it. */
-const STATE_W = 30;
+/** Round 3 (E10): the state slot's inner width is the longest head it can show at that width, capped at STATE_MAX (`◓ implement · Bash · 12 tools` clips its tool to fit); a shorter head is padded to it,
+ * and a narrow band shrinks the slot down to STATE_MIN (`○ idle 12s`, `◐ implement`) before it drops ctx, the rate text or the spark. */
+const STATE_MAX = 24;
+const STATE_MIN = 11;
 const padRuns = (runs: Run[], w: number): Run[] => { const used = runsWidth(runs); return used < w ? [...runs, r(' '.repeat(w - used))] : runs; };
 /** `12s`, `1m 05s`, `1h 05m`: the seconds since the last hook event (idle head). */
 export const sinceText = (secs: number): string => { const n = Math.max(0, Math.floor(secs)); return n < 60 ? `${n}s` : n < 3600 ? `${Math.floor(n / 60)}m ${String(n % 60).padStart(2, '0')}s` : `${Math.floor(n / 3600)}h ${String(Math.floor((n % 3600) / 60)).padStart(2, '0')}m`; };
-/** The health band's state head, longest wording first (the first fits STATE_W; the rest are the shorter wordings the narrowest forms fall back to).
+/** The health band's state head, longest wording first (the first fits the slot width `w`; the rest are the shorter wordings the narrowest forms fall back to).
  * working `◓ research · Bash · 3 tools` (no clock: the host prints the elapsed time itself); done `● done 0:05` (frozen); idle `○ idle 12s` (seconds since the last hook event, ticking). */
-function healthHeads(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, lead: (o: LeadOpts) => Run[], h: Health): Run[][] {
+function healthHeads(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>, lead: (o: LeadOpts) => Run[], h: Health, w: number = STATE_MAX): Run[][] {
   const mark = (glyph: string, tone: Tone): Run => ({ t: glyph, tone: ui.ascii ? 'text' : tone });
-  if (st.kind === 'done') return [lead({ ...LEAD_FULL, clock: true }).map((x) => (/^ · \d+:\d\d/.test(x.t) ? { ...x, t: x.t.replace(' · ', ' ') } : x))]; // `● done 0:05`, never `done · 0:05`
+  // `● done 0:05`, never `done · 0:05`: green glyph and green text on the band fill (round 3 E10; the fade tint is dropped, the resting tone is the green)
+  if (st.kind === 'done') return [lead({ ...LEAD_FULL, clock: true }).map((x): Run => { const { fg: _fg, ...rest } = /^ · \d+:\d\d/.test(x.t) ? { ...x, t: x.t.replace(' · ', ' ') } : x; return { ...rest, tone: ui.ascii ? rest.tone : 'ok' }; })];
   if (st.kind === 'idle') {
     const ago = h.hooks?.lastEventSecs;
     const base = [mark(phaseGlyph('idle', 0, ui.ascii), 'muted'), r(' '), r('idle', 'muted')];
@@ -419,27 +422,23 @@ function healthHeads(m: MissionModel, ui: Ui, st: ReturnType<typeof runStateOf>,
   const n = h.hooks?.runTools ?? 0;
   const tool = (h.hooks?.runTool ?? '').replace(/^mcp__.*__/, '');
   const head = (t: string, count: boolean): Run[] => [mark(phaseGlyph('working', bandFrame(m), ui.ascii), 'accent'), r(' '), r(word, 'text', true), ...(t ? [r(` · ${t}`, 'sub')] : []), ...(count && n > 0 ? [r(` · ${n} ${n === 1 ? 'tool' : 'tools'}`, 'sub')] : [])];
-  const fit = (count: boolean): Run[] => {
-    const full = head(tool, count);
-    if (!tool || runsWidth(full) <= STATE_W) return full;
-    const room = STATE_W - runsWidth(head('', count)) - 3; // ` · ` before the tool
-    return room >= 4 ? head(clipEll(tool, room, ellOf(ui)), count) : head('', count);
+  const fit = (): Run[] => {
+    const full = head(tool, true);
+    if (!tool || runsWidth(full) <= w) return full;
+    const room = w - runsWidth(head('', true)) - 3; // ` · ` before the tool: the count outranks the tool, which is clipped to what is left of the slot (or dropped)
+    return room >= 4 ? head(clipEll(tool, room, ellOf(ui)), true) : head('', true);
   };
-  return [fit(true), ...(tool ? [head(tool, false)] : []), head('', false)];
+  return [fit(), ...(tool ? [head(tool, false)] : []), head('', false)];
 }
-/** The one band: `state | seg | seg | ... | chip` on the alternating plan and worker fills, the state on its own colour (idle the slab, working the accent, done the green); the last seg is the clickable chip. `keep`: runs that wear their own tone (the breathing dot and cell). */
-function healthSegmented(ui: Ui, st: ReturnType<typeof runStateOf>, cap: Run[], lead: Run[], segs: Run[][], keep?: ReadonlySet<Run>): Run[] {
-  const idle = st.kind === 'idle';
-  const token = stateFillToken(st);
-  const fill = idle ? SEG_IDLE[ui.theme] : PALETTES[ui.theme][token];
-  const fills = [SEG_PLAN[ui.theme], SEG_WORK[ui.theme]];
-  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, idle ? 'text' : inkFor(token, ui.theme, ui.color), keep)];
-  let prev = fill;
-  segs.forEach((seg, i) => {
-    const next = fills[(segs.length - 1 - i) % 2 === 0 ? 1 : 0]!; // counted from the chip: it is always the strip's fill, the segments before it alternate
-    out.push(edge(prev, next), ...onFill([r(' '), ...seg, r(' ')], next, undefined, keep));
-    prev = next;
-  });
+/** The seam between two static segments: the dim line colour on the left half of `▌`, the band fill on the right. */
+const lineSeam = (ui: Ui): Run => edge(PALETTES[ui.theme].line, SEG_WORK[ui.theme]);
+/** The one band (round 3 E8): `state ▌ gates ▌ spark ▌ ctx ..` as static text on the band's own fill (SEG_WORK) divided by dim `▌` seams, no raised tile; then the seam, the slack (the ticker and padding) on the same fill and the
+ * `▸ health` chip, the one control, on its raised tile at the right edge. `keep`: runs that wear their own tone (the breathing dot and cell). */
+function healthSegmented(ui: Ui, cap: Run[], lead: Run[], segs: Run[][], tail: Run[], chip: Run[], keep?: ReadonlySet<Run>): Run[] {
+  const fill = SEG_WORK[ui.theme];
+  const out: Run[] = [...cap, ...onFill([r(' '), ...lead, r(' ')], fill, undefined, keep)];
+  for (const sg of segs) out.push(lineSeam(ui), ...onFill([r(' '), ...sg, r(' ')], fill, undefined, keep));
+  if (chip.length) out.push(lineSeam(ui), ...onFill(tail, fill, undefined, keep), ...chip); // the seam before the chip, then the slack on the fill, then the chip on its tile
   return out;
 }
 /** The workers segment: the groups joined by a middle dot, empty groups left out. */
@@ -549,40 +548,49 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const idleKind = st.kind === 'idle';
     const ramp = idleKind && m.now !== undefined ? idleRamp(m.now, ui, hostEnv(), m.still) : undefined;
     const h = m.health;
-    const heads = healthHeads(m, ui, st, lead, h);
+    const headsAt = (w: number): Run[][] => healthHeads(m, ui, st, lead, h, w);
     const keep = new Set<Run>();
-    const build = (head: Run[], o: { sparkW: number; rate: boolean; ctx: boolean; events: boolean; gates: boolean; work: boolean; plan: boolean }, padHead: boolean): Form => {
-      const bs = bandSegments(h, ui, { ramp: ramp?.hex, sparkW: o.sparkW, rate: o.rate, ctx: o.ctx });
+    type Step = { tight?: boolean; sparkW: number; rate: boolean; ctx: boolean; events: boolean; gates: boolean; work: boolean; plan: boolean };
+    /** `slot`: the state slot takes the room the other segments leave (STATE_MIN to STATE_MAX, the ticker only once it is full); otherwise `head` is drawn as it is (the last, narrowest forms). */
+    const build = (head: Run[] | undefined, o: Step, slot: boolean): Form => {
+      const bs = bandSegments(h, ui, { ramp: ramp?.hex, sparkW: o.sparkW, rate: o.rate, ctx: o.ctx, tight: o.tight === true });
       const chip: BandSeg | undefined = bs.find((x) => x.id === 'health');
       const body = bs.filter((x) => x.id !== 'health' && (o.events || x.id !== 'events') && (o.gates || x.id !== 'gates'));
-      const hd = padHead ? padRuns(head, STATE_W) : head;
-      const head_ = ramp?.hex && idleKind && hd[0] ? (() => { const dot = { ...hd[0], fg: ramp.hex }; keep.add(dot); return [dot, ...hd.slice(1)]; })() : hd;
       for (const sg of body) for (const x of sg.live ?? []) keep.add(x);
       const lists = [...(o.plan && m.total ? [planFig(false)] : []), ...(o.work && !workBody(false).every((x) => x.t === '-') ? [workBody(true)] : []), ...body.map((x) => x.runs)];
       const chipRuns = chip?.runs ?? [];
-      const assemble = (gap: number): Run[] => {
+      const headOf = (w: number): Run[] => {
+        const cands = slot ? headsAt(w) : [head!];
+        const hd0 = slot ? padRuns(cands.find((x) => runsWidth(x) <= w) ?? cands[cands.length - 1]!, w) : cands[0]!;
+        return ramp?.hex && idleKind && hd0[0] ? (() => { const dot = { ...hd0[0], fg: ramp.hex }; keep.add(dot); return [dot, ...hd0.slice(1)]; })() : hd0;
+      };
+      const assemble = (w: number, gap: number): Run[] => {
         const tick = gap > 0 ? tickerRuns(h, gap) : [];
         const pad = (gap > 0 ? [r(' '.repeat(gap - runsWidth(tick) - (tick.length ? 2 : 0)))] : []);
-        const tail: Run[][] = chipRuns.length ? [[...(tick.length ? [r('  '), ...tick] : []), ...pad, ...chipRuns]] : [];
-        const all = [...lists, ...tail];
-        return seg ? healthSegmented(ui, st, cap, head_, all, keep) : [...cap, r(' '), ...head_, ...all.flatMap((x) => [glue, ...x])];
+        const hd = headOf(w);
+        const tailRuns: Run[] = [...(tick.length ? [r('  '), ...tick] : []), ...pad];
+        if (seg) return healthSegmented(ui, cap, hd, lists, tailRuns, chipRuns, keep);
+        const tail: Run[][] = chipRuns.length ? [[...tailRuns, ...chipRuns]] : [];
+        return [...cap, r(' '), ...hd, ...[...lists, ...tail].flatMap((x) => [glue, ...x])];
       };
-      const base = runsWidth(assemble(0));
-      return { min: 0, runs: assemble(Math.max(0, m.cols - base)) };
+      const w0 = slot ? STATE_MIN : 0;
+      const base = runsWidth(assemble(w0, 0));
+      const w = slot ? Math.min(STATE_MAX, STATE_MIN + Math.max(0, m.cols - base)) : 0;
+      return { min: 0, runs: assemble(w, Math.max(0, m.cols - runsWidth(assemble(w, 0)))) };
     };
     const on = { work: true, plan: true };
-    const steps = [
+    const steps: Step[] = [
       { sparkW: BAND_SPARK_W, rate: true, ctx: true, events: true, gates: true, ...on },
       { sparkW: BAND_SPARK_W, rate: true, ctx: false, events: true, gates: true, ...on },
       { sparkW: BAND_SPARK_W, rate: false, ctx: false, events: true, gates: true, ...on },
-      { sparkW: 4, rate: false, ctx: false, events: true, gates: true, ...on },
-      { sparkW: 4, rate: false, ctx: false, events: false, gates: true, ...on },
+      { tight: true, sparkW: 4, rate: false, ctx: false, events: true, gates: true, ...on },
+      { tight: true, sparkW: 4, rate: false, ctx: false, events: false, gates: true, ...on },
       { sparkW: 4, rate: false, ctx: false, events: false, gates: false, ...on },
       { sparkW: 4, rate: false, ctx: false, events: false, gates: false, work: false, plan: true },
       { sparkW: 4, rate: false, ctx: false, events: false, gates: false, work: false, plan: false },
     ];
-    const forms: Form[] = steps.map((o) => build(heads[0]!, o, true));
-    for (const hd of heads) forms.push(build(hd, steps[7]!, false)); // the head alone gives way last: shorter wordings of the same state
+    const forms: Form[] = steps.map((o) => build(undefined, o, true));
+    for (const hd of headsAt(STATE_MIN)) forms.push(build(hd, steps[7]!, false)); // the head alone gives way last: shorter wordings of the same state
     const tiny = lead({ clock: st.kind === 'done', reason: 'none', fix: true }).filter((x) => x.t !== ' ' && !new Set(['working', 'done', 'idle']).has(x.t.trim()));
     forms.push(build(tiny, steps[7]!, false));
     return [...forms, { runs: [...cap], min: 0 }];

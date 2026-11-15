@@ -311,9 +311,9 @@ describe('D4 leftovers: no gate ratios', () => {
     expect(t).toMatch(/1 denied|1 deny/);
   });
   test('the panel context gauge is the card gauge (one gaugeRuns): the same fill and track cells', () => {
-    const card = healthCardRows(health({ ctxPct: 62 }), { cols: 100, ui }).map((r) => r.map((x) => x.t).join('')).find((l) => /[█▉▊▋▌▍▎▏]+░+ 62%/.test(l))!;
-    const panel = text(world(54, 40, 'working', { health: health({ ctxPct: 62 }) })).find((l) => /[█▉▊▋▌▍▎▏]+░+ 62%/.test(l))!;
-    const cells = (s: string): string => /[█▉▊▋▌▍▎▏]+░+/.exec(s)![0].replace(/░+/g, '').slice(0, 3);
+    const card = healthCardRows(health({ ctxPct: 62 }), { cols: 100, ui }).map((r) => r.map((x) => x.t).join('')).find((l) => /[█▉▊▋▌▍▎▏]{8} 62%/.test(l))!;
+    const panel = text(world(54, 40, 'working', { health: health({ ctxPct: 62 }) })).find((l) => /[█▉▊▋▌▍▎▏]{8} 62%/.test(l))!;
+    const cells = (s: string): string => /[█▉▊▋▌▍▎▏]{8}/.exec(s)![0].slice(0, 3);
     expect(cells(panel)).toBe(cells(card));
     expect(panelLines(world(54, 40, 'working', { health: health({ ctxPct: 62 }) })).flatMap((l) => l.runs).some((x) => x.tone === 'warn' && /^█+/.test(x.t))).toBe(true);
   });

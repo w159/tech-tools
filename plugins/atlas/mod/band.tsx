@@ -342,8 +342,11 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   return panel(els, rows, cols, ui);
 }
 
-/** The band's first-row runs (text and tone) for a model: what the tree paints, for goldens and tone checks. */
-export const bandRuns = (b: BandModel): Run[] => bandLines(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() }))[0]?.runs ?? [];
+/** The band's first-row runs (text and tone) for a model: what the tree paints, for goldens and tone checks. `on`: with the handlers wired (the `▸ health` chip present). */
+export function bandRuns(b: BandModel, on = false): Run[] {
+  const m = missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() });
+  return bandLines(on && m.health ? { ...m, health: { ...m.health, button: true } } : m)[0]?.runs ?? []; // `on`: the handlers are wired, so the health chip is drawn
+}
 
 /** The band's run state word (`working`, `done`, `idle`, `blocked`) for a model: the one rule the HUD's idle dimming and the side panel's phase read. */
 export const bandKindOf = (b: BandModel) => runStateOf(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() })).kind;

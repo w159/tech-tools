@@ -39,7 +39,7 @@ const BRAILLE = /[⠀-⣿]/;
 
 describe('E1: ACTIVITY is the focal chart, with axes', () => {
   test('the section opens on a ribbon with the events of the last 5 minutes, then braille rows, the axis and the stats line', () => {
-    const t = text(world(54, 40));
+    const t = text(world(54, 40, 'working', { health: health({ upSecs: 900 }) })); // a session older than 7 minutes: the full window
     const at = t.findIndex((l) => /^ ── ACTIVITY ─+ 14 in 5m ──$/.test(l));
     expect(at).toBeGreaterThan(0);
     const chart = t.slice(at + 1).filter((l, i, a) => i < a.findIndex((x) => /-7m/.test(x)));
@@ -55,7 +55,7 @@ describe('E1: ACTIVITY is the focal chart, with axes', () => {
   });
   test('the chart is 3 rows on a short pane and grows to 6 as the pane gets taller (24, 40, 50 rows)', () => {
     const heights = [24, 40, 50].map((rows) => {
-      const t = text(world(54, rows));
+      const t = text(world(54, rows, 'working', { health: health({ upSecs: 900 }) }));
       const at = t.findIndex((l) => l.includes('ACTIVITY'));
       return t.findIndex((l, i) => i > at && /-7m/.test(l)) - at - 1;
     });

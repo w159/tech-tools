@@ -729,8 +729,12 @@ function dashboard(m: PanelModel, h: Health, ws: readonly PanelWorker[]): PanelL
     const body: PanelLine[] = !checks.length ? [line(fitRuns([r(' '.repeat(ROW_AT)), r('no gates reported yet', 'dim')], m.cols))]
       : c.gates === 'full' ? lines(g.rows)
         : [line(fitRuns([r(' '.repeat(ROW_AT - 1)), chipRun(`${chevron(m.expanded === GATES_KEY, m.ui)} gates`, m.ui, GATES_KEY), r(' '), ...fitFields(healthRows(h, m.ui, { footer: true }).find((x) => x.id === 'gates')?.fields ?? [], m.cols - 1 - VALUE_AT)], m.cols), { kind: 'toggle', key: GATES_KEY }), ...(m.expanded === GATES_KEY ? lines(g.rows) : [])];
+    return [secHead('GATES', checks.length ? g.figure : '', m), ...body];
+  };
+  /** The session row under its own SESSION ribbon (not hanging under the last gate). */
+  const sessionGroup = (c: Cfg): PanelLine[][] => {
     const session = c.session ? sessionRow(h, m.ui, { cols: m.cols, messages: m.notes.length }) : null;
-    return [secHead('GATES', checks.length ? g.figure : '', m), ...body, ...(session ? [line(fitRuns(session, m.cols))] : [])];
+    return session ? [[secHead('SESSION', '', m), line(fitRuns(session, m.cols))]] : [];
   };
   const sections = (c: Cfg, chartRows: number): PanelLine[][] => {
     const a = activitySection(h, m.ui, { cols: m.cols, chartRows });
@@ -742,6 +746,7 @@ function dashboard(m: PanelModel, h: Health, ws: readonly PanelWorker[]): PanelL
       [secHead('CONTEXT', x.figure, m), ...lines(x.rows)],
       ...(c.runs ? [[secHead('RUNS', '', m), ...lines(runsSection(h, m.ui, { cols: m.cols }).rows)]] : []),
       gatesGroup(c),
+      ...sessionGroup(c),
     ];
   };
   const cfgs: Cfg[] = [
@@ -754,7 +759,8 @@ function dashboard(m: PanelModel, h: Health, ws: readonly PanelWorker[]): PanelL
     { gates: 'chip', lead: false, ctxChart: false, session: false, agents: false, runs: false },
   ];
   const need = (c: Cfg): number => sections(c, 3).flat().length + (c.lead ? 1 : 0) + (footer ? 1 : 0);
-  const cfg = room <= 0 ? cfgs[0]! : cfgs.find((c) => need(c) <= room) ?? cfgs[cfgs.length - 1]!;
+  const keep = events.length ? 2 : 0; // RECENT's ribbon and one event: the SESSION ribbon's row must not squeeze them out of a short pane
+  const cfg = room <= 0 ? cfgs[0]! : cfgs.find((c) => need(c) + keep <= room) ?? cfgs[cfgs.length - 1]!;
   let free = room <= 0 ? RECENT_SLOTS + 2 : room - need(cfg);
   const recentMin = 1 + Math.min(3, Math.max(1, events.length));
   const grow = Math.max(0, Math.min(3, free - recentMin));

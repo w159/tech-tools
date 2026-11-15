@@ -239,13 +239,20 @@ function chartRowsOf(series: readonly number[], o: { width: number; rows: number
 /** The tool calls the run has made: the run's own count, else the session's `tool.call` events. */
 const toolsOf = (h: Pick<Health, 'hooks'>): number => h.hooks?.runTools ?? h.hooks?.byLabel.filter((e) => e.label.startsWith('tool.call')).reduce((n, e) => n + e.n, 0) ?? 0;
 
-/** ACTIVITY: the hook events of the last 7 minutes as a braille area chart `chartRows` tall (y max top left, `0` at the baseline, `-7m` and `now` under it), then the stats line. */
+/** The ACTIVITY window in buckets: the session's age rounded up to a bucket, clamped to 2 to 7 minutes (an unknown age keeps all 7), so a young session's events fill the chart. */
+export function activitySpan(upSecs: number | undefined): { buckets: number; label: string } {
+  const secs = upSecs === undefined || !Number.isFinite(upSecs) ? BUCKETS * BUCKET_MS / 1000 : Math.min(BUCKETS * BUCKET_MS / 1000, Math.max(120, Math.ceil(Math.max(0, upSecs) / (BUCKET_MS / 1000)) * (BUCKET_MS / 1000)));
+  return { buckets: Math.round((secs * 1000) / BUCKET_MS), label: `-${Math.ceil(secs / 60)}m` };
+}
+
+/** ACTIVITY: the hook events of the session's last 2 to 7 minutes (activitySpan) as a braille area chart `chartRows` tall (y max top left, `0` at the baseline, the span and `now` under it), then the stats line. */
 export function activitySection(h: Health, ui: Ui, o: { cols: number; chartRows: number }): SectionRows {
   const ev = h.pulse?.events ?? [];
   const full = [...new Array<number>(Math.max(0, BUCKETS - ev.length)).fill(0), ...ev.slice(-BUCKETS)];
   const w = Math.max(4, o.cols - 1 - VALUE_AT);
-  const labelled = chartRowsOf(full, { width: w, rows: Math.max(1, o.chartRows), yAxis: true }, ui).rows;
-  const left = `-${Math.round((BUCKETS * BUCKET_MS) / 60_000)}m`;
+  const span = activitySpan(h.upSecs);
+  const labelled = chartRowsOf(full.slice(-span.buckets), { width: w, rows: Math.max(1, o.chartRows), yAxis: true }, ui).rows;
+  const left = span.label;
   const right = 'now';
   const useLeft = left.length + 1 + right.length <= w;
   const axis: Run[] = [dim(spaces(VALUE_AT) + (useLeft ? left : '') + spaces(w - (useLeft ? left.length : 0) - right.length) + right)];
@@ -256,14 +263,14 @@ export function activitySection(h: Health, ui: Ui, o: { cols: number; chartRows:
   return { figure: `${fiveMin} in 5m`, rows: [...labelled, axis, stats] };
 }
 
-/** CONTEXT: a 2-row chart of the context percent over the session's measures (first left, now right), the gauge and `6% · 64k of 1M · +12k/turn`. Data ink under 50, amber to 80, red above. */
+/** CONTEXT: with 2 or more measures a 2-row chart of the context percent over them (first left, now right), under 2 only the gauge row (`—` before the first measure); then the gauge and `6% · 64k of 1M · +12k/turn`. Data ink under 50, amber to 80, red above. */
 export function contextSection(h: Health, ui: Ui, o: { cols: number; chartRows?: number }): SectionRows {
   const ctx = h.pulse?.ctx ?? [];
   const series = ctxSeries({ ctx });
   const pct = h.ctxPct ?? ctx.at(-1)?.pct;
   const w = Math.max(4, o.cols - 1 - VALUE_AT);
   const ink = ctxInk(pct ?? 0, ui);
-  const rows: Run[][] = o.chartRows === 0 ? [] : chartRowsOf(series.length ? series : pct !== undefined ? [pct] : [], { width: w, rows: o.chartRows ?? 2, max: 100, ink }, ui).rows;
+  const rows: Run[][] = o.chartRows === 0 || series.length < 2 ? [] : chartRowsOf(series, { width: w, rows: o.chartRows ?? 2, max: 100, ink }, ui).rows; // under 2 measures there is no trend to draw: the gauge row alone
   const window = h.pulse?.window ?? h.window;
   const text = ctx.length ? (pulseCtxText({ ctx, ...(window !== undefined ? { window } : {}) }) ?? '') : pct === undefined ? '' : h.tokens !== undefined ? `${Math.round(pct)}% · ${tokenText(h.tokens)}${window !== undefined ? ` of ${tokenText(window)}` : ' tokens'}` : `${Math.round(pct)}%`;
   const room = o.cols - 1 - VALUE_AT;

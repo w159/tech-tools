@@ -41,7 +41,7 @@ const first = (b: BandModel): string => rows(b)[0]!;
 
 /** The segments the band row draws, by id, in the order they appear. */
 const idsIn = (row: string): string[] => [
-  ['gates', /gates ok|\d+ denied|not fired/], ['events', /[⣀-⣿]{4,}/], ['ctx', /ctx \d+%/], ['health', /▸ health/],
+  ['gates', /gates ok|\d+ denied|not fired/], ['events', /[▁-█]{4,}/], ['ctx', /ctx \d+%/], ['health', /▸ health/],
 ].map(([id, re]) => ({ id: id as string, at: row.search(re as RegExp) })).filter((x) => x.at >= 0).sort((a, b) => a.at - b.at).map((x) => x.id);
 
 describe('(a) segments are a priority-ordered prefix; state and the chip always stay', () => {
@@ -66,9 +66,9 @@ describe('(a) segments are a priority-ordered prefix; state and the chip always 
   });
   test('the wide idle band reads like the mock', () => {
     const row = first(model('idle', 150, false)).trimEnd();
-    expect(row).toMatch(/^◖ ◆ ATLAS ◗ ○ idle 2s +▌ ● gates ok +▌ [⣀-⣿]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
-    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement · 3 tools +▌ ● gates ok +▌ [⣀-⣿]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
-    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 0:05 +▌ ● gates ok +▌ [⣀-⣿]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
+    expect(row).toMatch(/^◖ ◆ ATLAS ◗ ○ idle 2s +▌ ● gates ok +▌ [▁-█]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
+    expect(first(model('working', 150, false)).trimEnd()).toMatch(/[◐◓◑◒] implement · 3 tools +▌ ● gates ok +▌ [▁-█]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
+    expect(first(model('done', 150, false)).trimEnd()).toMatch(/● done 0:05 +▌ ● gates ok +▌ [▁-█]{8} 12\/5m +▌ ctx 6% +▌ +▸ health$/);
   });
 });
 
@@ -146,7 +146,7 @@ describe('(d) idle liveness: beatDue and the breathing ramp', () => {
       for (let tick = 0; tick < 30; tick += 2) {
         const texts = all(bandTree(els, model(kind, 150, false, { tick }), handlers) as unknown as Node).filter((n) => n.kind === 'Text');
         const d = texts.find((n) => /^[○]/.test(textOf(n).trim()) || /○ idle/.test(textOf(n)));
-        const c = texts.filter((n) => /[⣀-⣿]$/.test(textOf(n).trimEnd()) && /⣀|⣤|⣿|⣦|⣶|⣷|⣄/.test(textOf(n)));
+        const c = texts.filter((n) => /[▁-█]$/.test(textOf(n).trimEnd()) && /[▁-█]/.test(textOf(n)));
         dot.add(d?.props.color);
         cell.add(c.at(-1)?.props.color);
         rest.add(texts.filter((n) => /gates|ctx|up /.test(textOf(n))).map((n) => `${n.props.color}`).join('|'));
@@ -203,7 +203,7 @@ describe('(g) no pulse, no spark', () => {
     const { pulse: _p, ...noPulse } = HEALTH;
     for (const kind of ['idle', 'working', 'done'] as Kind[]) {
       const row = first({ ...model(kind, 150, false), health: noPulse });
-      expect(row).not.toMatch(/[⣀-⣿]/);
+      expect(row).not.toMatch(/[⣀-⣿▁-█]/);
       expect(row).toContain('gates ok');
       expect(row).toContain('ctx 6%');
     }

@@ -81,8 +81,8 @@ describe('the health button', () => {
     return x;
   };
   test('closed it reads ▸ health, open ▾ health: the toggle flips the chevron', () => {
-    expect(textOf(btn(model(150)))).toBe('▸ health');
-    expect(textOf(btn(model(150, { health: { ...HEALTH, open: true } })))).toBe('▾ health');
+    expect(textOf(btn(model(150)))).toBe(' ▸ health '); // round 3 (E8): a chip, one cell of padding each side
+    expect(textOf(btn(model(150, { health: { ...HEALTH, open: true } })))).toBe(' ▾ health ');
   });
   test('it is distinguishable: accent text, a chevron, a hover style', () => {
     const b = btn(model(150));
@@ -110,7 +110,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
   for (const cols of [150, 110]) {
     test(`at ${cols} a running band keeps its state, plan and workers and adds the health segments after them (slice S2: one band)`, () => {
       const row = working(cols, true);
-      expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ implement                    ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ')).toBe(true); // round 2 D2: the working head is the phase (no clock; the host prints elapsed), padded to its fixed slot
+      expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ implement              ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ')).toBe(true); // round 2 D2: the working head is the phase (no clock; the host prints elapsed), padded to its fixed 24-cell slot (round 3, E10)
       expect(row).toContain('▸ health');
       expect(working(cols, false)).not.toContain('health');
     });
@@ -119,7 +119,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
     expect(working(150, true).trimEnd()).toBe(WORKING_150);
   });
 });
-const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement                    ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ● gates ok   ▌ ctx 12%  ▌' + ' '.repeat(38) + '▸ health';
+const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement              ▌ todo 1/4 ■1 ▌ ◐ 1 running · ■1 ▌ ● gates ok   ▌ ctx 12%  ▌' + ' '.repeat(44) + '▸ health';
 
 describe('the expanded health card (HUD)', () => {
   const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };
