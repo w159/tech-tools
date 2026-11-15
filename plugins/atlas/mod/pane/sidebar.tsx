@@ -4,7 +4,7 @@
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, markOf, runHex, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
-import { chipStyle, hoverStyle } from '../clickable';
+import { activeChipStyle, chipStyle, hoverStyle } from '../clickable';
 import { centred, chipText, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
@@ -32,7 +32,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
       // The chip (mod/clickable.ts): accent bold text with the hover style; the lit tab is filled (inverse) so it reads as pressed in.
       const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
       const tile = chipStyle(ui);
-      const label = els.Text({ color: accent, bold: true, ...(on_ ? { backgroundColor: bg, inverse: true } : { backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}) }), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) });
+      const label = els.Text(on_ ? { ...activeChipStyle(ui), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) } : { color: accent, bold: true, backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}), hover: hoverStyle(ui, keyOf(it)), children: chipText(it.label, f) });
       return els.Button({ key: keyOf(it), plain: true, children: [label], label: it.label, onPress: pressOf(it) });
     });
     const between = (i: number): RenderElement[] => (i && f.gap ? [gap(f.gap)] : []);
@@ -166,7 +166,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
   const ui = model.look ?? uiFromEnv(); // the host's one read (register.ts); the process environment only where a fixture sets none
   const cols = Math.max(10, model.columns - 1);
-  const pm = panelModelOf(model, ui, cols);
+  const pm = { ...panelModelOf(model, ui, cols), ...(on.close ? { close: true } : {}) }; // the close chip only where the close handler is wired
   noteRunSecs(model.run?.secs); // the run card prints the band's clock (transcript/placed.ts)
   noteStopVerdict(!!gateTally(model.gates as never).stop?.blocked); // the transcript's done chips read it: a refusal supersedes the ones drawn before it
   const blank = (): RenderElement => lineEl(els, { runs: [{ t: ' ', tone: 'text' }] }, model, on, ui);

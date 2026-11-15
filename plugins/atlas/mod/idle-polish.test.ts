@@ -15,6 +15,7 @@ import * as ih from './idle-health';
 import type { Health } from './idle-health';
 import { hookStats, noteHook, resetHookLog } from './hook-log';
 import { sidebarTree, type SidebarHandlers } from './pane/sidebar';
+import { activeChipStyle } from './clickable';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -95,24 +96,21 @@ describe('3: a health row opens only when it has real detail', () => {
     expect(row.press).toBeUndefined();
     expect(lineText(row)).not.toMatch(/[▸▾]/);
   });
-  test('events with hooks seen opens to the count by event kind, and the version line is gone', () => {
-    const t = body(world(57, { expanded: 'health:events' })).join('\n');
-    expect(t).toMatch(/tool call 3 {3}context measured 2/);
-    expect(t).not.toContain('hooks module loaded, mod drawing');
-    expect(t.match(/atlas 17\.21\.1/g)?.length).toBe(1); // round 2: the version is said once, in the pinned footer (the session row's detail no longer repeats it)
+  test('slice S3: only the gates row opens on the panel; events, context, runs and session are plain rows on the grid (the card carries their detail)', () => {
+    const ls = bodyLines(world(57));
+    for (const id of ['events', 'context', 'runs', 'session']) {
+      const row = ls.find((l) => new RegExp(`^ {4}${id}\\b`).test(lineText(l)))!;
+      expect([id, row.press]).toEqual([id, undefined]);
+      expect(lineText(row)).not.toMatch(/[▸▾]/);
+    }
+    expect(ls.find((l) => /^ {2}▸ gates/.test(lineText(l)))!.press).toEqual({ kind: 'toggle', key: 'health:gates' });
+    expect(body(world(57)).join('\n').match(/atlas 17\.21\.1/g)?.length).toBe(1); // the version is said once, in the pinned footer
   });
   test('the session row says the uptime and the branch (slice S4); the version is said once, in the pinned footer', () => {
     expect(body(world(80)).find((l) => l.includes('session'))).toContain('up 0:16');
     const short = body(world(57, { rows: 24 })).join('\n'); // a short pane keeps the figures in the session row (a tall one draws the branch as a row of its own)
     expect(short).toMatch(/session\s+up 0:16 · master/);
     expect(short.match(/atlas 17\.21\.1/g)?.length).toBe(1);
-  });
-  test('session opens to the context against its window; last run to each agent`s end state', () => {
-    expect(body(world(57, { rows: 24, expanded: 'health:context' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
-    const last = body(world(57, { expanded: 'health:runs' })).join('\n');
-    expect(last).toMatch(/alpha done\b/);
-    expect(last).toMatch(/beta failed\b/);
-    expect(last).not.toMatch(/0:42|0:07/); // slice S4: no worker clock under the runs row (a run's time prints once, on the band)
   });
   test('a runs row with no agents to list is not a toggle', () => {
     const none: Health = { ...h, last: undefined };
@@ -125,14 +123,15 @@ describe('4: the idle panel ends finished, with live content from real events', 
     const t = body(world(57));
     const i = t.findIndex((l) => l.includes('recent'));
     expect(i).toBeGreaterThan(0);
-    expect(t.slice(i + 1, i + 3).map((l) => l.trim())).toEqual(['12s ago  tool call Bash', '40s ago  context measured']);
+    expect(t.slice(i + 1, i + 3).map((l) => l.trim())).toEqual(['12s  tool call Bash', '40s  context measured']); // slice S3: a fixed three-cell age, no `ago`
     const tail = t.filter((l) => l.trim() !== '');
     expect(tail.at(-2)).toMatch(/^\s+─{20,}$/); // round 2: the rule, then the pinned footer
     expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1 · hooks loaded$/);
   });
-  test('with no events the panel still ends in the rule and prints no recent heading', () => {
+  test('with no events the panel still ends in the rule; the recent slots stay (a heading never moves)', () => {
     const t = body(world(57, { health: { ...h, hooks: undefined } }));
-    expect(t.join('\n')).not.toContain('recent');
+    expect(t.some((l) => l.trim() === 'recent')).toBe(true);
+    expect(t.join('\n')).not.toMatch(/\bago\b/);
     const tail = t.filter((l) => l.trim() !== '');
     expect(tail.at(-2)).toMatch(/^\s+─{20,}$/);
     expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1$/); // no hooks stats: the footer holds only the version
@@ -213,9 +212,10 @@ describe('7: the idle band carries one more live figure, the age of the last eve
 });
 
 describe('8: a narrow pane names the stages, it does not print bare dots', () => {
-  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /research 1\/5/]] as const) {
-    test(`the idle phase chain at ${cols} cells reads ${cols === 54 ? 'whole names (round 2: no dot marks, so they fit)' : 'the current stage and n/5'}`, () => {
-      const t = body(world(cols, { phases: ['research', 'theory', 'test', 'implement', 'verify'], phase: 'research' })).find((l) => l.includes('research'))!;
+  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /res .*thy .*tst .*imp .*ver/]] as const) {
+    test(`the idle stepper at ${cols} cells reads ${cols === 54 ? 'whole names' : 'the three-letter stages (slice S3)'}`, () => {
+      const rows = body(world(cols, { phases: ['research', 'theory', 'test', 'implement', 'verify'], phase: 'research' }));
+      const t = rows[rows.findIndex((l) => l.trim() === 'phase') + 1]!;
       expect(t).toMatch(names);
       expect(t).not.toContain('· · ·');
       expect(textWidth(t)).toBeLessThanOrEqual(cols);
@@ -230,9 +230,11 @@ describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither fo
     const chips = all(pane('team')).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('tab:'));
     expect(chips.length).toBe(6);
     const texts = chips.map((c) => all(c).find((x) => x.kind === 'Text')!.props);
-    const lit = texts.filter((t) => t.inverse === true);
+    const litStyle = activeChipStyle(uiFromEnv()); // slice S3: the lit chip is the one activeChipStyle
+    const isLit = (t: Record<string, any>): boolean => t.inverse === litStyle.inverse && t.backgroundColor === litStyle.backgroundColor;
+    const lit = texts.filter(isLit);
     expect(lit.length).toBe(1);
-    const tiles = texts.filter((t) => t.inverse !== true).map((t) => t.backgroundColor);
+    const tiles = texts.filter((t) => !isLit(t)).map((t) => t.backgroundColor);
     expect(new Set(tiles).size).toBe(1);
     expect(tiles[0]).not.toBe('#181825');
   });

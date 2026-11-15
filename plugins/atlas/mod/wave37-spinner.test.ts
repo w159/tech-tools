@@ -16,7 +16,8 @@ const bandModel = (now: number): MissionModel => ({ cols: 150, maxRows: 1, tick:
 const bandGlyph = (now: number): string => runsText(bandLines(bandModel(now))[0]!.runs).match(SPIN_MARK)?.[0] ?? '';
 const phaseGlyph = (now: number): string => {
   const m: PanelModel = panelWorld('route', 150, ui, { now, tick: 0, run: { kind: 'working', secs: 42 } });
-  const row = bodyLines(m).map(lineText).find((l) => /^\s*phase\b/.test(l)) ?? '';
+  const t = bodyLines(m).map(lineText);
+  const row = t[t.findIndex((l) => l.trim() === 'phase') + 1] ?? ''; // slice S3: the stepper row
   return row.match(SPIN_MARK)?.[0] ?? '';
 };
 

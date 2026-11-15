@@ -84,27 +84,29 @@ describe('step 3: every non-zero count keeps its glyph and figure, and the clock
   });
 });
 
-describe('step 4: the panel phase row is the band\'s last frame', () => {
+describe('step 4: the panel stepper is the band\'s last frame', () => {
   const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
   const NOW = 2_000_000;
   const rowOf = (now: number, over: Partial<PanelModel> = {}): string => {
     const m = panelWorld('route', 150, ui, { rows: 40, now, run: { kind: 'working', secs: 24 }, phase: 'research', ...over });
-    return panelLines(m).map(lineText).find((l) => /^\s*phase\b/.test(l))!.replace(/\s+/g, ' ').trim();
+    const t = panelLines(m).map(lineText);
+    return t[t.findIndex((l) => l.trim() === 'phase') + 1]!.replace(/\s+/g, ' ').trim();
   };
-  test('the panel phase row turns the frame its run carries: same glyph, word and clock as the band for that frame, on every beat', () => {
+  test('the panel stepper turns the frame its run carries: the same glyph as the band for that frame, on every beat', () => {
     for (const frame of [0, 3, 5, 9]) {
-      expect(rowOf(NOW, { run: { kind: 'working', secs: 25, frame } }), String(frame)).toMatch(new RegExp(`^phase ${leadSpinnerGlyph(frame)} working$`)) // slice S4: no clock on the panel's phase row;
+      expect(rowOf(NOW, { run: { kind: 'working', secs: 25, frame } }), String(frame)).toMatch(new RegExp(`^● plan ${leadSpinnerGlyph(frame)} research ○ build ○ verify$`)); // slice S3: the word and the clock are the band's alone
     }
   });
   test('a frame noted by the band is not read: the run alone decides', () => {
     noteBandFrame(5, 99, NOW, 'idle');
-    expect(rowOf(NOW)).toMatch(/working$/);
+    expect(rowOf(NOW)).toMatch(/[◐◓◑◒] research/);
     forgetBandFrame();
   });
   test('a blocked strip puts the mark on the last phase the run entered, not on an earlier header phase', () => {
     noteBandFrame(2, 41, NOW, 'blocked');
     const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'blocked', secs: 41 }, phase: 'research', entered: ['plan', 'research', 'build'] });
-    const chain = panelLines(m).map(lineText).find((l) => /research ›/.test(l))!;
+    const t = panelLines(m).map(lineText);
+    const chain = t[t.findIndex((l) => l.trim() === 'phase') + 1]!;
     expect(chain).toMatch(/▲ build/);
     expect(chain).not.toMatch(/▲ research/);
     forgetBandFrame();

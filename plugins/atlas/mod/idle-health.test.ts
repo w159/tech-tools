@@ -174,9 +174,10 @@ describe('the side panel status view, idle', () => {
     const t = rows(world({ expanded: 'health:gates' })).map(lineText);
     const i = t.findIndex((l) => l.includes('▾') && l.includes('gates'));
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/● completion 1\/1/);
+    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/● completion\s+1\/1/);
+    // slice S3: only gates opens on the panel; context, events and runs are plain rows
     const s = rows(world({ rows: 24, expanded: 'health:context' })).map(lineText).join('\n');
-    expect(s).toContain('42,000 tokens in the window');
+    expect(s).toMatch(/context +▕/);
   });
   test('with a worker listed the status view is unchanged (no health rows)', () => {
     const t = rows(world({ workers: panelWorld('route', 57, ui).workers })).map(lineText).join('\n');

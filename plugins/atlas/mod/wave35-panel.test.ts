@@ -167,17 +167,18 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
 describe('item 3: the status view (critique 34: route about 80% empty, channel about 95%, gates 3/4 against the band\'s 2/4)', () => {
   const rows = (cols = 57, run: Run = RUN, s: never = snap(), gates: unknown[] = GATES): string[] => { forgetPhases(); return withGates(s, 'route', cols, 40, run, gates); };
 
-  test('the ribbon names the view, and the phase line carries the band\'s word and clock', () => {
+  const stepperOf = (t: string[]): string => t[t.findIndex((l) => l.trim() === 'phase') + 1]!;
+  test('the ribbon names the view, and the phase stepper carries the band\'s glyph (slice S3: no word, no clock)', () => {
     const t = rows();
     expect(t[0]).toMatch(/SIDEPANEL/);
     expect(t[0]).not.toMatch(/status\s*$/); // round 2: the lit chip says `status`; the ribbon does not repeat it
-    expect(t.find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+◐ working$/);
-    expect(rows(57, BLOCKED).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+▲ blocked$/);
-    expect(rows(57, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+● done$/);
+    expect(stepperOf(t)).toMatch(/◐ implement/);
+    expect(stepperOf(rows(57, BLOCKED))).toMatch(/▲/);
+    expect(stepperOf(rows(57, { kind: 'done', secs: 52, startMs: NOW - 52000 }))).not.toMatch(/[◐◓◑◒]/); // done: nothing turns
   });
   test('phases are the true ones: only the entered ones are green, the lit one wears the clock', () => {
-    const chain = rows(70).find((l) => /research ›/.test(l))!;
-    expect(chain).toMatch(/research › theory › test › [◐◓◑◒] implement › verify/);
+    const chain = stepperOf(rows(70));
+    expect(chain).toMatch(/research [●○] theory [●○] test [◐◓◑◒] implement ○ verify/);
   });
   test('one 12-cell braille line per agent, with its name and its time', () => {
     const t = rows();
@@ -240,9 +241,9 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
       }
     }
   });
-  test('at 110 the phase chain keeps the lit phase and the clock (the dots stand for the rest)', () => {
-    const t = rows(38); const chain = t.slice(t.findIndex((l) => /^\s*phase\b/.test(l)) + 1).find((l) => /implement/.test(l))!;
-    expect(chain).toMatch(/implement 4\/5/); // a narrow pane: the current stage and its place; the clock is the phase row's
+  test('at 110 the stepper names the five stages in three letters, the lit one on the spinner', () => {
+    const chain = stepperOf(rows(38));
+    expect(chain).toMatch(/res .*thy .*tst .*[◐◓◑◒] imp .*ver/); // a narrow pane: three-letter stages, one glyph each
     expect(cells(chain)).toBeLessThanOrEqual(37);
   });
   test('the keys of the merged tabs keep working: channel and gates still open their own views', () => {

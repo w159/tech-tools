@@ -10,6 +10,7 @@ import { fillRows, headerRows, lineText, panelLines } from './panel-layout';
 import * as panelLayout from './panel-layout';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import { panelWorld } from '../contracts/panel-world';
+import { activeChipStyle } from './clickable';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -88,7 +89,8 @@ describe('every Button looks clickable', () => {
   test('the lit tab is a filled chip, the others are not', () => {
     const strip = buttons(pane(150, 'gates', true)).filter((b) => String(b.props.key).startsWith('tab:'));
     expect(strip.length).toBe(6);
-    const lit = strip.filter((b) => all(b).some((x) => x.kind === 'Text' && x.props.inverse === true));
+    const litStyle = activeChipStyle(uiFromEnv()); // slice S3: the lit chip is the one activeChipStyle (the accent fill; inverse with no colour)
+    const lit = strip.filter((b) => all(b).some((x) => x.kind === 'Text' && x.props.inverse === litStyle.inverse && x.props.backgroundColor === litStyle.backgroundColor));
     expect(lit.map((b) => b.props.key)).toEqual(['tab:gates']);
   });
 });

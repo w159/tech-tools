@@ -111,31 +111,35 @@ describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: 
   });
 });
 
-describe('wave 31 item 2: the panel phase row is the band (critique 29: `phase ● done` under a working band)', () => {
-  const phase = (run: Run): string => body('route', 65, 45, run).find((l) => l.trimStart().startsWith('phase'))!;
-  test('working: a spinner and `working`', () => {
-    expect(phase({ kind: 'working' })).toMatch(/phase\s+[◐◓◑◒]\s+working/);
+describe('wave 31 item 2 (slice S3: the stepper): the panel phase is the band\'s glyph on its stage (critique 29: `phase ● done` under a working band)', () => {
+  const stepper = (run: Run): string => { const t = body('route', 65, 45, run); return t[t.findIndex((l) => l.trim() === 'phase') + 1]!; };
+  const glyphs = (run: Run): string[] => stepper(run).match(/[●○◐◓◑◒▲■]/g) ?? [];
+  test('working: one spinner on the current stage', () => {
+    expect(glyphs({ kind: 'working' }).filter((g) => '◐◓◑◒'.includes(g))).toHaveLength(1);
   });
-  test('done: `● done`', () => {
-    expect(phase({ kind: 'done' })).toMatch(/phase\s+●\s+done/);
+  test('done: no stage is turning and no word is printed', () => {
+    expect(glyphs({ kind: 'done' }).every((g) => g === '●' || g === '○')).toBe(true);
+    expect(stepper({ kind: 'done' })).not.toMatch(/done|working|idle|blocked/);
   });
-  test('idle: `○ idle`', () => {
-    expect(phase({ kind: 'idle' })).toMatch(/phase\s+○\s+idle/);
+  test('idle: nothing turns (a finished plan at rest reads its stages done, as the band does)', () => {
+    expect(glyphs({ kind: 'idle' }).every((g) => g === '○' || g === '●')).toBe(true);
   });
-  test('blocked: `▲ blocked`', () => {
-    expect(phase({ kind: 'blocked' })).toMatch(/phase\s+▲\s+blocked/);
+  test('blocked: `▲` on the stage the run is in', () => {
+    expect(glyphs({ kind: 'blocked' })).toContain('▲');
   });
   test('the replayed sequence working -> done -> idle -> blocked reads the band each time', () => {
-    const words = (['working', 'done', 'idle', 'blocked'] as const).map((kind) => /\b(working|done|idle|blocked)\b/.exec(phase({ kind }))![1]);
-    expect(words).toEqual(['working', 'done', 'idle', 'blocked']);
+    const marks = (['working', 'done', 'idle', 'blocked'] as const).map((kind) => (glyphs({ kind }).find((g) => !'●○'.includes(g)) ?? 'none'));
+    expect(marks[0]).toMatch(/[◐◓◑◒]/);
+    expect(marks.slice(1)).toEqual(['none', 'none', '▲']);
   });
-  test('the word wears the band tones: 141, 114, 245, 203', () => {
-    const tone = (kind: Run['kind']): string | undefined => {
+  test('the glyph wears the band tones: 141 spinner, 114 done, dim pending, 203 blocked', () => {
+    const tone = (kind: Run['kind'], glyph: RegExp): string | undefined => {
       forgetRefusals();
-      const line = bodyLines(panelModelOf(model('route', 66, 45, { kind }), ui, 65)).find((l) => lineText(l).trimStart().startsWith('phase'))!;
-      return line.runs.find((x) => /^(working|done|idle|blocked)$/.test(x.t))?.tone;
+      const lines = bodyLines(panelModelOf(model('route', 66, 45, { kind }), ui, 65));
+      const row = lines[lines.findIndex((l) => lineText(l).trim() === 'phase') + 1]!;
+      return row.runs.find((x) => glyph.test(x.t))?.tone;
     };
-    expect([tone('working'), tone('done'), tone('idle'), tone('blocked')]).toEqual(['accent', 'ok', 'muted', 'bad']);
+    expect([tone('working', /[◐◓◑◒]/), tone('done', /●/), tone('idle', /○/), tone('blocked', /▲/)]).toEqual(['accent', 'ok', 'dim', 'block']);
   });
 });
 

@@ -147,7 +147,7 @@ describe('step 3: one clock (critique 35: board 0:31, team axis 0:34, footers 0:
   test('the board total, the team axis end and the phase clock all print the band\'s seconds', () => {
     expect(withBand('board').at(-1)).toMatch(/total 0:39\b/);
     expect(withBand('team').find((l) => /^\s+0:00\s+0:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:39\s*$/); // 28d53608: 0:34
-    expect(withBand('route').find((l) => /^\s*phase\b/.test(l))).toMatch(/working$/); // slice S4: the phase row carries no clock
+    expect(withBand('route').join('\n')).not.toMatch(/phase.*\d:\d\d/); // slice S3: the stepper carries no clock; the run's seconds are the band's alone
   });
   test('the `▸ run` footer prints the band\'s clock and no partial `+N done`', () => {
     const s = { ...(snap('done') as object), counts: { done: 5, total: 5, byPhase: {} }, squad: [], activity: {} } as never;

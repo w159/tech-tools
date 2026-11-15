@@ -34,25 +34,13 @@ describe('1: a tall idle pane is not a slab of empty rows', () => {
     expect(t.join('\n')).not.toMatch(/▕/);
   });
   test('the context gauge is a real row: `context ▕██░░░░░░▏ 6%`; none without a context figure', () => {
-    expect(body(world(54)).join('\n')).toMatch(/context ▕█+░*▏ 6%/);
+    expect(body(world(54)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 63k of 1M/); // slice S3: the gauge, the tokens and the window on one context row
     expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).not.toMatch(/▕/);
   });
-  test('`waiting for first prompt` replaces the empty zero state while no turn has run', () => {
+  test('slice S3: no `waiting for first prompt` line and no zero state; the stepper at rest is five `○` (the slots never move)', () => {
     const t = body(world(54)).join('\n');
-    expect(t).toContain('waiting for first prompt');
+    expect(t).not.toContain('waiting for first prompt');
     expect(t).not.toContain('no events yet');
-  });
-});
-
-describe('2: the waiting line pulses with the spinner frame', () => {
-  test('the line differs across frames 0..3 and is one row', () => {
-    const rows = [0, 1, 2, 3].map((frame) => body(world(54, { run: { kind: 'idle', secs: 0, startMs: NOW, frame } })).filter((l) => l.includes('waiting for first prompt')));
-    for (const r of rows) expect(r.length).toBe(1);
-    expect(new Set(rows.map((r) => r[0])).size).toBeGreaterThan(1);
-  });
-  test('once a run has ended the waiting line is gone', () => {
-    const last = { secs: 2, done: 0, total: 0, agents: 0, failed: 0 };
-    expect(body(world(54, { health: { ...h, last } })).join('\n')).not.toContain('waiting for first prompt');
   });
 });
 
@@ -96,11 +84,11 @@ describe('5: the recent list reads in words, collapsed, at most 3 rows', () => {
   });
 });
 
-describe('6: a narrow pane names the current stage and n/5', () => {
-  test('at 37 columns the phase chain is `research 1/5`, never the short names of the rest', () => {
+describe('6: a narrow pane abbreviates the stages (slice S3: one glyph per stage, the lit one turning)', () => {
+  test('at 37 columns the stepper is `◐ res ○ thy ○ tst ○ imp ○ ver`', () => {
     const t = body(world(37, { run: { kind: 'working', secs: 3, startMs: NOW, frame: 0 }, phase: 'research', phases: ['research', 'theory', 'test', 'implement', 'verify'], entered: ['research'] })).join('\n');
-    expect(t).toMatch(/research 1\/5/);
-    expect(t).not.toMatch(/thy|impl|ver\b/);
+    expect(t).toMatch(/◐ res ○ thy ○ tst ○ imp ○ ver/);
+    expect(t).not.toMatch(/research|implement/);
   });
 });
 

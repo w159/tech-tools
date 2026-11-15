@@ -88,11 +88,11 @@ describe('2b: the band drops its tab chips while the side panel shows its own st
   }
 });
 
-describe('3: the idle panel is one finished card: rule and footer pinned to the last body row', () => {
-  test('body fills the pane; the last two rows are the rule and `atlas version · hooks loaded`', () => {
+describe('3: the idle panel is one finished card: the rule and the footer close the fixed slots', () => {
+  test('the last two rows are the rule and `atlas version · hooks loaded` (slice S3: under the reserved slots, not at the pane foot; the pane\'s own surface fills the rest)', () => {
     const m = world(57);
     const t = body(m);
-    expect(t.length).toBe(m.rows - headerRows(m).length - 1);
+    expect(t.length).toBeLessThan(m.rows - headerRows(m).length - 1);
     expect(t.at(-1)).toMatch(/^\s+atlas 17\.21\.1 · hooks loaded$/);
     expect(t.at(-2)).toMatch(/^\s+─{20,}$/);
   });
@@ -147,22 +147,23 @@ describe('5: each fact once across the band, the card and the panel', () => {
 
 describe('6: the team tab with only the lead draws no dead sparkline', () => {
   test('lead row has no braille run and the line under it is `no workers yet`', () => {
-    const t = body(world(57, { lead: { name: 'lead', state: 'waiting', secs: 0 } as never }, 'team')).join('\n');
-    expect(t).not.toMatch(/[⣀⣄⣤⣶⣿▁]/u);
-    expect(t).toContain('lead');
-    expect(t).toContain('no workers yet');
+    const rows = body(world(57, { lead: { name: 'lead', state: 'waiting', secs: 0 } as never }, 'team'));
+    const top = rows.slice(0, rows.findIndex((l) => l.includes('no workers yet')) + 1).join('\n'); // slice S3: the pulse summary under the line has its own sparks
+    expect(top).not.toMatch(/[⣀⣄⣤⣶⣿▁]/u);
+    expect(top).toContain('lead');
+    expect(top).toContain('no workers yet');
   });
 });
 
-describe('7: the idle phase chain is dim, bold only while a phase is live', () => {
-  const chain = (m: PanelModel) => bodyLines(m).find((l) => lineText(l).includes('research') && lineText(l).includes(' › '))!;
-  test('idle: no bold run in the chain and the lit phase is not the body tone', () => {
-    const l = chain(world(57));
+describe('7: the idle stepper is dim, bold only while a stage is live', () => {
+  const stepper = (m: PanelModel) => { const ls = bodyLines(m); return ls[ls.findIndex((l) => lineText(l).trim() === 'phase') + 1]!; };
+  test('idle: no bold run in the stepper and the first stage is not the body tone', () => {
+    const l = stepper(world(57));
     expect(l.runs.some((x) => x.bold)).toBe(false);
     expect(l.runs.find((x) => x.t.includes('research'))!.tone).not.toBe('text');
   });
-  test('working: the lit phase is bold body text', () => {
-    const l = chain(world(57, { run: working, phase: 'research' }));
+  test('working: the lit stage is bold body text', () => {
+    const l = stepper(world(57, { run: working, phase: 'research' }));
     expect(l.runs.find((x) => x.t.includes('research'))).toMatchObject({ tone: 'text', bold: true });
   });
 });
@@ -199,12 +200,14 @@ describe('9: one accent, for what answers a click', () => {
   });
 });
 
-describe('10: one separator and one abbreviation set for the phase chain at every width', () => {
+describe('10: one abbreviation set for the stepper at every width', () => {
   for (const cols of [37, 44, 57, 80, 110]) {
-    test(`at ${cols}: no \`› ·\`, and names joined by \`›\` when named`, () => {
-      const t = body(world(cols)).find((l) => l.includes('research'))!;
-      expect(t).not.toMatch(/› ·/);
-      if (/theory|thy/.test(t)) expect(t).toContain(' › ');
+    test(`at ${cols}: one glyph per stage, names whole where they fit, else the three-letter set`, () => {
+      const rows = body(world(cols));
+      const t = rows[rows.findIndex((l) => l.trim() === 'phase') + 1]!;
+      expect(t).not.toMatch(/[›·]/);
+      expect(t.match(/[○●◐◓◑◒]/g)!.length).toBe(world(cols).phases.length);
+      expect(/research/.test(t) ? /\bres\b/.test(t) : /\bres\b/.test(t)).toBe(!/research/.test(t)); // whole names, or the three-letter set, never a mix
     });
   }
 });
@@ -221,10 +224,9 @@ describe('12: `context 6%` on the band; the tokens and the window only in the se
     expect(r).toContain('context 18%');
     expect(r).not.toMatch(/tok/);
   });
-  test('the context row says the gauge and `63k of 1M`; opening it adds the exact tokens and the window', () => {
+  test('the context row says the gauge and `63k of 1M`', () => {
     expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).toMatch(/▕.*▏ 63k of 1M/); // a short pane: the context row (slice S4: framed gauge and `63k of 1M`), its detail the exact tokens
     expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).not.toMatch(/tok/);
-    expect(body(world(57, { rows: 24, expanded: 'health:context' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
-    expect(body(world(57)).join('\n')).toMatch(/context ▕█+░*▏ 6%\n\s+63k of 1M tokens/); // a tall pane: the gauge row and the tokens under it
+    expect(body(world(57)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 63k of 1M/); // slice S3: one context row on the grid, the gauge and `63k of 1M`; the exact tokens are the card's
   });
 });

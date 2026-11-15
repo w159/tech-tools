@@ -197,12 +197,13 @@ describe('step 3: the channel tab does not contradict itself', () => {
   });
 });
 
-describe('step 2: the side panel phase row prints the band\'s glyph, word and clock', () => {
+describe('step 2: the side panel stepper wears the band\'s glyph (slice S3: no word, no clock)', () => {
   const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
   const NOW = 2_000_000;
   const rowOf = (over: Partial<PanelModel>): string => {
     const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'working', secs: 37 }, phase: 'research', ...over });
-    return panelLines(m).map(lineText).find((l) => /^\s*phase\b/.test(l))!;
+    const t = panelLines(m).map(lineText);
+    return t[t.findIndex((l) => l.trim() === 'phase') + 1]!; // the stepper: one glyph per stage
   };
   test('the band note carries the state word', () => {
     noteBandFrame(2, 36, NOW, 'blocked');
@@ -210,22 +211,23 @@ describe('step 2: the side panel phase row prints the band\'s glyph, word and cl
     forgetBandFrame();
   });
   test('stoprun-150-3 f0074: the run built from the band\'s inputs says blocked 0:36, and the panel prints exactly that (truth 41: no copy of a note)', () => {
-    expect(rowOf({ run: { kind: 'blocked', secs: 36 } }).replace(/\s+/g, ' ').trim()).toBe('phase ▲ blocked') // slice S4: the clock is the band's alone;
+    expect(rowOf({ run: { kind: 'blocked', secs: 36 } }).replace(/\s+/g, ' ').trim()).toBe('● plan ▲ research ○ build ○ verify'); // the band's `▲`, on the stage the run is in; the word and the clock are the band's alone
   });
   test('live-150-2 f0106: a run that reads idle 0:39 prints idle 0:39, never working', () => {
     const row = rowOf({ run: { kind: 'idle', secs: 39 } });
-    expect(row.replace(/\s+/g, ' ').trim()).toBe('phase ○ idle') // slice S4: the clock is the band's alone;
+    expect(row.replace(/\s+/g, ' ').trim()).toBe('○ plan ○ research ○ build ○ verify'); // idle: nothing turns, nothing is green
   });
   test('a band note is never read: the panel prints the run it was built with', () => {
     noteBandFrame(2, 36, NOW, 'blocked');
-    expect(rowOf({})).toContain('working');
+    expect(rowOf({})).toMatch(/[◐◓◑◒] research/); // working: the spinner on the stage
     forgetBandFrame();
   });
   test('the phase strip does not sit lit on `research` after the plan finished and the band rests', () => {
     const todos = [1, 2, 3].map((i) => ({ id: `t${i}`, label: `T${i}`, state: 'done' as const }));
     noteBandFrame(2, 39, NOW, 'idle');
     const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'idle', secs: 39 }, phase: 'research', todos });
-    const chain = panelLines(m).map(lineText).find((l) => /research ›/.test(l))!;
+    const t = panelLines(m).map(lineText);
+    const chain = t[t.findIndex((l) => l.trim() === 'phase') + 1]!;
     expect(chain).toMatch(/● research/);
     expect(chain).not.toMatch(/○ research/);
     forgetBandFrame();

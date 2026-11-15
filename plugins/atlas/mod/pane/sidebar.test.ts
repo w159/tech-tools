@@ -3,9 +3,10 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../live_fixture';
-import { PALETTES } from '../atlas-ui';
+import { PALETTES, uiFromEnv } from '../atlas-ui';
 import { stripRows } from './sidebar';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
+import { activeChipStyle } from '../clickable';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -69,9 +70,10 @@ describe('sidebar shell', () => {
   test('the lit tab is a filled (inverse) chip, the others accent chips with a hover style; pressing a tab sets that view', () => {
     const t = tree({}, 'channel');
     const head = (v: string) => kids(tab(t, v))[0]!.props;
-    expect(head('channel').inverse).toBe(true);
+    const litStyle = activeChipStyle(uiFromEnv()); // slice S3: the lit chip is the one activeChipStyle (accent fill, bold; inverse with no colour)
+    expect(head('channel')).toMatchObject(litStyle);
     expect(head('team').inverse).toBeFalsy();
-    expect(head('team').color).toBe(head('channel').color); // one accent: the fill alone says which tab is lit
+    expect(head('team').backgroundColor).not.toBe(litStyle.backgroundColor ?? '\0'); // the others sit on the raised tile
     expect(head('team').hover).toBeDefined();
     expect(head('team').children).toBe(' team ');
     tab(t, 'route').props.onPress();

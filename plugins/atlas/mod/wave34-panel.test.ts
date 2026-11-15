@@ -79,11 +79,11 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
     forgetPhases();
     const t = render('route', 65, 45).join('\n');
     expect(t).not.toMatch(/T\d read|plan {2}▰|\+0:\d\d$/m); // 4d8d8eb1: `plan ▰▰▰▱ 3/5` and one row per item, which disagreed with the HUD
-    expect(t).toMatch(/phase /); // wave 35: the status view's phase line and its chain
+    expect(t).toMatch(/^ {2}phase$/m); // wave 35: the status view's phase heading and, slice S3, its stepper
   });
   test('a phase is green only once the run was in it; an unentered phase is its 240 name, no mark (round 2)', () => {
     const t = walk(['research', 'implement', 'verify'], { kind: 'working', secs: 40, startMs: NOW - 40000 }).join('\n');
-    expect(t).toMatch(/● research › theory › test › ● implement › [◐◓◑◒] verify/); // 4d8d8eb1 greened every phase before the lit one
+    expect(t).toMatch(/● research ○ theory ○ test ● implement [◐◓◑◒] verify/); // 4d8d8eb1 greened every phase before the lit one
     const names = texts(tree('route', 65, 45)).filter((x) => x.t === 'theory' || x.t === 'test');
     expect(names.length).toBeGreaterThan(0);
     for (const d of names) expect(d.color).toBe(DIM);
@@ -93,7 +93,7 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
     render('route', 65, 45, snap('research'));
     render('route', 65, 45, snap('implement'));
     const done = render('route', 65, 45, snap('done'), { kind: 'done', secs: 52 }).join('\n');
-    expect(done).toMatch(/● research › theory › test › ● implement › verify/);
+    expect(done).toMatch(/● research ○ theory ○ test ● implement ○ verify/);
     expect(done).not.toMatch(SPIN_MARK);
   });
   test('a blocked run keeps the phases it entered green and lights none (critique 33: research stood `◇` after it ran)', () => {

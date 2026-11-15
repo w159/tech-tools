@@ -3,7 +3,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { surfaceHex, uiFromEnv, type Run, type Ui, runHex } from '../atlas-ui';
 import { hoverStyle } from '../clickable';
-import { bodyLines, fillRows, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
+import { bodyLines, CLOSE_KEY, fillRows, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
@@ -20,6 +20,10 @@ const rowEl = (els: ClientElements, runs: readonly Run[], ui: Ui): RenderElement
 /** A layout row as an element: a Button when the row is pressable. */
 export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: SidebarHandlers, ui: Ui): RenderElement {
   const press = l.press;
+  if (on.close && l.runs.some((x) => x.press === CLOSE_KEY)) { // the pill row: the close chip is the pane's dismiss Button, the rest of the row is plain
+    const close = on.close;
+    return els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: panelBg(ui), children: l.runs.map((x) => (x.press === CLOSE_KEY ? els.Button({ key: CLOSE_KEY, plain: true, role: 'dismiss', label: 'close', onPress: () => close(), children: [runEl(els, x, ui, CLOSE_KEY)] }) : runEl(els, x, ui))) });
+  }
   if (!press) return rowEl(els, l.runs, ui);
   const onPress = (): void => {
     if (press.kind === 'worker' && press.name) on.selectRecipient(press.name);
