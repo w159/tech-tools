@@ -168,33 +168,18 @@ describe('E1: the ACTIVITY window follows the session age (2m to 7m)', () => {
   });
 });
 
-describe('E7: the session row has its own SESSION ribbon', () => {
+describe('E7: the card has no SESSION row (frame spec section 6: the uptime and the version are the pane\'s NOW line and footer)', () => {
   const health = (): Health => ({
     gates: { total: 2, green: 2, checks: [{ id: 'completion', ok: true, lines: 1, pass: 1 }, { id: 'tripwire', ok: true, lines: 2, pass: 2 }] },
     ctxPct: 6, tokens: 64_000, window: 1_000_000, upSecs: 900, branch: 'master', version: '17.24.0',
     hooks: { total: 40, byLabel: [{ label: 'tool.call', n: 3 }], recent: [{ label: 'tool.call Bash', ageSecs: 5 }], lastEventSecs: 3 },
     pulse: { events: [0, 1, 2, 1], ctx: [], runs: [] },
   }) as Health;
-  const world = (cols: number, rows: number, tab: PanelTab = 'route'): PanelModel =>
-    panelWorld(tab, cols, ui, { rows, phases: ['research', 'theory'], phase: 'theory', entered: ['research'], todos: [], workers: [], gates: [], notes: [], run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: health() } as never);
-  const sessionAfterRibbon = (t: string[]): void => {
-    const at = t.findIndex((l) => /^ ── SESSION ─/.test(l));
-    expect(at).toBeGreaterThan(0);
-    expect(t[at + 1]).toMatch(/^ {4}session {3,}up /);
-    const gates = t.findIndex((l) => /── GATES ─/.test(l));
-    expect(gates).toBeGreaterThan(-1);
-    expect(at).toBeGreaterThan(gates);
-    expect(t[at - 1]).not.toMatch(/pass|deny/); // not hanging under the last gate row
-  };
-  test('the card (one column)', () => {
-    const t = healthCardRows(health(), { cols: 60, ui }).map((r) => r.map((x) => x.t).join('').trimEnd());
-    const at = t.findIndex((l) => /── SESSION ─/.test(l));
-    expect(at).toBeGreaterThan(0);
-    expect(t[at + 1]).toMatch(/session {3,}up /);
-  });
-  test('the card (two columns) carries the SESSION ribbon in the right column', () => {
-    const t = healthCardRows(health(), { cols: 150, ui }).map((r) => r.map((x) => x.t).join('').trimEnd());
-    expect(t.some((l) => /── SESSION ─/.test(l))).toBe(true);
-    expect(t.some((l) => /session {3,}up /.test(l))).toBe(true);
+  test('the card (one column and three) draws no SESSION ribbon and no `session up` row', () => {
+    for (const cols of [60, 150]) {
+      const t = healthCardRows(health(), { cols, ui }).map((r) => r.map((x) => x.t).join('').trimEnd());
+      expect(t.some((l) => /── SESSION ─/.test(l))).toBe(false);
+      expect(t.some((l) => /session {3,}up /.test(l))).toBe(false);
+    }
   });
 });

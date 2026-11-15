@@ -69,7 +69,7 @@ describe('item 1: the route tab carries the phase timeline (critique 30: the tab
     forgetPhases();
     const t = render('route', 66, 45).join('\n');
     expect(t).toMatch(/^ {2,3}PHASE$/m); // the Claude pane's rows sit one cell in from the host's border (round 3 gutter)
-    expect(t).toMatch(/[●–○] research [●–○] theory [●–○] test [◐◓◑◒] implement ○ verify/); // slice S3: the stepper, one glyph per stage // the run clock is the phase row's, said once (idle polish 3) // wave 34: a phase is green only once the run was in it (round 2: an unentered phase is its dim name, with no `·` mark beside the `›`)
+    expect(t).toMatch(/[●–○] research [●–○] theory [●–○] test [●–○] validate [◐◓◑◒] implement ○ verify/); // slice S3: the stepper, one glyph per stage // the run clock is the phase row's, said once (idle polish 3) // wave 34: a phase is green only once the run was in it (round 2: an unentered phase is its dim name, with no `·` mark beside the `›`)
   });
   test('the plan is not drawn here (wave 34: the HUD above the prompt and the board tab list it)', () => {
     const t = render('route', 66, 45).join('\n');

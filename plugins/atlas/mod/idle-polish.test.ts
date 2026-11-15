@@ -62,13 +62,13 @@ describe('1: the checks row never repeats the gates figure', () => {
 
 describe('2: the expanded card says each gate in the one vocabulary, never a second gate total', () => {
   const card = healthCardRows(h, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
-  test('no line restates the band\'s figure (`gates ok`, `N denied`, `n/m green`); the session row holds the uptime (slice S4: the card is a superset of the panel)', () => {
+  test('no line restates the band\'s figure (`gates ok`, `N denied`, `n/m green`); the uptime is the pane NOW line, not a card row (frame spec section 6)', () => {
     const t = card.join('\n');
     expect(t).not.toMatch(/gates ok|\d+ denied|\d+\/\d+ green/);
-    expect(t).toMatch(/session\s+up 0:16/);
+    expect(t).not.toMatch(/session\s+up /);
   });
-  test('each gate is `● name 3 pass · 0 deny`, two to a row; its note rides after it', () => {
-    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`● ${id} +3 pass · 0 deny`).test(l)), id).toBe(true);
+  test('each gate is one row of the GATES section: `● name  ok fail` once it fired, `○ name  n armed` before', () => {
+    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`[●○] ${id} +(?:3 +0|3 armed)`).test(l)), id).toBe(true);
     expect(card.join('\n')).not.toContain('Last Stop allowed'); // round 3 (E11): the card's GATES column holds the rows and their numbers; a gate's note stays on the panel
   });
 });
@@ -192,7 +192,7 @@ describe('11: the team tab has no orphan time axis when nothing ran', () => {
     const lead = { name: 'lead', state: 'waiting', detail: '', secs: 0 } as never;
     const t = body(world(57, { lead, workers: [], mates: [] }, 'team'));
     expect(t.join('\n')).not.toMatch(/^\s*\d+:\d\d\s+\d+:\d\d\s*$/m);
-    expect(t.join('\n')).toContain('0 workers');
+    expect(t.join('\n')).toContain('no workers registered');
     expect(t.join('\n')).not.toContain('0 running');
   });
 });
@@ -204,11 +204,11 @@ describe('12: the open card is one even block, spaced like the TODO box', () => 
     expect(new Set(w).size).toBe(1);
     expect(w[0]).toBe(110);
   });
-  test('the title is bold body text, not dimmed', () => {
-    const title = rows[0]!.find((x) => x.t.trim() === '▾ HEALTH')!; // D8: the one collapse control is a chip
-    expect(title.tone).toBe('accent');
+  test('the title is the fixed `HEALTH` label of the ribbon, with no control of its own (the band chip closes the card)', () => {
+    const title = rows[0]!.find((x) => x.t.trim() === 'HEALTH')!;
+    expect(title).toBeDefined();
     expect(title.bold).toBe(true);
-    expect(title.press).toBe('band:health');
+    expect(title.press).toBeUndefined();
   });
   test('the slot leaves the blank row under the band a HUD block has', () => {
     const card = padRows(healthCardRows(h, { cols: 110, ui }), 110).map((r) => r.map((x) => ({ t: x.t })));

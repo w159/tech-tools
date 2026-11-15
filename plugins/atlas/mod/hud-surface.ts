@@ -8,6 +8,7 @@ import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { activitySection, contextSection, gatesSection, runsSection, sessionRow, type Health } from './idle-health';
 import { chevron, chipRun } from './clickable';
+import { cardFrame } from './card-frame';
 import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
@@ -863,47 +864,7 @@ function clipRuns(runs: Run[], cols: number): Run[] {
   return out;
 }
 
-/** The card is never wider than this, whatever the terminal (round 3, E11). */
-export const CARD_MAX_W = 96;
-/** The expanded health card the band's `▾ health` button opens: a FLAT ribbon like the TODO and SUBAGENTS ones (`── ▾ HEALTH ────`, no corners) capped at 96 cells, then the same sections the side panel draws, each under its own ribbon:
- * from 96 cells two columns (left ACTIVITY and CONTEXT, right GATES, RUNS and the SESSION row under its own ribbon), below that one column. Rows are padded to `cols`. The `▾ HEALTH` title is a chip carrying the band's own `band:health` press key:
- * the card's one collapse control (a click closes it). The history is `h.pulse` (observed this session; absent: flat baselines and `—`). */
+/** The expanded health card the band's `▴ health` chip opens (frame spec section 6, mod/card-frame.ts): the fixed `HEALTH` ribbon, then the pane's own sections packed in columns. Rows are padded to `cols`. */
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
-  const { ui } = o;
-  const full = Math.max(8, o.cols);
-  const cols = Math.min(full, CARD_MAX_W);
-  const two = cols >= CARD_MAX_W;
-  const colW = two ? Math.floor((cols - 2) / 2) : cols;
-  const head = (title: string, figure: string): Run[] => [t(' '), ...sectionRibbon(title, figure, colW - 2, ui), t(' ')];
-  const sect = (title: string, figure: string, rows: Run[][]): Run[][] => [head(title, figure), ...rows.map((x) => clipRuns(x, colW))];
-  const chart = (n: number): number => (two ? 4 : n);
-  const act = activitySection(h, ui, { cols: colW, chartRows: chart(3) });
-  const ctx = contextSection(h, ui, { cols: colW });
-  const runs = runsSection(h, ui, { cols: colW });
-  const gates = gatesSection(h, ui, { cols: colW });
-  const session = sessionRow(h, ui, { cols: colW, version: true });
-  const sections = {
-    activity: sect('ACTIVITY', act.figure, act.rows),
-    context: sect('CONTEXT', ctx.figure, ctx.rows),
-    runs: sect('RUNS', '', runs.rows),
-    gates: sect('GATES', gates.figure, gates.rows),
-    session: session ? sect('SESSION', '', [session]) : [],
-  };
-  const body: Run[][] = [];
-  if (two) {
-    const left = [...sections.activity, ...sections.context];
-    const right = [...sections.gates, ...sections.runs, ...sections.session];
-    const n = Math.max(left.length, right.length);
-    for (let i = 0; i < n; i++) {
-      const l = left[i] ?? [];
-      const rr = right[i] ?? [];
-      body.push([...l, t(' '.repeat(Math.max(0, colW - runsCells(l)) + (cols - 2 * colW))), ...rr]);
-    }
-  } else body.push(...sections.activity, ...sections.context, ...sections.runs, ...sections.gates, ...sections.session);
-  // the ribbon: `── ▾ HEALTH ─────────────` (ASCII `-- v HEALTH -------------`): the title is the card's one control, a chip (key `band:health`) that collapses it (round 2, D8)
-  const rule = ui.ascii ? '-' : RULE;
-  const title = chipRun(`${chevron(true, ui)} HEALTH`, ui, 'band:health');
-  const top: Run[] = [dimRun(`${rule}${rule}`, ui), title];
-  const ribbon = [...top, dimRun(rule.repeat(Math.max(1, cols - runsCells(top))), ui)];
-  return padRows([clipRuns(ribbon, cols), ...body.map((b) => clipRuns(b, cols)), [dimRun(rule.repeat(cols), ui)]], full);
+  return padRows(cardFrame(h, o), Math.max(8, o.cols));
 }

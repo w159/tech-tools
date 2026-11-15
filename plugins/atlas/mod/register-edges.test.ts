@@ -243,7 +243,7 @@ describe('session boot and rebuild', () => {
 describe('sidebar note', () => {
   test('submitting the message input posts the note to the lead on the snapshot channel, clears the draft and toasts', async () => {
     const snapshot = { ...busySnap(), root: ROOT, channel: 'lead-abc123', sessionId: 'sess-abc123def456' };
-    const s = stubEngine({ 'atlas/snapshot': snapshot, 'atlas/isModOn': true, 'atlas/atlasView': 'team', 'atlas/sidebarDraft': 'ping' });
+    const s = stubEngine({ 'atlas/snapshot': snapshot, 'atlas/isModOn': true, 'atlas/atlasView': 'channel', 'atlas/sidebarDraft': 'ping' });
     const cap = captureOn();
     await register(cap.on, {});
     const tree = (await cap.one('ui.render', ['component', 'Pane'])(s.$, { surface: 'terminal', component: 'Pane', requestId: 'atlas', props: { bodyColumns: 70, scroll: { offset: 0, bodyRows: 40 } } }, noopNext)) as Node;
@@ -263,7 +263,7 @@ describe('sidebar note', () => {
 
   test('a snapshot with no board root refuses the note with a toast and keeps the draft', async () => {
     const snapshot = { ...busySnap(), root: '', channel: null };
-    const s = stubEngine({ 'atlas/snapshot': snapshot, 'atlas/isModOn': true, 'atlas/atlasView': 'team', 'atlas/sidebarDraft': 'ping' });
+    const s = stubEngine({ 'atlas/snapshot': snapshot, 'atlas/isModOn': true, 'atlas/atlasView': 'channel', 'atlas/sidebarDraft': 'ping' });
     const cap = captureOn();
     await register(cap.on, {});
     const tree = (await cap.one('ui.render', ['component', 'Pane'])(s.$, { surface: 'terminal', component: 'Pane', requestId: 'atlas', props: { bodyColumns: 70, scroll: { offset: 0, bodyRows: 40 } } }, noopNext)) as Node;

@@ -5,7 +5,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, markOf, runHex, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
 import { activeChipStyle, chipStyle, hoverStyle } from '../clickable';
-import { backWord, boardEmptyRows, centred, chipText, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
+import { backWord, bodyLines, boardEmptyRows, centred, chipText, frameTabOf, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../board-model';
@@ -111,6 +111,7 @@ function footerRow(totals: readonly BoardLine[], cols: number, ui: Ui): BoardLin
 
 /** The board view's rows (design wave 24): a summary row, every item with its owner in one right column, and the record of how the run closed. Nothing on the board: one dim line. */
 function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number, ui: Ui, pm: PanelModel): RenderElement {
+  if (frameTabOf(pm) === 'board') return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: bodyLines(pm).map((l) => lineEl(els, l, m, on, ui)) }); // frame spec D1-D3 (mod/tabs-frame.ts)
   const s = m.snapshot;
   const items = boardItems(m);
   const max = Math.max(1, m.rows - 4);

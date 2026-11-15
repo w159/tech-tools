@@ -136,8 +136,8 @@ describe('wire-expert: the pulse', () => {
     await press(button(await b.band(), 'band:health'));
     const card = textOf(await b.band());
     expect(card).toContain('64k of 1M');
-    expect(card).toContain('$0.04');
-    expect(card).toMatch(/── ACTIVITY ─+ \d+ in 5m/);
+    expect(card).toMatch(/── ACTIVITY ─+ hook events · 5 min/);
+    expect(card).toMatch(/\b\d+ ev\b/);
   });
   test('(g) a new session resets the pulse and the hook log', async () => {
     const b = await boot();
@@ -150,8 +150,7 @@ describe('wire-expert: the pulse', () => {
     await press(button(await b.band(), 'band:health'));
     const card = textOf(await b.band());
     expect(card).not.toContain('64k of 1M');
-    expect(card).not.toContain('$0.04');
-    expect(card).toMatch(/── ACTIVITY ─+ 1 in 5m/); // only the new session's own start
+    expect(card).toMatch(/\b1 ev\b/); // only the new session's own start
   });
 });
 
@@ -191,14 +190,15 @@ describe('wire-expert: the close controls', () => {
     expect(walk(await b.pane()).some((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toBe(false);
     expect(textOf(await b.pane())).not.toContain('[✕]');
   });
-  test('(e) the card title chip closes the card like the band chip opens it', async () => {
+  test('(e) the card has no control of its own: the band chip that opens it (`▴ health`, selected) closes it', async () => {
     const b = await boot();
     await b.rest();
     await press(button(await b.band(), 'band:health', 'health'));
     const open = await b.band();
     expect(textOf(open)).toContain('HEALTH');
     expect(textOf(open)).not.toContain('hide');
-    await press(button(open, 'band:health', 'HEALTH'));
+    expect(textOf(open)).toContain('▴ health');
+    await press(button(open, 'band:health', 'health'));
     expect(textOf(await b.band())).not.toContain('HEALTH');
   });
 });

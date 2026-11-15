@@ -54,8 +54,8 @@ export type BandFrameIn = {
 };
 
 export const bandLook = (ui: Ui) => ui.theme === 'latte'
-  ? { fill: PALETTES.latte.base, text: PALETTES.latte.text, dim: xtermHex(241), rule: xtermHex(250), chipBg: xtermHex(253), chipFg: xtermHex(54), alertBg: xtermHex(224), alertFg: xtermHex(124), ok: PALETTES.latte.ok, warn: PALETTES.latte.warn, bad: PALETTES.latte.bad, work: xtermHex(54), ramp: [xtermHex(97), xtermHex(98), xtermHex(54)] as const }
-  : { fill: xtermHex(235), text: xtermHex(252), dim: xtermHex(244), rule: xtermHex(238), chipBg: xtermHex(239), chipFg: xtermHex(183), alertBg: xtermHex(52), alertFg: xtermHex(210), ok: xtermHex(78), warn: xtermHex(214), bad: xtermHex(203), work: xtermHex(183), ramp: [xtermHex(97), xtermHex(141), xtermHex(183)] as const };
+  ? { fill: PALETTES.latte.base, text: PALETTES.latte.text, dim: xtermHex(241), rule: xtermHex(250), chipBg: xtermHex(253), chipFg: xtermHex(54), litBg: xtermHex(147), litFg: xtermHex(54), alertBg: xtermHex(224), alertFg: xtermHex(124), ok: PALETTES.latte.ok, warn: PALETTES.latte.warn, bad: PALETTES.latte.bad, work: xtermHex(54), ramp: [xtermHex(97), xtermHex(98), xtermHex(54)] as const }
+  : { fill: xtermHex(235), text: xtermHex(252), dim: xtermHex(244), rule: xtermHex(238), chipBg: xtermHex(239), chipFg: xtermHex(183), litBg: xtermHex(60), litFg: xtermHex(255), alertBg: xtermHex(52), alertFg: xtermHex(210), ok: ui.color === '256' ? PALETTES.mocha.ok : xtermHex(78), warn: xtermHex(214), bad: xtermHex(203), work: xtermHex(183), ramp: [xtermHex(97), xtermHex(141), xtermHex(183)] as const };
 
 const lerp = (a: string, b: string, t: number): string => '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) + (parseInt(b.slice(i, i + 2), 16) - parseInt(a.slice(i, i + 2), 16)) * t).toString(16).padStart(2, '0')).join('');
 const pad3 = (n: number): string => String(Math.max(0, Math.min(999, Math.round(n)))).padStart(3, ' ');
@@ -171,7 +171,7 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
 
   // ---- the health chip, right-anchored ----
   if (healthChip && w + HEALTH_CHIP_W <= cols) {
-    out.push(...pad(cols - w - HEALTH_CHIP_W), ...chip([{ t: ` ${h.open ? (ascii ? 'v' : '▾') : ascii ? '>' : '▸'} health `, fg: k.chipFg }], BAND_HEALTH_KEY, k.chipBg));
+    out.push(...pad(cols - w - HEALTH_CHIP_W), ...chip([{ t: ` ${h.open ? (ascii ? '^' : '▴') : ascii ? '>' : '▸'} health `, fg: h.open ? k.litFg : k.chipFg, ...(h.open ? { bold: true } : {}) }], BAND_HEALTH_KEY, h.open ? k.litBg : k.chipBg));
     return out;
   }
   out.push(...pad(cols - w));

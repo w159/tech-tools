@@ -178,7 +178,7 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
   });
   test('phases are the true ones: only the entered ones are green, the lit one wears the clock', () => {
     const chain = stepperOf(rows(70));
-    expect(chain).toMatch(/[–●] research [–●] theory [–●] test [◐◓◑◒] implement ○ verify/); // passed ●, skipped –, current turning, pending ○ (D12)
+    expect(chain).toMatch(/[–●] research [–●] theory [–●] test [–●] validate [◐◓◑◒] implement ○ verify/); // passed ●, skipped –, current turning, pending ○ (D12)
   });
   test('one 12-cell braille line per agent, with its name and its time', () => {
     const t = rows();

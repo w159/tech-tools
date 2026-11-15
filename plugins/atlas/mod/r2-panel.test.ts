@@ -68,20 +68,16 @@ describe('D8: one chip idiom, inert uppercase headers', () => {
     expect(all(tree).filter((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toEqual([]);
     expect(textOf(tree)).not.toContain('[✕]');
   });
-  test('the card has one collapse control: the ribbon title chip `▾ HEALTH` (key band:health); no `▾ hide` chip', () => {
+  test('the card has no collapse control of its own: the band chip closes it (frame spec section 6); no `▾ hide` chip', () => {
     const rows = healthCardRows(health(), { cols: 100, ui });
     const flat = rows.map((r) => r.map((x) => x.t).join(''));
     expect(flat.join('\n')).not.toContain('hide');
-    const pressed = rows.flat().filter((x) => x.press !== undefined);
-    expect(pressed).toHaveLength(1);
-    expect(pressed[0]).toMatchObject({ press: 'band:health', hover: true });
-    expect(pressed[0]!.t).toBe(' ▾ HEALTH '); // 1-cell padding each side, the glyph inside
-    expect(pressed[0]!.bgHex).toBeDefined(); // a raised fill
-    expect(flat[0]!.trimEnd()).toMatch(/^── ▾ HEALTH ─+$/);
+    expect(rows.flat().filter((x) => x.press !== undefined)).toHaveLength(0);
+    expect(flat[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─+$/);
   });
   test('the card keeps every health row when the panel is closed', () => {
     const flat = healthCardRows(health(), { cols: 100, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
-    for (const word of ['completion', 'tripwire', 'routing', 'header', 'ACTIVITY', 'CONTEXT', 'RUNS', 'session', '64k of 1M', 'master']) expect(flat).toContain(word);
+    for (const word of ['completion', 'tripwire', 'routing', 'header', 'ACTIVITY', 'CONTEXT', 'GATES', 'HOOKS', '64k of 1M']) expect(flat).toContain(word); // the session figures (uptime, branch, version) are the pane's NOW line and footer
   });
 });
 
@@ -285,7 +281,7 @@ describe('D1: card and panel never show at once', () => {
     await press(button(await band(h), 'band:health', 'health'));
     expect(textOf(await band(h))).toContain('HEALTH'); // panel closed: the chip opens the card again
   });
-  test('the card collapses from its ribbon title chip (key band:health)', async () => {
+  test('the card collapses from the band chip that opened it (key band:health), selected while open', async () => {
     const h = bootHarness();
     resetCore();
     await register(h.onFn, {});
@@ -296,7 +292,7 @@ describe('D1: card and panel never show at once', () => {
     const open = await band(h);
     expect(textOf(open)).toContain('HEALTH');
     expect(textOf(open)).not.toContain('hide');
-    await press(button(open, 'band:health', 'HEALTH'));
+    await press(button(open, 'band:health', 'health'));
     expect(textOf(await band(h))).not.toContain('HEALTH');
   });
 });

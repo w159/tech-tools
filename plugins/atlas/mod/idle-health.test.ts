@@ -80,9 +80,9 @@ describe('the health button', () => {
     if (!x) throw new Error('no health button');
     return x;
   };
-  test('closed it reads ▸ health, open ▾ health: the toggle flips the chevron', () => {
+  test('closed it reads ▸ health, open ▴ health (the selected chip): the toggle flips the chevron', () => {
     expect(textOf(btn(model(150)))).toBe(' ▸ health '); // round 3 (E8): a chip, one cell of padding each side
-    expect(textOf(btn(model(150, { health: { ...HEALTH, open: true } })))).toBe(' ▾ health ');
+    expect(textOf(btn(model(150, { health: { ...HEALTH, open: true } })))).toBe(' ▴ health ');
   });
   test('it is distinguishable: accent text, a chevron, a hover style', () => {
     const b = btn(model(150));
@@ -129,16 +129,15 @@ describe('the expanded health card (HUD)', () => {
   const text = (over: Record<string, unknown> = {}): string[] => healthCardRows({ ...h, ...over } as never, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
   test('ribbon, rows and closing rule', () => {
     const t = text();
-    expect(t[0]!.trimEnd()).toMatch(/^── ▾ HEALTH ─+$/); // a flat ribbon whose one control is the title chip (D8), no corners and no second badge (the TODO and SUBAGENTS ribbons keep theirs)
-    expect(t.some((l) => /● completion +1 pass · 0 deny/.test(l))).toBe(true); // every gate is `● name 1 pass · 0 deny`, one per row (in the card's right column)
-    expect(t.some((l) => /● tripwire +1 pass · 0 deny/.test(l))).toBe(true);
-    expect(t.some((l) => /[█▏▎▍▌▋▊▉░]+ 18% · 42k tokens/.test(l))).toBe(true);
+    expect(t[0]!.trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─+$/); // frame spec section 6: the fixed title, a flat ribbon with no control of its own
+    expect(t.some((l) => /○ completion +1 armed/.test(l))).toBe(true); // nothing fired yet (no prompt, no run): every gate is `○ name  n armed`, one per row (in the card's middle column)
+    expect(t.some((l) => /○ tripwire +1 armed/.test(l))).toBe(true);
+    expect(t.some((l) => /▰+▱+ 18%/.test(l)) && t.join('\n').includes('42k')).toBe(true);
     expect(t.some((l) => /last run/.test(l))).toBe(false); // the band says the run
-    expect(t[t.length - 1]!.trimEnd()).toMatch(/^─+$/);
   });
   test('a finished run is the runs row: a bar per run, the count and the average', () => {
     const t = text({ pulse: { events: [], ctx: [], runs: [{ secs: 134, ok: true, at: 1 }] } });
-    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+1 run · avg 2:14/.test(l))).toBe(true);
+    expect(t.some((l) => /[▁▂▃▄▅▆▇█]+\s+med 2:14 · max 2:14/.test(l))).toBe(true);
     expect(t.join('\n')).not.toMatch(/last run/);
   });
   test('only values the mod has: no ctx, no tokens, no branch', () => {

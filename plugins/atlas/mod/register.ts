@@ -119,6 +119,10 @@ const paneOpenedState = atom({ plugin: 'atlas', key: 'paneOpened' } as const, fa
 const recipientState = atom({ plugin: 'atlas', key: 'sidebarRecipient' } as const, null);
 const expandedState = atom({ plugin: 'atlas', key: 'sidebarExpanded' } as const, null);
 const draftState = atom({ plugin: 'atlas', key: 'sidebarDraft' } as const, '');
+/** The rows the user flipped from their default (a gate group, worker or board item opened or closed in place): remembered for the session (tabs-frame.ts). */
+// The host's state-key list (types/index.d.ts) lies outside the mod and has no `sidebarFlips` yet: the atom is typed as the draft's (a string, keys joined by a newline) until that list names it.
+const flipState = atom({ plugin: 'atlas', key: 'sidebarFlips' } as unknown as { readonly plugin: 'atlas'; readonly key: 'sidebarDraft' }, '');
+const flipsOf = (raw: string): string[] => raw.split('\n').filter(Boolean);
 /** The frame the last beat published: the band and the pane renders both read THIS value, so they never turn adjacent frames (critique 26: `⠸`/`⠼`, `◑`/`◓`). */
 let beatFrame = 0;
 let sessionStartMs: number | null = null; // wave 42: the idle health's `up 12:04`: the clock reading at this session's start
@@ -832,6 +836,7 @@ function sidebarHandlers($: EngineInterface, surface: 'terminal'): SidebarHandle
 	return {
 		selectRecipient: (name) => guarded(() => update($, recipientState, (cur) => (cur === name ? null : name))),
 		toggle: (key) => guarded(() => update($, expandedState, (cur) => (cur === key ? null : key))),
+		flip: (key) => guarded(() => update($, flipState, (cur) => { const ks = flipsOf(cur); return (ks.includes(key) ? ks.filter((k) => k !== key) : [...ks, key]).join('\n'); })),
 		draftChange: (text) => guarded(() => update($, draftState, () => text)),
 		send: (text) => guarded(() => sendNote($, text)),
 		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
@@ -1566,7 +1571,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			core: paneCore,
 			...(bandHealth(bandB) ? { health: bandHealth(bandB) } : {}),
 			run: { kind: bandKind(bandB), frame: paneFrame, ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(originMs !== undefined ? { startMs: originMs } : {}) },
-			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState) },
+			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState), flips: flipsOf(await read($, flipState)) },
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
 			tick: paneFrame,

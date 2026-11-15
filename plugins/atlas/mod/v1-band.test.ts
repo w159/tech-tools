@@ -245,7 +245,7 @@ describe('the rules the frames rest on', () => {
   test('the health chip exists only while the pane is closed', () => {
     expect(row({ kind: 'working', cols: 145, panel: true, ctx: 6, health: h })).not.toContain('health');
     expect(row({ kind: 'working', cols: 145, panel: false, ctx: 6, health: h })).toContain('▸ health');
-    expect(row({ kind: 'working', cols: 100, panel: false, ctx: 6, health: { ...h, open: true } })).toContain('▾ health');
+    expect(row({ kind: 'working', cols: 100, panel: false, ctx: 6, health: { ...h, open: true } })).toContain('▴ health');
   });
   test('the band is one row, with no second `checks` row under a denial', () => {
     const b = model({ kind: 'working', cols: 89, panel: true, ctx: 6, gates: GATES_DENY as never[], health: h });

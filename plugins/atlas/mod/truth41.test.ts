@@ -96,7 +96,7 @@ describe('step 2: one run total on the band, the panel, the board and the axis (
     expect(render('team', RUN).find((l) => /^\s+0:00\s+\d:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:46\s*$/);
     const route = render('route', RUN);
     expect(route.slice(route.findIndex((l) => l.trim() === 'PHASE'), route.findIndex((l) => l.trim() === 'PHASE') + 2).join('\n')).not.toMatch(/\b0:46\b/); // slice S3: a run's time prints once, on the band; the panel's phase is the stepper
-    expect(route[route.findIndex((l) => l.trim() === 'PHASE') + 1]!.match(/[●○◐◓◑◒]/g)).toHaveLength(5); // five stages, none turning (this run entered none of them)
+    expect(route[route.findIndex((l) => l.trim() === 'PHASE') + 1]!.match(/[●○◐◓◑◒]/g)).toHaveLength(6); // six stages (contract.todoPhases), none turning (this run entered none of them)
   });
   test('the band prints the same total as the panel: `● done 0:46`', () => {
     const m: MissionModel = { cols: 150, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'done', done: 5, total: 5, workers: [], checks: null, ui, ranSecs: 46, restSecs: 0 };

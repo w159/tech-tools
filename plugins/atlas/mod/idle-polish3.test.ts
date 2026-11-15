@@ -64,17 +64,14 @@ describe('5: the recent list reads in words, collapsed, at most 3 rows', () => {
 describe('8: the HEALTH card has one row schema at both widths', () => {
   const text = (cols: number, panel: boolean): string[] => healthCardRows({ ...idleHealth, panel }, { cols, ui }).map((r) => r.map((x) => x.t).join(''));
   test('the same rows at 110 and 150 (panel up or not), the note on its own line', () => {
-    const a = text(110, false).map((s) => s.replace(/[╭╮╰╯─│\s]+$/g, '').trim());
-    const b = text(150, true).map((s) => s.replace(/[╭╮╰╯─│\s]+$/g, '').trim());
-    expect(a.filter((l) => /^(gates|session)?\s*[●○◇■]/.test(l) || /atlas|branch/.test(l)).length).toBe(b.filter((l) => /^(gates|session)?\s*[●○◇■]/.test(l) || /atlas|branch/.test(l)).length);
-    expect(a.join('|').replace(/\s+/g, ' ').replace(/[─╭╮╰╯]/g, '')).toBe(b.join('|').replace(/\s+/g, ' ').replace(/[─╭╮╰╯]/g, ''));
+    const sections = (cols: number): string[] => [...(text(cols, false).join('\n').match(/── [A-Z]+/g) ?? [])].sort();
+    expect(sections(110)).toEqual(sections(150)); // frame spec section 6: two columns or three, the same sections
   });
-  test('a check is `● name 3 pass · 0 deny` (no ratio); the team line is the session row\'s `team off`, never a note', () => {
+  test('a check is `● name  ok fail` or `○ name  n armed` (no ratio); the team line is not a note on the card', () => {
     const t = text(150, true).join('\n');
     expect(t).not.toMatch(/\d+\/\d+ pass|\d+\/\d+ gates/);
     expect(t).not.toContain('Team mode');
-    expect(t).toContain('team off');
-    expect(t).toMatch(/● tripwire +3 pass · 0 deny/);
+    expect(t).toMatch(/[●○] tripwire +(?:3 +0|3 armed)/);
   });
 });
 

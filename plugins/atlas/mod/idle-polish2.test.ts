@@ -116,14 +116,12 @@ describe('5: each fact once across the band, the card and the panel', () => {
   const one: Health = { ...h, hooks: ONE };
   test('the card with the panel up holds only what opening a row adds: no `last run none`, no hooks line that the recent list says', () => {
     const t = healthCardRows({ ...one, panel: true }, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
-    expect(t).not.toMatch(/last run|session\.start|session started/);
-    expect(t).toContain('atlas 17.21.1'); // idle polish 3: the card is one schema at every width, version included
-    expect(t).toMatch(/● completion +3 pass · 0 deny/);
+    expect(t).not.toMatch(/last run|session started/);
+    expect(t).toMatch(/[●○] completion +(?:3 +0|3 armed)/);
   });
-  test('the card with no panel keeps the version; the band has no last run or event line any more', () => {
+  test('the card has no last run line (the version is the pane\'s footer); the band has no last run or event line any more', () => {
     const t = healthCardRows(one, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
-    expect(t).not.toMatch(/last run none|session\.start/);
-    expect(t).toContain('atlas 17.21.1');
+    expect(t).not.toMatch(/last run none/);
     expect(rowsOf(model(110, { hooks: ONE })).join('\n')).not.toMatch(/last run|1 event|last 7s ago/);
   });
   test('the band with the panel up repeats neither the panel`s uptime nor its events', () => {
@@ -132,12 +130,12 @@ describe('5: each fact once across the band, the card and the panel', () => {
 });
 
 describe('6: the team tab with only the lead draws no dead sparkline', () => {
-  test('lead row has no braille run and the line under it is `no workers yet`', () => {
+  test('lead row has no braille run and the lines under it say `Team mode is off.` and `no workers registered`', () => {
     const rows = body(world(57, { lead: { name: 'lead', state: 'waiting', secs: 0 } as never }, 'team'));
-    const top = rows.slice(0, rows.findIndex((l) => l.includes('0 workers')) + 2).join('\n'); // round 3 (E12): the ribbon carries the live fact, the lead row sits right under it
+    const top = rows.slice(rows.findIndex((l) => l.includes('── TEAM')), rows.findIndex((l) => l.includes('── TEAM')) + 5).join('\n'); // frame spec T1: the ribbon carries `off`, the lead row sits right under it
     expect(top).not.toMatch(/[⣀⣄⣤⣶⣿▁]/u);
     expect(top).toContain('lead');
-    expect(top).toContain('0 workers');
+    expect(top).toContain('no workers registered');
   });
 });
 
@@ -146,8 +144,8 @@ describe('7: the idle stepper is dim, bold only while a stage is live', () => {
 });
 
 describe('8: the card has no second badge; the band row ends on one edge and one fill', () => {
-  test('HEALTH ribbon carries no `◖ ◆ ATLAS ◗`', () => {
-    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('').trimEnd()).toMatch(/^── ▾ HEALTH ─+$/); // a flat ribbon whose one control is the title chip (D8)
+  test('the HEALTH ribbon carries the one capsule and no control', () => {
+    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('').trimEnd()).toMatch(/^◖ ◆ ATLAS ◗ ▸ HEALTH ─+$/); // the fixed title of frame spec section 6
   });
   for (const cols of [150, 110]) {
     test(`at ${cols}: the band row is ${cols} cells, there is no strip row, and its last cell wears the chip's fill (flush before the host's [-])`, () => {

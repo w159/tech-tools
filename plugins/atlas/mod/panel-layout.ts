@@ -19,6 +19,7 @@ import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runsta
 import { displayName } from './hud';
 import { sectionRibbon, sortAgents } from './hud-surface';
 import { statusFrame } from './status-frame';
+import { tabFrame, type TabId } from './tabs-frame';
 import type { GateGroup } from './pane/sidebar-types';
 import { ageWord, KILLED, sparkBraille, sparkOf, sparkOver, totalsOf, wordOf } from './pane/activity';
 
@@ -128,11 +129,15 @@ export type PanelModel = {
   run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
   /** Wave 42: the idle health (register.ts builds it from the band's own inputs): an idle status view with no agent draws these rows, each a pressable row that opens 1-3 detail lines, instead of `no agents yet` and `no events yet`. Absent: the view as before. */
   health?: Health;
+  /** The board view (the Claude pane's `board` tab; `tab` stays `route` for the shared chrome): the frame path draws the board in its place. */
+  board?: boolean;
+  /** Rows the user flipped from their default open or closed state (gate groups, workers, board items; mod/tabs-frame.ts), kept for the session. */
+  flips?: readonly string[];
 };
 
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
  * what a second press on an open row copies. */
-export type Press = { kind: 'toggle' | 'worker'; key: string; name?: string; copy?: string };
+export type Press = { kind: 'toggle' | 'worker' | 'flip' | 'compose'; key: string; name?: string; copy?: string };
 export type PanelLine = { runs: Run[]; press?: Press };
 
 // ---- run helpers ---------------------------------------------------------------------------------------------------
@@ -717,6 +722,7 @@ function statusLines(m: PanelModel, h: Health): PanelLine[] {
     cols: m.cols, room: m.rows > 0 ? m.rows - headerRows(m).length : 0, ui: m.ui, kind: m.run?.kind ?? 'idle', phases: m.phases, phase: m.phase,
     spin: phaseGlyph('working', spinIdx(m), m.ui.ascii), ...(m.now !== undefined ? { now: m.now } : {}),
     todos: { done: m.todos.filter((t) => t.state === 'done').length, total: m.todos.length }, gates: m.gates, health: h, lead: m.cols < 100,
+    ...(m.entered ? { entered: m.entered } : {}),
   });
   return rows.map((x) => line(fitRuns(x, m.cols)));
 }
@@ -1510,8 +1516,26 @@ export function boardEmptyRows(m: PanelModel, rows: number): PanelLine[] {
   const all = foot && rows > body.length + 1 ? [...body, ...Array.from({ length: rows - body.length - 1 }, () => BLANK), foot] : body;
   return all.map((l) => (l.runs.length ? { ...l, runs: [r(' '), ...l.runs] } : l));
 }
+/** The tab the frame path draws (spec section 5: gates, team, chat, core, board): the Claude pane with the mod's health, on any tab but the status one. */
+export const frameTabOf = (m: Pick<PanelModel, 'run' | 'health' | 'tab' | 'board'>): TabId | null => (m.run && m.health ? (m.board ? 'board' : m.tab === 'route' ? null : m.tab === 'channel' ? 'channel' : m.tab) : null);
+
+/** A frame tab as panel rows (mod/tabs-frame.ts): each row draws its own gutter; a row that expands in place carries a `flip` press, the chat compose chip a `compose` one. */
+function tabLines(m: PanelModel, tab: TabId, h: Health): PanelLine[] {
+  const rows = tabFrame({
+    tab, cols: m.cols, room: m.rows > 0 ? m.rows - headerRows(m).length : 0, ui: m.ui, kind: m.run?.kind ?? 'idle', health: h, gates: m.gates, lead: m.cols < 100,
+    workers: m.workers.map((w) => ({ name: w.name, ...(w.role ? { role: w.role } : {}), state: w.state, ...(w.model ? { model: w.model } : {}), detail: w.detail, ...(w.secs !== undefined ? { secs: w.secs } : {}) })),
+    ...(m.lead?.secs !== undefined || m.run?.secs !== undefined ? { leadSecs: m.lead?.secs ?? m.run?.secs } : {}),
+    todos: m.todos.map((t) => ({ id: t.id, label: t.label, state: t.state, ...(t.owner ? { owner: t.owner } : {}), ...(t.detail ? { detail: t.detail } : {}), evidence: t.evidence ?? null })),
+    notes: m.notes.map((n) => ({ at: n.at, from: n.from, ...(n.kind ? { kind: n.kind } : {}), text: n.text })),
+    channel: m.channel ?? 'channel', people: m.people, recipient: m.recipient, core: m.core ?? null, flips: m.flips ?? [],
+  });
+  return rows.map((x) => ({ runs: fitRuns(x.runs, m.cols), ...(x.press ? { press: x.press } : {}) }));
+}
+
 /** The Claude pane's rows sit one cell in from the host's border (the gutter); the caret of an expandable row is the first cell after it. The status view draws its own gutter. */
 export function bodyLines(m: PanelModel): PanelLine[] {
+  const framed = frameTabOf(m);
+  if (framed && m.health) return tabLines(m, framed, m.health);
   if (!m.run || (m.tab === 'route' && m.health)) return airy(m, clickable(BODIES[m.tab](m), m));
   const inner = { ...m, cols: m.cols - 1 };
   const g: PanelModel = { ...inner, rows: m.rows - (headerRows(m).length - headerRows(inner).length) };

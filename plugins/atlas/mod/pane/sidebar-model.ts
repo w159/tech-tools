@@ -111,6 +111,9 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const s = m.snapshot;
   const now = m.clock !== undefined ? Math.max(m.clock, s.now) : s.now; // the HUD's own reading (hud.ts: max of the shared clock and the snapshot's)
   const rail = railOf(contractRail(s.contract), s.phase);
+  // One phase source for the band and the panel (frame spec 2.10): the contract's todo phases (six), as the band counts them; the five-step rail only where the contract lists none (omp, fixtures).
+  const steps = s.contract.todoPhases?.length ? [...s.contract.todoPhases] : rail.ids;
+  const lit = s.phase === 'blocked' ? 'blocked' : s.phase === 'done' ? 'done' : steps.includes(s.phase) ? s.phase : rail.phase;
   // Other sessions' leads and workers that rested more than two hours ago are not on this team (the roster rules of sidebar-roster.ts).
   const left = new Set(s.squad.filter((a) => isLeadName(a.name) || isStale(a, s.now)).map((a) => a.name));
   const queued = queuedMembers(s).map((name): PanelWorker => ({ name: one(name), role: 'unknown', state: 'queued', detail: 'dispatched, not listed yet' })); // the host does not list them: queued
@@ -148,9 +151,9 @@ export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {
-    cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, tick: m.tick ?? 0, now: spinClock(s.now, m.tick ?? 0), // the one spinner clock (atlas-ui): the snapshot clock moves with the ticker, so a spinner turns between data polls
+    cols, rows: m.rows, ui, tab: m.ui.view === 'board' ? 'route' : m.ui.view, ...(m.ui.view === 'board' ? { board: true } : {}), ...(m.ui.flips?.length ? { flips: m.ui.flips } : {}), tick: m.tick ?? 0, now: spinClock(s.now, m.tick ?? 0), // the one spinner clock (atlas-ui): the snapshot clock moves with the ticker, so a spinner turns between data polls
     expanded: m.ui.expanded, recipient: m.ui.recipient,
-    phases: rail.ids, phase: s.phase === 'blocked' ? 'blocked' : rail.phase, ...(m.run ? enteredOf(s.channel ?? '', rail.ids, s.phase, m.run.kind) : {}), todos, workers: ordered, lead,
+    phases: steps, phase: lit, ...(m.run ? enteredOf(s.channel ?? '', steps, s.phase, m.run.kind) : {}), todos, workers: ordered, lead,
     gates, core: m.core,
     ...(m.motion ? { motion: m.motion } : {}),
     ...(m.run ? { run: m.run } : {}),

@@ -14,7 +14,7 @@ export type SidebarModel = {
   gates: GateGroup[];
   /** The Atlas core (contract, verdicts, offload, routes); the g view draws it above the gate groups. */
   core?: CoreModel | null;
-  ui: { recipient: string | null; expanded: string | null; draft: string; view: SidebarView };
+  ui: { recipient: string | null; expanded: string | null; draft: string; view: SidebarView; /** Rows flipped from their default open or closed state (tabs-frame.ts), kept for the session. */ flips?: readonly string[] };
   /** Theme, ASCII and colour depth as the host reported them once (mod/look.ts); absent in fixtures, which read the host environment. */
   look?: Ui;
   columns: number;
@@ -33,6 +33,8 @@ export type SidebarModel = {
 export type SidebarHandlers = {
   selectRecipient(name: string): void;
   toggle(key: string): void;
+  /** Open or close an expandable row of the frame tabs in place (remembered for the session); absent in fixtures that do not wire it. */
+  flip?(key: string): void;
   draftChange(text: string): void;
   send(text: string): void;
   copy(text: string): void;

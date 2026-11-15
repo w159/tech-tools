@@ -3,7 +3,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { fillHex, surfaceHex, uiFromEnv, type Run, type Ui, runHex } from '../atlas-ui';
 import { hoverStyle } from '../clickable';
-import { bodyLines, fillRows, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
+import { bodyLines, fillRows, frameTabOf, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarHandlers, SidebarModel } from './sidebar-types';
 
@@ -21,12 +21,29 @@ const rowEl = (els: ClientElements, runs: readonly Run[], ui: Ui): RenderElement
 export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: SidebarHandlers, ui: Ui): RenderElement {
   const press = l.press;
   if (!press) return rowEl(els, l.runs, ui);
+  if (press.kind === 'compose') return composeEl(els, m, on, ui, l.runs); // the chat tab's chip is the message field (frame spec C1: `✎ message the lead`)
+  if (press.kind === 'flip') {
+    const flip = (): void => {
+      if (press.name) on.selectRecipient(press.name);
+      (on.flip ?? on.toggle)(press.key);
+    };
+    return els.Button({ key: press.key, plain: true, onPress: flip, children: l.runs.map((x) => runEl(els, x, ui, press.key)) });
+  }
   const onPress = (): void => {
     if (press.kind === 'worker' && press.name) on.selectRecipient(press.name);
     if (press.copy && m.ui.expanded === press.key) on.copy(press.copy);
     else on.toggle(press.key);
   };
   return els.Button({ key: press.key, plain: true, onPress, children: l.runs.map((x) => runEl(els, x, ui, press.key)) });
+}
+
+/** The chat tab's compose chip as a field: it reads as the chip the frame draws until it is typed in. */
+function composeEl(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ui: Ui, runs: readonly Run[]): RenderElement {
+  const chip = runs.find((x) => x.bgHex !== undefined);
+  return els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: panelBg(ui), children: [
+    ...runs.filter((x) => x !== chip && x.t.trim() === '').map((x) => runEl(els, x, ui)),
+    els.Input({ key: 'msg', label: (chip?.t ?? '').trim() || `✎ message the ${m.ui.recipient ?? 'lead'}`, placeholder: '', value: m.ui.draft, onInput: (v: string) => on.draftChange(v), onSubmit: (v: string) => on.send(v) }),
+  ] });
 }
 
 /** The message field under the team and channel logs. */
@@ -46,5 +63,6 @@ export function viewRows(tab: PanelTab, els: ClientElements, m: SidebarModel, on
   const model = pm ?? panelModelOf({ ...m, ui: { ...m.ui, view: tab } }, ui, inner);
   const body = bodyLines(model);
   const fill = fillRows(model, body.length).map((l) => lineEl(els, l.runs.length ? l : { runs: [{ t: ' ', tone: 'text' }] }, m, on, ui)); // the panel surface down to the foot row
-  return [...body.map((l) => lineEl(els, l, m, on, ui)), ...fill, ...(tab === 'team' || tab === 'channel' ? [inputEl(els, m, on)] : [])];
+  const framed = frameTabOf(model) !== null; // the frame path draws the chat's compose chip itself and the team tab has no field (spec T1-T3, C1-C3)
+  return [...body.map((l) => lineEl(els, l, m, on, ui)), ...fill, ...(!framed && (tab === 'team' || tab === 'channel') ? [inputEl(els, m, on)] : [])];
 }
