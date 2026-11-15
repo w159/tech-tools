@@ -91,7 +91,7 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
     gates = fresh
       ? body(`${denied} denied`, k.alertFg, { t: glyph('■', 'x'), fg: k.alertFg }, k.alertBg)
       : body(`${denied} denied`, k.warn, { t: glyph('■', 'x'), fg: k.warn }, k.chipBg);
-  } else if (g.fired === 0 || !promptedOf(a.kind, h)) gates = body('gates armed', k.dim, { t: glyph('○', 'o'), fg: k.dim }, k.chipBg);
+  } else if (g.fired === 0 || !promptedOf(a.kind, h)) gates = body('gates armed', k.chipFg, { t: glyph('○', 'o'), fg: k.dim }, k.chipBg);
   else gates = body('gates ok', k.chipFg, { t: glyph('●', '*'), fg: k.ok }, k.chipBg);
   const joinW = 3;
   const gatesW = gates.reduce((n, x) => n + textWidth(x.t), 0);

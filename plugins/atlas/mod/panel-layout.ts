@@ -18,7 +18,7 @@ import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runstate';
 import { displayName } from './hud';
 import { sectionRibbon, sortAgents } from './hud-surface';
-import { statusFrame } from './status-frame';
+import { GOTO_PREFIX, statusFrame } from './status-frame';
 import { tabFrame, type TabId } from './tabs-frame';
 import type { GateGroup } from './pane/sidebar-types';
 import { ageWord, KILLED, sparkBraille, sparkOf, sparkOver, totalsOf, wordOf } from './pane/activity';
@@ -137,7 +137,7 @@ export type PanelModel = {
 
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
  * what a second press on an open row copies. */
-export type Press = { kind: 'toggle' | 'worker' | 'flip' | 'compose'; key: string; name?: string; copy?: string };
+export type Press = { kind: 'toggle' | 'worker' | 'flip' | 'compose' | 'goto'; key: string; name?: string; copy?: string };
 export type PanelLine = { runs: Run[]; press?: Press };
 
 // ---- run helpers ---------------------------------------------------------------------------------------------------
@@ -725,7 +725,7 @@ function statusLines(m: PanelModel, h: Health): PanelLine[] {
     todos: { done: m.todos.filter((t) => t.state === 'done').length, total: m.todos.length }, gates: m.gates, health: h, lead: m.cols < 100,
     ...(m.entered ? { entered: m.entered } : {}),
   });
-  return rows.map((x) => line(fitRuns(x, m.cols)));
+  return rows.map((x) => { const to = x.find((y) => y.press?.startsWith(GOTO_PREFIX))?.press; return line(fitRuns(x, m.cols), to ? { kind: 'goto', key: to.slice(GOTO_PREFIX.length) } : undefined); }); // the `+N more ›` chip of a short pane opens the view that holds what it dropped
 }
 
 function statusBody(m: PanelModel): PanelLine[] {

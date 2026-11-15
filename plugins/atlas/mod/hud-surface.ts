@@ -865,6 +865,6 @@ function clipRuns(runs: Run[], cols: number): Run[] {
 }
 
 /** The expanded health card the band's `▴ health` chip opens (frame spec section 6, mod/card-frame.ts): the fixed `HEALTH` ribbon, then the pane's own sections packed in columns. Rows are padded to `cols`. */
-export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
+export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'> & { maxRows?: number }): Run[][] {
   return padRows(cardFrame(h, o), Math.max(8, o.cols));
 }

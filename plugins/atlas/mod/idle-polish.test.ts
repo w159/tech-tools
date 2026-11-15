@@ -192,7 +192,7 @@ describe('11: the team tab has no orphan time axis when nothing ran', () => {
     const lead = { name: 'lead', state: 'waiting', detail: '', secs: 0 } as never;
     const t = body(world(57, { lead, workers: [], mates: [] }, 'team'));
     expect(t.join('\n')).not.toMatch(/^\s*\d+:\d\d\s+\d+:\d\d\s*$/m);
-    expect(t.join('\n')).toContain('0 workers');
+    expect(t.join('\n')).toMatch(/no workers/);
     expect(t.join('\n')).not.toContain('0 running');
   });
 });

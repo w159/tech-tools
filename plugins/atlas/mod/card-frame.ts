@@ -5,7 +5,7 @@
 // (`▾ HEALTH ───`; the band right under it already carries the pill), and so does the band's `▾ health` chip.
 import { type Run, type Ui } from './atlas-ui';
 import type { Health } from './idle-health';
-import { frameKit, hookFeed, promptedOf, statusActivityRows, statusContextRows, statusGatesRows, statusHooksRows, statusRunsRows } from './status-frame';
+import { CARD_MORE_KEY, frameKit, moreRow, promptedOf, statusActivityRows, statusContextRows, statusGatesRows, statusHooksRows, statusRunsRows } from './status-frame';
 import { textWidth } from './theme';
 
 const GUTTER = 3; // blank cells between the two columns
@@ -33,27 +33,43 @@ function pack(columns: readonly Run[][][][], width: number): Run[][] {
   }));
 }
 
-/** The health card at `o.cols` cells: the title chip row, then the packed sections. */
-export function cardFrame(h: Health, o: { cols: number; ui: Ui }): Run[][] {
+/** The health card at `o.cols` cells: the title chip row, then the packed sections. Y2a: with `o.maxRows` (the rows the host gives the card: its slot budget less the band's row) the card keeps whole sections only, dropping the lowest priority first (HOOKS, RUNS, CONTEXT, GATES, ACTIVITY), and ends in a chip `+N more ›` (key `card:more`, opens the status view) when any went. */
+export function cardFrame(h: Health, o: { cols: number; ui: Ui; maxRows?: number }): Run[][] {
   const cols = Math.max(8, o.cols);
   const two = cols >= CARD_COL2;
   const u = two ? Math.floor((cols - 4) / 2) - 1 : Math.max(10, Math.min(cols - 2, ONE_COL_MAX));
   const kit = frameKit(o.ui, u);
   const prompted = promptedOf('idle', h);
-  const secs = [
-    statusActivityRows(kit, h, 3),
-    statusContextRows(kit, h),
-    statusRunsRows(kit, h),
-    statusGatesRows(kit, h, { gates: [], prompted }, false),
-    statusHooksRows(kit, h),
-  ];
-  const [act, ctx, runs, gates, hooks] = secs as [Run[][], Run[][], Run[][], Run[][], Run[][]];
+  const secs = {
+    act: statusActivityRows(kit, h, 3),
+    ctx: statusContextRows(kit, h),
+    runs: statusRunsRows(kit, h),
+    gates: statusGatesRows(kit, h, { gates: [], prompted }, false),
+    hooks: statusHooksRows(kit, h),
+  };
+  type Key = keyof typeof secs;
+  const DROP: readonly Key[] = ['hooks', 'runs', 'ctx', 'gates', 'act']; // the order sections give way
   const present = (xs: Run[][][]): Run[][][] => xs.filter((x) => x.length);
-  const body = two ? pack([present([act, ctx, runs]), present([gates, hooks])], u + 1) : present([act, ctx, runs, gates, hooks]).flatMap((x, i) => (i ? [[] as Run[], ...x] : x));
+  const lay = (kept: ReadonlySet<Key>): Run[][] => {
+    const pick = (...ks: Key[]): Run[][][] => present(ks.filter((k) => kept.has(k)).map((k) => secs[k]));
+    return two ? pack([pick('act', 'ctx', 'runs'), pick('gates', 'hooks')], u + 1) : pick('act', 'ctx', 'runs', 'gates', 'hooks').flatMap((x, i) => (i ? [[] as Run[], ...x] : x));
+  };
+  const all = new Set<Key>(['act', 'ctx', 'runs', 'gates', 'hooks']);
+  let kept = new Set(all);
+  let body = lay(kept);
+  const limit = o.maxRows !== undefined && o.maxRows > 0 ? o.maxRows : Infinity;
+  const gone = (): Key[] => [...all].filter((k) => !kept.has(k) && secs[k].length > 0);
+  for (const k of DROP) {
+    if (1 + body.length + (gone().length ? 1 : 0) <= limit) break;
+    kept = new Set([...kept].filter((x) => x !== k));
+    body = lay(kept);
+  }
+  if (Number.isFinite(limit) && 1 + body.length + (gone().length ? 1 : 0) > limit) body = body.slice(0, Math.max(0, limit - 1 - (gone().length ? 1 : 0))); // a budget under one section: nothing whole fits
+  const more: Run[][] = gone().length ? [moreRow(kit, gone().length, 'status', CARD_MORE_KEY)] : [];
   // The title is a chip that toggles the card (`▾ HEALTH` while it is open): the chip and the rule after it; the pill is the band's, right under it.
   const { on, sp, g, k } = kit;
   const open = o.ui.ascii ? 'v' : '▾';
   const label = ` ${open} HEALTH `;
   const title: Run[] = [sp(1), { t: label, tone: 'text', fg: k.chipFg, bgHex: k.chipBg, bold: true, press: CARD_KEY, hover: true }, sp(1), on(g('─', '-').repeat(Math.max(0, cols - 3 - textWidth(label))), k.rule, { tone: 'dim' })];
-  return [title, ...body];
+  return [title, ...body, ...more];
 }

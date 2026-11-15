@@ -49,16 +49,19 @@ describe('X1: one widget set', () => {
       expect(src, f).not.toMatch(/0\$\{g\('└'|checks {3}ok fail|activityRows\(|contextRows\(|[^s]gatesRows\(|[^s]hooksRows\(/);
     }
   });
+  // Y2b: a tab shows its own body and exactly ONE related shared section (the status tab's own builder): board RUNS, team ACTIVITY, channel RECENT, core GATES, gates HOOKS
+  const SHARED: Record<string, [string, RegExp]> = {
+    team: ['ACTIVITY', /-\d+m +-[\d.]+m +now/], channel: ['RECENT', /\d+s · /], gates: ['HOOKS', /hook(?: · last 64 calls)? +n +p50 +p95 +last/], core: ['GATES', /pass deny last/], board: ['RUNS', /\d+ runs? · med/],
+  };
   for (const cols of WIDTHS) for (const t of ['team', 'channel', 'gates', 'core', 'board'] as TabId[]) {
-    test(`${t} at ${cols}: ACTIVITY, GATES-style HOOKS and CONTEXT are the status tab's rows (chart axis, the hooks table), not the old log`, () => {
+    test(`${t} at ${cols}: its own body plus exactly one shared section, ${SHARED[t]![0]}, drawn by the status tab's builder`, () => {
       const rows = text(tab(t, cols, { workers: t === 'team' ? [{ name: 'w', state: 'running', detail: 'x', secs: 3 }] : [] }));
       const all = rows.join('\n');
-      expect(all).toMatch(/── ACTIVITY /);
-      if (cols >= 48) expect(all).toMatch(/── ACTIVITY ─+ \d+ ev · peak \d+ \/ [\d.]+[sm]/);
-      expect(all).toMatch(/-\d+m +-[\d.]+m +now/);
-      expect(all).toMatch(/hook(?: · last 64 calls)? +n +p50 +p95 +last/);
-      expect(all).toMatch(/── CONTEXT /);
-      expect(all).not.toMatch(/0└5m|checks +ok fail|\d+ seen · \d+ms|no calls/);
+      const ribbons = rows.filter((l) => /^ ── [A-Z]+ /.test(l)).map((l) => l.match(/^ ── ([A-Z]+) /)![1]!);
+      expect(ribbons, `${t}@${cols}`).toHaveLength(2); // the tab's own ribbon, then the one shared section
+      expect(ribbons[1]).toBe(SHARED[t]![0]);
+      expect(all).toMatch(SHARED[t]![1]);
+      expect(all).not.toMatch(/── CONTEXT |0└5m|checks +ok fail|\d+ seen · \d+ms|no calls/);
     });
   }
   test('the status tab, a tab and the card draw the same ACTIVITY chart for one width (one implementation)', () => {
@@ -67,7 +70,7 @@ describe('X1: one widget set', () => {
     const status = buildStatus({ cols: u + 2, room: 39, ui, kind: 'idle', phases: ['research', 'theory'], phase: 'research', spin: '◐', todos: { done: 0, total: 0 }, gates: GROUPS, health: h, lead: false });
     const chartRows = (rows: string[]): string[] => { const i = rows.findIndex((l) => l.includes('── ACTIVITY')); return rows.slice(i + 1, i + 5).map((l) => l.replace(/ +$/, '')); };
     const st = status.map((r) => r.map((x) => x.t).join('').trimEnd());
-    const tb = text(tab('gates', u + 2));
+    const tb = text(tab('team', u + 2));
     const a = chartRows(st).slice(0, 3), b = chartRows(tb).slice(0, 3);
     expect(b[0]).toBe(a[0]); // the y gutter and the first chart row at the same width
     expect(st.join('\n')).toMatch(/hook(?: · last 64 calls)? +n +p50 +p95 +last/);
@@ -82,24 +85,20 @@ describe('X1: one widget set', () => {
 });
 
 describe('X2: no invented rows; an empty tab is never a void', () => {
-  const EMPTY = /○ T\d|○ w\d|·{3,}|--:--|worker +state|item +owner|time +from|check +figure|queued/;
-  for (const cols of WIDTHS) for (const [t, fact] of [['team', 'team off · 0 workers'], ['channel', 'no notes yet'], ['core', 'no verdicts yet'], ['board', '0 items']] as const) {
-    test(`${t} at ${cols}: ribbon, the live fact \`${fact}\`, the last run, then the shared sections; no placeholder`, () => {
+  const EMPTY = /○ T\d|○ w\d|·{3,}|--:--|worker +state|item +owner|time +from|check +figure|queued|last run/;
+  // Y2b: an empty tab is its ribbon and ONE honest line (what appears, what triggers it); the shared section follows, never a filler line of figures
+  for (const cols of WIDTHS) for (const [t, fact] of [['team', /no workers/], ['channel', /no notes/], ['core', /no verdicts/], ['board', /no items/]] as const) {
+    test(`${t} at ${cols}: ribbon, one honest line \`${fact.source}\` that says what appears and when, no placeholder`, () => {
       const rows = text(tab(t, cols));
       const all = rows.join('\n');
-      expect(all).toContain(fact);
-      expect(all).toMatch(/last run 0:05 · 6\/6/);
+      expect(all).toMatch(fact);
+      expect(all).toMatch(/(?:appear|adds?)/);
       expect(all).not.toMatch(EMPTY);
-      for (const s of ['ACTIVITY', 'HOOKS']) expect(all).toContain(`── ${s} `);
       expect(rows.at(-1)).toMatch(/^ +atlas /);
     });
   }
-  test('with no measured run the tab shows no run line at all', () => {
-    const { last: _l, ...rest } = health();
-    expect(text(tab('board', 48, { health: rest as Health })).join('\n')).not.toMatch(/last run/);
-  });
-  test('no word is cut: the board hint shortens before it is cut', () => {
-    for (const cols of [48, 41, 38]) { const t = text(tab('board', cols)); expect(t.slice(0, 3).join('\n'), String(cols)).not.toMatch(/…/); expect(t.slice(1, 3).join(' ')).toMatch(/0 items(?: ·)? +(items )?appear/); }
+  test('no word is cut: the board line shortens before it is cut', () => {
+    for (const cols of [48, 41, 38]) { const t = text(tab('board', cols)); expect(t.slice(0, 3).join('\n'), String(cols)).not.toMatch(/…/); expect(t.slice(1, 3).join(' ')).toMatch(/no items(?: yet)? · (?:items )?(?:appear|a plan adds)/); }
   });
 });
 
@@ -108,7 +107,7 @@ describe('X3: gates tab rows', () => {
   test('a group row carries the status table\'s columns (pass deny last) under one rule', () => {
     const t = rows(48);
     expect(t.find((l) => l.includes('── GATES'))).toMatch(/pass deny last$/);
-    expect(t.find((l) => /completion/.test(l))).toMatch(/[▸▾] [●○] completion +\d +\d +(—|\d+[smh])$/);
+    expect(t.find((l) => /completion/.test(l))).toMatch(/[▸▾] +[●○] completion +\d +\d +(—|\d+[smh])$/);
   });
   test('a child row is `├ ● label` and a short value at the right: a figure, off, ok or the dash; never a sentence', () => {
     for (const cols of WIDTHS) {

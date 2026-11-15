@@ -8,7 +8,7 @@ import { cardFrame } from './card-frame';
 import { composeHistory, emptyHistory, flushHistory, HIST_LAT, HIST_MINUTES, HIST_RUNS, historyView, loadHistory, noteHistoryCtx, noteHistoryRun, parseHistory, resetHistory, serializeHistory, type History } from './history';
 import { eventMinutes, hookStats, noteHook, noteHookMs, resetHookLog, seedHookLatency } from './hook-log';
 import type { Health, HealthCheck } from './idle-health';
-import { chartMinutes, chartSeries, frameKit, runFigures, statusActivityRows, statusFrame, statusHooksRows, statusRunsRows, type StatusIn } from './status-frame';
+import { bucketLabel, chartMinutes, roundBucket, chartSeries, frameKit, runFigures, statusActivityRows, statusFrame, statusHooksRows, statusRunsRows, type StatusIn } from './status-frame';
 import { healthStripRows, STRIP_BELOW_COLS, stripWanted } from './strip-frame';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
@@ -265,7 +265,7 @@ describe('Y1b: the chart window fits the data', () => {
   test('the x labels follow the real window: `-3m ... now`, no fixed `-5m`', () => {
     for (const [age, first, mid] of [[30, '-2m', '-1m'], [150, '-3m', '-1.5m'], [185, '-4m', '-2m'], [1000, '-17m', '-8.5m'], [5000, '-30m', '-15m']] as const) {
       const axis = axisOf(withAge(age));
-      expect(axis.indexOf(first)).toBe(8); // under the first column
+      expect(axis.indexOf(first)).toBe(8 + chartSeries(withAge(age), 46 - 4 - 3).pad); // under the first drawn column (Y2f: the chart is right-aligned)
       expect(axis).toContain(mid);
       expect(axis.endsWith('now')).toBe(true);
       expect(axis).not.toContain('-5m');
@@ -278,8 +278,9 @@ describe('Y1b: the chart window fits the data', () => {
       const outside = chartSeries(withAge(age, [AT - windowMs - 5000]), 40);
       expect(inside.total).toBe(2);
       expect(outside.total).toBe(0);
-      expect(inside.vals).toHaveLength(40);
-      expect(Math.abs(inside.bucketSecs - windowMs / 1000 / 40)).toBeLessThan(1e-6);
+      expect(inside.bucketSecs).toBe(roundBucket(windowMs / 1000, 40)); // Y2f: a round bucket, the smallest that fits the window in 40 columns
+      expect(inside.vals).toHaveLength(Math.ceil(windowMs / 1000 / inside.bucketSecs));
+      expect(inside.pad + inside.vals.length).toBe(40);
     }
   });
 
@@ -289,7 +290,7 @@ describe('Y1b: the chart window fits the data', () => {
     const { vals, peak, bucketSecs } = chartSeries(h, 46 - 4 - 3);
     expect(peak).toBe(Math.max(...vals));
     expect(peak).toBe(5);
-    expect(rows[0]).toMatch(new RegExp(`── ACTIVITY ─+ 8 ev · peak 5 / ${String(Math.round(bucketSecs * 10) / 10).replace('.', '\\.')}s$`));
+    expect(rows[0]).toMatch(new RegExp(`── ACTIVITY ─+ 8 ev · peak 5 / ${bucketLabel(bucketSecs)}$`));
     expect(rows[1]).toMatch(/^ {5} ?5┤/); // the top gutter label is the tallest bar
     expect(rows.at(-2)).toMatch(/^ {5} 0┤/);
     const tall = [...rows[1]!.slice(8)].findIndex((c) => c === '█');
@@ -309,12 +310,12 @@ describe('Y1b: the chart window fits the data', () => {
     const h = withAge(150, stampsOf({ 30_000: 2 }), { hist: { runs: [], minutes } });
     const c = chartSeries(h, 39);
     expect(c.prev.length).toBeGreaterThanOrEqual(3);
-    expect(c.prev.length + 1 + c.vals.length).toBe(39);
+    expect(c.pad + c.prev.length + 1 + c.vals.length).toBe(39);
     expect(c.prev.some((v) => v > 0)).toBe(true);
     expect(c.peak).toBe(Math.max(...c.vals, ...c.prev));
     const rows = statusActivityRows(kit, h, 3);
     const axis = text(rows.at(-1)!).trimEnd();
-    expect(axis.slice(8)).toMatch(/^prev/);
+    expect(axis.slice(8 + c.pad)).toMatch(/^prev/);
     expect(axis).toContain('│');
     expect(axis).toMatch(/│-3m/);
     const bars = rows[3]!;

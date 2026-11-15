@@ -5,7 +5,7 @@ import { fillHex, surfaceHex, uiFromEnv, type Run, type Ui, runHex } from '../at
 import { hoverStyle } from '../clickable';
 import { bodyLines, fillRows, frameTabOf, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
-import type { SidebarHandlers, SidebarModel } from './sidebar-types';
+import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';
 
 /** One run as a Text on the panel (or on its own fill); with NO_COLOR only bold and strike remain. */
 export function runEl(els: ClientElements, x: Run, ui: Ui, hoverKey?: string): RenderElement {
@@ -29,6 +29,7 @@ export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: S
     };
     return els.Button({ key: press.key, plain: true, onPress: flip, children: l.runs.map((x) => runEl(els, x, ui, press.key)) });
   }
+  if (press.kind === 'goto') return els.Button({ key: `goto:${press.key}`, plain: true, onPress: () => on.setView(press.key as SidebarView), children: l.runs.map((x) => runEl(els, x, ui, `goto:${press.key}`)) });
   const onPress = (): void => {
     if (press.kind === 'worker' && press.name) on.selectRecipient(press.name);
     if (press.copy && m.ui.expanded === press.key) on.copy(press.copy);
@@ -40,9 +41,10 @@ export function lineEl(els: ClientElements, l: PanelLine, m: SidebarModel, on: S
 /** The chat tab's compose chip as a field: it reads as the chip the frame draws until it is typed in. */
 function composeEl(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ui: Ui, runs: readonly Run[]): RenderElement {
   const chip = runs.find((x) => x.bgHex !== undefined);
+  const field = runs.find((x) => x !== chip && x.t.trim() !== '' && /^[▁_]+$/.test(x.t)); // Y2c: the drawn input field (an underline across the width) is the empty input's placeholder
   return els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: panelBg(ui), children: [
-    ...runs.filter((x) => x !== chip && x.t.trim() === '').map((x) => runEl(els, x, ui)),
-    els.Input({ key: 'msg', label: (chip?.t ?? '').trim() || `✎ message the ${m.ui.recipient ?? 'lead'}`, placeholder: '', value: m.ui.draft, onInput: (v: string) => on.draftChange(v), onSubmit: (v: string) => on.send(v) }),
+    ...runs.filter((x) => x !== chip && x !== field && x.t.trim() === '').map((x) => runEl(els, x, ui)),
+    els.Input({ key: 'msg', label: (chip?.t ?? '').trim() || `✎ message the ${m.ui.recipient ?? 'lead'}`, placeholder: field?.t ?? '', value: m.ui.draft, onInput: (v: string) => on.draftChange(v), onSubmit: (v: string) => on.send(v) }),
   ] });
 }
 

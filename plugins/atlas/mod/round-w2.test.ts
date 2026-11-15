@@ -110,21 +110,22 @@ describe('J: empty tabs own their body', () => {
     const m = panelWorld(tab as never, cols, ui, { rows: 40, ...EMPTY, run: { kind: 'idle', secs: 0, startMs: NOW, frame: 0 }, health: h(last), ...(tab === 'route' ? { board: true } : {}) } as never);
     return panelLines(m).map((l) => lineText(l).trimEnd());
   };
-  for (const [tab, fact] of [['team', 'team off · 0 workers'], ['channel', 'no notes yet'], ['core', 'no verdicts yet'], ['route', '0 items']] as const) {
-    test(`${tab}: ribbon, the live fact \`${fact}\`, no placeholder rows, then the shared dock and the pinned footer (X2)`, () => {
+  for (const [tab, fact] of [['team', 'no workers yet'], ['channel', 'no notes yet'], ['core', 'no verdicts yet'], ['route', 'no items yet']] as const) {
+    test(`${tab}: ribbon, the live fact \`${fact}\`, no placeholder rows, then its one shared section and the pinned footer (Y2b)`, () => {
       const t = body(tab === 'route' ? 'route' : tab);
       const i = t.findIndex((l) => l.includes(fact));
       expect(i).toBeGreaterThan(0);
       expect(t.some((l) => /── (TEAM|CHAT|CORE|BOARD) /.test(l))).toBe(true);
       expect(t.some((l) => /·{3,}|--:--|○ T\d|○ w\d|queued|worker +state|time +from|check +figure|item +owner/.test(l))).toBe(false); // nothing invented
-      for (const sec of ['ACTIVITY', 'HOOKS']) expect(t.some((l) => l.includes(`── ${sec}`))).toBe(true); // never a void under the fact
+      const shared: Record<string, string> = { team: 'ACTIVITY', channel: 'RECENT', core: 'GATES', route: 'RUNS' };
+      if (tab === 'team' || tab === 'core') expect(t.some((l) => l.includes(`── ${shared[tab]}`))).toBe(true); // never a void under the fact: the tab's one shared section (the board's RUNS and the channel's RECENT need data)
+      expect(t.filter((l) => /^ ── [A-Z]+ /.test(l)).length).toBeLessThanOrEqual(2);
       expect(t.at(-1)!.trim()).toMatch(/^atlas /);
     });
   }
-  test('the last run figures show when the mod measured one, and are never made up', () => {
+  test('no filler line of last-run figures: the tab says what will appear and what triggers it (Y2b)', () => {
     const t = body('team', { secs: 5, done: 6, total: 6, agents: 0, failed: 0, endedAgo: 3 });
-    expect(t.join('\n')).toMatch(/last run 0:05 · 6\/6 · 2 hooks/);
-    expect(body('team').join('\n')).not.toMatch(/last run/);
+    expect(t.join('\n')).not.toMatch(/last run/);
   });
 });
 

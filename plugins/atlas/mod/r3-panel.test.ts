@@ -91,7 +91,7 @@ describe('E9: the stepper has one form at every width', () => {
 
 describe('E12: a tab with nothing to show is a ribbon, one sentence, one measured fact and the footer (frame spec 2.5), never one centred line', () => {
   const empty = { workers: [], notes: [], gates: [], todos: [], core: null, lead: undefined } as Partial<PanelModel>;
-  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['team off · 0 workers']], ['channel', /── CHAT ─+/, ['no notes yet']], ['gates', /── GATES ─+/, ['pass deny last']], ['core', /── CORE ─+/, ['no verdicts yet']]];
+  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['no workers']], ['channel', /── CHAT ─+/, ['no notes yet']], ['gates', /── GATES ─+/, ['pass deny last']], ['core', /── CORE ─+/, ['no verdicts yet']]];
   for (const [tab, ribbon, words] of cases) for (const cols of [54, 37]) {
     test(`${tab} at ${cols} columns`, () => {
       const m = world(cols, 40, 'idle', { ...empty, health: health({ team: 'off' }) }, tab);

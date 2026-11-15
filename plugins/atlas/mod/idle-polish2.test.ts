@@ -135,7 +135,7 @@ describe('6: the team tab with only the lead draws no dead sparkline', () => {
     const top = rows.slice(rows.findIndex((l) => l.includes('── TEAM')), rows.findIndex((l) => l.includes('── TEAM')) + 5).join('\n'); // frame spec T1: the ribbon carries `off`, the lead row sits right under it
     expect(top).not.toMatch(/[⣀⣄⣤⣶⣿▁]/u);
     expect(top).toContain('lead');
-    expect(top).toContain('0 workers');
+    expect(top).toMatch(/no workers/);
   });
 });
 

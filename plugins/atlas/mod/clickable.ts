@@ -21,10 +21,10 @@ export function activeChipStyle(ui: Pick<Ui, 'color' | 'theme'>): { backgroundCo
   return { backgroundColor: hexIn(PALETTES[ui.theme].accent, ui), color: hexIn(PALETTES[ui.theme][inkFor('accent', ui.theme, ui.color)], ui), bold: true };
 }
 
-/** The fill under an idle tab chip: a raised tile one step off the panel, so a chip reads as a button and not as coloured text (the lit chip is filled with the accent, inverse). With no colour the chip is underlined instead. */
+/** The fill under an idle tab chip (Y2c: 239 on the 234 panel, five 256-colour steps up, the same tile as the band's and the frames' chips): a raised tile off the panel, so a chip reads as a button and not as coloured text (the lit chip is filled with the accent, inverse). With no colour the chip is underlined instead. */
 export function chipStyle(ui: Pick<Ui, 'color' | 'theme'>): { backgroundColor?: string; underline?: true } {
   if (ui.color === 'none') return { underline: true };
-  return { backgroundColor: xtermHex(ui.theme === 'latte' ? 253 : 237) };
+  return { backgroundColor: xtermHex(ui.theme === 'latte' ? 253 : 239) };
 }
 
 /** The raised tile a chip sits on (chipStyle's fill). No colour: none (the chip's padding and its glyph still read as a button). */

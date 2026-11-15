@@ -97,16 +97,26 @@ export function frameKit(ui: Ui, u: number) {
     return [sp(1), rule(2), on(head, k.work, { tone: 'accent', bold: true }), rule(Math.max(0, fill)), ...(fit.length ? [sp(1), ...fit] : [])];
   };
   const metaText = (t: string): Run[] => [dim(t)];
-  /** A clickable chip (2.3): one filled run spanning U (or `span` cells), one cell of padding each side, `left` flush left and `right` flush right inside the fill. `alert` is the denial chip (bg 52), `lit` the selected one. */
-  const chip = (left: string, right: string, style: 'idle' | 'lit' | 'alert' = 'idle', span = u): Run[] => {
+  /** A clickable chip (2.3): one filled run spanning U (or `span` cells), one cell of padding each side, `left` flush left and `right` flush right inside the fill. `alert` is the denial chip (bg 52), `lit` the selected one. Y2c: the fill is the raised tile (chip fill 239, violet text). Y2d: `o.right` paints the right text with a semantic colour and `o.mark` the first cell of `left` (a state glyph); both keep the chip's fill. */
+  const chip = (left: string, right: string, style: 'idle' | 'lit' | 'alert' = 'idle', span = u, o: { right?: { fg: string; tone: Run['tone'] }; mark?: { at: number; fg: string; tone: Run['tone'] } } = {}): Run[] => {
     const inner = Math.max(1, span - 2);
     const l = fitText(left, Math.max(1, inner - (right ? textWidth(right) + 1 : 0)));
     const gap = Math.max(0, inner - textWidth(l) - textWidth(right));
-    const text = ` ${l}${' '.repeat(gap)}${right} `;
     const look = style === 'alert' ? { fg: k.alertFg, bgHex: k.alertBg } : style === 'lit' ? { fg: k.litFg, bgHex: k.litBg, bold: true } : { fg: k.chipFg, bgHex: k.chipBg };
-    return [sp(1), { t: text, tone: 'text', hover: true, ...look }];
+    const base = { tone: 'text' as const, hover: true as const, ...look };
+    const parts: Run[] = [];
+    const chars = Array.from(l);
+    const at = style === 'alert' ? -1 : o.mark?.at ?? -1;
+    if (at >= 0 && at < chars.length) {
+      parts.push({ ...base, t: ` ${chars.slice(0, at).join('')}` }, { ...base, t: chars[at]!, fg: o.mark!.fg, tone: o.mark!.tone }, { ...base, t: chars.slice(at + 1).join('') });
+    } else parts.push({ ...base, t: ` ${l}` });
+    if (o.right && style !== 'alert' && right) parts.push({ ...base, t: ' '.repeat(gap) }, { ...base, t: right, fg: o.right.fg, tone: o.right.tone }, { ...base, t: ' ' });
+    else parts.push({ ...base, t: `${' '.repeat(gap)}${right} ` });
+    return [sp(1), ...parts.filter((x) => x.t !== '')];
   };
-  return { u, k, ascii, g, on, dim, txt, green, red, amber, violet, w, sp, row, ribbon, metaText, chip, blank: [] as Run[] };
+  /** Y2c: a chip as one small cell (` ▸ `, ` more › `): the raised tile around `text`, `alert` for a failing row; no fill beyond it. */
+  const cell = (text: string, style: 'idle' | 'alert' = 'idle'): Run => ({ t: text, tone: 'text', hover: true, ...(style === 'alert' ? { fg: k.alertFg, bgHex: k.alertBg } : { fg: k.chipFg, bgHex: k.chipBg }) });
+  return { u, k, ascii, g, on, dim, txt, green, red, amber, violet, w, sp, row, ribbon, metaText, chip, cell, blank: [] as Run[] };
 }
 export type Kit = ReturnType<typeof frameKit>;
 
@@ -145,7 +155,11 @@ const merge = (runs: readonly Run[]): Run[] => {
 };
 
 const trimNum = (x: number): string => String(Math.round(x * 10) / 10);
-/** `10s`, `45s`, `1.5m`: a bucket's size in the rule. */
+/** Y2f: the bucket sizes the chart may use, in seconds (1s 2s 5s 10s 15s 30s 1m 2m): a round figure, never `1.7s`. */
+export const ROUND_BUCKETS = [1, 2, 5, 10, 15, 30, 60, 120] as const;
+/** The smallest round bucket that spans `windowSecs` in at most `cols` columns (the largest when none does). */
+export const roundBucket = (windowSecs: number, cols: number): number => ROUND_BUCKETS.find((b) => windowSecs / b <= cols) ?? ROUND_BUCKETS[ROUND_BUCKETS.length - 1]!;
+/** `10s`, `45s`, `1m`, `1.5m`: a bucket's size in the rule. */
 export const bucketLabel = (secs: number): string => (secs >= 60 ? `${trimNum(secs / 60)}m` : `${trimNum(secs)}s`);
 /** The window the chart covers: the session's age rounded up to the next minute, clamped to 2..30 minutes (5 when the age is unknown). */
 export const chartMinutes = (h: Pick<Health, 'upSecs'>): number => (h.upSecs === undefined ? 5 : Math.max(2, Math.min(30, Math.ceil(h.upSecs / 60))));
@@ -160,16 +174,16 @@ export type ChartData = {
   peak: number;
   minutes: number;
   bucketSecs: number;
-  /** Blank columns at the far left (always 0 now that the window spans every column; kept for the layout arithmetic). */
+  /** Blank columns at the far left (Y2f): the window needs `window / bucket` columns, the chart is right-aligned and the rest stays blank. */
   pad: number;
 };
 
-/** The chart's series at `cols` columns (Y1b): the window follows the session age (`chartMinutes`), buckets are window / columns seconds wide (`3.1s`), aligned to the wall clock (`pulse.stamps`); a pulse with only the 20 x 15 s series spreads each bucket's count to the column at its centre. The persisted minutes before the window (`h.hist`) fill the spare columns left of it. */
+/** The chart's series at `cols` columns (Y1b, Y2f): the window follows the session age (`chartMinutes`), buckets are the smallest round size that fits the window in the columns (`10s`), only that many columns are drawn, right-aligned, aligned to the wall clock (`pulse.stamps`); a pulse with only the 20 x 15 s series spreads each bucket's count to the column at its centre. The persisted minutes before the window (`h.hist`) fill the spare columns left of it. */
 export function chartSeries(h: Health, cols: number): ChartData {
   const p = h.pulse;
   const age = h.upSecs;
-  const minutes = chartMinutes(h);
-  const windowSecs = minutes * 60;
+  const windowMinutes = chartMinutes(h);
+  const windowSecs = windowMinutes * 60;
   // Y1a: the earlier sessions' minutes that lie before the window take up to a quarter of the width (one column per minute), a `│` marker and the window the rest
   const mins = h.hist?.minutes ?? [];
   const firstMin = p?.at !== undefined ? Math.floor((p.at - windowSecs * 1000) / 60_000) : 0; // the first minute of the window
@@ -177,8 +191,9 @@ export function chartSeries(h: Health, cols: number): ChartData {
   const prevCols = age !== undefined && p?.at !== undefined && mins.length > 0 && cols >= 24 ? Math.min(Math.floor(cols / 4), firstMin - mins[0]!.m) : 0;
   const prevRaw = prevCols >= 3 ? Array.from({ length: prevCols }, (_, j) => byMin.get(firstMin - prevCols + j) ?? 0) : [];
   const showPrev = prevRaw.some((x) => x > 0);
-  const n = showPrev ? cols - prevCols - 1 : cols;
-  const bucketSecs = windowSecs / n; // the window spans every column it is given: no blank stretch at the left of a young session's chart
+  const avail = showPrev ? cols - prevCols - 1 : cols;
+  const bucketSecs = roundBucket(windowSecs, avail);
+  const n = Math.min(avail, Math.ceil(windowSecs / bucketSecs)); // only the columns the window needs; the chart is right-aligned
   const vals = new Array<number>(n).fill(0);
   if (p?.stamps && p.at !== undefined) {
     const bms = bucketSecs * 1000;
@@ -197,7 +212,7 @@ export function chartSeries(h: Health, cols: number): ChartData {
   }
   // the minutes in the persisted unit of the chart (events per bucket): a minute's count spread over the bucket's share of the minute, at least 1 for a minute that had events
   const prev = showPrev ? prevRaw.map((c) => (c > 0 ? Math.max(1, Math.round((c * bucketSecs) / 60)) : 0)) : [];
-  return { vals, prev, total: sum(vals), peak: Math.max(0, ...vals, ...prev), minutes, bucketSecs, pad: 0 };
+  return { vals, prev, total: sum(vals), peak: Math.max(0, ...vals, ...prev), minutes: (n * bucketSecs) / 60, bucketSecs, pad: avail - n };
 }
 
 /** `-1.5m`: a minute count on the axis. */
@@ -244,22 +259,27 @@ export function statusActivityRows(kit: Kit, h: Health, rows: number): Run[][] {
   return out;
 }
 
-/** CONTEXT (E): the ribbon carries the runway; one row, the gauge and `6% · 64k of 1M · +12k/turn` (the delta from two measures on). Absent before the first measure. */
+/** The context figure's colour (Y2d): green below 70 %, amber from 70 %, red from 90 %. */
+export const ctxLevel = (pct: number): 'ok' | 'warn' | 'bad' => (pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok');
+
+/** CONTEXT (E): the ribbon carries the runway; one row, the gauge and `6% · 64k of 1M · +12k/turn` (the delta from two measures on). The gauge and the percentage take the ramp (Y2d: green, amber from 70 %, red from 90 %); the token figures are neutral. Absent before the first measure. */
 export function statusContextRows(kit: Kit, h: Health): Run[][] {
-  const { dim, txt, amber, violet, row, ribbon, metaText, g } = kit;
+  const { dim, txt, amber, green, red, row, ribbon, metaText, g } = kit;
   const ctxs = h.pulse?.ctx ?? [];
   const pct = h.ctxPct ?? ctxs.at(-1)?.pct;
   if (pct === undefined) return [];
   const tokens = h.tokens ?? ctxs.at(-1)?.tokens;
   const window = h.pulse?.window ?? h.window;
   const delta = h.pulse && ctxs.length >= 2 ? ctxDelta({ ctx: ctxs }) : undefined;
-  const text = [`${Math.round(pct)}%`, ...(tokens !== undefined ? [`${tokenText(tokens)}${window !== undefined ? ` of ${tokenText(window)}` : ' tokens'}`] : []), ...(delta ? [delta] : [])].join(' · ');
-  const gw = Math.max(6, Math.min(GAUGE_W, kit.u - INDENT - 1 - textWidth(text)));
-  const hot = pct >= 70;
+  const pctText = `${Math.round(pct)}%`;
+  const rest = [...(tokens !== undefined ? [`${tokenText(tokens)}${window !== undefined ? ` of ${tokenText(window)}` : ' tokens'}`] : []), ...(delta ? [delta] : [])];
+  const tail = rest.length ? ` · ${rest.join(' · ')}` : '';
+  const gw = Math.max(6, Math.min(GAUGE_W, kit.u - INDENT - 1 - textWidth(pctText + tail)));
+  const paint = ctxLevel(pct) === 'bad' ? red : ctxLevel(pct) === 'warn' ? amber : green;
   const filled = pct > 0 ? Math.max(1, Math.min(gw, Math.round((pct / 100) * gw))) : 0;
-  const gauge: Run[] = [hot ? amber(g('▰', '#').repeat(filled)) : violet(g('▰', '#').repeat(filled), 1), dim(g('▱', '-').repeat(gw - filled))].filter((x) => x.t !== '');
+  const gauge: Run[] = [paint(g('▰', '#').repeat(filled)), dim(g('▱', '-').repeat(gw - filled))].filter((x) => x.t !== '');
   const runway = h.pulse ? ctxRunway({ ctx: ctxs, ...(window !== undefined ? { window } : {}) }) : undefined;
-  return [ribbon('CONTEXT', runway !== undefined ? metaText(`~${runway} ${runway === 1 ? 'turn' : 'turns'} left`) : []), row([...gauge, hot ? amber(` ${text}`) : txt(` ${text}`)])];
+  return [ribbon('CONTEXT', runway !== undefined ? metaText(`~${runway} ${runway === 1 ? 'turn' : 'turns'} left`) : []), row([...gauge, txt(' '), paint(pctText), ...(tail ? [txt(tail)] : [])])];
 }
 
 /** The runs the RUNS row draws, oldest first: the earlier sessions' (Y1a, persisted: `prev`) then this session's. */
@@ -321,7 +341,7 @@ export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boo
     const mark = deny > 0 ? red(g('■', 'x')) : fired ? green(g('●', '*')) : dim(g('○', 'o'));
     const lastSecs = fired ? gateLastSecs(h, c) : undefined;
     const right: Run[] = fired
-      ? [txt(cell(String(n.pass))), deny > 0 ? red(cell(String(deny))) : txt(cell('0')), lastSecs !== undefined ? dim(cell(agoText(lastSecs))) : dim(cell(none))]
+      ? [n.pass > 0 ? green(cell(String(n.pass))) : dim(cell('0')), deny > 0 ? red(cell(String(deny))) : dim(cell('0')), lastSecs !== undefined ? dim(cell(agoText(lastSecs))) : dim(cell(none))]
       : [dim(cell('0')), dim(cell('0')), dim(cell(none))];
     out.push(row([mark, fired ? txt(` ${fitText(c.id, nameW)}`) : dim(` ${fitText(c.id, nameW)}`)], right));
     if (deny > 0 && children) {
@@ -357,12 +377,12 @@ export function hookTable(h: Health): HookRow[] {
 
 /** HOOKS (D): the fixed table of the wired hooks, header row then one row each: name, count, p50, p95, last (right-aligned, flush right). A hook that never fired is dim `0 — — —`. The rule states the latency colours once (amber over 100 ms, red over 500 ms); only the latency cells take them. `rows` cuts the table from the end on a short pane. */
 export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length): Run[][] {
-  const { dim, txt, red, amber, row, ribbon, metaText, g } = kit;
+  const { dim, txt, red, amber, green, row, ribbon, metaText, g } = kit;
   const narrow = kit.u < 44;
   const wl = narrow ? 5 : 6;
   const pad = (t: string, n: number): string => t.padStart(n);
   const none = g('—', '-');
-  const ms = (v: number | undefined, prev = false): Run => (v === undefined ? dim(pad(none, wl)) : prev ? dim(pad(`${v}ms`, wl)) : v > 500 ? red(pad(`${v}ms`, wl)) : v > 100 ? amber(pad(`${v}ms`, wl)) : txt(pad(`${v}ms`, wl)));
+  const ms = (v: number | undefined, prev = false): Run => (v === undefined ? dim(pad(none, wl)) : prev ? dim(pad(`${v}ms`, wl)) : v > 500 ? red(pad(`${v}ms`, wl)) : v > 100 ? amber(pad(`${v}ms`, wl)) : green(pad(`${v}ms`, wl)));
   const table = hookTable(h);
   // Y1a: the latencies are the last 64 calls of each hook across sessions (the persisted ring), so the head says so; a figure no call of this session has made is dim (`prev`)
   const roomL = kit.u - INDENT - (4 + wl * 2 + 5) - 1; // what the name column has left of the figures
@@ -392,6 +412,16 @@ export function footerRow(kit: Kit, h: Health): Run[] {
   const left = [h.version ? `atlas ${h.version}` : '', h.branch ?? ''].filter(Boolean).join(' · ');
   if (!left) return kit.blank;
   return kit.row([kit.dim(left)], h.pulse?.cost ? [kit.dim(`cost $${h.pulse.cost.usd.toFixed(2)}`)] : []);
+}
+
+/** Press keys of the `+N more ›` chip (Y2a): `goto:<view>` on a pane tab (the view that holds a dropped section), `card:more` on the health card. */
+export const GOTO_PREFIX = 'goto:';
+export const CARD_MORE_KEY = 'card:more';
+/** The view that holds each section a short pane drops (`route` is the status tab). */
+export const STATUS_HOLDER: Readonly<Record<string, string>> = { activity: 'team', context: 'route', runs: 'board', hooks: 'gates', recent: 'channel', gates: 'core' };
+/** The last row of a view that dropped whole sections: a chip `+N more ›` (N sections) that carries `key`. */
+export function moreRow(kit: Kit, n: number, target: string, key = `${GOTO_PREFIX}${target}`): Run[] {
+  return kit.row([{ ...kit.cell(` +${n} more ${kit.g('›', '>')} `), press: key, bold: true }], [], 0);
 }
 
 /** The status body as rows of runs (each starts with the gutter cell); the first row is blank when `lead`, the last is the footer. */
@@ -456,30 +486,34 @@ export function statusFrame(a: StatusIn): Run[][] {
   const context = statusContextRows(kit, h);
   const runsSec = statusRunsRows(kit, h);
 
-  // ---- the stack (D): sections, then every spare row down to the pinned footer goes to the chart (to 8), then the RECENT log, then the chart again (to 12); a short pane gives up hooks rows, RUNS, gate children, CONTEXT in that order ----
-  type Plan = { chart: number; recent: number; hooks: number; runs: boolean; children: boolean; ctx: boolean };
+  // ---- the stack (D, Y2a): sections, then every spare row down to the pinned footer goes to the chart (to 8), then the RECENT log, then the chart again (to 12). A short pane gives up whole sections, never rows of one: HOOKS, RUNS, the gate children, CONTEXT, ACTIVITY in that order; a `+N more ›` chip ends the body when a section went. ----
+  type Plan = { chart: number; recent: number; hooks: boolean; runs: boolean; children: boolean; ctx: boolean; activity: boolean };
+  const dropped = (o: Plan): string[] => [...(o.activity ? [] : ['activity']), ...(o.ctx || !context.length ? [] : ['context']), ...(o.runs || !runsSec.length ? [] : ['runs']), ...(o.hooks ? [] : ['hooks'])];
   const sectionsOf = (o: Plan): Run[][][] => [
-    now, statusActivityRows(kit, h, o.chart), ...(o.ctx && context.length ? [context] : []), ...(o.runs && runsSec.length ? [runsSec] : []),
-    statusGatesRows(kit, h, src, o.children), statusHooksRows(kit, h, o.hooks), ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
+    now, ...(o.activity ? [statusActivityRows(kit, h, o.chart)] : []), ...(o.ctx && context.length ? [context] : []), ...(o.runs && runsSec.length ? [runsSec] : []),
+    statusGatesRows(kit, h, src, o.children), ...(o.hooks ? [statusHooksRows(kit, h)] : []), ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
   ];
-  const sizeOf = (o: Plan): number => { const s = sectionsOf(o); return (a.lead ? 1 : 0) + sum(s.map((x) => x.length)) + s.length - 1; };
+  const sizeOf = (o: Plan): number => { const s = sectionsOf(o); return (a.lead ? 1 : 0) + sum(s.map((x) => x.length)) + s.length - 1 + (dropped(o).length ? 2 : 0); };
   const foot = footer.length ? 1 : 0;
   const cap = a.room > 0 ? a.room - foot : Infinity;
-  let plan: Plan = { chart: a.room > 0 ? CHART_MIN : 4, recent: 0, hooks: WIRED_HOOKS.length, runs: true, children: true, ctx: true };
+  let plan: Plan = { chart: a.room > 0 ? CHART_MIN : 4, recent: 0, hooks: true, runs: true, children: true, ctx: true, activity: true };
   if (a.room > 0) {
     const fits = (o: Plan): boolean => sizeOf(o) <= cap;
-    while (!fits(plan) && plan.hooks > 1) plan = { ...plan, hooks: plan.hooks - 1 };
+    if (!fits(plan)) plan = { ...plan, hooks: false };
     if (!fits(plan)) plan = { ...plan, runs: false };
     if (!fits(plan)) plan = { ...plan, children: false };
     if (!fits(plan)) plan = { ...plan, ctx: false };
-    if (fits(plan)) {
+    if (!fits(plan)) plan = { ...plan, activity: false };
+    if (fits(plan) && plan.activity) {
       while (plan.chart < CHART_SPEC_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
       while (plan.recent < feed.length && fits({ ...plan, recent: plan.recent + 1 })) plan = { ...plan, recent: plan.recent + 1 };
       while (plan.chart < CHART_MAX && fits({ ...plan, chart: plan.chart + 1 })) plan = { ...plan, chart: plan.chart + 1 };
     }
   }
   const secs = sectionsOf(plan);
-  const body: Run[][] = [...(a.lead ? [blank] : []), ...secs.flatMap((s, i) => [...s, ...(i < secs.length - 1 ? [blank] : [])])];
+  const gone = dropped(plan);
+  const more: Run[][] = gone.length ? [blank, moreRow(kit, gone.length, STATUS_HOLDER[gone[0]!] ?? 'gates')] : [];
+  const body: Run[][] = [...(a.lead ? [blank] : []), ...secs.flatMap((s, i) => [...s, ...(i < secs.length - 1 ? [blank] : [])]), ...more];
   if (a.room > 0) {
     const cut = body.slice(0, cap);
     return [...cut, ...Array.from({ length: Math.max(0, cap - cut.length) }, () => blank), ...(foot ? [footer] : [])];

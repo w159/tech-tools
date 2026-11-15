@@ -15,6 +15,7 @@ import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './transcript/superseded';
 import { composeSlot } from './slot';
 import { healthCardRows } from './hud-surface';
+import { CARD_MORE_KEY } from './status-frame';
 import { healthLine, type HealthIn } from './idle-health';
 import { hookDone, hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
 import { denyAgeSecs, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
@@ -1533,7 +1534,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const runOn = e.props.isWorking === true || runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
 		const health = bandHealth(bandIn([], 1)); // wave 42: the idle health, from the band's own inputs
 		const healthLn = health ? healthLine(health, look.ui) : '';
-		const healthCard = health && healthIn.open ? healthCardRows(health, { cols: columns, ui: look.ui }).map((row) => row.filter((x) => x.t !== '').map((x) => segmentOf(x, look.ui))) : undefined;
+		const healthCard = health && healthIn.open ? healthCardRows(health, { cols: columns, ui: look.ui, ...(e.props.maxRows !== undefined && budget > 1 ? { maxRows: budget - 1 } : {}) }).map((row) => row.filter((x) => x.t !== '').map((x) => segmentOf(x, look.ui))) : undefined;
 		// Y1d: below the pane's rest width an idle session gets the two-row health strip above the band (never beside the open pane or the open card); it takes its rows off the budget first
 		const stripOn = health !== undefined && e.props.maxRows !== undefined && budget >= STRIP_ROWS + 2 && stripWanted({ cols: columns, kind: shownKind, panel: healthIn.panel === true, open: healthIn.open === true });
 		const plan = composeSlot({ budget: stripOn ? budget - STRIP_ROWS : budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView: { ...hudView, ...(healthLn ? { healthLine: healthLn } : {}) }, ...(healthCard ? { healthCard } : {}), running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: slotHeld });
@@ -1547,7 +1548,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			fullscreen: e.viewport?.isFullscreen === true,
 		});
 		const handlers = bandHandlers($);
-		const hudPress = { press: (key: string): void => { if (key === 'band:health') handlers.toggleHealth?.(); }, hover: (key: string): object => hoverStyle(look.ui, key) }; // the card's `▾ hide` chip toggles the card like the band's `▸ health`
+		const hudPress = { press: (key: string): void => { if (key === 'band:health') handlers.toggleHealth?.(); else if (key === CARD_MORE_KEY) handlers.openView('route'); }, hover: (key: string): object => hoverStyle(look.ui, key) }; // the card's `▾ hide` chip toggles the card like the band's `▸ health`
 		bandDrawnMs = clockNow;
 		const band = bandTree(els, plan.band, handlers);
 		// One blank row between the band and the HUD (A3), in the HUD's own panel fill.

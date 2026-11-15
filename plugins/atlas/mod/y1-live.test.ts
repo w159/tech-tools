@@ -114,8 +114,8 @@ async function boot(files?: Record<string, string>) {
   await cap.one('session.start')(s.$, { cwd: ROOT, surface: 'terminal', isInteractive: true }, noopNext);
   await settle();
   const props = { working: false };
-  const band = async (columns = 150, fullscreen = false): Promise<Node> =>
-    (await cap.one('ui.render', ['component', 'AbovePrompt'])(s.$, { surface: 'terminal', viewport: { isFullscreen: fullscreen, columns }, props: { hasSurvey: false, bodyColumns: columns, maxRows: 14, isWorking: props.working } }, async () => fakeEls.Text({ children: 'prompt' }))) as Node;
+  const band = async (columns = 150, fullscreen = false, maxRows = 14): Promise<Node> =>
+    (await cap.one('ui.render', ['component', 'AbovePrompt'])(s.$, { surface: 'terminal', viewport: { isFullscreen: fullscreen, columns }, props: { hasSurvey: false, bodyColumns: columns, maxRows, isWorking: props.working } }, async () => fakeEls.Text({ children: 'prompt' }))) as Node;
   const pane = async (columns = 56): Promise<Node> =>
     (await cap.one('ui.render', ['component', 'Pane'])(s.$, { surface: 'terminal', requestId: 'atlas', props: { bodyColumns: columns, scroll: { bodyRows: 40 } } }, noopNext)) as Node;
   const measure = (e: unknown) => cap.one('session.measure')(s.$, e, noopNext);
@@ -201,7 +201,7 @@ describe('y1-live: the history file (Y1a)', () => {
     const idle = textOf(await c.band(110));
     expect(idle).toMatch(/prev run \d+:\d\d (ok|failed)/);
     await press(button(await c.band(110), 'band:health', 'details'));
-    const card = textOf(await c.band(110));
+    const card = textOf(await c.band(110, false, 40)); // Y2a: a card keeps whole sections only: a taller slot holds RUNS
     expect(card).toMatch(/── RUNS ─+ .*prev/);
   });
 

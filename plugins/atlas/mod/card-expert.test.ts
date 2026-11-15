@@ -87,7 +87,7 @@ describe('gates: one vocabulary', () => {
 describe('pulse rows', () => {
   test('events: the chart, `N ev` and the peak; context: the gauge, `6%`, `64k of 1M`; the cost stays on the pane\'s footer', () => {
     const rows = rowsText(card(health(), 110, BUSY));
-    expect(rows.find((r) => /^ {8}-\d+m .*-[\d.]+m .*now/.test(r))).toBeDefined(); // the chart's axis under the bars
+    expect(rows.find((r) => /^ +-\d+m .*-[\d.]+m .*now/.test(r))).toBeDefined(); // the chart's axis under the bars
     expect(rows.find((r) => r.includes('── ACTIVITY'))).toMatch(/\b8 ev · peak \d+ \/ [\d.]+s/);
     const cx = rows.join('\n');
     expect(cx).toMatch(/▰[▰▱]{11} 6%/);
@@ -96,7 +96,7 @@ describe('pulse rows', () => {
   });
   test('an empty pulse is a flat baseline and `0 ev`, never `none yet` or an invented number', () => {
     const rows = rowsText(card(health({ ctxPct: undefined, tokens: undefined, window: undefined }), 110, IDLE));
-    expect(rows.find((r) => /^ {8}-\d+m .*-[\d.]+m .*now/.test(r))).toBeDefined();
+    expect(rows.find((r) => /^ +-\d+m .*-[\d.]+m .*now/.test(r))).toBeDefined();
     expect(rows.join('\n')).toMatch(/\b0 ev\b/);
     expect(rows.join('\n')).not.toContain('none yet');
     expect(rows.join('\n')).not.toMatch(/cost|\$/);

@@ -164,9 +164,11 @@ describe('the status tab body, round W1', () => {
       const u = cols - 2;
       const rows = bodyRaw(render(cols, 'idle', IDLE([], [])));
       const base = rows.find((l) => /^ {5} 0┤/.test(l))!;
-      expect(textWidth(base)).toBe(u + 1);
-      expect([...base.slice(8)].filter((c) => c === BLOCKS[0]).length + [...base.slice(8)].filter((c) => c !== BLOCKS[0]).length).toBe(u - 7);
-      expect([...base.slice(8)].every((c) => c === BLOCKS[0])).toBe(true); // idle: the dim zero glyph in every empty column, the band spark's own
+      expect(textWidth(base)).toBe(u + 1); // Y2f: right-aligned, so the last cell is col U
+      const cells = [...base.slice(8)];
+      expect(cells.length).toBe(u - 7);
+      expect(cells.filter((c) => c !== ' ').every((c) => c === BLOCKS[0])).toBe(true); // idle: the dim zero glyph in every drawn column, the band spark's own
+      expect(cells.filter((c) => c === BLOCKS[0]).length).toBe(24); // Y2f: the idle health's 2-minute window is 5 s buckets: only those 24 columns are drawn, the rest stays blank at the left
     }
   });
   test('C: the y gutter reads the scale on the top row and 0 on the baseline; the x labels sit under the chart\'s first and last columns', () => {
@@ -179,10 +181,10 @@ describe('the status tab body, round W1', () => {
     expect(rows[top]!.slice(5, 8)).toMatch(/^ ?\d┤$|^\d\d┤$/);
     for (let i = top + 1; i < base; i++) expect(rows[i]!.slice(5, 8)).toBe('  │');
     const axis = rows[base + 1]!;
-    expect(axis.indexOf('-4m')).toBe(8); // Y1b: the window is the session's age (185 s) rounded up to the next minute
+    expect(axis.indexOf('-4m')).toBe(u + 1 - 24 /* 4 minutes of 10 s buckets */); // Y1b, Y2f: the window is the session's age (185 s) rounded up to the next minute, drawn right-aligned in only the columns it needs
     expect(axis.indexOf('now') + 3).toBe(u + 1);
     expect(axis).toContain('-2m');
-    expect(axis.indexOf('-2m')).toBeGreaterThan(8 + 3);
+    expect(axis.indexOf('-2m')).toBeGreaterThan(axis.indexOf('-4m') + 3);
     expect(axis.indexOf('-2m') + 3).toBeLessThan(axis.indexOf('now'));
   });
   test('C: the stats ride the section rule; idle with no events says waiting', () => {
@@ -191,11 +193,12 @@ describe('the status tab body, round W1', () => {
     expect(body(render(W150, 'working', WORKING(false))).some((l) => /no calls|^ {20,}\d+ ev$/.test(l))).toBe(false);
   });
   test('C: events are bucketed to the chart\'s width and aligned to the wall clock; the total is conserved', () => {
-    const at = 1_000_000_000_000;
+    const at = 1_000_000_005_000; // 5 s into a 10 s bucket: the newest stamps fall in the last one
     const stamps = [at - 290_000, at - 100_000, at - 100_050, at - 3000, at - 10];
     const pulse = { events: [], ctx: [], runs: [], stamps, at };
     const a = chartSeries({ ...IDLE(EV.idle, []), upSecs: 300, pulse }, 40);
-    expect(a.vals).toHaveLength(40);
+    expect(a.vals).toHaveLength(30); // Y2f: 5 minutes of 10 s buckets, 30 of the 40 columns; the other ten are blank
+    expect(a.pad).toBe(10);
     expect(a.total).toBe(5);
     expect(a.vals.at(-1)).toBeGreaterThanOrEqual(1);
     const b = chartSeries({ ...IDLE(EV.idle, []), upSecs: 300, pulse: { ...pulse, at: at + 100 } }, 40); // later in the same bucket: the same series
@@ -212,7 +215,7 @@ describe('the status tab body, round W1', () => {
       return t.findIndex((l) => /^ {5} 0┤/.test(l)) - t.findIndex((l) => /^ {5}\s?\d+┤/.test(l)) + 1;
     };
     expect(count(30)).toBeGreaterThanOrEqual(3);
-    expect(count(30)).toBeLessThanOrEqual(count(36));
+    expect(count(30)).toBeLessThanOrEqual(12); // a pane that drops HOOKS whole (Y2a) hands its rows to the chart
     expect(count(41)).toBeGreaterThanOrEqual(8);
     expect(count(41)).toBeLessThanOrEqual(12);
   });
@@ -238,15 +241,15 @@ describe('the status tab body, round W1', () => {
     expect(hookTable(h).find((x) => x.name === 'prompt.submit')).toEqual({ name: 'prompt.submit', n: 0 });
     resetHookLog();
   });
-  test('D: latency cells take amber over 100 ms and red over 500 ms, and nothing else does', () => {
+  test('D: latency cells take green inside 100 ms, amber over it and red over 500 ms', () => {
     const hooks = { ...WORKING(false).hooks!, perHook: [{ label: 'tool.call', n: 6, p50: 40, p95: 120, lastSecs: 5 }, { label: 'turn.complete', n: 1, p50: 90, p95: 600, lastSecs: 9 }, { label: 'classic.Stop', n: 1, p50: 100, p95: 100, lastSecs: 9 }] };
     const m = render(W150, 'working', { ...WORKING(false), hooks });
     const tone = (t: string): string | undefined => runsOf(m, t).find((x) => x.t.trim() === t)?.tone;
     expect(tone('120ms')).toBe('warn');
     expect(tone('600ms')).toBe('bad');
-    expect(tone('40ms')).toBe('text');
-    expect(tone('90ms')).toBe('text');
-    expect(runsOf(m, '100ms').filter((x) => x.t.trim() === '100ms').every((x) => x.tone === 'text')).toBe(true);
+    expect(tone('40ms')).toBe('ok'); // Y2d: a latency inside its threshold reads green
+    expect(tone('90ms')).toBe('ok');
+    expect(runsOf(m, '100ms').filter((x) => x.t.trim() === '100ms').every((x) => x.tone === 'ok')).toBe(true);
   });
   test('D: rows past the sections go to the RECENT log of real events', () => {
     const rows = body(render(W150, 'done', DONE(), false, 49));
