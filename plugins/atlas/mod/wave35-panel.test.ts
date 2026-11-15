@@ -144,14 +144,14 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
     const ids: string[] = [];
     await placeFinished(engine(ids), running(NOW - 1000), clean(NOW));
     const id = ids.find((i) => i.startsWith('done-run'))!;
-    expect(flatEl(placedTree(id, ui))).toMatch(/\s0:47$/); // the pane has not said the band's clock: the workers' span
+    expect(flatEl(placedTree(id, ui))).toMatch(/2 workers$/); // slice S4: the card prints no time at all
     noteRunSecs(33);
-    expect(flatEl(placedTree(id, ui))).toMatch(/\s0:47$/); // truth 39: a placed card is never rewritten by a later reading
+    expect(flatEl(placedTree(id, ui))).toMatch(/2 workers$/); // slice S4: no time on the card; truth 39: a placed card is never rewritten by a later reading
     forgetPlaced();
     noteRunSecs(33);
     const ids2: string[] = [];
     await placeFinished(engine(ids2), running(NOW - 1000), clean(NOW));
-    expect(flatEl(placedTree(ids2.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/\s0:33$/); // 4fef5d66: the card said 0:13 and the band 0:33; the band's clock at placement wins
+    expect(flatEl(placedTree(ids2.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/2 workers$/); // slice S4 (was 4fef5d66: the card said 0:13, the band 0:33): the card prints no time, the band's clock is the one
     noteRunSecs(undefined);
     forgetPlaced();
   });
@@ -171,9 +171,9 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
     const t = rows();
     expect(t[0]).toMatch(/SIDEPANEL/);
     expect(t[0]).not.toMatch(/status\s*$/); // round 2: the lit chip says `status`; the ribbon does not repeat it
-    expect(t.find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+◐ working 0:57$/);
-    expect(rows(57, BLOCKED).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+▲ blocked\s+0:57$/);
-    expect(rows(57, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+● done\s+0:52$/);
+    expect(t.find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+◐ working$/);
+    expect(rows(57, BLOCKED).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+▲ blocked$/);
+    expect(rows(57, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*phase\b/.test(l))).toMatch(/phase\s+● done$/);
   });
   test('phases are the true ones: only the entered ones are green, the lit one wears the clock', () => {
     const chain = rows(70).find((l) => /research ›/.test(l))!;

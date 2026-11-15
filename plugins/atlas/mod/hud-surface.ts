@@ -6,7 +6,8 @@ import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFram
 import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
-import { healthRows, type Health } from './idle-health';
+import { fitFields, gateOf, healthRows, noteOf, type Health } from './idle-health';
+import { chevron, clickRun } from './clickable';
 import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
@@ -836,19 +837,48 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
 
 // ---- HEALTH (wave 42) -------------------------------------------------------------------------------------
 
-/** The expanded health card the band's `▾ health` button opens: the TODO box's own shape (ribbon, rows padded to the full width, closing rule). It adds what the band does not say, never the band again: each gate
- * with its own state and checks, the events the hooks saw, the context against its window, how each worker of the last run ended (idle-health `healthRows` detail: only data the mod has). */
+/** Runs cut to at most `cols` cells (cut by code point, never a cell over; a card row is built to fit, this only guards a very narrow pane). */
+function clipRuns(runs: Run[], cols: number): Run[] {
+  const out: Run[] = [];
+  let used = 0;
+  for (const x of runs) {
+    const w = cells(x.t);
+    if (used + w <= cols) { out.push(x); used += w; continue; }
+    if (used < cols) { let cut = ''; for (const ch of x.t) { if (used + cells(cut + ch) > cols) break; cut += ch; } out.push({ ...x, t: cut }); }
+    break;
+  }
+  return out;
+}
+
+/** The expanded health card the band's `▾ health` button opens (slice S4): a FLAT ribbon like the TODO and SUBAGENTS ones (`── ▾ HEALTH ──── ▾ hide ──`, no corners), every row exactly `cols` wide, and the rows are a superset of the
+ * panel's health rows: gates (the one `● name n/m` vocabulary, each with its note, two to a row when they fit), the events spark (28 cells of 15 s buckets) with `N in 5m`, the context gauge with `64k of 1M` and a short spark, the runs
+ * (bars and counts, never seconds: the band owns the run clock) and the session row (`up · branch · team · version · cost`). The history is `h.pulse` (observed this session; absent: baselines and `none yet`). The `▾ hide` chip carries the band's
+ * own `band:health` press key, so a click closes the card. */
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): Run[][] {
   const { cols, ui } = o;
+  const LABEL = 8;
+  const lead = 2 + LABEL + 1; // two spaces, the label, a space
+  const room = Math.max(8, cols - lead - 1);
+  const rows = healthRows(h, ui, { recent: true, sparkW: 28, gaugeW: 20 });
   const body: Run[][] = [];
-  const panel = h.panel === true; // the side panel is up: its rows (and its footer, which holds the version) say every figure; without it the band's second line says the last run and the events
-  for (const row of healthRows(h, ui, { recent: true })) {
-    const lines: Run[][] = row.detail.map((d): Run[] => {
-      const chk = row.id === 'gates' ? h.gates.checks.find((c) => d.startsWith(`${c.id} `)) : undefined; // a check's own row wears its mark; its note (indented) is a plain line under it
-      return chk ? [stateRun(chk.ok ? (chk.pending ? 'queued' : 'done') : 'failed', ui), t(` ${d}`, 'sub')] : [t(d, 'sub')];
-    });
-    const shown = lines; // the last run's own line and the event count are the band's second line (or the panel's rows): the card is only what opening a row adds
-    shown.forEach((runs, i) => body.push([t('  '), t(i === 0 ? row.label.padEnd(8) : ' '.repeat(8), 'muted'), t(' '), ...runs]));
+  const row = (label: string, runs: Run[]): Run[] => [t('  '), t(label.padEnd(LABEL), 'muted'), t(' '), ...runs];
+  for (const hr of rows) {
+    if (hr.id !== 'gates') { body.push(row(hr.label, fitFields(hr.fields, room))); continue; }
+    // gates: `● completion 1/1 · Last Stop allowed`, two columns when both fit the room, else one per row
+    const items = h.gates.checks.map((c): Run[] => { const g = gateOf(c, ui); const note = noteOf(c); return [t(g.glyph, g.tone), t(` ${g.name} ${g.count}`), ...(note ? [t(` · ${note}`, 'sub')] : [])]; });
+    const widest = items.reduce((n, it) => Math.max(n, runsCells(it)), 0);
+    const two = items.length > 1 && 2 * widest + 3 <= room;
+    for (let i = 0; i < items.length; i += two ? 2 : 1) {
+      const a = items[i]!;
+      const b = two ? items[i + 1] : undefined;
+      body.push(row(i === 0 ? hr.label : '', b ? [...a, t(' '.repeat(widest - runsCells(a) + 3)), ...b] : a));
+    }
   }
-  return padRows([titleRow(cols, 'HEALTH', '', [], ui, false, false, false), ...body, bottomRule(cols, ui)], cols); // the ATLAS badge is the TODO and SUBAGENTS ribbon's; a card opened from the band does not repeat it
+  // the ribbon: `── ▾ HEALTH ───── ▾ hide ──` (ASCII `-- v HEALTH ----- v hide --`)
+  const rule = ui.ascii ? '-' : RULE;
+  const hide = clickRun('hide', true, ui, 'band:health');
+  const head: Run[] = [dimRun(`${rule}${rule} `, ui), titleRun(`${chevron(true, ui)} HEALTH`, ui), dimRun(' ', ui)];
+  const tail: Run[] = [dimRun(' ', ui), hide, dimRun(` ${rule}${rule}`, ui)];
+  const ribbon = [...head, dimRun(rule.repeat(Math.max(1, cols - runsCells(head) - runsCells(tail))), ui), ...tail];
+  return padRows([clipRuns(ribbon, cols), ...body.map((b) => clipRuns(b, cols)), [dimRun(rule.repeat(cols), ui)]], cols);
 }

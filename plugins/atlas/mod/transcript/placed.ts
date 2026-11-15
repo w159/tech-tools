@@ -118,7 +118,7 @@ function redrawChips($: EngineInterface): void {
   try { $.ui.invalidate('ui.render') } catch { /* nothing drawn to refresh */ }
 }
 
-/** The run's own finish card, `▌ ◆ ATLAS  ● done  run  5/5 done · 3 workers  0:52`, in the build where the run first reads clean (never twice, never over a failure or an open dispatch row). */
+/** The run's own finish card, `▌ ◆ ATLAS  ● done  5/5 · 3 workers` (no time: the band owns the run clock), in the build where the run first reads clean (never twice, never over a failure or an open dispatch row). */
 async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: AtlasSnapshot): Promise<void> {
   let mine = false
   try {
@@ -127,9 +127,10 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
     if (runCarded || runPlacing || !prev) return
     if (runFinal === null) return // the band still works: the card flips on the band's own render (noteRunFinal)
     runPlacing = true; mine = true
+    const fact = `${clean.done}/${clean.total} \u00b7 ${clean.workers} ${clean.workers === 1 ? 'worker' : 'workers'}`
+    if (clean.total <= 0 || clean.workers <= 0) return // a card with no fact to say is not placed: the run's time is the band's alone
     const id = `done-run-${++counter}`
-    const banded = typeof runFinal === 'number' ? runFinal : runSecs() // the band's own run clock when the pane has said it: the card opens on the figure the band prints (critique 36: card 0:42, band 0:43)
-    rows.set(id, { name: 'run', role: '', text: textOf({ name: 'run', role: '', failed: false, durationMs: banded !== undefined ? banded * 1000 : clean.durationMs }), failed: false, fact: `${clean.done}/${clean.total} \u00b7 ${clean.workers} ${clean.workers === 1 ? 'worker' : 'workers'}` })
+    rows.set(id, { name: 'run', role: '', text: '', failed: false, fact })
     capped(rows)
     const res = await $.ui.place({ id })
     if (res.isPlaced) { runCarded = true; redrawChips($) } // the lead's `done 5/5` chip may have been drawn before this card existed: it draws again, and draws nothing

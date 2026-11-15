@@ -93,12 +93,12 @@ describe('step 4: the panel phase row is the band\'s last frame', () => {
   };
   test('the panel phase row turns the frame its run carries: same glyph, word and clock as the band for that frame, on every beat', () => {
     for (const frame of [0, 3, 5, 9]) {
-      expect(rowOf(NOW, { run: { kind: 'working', secs: 25, frame } }), String(frame)).toMatch(new RegExp(`^phase ${leadSpinnerGlyph(frame)} working 0:25`));
+      expect(rowOf(NOW, { run: { kind: 'working', secs: 25, frame } }), String(frame)).toMatch(new RegExp(`^phase ${leadSpinnerGlyph(frame)} working$`)) // slice S4: no clock on the panel's phase row;
     }
   });
   test('a frame noted by the band is not read: the run alone decides', () => {
     noteBandFrame(5, 99, NOW, 'idle');
-    expect(rowOf(NOW)).toMatch(/working 0:24/);
+    expect(rowOf(NOW)).toMatch(/working$/);
     forgetBandFrame();
   });
   test('a blocked strip puts the mark on the last phase the run entered, not on an earlier header phase', () => {

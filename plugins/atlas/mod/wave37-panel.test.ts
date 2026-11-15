@@ -118,10 +118,10 @@ describe('step 3: the run card clock (critique 36: card 0:42, band 0:43)', () =>
     await placeFinished(engine(ids), runningAt(NOW - 1000, NAMES), cleanAt(NOW, NAMES)); // the workers' own span is 0:42
     const card = flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui));
     const footer = flat(durationTree(rec({ counts: { done: 5, total: 5, byPhase: {} }, squad: [], activity: {} }), { durationMs: 8000 }, {}, NOW, ui, 43));
-    expect(card).toMatch(/0:43$/);
+    expect(card).not.toMatch(/\d:\d\d/); // slice S4: the run card prints no time; the band's 0:43 is the one
     expect(footer).toMatch(/run 0:43\b/);
     noteRunSecs(44); // the band moved on: a placed card keeps what it said (truth 39)
-    expect(flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/0:43$/);
+    expect(flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui))).toMatch(/3 workers$/); // slice S4: the card says no time
     forgetPlaced();
   });
 });

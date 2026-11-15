@@ -58,15 +58,15 @@ describe('2: the waiting line pulses with the spinner frame', () => {
 
 describe('4: the run duration is said once', () => {
   const last = { secs: 2, done: 0, total: 0, agents: 0, failed: 0, endedAgo: 3 };
-  test('a finished run at rest: `0:02` appears once in the panel', () => {
+  test('a finished run at rest: `0:02` is the band\'s alone, the panel prints it zero times (slice S4)', () => {
     const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last } })).join('\n');
-    expect(t.match(/0:02/g)?.length).toBe(1);
+    expect(t.match(/0:02/g)).toBeNull();
   });
-  test('a live run: the phase row never reads idle, the clock is on it, and no `last run` row repeats it', () => {
+  test('a live run: the phase row never reads idle, carries no clock, and no `last run` row repeats it', () => {
     const t = body(world(54, { run: { kind: 'working', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last } }));
     const phase = t.find((l) => /phase/.test(l))!;
     expect(phase).not.toContain('idle');
-    expect(t.join('\n').match(/0:02/g)?.length).toBe(1);
+    expect(t.join('\n').match(/0:02/g)).toBeNull();
     expect(t.join('\n')).not.toContain('last run');
   });
 });
@@ -121,11 +121,12 @@ describe('8: the HEALTH card has one row schema at both widths', () => {
     expect(a.filter((l) => /^(gates|session)?\s*[●◇■]/.test(l) || /atlas|branch/.test(l)).length).toBe(b.filter((l) => /^(gates|session)?\s*[●◇■]/.test(l) || /atlas|branch/.test(l)).length);
     expect(a.join('|').replace(/\s+/g, ' ').replace(/[─╭╮╰╯]/g, '')).toBe(b.join('|').replace(/\s+/g, ' ').replace(/[─╭╮╰╯]/g, ''));
   });
-  test('a check row is `name state n/m pass`; its note is not glued on', () => {
+  test('a check is `● name n/m`; the team line is the session row\'s `team off`, never a note', () => {
     const t = text(150, true).join('\n');
     expect(t).not.toMatch(/pass · /);
-    expect(t).toContain('Team mode: off');
-    expect(t).toMatch(/tripwire green 3\/3 pass\s*\n/);
+    expect(t).not.toContain('Team mode');
+    expect(t).toContain('team off');
+    expect(t).toMatch(/● tripwire 3\/3/);
   });
 });
 
@@ -142,7 +143,7 @@ describe('9: every tab is a chip', () => {
 describe('10: the last run ended `Ns ago`, not a wall clock with no zone', () => {
   test('relative age on the last run row', () => {
     const last = { secs: 2, done: 0, total: 0, agents: 0, failed: 0, endedAgo: 125 };
-    const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last } })).join('\n');
+    const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last, pulse: { events: [], ctx: [], runs: [{ secs: 2, ok: true, at: 1 }] } } })).join('\n');
     expect(t).toContain(`ended ${agoText(125)} ago`);
     expect(t).not.toMatch(/\d:\d\d [AP]M/);
   });

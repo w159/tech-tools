@@ -147,7 +147,7 @@ describe('step 3: one clock (critique 35: board 0:31, team axis 0:34, footers 0:
   test('the board total, the team axis end and the phase clock all print the band\'s seconds', () => {
     expect(withBand('board').at(-1)).toMatch(/total 0:39\b/);
     expect(withBand('team').find((l) => /^\s+0:00\s+0:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:39\s*$/); // 28d53608: 0:34
-    expect(withBand('route').find((l) => /^\s*phase\b/.test(l))).toMatch(/0:39$/);
+    expect(withBand('route').find((l) => /^\s*phase\b/.test(l))).toMatch(/working$/); // slice S4: the phase row carries no clock
   });
   test('the `▸ run` footer prints the band\'s clock and no partial `+N done`', () => {
     const s = { ...(snap('done') as object), counts: { done: 5, total: 5, byPhase: {} }, squad: [], activity: {} } as never;
@@ -174,7 +174,7 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
     const ids: string[] = [];
     await placeFinished(engine(ids), runningAt(NOW - 1000), cleanAt(NOW));
     const card = flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui));
-    expect(card).toMatch(/^▌ ◆ ATLAS\s+● done\s+5\/5 · 2 workers\s+0:47$/);
+    expect(card).toMatch(/^▌ ◆ ATLAS\s+● done\s+5\/5 · 2 workers$/);
     expect(card.match(/done/g)).toHaveLength(1); // 28d53608: `done  run  5/5 done · 3 workers`
     forgetPlaced();
   });

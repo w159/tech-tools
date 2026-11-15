@@ -4,6 +4,9 @@ import { elapsedClock, stateRun, type Run, type Ui } from './atlas-ui';
 import { textWidth } from './theme';
 import { clickRun } from './clickable';
 import type { HookStats } from './hook-log';
+import type { Pulse } from './pulse';
+import { spark, gaugeFramed } from './spark';
+import { gateLine } from './vocab';
 
 export type HealthLast = { secs?: number; done: number; total: number; agents: number; failed: number; /** Whole seconds since the run ended (a clock with no zone read as a time of day only to its owner): drawn `ended 3m ago`. */ endedAgo?: number; /** Each worker of the run with how it ended and how long it ran. */ workers?: readonly { name: string; state: string; secs?: number }[] };
 /** One gate group: its mark, and (from the gate groups the mod reads) how many of its lines pass and the first line's own words. */
@@ -26,6 +29,10 @@ export type Health = {
   open?: boolean;
   /** Handlers are wired: the band draws the clickable button. */
   button?: boolean;
+  /** Team mode (`off`, `on`) as its own session item; when absent it is read from the tripwire gate's `Team mode: off` note (teamOf), which is then left out of the notes. */
+  team?: string;
+  /** The observed-only history (pulse.ts) the events, context and runs rows draw their shapes from; absent: flat baselines and `none yet`. */
+  pulse?: Pulse;
   /** The side panel is drawn beside the transcript: it already says the gates, the uptime, the context, the events and the last run, so the band and the card say only what it does not. */
   panel?: boolean;
 };
@@ -76,7 +83,7 @@ export function bandDetail(h: Health, lastRun: { secs?: number; done: number; to
 /** A row's fields in drawing order; `keep` says how long a field survives a narrow pane (the lowest goes first, a field is dropped whole, never cut). */
 export type HealthField = { runs: Run[]; keep: number };
 /** The same figures as rows for the HUD card and the panel rows. `fields` is the collapsed value; `detail` is what opening the row adds (lines of real data the collapsed value lacks; empty: nothing to expand). */
-export type HealthRow = { id: 'hooks' | 'gates' | 'session' | 'last'; label: string; fields: HealthField[]; detail: string[]; /** The gates row's mark, for a fold to the count alone. */ runs: Run[] };
+export type HealthRow = { id: 'events' | 'gates' | 'context' | 'runs' | 'session'; label: string; fields: HealthField[]; detail: string[]; /** The row's collapsed value as runs. */ runs: Run[] };
 
 /** The fields that fit `room` cells joined by ` · `, dropping the lowest `keep` first and never cutting a field; the first field is always kept. */
 export function fitFields(fields: readonly HealthField[], room: number): Run[] {
@@ -92,6 +99,16 @@ export function fitFields(fields: readonly HealthField[], room: number): Run[] {
 
 /** A gate note's line in the detail list: indented, so it reads as the note of the check above it. */
 export const NOTE_INDENT = '  ';
+
+/** The team mode as its own item: the Health's `team`, else the value of the tripwire's `Team mode: off` gate note (the gate says it as a note; the surfaces say `team off` in the session row, never as a note). */
+export const teamOf = (h: Pick<Health, 'gates' | 'team'>): string | undefined => h.team ?? h.gates.checks.map((c) => /^Team mode:\s*(.+)$/.exec(c.note ?? '')?.[1]?.trim()).find((x) => !!x);
+/** A gate's note without the team line (that is the session row's `team off`). */
+export const noteOf = (c: HealthCheck): string => (c.note && !/^Team mode:/.test(c.note) ? c.note : '');
+/** One gate in the one vocabulary `● name n/m` (vocab.gateLine): n of m is the gate's own checks that pass; a gate with no checks is `0/0` in the neutral tone, and a failed one keeps its red. */
+export function gateOf(c: HealthCheck, ui: Pick<Ui, 'ascii'>): { glyph: string; name: string; count: string; text: string; tone: Run['tone'] } {
+  const g = gateLine(c.id, c.pass ?? 0, c.lines ?? 0, ui.ascii);
+  return { glyph: g.glyph, name: c.id, count: `${g.pass}/${g.total}`, text: g.text, tone: !c.ok ? 'bad' : g.tone };
+}
 
 /** A hook's own name in words: `session.measure` -> `context measured`; an unnamed one reads its dotted words (`tool.call Bash` -> `tool call Bash`). */
 const EVENT_WORDS: Record<string, string> = { 'session.measure': 'context measured', 'turn.complete': 'turn finished', 'classic.Stop': 'stop check', 'prompt.submit': 'prompt sent', 'session.start': 'session started' };
@@ -116,38 +133,51 @@ export function recentEvents(recent: readonly { label: string; ageSecs: number }
 }
 
 const plural = (n: number, w: string): string => `${n} ${w}${n === 1 ? '' : 's'}`;
-const seconds = (n: number | undefined): string => (n === undefined ? '' : elapsedClock(n));
 
-/** `recent`: a recent-events list is drawn beside the rows, so the hooks row leaves out the age of the last event and the per-label counts that the list already says. */
-export type RowOpts = { recent?: boolean; /** Messages on the channel: folded into the session row only when there are some. */ messages?: number; /** The panel's pinned footer says the version, so the session detail does not. */ footer?: boolean; /** The panel draws the context as its own gauge row: the session row leaves the figure out. */ gauge?: boolean };
+/** `recent`: a recent-events list is drawn beside the rows, so the events row's detail leaves out the per-label counts that the list already says. `gauge`: the panel draws the context as its own gauge rows, so the health rows leave the context row (and the branch) out. `sparkW` / `gaugeW`: cells of the events spark (the panel's 20 buckets, the card's 28) and of the gauge's inner bar. */
+export type RowOpts = { recent?: boolean; /** Messages on the channel: folded into the session row only when there are some. */ messages?: number; /** The panel's pinned footer says the version, so the session row does not. */ footer?: boolean; gauge?: boolean; sparkW?: number; gaugeW?: number };
+/** The events spark's cells in the panel: one per 15 s bucket of the 5 minutes the pulse keeps. */
+export const EVENTS_W = 20;
+const sum = (xs: readonly number[]): number => xs.reduce((n, x) => n + x, 0);
+/** The health rows both the panel and the card read: events, gates, context, runs, session. Every shape is drawn from the pulse (observed this session); an empty one is a flat baseline and `none yet`, never a made-up figure. The run's own seconds are the band's alone (the runs row holds shapes and counts). */
 export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
   const rows: HealthRow[] = [];
+  const p = h.pulse;
   const f = (text: string, keep: number, tone: Run['tone'] = 'text'): HealthField => ({ runs: [r(text, tone)], keep });
-  const ev = h.hooks;
-  const hooksFields: HealthField[] = [{ runs: [stateRun('done', ui), r(ev && ev.total > 0 ? ` ${plural(ev.total, 'event')}` : ' loaded')], keep: 9 }, ...(ev?.lastEventSecs !== undefined && !o.recent ? [f(`last ${agoText(ev.lastEventSecs)} ago`, 5, 'sub')] : [])];
-  rows.push({ id: 'hooks', label: 'hooks', fields: hooksFields, runs: hooksFields.flatMap((x) => x.runs), detail: healthDetail(h, 'hooks', o) });
-  if (h.gates.total > 0) {
-    const checks = h.gates.checks.reduce((n, c) => n + (c.lines ?? 0), 0);
-    const fields: HealthField[] = [{ runs: [gatesMark(h, ui), r(` ${h.gates.green}/${h.gates.total} green`)], keep: 9 }, ...(checks > 0 ? [f(`${plural(h.gates.checks.reduce((n, c) => n + (c.pass ?? 0), 0), 'check')} pass`, 3, 'sub')] : [])];
-    rows.push({ id: 'gates', label: 'gates', fields, runs: [gatesMark(h, ui), r(` ${h.gates.green}/${h.gates.total} green`, 'sub')], detail: healthDetail(h, 'gates', o) });
+  const add = (id: HealthRow['id'], label: string, fields: HealthField[]): void => { rows.push({ id, label, fields, runs: fields.flatMap((x) => x.runs), detail: healthDetail(h, id, o) }); };
+  if (h.gates.checks.length > 0) {
+    const marks = h.gates.checks.flatMap((c, i): Run[] => { const g = gateOf(c, ui); return [...(i ? [r('  ')] : []), r(g.glyph, g.tone), r(` ${g.name}`)]; });
+    add('gates', 'gates', [{ runs: marks, keep: 9 }]);
   }
+  const inWindow = p ? sum(p.events) : 0;
+  const seen = h.hooks?.total ?? 0; // no pulse wired yet: the hooks' own session count is real, and the baseline stays flat
+  const count = inWindow > 0 ? `${inWindow} in 5m` : !p && seen > 0 ? plural(seen, 'event') : 'none yet';
+  add('events', 'events', [{ runs: [r(spark(p?.events ?? [], o.sparkW ?? EVENTS_W, { ascii: ui.ascii }), inWindow > 0 ? 'accent' : 'dim'), r('  '), r(count, count === 'none yet' ? 'muted' : 'text')], keep: 9 }]);
+  if (!o.gauge) {
+    const pct = h.ctxPct;
+    const series = (p?.ctx ?? []).map((x) => x.pct);
+    add('context', 'context', pct === undefined
+      ? [{ runs: [r('none yet', 'muted')], keep: 9 }]
+      : [
+          { runs: [r(gaugeFramed(pct, o.gaugeW ?? 20, ui.ascii), pct > 70 ? 'warn' : 'sub'), r(` ${h.tokens !== undefined ? (h.window !== undefined ? `${tokenText(h.tokens)} of ${tokenText(h.window)}` : `${tokenText(h.tokens)} tokens`) : `${Math.round(pct)}%`}`)], keep: 9 },
+          ...(series.length >= 2 ? [{ runs: [r(spark(series, Math.min(8, series.length), { ascii: ui.ascii }), 'dim')], keep: 3 }] : []),
+        ]);
+  }
+  const done = p?.runs ?? [];
+  const failedRuns = done.filter((x) => !x.ok).length;
+  add('runs', 'runs', done.length
+    ? [{ runs: [r(spark(done.map((x) => x.secs), done.length, { ascii: ui.ascii }), failedRuns > 0 ? 'warn' : 'ok'), r(`  ${plural(done.length, 'run')}`)], keep: 9 }, ...(failedRuns > 0 ? [f(`${failedRuns} failed`, 7, 'bad')] : []), ...(h.last?.endedAgo !== undefined ? [f(`ended ${agoText(h.last.endedAgo)} ago`, 5, 'sub')] : [])]
+    : [{ runs: [r('none yet', 'muted')], keep: 9 }]);
+  const team = teamOf(h);
   const sessionFields: HealthField[] = [
     ...(h.upSecs !== undefined ? [f(`up ${elapsedClock(h.upSecs)}`, 9)] : []),
-    ...(h.ctxPct !== undefined ? (o.gauge ? [] : [f(ctxText(h), 8)]) : h.tokens !== undefined ? [f(`${tokenText(h.tokens)} tok`, 8)] : []),
+    ...(h.branch && !o.gauge ? [f(h.branch, 7)] : []),
+    ...(team ? [f(`team ${team}`, 8)] : []),
+    ...(h.version && !o.footer && !o.gauge ? [f(`atlas ${h.version}`, 4)] : []),
+    ...(p?.cost ? [f(`cost $${p.cost.usd.toFixed(2)}`, 5)] : []), // the host's own measure: absent when the host sent none
     ...(o.messages ? [f(plural(o.messages, 'message'), 2, 'sub')] : []),
-  ]; // the branch and the version are the row's detail, not its value: opening the row is how you see them
-  if (sessionFields.length) rows.push({ id: 'session', label: 'session', fields: sessionFields, runs: sessionFields.flatMap((x) => x.runs), detail: healthDetail(h, 'session', o) });
-  const l = h.last;
-  const lastFields: HealthField[] = l
-    ? [
-        ...(l.secs !== undefined ? [f(seconds(l.secs), 9)] : []),
-        ...(l.failed > 0 ? [f(`${l.failed} failed`, 8, 'warn')] : []),
-        ...(l.endedAgo !== undefined ? [f(`ended ${agoText(l.endedAgo)} ago`, 5)] : []),
-        ...(l.agents > 0 ? [f(plural(l.agents, 'agent'), 4)] : []),
-        ...(l.total > 0 ? [f(`${l.done}/${l.total} todos`, 3)] : []),
-      ]
-    : [{ runs: [r('none this session', 'muted')], keep: 9 }];
-  rows.push({ id: 'last', label: 'last run', fields: lastFields, runs: lastFields.flatMap((x) => x.runs), detail: healthDetail(h, 'last', o) });
+  ];
+  if (sessionFields.length) add('session', 'session', sessionFields);
   return rows;
 }
 
@@ -160,29 +190,19 @@ export function healthLine(h: Health, ui: Ui): string {
 /** What opening a row adds, from data the mod holds and the collapsed value lacks: no line restates the row. An empty list means the row has nothing more to show (it is not expandable). */
 export function healthDetail(h: Health, id: HealthRow['id'], o: RowOpts = {}): string[] {
   if (id === 'gates') {
-    // One schema per check: `name state n/m pass`; a note the gate gave is its own indented line under it (never glued on).
-    return h.gates.checks.flatMap((c) => {
-      const state = c.ok ? (c.pending ? 'pending' : 'green') : 'failed';
-      const count = c.lines !== undefined && c.lines > 0 ? ` ${c.pass ?? 0}/${c.lines} pass` : '';
-      return [`${c.id} ${state}${count}`, ...(c.note ? [`${NOTE_INDENT}${c.note}`] : [])];
-    });
+    // One schema per check, the one vocabulary `● name n/m`; a note the gate gave is its own indented line under it (never glued on).
+    return h.gates.checks.flatMap((c) => [gateOf(c, { ascii: false }).text, ...(noteOf(c) ? [`${NOTE_INDENT}${noteOf(c)}`] : [])]);
   }
-  if (id === 'session') {
-    const out: string[] = [];
-    if (o.gauge) return h.version && !o.footer ? [`atlas ${h.version}`] : []; // the panel draws the tokens and the branch as rows of their own
-    if (h.tokens !== undefined) out.push(h.window !== undefined ? `${grouped(h.tokens)} of ${grouped(h.window)} tokens in the window` : `${grouped(h.tokens)} tokens in the window`);
-    if (h.tokens !== undefined) out.push('measured on the last response, not a session total');
-    if (h.branch) out.push(`branch ${h.branch}`);
-    if (h.version && !o.footer) out.push(`atlas ${h.version}`);
-    return out;
+  if (id === 'session') return o.gauge && h.version && !o.footer ? [`atlas ${h.version}`] : []; // the panel draws the tokens and the branch as rows of their own; the card's session row says everything in its fields
+  if (id === 'context') {
+    if (h.tokens === undefined) return [];
+    return [h.window !== undefined ? `${grouped(h.tokens)} of ${grouped(h.window)} tokens in the window` : `${grouped(h.tokens)} tokens in the window`, 'measured on the last response, not a session total'];
   }
-  if (id === 'hooks') {
+  if (id === 'events') {
     const by = (h.hooks?.byLabel ?? []).filter((e) => !o.recent || e.n > 1); // a label seen once is a line of the recent list: only a count says more than it
     const words = by.map((e) => `${humanEvent(e.label)} ${e.n}`);
-    const lines = Array.from({ length: Math.min(3, Math.ceil(words.length / 2)) }, (_, k) => words.slice(k * 2, k * 2 + 2).join('   '));
-    return lines;
+    return Array.from({ length: Math.min(3, Math.ceil(words.length / 2)) }, (_, k) => words.slice(k * 2, k * 2 + 2).join('   '));
   }
-  const l = h.last;
-  if (!l) return [];
-  return (l.workers ?? []).map((w) => `${w.name} ${w.state}${w.secs !== undefined ? ` ${elapsedClock(w.secs)}` : ''}`);
+  // runs: how each worker of the last run ended (its duration is the band's run clock, never repeated here)
+  return (h.last?.workers ?? []).map((w) => `${w.name} ${w.state}`);
 }

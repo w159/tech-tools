@@ -89,12 +89,12 @@ const render = (view: SidebarView, run: SidebarModel['run'], s = world()): strin
 
 describe('step 2: one run total on the band, the panel, the board and the axis (live-150-1 f0095: card 0:46, band 0:48, panel 0:47)', () => {
   const RUN = { kind: 'done' as const, secs: 46, startMs: NOW - 46000 };
-  test('the board footer, the board axis end, the team axis end and the route phase clock all print 0:46', () => {
+  test('the board footer, the board axis end and the team axis end print 0:46; the route phase row prints no clock (the band owns the run clock)', () => {
     const board = render('board', RUN);
     expect(board.join('\n')).toMatch(/total 0:46\b/);
     expect(board.find((l) => /^\s+0:00\s.*\d:\d\d\s*$/.test(l))).toMatch(/0:46\s*$/);
     expect(render('team', RUN).find((l) => /^\s+0:00\s+\d:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:46\s*$/);
-    expect(render('route', RUN).find((l) => /^\s*phase\b/.test(l))).toMatch(/done 0:46$/);
+    expect(render('route', RUN).find((l) => /^\s*phase\b/.test(l))).toMatch(/done\s*$/); // slice S4: a run's time prints once, on the band
   });
   test('the band prints the same total as the panel: `● done 0:46`', () => {
     const m: MissionModel = { cols: 150, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'done', done: 5, total: 5, workers: [], checks: null, ui, ranSecs: 46, restSecs: 0 };
@@ -138,7 +138,7 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
   const phase = (t: string) => { const x = t.replace(/\s+/g, ' ').match(/phase (\S) (working|done|idle|blocked)\b[^\d]*(\d+:\d\d)?/); return x ? { glyph: x[1], word: x[2], clock: x[3] } : null; };
   for (const tick of [0, 3, 7, 9, 10, 13]) { // 10 and 13: the frame is the unwrapped beat count, which the band and the panel both wrap to the same four marks
     for (const c of cases) {
-      test(`${c.name} at frame ${tick}: same glyph, word and clock`, () => {
+      test(`${c.name} at frame ${tick}: same glyph and word; the clock is the band's alone`, () => {
         const mm: MissionModel = { ...base, ...c.m, tick };
         const band = lead(runsText(bandLines(mm)[0]!.runs));
         expect(band, 'band').not.toBeNull();
@@ -149,7 +149,8 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
         expect(row, 'panel').not.toBeNull();
         expect(row!.glyph).toBe(band!.glyph);
         expect(row!.word).toBe(band!.word);
-        expect(row!.clock).toBe(band!.clock);
+        expect(row!.clock).toBeUndefined(); // slice S4: one clock, on the band
+        expect(band!.clock).toBeDefined();
       });
     }
   }

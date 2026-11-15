@@ -206,7 +206,7 @@ export function blockedTree(reason: string, time: string, ui: Ui = uiFromEnv(), 
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer finished  0:15` (state, name, role, time). The worker's result line lives in the HUD's RESULT column, not on a second row. */
 export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false, o: FinishOpts = {}): RenderElement {
  const text = stripStatus(outcome)
- if (o.run) return finishRow('done', o.fact ?? '', '', timeOf(text), ui, o)
+ if (o.run) return finishRow('done', o.fact ?? '', '', '', ui, o) // the run's duration is the band's alone (`done 0:05`): the card keeps the other facts (stages, workers) and never prints a time
  if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, { ...o, who: name })
  return finishRow('done', displayName(name, role), o.fact ?? '', timeOf(text), ui, { ...o, who: name }) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
 }

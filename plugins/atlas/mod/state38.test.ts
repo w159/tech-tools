@@ -172,7 +172,8 @@ describe('step 4: the run card flips with the band and prints the band\'s final 
       const run = ids.filter((i) => i.startsWith('done-run'));
       expect(run).toHaveLength(1);
       const first = flat(placedTree(run[0]!, ui));
-      expect(first).toContain('0:39');
+      expect(first).not.toContain('0:39'); // slice S4: the run card prints no time
+      expect(first).toContain('1/1 · 1 worker');
       noteRunFinal(41); // a later figure never rewrites the card
       expect(flat(placedTree(run[0]!, ui))).toBe(first);
       await placeFinished(engine(ids), doneSnap(NOW), doneSnap(NOW));

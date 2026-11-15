@@ -18,13 +18,13 @@ describe('follow-up A: the side panel tick is the band tick', () => {
     const other = (sharedSpinFrame(now) + 3) % 10; // a frame the shared clock does not give at `now`
     const row = phaseRowOf({ now, run: { kind: 'working', secs: 42, frame: other } });
     expect(row.match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
-    expect(row).toContain('0:42');
+    expect(row).not.toContain('0:42'); // slice S4: no clock on the panel's phase row
     expect(row).not.toContain('0:41');
     expect(phaseRowOf({ now: now + 50, run: { kind: 'working', secs: 42, frame: other } }).match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
   });
   test('before the band ever drew, the panel falls back to the shared clock and its own seconds', () => {
     forgetBandFrame();
     const row = phaseRowOf({ now: 1_000_000 });
-    expect(row).toContain('0:41');
+    expect(row).not.toContain('0:41');
   });
 });

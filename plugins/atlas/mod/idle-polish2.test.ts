@@ -123,7 +123,7 @@ describe('4: no run, no plan, no agent: one line, not two empty boxes', () => {
 describe('5: each fact once across the band, the card and the panel', () => {
   const one: Health = { ...h, hooks: ONE };
   test('the panel: `session.start` once, no `last 7s ago` on the hooks row beside the recent list, no `1 event` AND `session.start 1`', () => {
-    const t = body(world(57, { health: one, expanded: 'health:hooks' })).join('\n');
+    const t = body(world(57, { health: one, expanded: 'health:events' })).join('\n');
     expect(t.match(/session started/g)?.length).toBe(1); // in words (idle polish 3), once
     expect(t).not.toMatch(/last \d+s ago/);
     expect(t.match(/up 0:16/g)?.length).toBe(1);
@@ -132,7 +132,7 @@ describe('5: each fact once across the band, the card and the panel', () => {
     const t = healthCardRows({ ...one, panel: true }, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
     expect(t).not.toMatch(/last run|session\.start|session started/);
     expect(t).toContain('atlas 17.21.1'); // idle polish 3: the card is one schema at every width, version included
-    expect(t).toContain('completion green');
+    expect(t).toContain('● completion 3/3');
   });
   test('the card with no panel leaves the last run and the events to the band`s second line, and keeps the version', () => {
     const t = healthCardRows(one, { cols: 110, ui }).map((r) => r.map((x) => x.t).join('')).join('\n');
@@ -169,7 +169,7 @@ describe('7: the idle phase chain is dim, bold only while a phase is live', () =
 
 describe('8: the card has no second badge; the band row and the chip strip end on one edge and one fill', () => {
   test('HEALTH ribbon carries no `◖ ◆ ATLAS ◗`', () => {
-    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('')).toMatch(/^╭─ HEALTH ─+╮$/);
+    expect(healthCardRows(h, { cols: 110, ui })[0]!.map((x) => x.t).join('')).toMatch(/^── ▾ HEALTH ─+ ▾ hide ──$/); // slice S4: a flat ribbon with its close chip
   });
   for (const cols of [150, 110]) {
     test(`at ${cols}: both rows are ${cols} cells and their last cells wear the same fill`, () => {
@@ -221,10 +221,10 @@ describe('12: `context 6%` on the band; the tokens and the window only in the se
     expect(r).toContain('context 18%');
     expect(r).not.toMatch(/tok/);
   });
-  test('the session row says `context 6%`; opening it adds the tokens and the window', () => {
-    expect(body(world(57, { rows: 24 })).find((l) => l.includes('session'))).toMatch(/context 6%/); // a short pane: the session row's figure, its detail the tokens
-    expect(body(world(57, { rows: 24 })).find((l) => l.includes('session'))).not.toMatch(/tok/);
-    expect(body(world(57, { rows: 24, expanded: 'health:session' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
+  test('the context row says the gauge and `63k of 1M`; opening it adds the exact tokens and the window', () => {
+    expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).toMatch(/▕.*▏ 63k of 1M/); // a short pane: the context row (slice S4: framed gauge and `63k of 1M`), its detail the exact tokens
+    expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).not.toMatch(/tok/);
+    expect(body(world(57, { rows: 24, expanded: 'health:context' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
     expect(body(world(57)).join('\n')).toMatch(/context ▕█+░*▏ 6%\n\s+63k of 1M tokens/); // a tall pane: the gauge row and the tokens under it
   });
 });

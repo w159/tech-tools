@@ -242,7 +242,7 @@ describe('item 5: every card number is true (critique 33)', () => {
     await placeFinished(engine(ids), running(NOW - 1000), clean(NOW));
     const runId = ids.find((i) => i.startsWith('done-run'))!;
     expect(runId).toBeDefined(); // 4d8d8eb1: only the host's `▌ verify 5/5 done`
-    expect(flat(placedTree(runId, ui))).toMatch(/^▌ ◆ ATLAS\s+● done\s+5\/5 · 2 workers\s+0:47$/);
+    expect(flat(placedTree(runId, ui))).toMatch(/^▌ ◆ ATLAS\s+● done\s+5\/5 · 2 workers$/);
     await placeFinished(engine(ids), clean(NOW), clean(NOW + 1000));
     expect(ids.filter((i) => i.startsWith('done-run'))).toHaveLength(1); // once per run
     forgetPlaced();

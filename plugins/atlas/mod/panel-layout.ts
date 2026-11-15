@@ -7,7 +7,7 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { chipStyle } from './clickable';
-import { agoText, tokenText, fitFields, gatesMark, healthRows, recentEvents, type Health } from './idle-health';
+import { agoText, tokenText, fitFields, gatesMark, healthRows, noteOf, recentEvents, type Health } from './idle-health';
 import { chevron, clickRun } from './clickable';
 import { brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
@@ -504,7 +504,6 @@ function phaseChainRuns(m0: PanelModel, compact: boolean | 'short' | 'one', raw:
     const rest = cur || entered; // a phase not entered yet is its name alone, dim
     // At rest nothing is live: the whole chain is dim, the phase the run stopped in included (a bold lit `research` under `idle` read as a running phase).
     runs.push(...(rest ? [{ ...g, t: `${g.t} ` }] : []), r(p, cur ? (kind === 'idle' ? 'dim' : 'text') : entered ? 'sub' : 'dim', cur && kind !== 'idle' ? { bold: true } : {}));
-    if (clock && cur && kind === 'working' && m.run?.secs !== undefined) runs.push(r(` ${shortAge(m.run.secs)}`, 'dim'));
   });
   return [line(raw ? runs : fitRuns(runs, m.cols))];
 }
@@ -584,13 +583,11 @@ const STATUS_EVENTS = 5;
 const STATUS_SPARK = 12;
 const dimLine = (m: PanelModel, text: string): PanelLine => line(fitRuns([r(' '.repeat(GRID_LEAD)), r(text, 'dim')], m.cols));
 
-/** `phase  ▲ blocked 0:33` and under it the true phases (`● research › ◐ implement › · verify`): the word and the clock are the band's own. */
-function statusPhase(m0: PanelModel, clock = true): PanelLine[] {
+/** `phase  ▲ blocked` and under it the true phases (`● research › ◐ implement › · verify`): the word is the band's own and the run's clock is the band's alone (`working 0:03`, `done 0:05`; a figure prints once). */
+function statusPhase(m0: PanelModel): PanelLine[] {
   const m = withBandRun(m0);
   const head = phaseRow(m, m.phases.length === 0); // the chain under it names the stage: the phase row does not say it a second time
-  const secs = m.run?.secs;
-  // The run's clock is said once: on the phase row while the run is live; at rest it is the `last run` row's (a second `idle 0:02` beside it was the same figure twice).
-  return [secs !== undefined && clock ? { ...head, runs: [...head.runs, r(` ${shortAge(secs)}`, 'dim')] } : head, ...phaseChain(m, 'auto')];
+  return [head, ...phaseChain(m, 'auto')];
 }
 
 /** One row per agent: its mark, whole name, 12 braille cells of its calls over the run's window, and its time. */
@@ -658,8 +655,8 @@ function waitingLine(m: PanelModel): PanelLine {
 function healthBlock(m: PanelModel, h: Health, recent: boolean, footer = false, gauge = false, airy = false): PanelLine[] {
   const out: PanelLine[] = [heading('health', [], m)];
   const msgs = m.notes.length;
-  for (const row of healthRows(h, m.ui, { recent, footer, ...(msgs ? { messages: msgs } : {}), ...(gauge ? { gauge } : {}) }).filter((x) => !(x.id === 'last' && m.run?.kind === 'working'))) { // a run that is live has its clock on the phase row: `last run` there would be the same run
-    if (airy && (row.id === 'session' || row.id === 'last')) out.push(BLANK); // a tall pane groups the rows: the checks, the session figures, the last run
+  for (const row of healthRows(h, m.ui, { recent, footer, ...(msgs ? { messages: msgs } : {}), ...(gauge ? { gauge } : {}) })) { // the `runs` row holds bars and counts, never the run's seconds (the band's clock is the one place a run's time prints)
+    if (airy && (row.id === 'session' || row.id === 'runs')) out.push(BLANK); // a tall pane groups the rows: the pulse, the runs, the session figures
     const key = `health:${row.id}`;
     const expandable = row.detail.length > 0;
     const open = expandable && m.expanded === key;
@@ -694,7 +691,7 @@ function checkRows(m: PanelModel, h: Health): PanelLine[] {
   return [heading('checks', [], m), ...h.gates.checks.map((c): PanelLine => {
     const mk = c.ok ? stateRun(c.pending ? 'queued' : 'done', m.ui) : stateRun('failed', m.ui);
     const count = c.lines !== undefined && c.lines > 0 ? `${c.pass ?? 0}/${c.lines} pass` : c.ok ? 'green' : 'failed';
-    return line(fitRuns([r(' '.repeat(GRID_LEAD)), { ...mk, t: `${mk.t} ` }, r(c.id.padEnd(nameW), 'text'), r('  '), r(count, c.ok ? 'sub' : 'warn'), ...(c.note ? [r(`  ${c.note}`, 'dim')] : [])], m.cols));
+    return line(fitRuns([r(' '.repeat(GRID_LEAD)), { ...mk, t: `${mk.t} ` }, r(c.id.padEnd(nameW), 'text'), r('  '), r(count, c.ok ? 'sub' : 'warn'), ...(noteOf(c) ? [r(`  ${noteOf(c)}`, 'dim')] : [])], m.cols));
   })];
 }
 
@@ -717,7 +714,7 @@ function statusBody(m: PanelModel): PanelLine[] {
     const waiting = !hh.last && m.run?.kind !== 'working'; // no turn has run yet
     const tall = body >= 26; // a tall pane draws the context gauge, the tokens and the branch as rows of their own; a short one keeps them in the session row
     const airy = body >= 30;
-    const phase = statusPhase(m, m.run?.kind === 'working');
+    const phase = statusPhase(m);
     const wait = waiting ? [waitingLine(m)] : [];
     const draw = (footer: boolean): PanelLine[] => [...phase, BLANK, ...wait, ...(wait.length ? [BLANK] : []), ...healthBlock(m, hh, events, footer, tall, airy)];
     const pin = !!foot && body >= draw(false).length + 7 + 2; // the footer needs the rows under the content: a short pane keeps the version in the session row's detail

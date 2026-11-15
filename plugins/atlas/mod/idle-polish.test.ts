@@ -59,16 +59,16 @@ describe('1: the checks row never repeats the gates figure', () => {
   }
 });
 
-describe('2: the expanded card adds per-gate detail, never the band again', () => {
+describe('2: the expanded card says each gate in the one vocabulary, never a second gate total', () => {
   const card = healthCardRows(h, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
-  test('no line restates the band (`gates 4/4`, the four names on one row, `up`, `ctx`)', () => {
+  test('no line restates the band\'s figure (`gates 4/4`, `n/m green`); the session row holds the uptime (slice S4: the card is a superset of the panel)', () => {
     const t = card.join('\n');
-    expect(t).not.toMatch(/4\/4/);
-    expect(t).not.toMatch(/completion.*tripwire.*routing/);
-    expect(t).not.toMatch(/\bup \d/);
+    expect(t).not.toMatch(/gates 4\/4|\d+\/\d+ green/);
+    expect(t).toMatch(/session\s+up 0:16/);
   });
-  test('each gate has its own line: state, passing checks and its own words', () => {
-    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`${id} green 3/3 pass\\s*│?$`).test(l)), id).toBe(true); // one schema per check: its note is a line of its own, never glued on
+  test('each gate is `● name n/m`, two to a row; its note rides after it', () => {
+    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`● ${id} 3/3`).test(l)), id).toBe(true);
+    expect(card.join('\n')).toContain('● completion 3/3 · Last Stop allowed');
   });
 });
 
@@ -88,34 +88,35 @@ describe('2b: the gate lines come from the gate groups the mod reads', () => {
 
 describe('3: a health row opens only when it has real detail', () => {
   const noHooks: Health = { ...h, hooks: undefined, version: undefined };
-  test('hooks with no events and no version has no detail: it is not a toggle and wears no chevron', () => {
-    expect(ih.healthDetail(noHooks, 'hooks')).toEqual([]);
+  test('events with no hooks seen has no detail: it is not a toggle and wears no chevron', () => {
+    expect(ih.healthDetail(noHooks, 'events')).toEqual([]);
     const ls = bodyLines(world(57, { health: noHooks }));
-    const row = ls.find((l) => lineText(l).includes('hooks'))!;
+    const row = ls.find((l) => /^\s+events/.test(lineText(l)))!;
     expect(row.press).toBeUndefined();
     expect(lineText(row)).not.toMatch(/[▸▾]/);
   });
-  test('hooks with events opens to the count by event kind, and the version line is gone', () => {
-    const t = body(world(57, { expanded: 'health:hooks' })).join('\n');
+  test('events with hooks seen opens to the count by event kind, and the version line is gone', () => {
+    const t = body(world(57, { expanded: 'health:events' })).join('\n');
     expect(t).toMatch(/tool call 3 {3}context measured 2/);
     expect(t).not.toContain('hooks module loaded, mod drawing');
     expect(t.match(/atlas 17\.21\.1/g)?.length).toBe(1); // round 2: the version is said once, in the pinned footer (the session row's detail no longer repeats it)
   });
-  test('the session row never prints what its detail says: the branch and the version only show when it opens', () => {
-    expect(body(world(80)).find((l) => l.includes('session'))).not.toContain('branch');
-    const open = body(world(57, { rows: 24, expanded: 'health:session' })).join('\n'); // a short pane keeps the figures in the session row's detail (a tall one draws them as rows)
-    expect(open).toContain('branch master');
-    expect(open.match(/atlas 17\.21\.1/g)?.length).toBe(1); // the pinned footer is where the version lives
+  test('the session row says the uptime and the branch (slice S4); the version is said once, in the pinned footer', () => {
+    expect(body(world(80)).find((l) => l.includes('session'))).toContain('up 0:16');
+    const short = body(world(57, { rows: 24 })).join('\n'); // a short pane keeps the figures in the session row (a tall one draws the branch as a row of its own)
+    expect(short).toMatch(/session\s+up 0:16 · master/);
+    expect(short.match(/atlas 17\.21\.1/g)?.length).toBe(1);
   });
   test('session opens to the context against its window; last run to each agent`s end state', () => {
-    expect(body(world(57, { rows: 24, expanded: 'health:session' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
-    const last = body(world(57, { expanded: 'health:last' })).join('\n');
-    expect(last).toMatch(/alpha done 0:42/);
-    expect(last).toMatch(/beta failed 0:07/);
+    expect(body(world(57, { rows: 24, expanded: 'health:context' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
+    const last = body(world(57, { expanded: 'health:runs' })).join('\n');
+    expect(last).toMatch(/alpha done\b/);
+    expect(last).toMatch(/beta failed\b/);
+    expect(last).not.toMatch(/0:42|0:07/); // slice S4: no worker clock under the runs row (a run's time prints once, on the band)
   });
-  test('a last run row with no agents to list is not a toggle', () => {
+  test('a runs row with no agents to list is not a toggle', () => {
     const none: Health = { ...h, last: undefined };
-    expect(ih.healthRows(none, ui).find((r) => r.id === 'last')!.detail).toEqual([]);
+    expect(ih.healthRows(none, ui).find((r) => r.id === 'runs')!.detail).toEqual([]);
   });
 });
 
@@ -141,18 +142,19 @@ describe('4: the idle panel ends finished, with live content from real events', 
 describe('5: rows fit by dropping the lowest-value field, never by cutting', () => {
   for (const cols of [57, 44]) {
     test(`at ${cols}: no ellipsis in the health rows`, () => {
-      const t = body(world(cols, { health: { ...h, last: { ...h.last!, secs: 2, agents: 0, failed: 0, total: 5, done: 5 } } })).filter((l) => /^\s+[▸▾]?\s*(session|last run) +\S/.test(l));
+      const t = body(world(cols, { health: { ...h, last: { ...h.last!, secs: 2, agents: 0, failed: 0, total: 5, done: 5 } } })).filter((l) => /^\s+[▸▾]?\s*(session|runs) +\S/.test(l));
       expect(t.length).toBe(2);
       for (const l of t) expect(l, l).not.toContain('…');
-      expect(t[0]).toContain('up 0:16');
-      expect(t[1]).toContain('0:02');
+      expect(t[0]).toContain('none yet'); // runs: no pulse run yet
+      expect(t[1]).toContain('up 0:16');
+      expect(t[1]).not.toContain('0:02'); // a run's seconds are the band's alone
     });
   }
-  test('the branch is never in the value; `0 agents` and `0 failed` never print at all', () => {
-    const t = body(world(57));
-    expect(t.find((l) => l.includes('session'))).not.toContain('branch');
-    const last = t.find((l) => l.includes('last run'))!;
+  test('`0 agents` and `0 failed` never print at all; a run in the pulse shows its age', () => {
+    const t = body(world(57, { health: { ...h, pulse: { events: [], ctx: [], runs: [{ secs: 2, ok: true, at: 1 }] } } }));
+    const last = t.find((l) => /^\s+[▸▾]?\s*runs /.test(l))!;
     expect(last).not.toContain('0 failed');
+    expect(last).toContain('1 run');
     expect(last).toContain('ended 10m ago');
   });
   test('fitFields drops by keep order and keeps the first', () => {
@@ -170,10 +172,10 @@ describe('6: ctx and tokens are one measure, labelled so', () => {
     expect(row).not.toContain('42k tok');
   });
   test('the panel session row reads the same words', () => {
-    expect(body(world(57, { rows: 24 })).find((l) => l.includes('session'))).toContain('context 6%'); // a tall pane draws the gauge row instead (idle-polish3)
+    expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).toContain('63k of 1M'); // a short pane: the context row (slice S4: framed gauge and `64k of 1M`); a tall one draws the gauge rows instead (idle-polish3)
   });
   test('the detail says what the figure is', () => {
-    expect(ih.healthDetail(h, 'session')).toContain('measured on the last response, not a session total');
+    expect(ih.healthDetail(h, 'context')).toContain('measured on the last response, not a session total');
   });
   test('source: both figures come from the same session.measure event (context.tokens and context.percent)', () => {
     const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');
@@ -268,7 +270,7 @@ describe('12: the open card is one even block, spaced like the TODO box', () => 
     expect(w[0]).toBe(110);
   });
   test('the title is bold body text, not dimmed', () => {
-    const title = rows[0]!.find((x) => x.t === 'HEALTH')!;
+    const title = rows[0]!.find((x) => x.t === '▾ HEALTH')!;
     expect(title.tone).toBe('text');
     expect(title.bold).toBe(true);
   });

@@ -121,16 +121,16 @@ describe('the expanded health card (HUD)', () => {
   const text = (over: Record<string, unknown> = {}): string[] => healthCardRows({ ...h, ...over } as never, { cols: 110, ui }).map((r) => r.map((x) => x.t).join(''));
   test('ribbon, rows and closing rule', () => {
     const t = text();
-    expect(t[0]).toMatch(/^╭─ HEALTH ─+╮$/); // round 2: no second badge (the TODO and SUBAGENTS ribbons keep theirs)
-    // wave 44: the card adds detail (per-gate lines, the context against its window, the hooks' event counts); it never restates the band
-    expect(t.some((l) => /gates\s+● completion green 1\/1 pass/.test(l))).toBe(true);
-    expect(t.some((l) => /session\s+42,000 tokens in the window/.test(l))).toBe(true);
-    expect(t.some((l) => /last run/.test(l))).toBe(false); // round 2: the band's second line says it
-    expect(t[t.length - 1]).toMatch(/^╰─+╯$/);
+    expect(t[0]).toMatch(/^── ▾ HEALTH ─+ ▾ hide ──$/); // slice S4: a flat ribbon with its close chip, no corners and no second badge (the TODO and SUBAGENTS ribbons keep theirs)
+    expect(t.some((l) => /gates\s+● completion 1\/1 {3,}● tripwire 1\/1/.test(l))).toBe(true); // every gate is `● name n/m`, two to a row when they fit
+    expect(t.some((l) => /context\s+▕.*▏ 42k tokens/.test(l))).toBe(true);
+    expect(t.some((l) => /last run/.test(l))).toBe(false); // the band says the run
+    expect(t[t.length - 1]).toMatch(/^─+$/);
   });
-  test('a finished run fills the last-run row', () => {
-    const t = text({ last: { secs: 134, done: 5, total: 5, agents: 3, failed: 0, endedAt: '9:27 PM', workers: [{ name: 'alpha', state: 'done', secs: 42 }] } });
-    expect(t.some((l) => /last run\s+alpha done 0:42/.test(l))).toBe(true);
+  test('a finished run is the runs row: a bar per run and a count, never its seconds', () => {
+    const t = text({ pulse: { events: [], ctx: [], runs: [{ secs: 134, ok: true, at: 1 }] } });
+    expect(t.some((l) => /runs\s+[⣀-⣿]\s+1 run\b/.test(l))).toBe(true);
+    expect(t.join('\n')).not.toMatch(/last run|2:14/);
   });
   test('only values the mod has: no ctx, no tokens, no branch', () => {
     const t = text({ ctxPct: undefined, tokens: undefined, branch: undefined }).join('\n');
@@ -161,21 +161,21 @@ describe('the side panel status view, idle', () => {
   test('health rows replace the bare placeholders', () => {
     const t = rows(world()).map(lineText).join('\n');
     expect(t).not.toMatch(/no agents yet|no events yet/);
-    for (const label of ['hooks', 'gates', 'session', 'last run']) expect(t).toContain(label);
+    for (const label of ['events', 'gates', 'session', 'runs']) expect(t).toContain(label);
     expect(t).toContain('up 12:04');
   });
   test('a row with detail is pressable and shows the closed chevron; one without is plain text', () => {
     const ls = rows(world()).filter((l) => l.press?.key.startsWith('health:'));
-    expect(ls.map((l) => l.press!.key)).toEqual(['health:gates']); // hooks (no events here), last run (none) and, on a tall pane, the session (its figures are rows) have nothing more to show
+    expect(ls.map((l) => l.press!.key)).toEqual(['health:gates']); // events (no hooks here), runs (none) and, on a tall pane, the session (its figures are rows) have nothing more to show
     for (const l of ls) expect(lineText(l)).toContain('▸');
-    expect(rows(world()).map(lineText).join('\n')).not.toContain('completion green'); // closed: no detail lines
+    expect(rows(world()).map(lineText).join('\n')).not.toContain('completion 1/1'); // closed: no detail lines
   });
   test('an open row shows ▾ and 1-3 detail lines', () => {
     const t = rows(world({ expanded: 'health:gates' })).map(lineText);
     const i = t.findIndex((l) => l.includes('▾') && l.includes('gates'));
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/completion green 1\/1 pass/);
-    const s = rows(world({ rows: 24, expanded: 'health:session' })).map(lineText).join('\n');
+    expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/● completion 1\/1/);
+    const s = rows(world({ rows: 24, expanded: 'health:context' })).map(lineText).join('\n');
     expect(s).toContain('42,000 tokens in the window');
   });
   test('with a worker listed the status view is unchanged (no health rows)', () => {

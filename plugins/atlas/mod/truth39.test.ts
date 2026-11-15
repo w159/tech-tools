@@ -108,7 +108,7 @@ describe('step 5: transcript cards are immutable, ordered and complete', () => {
     await placeFinished(engine(ids), now, now);
     const run = ids.filter((i) => i.startsWith('done-run'));
     expect(run).toHaveLength(1);
-    expect(flat(placedTree(run[0]!, ui))).toMatch(/done\s+5\/5 · 3 workers\s+0:38$/);
+    expect(flat(placedTree(run[0]!, ui))).toMatch(/done\s+5\/5 · 3 workers$/) // slice S4: the card carries no time, the band owns the run clock;
     expect(cardsDue()).toBe(false);
     await placeFinished(engine(ids), now, now);
     expect(ids.filter((i) => i.startsWith('done-run'))).toHaveLength(1);
@@ -210,11 +210,11 @@ describe('step 2: the side panel phase row prints the band\'s glyph, word and cl
     forgetBandFrame();
   });
   test('stoprun-150-3 f0074: the run built from the band\'s inputs says blocked 0:36, and the panel prints exactly that (truth 41: no copy of a note)', () => {
-    expect(rowOf({ run: { kind: 'blocked', secs: 36 } }).replace(/\s+/g, ' ').trim()).toBe('phase ▲ blocked 0:36');
+    expect(rowOf({ run: { kind: 'blocked', secs: 36 } }).replace(/\s+/g, ' ').trim()).toBe('phase ▲ blocked') // slice S4: the clock is the band's alone;
   });
   test('live-150-2 f0106: a run that reads idle 0:39 prints idle 0:39, never working', () => {
     const row = rowOf({ run: { kind: 'idle', secs: 39 } });
-    expect(row.replace(/\s+/g, ' ').trim()).toBe('phase ○ idle 0:39');
+    expect(row.replace(/\s+/g, ' ').trim()).toBe('phase ○ idle') // slice S4: the clock is the band's alone;
   });
   test('a band note is never read: the panel prints the run it was built with', () => {
     noteBandFrame(2, 36, NOW, 'blocked');
