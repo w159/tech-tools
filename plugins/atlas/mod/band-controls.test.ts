@@ -86,10 +86,10 @@ describe('band footer buttons', () => {
     }
     expect(textOf(band())).not.toMatch(/click or/);
   });
-  test('the chips touch (their own padding is the gap) and end one cell before the edge', () => {
+  test('the chips sit one cell apart (each its own tile) and end one cell before the edge', () => {
     const t = bandTree(els, { snapshot: busySnap({ squad: [], activity: {}, comms: [] }), live: [], gates: [], columns: 160, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
     const row = kids(kids(t).at(-1)!);
-    expect(textOf(kids(t).at(-1)!).endsWith(' status  team  channel  gates  core  board  ')).toBe(true);
+    expect(textOf(kids(t).at(-1)!).endsWith(' status   team   channel   gates   core   board  ')).toBe(true);
     expect(row.at(-1)!.props.children).toBe(' ');
   });
   test('no hotkey is bound on any band button', () => {

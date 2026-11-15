@@ -230,6 +230,6 @@ describe('step 6: the channel tab at 0 messages (critique 37: `○ no messages` 
     expect(row('alpha-explorer')).toMatch(/\+0:\d\d\s+read alpha\.py/);
     expect(row('beta-explorer')).toMatch(/read beta\.py/);
     expect(row('gamma-explorer')).toMatch(/read gamma\.py/);
-    expect(t.filter((l) => l.trim()).length).toBeGreaterThanOrEqual(9); // the pane's key-hint row is gone (wave 43)
+    expect(t.filter((l) => l.trim()).length).toBeGreaterThanOrEqual(8); // the pane's key-hint row is gone (wave 43), and the rule under the strip (idle polish 3)
   });
 });

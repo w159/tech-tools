@@ -5,7 +5,7 @@ import { textWidth } from './theme';
 import { clickRun } from './clickable';
 import type { HookStats } from './hook-log';
 
-export type HealthLast = { secs?: number; done: number; total: number; agents: number; failed: number; /** Local wall time the run ended, `9:27 PM`. */ endedAt?: string; /** Each worker of the run with how it ended and how long it ran. */ workers?: readonly { name: string; state: string; secs?: number }[] };
+export type HealthLast = { secs?: number; done: number; total: number; agents: number; failed: number; /** Whole seconds since the run ended (a clock with no zone read as a time of day only to its owner): drawn `ended 3m ago`. */ endedAgo?: number; /** Each worker of the run with how it ended and how long it ran. */ workers?: readonly { name: string; state: string; secs?: number }[] };
 /** One gate group: its mark, and (from the gate groups the mod reads) how many of its lines pass and the first line's own words. */
 export type HealthCheck = { id: string; ok: boolean; pending?: boolean; title?: string; lines?: number; pass?: number; note?: string };
 export type Health = {
@@ -90,11 +90,36 @@ export function fitFields(fields: readonly HealthField[], room: number): Run[] {
   return kept.flatMap((f, i) => [...(i ? [glue()] : []), ...f.runs]);
 }
 
+/** A gate note's line in the detail list: indented, so it reads as the note of the check above it. */
+export const NOTE_INDENT = '  ';
+
+/** A hook's own name in words: `session.measure` -> `context measured`; an unnamed one reads its dotted words (`tool.call Bash` -> `tool call Bash`). */
+const EVENT_WORDS: Record<string, string> = { 'session.measure': 'context measured', 'turn.complete': 'turn finished', 'classic.Stop': 'stop check', 'prompt.submit': 'prompt sent', 'session.start': 'session started' };
+export const humanEvent = (label: string): string => EVENT_WORDS[label] ?? label.replace(/[._]+/g, ' ');
+/** Which of several events in one second names the row (the one that says most). */
+const EVENT_RANK = ['turn.complete', 'classic.Stop', 'prompt.submit', 'tool.call', 'session.measure', 'session.start'];
+const rankOf = (label: string): number => { const k = EVENT_RANK.indexOf(label.split(' ')[0]!); return k < 0 ? EVENT_RANK.length : k; };
+/** The recent list as rows: events of one second are one row (`turn finished · 3 events`; the same event twice is `tool call Bash x2`), newest first, at most `max` rows. */
+export type RecentRow = { ageSecs: number; n: number; text: string };
+export function recentEvents(recent: readonly { label: string; ageSecs: number }[], max: number): RecentRow[] {
+  const out: RecentRow[] = [];
+  for (const e of recent) {
+    const at = out.at(-1);
+    if (at && at.ageSecs === e.ageSecs) { (at as RecentRow & { labels: string[] }).labels.push(e.label); at.n++; } else out.push({ ageSecs: e.ageSecs, n: 1, text: '', labels: [e.label] } as RecentRow & { labels: string[] });
+  }
+  return out.slice(0, Math.max(0, max)).map((row) => {
+    const labels = (row as RecentRow & { labels: string[] }).labels;
+    const best = [...labels].sort((a, b) => rankOf(a) - rankOf(b))[0]!;
+    const text = row.n === 1 ? humanEvent(best) : labels.every((l) => l === best) ? `${humanEvent(best)} ×${row.n}` : `${humanEvent(best)} · ${row.n} events`;
+    return { ageSecs: row.ageSecs, n: row.n, text };
+  });
+}
+
 const plural = (n: number, w: string): string => `${n} ${w}${n === 1 ? '' : 's'}`;
 const seconds = (n: number | undefined): string => (n === undefined ? '' : elapsedClock(n));
 
 /** `recent`: a recent-events list is drawn beside the rows, so the hooks row leaves out the age of the last event and the per-label counts that the list already says. */
-export type RowOpts = { recent?: boolean; /** The panel's pinned footer says the version, so the session detail does not. */ footer?: boolean };
+export type RowOpts = { recent?: boolean; /** Messages on the channel: folded into the session row only when there are some. */ messages?: number; /** The panel's pinned footer says the version, so the session detail does not. */ footer?: boolean; /** The panel draws the context as its own gauge row: the session row leaves the figure out. */ gauge?: boolean };
 export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
   const rows: HealthRow[] = [];
   const f = (text: string, keep: number, tone: Run['tone'] = 'text'): HealthField => ({ runs: [r(text, tone)], keep });
@@ -108,7 +133,8 @@ export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
   }
   const sessionFields: HealthField[] = [
     ...(h.upSecs !== undefined ? [f(`up ${elapsedClock(h.upSecs)}`, 9)] : []),
-    ...(h.ctxPct !== undefined ? [f(ctxText(h), 8)] : h.tokens !== undefined ? [f(`${tokenText(h.tokens)} tok`, 8)] : []),
+    ...(h.ctxPct !== undefined ? (o.gauge ? [] : [f(ctxText(h), 8)]) : h.tokens !== undefined ? [f(`${tokenText(h.tokens)} tok`, 8)] : []),
+    ...(o.messages ? [f(plural(o.messages, 'message'), 2, 'sub')] : []),
   ]; // the branch and the version are the row's detail, not its value: opening the row is how you see them
   if (sessionFields.length) rows.push({ id: 'session', label: 'session', fields: sessionFields, runs: sessionFields.flatMap((x) => x.runs), detail: healthDetail(h, 'session', o) });
   const l = h.last;
@@ -116,7 +142,7 @@ export function healthRows(h: Health, ui: Ui, o: RowOpts = {}): HealthRow[] {
     ? [
         ...(l.secs !== undefined ? [f(seconds(l.secs), 9)] : []),
         ...(l.failed > 0 ? [f(`${l.failed} failed`, 8, 'warn')] : []),
-        ...(l.endedAt ? [f(`ended ${l.endedAt}`, 5)] : []),
+        ...(l.endedAgo !== undefined ? [f(`ended ${agoText(l.endedAgo)} ago`, 5)] : []),
         ...(l.agents > 0 ? [f(plural(l.agents, 'agent'), 4)] : []),
         ...(l.total > 0 ? [f(`${l.done}/${l.total} todos`, 3)] : []),
       ]
@@ -134,14 +160,16 @@ export function healthLine(h: Health, ui: Ui): string {
 /** What opening a row adds, from data the mod holds and the collapsed value lacks: no line restates the row. An empty list means the row has nothing more to show (it is not expandable). */
 export function healthDetail(h: Health, id: HealthRow['id'], o: RowOpts = {}): string[] {
   if (id === 'gates') {
-    return h.gates.checks.map((c) => {
+    // One schema per check: `name state n/m pass`; a note the gate gave is its own indented line under it (never glued on).
+    return h.gates.checks.flatMap((c) => {
       const state = c.ok ? (c.pending ? 'pending' : 'green') : 'failed';
       const count = c.lines !== undefined && c.lines > 0 ? ` ${c.pass ?? 0}/${c.lines} pass` : '';
-      return `${c.id} ${state}${count}${c.note ? ` · ${c.note}` : ''}`;
+      return [`${c.id} ${state}${count}`, ...(c.note ? [`${NOTE_INDENT}${c.note}`] : [])];
     });
   }
   if (id === 'session') {
     const out: string[] = [];
+    if (o.gauge) return h.version && !o.footer ? [`atlas ${h.version}`] : []; // the panel draws the tokens and the branch as rows of their own
     if (h.tokens !== undefined) out.push(h.window !== undefined ? `${grouped(h.tokens)} of ${grouped(h.window)} tokens in the window` : `${grouped(h.tokens)} tokens in the window`);
     if (h.tokens !== undefined) out.push('measured on the last response, not a session total');
     if (h.branch) out.push(`branch ${h.branch}`);
@@ -150,7 +178,7 @@ export function healthDetail(h: Health, id: HealthRow['id'], o: RowOpts = {}): s
   }
   if (id === 'hooks') {
     const by = (h.hooks?.byLabel ?? []).filter((e) => !o.recent || e.n > 1); // a label seen once is a line of the recent list: only a count says more than it
-    const words = by.map((e) => `${e.label} ${e.n}`);
+    const words = by.map((e) => `${humanEvent(e.label)} ${e.n}`);
     const lines = Array.from({ length: Math.min(3, Math.ceil(words.length / 2)) }, (_, k) => words.slice(k * 2, k * 2 + 2).join('   '));
     return lines;
   }

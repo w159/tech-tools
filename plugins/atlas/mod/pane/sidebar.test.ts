@@ -116,16 +116,14 @@ describe('sidebar shell', () => {
     expect(stripRows(items, 30, 1).length).toBe(2);
   });
 
-  test('L21: a narrow pane wraps the strip onto a second row of whole words and rules the lit tab under its drawn label', () => {
+  test('L21: a narrow pane wraps the strip onto a second row of whole words and draws no rule under the lit tab', () => {
     for (const [columns, label, wrapped] of [[32, 'gates', true], [56, 'gates', false]] as const) {
       const t = tree({ columns }, 'gates');
       const rowsOf = kids(t).filter((n) => n.kind === 'Box');
       expect(rowsOf.filter((r) => String(r.props.key ?? '').startsWith('tabs:')).length > 0).toBe(wrapped); // 32 cells: not even the bare words fit one row, so a second strip row, never two-letter words
-      const strip = rowsOf.find((r) => String(r.props.key).startsWith('tabs') && r.props.key !== 'tabs:rule' && textOf(rowsOf[rowsOf.indexOf(r) + 1]!).includes('━'))!;
-      const rule = textOf(rowsOf[rowsOf.indexOf(strip) + 1]!);
-      expect(rule.replace(/ /g, '')).toBe('━'.repeat(label.length));
-      const drawn = kids(strip).map((c) => (c.kind === 'Button' ? String(kids(c)[0]!.props.children) : c.kind === 'Box' ? '' : String(c.props.children))).join('');
-      expect(drawn.slice(rule.indexOf('━'), rule.indexOf('━') + label.length)).toBe(label);
+      expect(rowsOf.some((r) => textOf(r).includes('━'))).toBe(false);
+      const lit = kids(t).flatMap((n) => (String(n.props.key ?? '').startsWith('tabs') ? kids(n) : [])).find((n) => n.kind === 'Button' && String(n.props.key) === 'tab:gates');
+      expect(lit && String(kids(lit)[0]!.props.children).trim()).toBe(label);
     }
   });
 

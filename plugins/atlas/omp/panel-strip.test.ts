@@ -63,22 +63,22 @@ describe('change 9: one tab strip on both hosts', () => {
       expect([...row].length).toBeLessThanOrEqual(cols);
       expect(row.startsWith(' status')).toBe(true);
     }
-    expect(stripOf(ccRows('route', 60))[0]!.trim()).toBe('status  team  channel  gates  core  board');
+    expect(stripOf(ccRows('route', 60))[0]!.trim()).toBe('status   team   channel   gates   core   board');
     // C4: below the one-row width the full words wrap onto a second row; the two-letter form is gone
-    expect(stripOf(ccRows('route', 30)).map((x) => x.trim())).toEqual(['status  team  channel  gates', 'core  board']);
+    expect(stripOf(ccRows('route', 30)).map((x) => x.trim())).toEqual(['status   team   channel', 'gates   core   board']);
     // Critique 17 B5: one form on every tab (the form follows the width only). Critique 18: the 110-column pane (about 38 cells) holds the six whole words on one row, so it draws them, the keys stay bound
     expect(stripOf(ccRows('route', 40)).map((x) => x.trim())).toEqual(['status team channel gates core board']);
     expect(stripOf(ccRows('route', 38)).map((x) => x.trim())).toEqual(['status team channel gates core board']);
-    expect(stripOf(ccRows('route', 46)).map((x) => x.trim())).toEqual(['status  team  channel  gates  core  board']);
-    expect(stripOf(ccRows('route', 110)).map((x) => x.trim())).toEqual(['status  team  channel  gates  core  board']);
+    expect(stripOf(ccRows('route', 46)).map((x) => x.trim())).toEqual(['status team channel gates core board']);
+    expect(stripOf(ccRows('route', 52)).map((x) => x.trim())).toEqual(['status   team   channel   gates   core   board']); // chips (one cell apart) from 48 cells
+    expect(stripOf(ccRows('route', 110)).map((x) => x.trim())).toEqual(['status   team   channel   gates   core   board']);
   });
-  test('the rule sits under the lit tab on both hosts', () => {
+  test('no rule under the lit tab on either host: the lit chip is the filled one', () => {
     for (const tab of TABS) {
       const rows = panelText(panelWorld(tab, 120, mocha, { core }));
-      const at = rows.findIndex((l) => l.includes('status  team'));
-      expect(rows[at]!.indexOf(tab === 'route' ? 'status' : tab)).toBe(rows[at + 1]!.indexOf('━'));
-      expect(rows[at]!.startsWith(' status  team')).toBe(true);
-      expect(rows[at + 1]!.trim()).toBe('━'.repeat((tab === 'route' ? 'status' : tab).length));
+      const at = rows.findIndex((l) => l.includes('status   team'));
+      expect(rows[at]!.startsWith(' status   team')).toBe(true);
+      expect(rows.slice(at, at + 2).join('')).not.toContain('━');
     }
   });
 });

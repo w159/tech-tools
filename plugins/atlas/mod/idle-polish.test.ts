@@ -40,7 +40,7 @@ const h: Health = {
   gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 3, pass: 3, note: 'Last Stop allowed' })) },
   ctxPct: 6, tokens: 63_000, window: 1_000_000, upSecs: 16, branch: 'master', version: '17.21.1',
   hooks: HOOKS,
-  last: { secs: 2, done: 0, total: 0, agents: 2, failed: 0, endedAt: '10:21 PM', workers: [{ name: 'alpha', state: 'done', secs: 42 }, { name: 'beta', state: 'failed', secs: 7 }] },
+  last: { secs: 2, done: 0, total: 0, agents: 2, failed: 0, endedAgo: 600, workers: [{ name: 'alpha', state: 'done', secs: 42 }, { name: 'beta', state: 'failed', secs: 7 }] },
 };
 const world = (cols: number, over: Partial<PanelModel> = {}, tab: 'route' | 'team' = 'route'): PanelModel => panelWorld(tab, cols, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: NOW }, health: h, ...over } as never);
 const body = (m: PanelModel): string[] => bodyLines(m).map(lineText);
@@ -68,7 +68,7 @@ describe('2: the expanded card adds per-gate detail, never the band again', () =
     expect(t).not.toMatch(/\bup \d/);
   });
   test('each gate has its own line: state, passing checks and its own words', () => {
-    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`${id} green 3/3 pass · Last Stop allowed`).test(l)), id).toBe(true);
+    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(card.some((l) => new RegExp(`${id} green 3/3 pass\\s*│?$`).test(l)), id).toBe(true); // one schema per check: its note is a line of its own, never glued on
   });
 });
 
@@ -97,18 +97,18 @@ describe('3: a health row opens only when it has real detail', () => {
   });
   test('hooks with events opens to the count by event kind, and the version line is gone', () => {
     const t = body(world(57, { expanded: 'health:hooks' })).join('\n');
-    expect(t).toMatch(/tool\.call 3 {3}session\.measure 2/);
+    expect(t).toMatch(/tool call 3 {3}context measured 2/);
     expect(t).not.toContain('hooks module loaded, mod drawing');
     expect(t.match(/atlas 17\.21\.1/g)?.length).toBe(1); // round 2: the version is said once, in the pinned footer (the session row's detail no longer repeats it)
   });
   test('the session row never prints what its detail says: the branch and the version only show when it opens', () => {
     expect(body(world(80)).find((l) => l.includes('session'))).not.toContain('branch');
-    const open = body(world(57, { expanded: 'health:session' })).join('\n');
+    const open = body(world(57, { rows: 24, expanded: 'health:session' })).join('\n'); // a short pane keeps the figures in the session row's detail (a tall one draws them as rows)
     expect(open).toContain('branch master');
     expect(open.match(/atlas 17\.21\.1/g)?.length).toBe(1); // the pinned footer is where the version lives
   });
   test('session opens to the context against its window; last run to each agent`s end state', () => {
-    expect(body(world(57, { expanded: 'health:session' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
+    expect(body(world(57, { rows: 24, expanded: 'health:session' })).join('\n')).toContain('63,000 of 1,000,000 tokens in the window');
     const last = body(world(57, { expanded: 'health:last' })).join('\n');
     expect(last).toMatch(/alpha done 0:42/);
     expect(last).toMatch(/beta failed 0:07/);
@@ -124,7 +124,7 @@ describe('4: the idle panel ends finished, with live content from real events', 
     const t = body(world(57));
     const i = t.findIndex((l) => l.includes('recent'));
     expect(i).toBeGreaterThan(0);
-    expect(t.slice(i + 1, i + 3).map((l) => l.trim())).toEqual(['12s ago  tool.call Bash', '40s ago  session.measure']);
+    expect(t.slice(i + 1, i + 3).map((l) => l.trim())).toEqual(['12s ago  tool call Bash', '40s ago  context measured']);
     const tail = t.filter((l) => l.trim() !== '');
     expect(tail.at(-2)).toMatch(/^\s+─{20,}$/); // round 2: the rule, then the pinned footer
     expect(tail.at(-1)).toMatch(/^\s+atlas 17\.21\.1 · hooks loaded$/);
@@ -153,7 +153,7 @@ describe('5: rows fit by dropping the lowest-value field, never by cutting', () 
     expect(t.find((l) => l.includes('session'))).not.toContain('branch');
     const last = t.find((l) => l.includes('last run'))!;
     expect(last).not.toContain('0 failed');
-    expect(last).toContain('ended 10:21 PM');
+    expect(last).toContain('ended 10m ago');
   });
   test('fitFields drops by keep order and keeps the first', () => {
     const f = (t: string, keep: number) => ({ runs: [{ t, tone: 'text' as const }], keep });
@@ -170,7 +170,7 @@ describe('6: ctx and tokens are one measure, labelled so', () => {
     expect(row).not.toContain('42k tok');
   });
   test('the panel session row reads the same words', () => {
-    expect(body(world(57)).find((l) => l.includes('session'))).toContain('context 6%');
+    expect(body(world(57, { rows: 24 })).find((l) => l.includes('session'))).toContain('context 6%'); // a tall pane draws the gauge row instead (idle-polish3)
   });
   test('the detail says what the figure is', () => {
     expect(ih.healthDetail(h, 'session')).toContain('measured on the last response, not a session total');
@@ -211,8 +211,8 @@ describe('7: the idle band carries one more live figure, the age of the last eve
 });
 
 describe('8: a narrow pane names the stages, it does not print bare dots', () => {
-  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /research.*thy.*test.*impl.*ver/]] as const) {
-    test(`the idle phase chain at ${cols} cells reads ${cols === 54 ? 'whole names (round 2: no dot marks, so they fit)' : 'short stage names'}`, () => {
+  for (const [cols, names] of [[54, /research.*theory.*test.*implement.*verify/], [46, /research 1\/5/]] as const) {
+    test(`the idle phase chain at ${cols} cells reads ${cols === 54 ? 'whole names (round 2: no dot marks, so they fit)' : 'the current stage and n/5'}`, () => {
       const t = body(world(cols, { phases: ['research', 'theory', 'test', 'implement', 'verify'], phase: 'research' })).find((l) => l.includes('research'))!;
       expect(t).toMatch(names);
       expect(t).not.toContain('· · ·');

@@ -842,8 +842,11 @@ export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'>): 
   const { cols, ui } = o;
   const body: Run[][] = [];
   const panel = h.panel === true; // the side panel is up: its rows (and its footer, which holds the version) say every figure; without it the band's second line says the last run and the events
-  for (const row of healthRows(h, ui, { recent: true, footer: panel && !!h.version })) {
-    const lines: Run[][] = row.detail.map((d, i): Run[] => (row.id === 'gates' && h.gates.checks[i] ? [stateRun(h.gates.checks[i]!.ok ? (h.gates.checks[i]!.pending ? 'queued' : 'done') : 'failed', ui), t(` ${d}`, 'sub')] : [t(d, 'sub')]));
+  for (const row of healthRows(h, ui, { recent: true })) {
+    const lines: Run[][] = row.detail.map((d): Run[] => {
+      const chk = row.id === 'gates' ? h.gates.checks.find((c) => d.startsWith(`${c.id} `)) : undefined; // a check's own row wears its mark; its note (indented) is a plain line under it
+      return chk ? [stateRun(chk.ok ? (chk.pending ? 'queued' : 'done') : 'failed', ui), t(` ${d}`, 'sub')] : [t(d, 'sub')];
+    });
     const shown = lines; // the last run's own line and the event count are the band's second line (or the panel's rows): the card is only what opening a row adds
     shown.forEach((runs, i) => body.push([t('  '), t(i === 0 ? row.label.padEnd(8) : ' '.repeat(8), 'muted'), t(' '), ...runs]));
   }

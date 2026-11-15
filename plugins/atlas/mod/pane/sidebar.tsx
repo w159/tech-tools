@@ -23,7 +23,6 @@ export { stripRows };
 function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, ui: Ui): RenderElement[] {
   const bg = panelBg(ui);
   const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
-  const rule = ui.ascii ? '-' : '━';
   const f = stripLayout(inner, m.ui.view); // the whole names as chips that fit one row (mod/panel-layout.ts); the rule is as wide as the lit chip
   return f.rows.flatMap((row, ri): RenderElement[] => {
     const pressOf = (it: { id: string }) => (it.id === 'board' ? () => on.toggleTodos?.() : () => on.setView(it.id as SidebarView));
@@ -37,12 +36,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
       return els.Button({ key: keyOf(it), plain: true, children: [label], label: it.label, onPress: pressOf(it) });
     });
     const between = (i: number): RenderElement[] => (i && f.gap ? [gap(f.gap)] : []);
-    const under = [...(f.lead ? [gap(f.lead)] : []), ...row.flatMap((it, i): RenderElement[] => [...between(i), ...(f.pad ? [gap(f.pad)] : []), it.id === m.ui.view ? runEl(els, { t: rule.repeat(cells(it.label)), tone: 'accent' }, ui) : gap(cells(it.label)), ...(f.pad ? [gap(f.pad)] : [])])];
-    const lit = row.some((it) => it.id === m.ui.view);
-    return [
-      els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: [...(f.lead ? [gap(f.lead)] : []), ...tabs.flatMap((t, i) => [...between(i), t])] }),
-      ...(lit ? [els.Box({ flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: under })] : []),
-    ];
+    return [els.Box({ key: ri ? `tabs:${ri}` : 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: [...(f.lead ? [gap(f.lead)] : []), ...tabs.flatMap((t, i) => [...between(i), t])] })]; // no rule under the lit chip: it is the filled one
   });
 }
 

@@ -13,10 +13,10 @@ const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 describe('C5: the tab strip stays on one line at the 110 column pane', () => {
   for (const cols of [37, 38, 40, 44]) {
     for (const tab of TABS) {
-      test(`${cols} cells, ${tab} lit: one strip row, the whole words, one rule under the lit tab`, () => {
+      test(`${cols} cells, ${tab} lit: one strip row, the whole words, no rule under the lit tab`, () => {
         const rows = tabRows(panelWorld(tab, cols, ui)).map(lineText);
-        expect(rows).toHaveLength(2); // the strip and the rule under the lit tab: no wrapped second strip
-        expect(rows[0]!.trim()).toMatch(/^status {1,2}team {1,2}channel {1,2}gates {1,2}core {1,2}board$/);
+        expect(rows).toHaveLength(1); // the strip alone: no rule under the lit tab, no wrapped second strip
+        expect(rows[0]!.trim()).toMatch(/^status {1,3}team {1,3}channel {1,3}gates {1,3}core {1,3}board$/);
         for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
       });
     }
@@ -28,8 +28,8 @@ describe('C5: the tab strip stays on one line at the 110 column pane', () => {
     }
   });
   test('design rev 5 C1: the keys are never drawn in the strip, at any width (53 cells and up too)', () => {
-    expect(headerRows(panelWorld('route', 120, ui)).slice(2, 3).map(lineText)[0]!.trim()).toBe('status  team  channel  gates  core  board');
-    expect(lineText(tabRows(panelWorld('team', 54, ui))[0]!).trim()).toBe('status  team  channel  gates  core  board');
+    expect(headerRows(panelWorld('route', 120, ui)).slice(2, 3).map(lineText)[0]!.trim()).toBe('status   team   channel   gates   core   board');
+    expect(lineText(tabRows(panelWorld('team', 54, ui))[0]!).trim()).toBe('status   team   channel   gates   core   board');
   });
   test('words alone on one row down to 36 cells (wave 36: `status` is one cell wider than `route` was), then the full words wrap (never a shortened word)', () => {
     expect(stripLayout(37, 'route').rows).toHaveLength(1);

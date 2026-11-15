@@ -26,7 +26,7 @@ describe('side panel design goldens', () => {
       expect(rows('route', cols).slice(0, sidepanelDesign[cols]!.length)).toEqual(padStrip(sidepanelDesign[cols]!));
     });
     test(`team body at ${cols} equals the design subagents golden`, () => {
-      expect(rows('team', cols).slice(cols >= 100 ? 5 : 4)).toEqual(subagentsDesign[cols]!);
+      expect(rows('team', cols).slice(cols >= 100 ? 4 : 3)).toEqual(subagentsDesign[cols]!);
     });
   }
   test('the team ribbon carries the worker counts with their words', () => {
@@ -42,14 +42,14 @@ describe('side panel design goldens', () => {
 });
 
 describe('tab strip', () => {
-  test('lists status team channel gates core board by name; the lit tab is ruled and bold', () => {
+  test('lists status team channel gates core board by name; the lit tab is the filled chip, no rule under it', () => {
     for (const t of tabs) {
-      const [strip, rule] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
-      expect(lineText(strip!).trim()).toBe('status  team  channel  gates  core  board');
+      const [strip, next] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
+      expect(lineText(strip!).trim()).toBe('status   team   channel   gates   core   board');
       const lit = strip!.runs.find((x) => x.bold)!;
       expect(lit.t.trim()).toBe(t === 'route' ? 'status' : t);
-      expect(lineText(rule!).trim()).toBe('━'.repeat((t === 'route' ? 'status' : t).length));
-      expect(lineText(rule!).indexOf('━')).toBe(lineText(strip!).indexOf(t === 'route' ? 'status' : t));
+      expect(lit.bg).toBe('accent');
+      expect(lineText(next!)).not.toMatch(/━/);
     }
   });
   test('L21: the strip keeps every tab, in order, at every width from 29 to 140 and never overflows (it wraps)', () => {
@@ -104,7 +104,7 @@ describe('route tab', () => {
     expect(out.some((l) => /\d+ more tasks on the board$/.test(l))).toBe(true);
   });
   test('names that do not fit the gates row fold to a labelled count', () => {
-    expect(rows('route', 30).find((l) => l.startsWith(' gates '))).toContain('2/3 green');
+    expect(rows('route', 30).find((l) => l.startsWith(' gates ') && !l.includes('core'))).toContain('2/3 green');
   });
 });
 

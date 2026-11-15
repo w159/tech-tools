@@ -43,7 +43,7 @@ export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void
 /** The band's controls: click chips, one per tab of the side panel's strip (wave 43: no key letters are drawn or bound). */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
 const buttonWidth = (b: { label: string }): number => textWidth(chipText(b.label)); // a chip is its label with a space each side
-const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0);
+const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0) + BAND_BUTTONS.length - 1; // one cell between chips: each is its own tile
 
 /** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
 export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
@@ -126,7 +126,6 @@ const blockedWhyOf = (plan: readonly { status: string; evidence?: string | null 
 };
 
 /** The wall clock a run ended, `9:27 PM`, from the snapshot clock less the seconds at rest. */
-const clock12 = (ms: number): string => { const d = new Date(ms); const h = d.getHours(); return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 
 /** Idle health (wave 42): the one model the band, the HUD card and the panel rows read. Only figures the mod holds; context 0 and absent tokens are unknown, never printed. */
 /** The longest gate note the health detail carries (a line's own words); a longer one is left to the gates tab. */
@@ -156,7 +155,7 @@ function healthOf(b: BandModel, s: LiveSnapshot, tally: ReturnType<typeof gateTa
     ...(h.upSecs !== undefined ? { upSecs: h.upSecs } : {}),
     ...(h.branch ? { branch: h.branch } : {}),
     ...(h.version ? { version: h.version } : {}),
-    ...(ran !== undefined ? { last: { secs: ran, done: Math.min(total, progress.done), total, agents: wave?.workers ?? 0, failed: wave?.failed ?? 0, ...(workers.length ? { workers } : {}), ...(b.restSecs !== undefined ? { endedAt: clock12(s.now - b.restSecs * 1000) } : {}) } } : {}),
+    ...(ran !== undefined ? { last: { secs: ran, done: Math.min(total, progress.done), total, agents: wave?.workers ?? 0, failed: wave?.failed ?? 0, ...(workers.length ? { workers } : {}), ...(b.restSecs !== undefined ? { endedAgo: Math.max(0, Math.round(b.restSecs)) } : {}) } } : {}),
     ...(h.open ? { open: true } : {}),
     ...(h.panel ? { panel: true } : {}),
   };
@@ -256,10 +255,10 @@ function keysRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, u
   const used = left.reduce((n, x) => n + textWidth(x.t), 0);
   const press = (id: SidebarView | 'board'): (() => void) => (id === 'board' ? on.toggleTodos : () => on.openView(id));
   const tile = chipStyle(ui);
-  const buttons = BAND_BUTTONS.map((b) => els.Button({
+  const buttons = BAND_BUTTONS.flatMap((b, i) => [...(i ? [els.Text({ backgroundColor: strip ?? bg, children: ' ' })] : []), els.Button({
     key: `band:${b.id}`, plain: true, label: b.label, onPress: press(b.id),
     children: [els.Text({ color: accent, backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}), bold: true, hover: hoverStyle(ui, `band:${b.id}`), children: chipText(b.label) })],
-  }));
+  })]);
   const gap = cols - used - KEYS_W - 1; // one cell of margin after the last chip
   return els.Box({
     flexDirection: 'row', flexShrink: 0,

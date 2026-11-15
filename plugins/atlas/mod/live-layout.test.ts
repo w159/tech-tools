@@ -76,29 +76,23 @@ describe('1. titles use the width the row has', () => {
   });
 });
 
-describe('2. the tab strip fits the pane and the rule sits under the lit tab', () => {
+describe('2. the tab strip fits the pane and the lit tab is the filled chip', () => {
   const tabs = ['route', 'team', 'channel', 'gates', 'core'] as const;
   for (const cols of PANE_WIDTHS) {
     for (const tab of tabs) {
-      test(`pane ${cols}, ${tab} lit: whole words (a second strip row where one does not fit), the rule under the lit label`, () => {
-        const rows = tabRows(panelWorld(tab as PanelTab, cols, ui)).map(lineText);
-        const ruleAt = rows.findIndex((r) => r.includes('━'));
-        expect(rows.filter((r) => r.includes('━'))).toHaveLength(1);
-        expect(rows.length).toBeLessThanOrEqual(3); // at most two strip rows and the rule
+      test(`pane ${cols}, ${tab} lit: whole words (a second strip row where one does not fit), the lit label filled, no rule`, () => {
+        const prows = tabRows(panelWorld(tab as PanelTab, cols, ui));
+        const rows = prows.map(lineText);
+        expect(rows.join('')).not.toMatch(/━/); // one idiom: filled lit chip, raised idle chips; no rule under the lit one
+        expect(rows.length).toBeLessThanOrEqual(2); // at most two strip rows
         for (const r of rows) expect(hostW(r.trimEnd())).toBeLessThanOrEqual(cols);
         expect(rows.join('\n')).not.toMatch(/\b[rtcgko]: (rt|tm|ch|gt|co|bd)\b/); // C4: no two-letter form
-        const strip = rows[ruleAt - 1]!;
-        const rule = rows[ruleAt]!;
-        const at = rule.indexOf('━');
-        expect(rule.replace(/ /g, '')).toMatch(/^━+$/);
-        // the cells under the rule are the lit tab's drawn label, whole, right after its `k: ` hotkey and before the gap
         const entry = STRIP_TABS.find((t) => t.id === tab)!;
-        const lit = strip.slice(at, at + [...rule.trim()].length);
-        expect(strip).not.toMatch(/\b[rtcgko]: /); // wave 43: no key letter is drawn
-        expect(entry.label).toBeTruthy();
-        expect(strip.slice(at + lit.length, at + lit.length + 1)).toMatch(/^ ?$/); // a gap, or the end of the row
-        expect(['status', 'team', 'channel', 'gates', 'core']).toContain(lit);
-        if (cols >= 55) expect(lit).toBe(entry.label);
+        const lit = prows.flatMap((p) => p.runs).filter((x) => x.bg === 'accent').map((x) => x.t.trim());
+        expect(rows.join('\n')).not.toMatch(/\b[rtcgko]: /); // wave 43: no key letter is drawn
+        expect(lit).toHaveLength(1);
+        expect(['status', 'team', 'channel', 'gates', 'core']).toContain(lit[0]);
+        if (cols >= 55) expect(lit[0]).toBe(entry.label);
       });
     }
   }

@@ -166,7 +166,7 @@ describe('the side panel status view, idle', () => {
   });
   test('a row with detail is pressable and shows the closed chevron; one without is plain text', () => {
     const ls = rows(world()).filter((l) => l.press?.key.startsWith('health:'));
-    expect(ls.map((l) => l.press!.key)).toEqual(['health:gates', 'health:session']); // hooks (no events here) and last run (none) have nothing more to show
+    expect(ls.map((l) => l.press!.key)).toEqual(['health:gates']); // hooks (no events here), last run (none) and, on a tall pane, the session (its figures are rows) have nothing more to show
     for (const l of ls) expect(lineText(l)).toContain('▸');
     expect(rows(world()).map(lineText).join('\n')).not.toContain('completion green'); // closed: no detail lines
   });
@@ -175,7 +175,7 @@ describe('the side panel status view, idle', () => {
     const i = t.findIndex((l) => l.includes('▾') && l.includes('gates'));
     expect(i).toBeGreaterThanOrEqual(0);
     expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/completion green 1\/1 pass/);
-    const s = rows(world({ expanded: 'health:session' })).map(lineText).join('\n');
+    const s = rows(world({ rows: 24, expanded: 'health:session' })).map(lineText).join('\n');
     expect(s).toContain('42,000 tokens in the window');
   });
   test('with a worker listed the status view is unchanged (no health rows)', () => {

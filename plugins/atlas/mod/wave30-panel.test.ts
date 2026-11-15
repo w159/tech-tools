@@ -93,7 +93,7 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
     const out = render('board', cols, rows);
     test(`pane ${cols}x${rows}: no run of more than 3 blank rows and the content reaches the foot`, () => {
       expect(blankRun(out)).toBeLessThanOrEqual(3);
-      expect(lastContent(out)).toBeGreaterThanOrEqual(rows - 11); // wave 33: the closure footer line is gone (the plan row carries the failure once), three rows higher again. wave 32: was rows - 6; the closing `closed · N of N` line and the tick-stub rows are gone, so a run-less pane ends two rows higher (a live pane pins the footer to the foot)
+      expect(lastContent(out)).toBeGreaterThanOrEqual(rows - 12); // idle polish 3: the rule row under the strip is gone, one row higher again. wave 33: the closure footer line is gone (the plan row carries the failure once), three rows higher again. wave 32: was rows - 6; the closing `closed · N of N` line and the tick-stub rows are gone, so a run-less pane ends two rows higher (a live pane pins the footer to the foot)
     });
     test(`pane ${cols}x${rows}: the bars are solid fills and the axis has tick marks with labels`, () => {
       const text = out.join('\n');

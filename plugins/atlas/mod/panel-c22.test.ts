@@ -16,7 +16,7 @@ const text = (tab: PanelTab, cols: number, over: Partial<PanelModel> = {}): stri
 const runsOf = (m: PanelModel) => panelLines(m).flatMap((l) => l.runs);
 
 describe('step 2: one vocabulary with the HUD', () => {
-  test('every tab at 150, 110 and 80 columns: no `█░` gauge, no strikethrough, a light title rule and a heavy rule only under the lit tab', () => {
+  test('every tab at 150, 110 and 80 columns: no `█░` gauge, no strikethrough, a light title rule and no heavy rule under the lit tab', () => {
     for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as PanelTab[]) for (const cols of [150, 110, 80]) {
       const m = world(tab, cols);
       const rows = panelText(m);
@@ -24,7 +24,7 @@ describe('step 2: one vocabulary with the HUD', () => {
       expect([tab, cols, runsOf(m).some((x) => x.strike)]).toEqual([tab, cols, false]);
       expect(rows[0]).toContain('─');
       expect(rows[0]).not.toContain('━');
-      expect(rows.filter((l) => l.includes('━')).length).toBe(1); // the one accent underline of the lit tab
+      expect(rows.filter((l) => l.includes('━')).length).toBe(0); // idle polish 3: no underline under the lit tab (it is the filled chip)
     }
   });
   test('the route meter is the HUD one, `▰▱`', () => {

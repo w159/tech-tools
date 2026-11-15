@@ -39,30 +39,17 @@ describe('pane box', () => {
   });
 });
 
-describe('the rule under the lit tab', () => {
-  test('only the row that holds the lit tab is ruled, at every width and for every view', () => {
+describe('no rule under the lit tab (idle polish 3: the lit chip is the filled one)', () => {
+  test('no strip row is followed by a rule box, at every width and for every view; exactly one tab Button is lit per view', () => {
     let wrapped = 0;
     for (const columns of [12, 16, 20, 24, 30, 40, 70]) for (const view of VIEWS) {
       const c = kids(tree(columns, view));
       const rowIdx = c.map((n, i) => (isTabsRow(n) ? i : -1)).filter((i) => i >= 0);
       if (rowIdx.length > 1) wrapped++;
-      let ruled = 0;
-      for (const i of rowIdx) {
-        const holdsLit = all(c[i]!).some((n) => n.kind === 'Button' && n.props.key === `tab:${view}`);
-        const under = c[i + 1];
-        // A rule box is the keyless sibling after a tabs row whose text is only rule glyphs and blanks (longer than the lone blank row).
-        const hasBox = !!under && !isTabsRow(under) && under.props.key === undefined && /^[━ ]{2,}$/.test(textOf(under));
-        const hasRule = hasBox && textOf(under!).includes('━');
-        expect([columns, view, i, hasBox]).toEqual([columns, view, i, holdsLit]);
-        if (hasRule) {
-          ruled++;
-          expect(under!.props.flexShrink).toBe(0);
-          expect(under!.props.flexDirection).toBe('row');
-        }
-      }
-      expect([columns, view, ruled]).toEqual([columns, view, 1]);
+      expect([columns, view, c.some((n) => /━/.test(textOf(n)))]).toEqual([columns, view, false]);
+      expect([columns, view, rowIdx.flatMap((i) => all(c[i]!)).filter((n) => n.kind === 'Button' && n.props.key === `tab:${view}`).length]).toEqual([columns, view, 1]);
     }
-    expect(wrapped).toBeGreaterThan(0); // the narrow widths do wrap, so a stray rule on another row would show
+    expect(wrapped).toBeGreaterThan(0); // the narrow widths do wrap
   });
 });
 
