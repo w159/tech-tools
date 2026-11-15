@@ -98,7 +98,7 @@ def visible_test_files(case: dict) -> list[str]:
 
 def run_pytest(path: Path, target: str | None = None) -> tuple[int, int, int]:
     """Run pytest in path. Returns (returncode, passed, failed)."""
-    cmd = [shutil.which("pytest") or "pytest", "-q", "-p", "no:cacheprovider"]
+    cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
     if target:
         cmd.append(target)
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}

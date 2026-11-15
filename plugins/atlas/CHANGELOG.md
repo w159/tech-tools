@@ -1,5 +1,12 @@
 # Changelog
 
+## 17.24.1 - 2026-11-15
+
+### Fixed
+
+- The omp verifier agent (`omp/agents/verifier.md`) is regenerated from `agents/verifier.md`, so omp users get the 17.24.0 claim-evidence rule. 17.24.0 shipped the omp copy without it.
+- `atlas_verifier_eval.py` runs pytest as `python -m pytest` with the current interpreter, so the eval and its tests work where no `pytest` command is on PATH (the CI `full` job failed 112 tests on this).
+
 ## 17.24.0 - 2026-11-15
 
 Round 4 answers the outside critics' list of gaps (audit: [2026-11-15_atlas-round4-expert-gaps.md](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)), then a second read-only review by two models fixed what they found ([2026-11-15_atlas-round4-post-review.md](../../docs/audits/2026-11-15_atlas-round4-post-review.md)). The done-claim gate (letter `v`) blocks when a claim contradicts this turn's own tool results, in the finding kinds measured at dev-split precision 0.95 or better. Gate (b) credits a verified finding only when a hook-written record backs it; the residual limits are listed below. The decision model speaks stock Ollama `/api/chat`, tested only against a stub. Tmux teams use git worktrees when 2 or more editing workers could touch the same files. The verifier has a claim-evidence rule, measured on a held-out tier in [2026-11-15_atlas-verifier-seeded-eval.md](../../docs/audits/2026-11-15_atlas-verifier-seeded-eval.md). The README claims were rewritten to match: "19 conditions" is now 20 (letters a to s and v), the old 13% tokens and 30% time headline is gone, and nothing says the gates prove the work is good. The history benchmark (Atlas against plain Claude Code) is built and its tasks validated, but the 48 paid runs have not run, so no result from it is reported.
