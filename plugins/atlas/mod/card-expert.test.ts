@@ -104,7 +104,7 @@ describe('pulse rows', () => {
     expect(ev).not.toMatch(/[⣀-⣿]{29}/);
     expect(ev).toContain('8/5m');
     const cx = rows.find((r) => /^ {2}context /.test(r))!;
-    expect(cx).toMatch(/▕[█▏▎▍▌▋▊▉░]{20}▏ 6% · 64k of 1M/);
+    expect(cx).toMatch(/ [█▏▎▍▌▋▊▉░]{20} 6% · 64k of 1M/);
     expect(rows.join('\n')).toContain('cost $0.04');
     const noCost = rowsText(card(health(), 110, { ...BUSY, cost: undefined } as Pulse)).join('\n');
     expect(noCost).not.toMatch(/cost|\$/);
@@ -115,7 +115,7 @@ describe('pulse rows', () => {
     expect(ev).toMatch(/⣀{28}/);
     expect(ev).toContain('0/5m');
     expect(rows.find((r) => /^ {2}runs /.test(r))).toContain('○ no runs this session');
-    expect(rows.find((r) => /^ {2}context /.test(r))).toMatch(/▕░{20}▏ —/);
+    expect(rows.find((r) => /^ {2}context /.test(r))).toMatch(/ ░{20} —/);
     expect(rows.join('\n')).not.toContain('none yet');
     expect(rows.join('\n')).not.toMatch(/cost|\$/);
     const none = rowsText(card(health({ hooks: undefined }), 110)); // no pulse at all and no hook seen (a card built before the pulse is wired)

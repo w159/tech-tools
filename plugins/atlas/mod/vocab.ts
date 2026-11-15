@@ -8,6 +8,8 @@
 //   gateLine(name, pass, total, ascii?) -> { glyph, text, count, tone, pass, total, deny, fired }
 //       fired:     `● name 8 pass · 0 deny`   tone `ok` (green), `bad` (red) when any deny; ascii swaps `●` for `*`
 //       not fired: `○ name not fired`         tone `sub` (grey); ascii `o`
+//   gateDot(pass, deny, { off? }, ascii?) -> { glyph, tone }   the one dot rule: green `ok` only when pass > 0 and deny = 0; red `bad` when deny > 0; grey hollow `○` (`sub`) for not fired and for a check that is off
+//   checkOff(label, note?)  true for a check whose own words say it is off (`Team mode: off`, `team mode off`)
 //   gatesTotal(gates) -> { pass, total, deny, fired, notFired, text, tone }   the sum over the gates that fired; text `ok` or `N denied`; tone `ok`, `bad`, or `sub` when no gate fired
 import type { Tone } from './atlas-ui';
 
@@ -34,6 +36,16 @@ export function gateLine(name: string, pass: number, total: number, ascii = fals
   const words = fired ? `${p} pass ${ascii ? '-' : '·'} ${deny} deny` : 'not fired';
   return { glyph, text: `${glyph} ${name} ${words}`, count: words, tone: !fired ? 'sub' : deny > 0 ? 'bad' : 'ok', pass: p, total: t, deny, fired };
 }
+
+export function gateDot(pass: number, deny: number, o: { off?: boolean } = {}, ascii = false): { glyph: string; tone: Tone } {
+  const p = count(pass);
+  const d = count(deny);
+  if (d > 0) return { glyph: ascii ? '*' : '●', tone: 'bad' };
+  if (o.off || p === 0) return { glyph: ascii ? 'o' : '○', tone: 'sub' };
+  return { glyph: ascii ? '*' : '●', tone: 'ok' };
+}
+
+export const checkOff = (label: string, note?: string): boolean => /^\s*team mode\b/i.test(label) ? /\boff\b/i.test(`${label} ${note ?? ''}`) : /\b(off|disabled)\s*$/i.test(label) || /^\s*off\b/i.test(note ?? '');
 
 export function gatesTotal(gates: readonly { pass: number; total: number }[]): GateTotal {
   const lines = gates.map((g) => gateLine('', g.pass, g.total));

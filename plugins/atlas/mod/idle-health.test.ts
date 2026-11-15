@@ -129,7 +129,7 @@ describe('the expanded health card (HUD)', () => {
     expect(t[0]).toMatch(/^── ▾ HEALTH ─+$/); // a flat ribbon whose one control is the title chip (D8), no corners and no second badge (the TODO and SUBAGENTS ribbons keep theirs)
     expect(t.some((l) => /gates\s+● completion +1 pass · 0 deny/.test(l))).toBe(true); // every gate is `● name 1 pass · 0 deny`, one per row
     expect(t.some((l) => /^\s+● tripwire +1 pass · 0 deny/.test(l))).toBe(true);
-    expect(t.some((l) => /context\s+▕.*▏ 18% · 42k tokens/.test(l))).toBe(true);
+    expect(t.some((l) => /context\s+[█▏▎▍▌▋▊▉░]+ 18% · 42k tokens/.test(l))).toBe(true);
     expect(t.some((l) => /last run/.test(l))).toBe(false); // the band says the run
     expect(t[t.length - 1]).toMatch(/^─+$/);
   });
@@ -183,7 +183,7 @@ describe('the side panel status view, idle', () => {
     expect(t.slice(i + 1, i + 5).join('\n')).toMatch(/● completion\s+1 pass · 0 deny/);
     // slice S3: only gates opens on the panel; context, events and runs are plain rows
     const s = rows(world({ rows: 24, expanded: 'health:context' })).map(lineText).join('\n');
-    expect(s).toMatch(/context +▕/);
+    expect(s).toMatch(/context +[█▏▎▍▌▋▊▉░]{8}/);
   });
   test('with a worker listed the status view is unchanged (no health rows)', () => {
     const t = rows(world({ workers: panelWorld('route', 57, ui).workers })).map(lineText).join('\n');

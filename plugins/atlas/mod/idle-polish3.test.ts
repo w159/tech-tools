@@ -32,11 +32,11 @@ describe('1: a tall idle pane is not a slab of empty rows (D11: RECENT grows int
     let dead = 0;
     for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
     expect(dead).toBeLessThanOrEqual(1);
-    expect(t.join('\n')).toMatch(/context {1,2}▕░+▏ —/); // D6: an empty track and an em dash, never `none yet`
+    expect(t.join('\n')).toMatch(/context {1,2}░+ —/); // D6: an empty track and an em dash, never `none yet`
   });
-  test('the context gauge is a real row: `context ▕██░░░░░░▏ 6% · 63k of 1M`; an empty track and `—` without a context figure', () => {
-    expect(body(world(54)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 6% · 63k of 1M/); // slice S3: the gauge, the tokens and the window on one context row
-    expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).toMatch(/context {1,2}▕░+▏ —/);
+  test('the context gauge is a real row: `context ██░░░░░░ 6% · 63k of 1M`; an empty track and `—` without a context figure', () => {
+    expect(body(world(54)).join('\n')).toMatch(/context {1,2}[█▏▎▍▌▋▊▉░]+ 6% · 63k of 1M/); // slice S3: the gauge, the tokens and the window on one context row
+    expect(body(world(54, { health: { ...h, ctxPct: undefined } })).join('\n')).toMatch(/context {1,2}░+ —/);
   });
   test('slice S3: no `waiting for first prompt` line and no zero state; the stepper at rest is five `○` (the slots never move)', () => {
     const t = body(world(54)).join('\n');

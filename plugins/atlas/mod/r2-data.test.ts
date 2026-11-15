@@ -144,9 +144,9 @@ describe('D5: one wall-clock event series on a fixed scale', () => {
 describe('D6: the context gauge is semantic', () => {
   const ctxRow = (pct: number | undefined, extra: Partial<Health> = {}): Run[] => healthRows({ gates: { total: 0, green: 0, checks: [] }, ...(pct !== undefined ? { ctxPct: pct } : {}), ...extra }, ui).find((x) => x.id === 'context')!.runs;
   const fill = (rs: Run[]): Run => rs.find((x) => /[█▎▍▌▋▊▉]/.test(x.t))!;
-  test('green under 50, amber 50 to 80, red over 80', () => {
-    expect(fill(ctxRow(6)).tone).toBe('ok');
-    expect(fill(ctxRow(49)).tone).toBe('ok');
+  test('data ink (not green) under 50, amber 50 to 80, red over 80', () => {
+    expect(fill(ctxRow(6)).tone).toBe('sub');
+    expect(fill(ctxRow(49)).tone).toBe('sub');
     expect(fill(ctxRow(50)).tone).toBe('warn');
     expect(fill(ctxRow(80)).tone).toBe('warn');
     expect(fill(ctxRow(81)).tone).toBe('bad');

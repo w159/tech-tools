@@ -12,8 +12,8 @@
 // Round 2 (D5, D6):
 //   SPARK_MIN_SCALE, sparkOf(series, width, { ascii? })   spark on the event scale max(4, the WHOLE series' max): one event is a low cell, four fill it, and every width (band 8, panel 20, card 28) is the last N cells of one series
 //   sparkRuns(series, width, ui, { newest? })   sparkOf as runs in the data-ink ramp (atlas-ui dataInk): baseline cells dim, the rest blue-grey, the newest highest cell one step brighter; `newest` (a style) replaces the last cell's run (returned last)
-//   ctxTone(pct)   `ok` under 50, `warn` 50 to 80, `bad` over 80
-//   gaugeRuns(pct, width, ui)   the framed gauge as runs: fill in ctxTone's colour, track in the dark track ink; an unmeasured gauge is all track
+//   ctxTone(pct)   `sub` (data ink via ctxInk, never green) under 50, `warn` 50 to 80, `bad` over 80
+//   gaugeRuns(pct, width, ui)   the gauge as runs, exactly `width` cells with no bracket glyphs: fill in ctxInk's colour, track in the dark track ink; an unmeasured gauge is all track
 import { dataInk, type Run, type Tone, type Ui } from './atlas-ui';
 
 export const SPARK_RAMP = '⣀⣄⣤⣦⣶⣷⣿';
@@ -84,7 +84,13 @@ export function sparkRuns(series: readonly number[], width: number, ui: Pick<Ui,
   return out;
 }
 
-export const ctxTone = (pct: number): Tone => (pct > 80 ? 'bad' : pct >= 50 ? 'warn' : 'ok');
+/** Round 3 (E3): under 50 the context is quiet data (`sub` in the data ink, never green), 50 to 80 amber, over 80 red. */
+export const ctxTone = (pct: number): Tone => (pct > 80 ? 'bad' : pct >= 50 ? 'warn' : 'sub');
+/** The style of a context fill: the data-ink body under 50, the warn and bad tones above. */
+export const ctxInk = (pct: number, ui: Pick<Ui, 'theme'>): Pick<Run, 'tone' | 'fg'> => {
+  const tone = ctxTone(pct);
+  return tone === 'sub' ? { tone, fg: dataInk(ui).body } : { tone };
+};
 
 export function gaugeRuns(pct: number | undefined, width: number, ui: Pick<Ui, 'theme' | 'ascii'>): Run[] {
   const ink = dataInk(ui);
@@ -94,9 +100,7 @@ export function gaugeRuns(pct: number | undefined, width: number, ui: Pick<Ui, '
   const fill = at < 0 ? g : g.slice(0, at);
   const track = at < 0 ? '' : g.slice(at);
   return [
-    { t: ui.ascii ? '[' : '▕', tone: 'dim' },
-    ...(fill ? [{ t: fill, tone: ctxTone(pct ?? 0) } as Run] : []),
+    ...(fill ? [{ t: fill, ...ctxInk(pct ?? 0, ui) } as Run] : []),
     ...(track ? [{ t: track, tone: 'line', fg: ink.track } as Run] : []),
-    { t: ui.ascii ? ']' : '▏', tone: 'dim' },
   ];
 }

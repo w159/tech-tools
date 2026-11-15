@@ -61,6 +61,20 @@ export function titleRow(cols: number, title: string, count: string, mid: readon
   const room = Math.max(1, cols - runsCells(left) - 1); // the rule to the cell before the corner
   return [...left, dimRun((ui.ascii ? '-' : RULE).repeat(room) + (flat ? (ui.ascii ? '-' : RULE) : ui.ascii ? '+' : bottom ? '╯' : '╮'), ui)];
 }
+/** A section header in the flat ribbon idiom: `── TITLE ───────── figure ──` in exactly `cols` cells (round 3, E2). The title is bold body grey, the rule and the figure dim; the figure drops when it does not fit, the title is cut last. ASCII: `-- TITLE ----- figure --`. */
+export function sectionRibbon(title: string, figure: string, cols: number, ui: Ui): Run[] {
+  const rule = ui.ascii ? '-' : RULE;
+  const w = Math.max(0, Math.floor(cols));
+  const lead = `${rule}${rule} `;
+  const fit = (t: string, room: number): string => [...t].slice(0, Math.max(0, room)).join('');
+  const hasFig = figure !== '' && w >= lead.length + [...title].length + 1 + 1 + [...figure].length + 1 + 2 + 1;
+  const tail = hasFig ? ` ${figure} ${rule}${rule}` : '';
+  const head = fit(title, w - lead.length - 2);
+  const gap = Math.max(0, w - lead.length - [...head].length - 1 - [...tail].length);
+  const left = fit(lead, w);
+  if (w <= lead.length) return [dimRun(left, ui)];
+  return [dimRun(lead, ui), titleRun(head, ui), dimRun(' ' + rule.repeat(gap) + tail, ui)];
+}
 /** The bottom edge that closes a box: `╰────╯` in exactly `cols` cells in the 240 neutral (ASCII `+---+`), under the last row of a block in every state. The capture scorer skips a row with no space after its first character. */
 export const bottomRule = (cols: number, ui: Ui): Run[] => {
   const w = Math.max(3, cols);

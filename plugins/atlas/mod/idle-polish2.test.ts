@@ -222,8 +222,8 @@ describe('12: `context 6%` on the band; the tokens and the window only in the se
     expect(r).not.toMatch(/tok/);
   });
   test('the context row says the gauge and `63k of 1M`', () => {
-    expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).toMatch(/▕.*▏ 6% · 63k of 1M/); // a short pane: the context row (slice S4: framed gauge and `63k of 1M`), its detail the exact tokens
+    expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).toMatch(/[█▏▎▍▌▋▊▉░]+ 6% · 63k of 1M/); // a short pane: the context row (slice S4: framed gauge and `63k of 1M`), its detail the exact tokens
     expect(body(world(57, { rows: 24 })).find((l) => l.includes('context'))).not.toMatch(/tok/);
-    expect(body(world(57)).join('\n')).toMatch(/context {1,2}▕[█▏▎▍▌▋▊▉░]+▏ 6% · 63k of 1M/); // slice S3: one context row on the grid, the gauge and `63k of 1M`; the exact tokens are the card's
+    expect(body(world(57)).join('\n')).toMatch(/context {1,2}[█▏▎▍▌▋▊▉░]+ 6% · 63k of 1M/); // slice S3: one context row on the grid, the gauge and `63k of 1M`; the exact tokens are the card's
   });
 });
