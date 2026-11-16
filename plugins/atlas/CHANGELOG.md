@@ -10,6 +10,10 @@ Round 5 hardened the done-claim detector after two outside critics and stopped t
 - Tier rule Amendment 1: group-level Wilson bound, seeded-only support cannot promote a kind, cross-validation stability. Result: `BLOCKING_KINDS` is empty. The Stop gate records done-claim findings as `decision.verify.block-would` and blocks only with `ATLAS_DONE_CLAIM=block`. In 17.25.0 two kinds blocked by default, both supported only by seeded rows.
 - Blocking path on the 182-row corpus: 32 TP, 0 FP, 12 FN before, 0 TP, 0 FP, 44 FN after.
 
+### Fixed
+
+- `scripts/test_atlas_decision_eval.py`: the unclosed-handle test now runs `gc.collect()` before its warning window, so sqlite connections leaked by earlier tests no longer fail it on Python 3.14 CI.
+
 ### Added
 
 - `scripts/atlas_done_claim_fresh.py` (mine, build, check, report, score) and `scripts/atlas_decision_eval.py`; data `hooks/done_claim_gtrain.jsonl`, `hooks/done_claim_fresh.jsonl`, `scripts/decision_eval_set.json`, `scripts/decision_eval_cache.json`.

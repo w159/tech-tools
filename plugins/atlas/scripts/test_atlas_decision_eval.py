@@ -127,6 +127,7 @@ class OwnersAndIoTest(unittest.TestCase):
     def test_no_unclosed_file_handles(self):
         with tempfile.TemporaryDirectory() as tmp:
             _write_transcript(tmp, "projA", ["Please review the billing module for races"])
+            gc.collect()  # finalize garbage from earlier tests outside the measured window
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 ev.tuning_text()
