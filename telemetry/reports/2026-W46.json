@@ -1,0 +1,56 @@
+{
+  "atlas_version": {
+    "17.19.0": 8,
+    "17.20.0": 4,
+    "17.21.0": 16,
+    "17.21.1": 8,
+    "17.22.0": 24,
+    "17.23.0": 8,
+    "17.24.0": 8,
+    "17.24.1": 16,
+    "17.24.2": 8,
+    "17.25.0": 8
+  },
+  "counts": {
+    "active.day.sat": {
+      "installs": 35,
+      "total": 37
+    },
+    "active.day.sun": {
+      "installs": 37,
+      "total": 37
+    },
+    "command.atlas-plan": {
+      "installs": 12,
+      "total": 12
+    },
+    "decision.verify.skip": {
+      "installs": 18,
+      "total": 18
+    },
+    "gate.pass": {
+      "installs": 26,
+      "total": 361
+    },
+    "session.claude": {
+      "installs": 29,
+      "total": 287
+    },
+    "session.codex": {
+      "installs": 22,
+      "total": 32
+    },
+    "session.unknown": {
+      "installs": 30,
+      "total": 30
+    }
+  },
+  "os": {
+    "linux": 108
+  },
+  "python": {
+    "3.14": 108
+  },
+  "submissions": 110,
+  "week": "2026-W46"
+}
