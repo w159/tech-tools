@@ -111,6 +111,9 @@ async function boot(files?: Record<string, string>) {
   const cap = captureOn();
   resetCore();
   await register(cap.on, {});
+  // The run clock, its hold and the armed prompt live in register.ts module scope and only session.end resets them: an earlier file
+  // (wire-expert) leaves a run open at a later clock, so end that session first, as the host does before a new one.
+  await cap.one('session.end')(s.$, { reason: 'other' }, noopNext);
   await cap.one('session.start')(s.$, { cwd: ROOT, surface: 'terminal', isInteractive: true }, noopNext);
   await settle();
   const props = { working: false };

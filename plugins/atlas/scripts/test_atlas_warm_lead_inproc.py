@@ -91,7 +91,7 @@ def test_pid_alive_cases():
 def test_pid_alive_treats_zombie_as_dead():
     p = subprocess.Popen(["true"])
     try:
-        wait_for(lambda: Path(f"/proc/{p.pid}/stat").read_text().rsplit(")", 1)[1].split()[0] == "Z")
+        wait_for(lambda: wl.proc_state(p.pid) == "Z")  # product helper: /proc on Linux, ps elsewhere
         assert wl.pid_alive(p.pid) is False
     finally:
         p.wait()
@@ -686,6 +686,21 @@ def test_stop_lead_sigkills_a_host_that_ignores_sigterm(tmp_path):
     wl.write_state(rd, host_pid=host.pid, launcher="subprocess")
     wl.stop_lead(tmp_path, "z")
     assert host.wait(10) == -signal.SIGKILL
+
+
+def test_stop_when_the_process_is_already_gone_does_not_raise(tmp_path, monkeypatch):
+    rd = wl.rundir(tmp_path, "z")
+    rd.mkdir(parents=True)
+    wl.write_state(rd, host_pid=999999, launcher="subprocess", tasks=1)
+
+    def gone(*a):
+        raise ProcessLookupError
+
+    # pid_alive saw the host alive, then it exited before the signal landed
+    monkeypatch.setattr(wl, "pid_alive", lambda pid: pid == 999999)
+    monkeypatch.setattr(wl.os, "kill", gone)
+    assert wl.stop_lead(tmp_path, "z") == {"stopped": True, "tasks": 1}
+    assert wl.read_state(rd)["status"] == "stopped"
 
 
 def test_start_with_tmux_launches_a_detached_session(tmp_path, monkeypatch, capsys):

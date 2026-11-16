@@ -734,7 +734,8 @@ class CrewWiringTests(Base):
         (self.rundir / "logs" / "a.log").write_text(
             res(0.9, 100) + "\n"
         )  # a: ollama, claims a cost it did not incur
-        (self.rundir / "logs" / "b.log").write_text(res(0.25, 40) + "\n")  # b: claude
+        api = json.dumps({"type": "system", "subtype": "init", "apiKeySource": "ANTHROPIC_API_KEY"})
+        (self.rundir / "logs" / "b.log").write_text(api + "\n" + res(0.25, 40) + "\n")  # b: claude, billed per token
         for n in "ab":
             (self.rundir / "exit" / f"{n}.r0.json").write_text(
                 '{"exit": 0, "wall_s": 1}'
@@ -762,7 +763,7 @@ class CrewWiringTests(Base):
         self.assertNotIn("local", rows["b"])
         self.assertEqual(
             out["tokens_workers"],
-            {"total": 160, "cost_usd": 0.25, "tokens_local": 110, "cost_complete": True},
+            {"total": 160, "cost_usd": 0.25, "tokens_local": 110, "cost_complete": True, "billing": "mixed"},
         )
 
     def test_status_lists_providers(self):
@@ -1360,7 +1361,7 @@ fi
 """
     RETRIES = (
         "i=1; while [ $i -le 6 ]; do echo '{\"type\":\"system\",\"subtype\":\"api_retry\",\"attempt\":'$i',"
-        "\"max_retries\":300,\"retry_delay_ms\":1,\"error_status\":%s,\"error\":\"x\"}'; i=$((i+1)); done; sleep 60"
+        "\"max_retries\":300,\"retry_delay_ms\":1,\"error_status\":%s,\"error\":\"x\"}'; i=$((i+1)); done; exec sleep 60"
     )
 
     def setUp(self):

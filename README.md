@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.26.0, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.27.0, armada 2.4.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -284,17 +284,18 @@ The full condition list and every kill switch are in the
 
 ### 5. Memory
 
-The first tool call of a session must be one claude-mem recall for the project,
-so prior work is found before it is re-derived:
+The first tool call of a session should be one claude-mem recall for the project,
+so prior work is found before it is re-derived. On Claude Code the recall gate
+allows the first other tool call and shows this reminder once per session:
 
 ```text
-[atlas gate] REQUIRED once per session: your first tool call must be one
-claude-mem recall for this project.
+[atlas gate] Recall first: run one claude-mem search for this project
 ```
 
-If the memory server comes from the plugin, or its recall tool is missing, the gate
-denies once and then releases. A mounted server is denied on every call until the
-recall happens.
+With `ATLAS_RECALL_GATE=deny` the gate denies tool calls until the recall happens:
+if the memory server comes from the plugin, or its recall tool is missing, it
+denies once and then releases; a mounted server is denied on every call until the
+recall happens. In omp the gate always denies.
 
 ### 6. Self-improvement with `/atlas:atlas-doctor`
 
@@ -371,6 +372,8 @@ Every guard has an off switch. Set it in your shell or in
 | `ATLAS_GATE=off` | Stop gate off |
 | `ATLAS_TRIPWIRE_HARD=off` | dispatch and routing denies off |
 | `ATLAS_MANDATES=off` | recall gate off |
+| `ATLAS_RECALL_GATE=deny` | recall gate denies tool calls until the recall instead of reminding once |
+| `ATLAS_PLAN_UPFRONT=off` | no plan rows written to the board from a code-shipping prompt |
 | `ATLAS_DASHBOARD=on` | start the dashboard at session start (off by default) |
 | `ATLAS_ADVISOR_GATE=off` | omp advisor gate off |
 | `ATLAS_MODE=solo` | small direct changes on the main thread are acknowledged instead of forced into a dispatch |
@@ -399,7 +402,7 @@ Worker pane transport: tmux when installed, else background `claude --bg` proces
 
 ## Releases
 
-Atlas 17.26.0 fixes 16 done-claim detector defects found by two outside critics and by false alarms on generated rows, and stops blocking by default (`BLOCKING_KINDS` is empty; `ATLAS_DONE_CLAIM=block` enforces): on a held-out set of 162 rows the default path made 0 false blocks (Wilson upper bound 0.024), while blocking on every kind would stop 20 of 156 genuine claims ([audit](docs/audits/2026-11-16_atlas-round5.md)). Atlas 17.24.0 blocked a done claim that contradicts this turn's own tool results in the finding kinds measured at dev precision 0.95 or better (real-row n=131, 1 true positive, 0 false positives; only 3 real unsupported claims exist in the corpus), credits a verified finding only when a hook-written dispatch or member record backs it (an in-process verifier still stamps as `lead`, so a lead can still pair a real dispatch with a self-stamped row), uses git worktrees for overlapping workers (simulated: worktrees avoid 14 retries of 40 edits and leave 6 same-line conflicts on kept branches) and speaks stock Ollama `/api/chat` ([audit](docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). Atlas 17.23.0 shows a live health summary when idle, makes every control clickable and removes the printed key hints ([audit](docs/audits/2026-11-14-idle-health.md)). Atlas 17.22.0 adds three things ([audit](docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). Decision models: a local model, when one answers on loopback, picks the prompt class and effort and judges whether a final reply claims done without showing a result, with the keyword router and the deterministic gate as fallback; the done-claim check only records until its thresholds are calibrated, and routing scores 84/86 on its own corpus (tuned on it) and 12/15 on an independent set. Ollama workers: crew and tmux team workers can run on a local Ollama model, with health checks, fallback to Claude and a `atlas_provider.py bench` command; no real Ollama model was run in development, and in-process Agent-tool subagents cannot move to it. Mod-load release gate: `atlas_mod_gate.py --live --require-live` boots the hooks module in the real host in CI and before each release. Atlas 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, so the band, TODO, SUBAGENTS and side panel draw again ([audit](docs/audits/2026-11-14-mod-load.md)). Release notes are in each plugin's CHANGELOG ([atlas](plugins/atlas/CHANGELOG.md),
+Atlas 17.27.0 fixes five faults found in six 17.26.0 sessions: the Stop gate no longer re-runs heredoc body lines as a test command, todo and finding bookkeeping no longer counts as inline work, the recall gate on Claude Code reminds instead of denying (`ATLAS_RECALL_GATE=deny` restores the denial), a code-shipping prompt puts plan rows on the board at once (`ATLAS_PLAN_UPFRONT=off`), and the core ledger counts only findings verified since the session started. It also reports crew dollars only for a worker billed per token (a plan login reports tokens with `cost_usd` null), and the sharded crew check no longer hands `.ts` tests to pytest. Atlas 17.26.0 fixes 16 done-claim detector defects found by two outside critics and by false alarms on generated rows, and stops blocking by default (`BLOCKING_KINDS` is empty; `ATLAS_DONE_CLAIM=block` enforces): on a held-out set of 162 rows the default path made 0 false blocks (Wilson upper bound 0.024), while blocking on every kind would stop 20 of 156 genuine claims ([audit](docs/audits/2026-11-16_atlas-round5.md)). Atlas 17.24.0 blocked a done claim that contradicts this turn's own tool results in the finding kinds measured at dev precision 0.95 or better (real-row n=131, 1 true positive, 0 false positives; only 3 real unsupported claims exist in the corpus), credits a verified finding only when a hook-written dispatch or member record backs it (an in-process verifier still stamps as `lead`, so a lead can still pair a real dispatch with a self-stamped row), uses git worktrees for overlapping workers (simulated: worktrees avoid 14 retries of 40 edits and leave 6 same-line conflicts on kept branches) and speaks stock Ollama `/api/chat` ([audit](docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). Atlas 17.23.0 shows a live health summary when idle, makes every control clickable and removes the printed key hints ([audit](docs/audits/2026-11-14-idle-health.md)). Atlas 17.22.0 adds three things ([audit](docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). Decision models: a local model, when one answers on loopback, picks the prompt class and effort and judges whether a final reply claims done without showing a result, with the keyword router and the deterministic gate as fallback; the done-claim check only records until its thresholds are calibrated, and routing scores 84/86 on its own corpus (tuned on it) and 12/15 on an independent set. Ollama workers: crew and tmux team workers can run on a local Ollama model, with health checks, fallback to Claude and a `atlas_provider.py bench` command; no real Ollama model was run in development, and in-process Agent-tool subagents cannot move to it. Mod-load release gate: `atlas_mod_gate.py --live --require-live` boots the hooks module in the real host in CI and before each release. Atlas 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, so the band, TODO, SUBAGENTS and side panel draw again ([audit](docs/audits/2026-11-14-mod-load.md)). Release notes are in each plugin's CHANGELOG ([atlas](plugins/atlas/CHANGELOG.md),
 [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md))
 and on [GitHub Releases](https://github.com/w159/tech-tools/releases). The
 release workflow (`.github/workflows/release.yml`) publishes `<plugin> <version>`

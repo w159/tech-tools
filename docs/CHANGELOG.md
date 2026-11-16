@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 17.27.0 - 2026-11-16
+
+- atlas 17.27.0: five fixes from a review of six local 17.26.0 sessions. The Stop gate no longer re-runs heredoc body lines as the session's test command (`gate_rerun._drop_heredoc_bodies`). Shell calls that only run `atlas_todo.py` or `atlas_finding.py` no longer count as inline ops. The recall gate on Claude Code allows the first call with a one-time reminder instead of denying it (`ATLAS_RECALL_GATE=deny` restores the denial; omp still denies). A code-shipping prompt writes plan rows to the board at once (`plan_upfront`, `ATLAS_PLAN_UPFRONT=off`). The core ledger counts only findings verified since the session started (`CoreInput.since`, passed by the core tab and the omp panel). The crew summary and the core tab report dollars only for a worker billed per token (init event `apiKeySource` other than `none`); a plan login reports tokens with `cost_usd` null and `billing: plan`. The mod shows the host's session cost only when the status line reports a per-token login (`billing: api` in `statusline-rows.json`); a plan login or an unknown billing shows no dollar figure. On macOS, which has no `/proc`, the crew (`_proc_state`, `_read_argv` through `_ps_field`) and the warm lead (`proc_state`, `proc_usage`) now read process state, command lines and usage with `ps`, and the crew tests run there without skips. Marketplace 5.32.0.
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
+## marketplace 5.32.0 - 2026-11-16
+
+- marketplace 5.32.0: atlas 17.27.0. armada and programmer are unchanged.
+
 ## atlas 17.26.0 - 2026-11-16
 
 - atlas 17.26.0: round 5 fixed 16 done-claim detector defects (11 from two outside critics, 5 from false alarms on generated rows) and amended the tier rule (group-level Wilson, seeded-only support cannot promote, cross-validation stability). `BLOCKING_KINDS` is now empty: the Stop gate records done-claim findings and blocks only with `ATLAS_DONE_CLAIM=block`. Held-out (162 rows, 6 gold positives): 0 false blocks on the default path (Wilson upper 0.024); blocking on every kind would stop 20 of 156 genuine claims. New tooling `atlas_done_claim_fresh.py` and `atlas_decision_eval.py` ([audit](audits/2026-11-16_atlas-round5.md)).

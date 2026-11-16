@@ -28,8 +28,8 @@ GOOD_REPORT = "STATUS: DONE\nSTEPS: 2/2\nFILES_CHANGED: none\nEVIDENCE:\n1. x ->
 
 
 class Gates:
-    """Drives the gate hooks in a sandbox and records (gate, case, expect, got)."""
 
+    """Drives the gate hooks in a sandbox and records (gate, case, expect, got)."""
     def __init__(self, ctx):
         self.sb = Sandbox(ctx, "gates")
         self.ctx = ctx
@@ -111,7 +111,14 @@ class Gates:
     # -- gates ------------------------------------------------------------------
     def recall_gate(self):
         G, sid = "recall_gate", self.sb.sid
-        rg = lambda p, extra=None, cwd=None: self.hook("recall_gate.py", p, extra, cwd)  # noqa: E731
+        # 17.27: recall_gate is advisory by default on Claude Code. Every case below pins the legacy
+        # ATLAS_RECALL_GATE=deny mode (so the deny path stays proven) unless it passes its own value;
+        # the [advisory] block cases further down pass "" to score the default.
+        deny = {"ATLAS_RECALL_GATE": "deny"}
+
+        def rg(p, extra=None, cwd=None):
+            return self.hook("recall_gate.py", p, {**deny, **(extra or {})}, cwd)
+
         try:
             mand = json.loads((self.ctx.root / "contracts/mandates.json").read_text())[
                 "recallGateCases"
@@ -139,6 +146,26 @@ class Gates:
                 "deny",
                 rg(self.pre(s, c["name"], c["input"])),
                 "mandates.json: denied on every attempt",
+            )
+        # Default (advisory) mode: the first block call is allowed with the recallAdvisory context and a
+        # repeat in the same session is silent. "" overrides the deny pin above whatever the host sets.
+        adv = {"ATLAS_RECALL_GATE": ""}
+        for c in mand.get("block", []):
+            s = sid()
+            self.rec(
+                G,
+                "contract-block(1st):" + c["name"] + " [advisory]",
+                "context",
+                rg(self.pre(s, c["name"], c["input"]), adv),
+            )
+            r = rg(self.pre(s, c["name"], c["input"]), adv)
+            # rec scores context as an allow, so a repeated reminder must not pass as silent.
+            self.rec(
+                G,
+                "contract-block(2nd, same session):" + c["name"] + " [advisory]",
+                "allow" if not r["out"].strip() else "silent",
+                r,
+                "advisory: reminded once, then silent",
             )
         for c in mand.get("exempt", []):
             self.rec(

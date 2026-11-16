@@ -7,10 +7,11 @@
 //     ctx     the last CTX_KEEP (24) context measures, oldest first: { tokens, pct (0..100), at }
 //     runs    the last RUNS_KEEP (12) finished runs, oldest first: { secs, ok, at }
 //     window  the model's context window in tokens from the newest measure (the `of 1M` figure); absent until measured
-//     cost    session.measure's `cost.usd` as of the newest measure that carried one; the key is absent when the host sent none
+//     cost    session.measure's `cost.usd` as of the newest measure that carried one; the key is absent when the host sent none, and unless noteBilling said `api`
 //   BUCKETS, BUCKET_MS, CTX_KEEP, RUNS_KEEP   the constants above
 //   RATE_BUCKETS, rateLabel(events)   the last 20 buckets (5 min) summed as `6/5m`
 //   noteMeasure(e, at)   record one session.measure input (only `context.tokens`, `context.percent`, `context.window`, `cost.usd` are read)
+//   noteBilling(kind)   how the login is billed, from the status line's statusline-rows.json: 'api' (per token) or 'plan'; anything else is unknown
 //   noteRunEnd(secs, ok, at)   record one finished run
 //   pulseOf(now)         the current Pulse at engine clock `now` (ms)
 //   ctxSeries(pulse)      the context percent of every measure, oldest first (the context chart's series)
@@ -18,7 +19,7 @@
 //   ctxRunway(pulse)      turns the window still holds at the newest turn's growth (`~78 turns left`); undefined under two measures, with no window or while the context is flat
 //   ctxText(pulse)        `6% · 64k of 1M · +12k/turn` (the window and the delta ride only when known); undefined before the first measure
 //   activityStats(pulse, runTools) -> `6 events · 1.2/min · peak 4 · 3 tools`   the events of the window, per minute over the window's span, the busiest bucket, the tools the run has called
-//   resetPulse()         a new session: empty rings, no cost (the event stamps are cleared by hook-log's resetHookLog)
+//   resetPulse()         a new session: empty rings, no cost, billing unknown (the event stamps are cleared by hook-log's resetHookLog)
 import { eventBuckets, eventStamps } from './hook-log';
 
 export type CtxSample = { tokens: number; pct: number; at: number };
@@ -40,6 +41,8 @@ let ctx: CtxSample[] = [];
 let runs: RunSample[] = [];
 let windowTokens: number | undefined;
 let cost: { usd: number } | undefined;
+/** The host's cost is an API-price estimate: it is a charge only on a per-token login. Unknown (undefined) shows no dollar figure. */
+let billing: 'plan' | 'api' | undefined;
 /** N3: the denied-call count last seen and the clock reading at which it last ROSE (a count that falls to 0 forgets the rise). */
 let denied = 0;
 let deniedRoseAt: number | undefined;
@@ -51,6 +54,7 @@ export function resetPulse(): void {
   runs = [];
   windowTokens = undefined;
   cost = undefined;
+  billing = undefined;
   denied = 0;
   deniedRoseAt = undefined;
 }
@@ -76,6 +80,11 @@ export function noteMeasure(e: MeasureLike, at: number): void {
   if (e.cost && finite(e.cost.usd)) cost = { usd: e.cost.usd };
 }
 
+/** Record how the login is billed; only 'api' lets pulseOf report the cost. Any other value is unknown. */
+export function noteBilling(kind: unknown): void {
+  billing = kind === 'api' || kind === 'plan' ? kind : undefined;
+}
+
 export function noteRunEnd(secs: number, ok: boolean, at: number): void {
   if (!finite(secs) || !finite(at)) return;
   runs = [...runs, { secs, ok, at }].slice(-RUNS_KEEP);
@@ -89,7 +98,7 @@ export function pulseOf(now: number): Pulse {
     ctx: ctx.map((s) => ({ ...s })),
     runs: runs.map((r) => ({ ...r })),
     ...(windowTokens !== undefined ? { window: windowTokens } : {}),
-    ...(cost ? { cost: { ...cost } } : {}),
+    ...(cost && billing === 'api' ? { cost: { ...cost } } : {}), // a dollar figure only when validated as an actual charge
   };
 }
 

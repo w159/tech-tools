@@ -277,7 +277,8 @@ describe('sidebar note', () => {
 });
 
 describe('core cache and gates', () => {
-  const verdict = JSON.stringify([{ id: 'a', status: 'verified', title: 'title a', evidence: ['ev'], verified_at: '2026-10-27T08:00:00+00:00', verified_by: 'atlas:verifier' }]);
+  // verified after the stub clock's session start (1_900_000_000_000 ms, March 2030): buildCore passes that start as `since`, so an earlier row is another session's
+  const verdict = JSON.stringify([{ id: 'a', status: 'verified', title: 'title a', evidence: ['ev'], verified_at: '2031-01-01T08:00:00+00:00', verified_by: 'atlas:verifier' }]);
   const seeded = (over: Record<string, unknown> = {}) => {
     const s = stubEngine({ 'atlas/snapshot': { root: ROOT, todos: [], contract: { headerFirstLinePattern: '' } }, 'atlas/isModOn': true, 'atlas/isInteractive': true, ...over });
     s.files[`${RUN}/findings.json`] = verdict;

@@ -800,7 +800,15 @@ class RouteScopeTest(unittest.TestCase):
         self.assertIn("pass count", nudge)
         self.assertIn("files changed", nudge)
         self.assertLess(len(nudge.encode()), po._CREW_NUDGE_MAX_BYTES)
-        self.assertLess(len(nudge.encode()), 700)
+
+    def test_crew_nudge_text_without_path_stays_under_cap(self):
+        self._spec_repo()
+        nudge = self._arm("c1", self.PROMPT)
+        script = po.crew_command(self.tmp, self.PROMPT, "x").split('"')[1]
+        self.assertIn(script, nudge)
+        # The cap is on the nudge text without the absolute atlas_crew.py path.
+        size = len(nudge.encode()) - len(script.encode()) * nudge.count(script)
+        self.assertLess(size, 650)
 
     def test_crew_command_none_without_spec_dir_or_check(self):
         root = self._spec_repo()

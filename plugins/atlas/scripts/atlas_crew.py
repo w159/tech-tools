@@ -1560,9 +1560,42 @@ def _pid_alive(pid: int) -> bool:
     except OSError:
         return True
     try:  # a zombie (dead, not yet reaped by its parent) is gone for our purposes
-        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+        state = _proc_state(pid)
     except (OSError, IndexError):
         return True
+    return state is not None and not state.startswith("Z")
+
+
+def _has_procfs() -> bool:
+    return Path("/proc/self").exists()
+
+
+def _ps_field(pid: int, field: str) -> str | None:
+    """One `ps` column for pid (hosts without /proc, e.g. macOS). None when the pid is gone (ps exits non-zero);
+    a plain OSError (never FileNotFoundError, which callers read as "pid gone") when ps cannot run or times out."""
+    try:
+        r = subprocess.run(["ps", "-ww", "-o", f"{field}=", "-p", str(pid)], capture_output=True, text=True,
+                           timeout=3, env={**os.environ, "LC_ALL": "C"})
+    except (OSError, subprocess.SubprocessError) as e:
+        raise OSError(f"ps failed for pid {pid}: {e}") from None
+    if r.returncode != 0:
+        return None
+    out = r.stdout.strip()
+    if not out:
+        raise OSError(f"ps printed nothing for pid {pid}")
+    return out
+
+
+def _proc_state(pid: int) -> str | None:
+    """pid's state (a leading Z is a zombie) from /proc/<pid>/stat, or `ps -o stat=` without /proc. None when the
+    pid is gone; OSError (IndexError on a malformed stat line) when it cannot be read."""
+    if _has_procfs():
+        try:
+            raw = Path(f"/proc/{pid}/stat").read_text()
+        except FileNotFoundError:
+            return None
+        return raw.rsplit(")", 1)[1].split()[0]
+    return _ps_field(pid, "stat")
 
 
 def _worker_gone(rundir: Path, name: str, rnd: int) -> str | None:
@@ -1690,8 +1723,10 @@ def _shard_jobs(cmd, root, test_files, ncpu, skip=()):
     """[(shell command, label, is_rest)] for a sharded run, or [] when `cmd` runs unsharded: not a plain pytest
     command (no `|`, `&&`, `;`, `>` ...), fewer than 2 known files, or ATLAS_CREW_SHARD=off. Files in `skip` get
     no shard and are `--ignore`d by the rest shard."""
-    skip = set(skip or ())
-    files = [f for f in (test_files or []) if f not in skip]
+    # pytest collects only .py files: a .ts test in a shard exits 4 (not found) and turned a green run red; its
+    # own worker's unit check already ran it, so it is neither sharded nor --ignore'd
+    skip = {f for f in (skip or ()) if str(f).endswith(".py")}
+    files = [f for f in (test_files or []) if f not in skip and str(f).endswith(".py")]
     if (
         os.environ.get("ATLAS_CREW_SHARD", "").strip().lower() == "off"
         or len(files) + len(skip) < 2
@@ -2086,9 +2121,20 @@ def _group_of(pid: int, needle: str) -> int | None:
 
 
 def _read_argv(pid: int) -> list[str]:
-    """pid's argv from /proc/<pid>/cmdline (NUL separated); OSError when it cannot be read."""
-    raw = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace")
-    return [a for a in raw.split("\0") if a]
+    """pid's argv from /proc/<pid>/cmdline (NUL separated), or `ps -o command=` without /proc. FileNotFoundError
+    when the pid is gone, another OSError when it cannot be read."""
+    if _has_procfs():
+        raw = Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace")
+        return [a for a in raw.split("\0") if a]
+    # no /proc (macOS): ps prints argv joined by spaces with no quoting, so the split is a best effort. An element
+    # holding a space comes back in pieces, which makes _argv_is_ours miss it (fail closed), never match it.
+    out = _ps_field(pid, "command")
+    if out is None:
+        raise FileNotFoundError(f"no process {pid}")  # same signal as a missing /proc entry: the pid is gone
+    try:
+        return shlex.split(out)
+    except ValueError:  # an unbalanced quote inside an argument: plain whitespace split
+        return out.split()
 
 
 def _argv_is_ours(argv: list[str], needle: str) -> bool:
@@ -2110,11 +2156,11 @@ def _argv_is_ours(argv: list[str], needle: str) -> bool:
 
 def _is_ours(pid: int, needle: str) -> bool:
     """False when pid's argv is readable and does not match `needle` (the run id) exactly: the pid file outlived its
-    process and the system gave the pid to another one. True without /proc (the file is trusted)."""
+    process and the system gave the pid to another one. True when argv cannot be read (the file is trusted)."""
     try:
         argv = _read_argv(pid)
     except FileNotFoundError:
-        return not Path("/proc/self").exists()  # /proc mounted and no entry: the pid is gone
+        return False  # no /proc entry, or ps found no such pid: the pid is gone
     except OSError:
         return True
     return _argv_is_ours(argv, needle)
@@ -2130,7 +2176,7 @@ def _stop_pidfile(path: Path, needle: str, wait_s: float = 3.0) -> int | None:
         if not _argv_is_ours(_read_argv(pid), needle):
             return None
     except OSError:
-        pass  # no /proc: trust the file
+        pass  # argv unreadable: trust the file
 
     def send(sig):
         try:
@@ -2404,6 +2450,25 @@ def usage_of(log: Path) -> dict:
     return t
 
 
+def billed_per_token(log: Path) -> bool:
+    """True when the log's claude init event names an API key source (billed per token). total_cost_usd is an
+    API-price estimate Claude Code fills in for a plan login too (apiKeySource "none"), where nothing is charged:
+    no init event or no apiKeySource is not proof of a charge either."""
+    try:
+        fh = log.open(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    with fh:
+        for line in fh:
+            if _event_type(line) != "system":
+                continue
+            e = json.loads(line)
+            if e.get("subtype") == "init":
+                src = e.get("apiKeySource")
+                return isinstance(src, str) and src.strip() not in ("", "none")
+    return False
+
+
 _USAGE_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 
 
@@ -2472,14 +2537,21 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
     names = [w["name"] for w in meta["plan"]["workers"]]
     workers, tot = [], {"total": 0, "cost_usd": 0.0}
     cost_complete = True
+    kinds: set = set()  # billing of each worker: plan, api, local
     failed, late, pending, stopped = [], {}, [], []
     for n in names:
         u = {"total": 0, "cost_usd": 0.0, "turns": 0}
         unknown = False  # a log with tokens but no result event leaves the worker's cost unknown
+        billed = False  # dollars count only from logs billed per token (see billed_per_token)
         for log in sorted((rundir / "logs").glob(f"{n}*.log")):
             x = usage_of(log)
-            if not x.pop("cost_known", False) and x["total"]:
-                unknown = True
+            known = x.pop("cost_known", False)
+            if billed_per_token(log):
+                billed = True
+                if not known and x["total"]:
+                    unknown = True
+            else:
+                x["cost_usd"] = 0.0  # a plan login's total_cost_usd is an estimate, not a charge
             for k, v in x.items():
                 u[k] = u.get(k, 0) + v
         cost_known = not unknown
@@ -2507,9 +2579,12 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
                 failed.append({"name": n, "exit": ex.get("exit"), "why": why})
         prec = load_provider(rundir, n) or {}
         local = prec.get("provider") == "ollama"
+        billing = "local" if local else ("api" if billed else "plan")
         if local:
             u["cost_usd"] = 0.0  # a local model has no API bill: tokens are counted, dollars are not
             cost_known = True
+        elif not billed:
+            cost_known = False  # not billed per token: no dollar figure, the tokens still count
         workers.append(
             {
                 "name": n,
@@ -2519,6 +2594,7 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
                 "tokens": u.get("total"),
                 "cost_usd": round(u.get("cost_usd", 0), 4) if cost_known else None,
                 "cost_known": cost_known,
+                "billing": billing,
                 **({"provider": prec.get("provider"), "model": prec.get("model")} if prec else {}),
                 **({"local": True} if local else {}),
                 **({"fallback": prec["fallback"]} if prec.get("fallback") else {}),
@@ -2528,12 +2604,19 @@ def summarize(rundir: Path, meta: dict, rounds, code, out, killed: bool = False,
             }
         )
         tot["total"] += u.get("total", 0)
-        tot["cost_usd"] += u.get("cost_usd", 0)
-        cost_complete = cost_complete and cost_known
+        kinds.add(billing)
+        if billing == "plan":
+            if u.get("total"):
+                tot["tokens_plan"] = tot.get("tokens_plan", 0) + u.get("total", 0)
+        else:  # the run total sums billed (api) and local (0.0) workers only
+            tot["cost_usd"] += u.get("cost_usd", 0)
+            cost_complete = cost_complete and cost_known
         if local:
             tot["tokens_local"] = tot.get("tokens_local", 0) + u.get("total", 0)
-    tot["cost_usd"] = round(tot["cost_usd"], 4) if cost_complete else None
+    charged = kinds - {"plan"}
+    tot["cost_usd"] = round(tot["cost_usd"], 4) if cost_complete and charged else None
     tot["cost_complete"] = cost_complete
+    tot["billing"] = "mixed" if len(kinds) > 1 else (next(iter(kinds)) if kinds else "plan")
     return {
         "ok": code == 0 and not failed and not killed,
         "killed": killed,
@@ -2604,7 +2687,8 @@ def write_changelog(root, text: str) -> str | None:
 
 def _known_run(a) -> Path | None:
     """The run's directory, or None after printing an unknown-run error (a run exists once `run` wrote run.json)."""
-    rundir = _run_dir(a.root or os.getcwd(), a.run)
+    # resolved like `run` resolves it (macOS: /var -> /private/var), so `wait` prints the same summary path
+    rundir = _run_dir(os.path.realpath(a.root or os.getcwd()), a.run)
     if RUN_ID_RE.match(a.run or "") and (rundir / "run.json").is_file():
         return rundir
     print(json.dumps({"ok": False, "error": f"unknown run {a.run!r}: no {rundir / 'run.json'}"}))
@@ -2701,7 +2785,7 @@ def _supervisor_gone(rundir: Path, poll=None) -> dict | None:
         dead = (poll() is not None) if poll is not None else not _pid_alive(pid)
         if not dead:
             try:  # a recycled pid is not our supervisor
-                dead = rundir.name not in Path(f"/proc/{pid}/cmdline").read_bytes().decode("utf-8", "replace")
+                dead = rundir.name not in "\0".join(_read_argv(pid))
             except OSError:
                 pass
         if not dead:

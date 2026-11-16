@@ -1,7 +1,7 @@
 // Pulse (S1): the observed-only data the band, panel and card draw shapes from. Nothing here is invented: an empty session is all zeros and empty rings.
 import { describe, expect, test } from 'claude-code/testing';
 import { noteHook, resetHookLog } from './hook-log';
-import { BUCKETS, BUCKET_MS, CTX_KEEP, RUNS_KEEP, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
+import { BUCKETS, BUCKET_MS, CTX_KEEP, RUNS_KEEP, noteBilling, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
 
 const fresh = (): void => { resetHookLog(); resetPulse(); };
 
@@ -55,6 +55,7 @@ describe('records only observed samples', () => {
   });
   test('with no cost in the measure the result has no cost key; with one it carries usd', () => {
     fresh();
+    noteBilling('api'); // the cost is reported only for a per-token login
     noteMeasure({ context: { tokens: 10, percent: 1, window: 100 } }, 1);
     expect('cost' in pulseOf(2)).toBe(false);
     noteMeasure({ context: { tokens: 20, percent: 2, window: 100 }, cost: { usd: 0.04 } }, 2);

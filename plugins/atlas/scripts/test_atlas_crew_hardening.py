@@ -36,9 +36,17 @@ def _alive(pid: int) -> bool:
     except OSError:
         return True
     try:
-        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+        state = atlas_crew._proc_state(pid)
     except (OSError, IndexError):
         return True
+    return state is not None and not state.startswith("Z")
+
+
+def _argv_or_empty(pid: int) -> list:
+    try:
+        return atlas_crew._read_argv(pid)
+    except OSError:
+        return []
 
 
 def _pids_with(marker: str) -> list:
@@ -142,14 +150,18 @@ class HungCheckTests(unittest.TestCase):
         p = subprocess.Popen(
             [sys.executable, "-c", script], cwd=self.root, start_new_session=True
         )
+        # wait for the check's own `sleep` (anchored: the caller's `-c` script and the check's shell also carry the
+        # marker): the caller's argv matched at once, so under load the signal landed before run_shell had started
+        # and registered the check, and the check then outlived its caller
+        started = f"^sleep {self.mark}"
         end = time.time() + 10
-        while time.time() < end and not _pids_with(f"sleep {self.mark}"):
+        while time.time() < end and not _pids_with(started):
             time.sleep(0.05)
-        self.assertTrue(_pids_with(f"sleep {self.mark}"), "the check never started")
+        self.assertTrue(_pids_with(started), "the check never started")
         os.killpg(p.pid, 15)
         p.wait(timeout=10)
         self.assertTrue(
-            _gone(f"sleep {self.mark}"), "the check outlived the process that ran it"
+            _gone(f"sleep {self.mark}", wait_s=10), "the check outlived the process that ran it"
         )
 
 
@@ -277,8 +289,7 @@ class DeadSupervisorTests(unittest.TestCase):
         self.addCleanup(sup.wait)
         self.addCleanup(sup.kill)
         end = time.time() + 10  # the real supervisor writes its own pid after exec; wait for this one's exec
-        while time.time() < end and Path(f"/proc/{sup.pid}").exists() and \
-                "supervise" not in Path(f"/proc/{sup.pid}/cmdline").read_bytes().decode("utf-8", "replace"):
+        while time.time() < end and sup.poll() is None and "supervise" not in _argv_or_empty(sup.pid):
             time.sleep(0.01)
         (self.rundir / "supervisor.pid").write_text(str(sup.pid))
         with contextlib.redirect_stdout(io.StringIO()):
@@ -298,8 +309,6 @@ class DeadSupervisorTests(unittest.TestCase):
 
     def test_wait_treats_a_recycled_supervisor_pid_as_dead(self):
         (self.rundir / "supervisor.pid").write_text(str(os.getpid()))  # alive, but not this run's supervisor
-        if not Path(f"/proc/{os.getpid()}/cmdline").exists():
-            self.skipTest("no /proc")
         with contextlib.redirect_stdout(io.StringIO()):
             code = atlas_crew.cmd_wait(types.SimpleNamespace(run="r1", root=str(self.root), timeout=2))
         self.assertEqual(code, 1)
@@ -310,8 +319,6 @@ class KillRecycledPidTests(unittest.TestCase):
     system has since given to an unrelated process."""
 
     def test_kill_leaves_alone_a_process_that_reuses_a_recorded_pid(self):
-        if not Path(f"/proc/{os.getpid()}/cmdline").exists():
-            self.skipTest("no /proc")
         with tempfile.TemporaryDirectory() as tmp:
             rundir = atlas_crew._run_dir(tmp, "r1")
             (rundir / "pid").mkdir(parents=True)
@@ -417,7 +424,11 @@ class OwnedPathTests(unittest.TestCase):
 class IsOursExactMatchTests(unittest.TestCase):
     def _ours(self, argv, run_id="a1"):
         raw = "\0".join(argv).encode() + b"\0"
-        with mock.patch.object(Path, "read_bytes", return_value=raw):
+        # feed argv through whichever source the host uses: /proc/<pid>/cmdline, or ps where there is no /proc
+        with (
+            mock.patch.object(Path, "read_bytes", return_value=raw),
+            mock.patch.object(atlas_crew, "_ps_field", return_value=" ".join(argv)),
+        ):
             return atlas_crew._is_ours(4242, run_id)
 
     def test_substring_of_run_id_in_unrelated_argv_is_not_ours(self):
@@ -445,7 +456,7 @@ class GroupAndStopExactMatchTests(unittest.TestCase):
         proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)", *argv], start_new_session=True)
         self.addCleanup(lambda: (proc.poll() is None and proc.kill(), proc.wait()))
         end = time.time() + 5
-        while time.time() < end and (argv and argv[-1] not in atlas_crew._read_argv(proc.pid)):
+        while time.time() < end and (argv and argv[-1] not in _argv_or_empty(proc.pid)):
             time.sleep(0.01)  # the new process's cmdline is readable only once its exec has landed
         return proc
 

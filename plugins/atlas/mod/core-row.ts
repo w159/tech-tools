@@ -132,7 +132,7 @@ export function coreReport(m: CoreModel | null): string {
   // workers have no timestamp: the list is name-sorted, so the tail is the newest by spawn order
   const live = [...m.offload.workers].reverse().filter((w) => w.peak > 0 || w.kept > 0 || w.returned > 0);
   for (const w of live.slice(0, MAX_WORKER_ROWS))
-    out.push(`  ${w.name}  ${w.model ?? "?"}  peak ${tok(w.peak)}  kept ${tok(w.kept)}  returned ${tok(w.returned)}  cost ${w.costUsd === null ? "?" : `$${w.costUsd.toFixed(2)}`}`);
+    out.push(`  ${w.name}  ${w.model ?? "?"}  peak ${tok(w.peak)}  kept ${tok(w.kept)}  returned ${tok(w.returned)}${w.costUsd === null && w.billing === "plan" ? "" : `  cost ${w.costUsd === null ? "?" : `$${w.costUsd.toFixed(2)}`}`}`); // a plan worker has no bill: no cost cell
   const hidden = live.length - MAX_WORKER_ROWS;
   const empty = nw - live.length;
   if (hidden > 0 || empty > 0)

@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""PreToolUse hook -- claude-mem recall gate (REQUIRED once per session).
+"""PreToolUse hook -- claude-mem recall gate (advisory by default on Claude Code).
 
-The first main-thread tool call that is neither a claude-mem call, TodoWrite nor ToolSearch is
-denied (once per session: the next call is allowed with a one-line note, because a server that failed
-to connect leaves no recall tool to satisfy the gate), with the `recallGate` text from
-contracts/mandates.json naming the claude-mem search tool and an example argument, until
-the session makes a real claude-mem call. Ignoring a denial does not satisfy the gate; only
-the recall itself does (it is allowed silently and writes the session's marker, even if
-the call later errors because claude-mem is down). The omp twin is omp/mandates.ts (same
-shared cases in contracts/mandates.json `recallGateCases`, asserted by both suites).
+Default: the first main-thread tool call that is neither a claude-mem call, TodoWrite nor ToolSearch
+is ALLOWED and carries the `recallAdvisory` text from contracts/mandates.json once as
+additionalContext (Claude Code renders any PreToolUse deny as a red hook error); later calls in the
+session are silent. A real claude-mem call still writes the session's recalled marker.
+
+ATLAS_RECALL_GATE=deny restores the legacy gate: that call is denied (once per session: the next
+call is allowed with a one-line note, because a server that failed to connect leaves no recall tool
+to satisfy the gate), with the `recallGate` text naming the claude-mem search tool and an example
+argument, until the session makes a real claude-mem call. Ignoring a denial does not satisfy the
+gate; only the recall itself does (it is allowed silently and writes the session's marker, even if
+the call later errors because claude-mem is down). The omp twin is omp/mandates.ts (same shared
+cases in contracts/mandates.json `recallGateCases`, asserted by both suites; omp still denies).
 
 Armed only when the claude-mem plugin is enabled (tool_routing.plugin_enabled) AND a
 claude-mem MCP server is mounted; enabled-but-unmounted allows everything and leaves one
@@ -82,6 +86,11 @@ _EXEMPT = (
     "toolsearch",
 )  # ToolSearch loads the deferred recall tool's schema
 
+# Used when the contract predates the `recallAdvisory` key; never claims a denial.
+_ADVISORY_FALLBACK = (
+    "[atlas gate] Recall first: run one claude-mem search for this project ({route}). {example}"
+)
+
 
 def _claude_mem_enabled(cwd: str | None) -> bool:
     import tool_routing
@@ -144,7 +153,13 @@ def _denied_marker(session: str) -> str:
     )
 
 
-_NOTE: list = [None]  # one-line allow note main() prints (set by _release)
+def _advised_marker(session: str) -> str:
+    return os.path.join(
+        GATE_MARKER_DIR, "advised-" + re.sub(r"[^A-Za-z0-9_.-]", "_", session)
+    )
+
+
+_NOTE: list = [None]  # one-line allow note main() prints (set by _release / the advisory)
 _MISSING_TOOL = lre(r"No such tool available:\s*mcp__(?:plugin_)?(?:claude[-_]?mem|mcp[-_]?search)", re.I)
 
 
@@ -334,6 +349,9 @@ def _decide(data: dict) -> str | None:
             return None  # already satisfied this session
         if os.path.exists(_unarmed_marker(session)):
             return None  # unmounted verdict cached for this session (traced once)
+        advisory = os.environ.get("ATLAS_RECALL_GATE") != "deny"
+        if advisory and os.path.exists(_advised_marker(session)):
+            return None  # reminded once already: stay silent
         if not _gates_armed(cwd):
             return None  # throwaway / non-project directory: gate never arms
         if not _claude_mem_enabled(cwd):
@@ -347,6 +365,21 @@ def _decide(data: dict) -> str | None:
             return None
         if _is_recall(tool_name, data.get("tool_input")):
             _mark_recalled(session)  # the recall itself: allow and satisfy the gate
+            return None
+        if advisory:
+            # Claude Code renders any PreToolUse deny as a red hook error, so by default the
+            # gate only reminds: allow this call, say it once, then stay silent.
+            os.makedirs(GATE_MARKER_DIR, exist_ok=True)
+            try:
+                os.close(os.open(_advised_marker(session), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            except FileExistsError:
+                return None
+            text = contract.get("recallAdvisory")
+            if not isinstance(text, str):
+                text = _ADVISORY_FALLBACK
+            _NOTE[0] = text.replace("{route}", CC_ROUTE).replace(
+                "{example}", contract["recallGateExample"]
+            )
             return None
         # Deny on every attempt until the recall. If the marker dir is unusable the recall
         # could never be recorded, so fail open (traced by the caller) instead of deadlocking.

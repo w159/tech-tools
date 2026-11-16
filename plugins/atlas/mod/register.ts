@@ -18,7 +18,7 @@ import { healthCardRows } from './hud-surface';
 import { CARD_MORE_KEY } from './status-frame';
 import { healthLine, type HealthIn } from './idle-health';
 import { hookDone, hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
-import { denyAgeSecs, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
+import { denyAgeSecs, noteBilling, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
 import { healthStripRows, STRIP_ROWS, stripWanted } from './strip-frame';
 import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryGates, noteHistoryRun } from './history';
 import { deniedCalls, gateCounts } from './vocab';
@@ -407,7 +407,7 @@ async function statSig($: EngineInterface, path: string): Promise<string> {
 
 export type HudState = { maxRows: number; wanted: number; shown: number; fullscreen: boolean };
 /** `.atlas/.run/statusline-rows.json`: the rows the status line printed last and the rows its full grid would take. */
-export type StatuslineRows = { ts: number; rows: number; fullRows: number };
+export type StatuslineRows = { ts: number; rows: number; fullRows: number; billing?: 'plan' | 'api' };
 const STATUSLINE_ROWS_FRESH_MS = 15_000;
 
 /** Reads the status line's row report; null when missing, malformed or older than 15 s. */
@@ -416,10 +416,11 @@ export async function readStatuslineRows($: EngineInterface, root: string | null
 		if (root === undefined || root === null || root === '') return null;
 		const text = await $.fs.read(`${root.replace(/\/+$/, '')}/.atlas/.run/statusline-rows.json`);
 		const doc = JSON.parse(text) as Partial<StatuslineRows>;
-		const { ts, rows, fullRows } = doc;
+		const { ts, rows, fullRows, billing } = doc;
 		if (![ts, rows, fullRows].every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
 		const age = (await $.clock.now()) - (ts as number);
-		return age >= 0 && age < STATUSLINE_ROWS_FRESH_MS ? { ts: ts as number, rows: rows as number, fullRows: fullRows as number } : null;
+		const bill = billing === 'plan' || billing === 'api' ? { billing } : {}; // an older status line writes no billing: unknown
+		return age >= 0 && age < STATUSLINE_ROWS_FRESH_MS ? { ts: ts as number, rows: rows as number, fullRows: fullRows as number, ...bill } : null;
 	} catch {
 		return null;
 	}
@@ -1031,6 +1032,7 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 			// same channels teamsOf gets in muxRuns; dispatches are the orchestration spawn rows this mod already holds
 			channels: [snap.channel ?? '', `lead-${(snap.sessionId ?? '').slice(0, 6)}`], // a snapshot without a session id (older fixtures) matches no lead channel
 			dispatches: Object.values((await read($, orchState)).meta),
+		...(sessionStartMs !== null ? { since: sessionStartMs } : {}), // the ledger counts this session's findings, not the file lifetime
 	});
 }
 
@@ -1524,6 +1526,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const running = agents.some(isRunning);
 		const runningCount = agents.filter(isRunning).length;
 		const report = await readStatuslineRows($, snapshot.root);
+		if (report) noteBilling(report.billing); // a fresh report decides; a stale one keeps the last (a login's billing does not change mid-session)
 		const slotRows = e.props.maxRows ?? 0;
 		const budget = e.props.maxRows === undefined ? 0 : effectiveRows(slotRows, e.viewport, report?.rows ?? null, runningCount); // no slot reported: nothing to cap
 		await read($, easeTickState); // a glide bumps it each frame: the band redraws with the value `easedNow` gives for this instant

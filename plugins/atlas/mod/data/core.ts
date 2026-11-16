@@ -33,8 +33,12 @@ export type Offload = {
   peak: number;
   kept: number;
   returned: number;
+  /** Dollars of total_cost_usd, only for a worker billed per token (billing "api"); null otherwise. */
   costUsd: number | null;
   finished: boolean;
+  /** "api": the init event names an API key source; "plan": a plan login (apiKeySource "none") or no init event,
+   * where total_cost_usd is an API-price estimate and nothing is charged. */
+  billing?: "api" | "plan";
 };
 export type Seat = {
   role: string;
@@ -118,6 +122,10 @@ export type CoreInput = {
   channels?: readonly string[];
   /** This session's in-process dispatches; when given they become `in-process` routes. */
   dispatches?: readonly Dispatch[];
+  /** Session start (epoch ms). findings.json is all-time, so without this the ledger shows every refuted row since the
+   * file began. Given: only findings verified at or after it count and list (an undated row cannot be placed in the
+   * session, so it is left out). Absent: every row counts (the caller has scoped the file). */
+  since?: number;
 };
 
 /** Roles whose STATUS: DONE is a claim another model must check; judges (verifier, critics, auditors) are not. */
@@ -266,6 +274,7 @@ export function offloadOf(name: string, log: string, report: string, role = role
   const calls = new Map<string, number>();
   let model: string | null = null;
   let cost: number | null = null;
+  let billed = false;
   let finished = false;
   for (const line of log.split("\n")) {
     if (!line.startsWith("{")) continue;
@@ -277,6 +286,8 @@ export function offloadOf(name: string, log: string, report: string, role = role
     if (e.type === "message_end" && msg?.role === "assistant" && msg.usage)
       calls.set(`omp-${calls.size}`, ctxOf(msg.usage));
     if (msg && typeof msg.model === "string" && msg.model) model = msg.model;
+    if (e.type === "system" && e.subtype === "init")
+      billed = typeof e.apiKeySource === "string" && e.apiKeySource.trim() !== "" && e.apiKeySource !== "none";
     if (e.type === "result") {
       finished = true;
       cost = typeof e.total_cost_usd === "number" ? e.total_cost_usd : cost;
@@ -295,8 +306,10 @@ export function offloadOf(name: string, log: string, report: string, role = role
     peak,
     kept: Math.max(0, peak - brief),
     returned: Math.ceil(report.length / 4),
-    costUsd: cost,
+    // a plan login still gets a total_cost_usd estimate: dollars only when billed per token
+    costUsd: billed ? cost : null,
     finished,
+    billing: billed ? "api" : "plan",
   };
 }
 
@@ -453,8 +466,10 @@ function teamRoles(teams: readonly { text: string }[]): Record<string, string> {
 
 export function coreModel(input: CoreInput): CoreModel {
   const entries = parseFindings(input.findings);
-  // the ledger counts findings, not file entries: one id is one finding, whatever its history
-  const verdicts = latestPerId(entries);
+  const since = input.since;
+  // the ledger counts findings, not file entries: one id is one finding, whatever its history. With `since` only this
+  // session's findings count: parseFindings reads an unparsable verified_at as 0, so `at >= since` drops undated rows too
+  const verdicts = latestPerId(entries).filter((v) => since === undefined || v.at >= since);
   const roles = teamRoles(input.teams);
   const claims = pairClaims(claimsOf(input.reports, roles), entries);
   const workers = Object.keys(input.logs)

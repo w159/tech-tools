@@ -1265,6 +1265,61 @@ def _arm_orchestration(data: dict, prompt: str) -> str | None:
     return _routed_nudge(data, prompt)
 
 
+# Code-shipping classes (as classify_scope returns them) -> scaffold phases. None is scaffold's own
+# default (every contract todoPhase, research..verify); fix gets the Stop gate's implement,verify.
+_PLAN_PHASES = {
+    "implement": None,
+    "build": None,
+    "feature": None,
+    "refactor": None,
+    "fix": ["implement", "verify"],
+    "bug": ["implement", "verify"],
+}
+
+
+def plan_upfront(data: dict, prompt: str) -> str | None:
+    """Write this session's plan rows to the board when a person's prompt is code-shipping work,
+    and return one line for additionalContext; else None. Never raises.
+
+    TodoWrite is deferred under tool search, so without this the HUD TODO block stays empty until
+    the Stop gate asks for phases. ATLAS_PLAN_UPFRONT=off disables it."""
+    try:
+        if os.environ.get("ATLAS_PLAN_UPFRONT", "on").strip().lower() == "off":
+            return None
+        if (os.environ.get("ATLAS_WORKER_NAME") or "").strip() or (data.get("agent_id") or "").strip():
+            return None  # worker or subagent: a leaf, the lead owns the plan
+        session = (data.get("session_id") or "").strip()
+        text = (prompt or "").strip()
+        if not session or not text or text.startswith("/") or text.endswith("?"):
+            return None
+        if _regex_band(text) != "arm":
+            return None  # regex only: no decision-model call on the prompt path
+        task_class = classify_scope(text)[0]
+        if task_class not in _PLAN_PHASES:
+            return None
+        root = _scope_root(data.get("cwd"))
+        if not _root_is_project(root):
+            return None  # the board lives in .atlas: never turn a plain dir into a project
+        import atlas_todo
+
+        if atlas_todo.open_items(atlas_todo.load(root), session):
+            return None  # a later prompt in the same run: the plan already exists
+        title = text.splitlines()[0].strip()
+        if len(title) > 80:
+            title = title[:77].rstrip() + "..."
+        res = atlas_todo.scaffold(root, title, session_id=session, phases=_PLAN_PHASES[task_class])
+        if not res.get("ok") or not res.get("created"):
+            return None
+        rows = ", ".join("%s=%s" % (i.get("phase") or "?", i["id"]) for i in res["items"])
+        return (
+            "[atlas-plan] Plan rows are on the board for this session (%s). Close one with evidence: "
+            'python3 "%s" complete --id <id> --session %s --evidence "<proof>"'
+            % (rows, os.path.join(_scripts_dir(), "atlas_todo.py"), session)
+        )
+    except Exception:
+        return None
+
+
 def optimizer_framing(optimized: str) -> str:
     """The system-reminder framing that wraps an optimized spec."""
     return (
@@ -1391,6 +1446,7 @@ def main() -> int:
     # and self-guards so a DB failure can never block the prompt.
     nudge = arm_orchestration(data, prompt)
     _mark_prompt_boundary(data)
+    plan = plan_upfront(data, prompt)
 
     do_it, body = should_optimize(prompt)
     optimized = None
@@ -1409,6 +1465,8 @@ def main() -> int:
         frames.append(optimizer_framing(optimized))
     if nudge:
         frames.append(nudge)
+    if plan:
+        frames.append(plan)
     if frames:
         emit_context(*frames)
     if optimized:

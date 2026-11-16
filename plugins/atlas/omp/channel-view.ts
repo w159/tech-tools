@@ -549,7 +549,7 @@ export function createChannelView(deps: ViewDeps = {}): ChannelView {
 	/** Fails soft: a bad scratch file never blocks the panel. */
 	const coreOf = (i: ChannelOpenInfo & { root: string }): CoreModel | null => {
 		try {
-			return coreSource.build(i.root, { sessionId: i.sessionId, openGates: openGateCount(gates.read() ?? []) });
+			return coreSource.build(i.root, { sessionId: i.sessionId, openGates: openGateCount(gates.read() ?? []), ...(startedAt > 0 ? { since: startedAt } : {}) }); // startedAt: the panel clock start, so old refuted rows stay out
 		} catch {
 			return null;
 		}

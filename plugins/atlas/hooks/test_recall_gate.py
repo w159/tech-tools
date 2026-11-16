@@ -90,6 +90,8 @@ class RecallGateTest(unittest.TestCase):
         env = patch.dict(os.environ)
         env.start()
         os.environ.pop("ATLAS_MANDATES", None)
+        # These cases assert the legacy deny path; the default is advisory (test_fix_recall_advisory.py).
+        os.environ["ATLAS_RECALL_GATE"] = "deny"
         self.addCleanup(env.stop)
 
     def tearDown(self):

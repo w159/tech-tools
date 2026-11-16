@@ -3,7 +3,7 @@
 // registered ui.render hooks and the chips are pressed through their real Buttons.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { register, resetCore } from './register';
+import { register, resetBlockedDebounce, resetCore } from './register';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
@@ -180,6 +180,10 @@ describe('wire-expert: one spinner', () => {
     const glyph = /ATLAS ◗ ([◐◓◑◒])/.exec(band)?.[1]; // round 2 D2: the working head is `◓ <phase> · ..`, no `working` word
     expect(glyph).toBeDefined();
     expect(pane).toContain(`${glyph}`);
+    // The host's turn flag is register.ts module state that no session hook resets: end the turn this test started, so a later
+    // file's boot (y1-live) does not read a working host before its first band render.
+    b.props.working = false;
+    await b.band();
   });
 });
 
@@ -223,5 +227,12 @@ describe('wire-expert: tools per run', () => {
     const second = await run(1);
     expect(second).toContain('Bash');
     expect(second).not.toMatch(/\d+ tools?/);
+    // The host's turn flag is register.ts module state that no session hook resets: end the turn this test started, so a later
+    // file's boot (y1-live) does not read a working host before its first band render.
+    b.props.working = false;
+    await b.band();
+    // The band's held word (kindHold) is stamped with this file's clock, which runs past the START a later file boots at: the
+    // hold would never expire there (y1-live read `done 5/5` at idle). Forget it, as the debounce seam does.
+    resetBlockedDebounce();
   });
 });

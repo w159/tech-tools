@@ -19,6 +19,7 @@ export interface CoreReadOpts {
 	sessionId?: string;
 	openGates?: number;
 	header?: Tally; // omp has no reply-header count yet
+	since?: number; // session start (epoch ms): the ledger counts only findings verified since, not the file lifetime
 }
 export interface CoreSource {
 	build(root: string, opts?: CoreReadOpts): CoreModel;
@@ -104,6 +105,7 @@ export function createCoreSource(deps: CoreSourceDeps = {}): CoreSource {
 				todos,
 				header: opts.header ?? { ok: 0, total: 0 },
 				openGates: opts.openGates ?? 0,
+				...(opts.since !== undefined ? { since: opts.since } : {}),
 			});
 		},
 	};

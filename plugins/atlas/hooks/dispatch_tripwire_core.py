@@ -1534,6 +1534,16 @@ _MUX_TEAM_VERBS = ("spawn-team", "wait", "reap")
 _SHELL_OPS = {"&&", "||", ";", "|", "&", ";;", "|&"}
 
 
+_BOOKKEEPING_SCRIPTS = ("atlas_todo.py", "atlas_finding.py")
+
+
+def _is_bookkeeping_call(tool, tinput):
+    """True when a shell call only runs atlas bookkeeping scripts (atlas_todo.py,
+    atlas_finding.py, atlas_resolve.py), optionally after `cd` and piped into a filter.
+    Such a call is neither an inline op nor a dispatch: not logged, not denied, no reset."""
+    return _team_mux_verb(tool, tinput) in ("bookkeeping", "resolve")
+
+
 def _is_shell_tool(tool):
     """Bash, or lean-ctx's ctx_shell under any MCP server prefix."""
     tool = str(tool or "")
@@ -1569,18 +1579,18 @@ def _team_mux_verb(tool, tinput):
         tokens = list(lex)
     except ValueError:
         return ""
-    segments, cur = [], []
+    segments, cur, op = [], [], ""
     for tok in tokens:
         if tok in _SHELL_OPS:
-            segments.append(cur)
-            cur = []
+            segments.append((op, cur))
+            cur, op = [], tok
         elif tok and set(tok) <= set("<>&|();"):
             return ""  # any redirect left after stripping /dev/null + fd dups writes a file
         else:
             cur.append(tok)
-    segments = [s for s in segments + [cur] if s]
+    segments = [(o, s) for o, s in segments + [(op, cur)] if s]
     verb = ""
-    for seg in segments:
+    for op, seg in segments:
         while seg and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[0]):
             seg = seg[1:]  # env assignment prefix (LEAN_CTX_DISABLED=1 ...)
         if not seg or seg[0] == "cd":
@@ -1595,6 +1605,11 @@ def _team_mux_verb(tool, tinput):
             script == "atlas_resolve.py"
         ):  # the read-only resolver step that precedes spawn-team
             verb = verb or "resolve"
+        elif script in _BOOKKEEPING_SCRIPTS:
+            # The lead's own todo/finding bookkeeping (the Stop gate demands it): never inline work.
+            verb = verb or "bookkeeping"
+        elif op == "|" and is_python and len(seg) > 1 and seg[1] == "-c":
+            continue  # `| python3 -c ...` only filters the piped output (JSON pretty-print)
         elif not _is_exploration_shell(shlex.join(seg)):
             return ""
     return verb
@@ -1829,7 +1844,9 @@ def _pre_tool_use(
     # (Read/Grep/Glob, exploration-only or read-only-git Bash) is neither counted
     # (see _run) nor blocked here: the threshold polices drift into edits, not looking.
     if _is_read_only_call(tool, tinput or {}) or _team_mux_verb(tool, tinput):
-        return  # a team launch/wait/reap is the dispatch path itself, never inline drift
+        # A team launch/wait/reap is the dispatch path itself, and atlas bookkeeping
+        # (_is_bookkeeping_call: todo/finding/resolve) is what the gates demand: never inline drift.
+        return
     if tool in EDIT_TOOLS and path and _is_brief_or_scratch(path):
         return  # briefs and scratchpad writes are never counted, so never denied for the count
     # Fail CLOSED on DB error: an unverified count must never let an inline
@@ -2830,7 +2847,9 @@ def _run(payload):
                 find_root(Path(payload.get("cwd") or os.getcwd())), session, _run_key(conn, run_id)
             )
         if verb:
-            return  # wait/reap only observe the team: not inline work, not a dispatch
+            # wait/reap only observe the team, and bookkeeping (_is_bookkeeping_call) only
+            # records state: not inline work, not a dispatch, so no log row and no reset.
+            return
 
         if tool not in INLINE_TOOLS and tool not in EDIT_TOOLS:
             return

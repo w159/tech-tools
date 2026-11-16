@@ -2166,7 +2166,8 @@ class RunDirHelpers(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
+        # resolved: _known_run resolves the root like `run` does (macOS: /var -> /private/var)
+        self.root = Path(os.path.realpath(self._tmp.name))
 
     def _run(self, names=("a", "b"), **meta_extra):
         rundir = atlas_crew._run_dir(self.root, "r1")
@@ -2778,8 +2779,8 @@ class UsageAndSummary(unittest.TestCase):
         rundir, meta = self._summary_setup()
         for f in (rundir / "logs").glob("*.log"):
             f.unlink()
-        (rundir / "logs" / "a.log").write_text(self._result(total_cost_usd=0.25, num_turns=1) + "\n")
-        (rundir / "logs" / "b.log").write_text(self._assistant("m1") + "\n")
+        (rundir / "logs" / "a.log").write_text(self._api_init() + self._result(total_cost_usd=0.25, num_turns=1) + "\n")
+        (rundir / "logs" / "b.log").write_text(self._api_init() + self._assistant("m1") + "\n")
         with mock.patch.object(atlas_crew.atlas_irc, "history", return_value=[]):
             out = atlas_crew.summarize(rundir, meta, 2, 0, "")
         a, b = out["workers"]
@@ -2814,14 +2815,19 @@ class UsageAndSummary(unittest.TestCase):
             {"messages": 7, "from_workers": 3, "direct_worker_to_worker": 2, "ready": 2, "human_or_irc_client": 1},
         )
 
+    @staticmethod
+    def _api_init():
+        # dollars count only for a worker billed per token: the init event names its API key source
+        return json.dumps({"type": "system", "subtype": "init", "apiKeySource": "ANTHROPIC_API_KEY"}) + "\n"
+
     def _summary_setup(self, ex=None):
         rundir = self.root / "run"
         (rundir / "logs").mkdir(parents=True)
         (rundir / "irc" / "stop").mkdir(parents=True)
         (rundir / "exit").mkdir()
-        (rundir / "logs" / "a.log").write_text(self._result() + "\n")
-        (rundir / "logs" / "a.r1.log").write_text(self._result(total_cost_usd=0.25, num_turns=1) + "\n")
-        (rundir / "logs" / "ab.log").write_text(self._result() + "\n")
+        (rundir / "logs" / "a.log").write_text(self._api_init() + self._result() + "\n")
+        (rundir / "logs" / "a.r1.log").write_text(self._api_init() + self._result(total_cost_usd=0.25, num_turns=1) + "\n")
+        (rundir / "logs" / "ab.log").write_text(self._api_init() + self._result() + "\n")
         (rundir / "irc" / "stop" / "a.json").write_text('{"blocks": 2, "passed": true}')
         (rundir / "exit" / "a.r0.json").write_text('{"exit": 7, "wall_s": 12.5}')
         meta = {"run_id": "run", "started": time.time() - 100, "plan": {"workers": [{"name": "a"}, {"name": "b"}], "check": "pytest"}}
@@ -2847,9 +2853,10 @@ class UsageAndSummary(unittest.TestCase):
         self.assertEqual(a["cost_usd"], 1.25)
         self.assertEqual(
             (b["name"], b["exit"], b["wall_s"], b["turns"], b["tokens"], b["cost_usd"], b["gate_refusals"], b["own_check_passed"]),
-            ("b", None, None, 0, 0, 0.0, None, None),
+            ("b", None, None, 0, 0, None, None, None),
         )
-        self.assertEqual(out["tokens_workers"], {"total": 135, "cost_usd": 1.25, "cost_complete": True})
+        # b left no log, so no init event: not billed, no dollars
+        self.assertEqual(out["tokens_workers"], {"total": 135, "cost_usd": 1.25, "cost_complete": True, "billing": "mixed"})
         self.assertEqual(out["transcripts"], str(rundir / "logs"))
         self.assertEqual(out["channel_log"], str(rundir / "irc" / "log.jsonl"))
         self.assertEqual(out["irc"]["messages"], 0)
@@ -3405,7 +3412,8 @@ class SealedRunLiveTests(unittest.TestCase):
             self.assertIs(summary["ok"], True)
             rundir = atlas_crew._run_dir(Path(tmp, "proj"), "crew-live")
             self.assertTrue(json.loads((rundir / "summary.json").read_text())["sig"])
-            self.assertEqual(summary["summary"], str(rundir / "summary.json"))
+            # run resolves --root (macOS: /var is a symlink to /private/var), so compare resolved paths
+            self.assertEqual(os.path.realpath(summary["summary"]), os.path.realpath(rundir / "summary.json"))
             code, out = self._engine(tmp, "wait", "--run", "crew-live", "--root", str(Path(tmp, "proj")), "--timeout", "5")
             self.assertEqual(code, 0, out)
             self.assertEqual(json.loads(out), summary)
@@ -3579,16 +3587,20 @@ class LiveTmuxWorkerTests(unittest.TestCase):
     def _procs_of_worker(self):
         """pids whose command line names this run (the wrapper) or the fake claude's child."""
         out = []
-        for d in Path("/proc").iterdir():
-            if not d.name.isdigit() or int(d.name) == os.getpid():
+        # every pid on the host (ps -A works with or without /proc), each read through the product's helpers
+        listed = subprocess.run(["ps", "-A", "-o", "pid="], capture_output=True, text=True, timeout=10,
+                                env={**os.environ, "LC_ALL": "C"}).stdout.split()
+        marks = {str(self.rundir), os.path.realpath(self.rundir), str(self.fake), os.path.realpath(self.fake)}
+        for p in listed:
+            if not p.isdigit() or int(p) == os.getpid():
                 continue
             try:
-                cmd = (d / "cmdline").read_bytes().decode("utf-8", "replace")
-                state = (d / "stat").read_text().rsplit(")", 1)[1].split()[0]
-            except OSError:
+                cmd = " ".join(atlas_crew._read_argv(int(p)))
+                state = atlas_crew._proc_state(int(p))
+            except (OSError, IndexError):
                 continue
-            if state != "Z" and (str(self.rundir) in cmd or str(self.fake) in cmd):
-                out.append(int(d.name))
+            if state is not None and not state.startswith("Z") and any(m in cmd for m in marks):
+                out.append(int(p))
         return out
 
     def test_ctrl_c_typed_in_the_pane_reaches_claude(self):

@@ -83,10 +83,39 @@ def pid_alive(pid) -> bool:
         os.kill(int(pid), 0)
     except (OSError, ValueError):
         return False
-    try:  # a zombie is dead for our purposes
-        return Path(f"/proc/{int(pid)}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
-    except (OSError, IndexError):
-        return True
+    # a zombie is dead for our purposes; an unreadable state keeps the old "alive" fallback
+    return proc_state(pid) != "Z"
+
+
+def _ps(pid, fields: str) -> list[str] | None:
+    # Portable stand-in for /proc (macOS has none): one `ps` call, C locale so numbers parse.
+    # None when the pid is gone (ps exits non-zero) or ps itself fails.
+    try:
+        r = subprocess.run(["ps", "-o", fields, "-p", str(int(pid))], capture_output=True, text=True,
+                           timeout=5, env={**os.environ, "LC_ALL": "C"})
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    return r.stdout.split() if r.returncode == 0 and r.stdout.strip() else None
+
+
+def _ps_seconds(t: str) -> float:
+    # ps time is [DD-][HH:]MM:SS[.cc] (Linux DD-HH:MM:SS, macOS MM:SS.cc) -> seconds
+    days, _, hms = t.rpartition("-")
+    secs = 0.0
+    for part in hms.split(":"):
+        secs = secs * 60 + float(part)
+    return secs + (int(days) * 86400 if days else 0)
+
+
+def proc_state(pid) -> str | None:
+    """One-letter process state (Z = zombie), or None when it cannot be read."""
+    if Path("/proc/self").exists():
+        try:
+            return Path(f"/proc/{int(pid)}/stat").read_text().rsplit(")", 1)[1].split()[0]
+        except (OSError, IndexError, ValueError):
+            return None
+    f = _ps(pid, "stat=")
+    return f[0][:1] if f else None
 
 
 def event_dict(line: str) -> dict:
@@ -351,14 +380,18 @@ def stop_lead(root, name: str) -> dict:
     if not st:
         return {"stopped": True, "note": "not running"}
     host = st.get("host_pid")
-    if pid_alive(host):
-        os.kill(int(host), signal.SIGTERM)
-        for _ in range(200):
-            if not pid_alive(host):
-                break
-            time.sleep(0.05)
+    # The host can exit between pid_alive and the signal; already gone is the goal.
+    try:
         if pid_alive(host):
-            os.kill(int(host), signal.SIGKILL)
+            os.kill(int(host), signal.SIGTERM)
+            for _ in range(200):
+                if not pid_alive(host):
+                    break
+                time.sleep(0.05)
+            if pid_alive(host):
+                os.kill(int(host), signal.SIGKILL)
+    except ProcessLookupError:
+        pass
     # the host died before it could close its lead; it may have started a new one since `st` was read
     for lead in {st.get("lead_pid"), (read_state(rd) or {}).get("lead_pid")}:
         if pid_alive(lead):
@@ -456,6 +489,12 @@ def cmd_send(a) -> int:
 
 
 def proc_usage(pid) -> dict:
+    if not Path("/proc/self").exists():  # no procfs (macOS): rss (KB, as VmRSS) and cpu time via one ps call
+        f = _ps(pid, "rss=,time=")
+        try:
+            return {"rss_kb": int(f[0]), "cpu_s": round(_ps_seconds(f[1]), 2)}
+        except (TypeError, ValueError, IndexError):
+            return {"rss_kb": None, "cpu_s": None}
     try:
         rss = next(int(x.split()[1]) for x in Path(f"/proc/{pid}/status").read_text().splitlines() if x.startswith("VmRSS:"))
         f = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()

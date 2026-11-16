@@ -334,8 +334,8 @@ class ParseSummaryTests(unittest.TestCase):
 
 
 class RealRunSchemaTests(unittest.TestCase):
-    """Runs the cheap static probes against this tree and validates the output document."""
 
+    """Runs the cheap static probes against this tree and validates the output document."""
     @classmethod
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp(prefix="sc-run-"))
@@ -491,9 +491,9 @@ class RegistryTests(unittest.TestCase):
 
 
 class GateProbeAgreementTests(unittest.TestCase):
+
     """The gate probes must score what the hooks really decide: a shared session turned the one-shot spec advisory
     into a false 'allow', and a stale expectation called a foreign mcp-search server a recall."""
-
     @classmethod
     def setUpClass(cls):
         from scorecard import probe_gates
@@ -519,6 +519,22 @@ class GateProbeAgreementTests(unittest.TestCase):
         m = self.gates["gate_probes_mismatch"]
         self.assertEqual(m["value"], 0, m.get("detail"))
         self.assertEqual(self.gates["gate_probes_correct"]["value"], self.gates["gate_probes_total"]["value"])
+
+    def test_recall_probe_covers_advisory_default_and_deny_mode(self):
+        # 17.27: recall_gate is advisory by default on Claude Code and ATLAS_RECALL_GATE=deny keeps the legacy
+        # denial. The probe must score both, so the deny path stays proven and the default is not scored as a deny.
+        from scorecard import probe_gates
+
+        g = probe_gates.Gates(core.Ctx(ROOT, work=self.tmp))
+        g.recall_gate()
+        self.assertEqual([r for r in g.results if not r["ok"]], [])
+        blocks = [r for r in g.results if r["case"].startswith("contract-block")]
+        adv = [r for r in blocks if r["case"].endswith(" [advisory]")]
+        deny = [r for r in blocks if not r["case"].endswith(" [advisory]")]
+        self.assertTrue(adv)
+        self.assertEqual(len(adv), len(deny))
+        self.assertEqual({r["expect"] for r in deny}, {"deny"})
+        self.assertEqual({r["expect"] for r in adv}, {"context", "allow"})
 
     def test_report_gate_probe_blocks_every_nonsense_report_and_passes_valid_ones(self):
         from scorecard import probe_gates
@@ -568,10 +584,10 @@ class GateProbeAgreementTests(unittest.TestCase):
 
 @unittest.skipUnless(__import__("shutil").which("tmux"), "needs a real tmux")
 class IrcProbeReceiptTests(unittest.TestCase):
+
     """The IRC delivery probe must count a note as received when the hook/worker drain shows it. Drained notes are
     <board-message> blocks; a recorder that only matched '- from' lines reported 30 of 30 human and 40 of 40
     agent messages lost while the board showed every one read."""
-
     def test_no_message_is_lost_on_a_real_tmux(self):
         from scorecard import probe_mesh
 

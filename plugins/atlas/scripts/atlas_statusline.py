@@ -359,7 +359,7 @@ def _hud_root(cwd):
     return atlas_paths.project_root(str(cwd))
 
 
-def write_rows(cwd, rows, full_rows, now=None):
+def write_rows(cwd, rows, full_rows, now=None, billing=None):
     """Publishes {ts, rows, fullRows} to .atlas/.run/statusline-rows.json so the mod can size
     its starved decision against the rows the FULL grid would take from the same slot. Atomic,
     fail soft, silent."""
@@ -373,7 +373,12 @@ def write_rows(cwd, rows, full_rows, now=None):
         tmp = "%s.%d.tmp" % (path, os.getpid())
         ts = int((time.time() if now is None else now) * 1000)
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"ts": ts, "rows": int(rows), "fullRows": int(full_rows)}, f)
+            doc = {"ts": ts, "rows": int(rows), "fullRows": int(full_rows)}
+            # billing: the mod shows the host's dollar estimate only for "api" (a
+            # per-token bill); a plan login is not charged per token.
+            if billing in ("plan", "api"):
+                doc["billing"] = billing
+            json.dump(doc, f)
         os.replace(tmp, path)
     except Exception:
         pass
@@ -699,7 +704,8 @@ def render(data, width, home):
         out = [clip("%s%s \u00b7 ctx %d%%%s" % (first, DIM, ctx_pct, R), row_cols)]
     else:
         out = full
-    write_rows(str(cwd), len(out), len(full))
+    # rate_limits arrive only for a plan login: anything else is billed per token
+    write_rows(str(cwd), len(out), len(full), billing="plan" if rl is not None else "api")
     return out
 
 

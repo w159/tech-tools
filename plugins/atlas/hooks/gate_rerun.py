@@ -178,7 +178,9 @@ def normalize(command: str, root: Path, ran: bool = False) -> tuple[list, Path] 
     for prefix in _RUNNERS:
         if tuple(argv[: len(prefix)]) == prefix:
             return argv, cwd
-    local = _local_runner(argv, cwd, Path(root).resolve(), ran)
+    # Pass root unresolved: _local_runner matches both the resolved and the literal spelling, so an
+    # absolute runner under a symlinked root (/var -> /private/var on macOS) is still inside it.
+    local = _local_runner(argv, cwd, Path(root), ran)
     if local is not None:
         return local, cwd
     return None
@@ -193,6 +195,24 @@ def _epoch(ts) -> float | None:
 
 _SEG_SPLIT = re.compile(r"\n|&&|;|\|\|")
 _CD_ONLY = re.compile(r"^cd\s+(\S+)$")
+# `<<WORD`, `<<-WORD`, `<<'WORD'`, `<< "WORD"`; `<<<` (a here-string) has no body and is skipped.
+_HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)\s*(['\"]?)([A-Za-z_][\w.-]*)\2")
+
+
+def _drop_heredoc_bodies(command: str) -> str:
+    # A heredoc body is data, not commands: a line in it that reads like a test run (a pasted
+    # `npx vitest run ... EXIT=0` result in an evidence file) must never be re-run as the session's test.
+    # The opener line and the lines after the closing delimiter stay; an unterminated body drops to the end.
+    out, pending = [], []
+    for line in command.split("\n"):
+        if pending:
+            dash, word = pending[0]
+            if (line.lstrip("\t") if dash else line) == word:
+                pending.pop(0)
+            continue
+        out.append(line)
+        pending = [(m.group(1) == "-", m.group(3)) for m in _HEREDOC.finditer(line)]
+    return "\n".join(out)
 
 
 def runnable_part(command: str, root: Path, ran: bool = False) -> str | None:
@@ -205,7 +225,7 @@ def runnable_part(command: str, root: Path, ran: bool = False) -> str | None:
     if normalize(command, root, ran) is not None:
         return command.strip()
     found, cd = None, ""
-    for seg in _SEG_SPLIT.split(command):
+    for seg in _SEG_SPLIT.split(_drop_heredoc_bodies(command)):
         seg = seg.strip()
         if not seg:
             continue

@@ -49,3 +49,7 @@ Assumption to avoid (tech-tools): SKIP exits 0, so CI cannot tell "live ran" fro
 Assumption to avoid (tech-tools): - Counts below 3 are never checked.
 §
 Assumption to avoid (tech-tools): The fresh-score file and the A3 bar: A3 "passes" without testing anything.**
+§
+Assumption to avoid (tech-tools): Member count is never checked, and `members` may be empty.
+§
+Assumption to avoid (tech-tools): The stored command text is never checked against `_TEST_RUNNER_RE`.

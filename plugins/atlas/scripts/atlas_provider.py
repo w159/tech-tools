@@ -745,6 +745,9 @@ def _summary_cost(tw: dict):
     """Crew rollup cost for the bench: None (unknown) when the summary says it is incomplete, else the dollars."""
     if tw.get("cost_complete") is False:
         return None
+    # a plan worker's cost is not a charge (no API key): its dollars are unknown, never 0.0 nor the estimate
+    if tw.get("tokens_plan") or ("billing" in tw and tw.get("cost_usd") is None):
+        return None
     return tw.get("cost_usd") or 0.0
 
 

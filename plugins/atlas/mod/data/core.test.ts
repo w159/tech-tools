@@ -167,9 +167,13 @@ describe('core model: context accounting and defaults', () => {
   });
 
   test('offloadOf: model from the costliest modelUsage entry, cost from total_cost_usd, no calls => zeros', () => {
-    const log = JSON.stringify({ type: 'result', total_cost_usd: 1.25, modelUsage: { cheap: { costUSD: 0.1 }, dear: { costUSD: 1 } } });
+    // dollars only for a worker billed per token: the init event names its API key source
+    const log = [
+      JSON.stringify({ type: 'system', subtype: 'init', apiKeySource: 'ANTHROPIC_API_KEY' }),
+      JSON.stringify({ type: 'result', total_cost_usd: 1.25, modelUsage: { cheap: { costUSD: 0.1 }, dear: { costUSD: 1 } } }),
+    ].join('\n');
     expect(offloadOf('w-1', log, 'abcde')).toEqual({
-      name: 'w-1', role: 'w', model: 'dear', brief: 0, peak: 0, kept: 0, returned: 2, costUsd: 1.25, finished: true,
+      name: 'w-1', role: 'w', model: 'dear', brief: 0, peak: 0, kept: 0, returned: 2, costUsd: 1.25, finished: true, billing: 'api',
     });
     expect(offloadOf('w-1', 'not json\n{bad', '').finished).toBe(false);
     expect(offloadOf('w-1', JSON.stringify({ type: 'result' }), '').model).toBeNull();

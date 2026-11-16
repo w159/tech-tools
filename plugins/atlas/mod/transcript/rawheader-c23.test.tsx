@@ -6,7 +6,8 @@ import { expect, test } from 'claude-code/testing'
 import type { EngineInterface, On } from 'claude-code'
 import contract from '../../contracts/operating-contract.json'
 import type { AtlasSnapshot } from '../contract'
-import { assistantTree, forgetDrawnHeaders, forgetHeaderPattern, registerRestyle } from '../restyle'
+import { HEADER_FIRST_LINE_PATTERN } from '../contract-pattern'
+import { assistantTree, forgetDrawnHeaders, forgetHeaderPattern, noteHeaderPattern, registerRestyle } from '../restyle'
 import { displayDelta, leadOf, partialLead } from './leadheader'
 
 type Flush = { index: number; final: boolean; delta: string }
@@ -89,8 +90,12 @@ test('C23: the transcript draws the same chip from the display form the host may
 
 test('C23: with no pattern the display form is still a header and the contract form is not', () => {
   forgetHeaderPattern()
-  expect(leadOf('▌ done · all finished', '')?.phase).toBe('done')
-  expect(leadOf('ATLAS | 🏁 done | all finished', '')).toBeNull()
+  try {
+    expect(leadOf('▌ done · all finished', '')?.phase).toBe('done')
+    expect(leadOf('ATLAS | 🏁 done | all finished', '')).toBeNull()
+  } finally {
+    noteHeaderPattern(HEADER_FIRST_LINE_PATTERN) // the pattern is module state: restore the bundled one so a later file (rawheader-c22) does not see an empty pattern
+  }
 })
 
 test('a phase-first header (`ATLAS | done 🏁 | ...`) parses like the glyph-first one, whole and streaming', () => {
