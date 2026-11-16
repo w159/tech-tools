@@ -12338,5 +12338,62 @@
     "status": "verified",
     "verified_at": "2026-11-15T03:24:53+00:00",
     "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "r5-verifier-before",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Before-state recorded; 4-file pytest run denied; implementer DONE claims not yet available",
+    "evidence": [
+      "done_claim.py --eval: all rows blocking TP=32 FP=0 FN=12; isolation bench lost=0 shared/worktree/auto (naive 14)"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/hooks/done_claim.py --eval; python3 plugins/atlas/scripts/atlas_isolation_bench.py; pytest of 4 files denied by permission check",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-16T06:23:23+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-bd19"
+  },
+  {
+    "id": "t558873b1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "round-5 critics (sonnet 4/10, opus 3/10) run; findings checked against code",
+    "evidence": [
+      "scratchpad critic-sonnet.md critic-opus.md; done_claim.py:379-393,486-496,659; atlas_decision_eval.py:199-210"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude -p --model sonnet|opus < packet.md; python probes in done_claim (select_kinds min_support=0, _ls_remote_backs, tools_from_transcript opaque)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-16T06:46:00+00:00",
+    "verified_by": "atlas:verifier"
+  },
+  {
+    "id": "t808b87de-critics2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "round 5 second critic round: 4/10 and 4/10, open defects listed in round-5 audit",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/critic2-sonnet.md",
+      "/tmp/claude-0/-home-user-tech-tools/9f8d0ae0-7987-56fa-be27-2c6022afd1b8/scratchpad/critic2-opus.md",
+      "docs/audits/2026-11-16_atlas-round5.md"
+    ],
+    "doc_refs": [
+      "docs/audits/2026-11-16_atlas-round5.md"
+    ],
+    "reproduction": "claude -p --model sonnet|opus --output-format json --setting-sources \"\" < scratchpad/packet2.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-16T07:51:21+00:00",
+    "verified_by": "audit-docs-curator",
+    "stamped_by": "lead"
   }
 ]

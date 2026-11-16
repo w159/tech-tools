@@ -45,3 +45,7 @@ Assumption to avoid (tech-tools): . I used Read, Grep and Bash instead. DELIVERA
 Assumption to avoid (tech-tools): - I never ran these tests on the untouched baseline, so `[unverified]` that they were already failing without COLORTERM.
 §
 Assumption to avoid (tech-tools): SKIP exits 0, so CI cannot tell "live ran" from "live never ran".
+§
+Assumption to avoid (tech-tools): - Counts below 3 are never checked.
+§
+Assumption to avoid (tech-tools): The fresh-score file and the A3 bar: A3 "passes" without testing anything.**

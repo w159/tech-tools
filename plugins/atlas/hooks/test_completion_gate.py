@@ -6243,12 +6243,12 @@ class DoneClaimGateTest(unittest.TestCase):
         return path
 
     def test_block_mode_blocks_on_an_advisory_only_claim_and_names_it(self):
-        # "42 passed" with no test run this turn is an advisory (count_no_test_run), not a finding.
+        # "42 passed" with no test run this turn is an advisory (count_nowhere), not a finding.
         t = self._ls_transcript()
         out = json.loads(self.stop(self.ADVISORY_ONLY, mode="block", transcript_path=t))
         self.assertEqual(out["decision"], "block")
         self.assertIn("42", out["reason"])
-        self.assertIn("no test run this turn", out["reason"])
+        self.assertIn("no tool output or report this turn", out["reason"])
 
     def test_auto_mode_passes_on_the_same_advisory_only_claim(self):
         t = self._ls_transcript()
@@ -6271,11 +6271,14 @@ class DoneClaimGateTest(unittest.TestCase):
     def test_default_contradiction_blocks_and_names_the_finding(self):
         reply = "ATLAS | verify | done\n\nFixed it. `pytest hooks -q` -> 99 passed in 2.1s, exit 0."
         real = self._transcript("....\n5 passed in 0.3s\n")
-        for mode in (None, "auto", "block"):
-            out = json.loads(self.stop(reply, mode=mode, transcript_path=real))
-            self.assertEqual(out["decision"], "block", mode)
-            self.assertIn("count 99 not in tool results", out["reason"])
-            self.assertIn("re-run", out["reason"])
+        # BLOCKING_KINDS is empty on the shipped corpus (done_claim.py tier rule), so only `block` mode blocks
+        # on a transcript finding; default and auto record it as block-would.
+        for mode in (None, "auto"):
+            self.assertEqual(self.stop(reply, mode=mode, transcript_path=real), "", mode)
+        out = json.loads(self.stop(reply, mode="block", transcript_path=real))
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("count 99 not in tool results", out["reason"])
+        self.assertIn("re-run", out["reason"])
         self.assertEqual(self.stop(reply, mode="shadow", transcript_path=real), "")
         self.assertEqual(self.stop(reply, mode="off", transcript_path=real), "")
 
@@ -6285,7 +6288,7 @@ class DoneClaimGateTest(unittest.TestCase):
         with self.Stub(self._answers(0.95, 0.95)) as srv:
             out = self.stop(
                 reply,
-                mode="auto",
+                mode="block",  # auto blocks nothing while BLOCKING_KINDS is empty; block promotes the finding
                 env={"ATLAS_DECISION_URL": srv.url},
                 transcript_path=real,
             )

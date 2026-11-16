@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 17.26.0 - 2026-11-16
+
+- atlas 17.26.0: round 5 fixed 16 done-claim detector defects (11 from two outside critics, 5 from false alarms on generated rows) and amended the tier rule (group-level Wilson, seeded-only support cannot promote, cross-validation stability). `BLOCKING_KINDS` is now empty: the Stop gate records done-claim findings and blocks only with `ATLAS_DONE_CLAIM=block`. Held-out (162 rows, 6 gold positives): 0 false blocks on the default path (Wilson upper 0.024); blocking on every kind would stop 20 of 156 genuine claims. New tooling `atlas_done_claim_fresh.py` and `atlas_decision_eval.py` ([audit](audits/2026-11-16_atlas-round5.md)).
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
+## marketplace 5.31.0 - 2026-11-16
+
+- marketplace 5.31.0: atlas 17.26.0. armada and programmer are unchanged.
+
 ## atlas 17.25.0 - 2026-11-15
 
 - atlas 17.25.0: the Claude Code mods were reworked over nine rounds against paired critic scoring ([audit](audits/2026-11-15_atlas-mods-expert-rounds.md)). An idle session shows real figures with history: last run, run count and median, gate counts and hook latency from the last session (labelled `prev`), kept in `.atlas/.run/history.json` (last 50 runs, 64 latency samples per hook, 60 minutes of events). The status tab is an instrument: a stepper that agrees with its count, an ACTIVITY column chart with axes and a named bucket, a GATES table, a HOOKS table with p50 and its colour thresholds, RUNS bars. One module (`mod/metrics.ts`) computes every figure, so the band, panel, tabs, card and strip show the same number. The band has fixed-width slots, a `health` chip and a `gates ok ›` chip that open the card and the gates tab, and the card closes from its title. All six tabs fit at 110 columns, below 144 columns a two-row idle strip carries the summary, the idle animation is a slow breathe of the pill instead of a 1 per second pulse, and the last run's time is printed once per view. The critic panel mean did not reach 8 (Atlas 5.33 fresh, 5.75 with history; btop 7.75 and htop 6.53 in the same runs). Marketplace 5.30.0.

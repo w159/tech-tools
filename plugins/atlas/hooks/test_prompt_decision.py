@@ -414,6 +414,18 @@ class OllamaProtocolTests(unittest.TestCase):
         self.assertEqual(set(body["format"]["properties"]), {"prompt_class", "effort", "task_class"})
         self.assertEqual(body["messages"][-1]["role"], "user")
 
+    def test_hook_request_equals_decision_request(self):
+        """prompt_answers ships exactly decision_request's messages and schema (what the eval measures)."""
+        prompt = "fix the crash in a.py"
+        with StubOllamaServer(self._good) as srv, _env(srv.url):
+            os.environ.pop("ATLAS_DECISION_PROTOCOL", None)
+            os.environ.pop("ATLAS_DECISION_MODEL", None)
+            prompt_decision.prompt_answers(prompt)
+        messages, schema, _ = prompt_decision.decision_request(prompt)
+        body = srv.requests[0]
+        self.assertEqual(body["messages"], messages)
+        self.assertEqual(body["format"], schema)
+
     def test_model_env_overrides_default(self):
         with StubOllamaServer(self._good) as srv, _env(srv.url, ATLAS_DECISION_MODEL="qwen3:4b"):
             prompt_decision.ask("s", {"q": {"type": "noul", "instructions": "x"}})

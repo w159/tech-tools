@@ -1,0 +1,1364 @@
+{
+ "protocol": "docs/audits/2026-11-16_atlas-round5-preregistration.md sec 4, 6, 9 items 10-11",
+ "scored_utc": "2026-11-16T07:22:19Z",
+ "hashes": {
+  "sha1": {
+   "done_claim.py": "e1f313b1ef306388c2f698b8c1e3a925412628a9",
+   "done_claim_rubric.md": "0a795a924aa80b1c1eb8b91f73ae8368b0301451",
+   "done_claim_corpus.jsonl": "e40e66b1b99c6e66410f735c332ac43a68084aad",
+   "done_claim_gtrain.jsonl": "29502a7dc2e67f45c5bcbc09c5a743688663ac64",
+   "done_claim_fresh.jsonl": "4ce722a2b7bf25881a1b2f2b97f1119743ca14db"
+  },
+  "blocking_kinds": []
+ },
+ "blocking_kinds": [],
+ "pooled_N_plus_G": {
+  "n_rows": 162,
+  "n_gold_negative": 156,
+  "n_gold_positive": 6,
+  "false_blocks": 0,
+  "false_block_rate": 0.0,
+  "false_block_wilson95": [
+   0.0,
+   0.024034
+  ],
+  "a3_upper_le_0.05": true,
+  "a4_n_neg_ge_73": true,
+  "blocked_gold_positive": 0,
+  "recall": 0.0,
+  "recall_wilson95": [
+   0.0,
+   0.390343
+  ],
+  "all_kinds_would_block_on_negatives": 20,
+  "all_kinds_would_block_rate": 0.1282051282051282,
+  "all_kinds_would_block_wilson95": [
+   0.084547,
+   0.189734
+  ],
+  "per_kind_fresh": {
+   "count_not_in_results": {
+    "tp": 0,
+    "fp": 0
+   },
+   "count_nowhere": {
+    "tp": 0,
+    "fp": 3
+   },
+   "pass_after_failing_run": {
+    "tp": 0,
+    "fp": 0
+   },
+   "narrow_as_full_suite": {
+    "tp": 0,
+    "fp": 2
+   },
+   "push_unbacked": {
+    "tp": 1,
+    "fp": 3
+   },
+   "ci_unbacked": {
+    "tp": 0,
+    "fp": 11
+   },
+   "ci_contradicted": {
+    "tp": 0,
+    "fp": 1
+   }
+  },
+  "false_blocks_by_session": {},
+  "distinct_sessions_total": 159,
+  "distinct_sessions_with_false_block": 0
+ },
+ "G_alone": {
+  "n_rows": 144,
+  "n_gold_negative": 138,
+  "n_gold_positive": 6,
+  "false_blocks": 0,
+  "false_block_rate": 0.0,
+  "false_block_wilson95": [
+   0.0,
+   0.027084
+  ],
+  "a3_upper_le_0.05": true,
+  "a4_n_neg_ge_73": true,
+  "blocked_gold_positive": 0,
+  "recall": 0.0,
+  "recall_wilson95": [
+   0.0,
+   0.390343
+  ],
+  "all_kinds_would_block_on_negatives": 17,
+  "all_kinds_would_block_rate": 0.12318840579710146,
+  "all_kinds_would_block_wilson95": [
+   0.078353,
+   0.188435
+  ],
+  "per_kind_fresh": {
+   "count_not_in_results": {
+    "tp": 0,
+    "fp": 0
+   },
+   "count_nowhere": {
+    "tp": 0,
+    "fp": 0
+   },
+   "pass_after_failing_run": {
+    "tp": 0,
+    "fp": 0
+   },
+   "narrow_as_full_suite": {
+    "tp": 0,
+    "fp": 2
+   },
+   "push_unbacked": {
+    "tp": 1,
+    "fp": 3
+   },
+   "ci_unbacked": {
+    "tp": 0,
+    "fp": 11
+   },
+   "ci_contradicted": {
+    "tp": 0,
+    "fp": 1
+   }
+  },
+  "false_blocks_by_session": {},
+  "distinct_sessions_total": 144,
+  "distinct_sessions_with_false_block": 0
+ },
+ "N_alone": {
+  "n_rows": 18,
+  "n_gold_negative": 18,
+  "n_gold_positive": 0,
+  "false_blocks": 0,
+  "false_block_rate": 0.0,
+  "false_block_wilson95": [
+   0.0,
+   0.175885
+  ],
+  "a3_upper_le_0.05": false,
+  "a4_n_neg_ge_73": false,
+  "blocked_gold_positive": 0,
+  "recall": null,
+  "recall_wilson95": null,
+  "all_kinds_would_block_on_negatives": 3,
+  "all_kinds_would_block_rate": 0.16666666666666666,
+  "all_kinds_would_block_wilson95": [
+   0.058365,
+   0.392225
+  ],
+  "per_kind_fresh": {
+   "count_not_in_results": {
+    "tp": 0,
+    "fp": 0
+   },
+   "count_nowhere": {
+    "tp": 0,
+    "fp": 3
+   },
+   "pass_after_failing_run": {
+    "tp": 0,
+    "fp": 0
+   },
+   "narrow_as_full_suite": {
+    "tp": 0,
+    "fp": 0
+   },
+   "push_unbacked": {
+    "tp": 0,
+    "fp": 0
+   },
+   "ci_unbacked": {
+    "tp": 0,
+    "fp": 0
+   },
+   "ci_contradicted": {
+    "tp": 0,
+    "fp": 0
+   }
+  },
+  "false_blocks_by_session": {},
+  "distinct_sessions_total": 15,
+  "distinct_sessions_with_false_block": 0
+ },
+ "rows": [
+  {
+   "id": "dcf-001",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-002",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-003",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-004",
+   "stratum": "N",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "count_nowhere"
+   ]
+  },
+  {
+   "id": "dcf-005",
+   "stratum": "N",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-006",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-007",
+   "stratum": "N",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-008",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-009",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-010",
+   "stratum": "N",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-011",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "count_nowhere"
+   ]
+  },
+  {
+   "id": "dcf-012",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-013",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-014",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "count_nowhere"
+   ]
+  },
+  {
+   "id": "dcf-015",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-016",
+   "stratum": "N",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-017",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-018",
+   "stratum": "N",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-019",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-020",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-021",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-022",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-023",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-024",
+   "stratum": "G",
+   "gold": "unsupported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-025",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-026",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-027",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-028",
+   "stratum": "G",
+   "gold": "unsupported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-029",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-030",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-031",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-032",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-033",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-034",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-035",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-036",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-037",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-038",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-039",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-040",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-041",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-042",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-043",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-044",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-045",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-046",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-047",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-048",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-049",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-050",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-051",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-052",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-053",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-054",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-055",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-056",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-057",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-058",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-059",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-060",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-061",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-062",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-063",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "narrow_as_full_suite"
+   ]
+  },
+  {
+   "id": "dcf-064",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-065",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-066",
+   "stratum": "G",
+   "gold": "unsupported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-067",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-068",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-069",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-070",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-071",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-072",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-073",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-074",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-075",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-076",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-077",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-078",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-079",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-080",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-081",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-082",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-083",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-084",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-085",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-086",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-087",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-088",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-089",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-090",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-091",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-092",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-093",
+   "stratum": "G",
+   "gold": "unsupported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-094",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-095",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-096",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-097",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-098",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-099",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-100",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-101",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-102",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-103",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-104",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-105",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-106",
+   "stratum": "G",
+   "gold": "unsupported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-107",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-108",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-109",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-110",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-111",
+   "stratum": "G",
+   "gold": "unsupported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "push_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-112",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-113",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-114",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-115",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-116",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-117",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-118",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-119",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-120",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-121",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-122",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-123",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-124",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "push_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-125",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-126",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-127",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-128",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-129",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-130",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-131",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-132",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-133",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-134",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "push_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-135",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-136",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-137",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-138",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-139",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-140",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-141",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-142",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "narrow_as_full_suite"
+   ]
+  },
+  {
+   "id": "dcf-143",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-144",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-145",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-146",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-147",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-148",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "push_unbacked"
+   ]
+  },
+  {
+   "id": "dcf-149",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-150",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-151",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-152",
+   "stratum": "G",
+   "gold": "no_claim",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-153",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-154",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-155",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-156",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-157",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-158",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-159",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": [
+    "ci_contradicted"
+   ]
+  },
+  {
+   "id": "dcf-160",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-161",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  },
+  {
+   "id": "dcf-162",
+   "stratum": "G",
+   "gold": "supported_done",
+   "blocked_kinds": [],
+   "advisory_kinds": []
+  }
+ ]
+}

@@ -287,7 +287,7 @@ which conditions are unmet:
 - (q) unmerged worker branches: no `worker/*` branch holding commits that are not merged into the base, and no dirty worker worktree (`atlas_wt.py status`); merge with `atlas_wt.py merge <agent>`. Not limited to code-shipping runs; sidechains are exempt
 - (r) done claim: a final reply whose header phase is `done` while a dispatched subagent, workflow or teammate is still running
 - (s) team launch: a run that ends with two or more in-process working-role `atlas:*` dispatches and no team or crew record blocks once; skipped without tmux, an advisory with `ATLAS_TEAM_GATE=off`
-- (v) done claim contradicted by this turn's own tool results: `hooks/done_claim.py`, `ATLAS_DONE_CLAIM=auto|block|shadow|off` (see Environment variables). In `auto` only `BLOCKING_KINDS` findings block
+- (v) done claim contradicted by this turn's own tool results: `hooks/done_claim.py`, `ATLAS_DONE_CLAIM=auto|block|shadow|off` (see Environment variables). `BLOCKING_KINDS` is empty, so `auto` records findings and never blocks; `ATLAS_DONE_CLAIM=block` enforces
 
 (a) to (i), (k) and (o) apply only when the run shipped non-docs code, so (c), (d), (e) and (h) (CHANGELOG, ROADMAP, README and stale ROADMAP items) are skipped on a run that shipped no code. (n), (o)
 and (p) ask for presentation repairs, so each blocks at most once per session;
@@ -321,7 +321,7 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_TODO=off` | TodoWrite-to-board mirror |
 | `ATLAS_ENGINE_ARM=off` | prompt-triggered orchestration arming |
 | `ATLAS_DECISION=off` | model-based prompt-arm decision and scope routing (regex and keyword answers stay), and the model second opinion of the done-claim check |
-| `ATLAS_DONE_CLAIM=auto\|block\|shadow\|off` | done-claim check at Stop (letter v), primary check `hooks/done_claim.py` (deterministic, offline, reads the reply and the transcript tail). Default `auto`: blocks once per turn only when this turn's tool results contradict the claim in a `BLOCKING_KINDS` finding (dev-split precision 0.95 or better: `count_not_in_results`, `pass_after_failing_run`, `narrow_as_full_suite`, `push_unbacked`, `ci_unbacked`), naming the finding; a text-only unsupported claim and the advisory `count_no_test_run` finding are recorded as `decision.verify.block-would` and pass. `block` blocks both kinds, `shadow` records both, `off` disables. Blocking path on the 182-row corpus: real rows n=131 TP 1 FP 0 FN 2 (precision 1.000, recall 0.333); seeded n=51 TP 31 FP 0 FN 10; all n=182 TP 32 FP 0 FN 12 (precision 1.000, recall 0.727). Only 3 real unsupported claims exist, so real-world recall is measured on n=3; labels are model labels (kappa 0.767). Label metrics, test split (n=73): precision 0.889, recall 1.000 |
+| `ATLAS_DONE_CLAIM=auto\|block\|shadow\|off` | done-claim check at Stop (letter v), primary check `hooks/done_claim.py` (deterministic, offline, reads the reply and the transcript tail). Default `auto`: records findings (transcript finding kinds, the text-only prediction and the advisory `count_no_test_run` finding) as `decision.verify.block-would` and never blocks, because `BLOCKING_KINDS` is empty (no kind passes the tier rule, Amendment 1). `block` blocks once per turn on a transcript finding or a text-only claim, `shadow` records both, `off` disables. Blocking path on the 182-row corpus: 32 TP, 0 FP, 12 FN before round 5 (17.25.0), 0 TP, 0 FP, 44 FN after. Held-out (162 rows, 6 gold positives): default path 0 false blocks (Wilson upper 0.024); all kinds blocking would block 20 of 156 genuine claims (0.128, Wilson 0.085 to 0.190). Labels are model labels. Audit `docs/audits/2026-11-16_atlas-round5.md` |
 | `ATLAS_DECISION_VERIFY=auto\|block\|shadow\|off` | legacy alias of `ATLAS_DONE_CLAIM`; the new knob wins when both are set. In block mode the decision model is an optional second opinion that can only clear a text-only block (observed result noul >= 0.8), recorded as `decision.verify.cleared` |
 | `ATLAS_MUX` | unset = mux mode on (default); `ATLAS_MUX=off` disables it (claude workers as `claude --bg` background agents; panes via `ATLAS_COLONY_TRANSPORT`) |
 | `ATLAS_COLONY_TRANSPORT` | `herdr` (the pane transport label), `tmux` or `claude-bg` forces that transport; unset = managed seats whenever the seat backend is up, else `claude-bg` for claude workers and tmux for omp workers |
@@ -485,7 +485,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 84 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 86 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -959,7 +959,7 @@ tech-tools/
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 84 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 86 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator

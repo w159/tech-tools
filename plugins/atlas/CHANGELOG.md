@@ -1,5 +1,20 @@
 # Changelog
 
+## 17.26.0 - 2026-11-16
+
+Round 5 hardened the done-claim detector after two outside critics and stopped the Stop gate from blocking by default. Audit: [2026-11-16_atlas-round5.md](../../docs/audits/2026-11-16_atlas-round5.md).
+
+### Changed
+
+- `hooks/done_claim.py`: 11 detector fixes from the two critics (a count counts as evidence only from test, CI or report output; the opaque flag comes only from agent reports; narrower check-run detection; a push or ls-remote must show the claimed sha or ref; the CI verdict uses the latest status per workflow and "0 failed"; fail-closed wording no longer suppresses a finding; guards) and 5 fixes from 8 false alarms on 100 generated training rows.
+- Tier rule Amendment 1: group-level Wilson bound, seeded-only support cannot promote a kind, cross-validation stability. Result: `BLOCKING_KINDS` is empty. The Stop gate records done-claim findings as `decision.verify.block-would` and blocks only with `ATLAS_DONE_CLAIM=block`. In 17.25.0 two kinds blocked by default, both supported only by seeded rows.
+- Blocking path on the 182-row corpus: 32 TP, 0 FP, 12 FN before, 0 TP, 0 FP, 44 FN after.
+
+### Added
+
+- `scripts/atlas_done_claim_fresh.py` (mine, build, check, report, score) and `scripts/atlas_decision_eval.py`; data `hooks/done_claim_gtrain.jsonl`, `hooks/done_claim_fresh.jsonl`, `scripts/decision_eval_set.json`, `scripts/decision_eval_cache.json`.
+- Held-out score scored once after the freeze: 162 rows, 156 gold negatives, 6 gold positives. Default path 0 false blocks (Wilson upper 0.024). Blocking on every kind would stop 20 of 156 genuine claims (0.128) and catch 1 of 6 false claims.
+
 ## 17.25.0 - 2026-11-15
 
 The Claude Code mods (band, side panel, HEALTH card) were reworked over nine rounds against paired critic scoring (Atlas next to btop and htop, four Claude models, one scale). The audit is [2026-11-15_atlas-mods-expert-rounds.md](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md). The panel mean of 8 was not reached: Atlas moved from 4.97 to 5.33 in a fresh session and 5.75 in a session with history, against 7.75 and 7.80 for btop. What changed is below.

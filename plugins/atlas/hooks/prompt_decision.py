@@ -506,13 +506,26 @@ def prompt_answers(prompt: str) -> dict | None:
     now = time.monotonic()
     if _PROMPT_CACHE["key"] == key and now - _PROMPT_CACHE["at"] < _PROMPT_CACHE_TTL_S:
         return _PROMPT_CACHE["answers"]
+    _, _, questions = decision_request(prompt)
+    answers = ask(prompt[:4000], questions, TIMEOUT_S)
+    _PROMPT_CACHE.update(key=key, at=now, answers=answers)
+    return answers
+
+
+def decision_request(prompt: str) -> tuple[list, dict, dict]:
+    """(messages, json schema, questions) exactly as the ollama path of prompt_answers sends them.
+    prompt_answers takes its questions from here, so the evaluation (atlas_decision_eval.py), which lets
+    a stand-in backend answer the same prompt and schema, measures the request the hook ships."""
     questions = {"prompt_class": PROMPT_CLASS, "effort": EFFORT_QUESTION}
     tc = task_class_question()
     if tc:
         questions["task_class"] = tc
-    answers = ask(prompt[:4000], questions, TIMEOUT_S)
-    _PROMPT_CACHE.update(key=key, at=now, answers=answers)
-    return answers
+    return _ollama_prompt(prompt[:4000], questions), _ollama_schema(questions), questions
+
+
+def validate_answer(content, questions: dict) -> dict | None:
+    """Strict validation of a backend's JSON answer (same rules as the ollama path)."""
+    return _ollama_validate(content, questions)
 
 
 def local_decision(prompt: str) -> tuple[str, float] | None:

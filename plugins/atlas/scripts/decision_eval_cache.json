@@ -1,0 +1,2040 @@
+{
+ "answers": {
+  "haiku": {
+   "dp-001": {
+    "answers": {
+     "effort": {
+      "choice": "high",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.356615200999954,
+    "usd": 0.0005334000000000001
+   },
+   "dp-002": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "test",
+      "confidence": 0.93,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.2338805550000416,
+    "usd": 0.00026537
+   },
+   "dp-003": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.4,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.738961121999978,
+    "usd": 0.00033197
+   },
+   "dp-004": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.7,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.7362784580000152,
+    "usd": 0.00032067
+   },
+   "dp-005": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.35,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.791112259999977,
+    "usd": 0.00031797
+   },
+   "dp-006": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.8,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.1202262479999945,
+    "usd": 0.00025667
+   },
+   "dp-007": {
+    "answers": {
+     "effort": {
+      "choice": "high",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.6,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.61836416299991,
+    "usd": 0.00030147
+   },
+   "dp-008": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "defect",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "fix",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.3880851559999883,
+    "usd": 0.00026057
+   },
+   "dp-009": {
+    "answers": {
+     "effort": {
+      "choice": "high",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "db-audit",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.9315798650000033,
+    "usd": 0.00028867000000000004
+   },
+   "dp-010": {
+    "answers": {
+     "effort": {
+      "choice": "high",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.6,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.4093334830000686,
+    "usd": 0.00030257
+   },
+   "dp-011": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "defect",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "fix",
+      "confidence": 0.6,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 4.088434529999972,
+    "usd": 0.00033287
+   },
+   "dp-012": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "test",
+      "confidence": 0.95,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.138346560999935,
+    "usd": 0.00026827000000000003
+   },
+   "dp-013": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.4,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.679128154999944,
+    "usd": 0.00029467
+   },
+   "dp-014": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.4,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.5,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.9063140920000023,
+    "usd": 0.00027167
+   },
+   "dp-015": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.95,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.85,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.1762340989999984,
+    "usd": 0.00027227
+   },
+   "dp-016": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.95,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.8356155510000463,
+    "usd": 0.00034777
+   },
+   "dp-017": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.45,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 4.044011960000034,
+    "usd": 0.00035257
+   },
+   "dp-018": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.35,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 4.590421461000005,
+    "usd": 0.00038757
+   },
+   "dp-019": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.55,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.95,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.5470164289999957,
+    "usd": 0.00033397
+   },
+   "dp-020": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.75,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.6,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.5926071490000595,
+    "usd": 0.00032187000000000003
+   },
+   "dp-021": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.95,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.85,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.3510727269999734,
+    "usd": 0.00028797
+   },
+   "dp-022": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "defect",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "fix",
+      "confidence": 0.7,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.1352800800000296,
+    "usd": 0.00027147
+   },
+   "dp-023": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.671017644000017,
+    "usd": 0.00020847000000000001
+   },
+   "dp-024": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.7,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.499936529000024,
+    "usd": 0.00029967000000000004
+   },
+   "dp-025": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.8,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.5715248840000413,
+    "usd": 0.00029607
+   }
+  },
+  "sonnet": {
+   "dp-001": {
+    "answers": {
+     "effort": {
+      "choice": "high",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.6132322079999994,
+    "usd": 0.0109315
+   },
+   "dp-002": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "test",
+      "confidence": 0.95,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.331356143999983,
+    "usd": 0.0038557
+   },
+   "dp-003": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.6,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.30236988799993,
+    "usd": 0.0039277
+   },
+   "dp-004": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.8,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 4.49059872700002,
+    "usd": 0.0075374
+   },
+   "dp-005": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.4,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.442181102999939,
+    "usd": 0.0038877
+   },
+   "dp-006": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.85,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.708152145999975,
+    "usd": 0.0057794
+   },
+   "dp-007": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.8,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 4.128799259000061,
+    "usd": 0.005811800000000001
+   },
+   "dp-008": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "defect",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "fix",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.41868742500003,
+    "usd": 0.0038797
+   },
+   "dp-009": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "db-audit",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.732183776999932,
+    "usd": 0.0058499
+   },
+   "dp-010": {
+    "answers": {
+     "effort": {
+      "choice": "high",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "ui-test",
+      "confidence": 0.8,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.50043610299997,
+    "usd": 0.0058331
+   },
+   "dp-011": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "defect",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.7,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.7513046870000153,
+    "usd": 0.005795
+   },
+   "dp-012": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "test",
+      "confidence": 0.96,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.4366667259999986,
+    "usd": 0.0038837000000000003
+   },
+   "dp-013": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.4,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 4.265916887000003,
+    "usd": 0.007861400000000001
+   },
+   "dp-014": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.6,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.3430235889999267,
+    "usd": 0.0038617
+   },
+   "dp-015": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.95,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.93,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.346299087000034,
+    "usd": 0.0038737
+   },
+   "dp-016": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.5,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.95,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.7377260639999577,
+    "usd": 0.0057561999999999995
+   },
+   "dp-017": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.4,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.5866820889999644,
+    "usd": 0.0038997
+   },
+   "dp-018": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.85,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.4,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.777883490000022,
+    "usd": 0.0057831
+   },
+   "dp-019": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.55,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.95,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.689559542999973,
+    "usd": 0.0057603
+   },
+   "dp-020": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.8,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.885240719999956,
+    "usd": 0.0057995
+   },
+   "dp-021": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.864918622999994,
+    "usd": 0.0057958
+   },
+   "dp-022": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.75,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "defect",
+      "confidence": 0.9,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "fix",
+      "confidence": 0.7,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.043354602000022,
+    "usd": 0.0038976999999999996
+   },
+   "dp-023": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "code_change",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "implement",
+      "confidence": 0.9,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 3.7321157430000085,
+    "usd": 0.0057563
+   },
+   "dp-024": {
+    "answers": {
+     "effort": {
+      "choice": "medium",
+      "confidence": 0.55,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "investigation",
+      "confidence": 0.8,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "audit",
+      "confidence": 0.8,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 4.795237251999993,
+    "usd": 0.0057999
+   },
+   "dp-025": {
+    "answers": {
+     "effort": {
+      "choice": "low",
+      "confidence": 0.7,
+      "type": "choice"
+     },
+     "prompt_class": {
+      "choice": "conversation",
+      "confidence": 0.6,
+      "type": "choice"
+     },
+     "task_class": {
+      "choice": "docs",
+      "confidence": 0.7,
+      "type": "choice"
+     }
+    },
+    "error": null,
+    "latency_s": 2.4650605960000576,
+    "usd": 0.0038797
+   }
+  }
+ },
+ "spend": [
+  {
+   "id": "dp-001",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.005984
+  },
+  {
+   "id": "dp-002",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028336999999999998
+  },
+  {
+   "id": "dp-003",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0029157
+  },
+  {
+   "id": "dp-004",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028596999999999997
+  },
+  {
+   "id": "dp-005",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028756999999999997
+  },
+  {
+   "id": "dp-006",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028396999999999997
+  },
+  {
+   "id": "dp-007",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028956999999999997
+  },
+  {
+   "id": "dp-008",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028677
+  },
+  {
+   "id": "dp-009",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028797
+  },
+  {
+   "id": "dp-010",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028877
+  },
+  {
+   "id": "dp-011",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0048037
+  },
+  {
+   "id": "dp-012",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028617
+  },
+  {
+   "id": "dp-013",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028197
+  },
+  {
+   "id": "dp-014",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028396999999999997
+  },
+  {
+   "id": "dp-015",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028517
+  },
+  {
+   "id": "dp-016",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028317
+  },
+  {
+   "id": "dp-017",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0040677000000000005
+  },
+  {
+   "id": "dp-018",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0037377
+  },
+  {
+   "id": "dp-019",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028357
+  },
+  {
+   "id": "dp-020",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028837
+  },
+  {
+   "id": "dp-021",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028557
+  },
+  {
+   "id": "dp-022",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028956999999999997
+  },
+  {
+   "id": "dp-023",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028756999999999997
+  },
+  {
+   "id": "dp-024",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028596999999999997
+  },
+  {
+   "id": "dp-025",
+   "kind": "label",
+   "model": "sonnet",
+   "usd": 0.0028677
+  },
+  {
+   "id": "dp-001",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.011936
+  },
+  {
+   "id": "dp-002",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0056354000000000005
+  },
+  {
+   "id": "dp-003",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0067194
+  },
+  {
+   "id": "dp-004",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0056874
+  },
+  {
+   "id": "dp-005",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.007679399999999999
+  },
+  {
+   "id": "dp-006",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0056473999999999995
+  },
+  {
+   "id": "dp-007",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.006999399999999999
+  },
+  {
+   "id": "dp-008",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0057034
+  },
+  {
+   "id": "dp-009",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0057274
+  },
+  {
+   "id": "dp-010",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0057434
+  },
+  {
+   "id": "dp-011",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.009315400000000001
+  },
+  {
+   "id": "dp-012",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.005691400000000001
+  },
+  {
+   "id": "dp-013",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0074074
+  },
+  {
+   "id": "dp-014",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0064474
+  },
+  {
+   "id": "dp-015",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0056714
+  },
+  {
+   "id": "dp-016",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0056314
+  },
+  {
+   "id": "dp-017",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0092434
+  },
+  {
+   "id": "dp-018",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0068834000000000005
+  },
+  {
+   "id": "dp-019",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0056394
+  },
+  {
+   "id": "dp-020",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.006015400000000001
+  },
+  {
+   "id": "dp-021",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.005679399999999999
+  },
+  {
+   "id": "dp-022",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0057594
+  },
+  {
+   "id": "dp-023",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0057193999999999995
+  },
+  {
+   "id": "dp-024",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0060674
+  },
+  {
+   "id": "dp-025",
+   "kind": "label",
+   "model": "opus",
+   "usd": 0.0057034
+  },
+  {
+   "id": "dp-011",
+   "kind": "adjudicate",
+   "model": "opus",
+   "usd": 0.017287999999999998
+  },
+  {
+   "id": "dp-014",
+   "kind": "adjudicate",
+   "model": "opus",
+   "usd": 0.012892
+  },
+  {
+   "id": "dp-018",
+   "kind": "adjudicate",
+   "model": "opus",
+   "usd": 0.012492
+  },
+  {
+   "id": "dp-001",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.0005334000000000001
+  },
+  {
+   "id": "dp-002",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00026537
+  },
+  {
+   "id": "dp-003",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00033197
+  },
+  {
+   "id": "dp-004",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00032067
+  },
+  {
+   "id": "dp-005",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00031797
+  },
+  {
+   "id": "dp-006",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00025667
+  },
+  {
+   "id": "dp-007",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00030147
+  },
+  {
+   "id": "dp-008",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00026057
+  },
+  {
+   "id": "dp-009",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00028867000000000004
+  },
+  {
+   "id": "dp-010",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00030257
+  },
+  {
+   "id": "dp-011",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00033287
+  },
+  {
+   "id": "dp-012",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00026827000000000003
+  },
+  {
+   "id": "dp-013",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00029467
+  },
+  {
+   "id": "dp-014",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00027167
+  },
+  {
+   "id": "dp-015",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00027227
+  },
+  {
+   "id": "dp-016",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00034777
+  },
+  {
+   "id": "dp-017",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00035257
+  },
+  {
+   "id": "dp-018",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00038757
+  },
+  {
+   "id": "dp-019",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00033397
+  },
+  {
+   "id": "dp-020",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00032187000000000003
+  },
+  {
+   "id": "dp-021",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00028797
+  },
+  {
+   "id": "dp-022",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00027147
+  },
+  {
+   "id": "dp-023",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00020847000000000001
+  },
+  {
+   "id": "dp-024",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00029967000000000004
+  },
+  {
+   "id": "dp-025",
+   "kind": "decision",
+   "model": "haiku",
+   "usd": 0.00029607
+  },
+  {
+   "id": "dp-001",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0109315
+  },
+  {
+   "id": "dp-002",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038557
+  },
+  {
+   "id": "dp-003",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0039277
+  },
+  {
+   "id": "dp-004",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0075374
+  },
+  {
+   "id": "dp-005",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038877
+  },
+  {
+   "id": "dp-006",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057794
+  },
+  {
+   "id": "dp-007",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.005811800000000001
+  },
+  {
+   "id": "dp-008",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038797
+  },
+  {
+   "id": "dp-009",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0058499
+  },
+  {
+   "id": "dp-010",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0058331
+  },
+  {
+   "id": "dp-011",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.005795
+  },
+  {
+   "id": "dp-012",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038837000000000003
+  },
+  {
+   "id": "dp-013",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.007861400000000001
+  },
+  {
+   "id": "dp-014",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038617
+  },
+  {
+   "id": "dp-015",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038737
+  },
+  {
+   "id": "dp-016",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057561999999999995
+  },
+  {
+   "id": "dp-017",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038997
+  },
+  {
+   "id": "dp-018",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057831
+  },
+  {
+   "id": "dp-019",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057603
+  },
+  {
+   "id": "dp-020",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057995
+  },
+  {
+   "id": "dp-021",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057958
+  },
+  {
+   "id": "dp-022",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038976999999999996
+  },
+  {
+   "id": "dp-023",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057563
+  },
+  {
+   "id": "dp-024",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0057999
+  },
+  {
+   "id": "dp-025",
+   "kind": "decision",
+   "model": "sonnet",
+   "usd": 0.0038797
+  },
+  {
+   "id": "dp-001",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.14027199999999998
+  },
+  {
+   "id": "dp-002",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.012829199999999999
+  },
+  {
+   "id": "dp-003",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0136452
+  },
+  {
+   "id": "dp-004",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.013613199999999999
+  },
+  {
+   "id": "dp-005",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.013837200000000001
+  },
+  {
+   "id": "dp-006",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0128732
+  },
+  {
+   "id": "dp-007",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0157692
+  },
+  {
+   "id": "dp-008",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0129052
+  },
+  {
+   "id": "dp-009",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0129532
+  },
+  {
+   "id": "dp-010",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0137212
+  },
+  {
+   "id": "dp-011",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.015233199999999999
+  },
+  {
+   "id": "dp-012",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.012901200000000002
+  },
+  {
+   "id": "dp-013",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.015509199999999999
+  },
+  {
+   "id": "dp-014",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0134172
+  },
+  {
+   "id": "dp-015",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0129132
+  },
+  {
+   "id": "dp-016",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0128652
+  },
+  {
+   "id": "dp-017",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.015589200000000001
+  },
+  {
+   "id": "dp-018",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0143292
+  },
+  {
+   "id": "dp-019",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.012857200000000001
+  },
+  {
+   "id": "dp-020",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0129612
+  },
+  {
+   "id": "dp-021",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.012897200000000001
+  },
+  {
+   "id": "dp-022",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0129772
+  },
+  {
+   "id": "dp-023",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0129612
+  },
+  {
+   "id": "dp-024",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0139692
+  },
+  {
+   "id": "dp-025",
+   "kind": "label",
+   "model": "opus-router",
+   "usd": 0.0132932
+  },
+  {
+   "id": "dp-001",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.059541000000000004
+  },
+  {
+   "id": "dp-002",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0128986
+  },
+  {
+   "id": "dp-003",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0150426
+  },
+  {
+   "id": "dp-004",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.013834599999999999
+  },
+  {
+   "id": "dp-005",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0145786
+  },
+  {
+   "id": "dp-006",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0143226
+  },
+  {
+   "id": "dp-007",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.014254600000000001
+  },
+  {
+   "id": "dp-008",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0129506
+  },
+  {
+   "id": "dp-009",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.013014600000000001
+  },
+  {
+   "id": "dp-010",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.013598599999999999
+  },
+  {
+   "id": "dp-011",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0173706
+  },
+  {
+   "id": "dp-012",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0129866
+  },
+  {
+   "id": "dp-013",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0146146
+  },
+  {
+   "id": "dp-014",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0144106
+  },
+  {
+   "id": "dp-015",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.012966599999999998
+  },
+  {
+   "id": "dp-016",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0129266
+  },
+  {
+   "id": "dp-017",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0152226
+  },
+  {
+   "id": "dp-018",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.015418600000000001
+  },
+  {
+   "id": "dp-019",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.012942599999999999
+  },
+  {
+   "id": "dp-020",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0136346
+  },
+  {
+   "id": "dp-021",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.014486599999999999
+  },
+  {
+   "id": "dp-022",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0130546
+  },
+  {
+   "id": "dp-023",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.013014600000000001
+  },
+  {
+   "id": "dp-024",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0148626
+  },
+  {
+   "id": "dp-025",
+   "kind": "label",
+   "model": "opus-matrix",
+   "usd": 0.0134226
+  },
+  {
+   "id": "dp-007",
+   "kind": "adjudicate",
+   "model": "opus",
+   "usd": 0.14037999999999998
+  },
+  {
+   "id": "dp-011",
+   "kind": "adjudicate",
+   "model": "opus",
+   "usd": 0.143972
+  }
+ ]
+}

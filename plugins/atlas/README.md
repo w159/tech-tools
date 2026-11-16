@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.25.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.26.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -193,7 +193,7 @@ blocks, it names the letters:
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
 | i      | open todos                                       | r      | `done` header while work is open           |
 |        |                                                  | s      | 2+ in-process workers, no tmux team or crew |
-|        |                                                  | v      | done claim contradicted by this turn's tool results (`ATLAS_DONE_CLAIM=auto`, default; `block` also blocks text-only claims) |
+|        |                                                  | v      | done claim contradicted by this turn's tool results (records findings by default; blocks only with `ATLAS_DONE_CLAIM=block`) |
 
 The gate checks the work itself before it asks for paperwork. When (a), (b),
 (g), (k), (m) or (o) would block, it re-runs the session's last plain test
@@ -555,31 +555,37 @@ judgment:
    suite, and a push or CI result claimed with no matching tool call all count
    as unsupported. Counts are checked only against test-run output of the turn;
    a push needs a `git push` command with ref-update output; CI needs a `gh`
-   run, api, workflow or pr call or a CI tool; "0 failed" is not a hedge. `ATLAS_DONE_CLAIM=auto|block|shadow|off` (default `auto`): `auto`
-   blocks only a claim with a transcript finding of a kind in `BLOCKING_KINDS`
-   (dev-split precision 0.95 or better) and records a text-only claim, or the
-   advisory `count_no_test_run` finding, as `decision.verify.block-would`;
-   `block` blocks once per turn (the continuation Stop passes, so it cannot
-   loop); `shadow` only records `decision.verify.block-would`. The decision model
+   run, api, workflow or pr call or a CI tool; "0 failed" is not a hedge. Counts
+   count as evidence only from test, CI or report output; the opaque flag comes
+   only from agent reports; a push or ls-remote must show the claimed sha or ref;
+   the CI verdict uses the latest status per workflow. `ATLAS_DONE_CLAIM=auto|block|shadow|off`
+   (default `auto`): `auto` records findings (the finding kinds, the text-only
+   prediction and the advisory `count_no_test_run` finding) as
+   `decision.verify.block-would` and never blocks, because `BLOCKING_KINDS` is
+   empty: no finding kind passes the tier rule (Amendment 1: group-level Wilson
+   bound, seeded-only support cannot promote a kind, cross-validation stability).
+   `block` blocks once per turn on a transcript finding or a text-only claim (the
+   continuation Stop passes, so it cannot loop); `shadow` only records
+   `decision.verify.block-would`. The decision model
    (`prompt_decision.verify_reply`) is an optional second opinion in block mode:
    it can clear a text-only block when it is at least 0.8 sure the reply quotes
    an observed result, it never adds a block, and it never clears a block that
-   rests on a transcript finding. `block` blocks both kinds. `ATLAS_DECISION_VERIFY` still works as an
+   rests on a transcript finding. `ATLAS_DECISION_VERIFY` still works as an
    alias. Counters `decision.verify.{block,block-would,cleared,pass,skip}`.
    Measured on `hooks/done_claim_corpus.jsonl` (182 rows: 131 real final replies
    from this machine's tech-tools and bench transcripts, 51 seeded; labels by
-   two models plus one adjudication pass, not human ground truth, kappa 0.767),
-   split by source transcript and seed template (109 dev, 73 test). Test split,
-   unsupported_done label metrics: precision 0.889, recall 1.000 (n=73). Blocking
-   path (the `--eval` "blocking path (findings)" rows): real rows n=131 TP 1 FP 0 FN 2
-   (precision 1.000, recall 0.333); seeded rows n=51 TP 31 FP 0 FN 10; all rows n=182
-   TP 32 FP 0 FN 12 (precision 1.000, recall 0.727). Only 3 real unsupported claims
-   exist in the corpus, so real-world recall is measured on n=3, and 31 of the 32
-   blocking true positives are seeded rows built from the detector's own rule kinds.
-   Text-only predictions (all rows: precision 0.913, recall 0.477) are not precise
-   enough to block, so they stay in shadow. `python3 hooks/done_claim.py --eval [--split test]` reprints the
-   numbers; `hooks/done_claim_rubric.md` is the label rubric. Hook cost: `analyze()` p95
-   1.40 ms, added hook latency (transcript tail parse plus analyze) p95 2.26 ms.
+   two models plus one adjudication pass, not human ground truth, kappa 0.767).
+   Blocking path on that corpus: 32 TP, 0 FP, 12 FN before the round-5 tier rule
+   (17.25.0, two kinds blocked, both supported only by seeded rows); 0 TP, 0 FP,
+   44 FN after (nothing blocks by default). Held-out score, scored once after the
+   freeze (`docs/audits/2026-11-16_atlas-round5-fresh-score.json`): 162 rows, 156
+   gold negatives, 6 gold positives. Default path: 0 false blocks, Wilson upper
+   bound 0.024. With every kind blocking (`block` behavior): 20 of 156 genuine
+   claims would block (0.128, Wilson 0.085 to 0.190) and 1 of 6 false claims is
+   caught; `ci_unbacked` causes 11 of the 20. Only 6 positives exist, so recall is
+   not measurable. `python3 hooks/done_claim.py --eval [--split test]` reprints the
+   corpus numbers; `hooks/done_claim_rubric.md` is the label rubric. Audit:
+   [2026-11-16_atlas-round5.md](../../docs/audits/2026-11-16_atlas-round5.md).
 2. Which team, at what cost. `scripts/atlas_resolve.py <class> <effort>` reads
    `contracts/scope-matrix.json` and returns the roles, counts, model tier,
    effort and isolation for the task. It is deterministic: the same input gives
@@ -1533,7 +1539,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.25.0
+|-- .claude-plugin/plugin.json   manifest, version 17.26.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1562,7 +1568,7 @@ atlas/
 
 ## Release notes and license
 
-Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.25.0 reworks the mods: idle health with persisted history, a status tab with ACTIVITY, GATES, HOOKS and RUNS widgets, one metric source, fixed band geometry, clickable chips, all six tabs at 110 columns and a narrow idle strip ([audit](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). 17.24.0 adds the deterministic done-claim gate, git worktree isolation for overlapping workers, a verifier claim-evidence rule, a stock Ollama chat protocol and a history benchmark harness ([audit](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
+Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.26.0 hardens the done-claim detector after two outside critiques and stops blocking by default: `BLOCKING_KINDS` is empty and `ATLAS_DONE_CLAIM=block` enforces ([audit](../../docs/audits/2026-11-16_atlas-round5.md)). 17.25.0 reworks the mods: idle health with persisted history, a status tab with ACTIVITY, GATES, HOOKS and RUNS widgets, one metric source, fixed band geometry, clickable chips, all six tabs at 110 columns and a narrow idle strip ([audit](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). 17.24.0 adds the deterministic done-claim gate, git worktree isolation for overlapping workers, a verifier claim-evidence rule, a stock Ollama chat protocol and a history benchmark harness ([audit](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
 for 16.0.0:
 [docs/audits/2026-10-27_atlas-16.0.0-evidence.md](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md).
 

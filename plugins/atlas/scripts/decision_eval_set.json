@@ -1,0 +1,245 @@
+{
+ "mined": 25,
+ "pool": 25,
+ "rows": [
+  {
+   "id": "dp-001",
+   "prompt": "Implement every module in kit/ per SPEC.md so that `python3 -m pytest -q` passes in this directory. Do not modify the tests. Work until the whole suite passes.",
+   "src": "232e1914",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "implement"
+   }
+  },
+  {
+   "id": "dp-002",
+   "prompt": "Write unit tests for the parser module",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "test",
+    "opus-router": "test"
+   }
+  },
+  {
+   "id": "dp-003",
+   "prompt": "Which is better for us, Postgres or SQLite? We need to decide, costly to reverse",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "audit",
+    "opus-router": "audit"
+   }
+  },
+  {
+   "id": "dp-004",
+   "prompt": "Make the parse function 2x faster, measure it",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "implement"
+   }
+  },
+  {
+   "id": "dp-005",
+   "prompt": "I have an idea for a habit tracking app, help me shape it",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "implement"
+   }
+  },
+  {
+   "id": "dp-006",
+   "prompt": "Review my PR before I merge it",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "audit",
+    "opus-router": "audit"
+   }
+  },
+  {
+   "adjudicated": true,
+   "id": "dp-007",
+   "label": "implement",
+   "prompt": "Remediate the SMB1 setting on all endpoints via an RMM script",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "fix"
+   }
+  },
+  {
+   "id": "dp-008",
+   "prompt": "CI is failing on my PR, watch it and fix it",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "fix",
+    "opus-router": "fix"
+   }
+  },
+  {
+   "id": "dp-009",
+   "prompt": "Audit our Postgres database schema and privileges",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "db-audit",
+    "opus-router": "db-audit"
+   }
+  },
+  {
+   "id": "dp-010",
+   "prompt": "Do a full UX pass on the whole web app with personas",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "ui-test",
+    "opus-router": "ui-test"
+   }
+  },
+  {
+   "adjudicated": true,
+   "id": "dp-011",
+   "label": "audit",
+   "prompt": "There's a bug: parse('a,,b') returns wrong output, find the root cause",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "fix",
+    "opus-router": "audit"
+   }
+  },
+  {
+   "id": "dp-012",
+   "prompt": "Write unit tests for the parser module in src/parser.py",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "test",
+    "opus-router": "test"
+   }
+  },
+  {
+   "id": "dp-013",
+   "prompt": "Commit my work",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "implement"
+   }
+  },
+  {
+   "id": "dp-014",
+   "prompt": "Address the review comments on my PR",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "fix"
+   }
+  },
+  {
+   "id": "dp-015",
+   "prompt": "Explain how authentication works in this codebase",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "audit",
+    "opus-router": "audit"
+   }
+  },
+  {
+   "id": "dp-016",
+   "prompt": "Write a README for this repo",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "docs",
+    "opus-router": "docs"
+   }
+  },
+  {
+   "id": "dp-017",
+   "prompt": "Rewrite this prompt to be clearer: make the app good and fast",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "docs",
+    "opus-router": "docs"
+   }
+  },
+  {
+   "id": "dp-018",
+   "prompt": "I'm done with this change, ship it (commit locally)",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "verify",
+    "opus-router": "verify"
+   }
+  },
+  {
+   "id": "dp-019",
+   "prompt": "Generate a README for this repo",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "docs",
+    "opus-router": "docs"
+   }
+  },
+  {
+   "id": "dp-020",
+   "prompt": "Generate a .gitignore for a Python project with secrets excluded",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "implement"
+   }
+  },
+  {
+   "id": "dp-021",
+   "prompt": "Refactor src/parser.py to use a class",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "implement"
+   }
+  },
+  {
+   "id": "dp-022",
+   "prompt": "Why does parse('a,,b') crash with a stack trace? Debug it",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "fix",
+    "opus-router": "fix"
+   }
+  },
+  {
+   "id": "dp-023",
+   "prompt": "Build a settings page UI using shadcn and Tailwind",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "implement",
+    "opus-router": "implement"
+   }
+  },
+  {
+   "id": "dp-024",
+   "prompt": "Triage the dependabot alerts on this repo",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "audit",
+    "opus-router": "audit"
+   }
+  },
+  {
+   "id": "dp-025",
+   "prompt": "Write a session handoff so I can resume tomorrow",
+   "src": "f403dc25",
+   "votes": {
+    "opus-matrix": "docs",
+    "opus-router": "docs"
+   }
+  }
+ ],
+ "seed": 20261116,
+ "stats": {
+  "duplicate": 79,
+  "probe": 21,
+  "secret": 0,
+  "templated_or_brief": 744,
+  "tuning_overlap": 0,
+  "user_messages": 869
+ },
+ "target": 150
+}

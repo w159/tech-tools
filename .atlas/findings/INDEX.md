@@ -64,6 +64,8 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-16 | t808b87de-critics2 | verified | round 5 second critic round: 4/10 and 4/10, open defects listed in round-5 audit | [2026-11-16_t808b87de-critics2.md](2026-11-16_t808b87de-critics2.md) |
+| 2026-11-16 | t558873b1 | verified | round-5 critics (sonnet 4/10, opus 3/10) run; findings checked against code | [2026-11-16_t558873b1.md](2026-11-16_t558873b1.md) |
 | 2026-11-15 | tc0aee6c7 | verified | atlas 17.24.0 HEAD release-ready; doc figures match code output | [2026-11-15_tc0aee6c7.md](2026-11-15_tc0aee6c7.md) |
 | 2026-11-14 | tele-6 | verified | worker sessions record no session/active.day keys | [2026-11-14_tele-6.md](2026-11-14_tele-6.md) |
 | 2026-11-14 | tele-5 | verified | _notice_shown True with ATLAS_ANALYTICS=on; send --auto exits 2 w/o notice | [2026-11-14_tele-5.md](2026-11-14_tele-5.md) |
