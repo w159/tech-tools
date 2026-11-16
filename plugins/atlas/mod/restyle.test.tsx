@@ -127,12 +127,13 @@ test('non-atlas tool rows keep the engine drawing', () => {
 test('header line is drawn styled in place with the body kept', () => {
   const first = 'ATLAS | 🔧 implement 3/5 | shipping restyle'
   const text = stringsOf(assistantTree(snap(), { text: `${first}\n\nBody text here.`, isFirstOfReply: true }))
-  expect(text).not.toContain('ATLAS') // the lead header does not repeat the brand (critique 23)
+  expect(text).toContain('ATLAS') // the lead header is branded `ATLAS <glyph> <phase> | <state>` (17.27.1)
+  expect(text).toContain('🔧')
   expect(text).toContain('implement')
   expect(text).toContain('3/5')
   expect(text).toContain('shipping restyle')
   expect(text).toContain('Body text here.')
-  expect(text).not.toContain('|')
+  expect(text).not.toContain('ATLAS |') // the raw contract form is not shown; the chip's own ` | ` separator is
 })
 
 type Pill = { props: Record<string, unknown>; children: string[] }
@@ -147,7 +148,7 @@ test('critique 15 C1: at 110 the ATLAS and phase chips never shrink, whatever th
   for (const cols of [66, 110, 150]) {
     const kids = rawKids(long, cols)
     expect([cols, kids.slice(0, 2).map((k) => [(k as { type: string }).type, (k as { props: Record<string, unknown> }).props.flexShrink])]).toEqual([cols, [['Box', 0], ['Box', 0]]])
-    expect(pillsOf(long, cols).slice(0, 2).map((p) => p.children[0])).toEqual(['▌', ' research'])
+    expect(pillsOf(long, cols).slice(0, 2).map((p) => p.children[0])).toEqual(['▌', ' ATLAS 🔍 research'])
   }
 })
 
@@ -155,11 +156,11 @@ test('critique 23: the lead header has no fill and no pastel: a bar in the phase
   const [bar, word, ...rest] = pillsOf('ATLAS | 🔧 implement 3/5 | shipping restyle', 120)
   expect(bar!.children[0]).toBe('▌')
   expect(bar!.props.color).toBe('#af87ff') // 141, the one lavender
-  expect(word!.children[0]).toBe(' implement')
-  expect(word!.props).toMatchObject({ color: '#d0d0d0', bold: true }) // 252
-  expect(rest.map((p) => p.children[0]).join('')).toBe(' 3/5 shipping restyle')
+  expect(word!.children[0]).toBe(' ATLAS 🔧 implement')
+  expect(word!.props).toMatchObject({ color: '#af87ff', bold: true }) // the whole line takes the phase colour (17.27.1)
+  expect(rest.map((p) => p.children[0]).join('')).toBe(' 3/5 | shipping restyle')
   for (const p of [bar!, word!, ...rest]) expect(p.props.backgroundColor).toBeUndefined()
-  expect(rest.at(-1)!.props.color).toBe('#8a8a8a') // 245
+  expect(rest.at(-1)!.props.color).toBe('#af87ff') // the state is in the phase colour too
   expect(pillsOf('ATLAS | 🏁 done | all finished', 120)[0]!.props.color).toBe('#87d787') // 114
   expect(pillsOf('ATLAS | ⛔ blocked | stuck', 120)[0]!.props.color).toBe('#ff5f5f') // 203: blocked is the error colour (critique 25: one bar colour per state)
 })
@@ -172,11 +173,11 @@ test("critique 14 B2: the lead's sentence is never cut inside the chip; it wraps
   expect(line).toContain(sentence)
   expect(line).not.toContain('…')
   const tail = kids.at(-1)!
-  expect(tail.children[0]).toBe(` ${sentence}`)
+  expect(tail.children[0]).toBe(` | ${sentence}`)
   expect(tail.props.wrap).toBe('wrap') // a wrapping Text in a row shrinks and hangs under itself; truncate-end cut it
   const long = pillsOf(`ATLAS | 🔧 implement 3/5 | ${'word '.repeat(40).trim()}`, 60)
   expect(stringsOf({ type: 'Box', props: {}, children: long })).not.toContain('…')
-  expect(line).not.toContain('|')
+  expect(line).not.toContain('ATLAS |')
   expect(pillsOf('ATLAS | ✅ verify | started', 39)).toHaveLength(2)
 })
 

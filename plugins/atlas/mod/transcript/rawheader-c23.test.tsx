@@ -27,7 +27,7 @@ const pattern = (contract as { headerFirstLinePattern: string }).headerFirstLine
 const snap = { contract: { headerFirstLinePattern: pattern } } as unknown as AtlasSnapshot
 type El = { children?: unknown }
 const flat = (n: unknown): string => (typeof n === 'string' ? n : n && typeof n === 'object' ? ((n as El).children as unknown[] ?? []).map(flat).join('') : '')
-const RAW = /ATLAS \||[\u{1F300}-\u{1FAFF}⛔✅]/u
+const RAW = /ATLAS \|/u // the contract form's pipe right after the brand; the display form is `ATLAS <glyph> <phase> | <state>` (17.27.1)
 
 // live-110-513bb41c-1 f0062-f0064: the first flush holds the header and the first paragraphs; later flushes the rest of the body.
 const STREAM: Flush[] = [
@@ -47,16 +47,16 @@ test('C23: every batch of the streamed reply leaves MessageDisplay without the p
   const out: string[] = []
   for (const f of STREAM) out.push(await shown(f))
   expect(out.filter((d) => RAW.test(d))).toEqual([])
-  expect(out[0]).toBe('research · 0/3 explorers returned\n\nThe three atlas:explorer agents (alpha, beta, gamma) are\nrunning in the background.\n')
+  expect(out[0]).toBe('ATLAS 🔍 research | 0/3 explorers returned\n\nThe three atlas:explorer agents (alpha, beta, gamma) are\nrunning in the background.\n')
   expect(out[1]).toBe(STREAM[1]!.delta)
   expect(out[2]).toBe('')
 })
 
 test('C23: a reply that is the header alone (first and final flush at once) is rewritten too', async () => {
   const shown = display()
-  expect(await shown(DONE_ONLY)).toBe('done · all finished')
+  expect(await shown(DONE_ONLY)).toBe('ATLAS 🏁 done | all finished')
   expect(RAW.test(await shown({ index: 0, final: true, delta: 'ATLAS | 🔍 research 3/5 | 3/5 dispatched' }))).toBe(false)
-  expect(await shown({ index: 0, final: true, delta: 'ATLAS | 🔍 research 3/5 | 3/5 dispatched' })).toBe('research 3/5 · 3/5 dispatched')
+  expect(await shown({ index: 0, final: true, delta: 'ATLAS | 🔍 research 3/5 | 3/5 dispatched' })).toBe('ATLAS 🔍 research 3/5 | 3/5 dispatched')
 })
 
 test('C23: prose, a later batch, ATLAS_MOD=off and an unknown phase are left exactly as the host has them', async () => {
@@ -72,7 +72,7 @@ test('C23: prose, a later batch, ATLAS_MOD=off and an unknown phase are left exa
 
 test("C23: another plugin's rewrite of the batch is the source, not the raw delta", async () => {
   const shown = display()
-  expect(await shown({ index: 0, final: true, delta: 'x' }, { displayContent: 'ATLAS | 🏁 done | other' })).toBe('done · other')
+  expect(await shown({ index: 0, final: true, delta: 'x' }, { displayContent: 'ATLAS | 🏁 done | other' })).toBe('ATLAS 🏁 done | other')
 })
 
 test('C23: the transcript draws the same chip from the display form the host may hand back as the message text, and from the contract form', () => {
@@ -92,6 +92,7 @@ test('C23: with no pattern the display form is still a header and the contract f
   forgetHeaderPattern()
   try {
     expect(leadOf('▌ done · all finished', '')?.phase).toBe('done')
+    expect(leadOf('ATLAS 🏁 done | all finished', '')?.phase).toBe('done')
     expect(leadOf('ATLAS | 🏁 done | all finished', '')).toBeNull()
   } finally {
     noteHeaderPattern(HEADER_FIRST_LINE_PATTERN) // the pattern is module state: restore the bundled one so a later file (rawheader-c22) does not see an empty pattern
@@ -101,7 +102,7 @@ test('C23: with no pattern the display form is still a header and the contract f
 test('a phase-first header (`ATLAS | done 🏁 | ...`) parses like the glyph-first one, whole and streaming', () => {
   expect(leadOf('ATLAS | done 🏁 | all finished', pattern)?.phase).toBe('done')
   expect(leadOf('ATLAS | implement 🔧 3/5 | working', pattern)?.count).toBe('3/5')
-  expect(displayDelta('ATLAS | done 🏁 | all finished\nbody', pattern)).toBe('done · all finished\nbody')
+  expect(displayDelta('ATLAS | done 🏁 | all finished\nbody', pattern)).toBe('ATLAS 🏁 done | all finished\nbody')
   const ui = { theme: 'mocha', ascii: false, color: 'none' } as const
   expect(flat(partialLead('ATLAS | done 🏁', ui)!)).toBe(flat(partialLead('ATLAS | 🏁 done', ui)!))
   expect(flat(partialLead('ATLAS | done 🏁', ui)!)).toContain('done')

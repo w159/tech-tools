@@ -443,7 +443,7 @@ export function registerRestyle(on: On): void {
   try {
    await primeEnv($, cache)
    if (cache.envOff || e.index !== 0) return base
-   const shown = displayDelta(base?.displayContent ?? e.delta, headerPattern)
+   const shown = displayDelta(base?.displayContent ?? e.delta, headerPattern, uiFromEnv().ascii)
    return shown === null ? base : { ...base, displayContent: shown }
   } catch { return base }
  })

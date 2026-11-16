@@ -17,16 +17,18 @@ import { runHex, stateRun, type Ui } from '../atlas-ui'
 export interface Lead { phase: PhaseId; count: string; sentence: string; first: string; form: 'contract' | 'display' }
 
 const PHASE_ALT = PHASES.join('|')
+/** operating-contract.json `phases[].glyph`, inline because the host loader refuses a .json import from a mod module (mod/contract-pattern.ts); header-brand.test.tsx reads the JSON to keep this equal. */
+const PHASE_GLYPH: Record<PhaseId, string> = { research: '🔍', theory: '💡', test: '🧪', validate: '📋', implement: '🔧', verify: '✅', done: '🏁', blocked: '⛔' }
 const PHASE_IN_LINE = new RegExp(`\\b(${PHASE_ALT})\\b`)
 /** The display form: `research 3/5 · state`, which the host paints after its own `●` bullet. The bar form `▌ research 3/5 · state` (what an earlier build wrote) is still read; the form with no bar needs the
  * count or the ` · ` so that a plain first line that is only a phase word (`done`) is no header. */
-const DISPLAY_RE = new RegExp(`^(?:▌ (${PHASE_ALT})(?: (\\d+/\\d+))?(?: · (.*))?|(${PHASE_ALT})(?: (\\d+/\\d+)(?: · (.*))?| · (.*)))$`)
+const DISPLAY_RE = new RegExp(`^(?:▌ (${PHASE_ALT})(?: (\\d+/\\d+))?(?: · (.*))?|(${PHASE_ALT})(?: (\\d+/\\d+)(?: · (.*))?| · (.*))|ATLAS (?:\\S+ )?(${PHASE_ALT})(?: (\\d+/\\d+))?(?: \\| (.*))?)$`)
 
 /** The header the first line of `text` pins, in either form; null when the first line is neither. `pattern` is the contract's `headerFirstLinePattern`. */
 export function leadOf(text: string, pattern: string): Lead | null {
   const first = text.split('\n', 1)[0] ?? ''
   const shown = DISPLAY_RE.exec(first)
-  if (shown) return { phase: (shown[1] ?? shown[4]) as PhaseId, count: shown[2] ?? shown[5] ?? '', sentence: (shown[3] ?? shown[6] ?? shown[7] ?? '').trim(), first, form: 'display' }
+  if (shown) return { phase: (shown[1] ?? shown[4] ?? shown[8]) as PhaseId, count: shown[2] ?? shown[5] ?? shown[9] ?? '', sentence: (shown[3] ?? shown[6] ?? shown[7] ?? shown[10] ?? '').trim(), first, form: 'display' }
   if (pattern === '') return null
   let re: RegExp
   try { re = new RegExp(pattern) } catch { return null }
@@ -39,14 +41,14 @@ export function leadOf(text: string, pattern: string): Lead | null {
 
 /** `research 3/5 · state`: the header as the host's own streaming row shows it (plain text: that row takes no colour). The host draws its own `●` before the row, so the line carries no bar of its own:
  * `● ▌ research · waiting on 3 explorers` put two marks on one line (critique 27, live-150-46d4825c-1 f0065:23). */
-export const displayLine = (l: Lead): string => `${l.phase}${l.count ? ` ${l.count}` : ''}${l.sentence ? ` · ${l.sentence}` : ''}`
+export const displayLine = (l: Lead, ascii = false): string => `ATLAS ${ascii ? '' : `${PHASE_GLYPH[l.phase]} `}${l.phase}${l.count ? ` ${l.count}` : ''}${l.sentence ? ` | ${l.sentence}` : ''}`
 
 /** A MessageDisplay batch with its first line rewritten from the contract form to the display form; null when the batch holds no header (or already the display form). */
-export function displayDelta(delta: string, pattern: string): string | null {
+export function displayDelta(delta: string, pattern: string, ascii = false): string | null {
   const nl = delta.indexOf('\n')
   const first = nl < 0 ? delta : delta.slice(0, nl)
   const lead = leadOf(first, pattern)
-  return lead && lead.form === 'contract' ? displayLine(lead) + (nl < 0 ? '' : delta.slice(nl)) : null
+  return lead && lead.form === 'contract' ? displayLine(lead, ascii) + (nl < 0 ? '' : delta.slice(nl)) : null
 }
 
 // ---- the chip -------------------------------------------------------------------------------------------------------------
@@ -88,6 +90,14 @@ export function leadRow(l: Lead, o: LeadOpts): RenderElement {
     return { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: [keep(txt({ ...fixed, ...paint(v.tone) }, '▌')), ...glyph, keep(txt({ ...fixed, ...paint(v.phase === 'blocked' ? 'bad' : 'text'), bold: true }, ` ${v.phase}`)), ...(o.columns > 0 && o.columns < 40 ? [] : [txt({ wrap: 'wrap', ...paint(v.tone) }, ` · ${v.text}`)])] }
   }
   const bar = txt({ ...fixed, ...paint(dead || o.quiet ? 'sub' : progress ? 'accent' : leadTone(l.phase)) }, '▌')
+  // The live line is branded `ATLAS <glyph> <phase> | <state>` and painted whole in the phase colour (the bar's own tone); quiet and superseded chips keep their plain look.
+  if (!dead && !o.quiet) {
+    const line = paint(progress ? 'accent' : leadTone(l.phase))
+    const glyph = o.ui.ascii ? '' : ` ${PHASE_GLYPH[l.phase]}`
+    const head = keep(txt({ ...fixed, ...line, bold: true }, ` ATLAS${glyph} ${progress ? 'working' : l.phase}`))
+    const tail = o.columns > 0 && o.columns < 40 ? [] : [...(l.count ? [keep(txt({ ...fixed, ...line }, ` ${l.count}`))] : []), ...(l.sentence ? [txt({ wrap: 'wrap', ...line }, ` | ${l.sentence}`)] : [])]
+    return { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: [keep(bar), head, ...tail] }
+  }
   const word = txt({ ...fixed, ...paint(dead ? 'dim' : 'text'), bold: !dead, ...(dead ? { strikethrough: true } : {}) }, ` ${progress ? 'working' : l.phase}`)
   const count = l.count ? [txt({ ...fixed, ...paint('sub') }, ` ${l.count}`)] : []
   const state = l.sentence ? [txt({ wrap: 'wrap', ...paint('sub') }, ` ${l.sentence}`)] : []

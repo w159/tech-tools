@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { coreMatrix } from '../contracts/core-fixture';
-import { buildCore, coreTick, headerTallyOf, register, resetCore } from './register';
+import { buildCore, coreTick, headerTallyOf, register, resetCore, resetSessionStart } from './register';
 import { memState } from './test_helpers';
 import { withHeaderTally } from './data/runstate';
 import { forgetDrawnHeaders } from './restyle';
@@ -68,6 +68,7 @@ function stubEngine() {
 async function session(sound: boolean) {
   const cap = captureOn();
   resetCore();
+  resetSessionStart(); // register-edges.test.ts fires session.start with a far-future clock; it must not drop this file's dated verdicts
   await register(cap.on, { atlas_mod_sound: sound });
   return { ...cap, ...stubEngine() };
 }

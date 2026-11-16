@@ -1,5 +1,10 @@
 # Changelog
 
+## atlas 17.27.1 - 2026-11-16
+
+- atlas 17.27.1: the transcript's reply header line is branded again as `ATLAS <glyph> <phase> [n/m] | <state>`, in the phase colour when it is drawn as a chip and as plain text while a reply streams (`leadRow`, `displayDelta` in `mod/transcript/leadheader.ts`). The mod's session clock is reset between test files (`resetSessionStart`), which fixes three order-dependent `register-core` tests.
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
 ## atlas 17.27.0 - 2026-11-16
 
 - atlas 17.27.0: five fixes from a review of six local 17.26.0 sessions. The Stop gate no longer re-runs heredoc body lines as the session's test command (`gate_rerun._drop_heredoc_bodies`). Shell calls that only run `atlas_todo.py` or `atlas_finding.py` no longer count as inline ops. The recall gate on Claude Code allows the first call with a one-time reminder instead of denying it (`ATLAS_RECALL_GATE=deny` restores the denial; omp still denies). A code-shipping prompt writes plan rows to the board at once (`plan_upfront`, `ATLAS_PLAN_UPFRONT=off`). The core ledger counts only findings verified since the session started (`CoreInput.since`, passed by the core tab and the omp panel). The crew summary and the core tab report dollars only for a worker billed per token (init event `apiKeySource` other than `none`); a plan login reports tokens with `cost_usd` null and `billing: plan`. The mod shows the host's session cost only when the status line reports a per-token login (`billing: api` in `statusline-rows.json`); a plan login or an unknown billing shows no dollar figure. On macOS, which has no `/proc`, the crew (`_proc_state`, `_read_argv` through `_ps_field`) and the warm lead (`proc_state`, `proc_usage`) now read process state, command lines and usage with `ps`, and the crew tests run there without skips. Marketplace 5.32.0.

@@ -145,9 +145,10 @@ describe('truth29 item 6: a returned worker is drawn with the neutral glyph and 
 describe('truth29 item 7: one case and one mark on the lead header line', () => {
   // live-150-46d4825c-1 f0065:23 `● ▌ research · waiting on 3 explorers` and, elsewhere, `▌ RESEARCH working`.
   const lead = leadOf('ATLAS | 🔍 research 1/3 | waiting on 3 explorers', '^(?:● )?ATLAS \\|')!;
-  test('the host-drawn line carries no bar of ours and no capitals', () => {
+  test('the host-drawn line carries the brand and glyph, no bar of ours and no capitals', () => {
     const line = displayLine(lead);
-    expect(line).toBe('research 1/3 · waiting on 3 explorers');
+    expect(line).toBe('ATLAS 🔍 research 1/3 | waiting on 3 explorers');
+    expect(displayLine(lead, true)).toBe('ATLAS research 1/3 | waiting on 3 explorers');
     expect(line).not.toContain('▌');
   });
   test('the display form is read back with or without a bar, and a bare phase word is no header', () => {

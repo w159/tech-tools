@@ -1,4 +1,8 @@
 # Changelog
+## 17.27.1 - 2026-11-16
+### Fixed
+- `mod/transcript/leadheader.ts`: the lead's header chip (`leadRow`) drew only a phase-coloured bar, the phase word in body text and the state in grey, so the reply header showed no `ATLAS` brand, no glyph and no line colour. It now draws `ATLAS <glyph> <phase> [n/m] | <state>` with every run in the phase colour (accent, done green, blocked red); NO_COLOR keeps the full text with no colour, ASCII mode drops the glyph, under 40 columns only the brand, glyph and phase remain. Quiet and superseded chips are unchanged. The streaming first line that `displayDelta` writes through `MessageDisplay` now reads `ATLAS <glyph> <phase> [n/m] | <state>` too (glyph dropped in ASCII mode); the raw delta carries text only, so that line has no colour. Test: `mod/transcript/header-brand.test.tsx`.
+- `mod/register.ts`: new `resetSessionStart()` test reset; `mod/register-core.test.ts` calls it beside `resetCore()`. `sessionStartMs` is module state that `register-edges.test.ts` set to a far-future clock, so `buildCore` dropped the dated fixture verdicts in `register-core.test.ts` and three tests failed depending on file order.
 
 ## 17.27.0 - 2026-11-16
 

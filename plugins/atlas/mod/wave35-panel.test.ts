@@ -131,7 +131,7 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
 
   test('one finish line per run: with the run card placed, the lead\'s bare `done 5/5` chip draws no second row', async () => {
     forgetPlaced();
-    expect(flatEl(chip(clean(NOW), 'done 5/5'))).toMatch(/^▌ done 5\/5/); // no card yet: the chip is the finish line
+    expect(flatEl(chip(clean(NOW), 'done 5/5'))).toMatch(/^▌ ATLAS 🏁 done 5\/5/); // no card yet: the chip is the finish line
     const ids: string[] = [];
     await placeFinished(engine(ids), running(NOW - 1000), clean(NOW));
     expect(runCardPlaced()).toBe(true);

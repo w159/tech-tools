@@ -438,6 +438,8 @@ export { fitHudToBand, hudGapRows, hudSlotCap, slotHold } from './slot';
 /** The module's hold across renders: a pure function of the run, reset when no run is on. Test seam: `resetSlotHold`. */
 let slotHeld = 0;
 export const resetSlotHold = (): void => { slotHeld = 0; };
+/** Test reset for the session clock. Not part of resetCore(): the product calls resetCore() after session.start has set it. */
+export const resetSessionStart = (): void => { sessionStartMs = null; };
 
 /** Rows below the AbovePrompt slot in the inline renderer: prompt box (3), the status line (its reported rows, 5 when unknown), mode line and a blank (2), the blank row Claude Code draws between the content and the prompt's top rule (1), and Claude Code's own agent list ("main" plus one row per running agent). */
 export function inlineBelowRows(statusRows: number | null, running: number): number {
