@@ -43,9 +43,9 @@
     },
     "panos": {
       "package": "mcp_servers/panos-mcp",
-      "source_sha256": "b8cae3cb68797699d44a7a007d94ed656d89c542ec749bf7595f47a0db283209",
-      "bundle_sha256": "9a80ed4752e0434b165fadcd869fdb8b5a5f7b672a58651f29ea0468fcb3d49f",
-      "bytes": 886512
+      "source_sha256": "a99ece34f78360b507ad52e21f92fda86a0f8db9101456fc23f0e39dc711bfc9",
+      "bundle_sha256": "2f62a6bc506698261894c1deac539c6e875fe08a27896f6cd9c4012950775b86",
+      "bytes": 887643
     },
     "paylocity": {
       "package": "mcp_servers/paylocity-mcp",

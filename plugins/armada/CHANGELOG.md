@@ -6,6 +6,10 @@
 
 - CI: the new armada-bundles job failed on a clean runner with "Cannot find module 'typescript'": tsup 8.5.1 requires typescript as a peer, and the toolchain only found it through a global install on the dev box. `mcp_servers/_toolchain` now pins typescript 5.9.3 (the version the connectors lock). A clean clone without NODE_PATH rebuilds byte-identical bundles. No shipped file changed.
 
+### Changed
+
+- Dependabot PR #65 bumped fast-xml-parser 5.11.2 to fast-xml-parser 5.12.0 in `mcp_node/node-panos`. The maintainer rebuilt the shipped panos MCP bundle (`plugins/armada/mcp/panos/server.mjs`, with its entry in `plugins/armada/mcp/bundles.lock.json`) with `node scripts/rebuild_armada_bundles.mjs --only panos`. Before the rebuild, the `armada-bundles` CI job and `plugins/armada/tests/test_armada_bundles.py::ArmadaBundleProvenance::test_source_hash_is_current` failed because the recorded source hash no longer matched.
+
 ## 2.4.0 - 2026-11-14
 
 ### Security
