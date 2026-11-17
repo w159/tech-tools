@@ -5230,6 +5230,32 @@ class BlockLoopCapTest(unittest.TestCase):
             ]
             self.assertEqual(got, [False] * lim)
 
+    def _loop_env(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        patcher = mock.patch.dict(os.environ, {"ATLAS_HOOKSTATE_DIR": tmp})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_new_dispatches_between_blocks_are_not_a_loop(self):
+        """Self-inflicted pattern: each Stop follows a wave of dispatches (parallel exploration team)."""
+        self._loop_env()
+        lim = completion_gate.BLOCK_LOOP_LIMIT
+        for wave in range(1, 2 * lim + 3):
+            count, exhausted = completion_gate._block_loop_state(
+                "s-wave", ["m"], True, progress=wave
+            )
+            self.assertEqual((count, exhausted), (1, False))
+
+    def test_identical_block_with_no_new_dispatch_is_still_a_loop(self):
+        self._loop_env()
+        lim = completion_gate.BLOCK_LOOP_LIMIT
+        got = [
+            completion_gate._block_loop_state("s-real", ["m"], True, progress=7)[1]
+            for _ in range(lim + 1)
+        ]
+        self.assertEqual(got, [False] * lim + [True])
+
     def test_letter_scoped_reset_only_clears_a_count_that_names_the_letter_alone(self):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)

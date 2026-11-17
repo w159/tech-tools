@@ -433,7 +433,7 @@ Produced by `behavior_state()` (plugins/atlas/scripts/atlas_control.py). Every e
 | Storage paths | `ATLAS_DB` | shell | text | `/Users/jerry/.atlas/atlas.db` | The sqlite file every hook writes to and this dashboard reads. Pointing elsewhere hides existing history. |
 | Advanced | `ATLAS_AUTONAME` | hooks | toggle ('on'/'off') | `on` | `off` makes a dispatch of an atlas agent that carries no name a denial; on, the hook names it for you. |
 | Advanced | `ATLAS_BUILTIN_AGENT_NUDGE` | hooks | toggle ('on'/'off') | `on` | `off` stops the dispatch check that denies a built-in agent type where an atlas agent should be used. |
-| Advanced | `ATLAS_BURST_SECS` | hooks | number 0-600 | `10` | Seconds within which back-to-back dispatches trigger the burst advisory. 0 silences it. |
+| Advanced | `ATLAS_BURST_SECS` | hooks | number 0-600 | `30` | Seconds within which back-to-back dispatches trigger the burst advisory. 0 silences it. |
 | Advanced | `ATLAS_CHANNELS` | hooks | toggle ('on'/'off') | `on` | `off` stops atlas steering subagent dispatches onto a colony channel. |
 | Advanced | `ATLAS_COLONY` | hooks | toggle ('on'/'off') | `on` | `off` skips starting the herdr colony when a session begins. |
 | Advanced | `ATLAS_COLONY_LIVE_WINDOW` | hooks | number 0-86400 | `1800` | Seconds an agent counts as live in the colony roster after its last activity. |

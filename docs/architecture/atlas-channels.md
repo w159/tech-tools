@@ -151,7 +151,7 @@ atlas_mux.py reap --team T [--json]
 - `ATLAS_SCOPE_GATE=off` downgrades the deny to an `[atlas] ADVISORY (ATLAS_SCOPE_GATE=off)` note.
 - A broken resolver fails open and records an `atlas_faults` entry.
 - Since 12.3.0 the deny tier runs on every turn, not only the first, and a missing SCOPE denies before the first-offense spec advisory is emitted.
-- Burst advisory: a 2nd `atlas:*` dispatch within `ATLAS_BURST_SECS` (default 10) of the previous one adds an advisory to run the team with spawn-team, wait and reap. `ATLAS_BURST_SECS=0` silences it.
+- Burst advisory: a 2nd `atlas:*` dispatch within `ATLAS_BURST_SECS` (default 30) of the previous one adds an advisory to run the team with spawn-team, wait and reap. `ATLAS_BURST_SECS=0` silences it.
 
 ## omp parity notes (12.1.0)
 

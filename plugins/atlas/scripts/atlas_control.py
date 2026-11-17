@@ -430,7 +430,7 @@ _k("ATLAS_FOOTPRINT_FILES", _GR, "Inline footprint (files)", "Distinct code file
 _k("ATLAS_AUTONAME", _GR, "Name unnamed dispatches", "Give a subagent dispatch that has no name one, instead of denying it.", default="on", details="Off turns the missing-name case into a denial. Read at hooks/dispatch_tripwire_core.py:1398.")
 _k("ATLAS_BUILTIN_AGENT_NUDGE", _GR, "Nudge off built-in agents", "Advise using an atlas:* role when a dispatch picks a built-in agent type.", default="on", details="Read at hooks/dispatch_tripwire_core.py:916.")
 _k("ATLAS_SCOPE_GATE", _GR, "Enforce dispatch SCOPE", "Deny a dispatch whose SCOPE line is missing or wrong. Off downgrades it to advice.", default="on", details="Read at hooks/dispatch_tripwire_core.py:504.")
-_k("ATLAS_BURST_SECS", _GR, "Dispatch burst window (seconds)", "Window in which several dispatches count as one burst for the burst advisory. 0 or less disables the advisory.", "number", "10", details="Read at hooks/dispatch_tripwire_core.py:480; default BURST_SECS = 10.")
+_k("ATLAS_BURST_SECS", _GR, "Dispatch burst window (seconds)", "Window in which several dispatches count as one burst for the burst advisory. 0 or less disables the advisory.", "number", "30", details="Read at hooks/dispatch_tripwire_core.py:480; default BURST_SECS = 30.")
 _k("ATLAS_QUIET", _GR, "Quiet Claude Code", "Print only what needs the user: the Stop nudge speaks once and only after non-docs changes, and board acknowledgements and progress pings stay on the board.", default="on", details="Off restores the old chatter. Read at hooks/nudge.py and hooks/worker_inbox.py.")
 
 # Colony

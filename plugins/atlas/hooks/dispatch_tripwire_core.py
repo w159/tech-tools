@@ -389,7 +389,8 @@ SPAWN_TEAM_CMD = (
 )
 # Measured over 7 days: resolver invoked 0 times, SCOPE on 8 of 166 dispatches. Advice did not move it; a deny does.
 # ATLAS_BURST_SECS=0 silences the burst advisory (test suites that fire many dispatches back to back).
-BURST_SECS = 10
+# 30 s: a parallel fan-out of several explorers is emitted over several seconds of model time; 10 s split it.
+BURST_SECS = 30
 
 
 def _scope_matrix():
@@ -469,12 +470,28 @@ def _scope_problem(tinput):
     return f"DENY - {detail}. {fix}:\n  {RESOLVE_CMD}{_scope_suggestion(agent)}"
 
 
-def _burst_note(root, session):
+# A read-only role dispatched with an explicit haiku/sonnet-class `model` is cheap exploration: it may run in
+# parallel (never edits, so it cannot collide with a teammate). No `model` falls back to normal handling.
+_CHEAP_MODEL = lre(r"(?i)(?<![a-z])(?:haiku|sonnet)(?![a-z])")
+
+
+def _cheap_exploration(tinput):
+    """True for a READ_ONLY_ROLES dispatch whose `model` string names haiku or sonnet (also `claude-sonnet-5`)."""
+    return _is_read_only_role(tinput.get("subagent_type")) and bool(
+        _CHEAP_MODEL.search(str(tinput.get("model") or ""))
+    )
+
+
+def _burst_note(root, session, exempt=False, tool_use_id=None):
     """(concurrent, text) for an atlas:* dispatch inside BURST_SECS of an earlier one: that is a team, and
     teams run as tmux panes. `concurrent` is True when an earlier in-process dispatch has no PostToolUse yet
     (a foreground Agent call posts when it returns, so a sequential dispatch finds the list empty).
+    `exempt` (cheap read-only exploration): never denied, still holds a slot so PostToolUse stays balanced.
+    The slot is recorded under the dispatch's tool_use_id (`owners`) so its PostToolUse closes THAT slot, not the oldest.
     The state rides in the per-session autoname store (already flock-serialised for parallel batches)."""
     import time
+
+    tuid = str(tool_use_id or _PAYLOAD_TUID[0] or "")
 
     try:
         window = float(os.environ.get("ATLAS_BURST_SECS", BURST_SECS))
@@ -489,10 +506,16 @@ def _burst_note(root, session):
         with _name_state(root, session) as st:
             last, st["last_dispatch"] = st.get("last_dispatch", 0), now
             live = [t for t in st.get("open", []) if now - float(t) < window]
-            concurrent = bool(live) and not _omp_harness()
+            concurrent = bool(live) and not _omp_harness() and not exempt
             # a denied dispatch never ran: it must not hold the slot
             st["open"] = live if concurrent else live + [now]
             st["slot"] = None if concurrent else now
+            if tuid and not concurrent:
+                owners = dict(st.get("owners") or {})
+                owners[tuid] = now
+                st["owners"] = dict(list(owners.items())[-64:])  # bounded: expired slots keep their owner entry
+            if exempt:
+                return False, ""
     except Exception as exc:
         _record_fault(exc)
         return False, ""
@@ -692,6 +715,7 @@ def _team_note(root, session, tinput, run_key, cwd=None):
                 slot = st.get("slot")
                 if slot is not None and st.get("open") and st["open"][-1] == slot:
                     st["open"].pop()  # a denied dispatch never ran: free the burst slot it took
+                    st["owners"] = {k: v for k, v in (st.get("owners") or {}).items() if v != slot}
                 st["slot"] = None
             else:
                 team["working"] = prior + 1
@@ -792,7 +816,8 @@ def _omp_harness():
 
 
 def _close_dispatch(payload):
-    """PostToolUse:Agent: the oldest open in-process dispatch of the session has returned. Fail-open."""
+    """PostToolUse:Agent: an open in-process dispatch of the session has returned; close ITS slot (found by
+    tool_use_id), or the oldest when the payload carries no id we recorded. Fail-open."""
     try:
         tin = payload.get("tool_input")
         # A background Agent posts at launch while its worker keeps running: keep its slot so the
@@ -802,7 +827,14 @@ def _close_dispatch(payload):
         cwd = payload.get("cwd")
         root = find_root(Path(cwd if isinstance(cwd, str) and cwd else os.getcwd()))
         with _name_state(root, payload.get("session_id")) as st:
-            if st.get("open"):
+            owners = dict(st.get("owners") or {})
+            tuid = str(payload.get("tool_use_id") or "")
+            if tuid in owners:
+                slot = owners.pop(tuid)
+                if slot in st.get("open", []):
+                    st["open"].remove(slot)  # its own slot; already expired by the window: nothing to free
+                st["owners"] = owners
+            elif st.get("open"):
                 st["open"].pop(0)
     except Exception as exc:
         _record_fault(exc)
@@ -821,7 +853,7 @@ def _scope_gate(deny, tinput, root, session, run_key=None, cwd=None):
         else []
     )
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
-        blocked, text = _burst_note(root, session)
+        blocked, text = _burst_note(root, session, _cheap_exploration(tinput))
         if blocked:
             deny("mux", text)
             return
@@ -2694,6 +2726,7 @@ def main():
     _normalize_codex_dispatch(payload)
     if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
         _PAYLOAD_CWD[0] = payload["cwd"]
+    _PAYLOAD_TUID[0] = payload.get("tool_use_id") if isinstance(payload, dict) else None
     if payload.get("hook_event_name") == "SubagentStart":
         _reserve_name(payload)
         return
@@ -2794,6 +2827,7 @@ def _device_args_overwrite(payload):
 
 
 _PAYLOAD_CWD = [None]
+_PAYLOAD_TUID = [None]  # tool_use_id of the payload being handled; keys the burst slot to its dispatch
 
 
 def _gates_armed(payload):

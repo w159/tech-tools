@@ -12694,5 +12694,54 @@
     "verified_at": "2026-11-17T14:48:21+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-043e88-1794926933",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py scripts/test_repo_counts.py 2>&1 | tail -2`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_144853_gate-rerun_043e88.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-17T14:48:53+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "atlas-doctor-session-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-doctor run: 3154 facets enriched, 8 open findings fixed (mux cheap-model exemption, block-loop progress reset, created_at upsert fix, judge budget+hosted endpoint), 1,610 facets re-judged by the model",
+    "evidence": [
+      "repo /Users/jerry/MEGA/Projects/Agentic/tech-tools working tree: dispatch_tripwire_core.py, completion_gate_core.py, atlas_db.py, turn_scoring.py, typesafe_client.py, atlas_control.py, CLAUDE.md, docs/CHANGELOG.md, docs/lessons/2026-11-17_a-loop-counter-needs-a-progress-signal.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && python3 -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T16:32:30+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-doctor-verification-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Adversarial verification of the atlas-doctor changes: created_at upsert fix VERIFIED (pre-fix bug reproduced against HEAD), mux exemption and block-loop progress reset VERIFIED with no NEW test failures (hooks 3277 vs 3272, same 11 pre-existing failures; scripts 349 OK); 3 defects found and handed back for repair",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_db.py upsert_facet created_at; plugins/atlas/hooks/dispatch_tripwire_core.py _cheap_exploration + BURST_SECS 30; plugins/atlas/hooks/completion_gate_core.py _block_loop_state progress reset; plugins/atlas/scripts/turn_scoring.py judge budget"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && python3 -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q && cd plugins/atlas/scripts && python3 -m unittest test_atlas_db_facet test_turn_scoring_budget",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T16:33:13+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

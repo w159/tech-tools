@@ -2104,7 +2104,9 @@ def _main() -> int:
             if missing_delegation and not _has_in_flight_dispatch(data, root):
                 # Same loop cap as an orchestrating run: the continuation is
                 # re-checked, so without it an unfixable (m) never ends.
-                count, loop_exhausted = _block_loop_state(session, ["m"], continuation)
+                count, loop_exhausted = _block_loop_state(
+                    session, ["m"], continuation, _run_dispatch_count(session)
+                )
                 if loop_exhausted:
                     _note_loop_allowed(count, ["m"])
                     return 0
@@ -2291,7 +2293,9 @@ def _main() -> int:
             _block_loop_reset(session, keep="" if _reply_has_header(data) else "n")
             _record_pass()
             return 0
-        count, loop_exhausted = _block_loop_state(session, failed, continuation)
+        count, loop_exhausted = _block_loop_state(
+            session, failed, continuation, _run_dispatch_count(session)
+        )
         if loop_exhausted:
             _note_loop_allowed(count, failed)
             return 0
@@ -2547,7 +2551,7 @@ def _print_decision(doc: dict) -> None:
 
 
 def _block_loop_state(
-    session_id: str, failed: list, continuation: bool = False
+    session_id: str, failed: list, continuation: bool = False, progress=None
 ) -> tuple[int, bool]:
     """Count the identical consecutive blocks and say when the cap is reached.
 
@@ -2561,7 +2565,12 @@ def _block_loop_state(
     State: `loop-<session>` marker holding `<letters> <count>`. Never raises;
     an unwritable marker means no cap, the lesser failure. The exhausted
     verdict is also recorded as one friction row (F4: the silent pass becomes
-    a stated one)."""
+    a stated one).
+    `progress` (the run's dispatch count) is the not-a-loop signal: when it
+    changed since the previous block the model did real work in between (a
+    wave of dispatches), so the count restarts at 1. A repeat with no new
+    dispatch is the genuine loop and keeps counting; the native 8-block cap
+    still backstops a model that dispatches on every Stop."""
     count = 1
     path = None
     state_dir = None
@@ -2588,8 +2597,18 @@ def _block_loop_state(
                 count = int(n) + 1
         except (OSError, ValueError):
             count = 1
+        if progress is not None:
+            try:
+                with open(path + ".prog", encoding="utf-8") as fh:
+                    if int(fh.read().strip()) != progress:
+                        count = 1
+            except (OSError, ValueError):
+                pass
         try:
             os.makedirs(state_dir, exist_ok=True)
+            if progress is not None:
+                with open(path + ".prog", "w", encoding="utf-8") as fh:
+                    fh.write(str(progress))
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(f"{sig} {count}")
         except OSError:
@@ -3596,6 +3615,28 @@ def _inprocess_working_dispatches(session_id: str) -> int | None:
             if _is_working_role(agent_type)
             and _role_name(agent_type) not in READ_ONLY_ROLES
         )
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _run_dispatch_count(session_id: str) -> int | None:
+    """Every `dispatches` row of THIS RUN (any role): the block-loop progress signal. None on any DB error."""
+    conn = None
+    try:
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return None
+        return conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (rid,)
+        ).fetchone()[0]
     except Exception:
         return None
     finally:

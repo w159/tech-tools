@@ -21,6 +21,7 @@ Env: ATLAS_TYPESAFE_MAX_CALLS (default 200), plus typesafe_client's.
 """
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -33,10 +34,21 @@ import atlas_db  # noqa: E402
 import session_ingest  # noqa: E402
 import typesafe_client  # noqa: E402
 
-REQUEST_CAP = 4000
-EARLIER_CAP = 800
+# Two bounds, and only the second is the wire bound:
+#  * JUDGE_BUDGET_CHARS: characters of state TEXT (request + replies + messages),
+#    before JSON. Every per-field cap below is derived from it. It says nothing
+#    about bytes sent: JSON escaping can make 20,000 chars ~112,000 bytes.
+#  * JUDGE_BODY_BUDGET_BYTES: the whole POST body (state + questions + model +
+#    JSON overhead), enforced by fit_state() for both the exchange and the facet
+#    state, over the exact bytes typesafe_client.evaluate() sends.
+JUDGE_BUDGET_CHARS = 20_000
+JUDGE_BODY_BUDGET_BYTES = typesafe_client.MAX_BODY_BYTES
 EARLIER_N = 5
-REPLY_CAP = 8000
+REQUEST_CAP = JUDGE_BUDGET_CHARS // 5  # request, and again for next_user_message
+EARLIER_CAP = JUDGE_BUDGET_CHARS // 5 // EARLIER_N  # EARLIER_N messages share one fifth
+REPLY_CAP = JUDGE_BUDGET_CHARS * 2 // 5
+if 2 * REQUEST_CAP + EARLIER_N * EARLIER_CAP + REPLY_CAP > JUDGE_BUDGET_CHARS:
+    raise RuntimeError("per-field caps exceed JUDGE_BUDGET_CHARS")
 DIGEST_CAP = 1500
 def _load_header_re():
     """The contract's headerFirstLinePattern, so `header_present` agrees with
@@ -284,6 +296,82 @@ def _tail_within(texts, cap):
     return "\n\n".join(reversed(picked))
 
 
+def _state_chars(state):
+    if "first_prompt" in state:  # facet state
+        return (
+            len(state["first_prompt"])
+            + len(state["last_reply"])
+            + sum(len(m) for m in state["last_prompts"])
+        )
+    return (
+        len(state["request"])
+        + len(state["reply"])
+        + len(state.get("next_user_message", ""))
+        + sum(len(m) for m in state["earlier_user_messages"])
+    )
+
+
+def _enforce_budget(state, budget=None):
+    """Deterministically trim `state` so its text fields total <= budget chars,
+    instead of sending a prompt the judge rejects (the caller swallows that
+    error and the turn is never scored). Sheds least-needed evidence first:
+    oldest earlier messages, the next user message's tail, the reply's head
+    (its ending survives), then the request's tail. scope_drift reads only the
+    request and reply, which are touched last."""
+    budget = JUDGE_BUDGET_CHARS if budget is None else budget
+    over = _state_chars(state) - budget
+    facet = "first_prompt" in state  # facet shape: oldest of last_prompts, then reply head, then first prompt
+    list_key = "last_prompts" if facet else "earlier_user_messages"
+    fields = (
+        (("last_reply", True), ("first_prompt", False))
+        if facet
+        else (("next_user_message", False), ("reply", True), ("request", False))
+    )
+    earlier = list(state[list_key])
+    while over > 0 and earlier:
+        over -= len(earlier.pop(0))
+    state[list_key] = earlier
+    for key, keep_tail in fields:
+        if over <= 0:
+            break
+        text = state.get(key)
+        if not text:
+            continue
+        cut = min(over, len(text))
+        state[key] = text[cut:] if keep_tail else text[: len(text) - cut]
+        over -= cut
+    return state
+
+
+def fit_state(state, questions, model=None, budget=None):
+    """Return `state` trimmed so the body typesafe_client.evaluate() will POST
+    (state + questions + model + JSON escaping) is <= budget BYTES. Works for the
+    exchange and the facet state alike. Bisects the state-text budget (body size
+    only shrinks as text is shed) and then re-measures the exact encoded bytes,
+    so the bound holds by construction, not by estimate. If the questions and
+    framing alone exceed the budget it raises 413 rather than touch the questions."""
+    budget = JUDGE_BODY_BUDGET_BYTES if budget is None else budget
+    name = typesafe_client.request_model(model)
+
+    def size(s):
+        return len(typesafe_client.encode_body(s, name, questions))
+
+    def trimmed(chars):
+        return _enforce_budget(copy.deepcopy(state), chars)
+
+    if size(state) <= budget:
+        return state
+    if size(trimmed(0)) > budget:
+        raise typesafe_client.TypeSafeError(
+            413, f"questions and framing alone are {size(trimmed(0))} bytes, over the {budget}-byte budget"
+        )
+    lo, hi = 0, _state_chars(state)  # lo fits, hi does not
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        lo, hi = (mid, hi) if size(trimmed(mid)) <= budget else (lo, mid)
+    return trimmed(lo)
+
+
 def build_exchanges(conn, session_id):
     """Exchanges for one session, oldest first. A real user prompt is a
     `messages` user row whose uuid is in `user_prompts` (ingest already drops
@@ -340,7 +428,7 @@ def build_exchanges(conn, session_id):
             {
                 "message_uuid": t["uuid"],
                 "ts": t["last_ts"],
-                "state": state,
+                "state": _enforce_budget(state),
                 "metrics": _metrics("\n".join(t["texts"]), t["texts"][-1]),
             }
         )
@@ -594,6 +682,7 @@ def score_session(
             )
 
     def call(state, questions):
+        state = fit_state(state, questions)  # the wire bound; exchange and facet share it
         summary["calls"] += 1
         if dry_run:
             summary["state_chars"] += len(str(state))
@@ -668,6 +757,7 @@ def status(conn):
     return {
         "key_present": bool(os.environ.get("TYPESAFE_API_KEY", "").strip()),
         "scoring_enabled": typesafe_client.available(),
+        "config_error": typesafe_client.missing_key_reason(),
         "rows_total": total,
         "rows_last_7d": week,
         "last_scored_at": last,
@@ -726,6 +816,9 @@ def main(argv=None):
             "scoring unavailable: set TYPESAFE_API_KEY (and not ATLAS_TYPESAFE_SCORING=off)"
         )
         return 0
+    reason = typesafe_client.missing_key_reason()
+    if reason and not args.dry_run:  # still run: evaluate() raises 401 and records scoring_error
+        print(f"scoring will fail: {reason}", file=sys.stderr)
     budget = args.max_calls if args.max_calls is not None else default_max_calls()
     totals = {
         "sessions": 0,

@@ -131,6 +131,10 @@ here; do not duplicate it.
 Beyond name, TOOLS and SCOPE above, `hooks/dispatch_tripwire_core.py` also requires: `GOAL:`, `DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (`REQUIRED_SPEC_BLOCKS` :69, deny `... is unbounded: missing <labels>`; REPORT alone is auto-injected; first offense per session is an advisory); exactly one `GOAL:` (:1342, `carries N GOAL: blocks`); numbered `STEPS:` for `atlas:runner` (:644, `must carry numbered STEPS:`); no `model` param (:1317, `overrides model with`); no built-in agent types (:1281, `uses the built-in agent`). Subagents may not dispatch (:197).
 One `GOAL:` per dispatch, written as a single sentence: `GOAL: map the auth call path from login to token refresh.` Two concerns means two dispatches, not two `GOAL:` lines; sub-steps go under `STEPS:` or the body, never as a second `GOAL:` (deny `dispatch_denied:multi_goal`).
 
+## Parallel agents (team rules)
+
+Agents work as a team. Cheap-model (haiku/sonnet) read-only agents (`atlas:explorer`, `atlas:db-prober`, dispatched with their pinned `model`) MAY dispatch in parallel to explore several files or directories quickly: the tripwire's concurrent-dispatch deny (`dispatch_denied:mux`) skips them, and the team deny (`dispatch_denied:team`) and gate (s) already do. NO agent makes multi-file edits in parallel: working roles still go through a tmux team with isolated paths, as above. The remaining denials (toolkit, name, scope, spec blocks, STEPS cap of 7 for the runner, mux for editors/opus/unpinned models, team) and the Stop-gate letters exist for a reason; fix the cause, do not route around them. The gate's identical-block cap (`BLOCK_LOOP_LIMIT`) restarts when new dispatches ran between blocks, and only a repeat with none counts as a loop.
+
 ## Completion-gate friction (top blockers, last 14d)
 
 Recurring Stop-gate blocks: (m) delegation mandate, (c,d,e) CHANGELOG/ROADMAP/README
