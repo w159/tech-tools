@@ -184,6 +184,20 @@ def is_exempt_doc_path(path: str, dirs=None, exts=None) -> bool:
     )
 
 
+_HARNESS_SETTINGS = (".claude/settings.json", ".claude/settings.local.json")
+
+
+def _is_harness_settings(norm: str, cwd: str | None) -> bool:
+    """Harness settings at the project root only; the rest of .claude/ stays code."""
+    try:
+        if not os.path.isabs(norm):
+            norm = os.path.join(cwd or os.getcwd(), norm)
+        root = os.path.realpath(project_root(cwd))
+        return os.path.relpath(os.path.realpath(norm), root) in _HARNESS_SETTINGS
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def is_target_code(path: str, cwd: str | None = None, dirs=None, exts=None) -> bool:
     """True when `path` is code an orchestrator must delegate: a file inside the project
     root of `cwd` that is not docs/.atlas/.md, not a URI and not under a scratch root.
@@ -193,6 +207,8 @@ def is_target_code(path: str, cwd: str | None = None, dirs=None, exts=None) -> b
         return False
     norm = os.path.expanduser(path).replace("\\", "/")
     if is_exempt_doc_path(norm, dirs, exts) or is_outside_project(norm, cwd):
+        return False
+    if _is_harness_settings(norm, cwd):
         return False
     return not (is_scratch_path(norm) and not is_scratch_path(project_root(cwd)))
 
@@ -250,6 +266,15 @@ def _is_env_assignment(token: str) -> bool:
     return bool(eq) and name.isidentifier()
 
 
+def _is_atlas_test_run(tokens: list[str]) -> bool:
+    """The repo's own runner: atlas_test.py as the program with `run` or `select`."""
+    return (
+        len(tokens) >= 2
+        and tokens[0].rsplit("/", 1)[-1] == "atlas_test.py"
+        and tokens[1] in ("run", "select")
+    )
+
+
 def _verify_segment(tokens: list[str]) -> bool:
     """One simple command: a test runner, linter or type check that writes no source."""
     while tokens and (
@@ -272,6 +297,10 @@ def _verify_segment(tokens: list[str]) -> bool:
         return False
     if name in _RUNNERS:
         return True
+    if name.startswith("python") and rest[:1] and _is_atlas_test_run(rest):
+        return True
+    if name == "atlas_test.py":
+        return _is_atlas_test_run([name, *rest])
     if name.startswith("python"):
         return (
             len(rest) >= 2
