@@ -12658,5 +12658,41 @@
     "verified_at": "2026-11-17T12:27:45+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "output-style-restore-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "output style: two removed sentences restored, file under 7000 chars",
+    "evidence": [
+      "zsh:1: no such file or directory: .venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T14:47:55+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "output-style-restore-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "output style: two removed sentences restored, file under 7000 chars",
+    "evidence": [
+      "118 passed, 3 skipped, 142 subtests passed in 10.55s"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T14:48:21+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

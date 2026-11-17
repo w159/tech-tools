@@ -23,7 +23,7 @@ The owner reported that the same session behaved differently from one project to
 - `scripts/atlas_scope.py` `_is_atlas_test_run`, `_verify_segment` (:269): `atlas_test.py run` and `atlas_test.py select` are verification commands, so the lead's own test runs no longer count as inline ops.
 - `hooks/completion_gate_core.py` `_team_in_flight`, `TEAM_IN_FLIGHT_MAX_AGE_S` (:1075, :1078): a tmux team of this session with a member still running counts as work in flight at Stop, as a running subagent does. An exited team, a team of another session, a record older than six hours and a missing record do not. Test: `hooks/test_completion_gate.py`.
 - `scripts/atlas_paths.py` `sanitize`, `_marketplace_root` (:21, :38) and `scripts/atlas_mux.py`: a root under `plugins/<name>/` of a marketplace git repo maps to the repo root. Cause: `atlas_todo._resolve_base` used the hook cwd as given, so a session whose shell was in `plugins/atlas` wrote the board to `plugins/atlas/.atlas/.run/todos.json`, and the mux failure log kept that folder alive. Tests: `scripts/test_atlas_paths.py`, `scripts/test_atlas_mux.py`.
-- `output-styles/atlas-orchestrator.md`: one sentence that TodoWrite items carry a `[implement] ` or `[verify] ` prefix when code ships (gate o).
+- `output-styles/atlas-orchestrator.md`: one sentence that TodoWrite items carry a `[implement] ` or `[verify] ` prefix when code ships (gate o). The sentence "If the honest content is waiting, wait inside the turn." and the git-policy note "(reuse; never protected; PRs on request)" stay; small word cuts keep the file under 7000 characters.
 
 ### Removed
 

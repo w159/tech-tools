@@ -66,6 +66,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 |---|---|---|---|---|
 | 2026-11-17 | root-sanitize-2026-11-17 | verified | worker/t95494f-implementer-7f36: sanitize maps plugins/<name> of a marketplace repo to the repo root | [2026-11-17_root-sanitize-2026-11-17.md](2026-11-17_root-sanitize-2026-11-17.md) |
 | 2026-11-17 | project-disable-list-2026-11-17 | verified | Project-only disable list: plugins 24 to 10, active MCP servers 66 to 26 | [2026-11-17_project-disable-list-2026-11-17.md](2026-11-17_project-disable-list-2026-11-17.md) |
+| 2026-11-17 | output-style-restore-2026-11-17 | verified | output style: two removed sentences restored, file under 7000 chars | [2026-11-17_output-style-restore-2026-11-17.md](2026-11-17_output-style-restore-2026-11-17.md) |
 | 2026-11-17 | hud-surface-fallow-refactor-17.28.0 | verified | hud-surface.ts rows and agentRowResting split into helpers: fallow audit passes (0 introduced), mod and omp suite 5017 pass 0 fail | [2026-11-17_hud-surface-fallow-refactor-17-28-0.md](2026-11-17_hud-surface-fallow-refactor-17-28-0.md) |
 | 2026-11-17 | gate-team-in-flight-2026-11-17 | verified | worker/t95494f-implementer-df41: a running tmux team of this session counts as work in flight at Stop | [2026-11-17_gate-team-in-flight-2026-11-17.md](2026-11-17_gate-team-in-flight-2026-11-17.md) |
 | 2026-11-17 | gate-segment-match-17.28.1 | verified | Completion gate (b) matches a compound reproduction per ; && // segment | [2026-11-17_gate-segment-match-17-28-1.md](2026-11-17_gate-segment-match-17-28-1.md) |
