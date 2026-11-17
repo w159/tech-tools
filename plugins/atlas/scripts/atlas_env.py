@@ -5,10 +5,74 @@ mid-session never reaches a running session's hooks. The dashboard also writes t
 <ATLAS_HOME or ~/.atlas>/settings.json {"env": {...}}; every hook entry calls
 apply_store_env() before reading any knob. The store wins over an inherited value because
 the inherited one is the stale copy from session start. Stdlib only; fails open.
+
+Plugin settings: Claude Code exports each plugin userConfig value (plugin.json "userConfig")
+to the plugin's subprocesses as CLAUDE_PLUGIN_OPTION_<KEY>. apply_plugin_options() maps the
+ones listed in PLUGIN_OPTIONS onto the ATLAS_* variable the code reads, only when that
+variable is not already set: an explicit environment variable or a dashboard-saved knob
+always wins, and an empty option or one equal to its default changes nothing, so an
+untouched install behaves exactly as before.
 """
 
 import json
 import os
+
+# (userConfig key in plugin.json, the ATLAS_* variable the code reads)
+PLUGIN_OPTIONS = (
+    ("atlas_decision", "ATLAS_DECISION"),
+    ("atlas_decision_url", "ATLAS_DECISION_URL"),
+    ("atlas_decision_model", "ATLAS_DECISION_MODEL"),
+    ("atlas_decision_protocol", "ATLAS_DECISION_PROTOCOL"),
+    ("atlas_ollama_url", "ATLAS_OLLAMA_URL"),
+    ("atlas_ollama_model", "ATLAS_OLLAMA_MODEL"),
+    ("atlas_ollama_auto_roles", "ATLAS_OLLAMA_AUTO_ROLES"),
+    ("atlas_analytics", "ATLAS_ANALYTICS"),
+)
+# Booleans: the code reads on/off; only "off" differs from the default (on), so only it is mapped.
+BOOLEAN_OPTIONS = frozenset({"atlas_decision", "atlas_analytics"})
+# Same values as plugin.json; an option equal to its default must not pin the variable
+# (ATLAS_DECISION_URL set explicitly would bypass ATLAS_DECISION=off, ATLAS_ANALYTICS=on would
+# bypass a `disable` consent or the CI opt-out).
+OPTION_DEFAULTS = {
+    "atlas_decision_url": "http://127.0.0.1:11434",
+    "atlas_decision_protocol": "auto",
+    "atlas_ollama_url": "http://127.0.0.1:11434",
+    "atlas_ollama_auto_roles": "explorer,docs-auditor",
+}
+_FALSE = ("false", "0", "off", "no")
+
+
+def option_value(key, environ=None):
+    """The ATLAS_* value a plugin option asks for, or None when it asks for nothing."""
+    env = os.environ if environ is None else environ
+    raw = env.get("CLAUDE_PLUGIN_OPTION_" + key.upper())
+    if raw is None:
+        raw = env.get("CLAUDE_PLUGIN_OPTION_" + key)
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    if key in BOOLEAN_OPTIONS:
+        return "off" if raw.lower() in _FALSE else None
+    if raw.rstrip("/") == OPTION_DEFAULTS.get(key, ""):
+        return None
+    return raw
+
+
+def apply_plugin_options(environ=None):
+    """Fill each unset ATLAS_* variable from its exported plugin option; returns what was set."""
+    env = os.environ if environ is None else environ
+    applied = {}
+    try:
+        for key, var in PLUGIN_OPTIONS:
+            if var in env:
+                continue
+            value = option_value(key, env)
+            if value is not None:
+                env[var] = value
+                applied[var] = value
+    except Exception:
+        return applied
+    return applied
 
 
 def apply_store_env(environ=None):
@@ -20,6 +84,8 @@ def apply_store_env(environ=None):
             stored = json.load(fh)["env"]
         applied = {k: v for k, v in stored.items() if isinstance(k, str) and isinstance(v, str)}
     except Exception:
-        return {}
+        applied = {}
     env.update(applied)
+    # After the store: a dashboard-saved knob and an inherited variable both outrank a plugin option.
+    apply_plugin_options(env)
     return applied

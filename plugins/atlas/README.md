@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.27.1 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.28.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -192,7 +192,7 @@ blocks, it names the letters:
 | g      | implementer work not independently verified      | p      | colony channel unused                      |
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
 | i      | open todos                                       | r      | `done` header while work is open           |
-|        |                                                  | s      | 2+ in-process workers, no tmux team or crew |
+|        |                                                  | s      | 2+ in-process working dispatches in a run, no tmux team or crew (with tmux on PATH the tripwire routes each one) |
 |        |                                                  | v      | done claim contradicted by this turn's tool results (records findings by default; blocks only with `ATLAS_DONE_CLAIM=block`) |
 
 The gate checks the work itself before it asks for paperwork. When (a), (b),
@@ -287,8 +287,12 @@ A long task run inline fills the main context window with file reads and tool
 output. Atlas moves that work out in two shapes: a crew for a parallel build,
 and a team for read-only work. When the prompt optimizer arms a session it
 names the resolved team and the next command. With tmux on PATH the dispatch
-tripwire denies every in-process working-role dispatch (`dispatch_denied:team`),
-the first one and a one-seat or `low` scope included; closing roles are exempt.
+tripwire routes every in-process working-role dispatch (`dispatch_denied:team`),
+the first one and a one-seat or `low` scope included, also before the session
+is armed; the text holds a ready `atlas_mux.py spawn-team` command and saves
+the prompt as its `--task-file` under `.atlas/.run/briefs/`. Closing roles are
+exempt. A simple task (one working seat or effort `low`, no team launched) is
+the lead's own inline work and is not denied (`ATLAS_INLINE_SIMPLE=off` gates it).
 Without tmux, under omp or with `ATLAS_TEAM_GATE=off` the 2nd in-process
 working-role dispatch of a run whose scope has 2+ working seats gets an advisory.
 Completion gate (s) blocks once when a run ends with 2+ in-process working-role
@@ -847,7 +851,7 @@ fail-open when the CLI is absent).
 | `bash_advisor.py`               | PreToolUse (Bash)                                                  | Warns on catastrophic commands; never denies                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `git_guard.py`                  | PreToolUse (Bash, Write, Agent, Task, mcp__*)                      | Keeps commits and pushes off protected branches (the default branch, `production`, `release/*`, GitHub-protected) while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. Policy: `.atlas/git-policy.json`, `scripts/atlas_git.py policy` (`ATLAS_GIT_GUARD=off`)                                                                                         |
 | `edit_read_nudge.py`            | PreToolUse, PostToolUse                                            | Nudges when an edit targets a file read only through `ctx_read`                                                                                                                                                                                                                                                                                                                                                                              |
-| `dispatch_tripwire.py`          | PreToolUse, PostToolUse, SubagentStart                             | Routes native Grep and Glob to lean-ctx where it is configured; counts inline work and denies past the threshold in orchestration runs (shell calls that only run `atlas_todo.py`, `atlas_finding.py` or `atlas_resolve.py` do not count); names an unnamed `atlas:*` dispatch (denies it instead with `ATLAS_AUTONAME=off`); denies model-overriding `atlas:*` dispatches, dispatches missing the GOAL / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / STOP CONDITIONS spec or bundling more than one GOAL, and any nested subagent dispatch; denies every in-process working-role dispatch when tmux is on PATH (`dispatch_denied:team`; closing roles exempt) |
+| `dispatch_tripwire.py`          | PreToolUse, PostToolUse, SubagentStart                             | Routes native Grep and Glob to lean-ctx where it is configured; counts inline work and denies past the threshold in orchestration runs (shell calls that only run `atlas_todo.py`, `atlas_finding.py` or `atlas_resolve.py` do not count); names an unnamed `atlas:*` dispatch (denies it instead with `ATLAS_AUTONAME=off`); denies model-overriding `atlas:*` dispatches, dispatches missing the GOAL / DELIVERABLE / SUCCESS CRITERIA / OUT OF SCOPE / STOP CONDITIONS spec or bundling more than one GOAL, and any nested subagent dispatch; routes every in-process working-role dispatch, the first one included, to a tmux team when tmux is on PATH (`dispatch_denied:team`: a `ROUTE` text with a ready `atlas_mux.py spawn-team ... --task-file` command; closing roles exempt); does not deny a simple task (one working seat or effort `low`) done inline (`ATLAS_INLINE_SIMPLE`) |
 | `fallow_gate.py`                | PreToolUse (Bash)                                                  | Runs `fallow audit` on `git commit` and `git push` and denies on `verdict: fail` or a CLI below the minimum version (`ATLAS_FALLOW=off`)                                                                                                                                                                                                                                                                                                     |
 | `todo_capture.py`               | PostToolUse                                                        | Mirrors TodoWrite plans to the durable board (`ATLAS_TODO=off`)                                                                                                                                                                                                                                                                                                                                                                              |
 | `docs_drift_watch.py`           | PostToolUse                                                        | Warns as soon as code ships without a `docs/CHANGELOG.md` entry (debounced per session)                                                                                                                                                                                                                                                                                                                                                      |
@@ -1507,6 +1511,9 @@ switches:
 | `ATLAS_MANDATES`                                               | on                       | `off` drops the recall gate and companion nudges              |
 | `ATLAS_RECALL_GATE`                                            | advisory                 | `deny` makes the Claude Code recall gate deny until recall    |
 | `ATLAS_PLAN_UPFRONT`                                           | on                       | `off` stops plan rows being written from a code-shipping prompt |
+| `ATLAS_INLINE_SIMPLE`                                          | on                       | `off` gates a simple task (one working seat or effort `low`) like any other |
+| `ATLAS_OLLAMA_AUTO_ROLES`                                      | explorer,docs-auditor    | Roles `ATLAS_WORKER_PROVIDER=auto` moves onto Ollama          |
+| `ATLAS_ANALYTICS`                                              | on                       | `off` stops the anonymous usage counters                      |
 | `ATLAS_MUX`, `ATLAS_COLONY_TRANSPORT`                          | on, auto                 | Colony mode and transport                                     |
 | `ATLAS_DASHBOARD`                                              | off                      | `on` starts the Command Center at session start               |
 | `ATLAS_MOD`                                                    | on                       | Claude Code in-terminal mod                                   |
@@ -1516,6 +1523,23 @@ switches:
 | `ATLAS_ANALYTICS`                                              | on                       | Anonymous usage counters (`off` or `DO_NOT_TRACK=1` stops them) |
 | `ATLAS_FALLOW`, `ATLAS_CONNECTOR_WATCH`                        | on                       | Commit gate, connector credential advice                      |
 | `ATLAS_TYPESAFE_SCORING`                                       | on (inert without a key) | Turn scoring                                                  |
+
+Settings: the decision model and the Ollama worker options can also be set as
+plugin settings (`userConfig` in `.claude-plugin/plugin.json`: `atlas_decision`,
+`atlas_decision_url`, `atlas_decision_model`, `atlas_decision_protocol`,
+`atlas_ollama_url`, `atlas_ollama_model`, `atlas_ollama_auto_roles`,
+`atlas_analytics`). Claude Code exports each as `CLAUDE_PLUGIN_OPTION_<KEY>` and
+`scripts/atlas_env.py` maps it onto its `ATLAS_*` variable; an environment
+variable or a dashboard-saved setting wins, and an empty option or one equal to
+its default changes nothing. `python3 scripts/atlas_settings.py show` prints each
+option's effective value and its source; `python3 scripts/atlas_settings.py
+decision-status` probes the decision endpoint (answers or not, protocol, model,
+decisions recorded in the last 7 days).
+
+Usage analytics: the owner reads them on the `/dashboard` page of the telemetry
+server (https://atlas-telemetry.vercel.app/dashboard; the page asks for the
+dashboard secret, see `telemetry/server/README.md`) and with
+`scripts/telemetry_report.py` in the tech-tools repository.
 
 Companions, recommended by `atlas-setup` and used when present: claude-mem
 (cross-session memory), context-mode (keeps large output out of the context
@@ -1541,7 +1565,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.27.1
+|-- .claude-plugin/plugin.json   manifest, version 17.28.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1570,7 +1594,7 @@ atlas/
 
 ## Release notes and license
 
-Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.27.0 fixes five faults found in six 17.26.0 sessions: no re-run of heredoc body lines by the Stop gate, todo and finding bookkeeping is not inline work, the recall gate reminds instead of denying on Claude Code (`ATLAS_RECALL_GATE=deny`), plan rows on the board from a code-shipping prompt (`ATLAS_PLAN_UPFRONT=off`), and the core ledger counts only findings verified since the session started (`CoreInput.since`). It also reports crew and core tab dollars only for a worker billed per token (a plan login reports tokens, `cost_usd` null), and the sharded crew check no longer hands `.ts` tests to pytest. 17.26.0 hardens the done-claim detector after two outside critiques and stops blocking by default: `BLOCKING_KINDS` is empty and `ATLAS_DONE_CLAIM=block` enforces ([audit](../../docs/audits/2026-11-16_atlas-round5.md)). 17.25.0 reworks the mods: idle health with persisted history, a status tab with ACTIVITY, GATES, HOOKS and RUNS widgets, one metric source, fixed band geometry, clickable chips, all six tabs at 110 columns and a narrow idle strip ([audit](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). 17.24.0 adds the deterministic done-claim gate, git worktree isolation for overlapping workers, a verifier claim-evidence rule, a stock Ollama chat protocol and a history benchmark harness ([audit](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
+Changes by version: [CHANGELOG.md](CHANGELOG.md). 17.28.0 does a simple task inline with no denial (`ATLAS_INLINE_SIMPLE`), routes every in-process working dispatch to a tmux team with a ready command and task file, draws every worker row in its role colour, keeps completion lines pending until a Stop is refused, scopes the tripwire and routing rows to the current run, moves stale board rows of other sessions to the archive so the plan shows, and adds plugin settings for the decision model, Ollama workers and analytics (`atlas_settings.py show|decision-status`). 17.27.0 fixes five faults found in six 17.26.0 sessions: no re-run of heredoc body lines by the Stop gate, todo and finding bookkeeping is not inline work, the recall gate reminds instead of denying on Claude Code (`ATLAS_RECALL_GATE=deny`), plan rows on the board from a code-shipping prompt (`ATLAS_PLAN_UPFRONT=off`), and the core ledger counts only findings verified since the session started (`CoreInput.since`). It also reports crew and core tab dollars only for a worker billed per token (a plan login reports tokens, `cost_usd` null), and the sharded crew check no longer hands `.ts` tests to pytest. 17.26.0 hardens the done-claim detector after two outside critiques and stops blocking by default: `BLOCKING_KINDS` is empty and `ATLAS_DONE_CLAIM=block` enforces ([audit](../../docs/audits/2026-11-16_atlas-round5.md)). 17.25.0 reworks the mods: idle health with persisted history, a status tab with ACTIVITY, GATES, HOOKS and RUNS widgets, one metric source, fixed band geometry, clickable chips, all six tabs at 110 columns and a narrow idle strip ([audit](../../docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). 17.24.0 adds the deterministic done-claim gate, git worktree isolation for overlapping workers, a verifier claim-evidence rule, a stock Ollama chat protocol and a history benchmark harness ([audit](../../docs/audits/2026-11-15_atlas-round4-expert-gaps.md)). 17.23.0 adds the idle health summary, clickable controls and removes the key hints ([audit](../../docs/audits/2026-11-14-idle-health.md)). 17.22.0 adds decision models for routing and the done-claim check, Ollama as a worker provider with a benchmark command, and a mod-load release gate ([audit](../../docs/audits/2026-11-14_atlas-round3-decision-models-ollama.md)). 17.21.1 fixes the hooks module failing to load in 17.19.0 to 17.21.0, which left the band, TODO, SUBAGENTS and side panel undrawn ([audit](../../docs/audits/2026-11-14-mod-load.md)). Before and after measurements
 for 16.0.0:
 [docs/audits/2026-10-27_atlas-16.0.0-evidence.md](../../docs/audits/2026-10-27_atlas-16.0.0-evidence.md).
 

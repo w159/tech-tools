@@ -321,6 +321,28 @@ def _canon_cmd(cmd: str) -> str:
     return _CMD_PREFIX_RE.sub("", cmd, count=1).strip()
 
 
+def _canon_segments(cmd: str) -> list:
+    """`_canon_cmd` of each `;`, `&&`, `||` segment outside quotes, so a compound command's
+    `cd X && env K=V bun test a` segment compares equal to a row naming `bun test a`.
+    Known limit: a compound command's pass or fail status is that of the whole command, not of one segment."""
+    segs, cur, quote, i = [], [], "", 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "'\"":
+            quote = ch
+        elif ch == ";" or cmd[i : i + 2] in ("&&", "||"):
+            segs.append("".join(cur))
+            cur = []
+            i += 1 if ch == ";" else 2
+            continue
+        cur.append(ch)
+        i += 1
+    segs.append("".join(cur))
+    return [c for c in (_canon_cmd(s) for s in segs) if c]
+
+
 def _log_gate_fail_open(why: str) -> None:
     print(f"completion_gate (b): {why}; crediting the row fail-open", file=sys.stderr)
 
@@ -406,9 +428,9 @@ def _evidence_test_commands(item: dict) -> list:
     for r in raw:
         if not isinstance(r, str):
             continue
-        cmd = _canon_cmd(re.split(r"\s(?:->|=>|#)\s", r, maxsplit=1)[0])
-        if cmd and _EVIDENCE_TEST_RE.search(cmd):
-            out.append(cmd)
+        for cmd in _canon_segments(re.split(r"\s(?:->|=>|#)\s", r, maxsplit=1)[0]):
+            if _EVIDENCE_TEST_RE.search(cmd):
+                out.append(cmd)
     return out
 
 
@@ -461,7 +483,7 @@ def _passing_shell_commands(transcript_path: str, started: float | None) -> list
                             for c in inp.get("commands") or []
                             if isinstance(c, dict)
                         ]
-                        calls[block.get("id", "")] = _canon_cmd(
+                        calls[block.get("id", "")] = _canon_segments(
                             " ".join(str(x) for x in parts if x)
                         )
                     elif block.get("type") == "tool_result":
@@ -480,7 +502,7 @@ def _passing_shell_commands(transcript_path: str, started: float | None) -> list
                             continue
                         if done_claim._FAIL_OUT.search(body):
                             continue
-                        passing.append(cmd)
+                        passing.extend(cmd)
         return passing
     except Exception:
         return None
@@ -545,7 +567,7 @@ def _check_findings(
                 f" {self_stamped} verified row(s) this run are self-stamps: no hook-recorded verifier "
                 "backs them (a verified_by value alone never counts) and no test-runner command (pytest, "
                 "unittest, vitest, bun test, go test, cargo test, npm/yarn test) named by the row ran "
-                "with a passing result in this session, byte-for-byte as the row names it. Dispatch "
+                "with a passing result in this session, exactly as the row names it (compound commands compare per ;, &&, || segment). Dispatch "
                 "atlas:verifier, or run the test command so it shows passing, then stamp the row with "
                 "that exact command as --reproduction."
             )
@@ -1047,7 +1069,56 @@ _IN_FLIGHT_DISPATCH_TYPES = {"subagent", "workflow", "teammate"}
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "killed", "cancelled", "stopped"}
 
 
-def _has_in_flight_dispatch(data: dict) -> bool:
+# A team record older than this never counts as in flight. `atlas_mux wait` defaults to
+# a shorter timeout, so a record this old belongs to a wedged or forgotten team; the gate
+# must not block a Stop for ever on it. Six hours covers a long real run.
+TEAM_IN_FLIGHT_MAX_AGE_S = 6 * 3600
+
+
+def _team_in_flight(root, session_id: str, now: float | None = None) -> bool:
+    """True when a tmux team launched by this session still has a running member.
+
+    Reads the record `atlas_mux wait` trusts: `.atlas/.run/teams/<id>.json` (reap
+    archives it, so archived records are ignored), a live tmux session
+    `atlas-<id>`, and each member's last board note (`atlas_mux._exited`, scoped to
+    the record's `created`). Ignores: another session's team, a record older than
+    TEAM_IN_FLIGHT_MAX_AGE_S, a dead tmux session, a team whose members all exited.
+    Missing/unreadable record or any error -> False (never fail open)."""
+    if not session_id:
+        return False
+    try:
+        import atlas_mux
+        import atlas_todo
+
+        lead = atlas_todo.lead_name(session_id)
+        now = time.time() if now is None else now
+        for rec_path in sorted((Path(root) / atlas_mux.TEAMS_REL).glob("*.json")):
+            try:
+                team = json.loads(rec_path.read_text(encoding="utf-8"))
+                source = team.get("source") or {}
+                if team.get("lead") != lead and source.get("session") != session_id:
+                    continue
+                created = team.get("created")
+                if not isinstance(created, (int, float)) or now - created > TEAM_IN_FLIGHT_MAX_AGE_S:
+                    continue
+                tid = str(team.get("team_id") or rec_path.stem)
+                if team.get("transport") in ("claude-bg", "herdr"):
+                    continue  # no tmux session to probe
+                if atlas_mux._tmux("has-session", "-t", f"={atlas_mux._session(tid)}").returncode != 0:
+                    continue
+                if any(
+                    not atlas_mux._exited(str(root), m["name"], float(created))
+                    for m in team.get("members") or []
+                ):
+                    return True
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                continue
+    except Exception:  # noqa: BLE001 -- a probe failure must read as "not in flight"
+        return False
+    return False
+
+
+def _has_in_flight_dispatch(data: dict, root=None) -> bool:
     """True when the Stop payload's `background_tasks` lists a dispatched
     subagent/workflow/teammate that has not reached a terminal status.
 
@@ -1062,16 +1133,15 @@ def _has_in_flight_dispatch(data: dict) -> bool:
     Absent/malformed `background_tasks` -> no suppression (current
     behavior)."""
     tasks = data.get("background_tasks")
-    if not isinstance(tasks, list):
-        return False
-    for task in tasks:
+    for task in tasks if isinstance(tasks, list) else []:
         if not isinstance(task, dict):
             continue
         if str(task.get("type", "")).lower() not in _IN_FLIGHT_DISPATCH_TYPES:
             continue
         if str(task.get("status", "")).lower() not in _TERMINAL_TASK_STATUSES:
             return True
-    return False
+    # tmux team members are processes, not Stop-payload tasks: ask the team record.
+    return root is not None and _team_in_flight(root, str(data.get("session_id") or ""))
 
 
 _SHELL_MEMO: dict | None = None  # set by main(): one `git status` per Stop
@@ -2031,10 +2101,12 @@ def _main() -> int:
             data, root
         )
         if not _session_is_orchestrating(session):
-            if missing_delegation and not _has_in_flight_dispatch(data):
+            if missing_delegation and not _has_in_flight_dispatch(data, root):
                 # Same loop cap as an orchestrating run: the continuation is
                 # re-checked, so without it an unfixable (m) never ends.
-                count, loop_exhausted = _block_loop_state(session, ["m"], continuation)
+                count, loop_exhausted = _block_loop_state(
+                    session, ["m"], continuation, _run_dispatch_count(session)
+                )
                 if loop_exhausted:
                     _note_loop_allowed(count, ["m"])
                     return 0
@@ -2077,7 +2149,7 @@ def _main() -> int:
                     done_reason += "\n" + notice
                 _print_decision({"decision": "block", "reason": done_reason})
                 return 0
-        if _has_in_flight_dispatch(data):
+        if _has_in_flight_dispatch(data, root):
             # Dispatched subagent/workflow/teammate still running: not a
             # completion claim yet, so every condition stays silent except
             # (n). The header is a property of the reply text, so like (r) it
@@ -2221,7 +2293,9 @@ def _main() -> int:
             _block_loop_reset(session, keep="" if _reply_has_header(data) else "n")
             _record_pass()
             return 0
-        count, loop_exhausted = _block_loop_state(session, failed, continuation)
+        count, loop_exhausted = _block_loop_state(
+            session, failed, continuation, _run_dispatch_count(session)
+        )
         if loop_exhausted:
             _note_loop_allowed(count, failed)
             return 0
@@ -2477,7 +2551,7 @@ def _print_decision(doc: dict) -> None:
 
 
 def _block_loop_state(
-    session_id: str, failed: list, continuation: bool = False
+    session_id: str, failed: list, continuation: bool = False, progress=None
 ) -> tuple[int, bool]:
     """Count the identical consecutive blocks and say when the cap is reached.
 
@@ -2491,7 +2565,12 @@ def _block_loop_state(
     State: `loop-<session>` marker holding `<letters> <count>`. Never raises;
     an unwritable marker means no cap, the lesser failure. The exhausted
     verdict is also recorded as one friction row (F4: the silent pass becomes
-    a stated one)."""
+    a stated one).
+    `progress` (the run's dispatch count) is the not-a-loop signal: when it
+    changed since the previous block the model did real work in between (a
+    wave of dispatches), so the count restarts at 1. A repeat with no new
+    dispatch is the genuine loop and keeps counting; the native 8-block cap
+    still backstops a model that dispatches on every Stop."""
     count = 1
     path = None
     state_dir = None
@@ -2518,8 +2597,18 @@ def _block_loop_state(
                 count = int(n) + 1
         except (OSError, ValueError):
             count = 1
+        if progress is not None:
+            try:
+                with open(path + ".prog", encoding="utf-8") as fh:
+                    if int(fh.read().strip()) != progress:
+                        count = 1
+            except (OSError, ValueError):
+                pass
         try:
             os.makedirs(state_dir, exist_ok=True)
+            if progress is not None:
+                with open(path + ".prog", "w", encoding="utf-8") as fh:
+                    fh.write(str(progress))
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(f"{sig} {count}")
         except OSError:
@@ -3526,6 +3615,28 @@ def _inprocess_working_dispatches(session_id: str) -> int | None:
             if _is_working_role(agent_type)
             and _role_name(agent_type) not in READ_ONLY_ROLES
         )
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _run_dispatch_count(session_id: str) -> int | None:
+    """Every `dispatches` row of THIS RUN (any role): the block-loop progress signal. None on any DB error."""
+    conn = None
+    try:
+        import atlas_db
+
+        conn = atlas_db.connect()
+        rid = atlas_db.current_run_id(conn, session_id) or atlas_db.latest_run_id(
+            conn, session_id
+        )
+        if rid is None:
+            return None
+        return conn.execute(
+            "SELECT COUNT(*) FROM dispatches WHERE run_id=?", (rid,)
+        ).fetchone()[0]
     except Exception:
         return None
     finally:

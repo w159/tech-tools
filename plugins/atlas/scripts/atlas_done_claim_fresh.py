@@ -843,8 +843,6 @@ def fixture_set(name: str) -> str:
     return "heldout" if int(hashlib.sha1((GEN_SPLIT_SALT + name).encode()).hexdigest(), 16) % 2 else "train"
 
 
-def _file_digest(path: str) -> str:
-    return hashlib.sha1(open(path, "rb").read()).hexdigest()
 
 
 def _runs_cost(ledger: str) -> dict:

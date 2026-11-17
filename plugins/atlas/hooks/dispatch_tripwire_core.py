@@ -389,7 +389,8 @@ SPAWN_TEAM_CMD = (
 )
 # Measured over 7 days: resolver invoked 0 times, SCOPE on 8 of 166 dispatches. Advice did not move it; a deny does.
 # ATLAS_BURST_SECS=0 silences the burst advisory (test suites that fire many dispatches back to back).
-BURST_SECS = 10
+# 30 s: a parallel fan-out of several explorers is emitted over several seconds of model time; 10 s split it.
+BURST_SECS = 30
 
 
 def _scope_matrix():
@@ -469,12 +470,28 @@ def _scope_problem(tinput):
     return f"DENY - {detail}. {fix}:\n  {RESOLVE_CMD}{_scope_suggestion(agent)}"
 
 
-def _burst_note(root, session):
+# A read-only role dispatched with an explicit haiku/sonnet-class `model` is cheap exploration: it may run in
+# parallel (never edits, so it cannot collide with a teammate). No `model` falls back to normal handling.
+_CHEAP_MODEL = lre(r"(?i)(?<![a-z])(?:haiku|sonnet)(?![a-z])")
+
+
+def _cheap_exploration(tinput):
+    """True for a READ_ONLY_ROLES dispatch whose `model` string names haiku or sonnet (also `claude-sonnet-5`)."""
+    return _is_read_only_role(tinput.get("subagent_type")) and bool(
+        _CHEAP_MODEL.search(str(tinput.get("model") or ""))
+    )
+
+
+def _burst_note(root, session, exempt=False, tool_use_id=None):
     """(concurrent, text) for an atlas:* dispatch inside BURST_SECS of an earlier one: that is a team, and
     teams run as tmux panes. `concurrent` is True when an earlier in-process dispatch has no PostToolUse yet
     (a foreground Agent call posts when it returns, so a sequential dispatch finds the list empty).
+    `exempt` (cheap read-only exploration): never denied, still holds a slot so PostToolUse stays balanced.
+    The slot is recorded under the dispatch's tool_use_id (`owners`) so its PostToolUse closes THAT slot, not the oldest.
     The state rides in the per-session autoname store (already flock-serialised for parallel batches)."""
     import time
+
+    tuid = str(tool_use_id or _PAYLOAD_TUID[0] or "")
 
     try:
         window = float(os.environ.get("ATLAS_BURST_SECS", BURST_SECS))
@@ -489,10 +506,16 @@ def _burst_note(root, session):
         with _name_state(root, session) as st:
             last, st["last_dispatch"] = st.get("last_dispatch", 0), now
             live = [t for t in st.get("open", []) if now - float(t) < window]
-            concurrent = bool(live) and not _omp_harness()
+            concurrent = bool(live) and not _omp_harness() and not exempt
             # a denied dispatch never ran: it must not hold the slot
             st["open"] = live if concurrent else live + [now]
             st["slot"] = None if concurrent else now
+            if tuid and not concurrent:
+                owners = dict(st.get("owners") or {})
+                owners[tuid] = now
+                st["owners"] = dict(list(owners.items())[-64:])  # bounded: expired slots keep their owner entry
+            if exempt:
+                return False, ""
     except Exception as exc:
         _record_fault(exc)
         return False, ""
@@ -520,9 +543,6 @@ def _burst_note(root, session):
 # completion_gate_core._is_working_role mirrors this set.
 CLOSING_ROLES = frozenset(
     {"planner", "verifier", "completeness-critic", "docs-curator", "docs-auditor"}
-)
-CREW_RUN_CMD = (
-    f'python3 "{_OWN_SCRIPTS / "atlas_crew.py"}" run --spec S --files G --goal "..."'
 )
 
 
@@ -602,7 +622,72 @@ def _run_key(conn, run_id):
     return f"{db}|{run_id}|{prompt}"
 
 
-def _team_note(root, session, tinput, run_key):
+_PATHS_LINE = lre(r"^[ \t]*PATHS[ \t]*:[ \t]*(\S.*?)[ \t]*$", re.M)
+
+
+def _dispatch_paths(tinput):
+    """Comma-joined paths the dispatch names (a `paths` argument or a line-start `PATHS:` line), else ""."""
+    got = tinput.get("paths")
+    if isinstance(got, (list, tuple)):
+        items = [str(p) for p in got]
+    elif isinstance(got, str) and got.strip():
+        items = re.split(r"[,\s]+", got)
+    else:
+        m = _PATHS_LINE.search(str(tinput.get("prompt") or ""))
+        items = re.split(r"[,\s]+", m.group(1)) if m else []
+    return ",".join(p for p in items if p)
+
+
+def _route_brief(base, tinput):
+    """Write the denied dispatch's prompt to <base>/.atlas/.run/briefs/<name-or-role>-<hash>.md and return the
+    path: the routed dispatch must not lose its brief, the team launcher reads it with --task-file. None on
+    failure (fail-open: the ROUTE text then carries a placeholder)."""
+    import hashlib
+
+    try:
+        prompt = str(tinput.get("prompt") or "")
+        role = str(tinput.get("subagent_type") or "").split(":", 1)[-1]
+        stem = re.sub(r"[^A-Za-z0-9._-]+", "-", str(tinput.get("name") or "").strip() or role)
+        stem = stem.strip(".-")[:60] or "brief"
+        digest = hashlib.sha1(prompt.encode("utf-8", "replace")).hexdigest()[:8]
+        path = Path(base).joinpath(".atlas", ".run", "briefs", f"{stem}-{digest}.md")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(prompt, encoding="utf-8")
+        return path
+    except Exception as exc:
+        _record_fault(exc)
+        return None
+
+
+def _team_blocks(tinput):
+    """True when _team_note would deny (route) this dispatch: a working, non-read-only atlas: role with tmux
+    on PATH, outside omp and with ATLAS_TEAM_GATE on. Pure: touches no state, so the early checks in
+    _pre_tool_use can ask it without counting the dispatch toward the advisory."""
+    import shutil
+
+    agent = tinput.get("subagent_type")
+    if not str(agent or "").startswith("atlas:"):
+        return False
+    if not _is_working_role(agent) or _is_read_only_role(agent):
+        return False
+    if os.environ.get("ATLAS_TEAM_GATE", "on").strip().lower() == "off" or _omp_harness():
+        return False
+    return bool(shutil.which("tmux"))
+
+
+def _team_route(deny, tinput, root, session, run_key, cwd=None):
+    """Run the team check now when it would route this dispatch; True when it denied. Used ahead of the
+    paths that return before _scope_gate (unarmed session, one-time spec advisory), so the FIRST working
+    dispatch of a session is routed like every later one instead of running in-process."""
+    if not _team_blocks(tinput):
+        return False
+    blocked, text = _team_note(root, session, tinput, run_key, cwd)
+    if blocked:
+        deny("team", text)
+    return blocked
+
+
+def _team_note(root, session, tinput, run_key, cwd=None):
     """(deny, text) for a working-role atlas: dispatch. With tmux on PATH every in-process working dispatch is
     denied (the first one and a one-seat scope too): working subagents run as a tmux team or crew. Without tmux,
     under omp or with ATLAS_TEAM_GATE=off the 2nd in-process working dispatch of a run whose resolved team has
@@ -630,6 +715,7 @@ def _team_note(root, session, tinput, run_key):
                 slot = st.get("slot")
                 if slot is not None and st.get("open") and st["open"][-1] == slot:
                     st["open"].pop()  # a denied dispatch never ran: free the burst slot it took
+                    st["owners"] = {k: v for k, v in (st.get("owners") or {}).items() if v != slot}
                 st["slot"] = None
             else:
                 team["working"] = prior + 1
@@ -645,14 +731,28 @@ def _team_note(root, session, tinput, run_key):
         'or a crew:\n  atlas_crew.py run --spec S --files G --goal "..."\n'
     )
     if blocked:
-        cls, effort = (scope[0], scope[1]) if scope else ("C", "E")
+        import shlex
+
         role = str(tinput.get("subagent_type") or "")
+        if scope:
+            cls, effort = scope[0], scope[1]
+        else:  # no SCOPE line and no resolved scope: the matrix class whose team holds this role
+            cls, effort = _ROLE_CLASS.get(role.split(":", 1)[-1], "implement"), "medium"
+        # The routed case is an instruction, not an error: the brief is saved where the launcher reads it and
+        # the command is complete, so the lead pastes it as is.
+        brief = _route_brief(root or (Path(cwd) if cwd else Path(os.getcwd())), tinput)
+        paths = _dispatch_paths(tinput)
+        cmd = (
+            f'python3 "${{CLAUDE_PLUGIN_ROOT}}/scripts/atlas_mux.py" spawn-team --class {cls} --effort {effort}'
+            + (f" --paths {shlex.quote(paths)}" if paths else "")
+            + f" --task-file {shlex.quote(str(brief)) if brief else 'T'}"
+        )
         return True, (
-            f"DENY - in-process working dispatch ({role}) with tmux on PATH: working subagents never run "
-            "in-process, not the first one and not a one-seat scope. "
-            + cmds.replace("{cls}", cls).replace("{effort}", effort)
-            + "Ways out: run that team or crew command. Closing roles (planner, verifier, completeness-critic, "
-            "docs-curator, docs-auditor) stay in-process."
+            "ROUTE - this work goes to a tmux team: run the command below\n"
+            f"  {cmd}\n"
+            f"The task file holds this {role} dispatch's prompt. With tmux on PATH working subagents run as a "
+            'tmux team or crew (atlas_crew.py run --spec S --files G --goal "..."), never in-process. '
+            "Closing roles (planner, verifier, completeness-critic, docs-curator, docs-auditor) stay in-process."
         )
     if not (scope and scope[2] >= 2):
         return False, ""
@@ -666,6 +766,31 @@ def _team_note(root, session, tinput, run_key):
         + cmds.replace("{cls}", cls).replace("{effort}", effort)
         + "Ways out: run that team or crew command."
     )
+
+
+def _simple_task(conn, root, session, run_id):
+    """True when this session's current task is simple, so the lead does it inline with no deny and no STOP
+    nudge: the resolved scope has exactly one working seat or effort `low`, and no team or crew was launched
+    in this run. No resolved scope, a launched team, ATLAS_INLINE_SIMPLE=off or any error: False (today's
+    gates apply)."""
+    if os.environ.get("ATLAS_INLINE_SIMPLE", "on").strip().lower() == "off":
+        return False
+    try:
+        scope = _working_seats({}, root, session)  # empty input: the session's resolved scope only
+        if not scope:
+            return False
+        _cls, effort, seats = scope
+        if not (int(seats) == 1 or str(effort).lower() == "low"):
+            return False
+        # A launch is logged as this marker row (see _run): once the run went to a team it is not simple.
+        launched = conn.execute(
+            "SELECT 1 FROM events WHERE run_id=? AND tool=? LIMIT 1",
+            (run_id, "atlas_mux:spawn-team"),
+        ).fetchone()
+        return launched is None
+    except Exception as exc:
+        _record_fault(exc)
+        return False
 
 
 def _mark_team_launched(root, session, run_key):
@@ -691,7 +816,8 @@ def _omp_harness():
 
 
 def _close_dispatch(payload):
-    """PostToolUse:Agent: the oldest open in-process dispatch of the session has returned. Fail-open."""
+    """PostToolUse:Agent: an open in-process dispatch of the session has returned; close ITS slot (found by
+    tool_use_id), or the oldest when the payload carries no id we recorded. Fail-open."""
     try:
         tin = payload.get("tool_input")
         # A background Agent posts at launch while its worker keeps running: keep its slot so the
@@ -701,13 +827,20 @@ def _close_dispatch(payload):
         cwd = payload.get("cwd")
         root = find_root(Path(cwd if isinstance(cwd, str) and cwd else os.getcwd()))
         with _name_state(root, payload.get("session_id")) as st:
-            if st.get("open"):
+            owners = dict(st.get("owners") or {})
+            tuid = str(payload.get("tool_use_id") or "")
+            if tuid in owners:
+                slot = owners.pop(tuid)
+                if slot in st.get("open", []):
+                    st["open"].remove(slot)  # its own slot; already expired by the window: nothing to free
+                st["owners"] = owners
+            elif st.get("open"):
                 st["open"].pop(0)
     except Exception as exc:
         _record_fault(exc)
 
 
-def _scope_gate(deny, tinput, root, session, run_key=None):
+def _scope_gate(deny, tinput, root, session, run_key=None, cwd=None):
     """Last dispatch check: SCOPE deny (ATLAS_SCOPE_GATE=off downgrades it to advisory), then the concurrent
     in-process deny / burst advisory (ATLAS_MUX=off downgrades the deny to advisory)."""
     problem = _scope_problem(tinput)
@@ -720,12 +853,12 @@ def _scope_gate(deny, tinput, root, session, run_key=None):
         else []
     )
     if str(tinput.get("subagent_type") or "").startswith("atlas:"):
-        blocked, text = _burst_note(root, session)
+        blocked, text = _burst_note(root, session, _cheap_exploration(tinput))
         if blocked:
             deny("mux", text)
             return
         notes.append(text)
-        blocked, text = _team_note(root, session, tinput, run_key)
+        blocked, text = _team_note(root, session, tinput, run_key, cwd)
         if blocked:
             deny("team", text)
             return
@@ -1672,15 +1805,21 @@ def _pre_tool_use(
         return  # session never had a run -> nothing to gate
     if _is_worker():
         return  # a headless worker is a leaf: its lead owns delegation
-    if not atlas_db.is_orchestrating(conn, session):
-        return  # non-orchestration sessions are NEVER denied anything
-    if tool in DISPATCH_TOOLS:
 
-        def deny(code, reason):
-            _deny(reason)
-            _record_dispatch_deny(
-                conn, atlas_db, session, tool, tinput, code, session_model
-            )
+    def deny(code, reason):
+        _deny(reason)
+        _record_dispatch_deny(
+            conn, atlas_db, session, tool, tinput, code, session_model
+        )
+
+    if not atlas_db.is_orchestrating(conn, session):
+        # The session is armed only on the PostToolUse of its first atlas: dispatch, so that first working
+        # dispatch used to run in-process while every later one was routed. An atlas: dispatch is itself
+        # proof of orchestration: run the team check for it now. Nothing else is gated earlier than before.
+        if tool in DISPATCH_TOOLS:
+            _team_route(deny, tinput or {}, root, session, _run_key(conn, run_id), cwd)
+        return  # non-orchestration sessions are otherwise NEVER denied anything
+    if tool in DISPATCH_TOOLS:
 
         unnamed = _name_missing(tinput or {})
         # (c00) Built-in agent types bypass Atlas's roles, models and guardrails.
@@ -1783,6 +1922,9 @@ def _pre_tool_use(
             and _spec_advisory_claimed(root, session)
         )
         if advisory:
+            # The one-time spec advisory lets this dispatch through: route it to a team first if it must.
+            if _team_route(deny, tinput or {}, root, session, _run_key(conn, run_id), cwd):
+                return
             # F11: the first spec offense per session is taught, not denied - the deny-then-rewrite
             # round-trip is the expensive enforcement point. The second offense denies.
             _advisory(
@@ -1831,10 +1973,15 @@ def _pre_tool_use(
                 + _role_block(str((tinput or {}).get("subagent_type")), root),
             )
         else:
-            _scope_gate(deny, tinput or {}, root, session, _run_key(conn, run_id))
+            _scope_gate(deny, tinput or {}, root, session, _run_key(conn, run_id), cwd)
         return
     # (b) Editing production target code inline is the sharpest violation.
-    if tool in EDIT_TOOLS and not _is_orchestration_path(path, cwd):
+    # A simple task (one seat or effort low, no team this run) is the lead's own work: no inline deny.
+    if (
+        tool in EDIT_TOOLS
+        and not _is_orchestration_path(path, cwd)
+        and not _simple_task(conn, root, session, run_id)
+    ):
         _deny(
             "DENY - atlas orchestrators never edit target code inline. "
             f"Route this {tool} of {path} to atlas:implementer."
@@ -1872,7 +2019,7 @@ def _pre_tool_use(
             "or atlas:implementer (edits) instead of acting inline."
         )
         return
-    if count >= DENY_THRESHOLD:
+    if count >= DENY_THRESHOLD and not _simple_task(conn, root, session, run_id):
         _deny(
             f"DENY - {count} inline ops since your last dispatch. Orchestrators delegate: "
             "the work happens in subagents so this session's context stays clean. "
@@ -2579,6 +2726,7 @@ def main():
     _normalize_codex_dispatch(payload)
     if isinstance(payload, dict) and isinstance(payload.get("cwd"), str):
         _PAYLOAD_CWD[0] = payload["cwd"]
+    _PAYLOAD_TUID[0] = payload.get("tool_use_id") if isinstance(payload, dict) else None
     if payload.get("hook_event_name") == "SubagentStart":
         _reserve_name(payload)
         return
@@ -2679,6 +2827,7 @@ def _device_args_overwrite(payload):
 
 
 _PAYLOAD_CWD = [None]
+_PAYLOAD_TUID = [None]  # tool_use_id of the payload being handled; keys the burst slot to its dispatch
 
 
 def _gates_armed(payload):
@@ -2883,6 +3032,10 @@ def _run(payload):
         if armed and (count >= _threshold() or edit_to_target):
             if _is_worker() or not atlas_db.is_orchestrating(conn, session):
                 return  # WS1: non-orchestration sessions are logged but never nagged
+            if _simple_task(
+                conn, find_root(Path(payload.get("cwd") or os.getcwd())), session, run_id
+            ):
+                return  # a simple task is the lead's own inline work: no STOP nudge
             if edit_to_target:
                 msg = f"STOP - route this {tool} of {path} to atlas:implementer."
             else:

@@ -280,7 +280,6 @@ def marketplace_plugin_version(clone_dir, plugin_name):
 
 # --- clone-fresh: is the marketplace clone behind GitHub? (read-only, never mutates the clone) ---
 UPDATE_NET_TIMEOUT = 5  # seconds, per network call
-UPDATE_MKT_DEFAULT = "tech-tools"
 
 
 def _ls_remote_head(url, timeout=UPDATE_NET_TIMEOUT):

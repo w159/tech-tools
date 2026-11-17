@@ -117,8 +117,7 @@ identity, description, or published surface changes.
 When the user says "atlas/armada or their dependencies," that includes everything
 the plugins are built on:
 
-- **Shared plugin libraries:** `plugins/_standards/`, `plugins/_templates/`, and
-  the top-level `skills/` library that plugin skills draw from.
+- **Shared plugin libraries:** `plugins/_standards/` and `plugins/_templates/`.
 - **Vendor connectors that armada department agents call:**
   - `mcp_servers/<svc>-mcp/` - the MCP server per vendor (Auvik, Blumira, CIPP,
     ConnectWise Manage, KnowBe4, NinjaOne, PAN-OS, Paylocity, SonicWall, Spanning, ThreatLocker, Vanta;

@@ -165,7 +165,8 @@ describe('D14: each tab owns the full body', () => {
 
 describe('D4 leftovers: no gate ratios', () => {
   test('the gates tab and the status view say `ok` or `N denied`, never `n/m`', () => {
-    const gates = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'a', label: 'a', ok: true }, { id: 'b', label: 'b', ok: false }] }, { id: 'routing', title: 'Tool routing', lines: [{ id: 'c', label: 'c', ok: true }] }];
+    // fix1728: an unmet completion line is pending until a Stop refuses, so the one denial is a routing line (a call denied in the current run)
+    const gates = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'a', label: 'a', ok: true }] }, { id: 'routing', title: 'Tool routing', lines: [{ id: 'c', label: 'c', ok: true }, { id: 'b', label: 'b', ok: false }] }];
     const m = world(54, 40, 'working', { gates, health: undefined as never, workers: [{ name: 'alpha', state: 'running', detail: '', secs: 4 }] });
     for (const tab of ['route', 'gates'] as PanelTab[]) {
       const t = [...headerRows({ ...m, tab }), ...bodyLines({ ...m, tab })].map(lineText).join('\n');

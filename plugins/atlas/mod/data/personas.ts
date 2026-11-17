@@ -4,7 +4,7 @@
 // test kit can drive them from memory. No Node imports: mod modules run sandboxed.
 import type { Contract, FsLike, Persona, PhaseId } from '../contract';
 import { BRAND } from '../contract';
-import { contractGlyph } from '../theme';
+import { contractGlyph, ROLE_COLOUR } from '../theme';
 
 /** Frontmatter colour name -> hex, mirroring the dashboard token palette (dashboard_ui/css/tokens.css). */
 export const PERSONA_COLORS: Record<string, string> = {
@@ -24,18 +24,8 @@ export const PERSONA_COLORS: Record<string, string> = {
  * from plugins/atlas/agents/*.md so UI panes can colour by name without loading
  * the files. Frontmatter stays the source of truth for model/effort.
  */
-const PERSONA_BY_NAME: Record<string, string> = {
-  'completeness-critic': 'red',
-  'db-prober': 'yellow',
-  'docs-auditor': 'orange',
-  'docs-curator': 'purple',
-  explorer: 'cyan',
-  implementer: 'green',
-  planner: 'blue',
-  runner: 'orange',
-  'ui-runtime-tester': 'pink',
-  verifier: 'red',
-};
+// The one role table lives in theme.ts (ROLE_COLOUR), so the HUD rows and personaColor never disagree.
+const PERSONA_BY_NAME: Readonly<Record<string, string>> = ROLE_COLOUR;
 
 /**
  * Resolve an identity token to a '#rrggbb' hex.

@@ -18,15 +18,34 @@ import tempfile
 __all__ = ["project_root", "sanitize", "worktree_main_root"]
 
 
+def _marketplace_root(d):
+    """Repo root when `d` sits under `plugins/` of a marketplace repo, else None.
+
+    The nearest git ancestor decides; it counts only when it holds
+    .claude-plugin/marketplace.json. A plugin dir (plugins/atlas has its own
+    package.json and manifest) is product source, never a project root."""
+    cur = d
+    while True:
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            return None
+        cur = parent
+        if os.path.exists(os.path.join(cur, ".git")):
+            market = os.path.isfile(os.path.join(cur, ".claude-plugin", "marketplace.json"))
+            return cur if market and d.startswith(os.path.join(cur, "plugins") + os.sep) else None
+
+
 def sanitize(path):
     """Absolute path with everything from the first `.atlas` component down cut
     off, so a cwd or ATLAS_PROJECT_ROOT inside runtime state maps back to its
-    owning project dir."""
+    owning project dir. A dir under plugins/<name>/ of a marketplace repo maps
+    to the repo root, so a cwd there never becomes a root (and never grows a
+    plugins/<name>/.atlas)."""
     d = os.path.abspath(path or os.getcwd())
     parts = d.split(os.sep)
     if ".atlas" in parts:
         d = os.sep.join(parts[: parts.index(".atlas")]) or os.sep
-    return d
+    return _marketplace_root(d) or d
 
 
 def worktree_main_root(worktree):

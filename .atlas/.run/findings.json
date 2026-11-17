@@ -12395,5 +12395,371 @@
     "verified_at": "2026-11-16T07:51:21+00:00",
     "verified_by": "audit-docs-curator",
     "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794859302",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_200142_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:01:42+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794859324",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_200204_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:02:04+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794859931",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_201211_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:12:11+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794861576",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_203936_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:39:36+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "hud-surface-fallow-refactor-17.28.0",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hud-surface.ts rows and agentRowResting split into helpers: fallow audit passes (0 introduced), mod and omp suite 5017 pass 0 fail",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_hud-surface-fallow-refactor.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "fallow audit --base origin/main --format json; cd plugins/atlas && env -u NO_COLOR bun test omp mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T09:43:43+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-8cf896-1794908705",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_094505_gate-rerun_8cf896.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-17T09:45:05+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "crew-role-tiers-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Crew workers default to the role model and effort from agent frontmatter",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_crew.py: 3 new tests fail without the atlas_crew.py change, 9/9 V16Tests pass with it"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_crew.V16Tests",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:30:17+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-segment-match-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Completion gate (b) matches a compound reproduction per ; && || segment",
+    "evidence": [
+      "hooks/test_completion_gate.py: test_compound_reproduction_counts_when_its_test_segment_passed fails with the gate change stashed (738 tests, 1 failure), 738 OK with it"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run plugins/atlas/scripts/atlas_crew.py plugins/atlas/scripts/atlas_test.py plugins/atlas/hooks/completion_gate_core.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:50:32+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-test-runner-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_test.py runs hooks and scripts suites in parallel under pytest and selects tests by changed path",
+    "evidence": [
+      "full run: hooks PASS 74 files, scripts 166/167 (test_connectors_wiring.py fails on the blumira server.mjs deletion that predates this run), wall 172.9s at jobs 8 against about 17 minutes serial"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run plugins/atlas/scripts/atlas_crew.py plugins/atlas/scripts/atlas_test.py plugins/atlas/hooks/completion_gate_core.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:50:32+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-test-pytest-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_test.py run starts each file under pytest from the first interpreter that has it",
+    "evidence": [
+      "16 passed; full run under pytest: hooks PASS 74 files, scripts 166/167, wall 172.9s (.atlas/evidence/2026-11-17_perf-fixes-full-parallel-run.txt)"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_atlas_test.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:51:34+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "project-disable-list-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Project-only disable list: plugins 24 to 10, active MCP servers 66 to 26",
+    "evidence": [
+      "init event: plugins 14 (10 user, 4 built-in), mcp_servers connected 24, disabled 14, failed 1, needs-auth 1"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude -p 'Reply with the single word ok.' --model haiku --max-turns 1 --output-format stream-json --verbose (read the init event)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:51:34+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "cleanup-delete-list-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Delete list: 1,2,3,7 confirmed; 4,5,6 refuted (keep types/, connector-config-flow.md, herdr scripts)",
+    "evidence": [
+      ".atlas/.run/briefs/cleanup-audit.verified-deletes.report.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "git grep skill names outside skills/; ls node_modules; git status --ignored --short plugins/atlas; grep tsconfig extends .claude-plugin/types; read herdr-web-ui/UPSTREAM.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:11:08+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-fab5"
+  },
+  {
+    "id": "gate-scope-fixes-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/t95494f-implementer-ff0f: harness settings are not target code; atlas_test.py run/select is a verification command; output style names the todo phase prefix",
+    "evidence": [
+      "worker/t95494f-implementer-ff0f: 632 passed, 3 skipped"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_atlas_scope_rules.py plugins/atlas/hooks/test_atlas_contract.py plugins/atlas/hooks/test_dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:20:02+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-team-in-flight-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/t95494f-implementer-df41: a running tmux team of this session counts as work in flight at Stop",
+    "evidence": [
+      "worker/t95494f-implementer-df41: 859 passed, 3 skipped"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_completion_gate.py plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:20:02+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "root-sanitize-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/t95494f-implementer-7f36: sanitize maps plugins/<name> of a marketplace repo to the repo root",
+    "evidence": [
+      "worker/t95494f-implementer-7f36: 385 passed, 3 skipped"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_atlas_paths.py plugins/atlas/scripts/test_atlas_mux.py plugins/atlas/hooks/test_todo_capture.py plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:20:02+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "cleanup-deletes-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Cleanup: root skills/ and node_modules, 11 dead definitions, ignored leftovers in plugins/atlas; mcp_servers and mcp_node kept",
+    "evidence": [
+      "merged and cleaned tree: hooks PASS 74 files, scripts PASS 167 files, wall 174.8s; plugins/atlas/.atlas not recreated by the run"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:27:45+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "output-style-restore-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "output style: two removed sentences restored, file under 7000 chars",
+    "evidence": [
+      "zsh:1: no such file or directory: .venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T14:47:55+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "output-style-restore-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "output style: two removed sentences restored, file under 7000 chars",
+    "evidence": [
+      "118 passed, 3 skipped, 142 subtests passed in 10.55s"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T14:48:21+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-043e88-1794926933",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py scripts/test_repo_counts.py 2>&1 | tail -2`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_144853_gate-rerun_043e88.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-17T14:48:53+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "atlas-doctor-session-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas-doctor run: 3154 facets enriched, 8 open findings fixed (mux cheap-model exemption, block-loop progress reset, created_at upsert fix, judge budget+hosted endpoint), 1,610 facets re-judged by the model",
+    "evidence": [
+      "repo /Users/jerry/MEGA/Projects/Agentic/tech-tools working tree: dispatch_tripwire_core.py, completion_gate_core.py, atlas_db.py, turn_scoring.py, typesafe_client.py, atlas_control.py, CLAUDE.md, docs/CHANGELOG.md, docs/lessons/2026-11-17_a-loop-counter-needs-a-progress-signal.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && python3 -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T16:32:30+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-doctor-verification-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Adversarial verification of the atlas-doctor changes: created_at upsert fix VERIFIED (pre-fix bug reproduced against HEAD), mux exemption and block-loop progress reset VERIFIED with no NEW test failures (hooks 3277 vs 3272, same 11 pre-existing failures; scripts 349 OK); 3 defects found and handed back for repair",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_db.py upsert_facet created_at; plugins/atlas/hooks/dispatch_tripwire_core.py _cheap_exploration + BURST_SECS 30; plugins/atlas/hooks/completion_gate_core.py _block_loop_state progress reset; plugins/atlas/scripts/turn_scoring.py judge budget"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && python3 -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q && cd plugins/atlas/scripts && python3 -m unittest test_atlas_db_facet test_turn_scoring_budget",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T16:33:13+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-doctor-regression-check-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Regression check settled: HEAD archive tree vs working tree, same runner and interpreter, identical failing-test ids - 0 regressions; the 4 failures (2x test_codex_parity AskBehaviour, 1x test_telemetry_wiring, 1x test_atlas_analytics session.codex!=session.omp) are ambient PI_*/OMP_*/CLAUDE_* env artifacts that fail at HEAD too and pass under a clean env",
+    "evidence": [
+      "plugins/atlas/hooks/test_dispatch_tripwire.py, plugins/atlas/hooks/test_completion_gate.py, plugins/atlas/scripts/test_atlas_control.py, plugins/atlas/scripts/test_typesafe_client.py, plugins/atlas/scripts/test_turn_scoring_budget.py, plugins/atlas/scripts/test_atlas_db_facet.py; commit 08d8304d"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && .venv/bin/python -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T17:42:00+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

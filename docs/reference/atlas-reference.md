@@ -244,7 +244,9 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
 
 - Inline-op threshold: after 6 unsanctioned main-thread ops with no dispatch in
   between, the 7th is denied (`DENY - 6 inline ops since your last dispatch ...`).
-  Writes to `docs/` and `.atlas/` do not count.
+  Writes to `docs/` and `.atlas/` do not count. A verification command does not
+  count either: a test runner, linter or type check, and `atlas_test.py run` or
+  `atlas_test.py select` (`atlas_scope.py:269`).
 - Native-tool routing: exploration-only `cat`/`grep`/`ls`, and native Grep/Glob,
   are denied toward lean-ctx when it is reachable.
 - Dispatch spec: an `atlas:*` dispatch missing any of `GOAL:`, `DELIVERABLE:`,
@@ -256,7 +258,9 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
   `STEPS`.
 - Production-edit deny: a main-thread `Write`/`Edit` of target code (anything
   outside `docs/` and `.atlas/`) in an orchestration-flagged session is routed
-  to `atlas:implementer`. URI-scheme writes (`agent://`, `xd://`) are never
+  to `atlas:implementer`. `.claude/settings.json` and `.claude/settings.local.json`
+  at the project root are not target code (`atlas_scope.py:187`); the rest of
+  `.claude/` is. URI-scheme writes (`agent://`, `xd://`) are never
   counted as edits.
 
 `ATLAS_TRIPWIRE=off` disables the drift tiers (nudges); `ATLAS_TRIPWIRE_THRESHOLD`
@@ -264,11 +268,14 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
 
 **Completion gate** (`hooks/completion_gate.py`, Stop). Twenty conditions,
 (a) to (s) and (v). It engages only in a project with a `docs/` directory, stays silent
-while a dispatch is in flight, and prints one block message listing exactly
+while a dispatch is in flight (a running subagent, or a tmux team of this session
+with a member still running; `_team_in_flight`, `completion_gate_core.py:1078`; an
+exited team, a team of another session and a record older than six hours do not
+count), and prints one block message listing exactly
 which conditions are unmet:
 
 - (a) evidence saved under `.atlas/evidence/` during this run; nested dated folders (`.atlas/evidence/<date>-<slug>/...`) count
-- (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run and backed by a hook-written record for this session and run: an `atlas:verifier` or `atlas:completeness-critic` dispatch row with `ts` at most `verified_at` + 1 s and a role matching `verified_by`, or a team or crew member record (verifier or completeness-critic role) whose name equals `stamped_by`; or a `reproduction` or `evidence` that exactly matches (whitespace collapsed, leading `cd X &&` and env assignments stripped) a passing test-runner command of this session. A bare `--by atlas:verifier` does not credit. Residual limits: an in-process verifier stamps as `lead`, so credit depends on the dispatch row; a lead can pair a real verifier dispatch with a self-stamped row; `ATLAS_WORKER_NAME` can be set from the process environment; an unreadable DB fails open with a stderr line
+- (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run and backed by a hook-written record for this session and run: an `atlas:verifier` or `atlas:completeness-critic` dispatch row with `ts` at most `verified_at` + 1 s and a role matching `verified_by`, or a team or crew member record (verifier or completeness-critic role) whose name equals `stamped_by`; or a `reproduction` or `evidence` that matches a passing test-runner command of this session. The row and each command that ran are split on `;`, `&&` and `||` outside quotes, and each segment is compared with whitespace collapsed, leading `cd X &&` and env assignments stripped (`_canon_segments`, `hooks/completion_gate_core.py`), so a compound reproduction such as `fallow audit ...; cd plugins/atlas && env -u NO_COLOR bun test omp mod` credits when its `bun test omp mod` segment ran passing. Known limit: the pass status is the whole command's status, not one segment's. A bare `--by atlas:verifier` does not credit. Residual limits: an in-process verifier stamps as `lead`, so credit depends on the dispatch row; a lead can pair a real verifier dispatch with a self-stamped row; `ATLAS_WORKER_NAME` can be set from the process environment; an unreadable DB fails open with a stderr line
 - (c) `docs/CHANGELOG.md` exists and is non-empty
 - (d) `docs/ROADMAP.md` exists and is non-empty
 - (e) root `README.md` exists and is non-empty
@@ -485,7 +492,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 86 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 88 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -493,6 +500,7 @@ them. The table lists the main entry points, not every module.
 |---|---|
 | `atlas_db.py` | Observability store: the SQLite SSOT for run health. |
 | `atlas_provider.py` | Worker provider selection: claude or a local Ollama model (per-role models, health check with a 30 s cache, fallback reasons, cross-family verifier pairing); `doctor` and `resolve` print the result. |
+| `atlas_settings.py` | Plugin settings: `show` prints each decision-model, Ollama and analytics option with its effective value and source (environment, dashboard setting, plugin setting, default); `decision-status` probes the decision endpoint. |
 | `session_ingest.py` | Mirrors session transcripts into the DB (omp workers ingest as lead sidechains). |
 | `omp_transcript.py` | Converts an omp session file to the Claude transcript shape for the bridge. |
 | `omp_runstate.py` | Writes the omp run/dispatch/edit state Claude hooks would have written. |
@@ -953,13 +961,13 @@ tech-tools/
 |- docs/                     # canonical documentation (SSOT); see docs/architecture/README.md
 |- plugins/
 |  |- atlas/                 # the plugin
-|  |  |- .claude-plugin/     # plugin.json (one userConfig key, `atlas_mod_sound`; connector keys live in armada)
+|  |  |- .claude-plugin/     # plugin.json (userConfig: `atlas_mod_sound` plus 8 decision, Ollama and analytics keys mapped to ATLAS_* by scripts/atlas_env.py; connector keys live in armada)
 |  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 86 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 88 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator

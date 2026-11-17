@@ -275,12 +275,14 @@ describe('message and footer', () => {
     expect(panel(160).all).toContain('impl-auth to lead   sent a message');
   });
   test('checks name each group with a mark and a word; failures take the text tone', () => {
-    const { rows, rowNodes } = panel(160, { gates: [gate, okGate] });
+    // fix1728: an unmet completion line is pending until a Stop refuses (the queued mark); a real failure is a call denied in the current run (tripwire, routing)
+    expect(panel(160, { gates: [gate, okGate] }).rows.at(-1)).toContain('checks  ◇ completion  ● routing');
+    const { rows, rowNodes } = panel(160, { gates: [{ ...gate, id: 'tripwire' }, okGate] });
     const foot = rows.at(-1)!;
-    expect(foot).toContain('checks  △ completion  ● routing');
+    expect(foot).toContain('checks  △ tripwire  ● routing');
     const row = rowNodes.at(-1)!;
     expect(cellOf(row, '△').props.color).toBe(TONE_HEX.warn); // a warning is the amber triangle on the checks row, as on the band head and the gates tab (critique 11)
-    expect(cellOf(row, ' completion').props.color).toBe(TONE_HEX.text);
+    expect(cellOf(row, ' tripwire').props.color).toBe(TONE_HEX.text);
     expect(cellOf(row, '●').props.color).toBe(TONE_HEX.ok);
     expect(cellOf(row, ' routing').props.color).toBe(TONE_HEX.sub);
   });

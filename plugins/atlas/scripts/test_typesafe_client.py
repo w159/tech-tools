@@ -79,6 +79,37 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(json.loads(calls[0].data)["model"], "nimble")
         self.assertTrue(calls[0].full_url.startswith("http://127.0.0.1:11434/"))
 
+    def test_hosted_url_without_key_is_loud_not_a_quiet_false(self):
+        env = {"TYPESAFE_API_KEY": "", "ATLAS_TYPESAFE_URL": "https://scoring.example.com"}
+        with mock.patch.dict(os.environ, env), mock.patch.object(
+            typesafe_client.urllib.request, "urlopen"
+        ) as net:
+            self.assertTrue(typesafe_client.available())  # not silently skipped
+            self.assertIn("TYPESAFE_API_KEY", typesafe_client.missing_key_reason())
+            with self.assertRaises(typesafe_client.TypeSafeError) as cm:
+                typesafe_client.evaluate({"r": 1}, {})
+        self.assertEqual(cm.exception.status, 401)
+        self.assertIn("TYPESAFE_API_KEY", str(cm.exception))
+        net.assert_not_called()
+
+    def test_loopback_without_key_has_no_missing_key_reason(self):
+        env = {"TYPESAFE_API_KEY": "", "ATLAS_TYPESAFE_URL": "http://localhost:11434"}
+        with mock.patch.dict(os.environ, env):
+            self.assertTrue(typesafe_client.available())
+            self.assertIsNone(typesafe_client.missing_key_reason())
+
+    def test_off_switch_still_wins_over_a_hosted_url(self):
+        env = {"TYPESAFE_API_KEY": "", "ATLAS_TYPESAFE_URL": "https://scoring.example.com", "ATLAS_TYPESAFE_SCORING": "off"}
+        with mock.patch.dict(os.environ, env):
+            self.assertFalse(typesafe_client.available())
+
+    def test_oversize_body_is_refused_before_any_network(self):
+        with mock.patch.object(typesafe_client.urllib.request, "urlopen") as net:
+            with self.assertRaises(typesafe_client.TypeSafeError) as cm:
+                typesafe_client.evaluate({"r": "x" * typesafe_client.MAX_BODY_BYTES}, {})
+        self.assertEqual(cm.exception.status, 413)
+        net.assert_not_called()
+
     def _urls_for(self, url, model="nimble"):
         urls = []
 

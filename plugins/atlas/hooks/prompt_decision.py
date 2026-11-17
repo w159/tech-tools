@@ -552,8 +552,6 @@ def route_choice(prompt: str) -> dict:
 
 
 VERIFY_TIMEOUT_S = 1.5
-VERIFY_CLAIMS_MIN = 0.8
-VERIFY_OBSERVED_MAX = 0.3
 # Second opinion on a deterministic done-claim block: clears it only at or above this observed-result noul.
 VERIFY_CLEAR_OBSERVED_MIN = 0.8
 VERIFY_QUESTIONS = {

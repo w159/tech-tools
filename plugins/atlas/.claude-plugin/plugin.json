@@ -1,6 +1,6 @@
 {
     "name": "atlas",
-    "version": "17.27.1",
+    "version": "17.28.0",
     "description": "Multi-agent coding architect for Claude Code and Codex: plans, delegates to named subagents, verifies with evidence, and blocks 'done' until the evidence exists.",
     "author": {
         "name": "w159",
@@ -16,6 +16,54 @@
             "title": "Atlas mod sound",
             "description": "Enable sound effects in the Atlas mod UI.",
             "default": false
+        },
+        "atlas_decision": {
+            "type": "boolean",
+            "title": "Decision model",
+            "description": "Ask the local decision model to classify prompts and second-check done claims (ATLAS_DECISION). Default: on. An ATLAS_DECISION environment variable wins.",
+            "default": true
+        },
+        "atlas_decision_url": {
+            "type": "string",
+            "title": "Decision model URL",
+            "description": "Base URL of the decision model; loopback only unless ATLAS_DECISION_ALLOW_REMOTE=1 (ATLAS_DECISION_URL). Default: http://127.0.0.1:11434.",
+            "default": "http://127.0.0.1:11434"
+        },
+        "atlas_decision_model": {
+            "type": "string",
+            "title": "Decision model name",
+            "description": "Model the decision endpoint runs (ATLAS_DECISION_MODEL). Default: empty, meaning llama3.2:3b on Ollama or nimble on SystemOne.",
+            "default": ""
+        },
+        "atlas_decision_protocol": {
+            "type": "string",
+            "title": "Decision protocol",
+            "description": "Wire protocol of the decision endpoint: auto, ollama or systemone (ATLAS_DECISION_PROTOCOL). Default: auto (probed).",
+            "default": "auto"
+        },
+        "atlas_ollama_url": {
+            "type": "string",
+            "title": "Ollama URL for workers",
+            "description": "Ollama server that workers moved off Claude run on (ATLAS_OLLAMA_URL). Default: http://127.0.0.1:11434.",
+            "default": "http://127.0.0.1:11434"
+        },
+        "atlas_ollama_model": {
+            "type": "string",
+            "title": "Ollama worker model",
+            "description": "Ollama model for workers that run on Ollama (ATLAS_OLLAMA_MODEL). Default: empty, meaning workers stay on Claude.",
+            "default": ""
+        },
+        "atlas_ollama_auto_roles": {
+            "type": "string",
+            "title": "Roles that run on Ollama automatically",
+            "description": "Comma-separated roles that ATLAS_WORKER_PROVIDER=auto moves onto Ollama (ATLAS_OLLAMA_AUTO_ROLES). Default: explorer,docs-auditor.",
+            "default": "explorer,docs-auditor"
+        },
+        "atlas_analytics": {
+            "type": "boolean",
+            "title": "Share anonymous usage counts",
+            "description": "Count and send anonymous usage counters (ATLAS_ANALYTICS). Default: on. DO_NOT_TRACK=1 or an ATLAS_ANALYTICS environment variable wins.",
+            "default": true
         }
     },
     "keywords": [

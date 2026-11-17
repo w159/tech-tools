@@ -29,9 +29,11 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 from pathlib import Path
@@ -1505,11 +1507,15 @@ class NoNestedSubagentsContract(unittest.TestCase):
             "transcript_path": "/x/projects/p/sess/subagents/agent-deadbeef.jsonl",
             "tool_input": {"subagent_type": "atlas:explorer", "prompt": "ToolSearch()"},
         }
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
         r = subprocess.run(
             [sys.executable, str(HOOKS_DIR / "dispatch_tripwire.py")],
             input=json.dumps(payload),
             capture_output=True,
             text=True,
+            cwd=scratch.name,
+            env=dict(os.environ, ATLAS_PROJECT_ROOT=scratch.name),
         )
         self.assertEqual(r.returncode, 0)
         out = json.loads(r.stdout)["hookSpecificOutput"]
@@ -1605,20 +1611,55 @@ class QuietTerminalContract(unittest.TestCase):
     MAX_BOOT_BYTES = 5000
 
     def test_session_boot_emission_stays_small(self):
+        # Boot a throwaway project, never the developer's checkout: the boot
+        # carry-over re-stamps open board rows to this session id, so booting
+        # REPO_ROOT emptied the live plan in <repo>/.atlas/.run/todos.json.
+        # The scratch board holds open rows of another session so the
+        # carry-over path still runs and its output is still measured.
+        repo = _mkrepo()
+        self.addCleanup(shutil.rmtree, repo, True)
+        run_dir = Path(repo, ".atlas", ".run")
+        run_dir.mkdir(parents=True)
+        now = time.time()
+        items = [
+            {
+                "id": "t%d" % i,
+                "title": "open plan row %d" % i,
+                "status": "pending",
+                "session_id": "other-session",
+                "origin": "todowrite",
+                "created_at": now,
+                "updated_at": now,
+            }
+            for i in range(12)
+        ]
+        (run_dir / "todos.json").write_text(
+            json.dumps(
+                {"version": 1, "root": repo, "updated_at": now, "items": items}
+            ),
+            encoding="utf-8",
+        )
         r = subprocess.run(
             [sys.executable, str(HOOKS_DIR / "session_boot.py")],
             input=json.dumps(
                 {
                     "hook_event_name": "SessionStart",
                     "session_id": "contract",
-                    "cwd": str(REPO_ROOT),
+                    "cwd": repo,
                     "source": "startup",
                 }
             ),
             capture_output=True,
             text=True,
-            env=dict(os.environ, ATLAS_DASHBOARD="off", ATLAS_COLONY="off"),
+            cwd=repo,
+            env=dict(
+                os.environ,
+                ATLAS_DASHBOARD="off",
+                ATLAS_COLONY="off",
+                ATLAS_PROJECT_ROOT=repo,
+            ),
         )
+        self.assertEqual(r.returncode, 0, r.stderr)
         self.assertLess(
             len(r.stdout),
             self.MAX_BOOT_BYTES,

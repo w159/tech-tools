@@ -14,6 +14,9 @@ A loopback ATLAS_TYPESAFE_URL (127.0.0.1, localhost, ::1) is allowed with no
 API key, so a local Ollama nimble/tev1 model can score without sending
 excerpts to api.typesafe.ai. Set ATLAS_TYPESAFE_MODEL to that local tag.
 The hosted default still requires TYPESAFE_API_KEY.
+Local tev1 decision models reject any prompt over 2,048 tokens; the judge state
+is budgeted at ~5,250 tokens (turn_scoring.JUDGE_BUDGET_CHARS), so the hosted
+jev-latest default (accepts >28k tokens) is the endpoint that fits it.
 """
 
 import json
@@ -68,13 +71,28 @@ def _loopback(url):
 
 
 def available():
+    """True when scoring can run. False only for the explicit off switch or when
+    nothing was configured at all (no key, no URL): that stays a quiet opt-out.
+    A configured non-loopback URL with no key is a misconfiguration, so it
+    returns True and evaluate() raises the 401 naming TYPESAFE_API_KEY; see
+    missing_key_reason() for callers that want to say so up front."""
     if os.environ.get("ATLAS_TYPESAFE_SCORING", "on").lower() == "off":
         return False
     if _key():
         return True
-    # Opt-in only. An unset URL stays on the hosted default and does not score.
     explicit = os.environ.get("ATLAS_TYPESAFE_URL", "").strip()
-    return bool(explicit) and _loopback(explicit)
+    return bool(explicit)  # loopback scores locally; a hosted URL fails loudly in evaluate()
+
+
+def missing_key_reason():
+    """Why scoring will fail for lack of a key, or None. Set only for an explicit
+    non-loopback URL with no TYPESAFE_API_KEY (the case available() lets through)."""
+    if _key():
+        return None
+    explicit = os.environ.get("ATLAS_TYPESAFE_URL", "").strip()
+    if explicit and not _loopback(explicit):
+        return f"ATLAS_TYPESAFE_URL={explicit} is a hosted endpoint but TYPESAFE_API_KEY is not set"
+    return None
 
 
 def _redact(text):
@@ -90,6 +108,22 @@ def _retry_after(headers, attempt):
         return min(2.0**attempt, MAX_BACKOFF_S)
 
 
+# Budget for the whole POST body, in bytes: state + questions + model + JSON framing
+# and escaping. This (not the state text length) is what the endpoint receives.
+MAX_BODY_BYTES = 24_000
+
+
+def request_model(model=None):
+    return model or os.environ.get("ATLAS_TYPESAFE_MODEL", DEFAULT_MODEL)
+
+
+def encode_body(state, model_name, questions):
+    """The exact bytes evaluate() POSTs."""
+    return json.dumps(
+        {"state": state, "model": model_name, "questions": questions}
+    ).encode("utf-8")
+
+
 def evaluate(state, questions, *, model=None, timeout=30.0):
     key = _key()
     base = _base()
@@ -97,7 +131,7 @@ def evaluate(state, questions, *, model=None, timeout=30.0):
     local = _loopback(base)
     if not key and not local:
         raise TypeSafeError(401, "TYPESAFE_API_KEY is not set in the environment")
-    model_name = model or os.environ.get("ATLAS_TYPESAFE_MODEL", DEFAULT_MODEL)
+    model_name = request_model(model)
     if not local and ":" in model_name:
         # Ollama tags look like name:tag; the hosted API rejects them with a bare "Unknown model".
         raise TypeSafeError(
@@ -106,9 +140,11 @@ def evaluate(state, questions, *, model=None, timeout=30.0):
             f"hosted endpoint ({base}). Set ATLAS_TYPESAFE_URL=http://127.0.0.1:11434 to score "
             "locally, or set ATLAS_TYPESAFE_MODEL to a hosted model such as jev-latest.",
         )
-    body = json.dumps(
-        {"state": state, "model": model_name, "questions": questions}
-    ).encode("utf-8")
+    body = encode_body(state, model_name, questions)
+    if len(body) > MAX_BODY_BYTES:  # backstop: turn_scoring.fit_state trims first, so this never fires for it
+        raise TypeSafeError(
+            413, f"request body is {len(body)} bytes, over the {MAX_BODY_BYTES}-byte budget"
+        )
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"

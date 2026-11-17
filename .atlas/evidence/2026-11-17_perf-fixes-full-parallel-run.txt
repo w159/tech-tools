@@ -1,0 +1,6 @@
+2026-11-17 perf fixes, branch atlas/routing-17.28.0
+cmd: python3 plugins/atlas/scripts/atlas_test.py run
+hooks: PASS 74 files
+scripts: FAIL 1/167 files: test_connectors_wiring.py
+wall 172.9s, jobs 8, python /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python, pytest 9.2.0
+note: test_connectors_wiring.py fails on the deletion of plugins/armada/mcp/blumira/server.mjs, which predates this run

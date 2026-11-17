@@ -53,3 +53,5 @@ Assumption to avoid (tech-tools): The fresh-score file and the A3 bar: A3 "passe
 Assumption to avoid (tech-tools): Member count is never checked, and `members` may be empty.
 §
 Assumption to avoid (tech-tools): The stored command text is never checked against `_TEST_RUNNER_RE`.
+§
+Assumption to avoid (tech-tools): So the first dispatch in a session that was not flagged is never checked by `_scope_gate`.

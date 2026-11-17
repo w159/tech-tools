@@ -6,8 +6,10 @@ import { cells, uiFromEnv } from './atlas-ui';
 import { bodyLines, lineText, type PanelGate, type PanelModel } from './panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
+// fix1728: a completion line is pending until a Stop refuses. The refused Stop (a record, never a gate row) keeps this group a real failure, so the count column and its tone are tested on one.
+const STOP = { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'verification coverage' };
 const gates: PanelGate[] = [
-  { id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, fix: 'run the suite' }, { id: 'docs', label: 'docs updated', ok: true }, { id: 'ev', label: 'evidence recorded', ok: true }] },
+  { id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, fix: 'run the suite' }, { id: 'docs', label: 'docs updated', ok: true }, { id: 'ev', label: 'evidence recorded', ok: true }, STOP] },
   { id: 'dispatch', title: 'Dispatch tripwire', lines: [{ id: 'name', label: 'named dispatch', ok: true }, { id: 'scope', label: 'scope declared', ok: true }] },
   { id: 'header', title: 'Header contract', lines: [{ id: 'header-matched', label: 'header matched', ok: true, detail: '8 of 8' }] },
 ];
@@ -33,6 +35,13 @@ describe('C2: gates grouped by check', () => {
     const rows = body(80).filter((l) => l.press?.key.startsWith('group:'));
     const tone = (l: (typeof rows)[number]) => l.runs.find((x) => /\d+ pass/.test(x.t))!.tone;
     expect([tone(rows[0]!), tone(rows[1]!)]).toEqual(['warn', 'muted']);
+  });
+  test('fix1728: no Stop refused, the same group reads pending: 3 pass · 0 deny, dim, on the same value column', () => {
+    const open = gates.map((g) => ({ ...g, lines: g.lines.filter((l) => l.id !== 'stop-verdict') }));
+    const rows = body(80, { gates: open }).filter((l) => l.press?.key.startsWith('group:'));
+    expect(lineText(rows[0]!).trimEnd()).toMatch(/◇ Completion gate +pending +3 pass · 0 deny$/);
+    expect(new Set(rows.map((l) => cells(lineText(l).trimEnd()))).size).toBe(1);
+    expect(rows[0]!.runs.find((x) => /\d+ pass/.test(x.t))!.tone).toBe('muted');
   });
   test('the checks of an open group are indented under the title: their mark sits at the title text column', () => {
     const rows = body(80, { expanded: 'group:completion' });

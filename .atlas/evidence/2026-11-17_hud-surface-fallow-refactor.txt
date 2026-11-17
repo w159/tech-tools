@@ -1,0 +1,13 @@
+2026-11-17 atlas 17.28.0: rows and agentRowResting in plugins/atlas/mod/hud-surface.ts split into non-exported helpers
+
+$ fallow audit --base origin/main --format json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[\"verdict\"], d[\"attribution\"])"
+pass {'gate': 'new-only', 'dead_code_introduced': 0, 'dead_code_inherited': 18, 'complexity_introduced': 0, 'complexity_inherited': 61, 'duplication_introduced': 0, 'duplication_inherited': 0, 'styling_introduced': 0, 'styling_inherited': 0, 'duplication_demoted': 0}
+
+$ cd plugins/atlas && env -u NO_COLOR bun test omp mod | tail -5
+ 5017 pass
+ 31 skip
+ 0 fail
+ 71358 expect() calls
+Ran 5048 tests across 297 files. [45.49s]
+
+Before (same audit, 2026-11-17 earlier): fail, complexity_introduced 2 (rows 20/28 cognitive_crap, agentRowResting 14/15 crap)

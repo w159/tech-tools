@@ -1497,6 +1497,47 @@ class V16Tests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"ATLAS_CREW_WORKER_EFFORT": "bogus"}):
             self.assertEqual(atlas_crew.worker_effort(w, meta), "low")
 
+    def _role_flags(self, w, meta=None):
+        """The --model/--effort pair a claude worker command carries for this worker entry and plan meta."""
+        meta = meta or {}
+        argv = atlas_crew.worker_argv(
+            atlas_crew.worker_model(w, meta), atlas_crew.worker_effort(w, meta), "/s.json", "sid-1", "P"
+        )
+        pick = lambda flag: argv[argv.index(flag) + 1] if flag in argv else None  # noqa: E731
+        return pick("--model"), pick("--effort")
+
+    def test_role_default_tier_applies_when_env_worker_and_plan_name_none(self):
+        with mock.patch.dict(os.environ, {}):
+            os.environ.pop("ATLAS_CREW_WORKER_MODEL", None)
+            os.environ.pop("ATLAS_CREW_WORKER_EFFORT", None)
+            self.assertEqual(self._role_flags({"role": "implementer"}), ("sonnet", "medium"))
+            self.assertEqual(self._role_flags({}), ("sonnet", "medium"))  # no role is an implementer
+            self.assertEqual(self._role_flags({"role": "explorer"}), ("haiku", "low"))
+
+    def test_role_default_yields_to_worker_entry_and_plan_meta_per_field(self):
+        with mock.patch.dict(os.environ, {}):
+            os.environ.pop("ATLAS_CREW_WORKER_MODEL", None)
+            os.environ.pop("ATLAS_CREW_WORKER_EFFORT", None)
+            self.assertEqual(self._role_flags({"role": "explorer"}, {"model": "opus", "effort": "high"}), ("opus", "high"))
+            self.assertEqual(
+                self._role_flags({"role": "explorer", "model": "w-m", "effort": "medium"}, {"model": "opus"}),
+                ("w-m", "medium"),
+            )
+            # a plan that names only the model keeps the role's effort
+            self.assertEqual(self._role_flags({"role": "explorer"}, {"model": "opus"}), ("opus", "low"))
+
+    def test_unknown_role_adds_no_model_or_effort_flag(self):
+        with mock.patch.dict(os.environ, {}):
+            os.environ.pop("ATLAS_CREW_WORKER_MODEL", None)
+            os.environ.pop("ATLAS_CREW_WORKER_EFFORT", None)
+            self.assertEqual(self._role_flags({"role": "no-such-role"}), (None, None))
+
+    def test_run_level_model_does_not_take_a_role_default(self):
+        # cmd_run resolves the run-wide --model with no worker; a role default there would override every role
+        with mock.patch.dict(os.environ, {}):
+            os.environ.pop("ATLAS_CREW_WORKER_MODEL", None)
+            self.assertIsNone(atlas_crew.worker_model({}, {"model": None}, role_default=False))
+
     def test_docstring_restore_covers_function_class_and_method(self):
         stub = 'def f():\n    """F."""\n\nclass C:\n    """C."""\n    def m(self):\n        """M."""\n'
         work = "def f():\n    return 1\n\nclass C:\n    def m(self):\n        return 2\n"

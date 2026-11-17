@@ -1106,16 +1106,23 @@ def upsert_turn_score(conn, session_id, message_uuid, judgment, **fields):
 def upsert_facet(conn, session_id, **fields):
     """Insert or update the per-session qualitative facet row. Only keys
     passed in `fields` are written; absent keys keep their stored value
-    (COALESCE), matching upsert_session_log's semantics. `created_at`
-    defaults to now so a fresh insert is never left NULL."""
-    fields.setdefault("created_at", time.time())
+    (COALESCE), matching upsert_session_log's semantics. `created_at` is
+    set to now only on INSERT; on UPDATE it keeps the stored value unless
+    the caller passes one explicitly."""
+    supplied = fields.get("created_at")
+    fields["created_at"] = supplied if supplied is not None else time.time()
     vals = [fields.get(c) for c in FACET_COLUMNS]
     conn.execute(
         "INSERT INTO facets(session_id," + ",".join(FACET_COLUMNS) + ") "
         "VALUES(?," + ",".join("?" for _ in FACET_COLUMNS) + ") "
         "ON CONFLICT(session_id) DO UPDATE SET "
-        + ",".join(f"{c}=COALESCE(excluded.{c},{c})" for c in FACET_COLUMNS),
-        (session_id, *vals),
+        + ",".join(
+            "created_at=COALESCE(?,created_at)"
+            if c == "created_at"
+            else f"{c}=COALESCE(excluded.{c},{c})"
+            for c in FACET_COLUMNS
+        ),
+        (session_id, *vals, supplied),
     )
     conn.commit()
 

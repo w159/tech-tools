@@ -820,6 +820,32 @@ class FindingsSelfStampTest(unittest.TestCase):
         tp = self._transcript(cmd="cd /x && pytest hooks -q -p no:cacheprovider")
         self.assertTrue(self.check(tp))
 
+    _COMPOUND_REPRO = (
+        "fallow audit --base origin/main --format json; "
+        "cd plugins/atlas && env -u NO_COLOR bun test omp mod"
+    )
+
+    def test_compound_reproduction_counts_when_its_test_segment_passed(self):
+        self._row(reproduction=self._COMPOUND_REPRO)
+        tp = self._transcript(cmd="cd plugins/atlas && env -u NO_COLOR bun test omp mod")
+        self.assertTrue(self.check(tp))
+
+    def test_compound_reproduction_without_a_passing_test_run_stays_rejected(self):
+        self._row(reproduction=self._COMPOUND_REPRO)
+        self.assertFalse(self.check(self._transcript()))
+        tp = self._transcript(
+            cmd="bun test omp mod", out="Exit code 1\n1 fail", is_error=True
+        )
+        self.assertFalse(self.check(tp))
+
+    def test_longer_test_segment_is_not_credited_by_a_prefix_run(self):
+        self._row(reproduction=self._COMPOUND_REPRO)
+        self.assertFalse(self.check(self._transcript(cmd="bun test omp")))
+
+    def test_semicolon_inside_quotes_does_not_split(self):
+        self._row(reproduction="pytest -k 'a; b' -q")
+        self.assertTrue(self.check(self._transcript(cmd="pytest -k 'a; b' -q")))
+
     def test_evidence_entry_with_arrow_suffix_counts(self):
         self._row(evidence=["pytest hooks -q -> 36 passed"])
         self.assertTrue(self.check(self._transcript(cmd="pytest hooks -q")))
@@ -3469,6 +3495,72 @@ class InFlightDispatchHelperTest(unittest.TestCase):
         )
 
 
+class InFlightTmuxTeamTest(unittest.TestCase):
+    """A tmux team launched by this session with a running member is work in
+    flight (its members are not in the Stop payload's `background_tasks`)."""
+
+    SID = "sess-team-1"
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.teams = Path(self.root) / ".atlas" / ".run" / "teams"
+        self.teams.mkdir(parents=True)
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.created = time.time() - 60
+
+    def _team(self, tid="t111111", session=None, created=None, members=("w-1", "w-2")):
+        rec = {
+            "team_id": tid,
+            "transport": "tmux",
+            "created": self.created if created is None else created,
+            "source": {"session": session or self.SID},
+            "members": [{"name": m} for m in members],
+        }
+        (self.teams / f"{tid}.json").write_text(json.dumps(rec), encoding="utf-8")
+
+    def _exit(self, name):
+        atlas_todo.note(self.root, name, "exit 0")
+
+    def _flight(self, tmux_rc=0):
+        import atlas_mux
+
+        res = subprocess.CompletedProcess([], tmux_rc, "", "")
+        with mock.patch.object(atlas_mux, "_tmux", return_value=res):
+            return completion_gate._has_in_flight_dispatch(
+                {"session_id": self.SID}, self.root
+            )
+
+    def test_running_team_of_this_session_is_in_flight(self):
+        self._team()
+        self._exit("w-1")  # w-2 still running
+        self.assertTrue(self._flight())
+
+    def test_all_exited_team_is_not_in_flight(self):
+        self._team()
+        self._exit("w-1")
+        self._exit("w-2")
+        self.assertFalse(self._flight())
+
+    def test_other_session_team_is_not_in_flight(self):
+        self._team(session="sess-other")
+        self.assertFalse(self._flight())
+
+    def test_stale_record_is_not_in_flight(self):
+        self._team(created=time.time() - completion_gate.TEAM_IN_FLIGHT_MAX_AGE_S - 60)
+        self.assertFalse(self._flight())
+
+    def test_gone_tmux_session_is_not_in_flight(self):
+        self._team()
+        self.assertFalse(self._flight(tmux_rc=1))
+
+    def test_missing_record_is_not_in_flight(self):
+        self.assertFalse(self._flight())
+
+    def test_unreadable_record_is_not_in_flight(self):
+        (self.teams / "t222222.json").write_text("{not json", encoding="utf-8")
+        self.assertFalse(self._flight())
+
+
 class InFlightDispatchOrchestrationTest(GateOrchestrationTest):
     """End-to-end: an orchestrating session with everything else missing must
     still pass silently while a dispatched subagent is in flight."""
@@ -5137,6 +5229,32 @@ class BlockLoopCapTest(unittest.TestCase):
                 for _ in range(lim)
             ]
             self.assertEqual(got, [False] * lim)
+
+    def _loop_env(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        patcher = mock.patch.dict(os.environ, {"ATLAS_HOOKSTATE_DIR": tmp})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_new_dispatches_between_blocks_are_not_a_loop(self):
+        """Self-inflicted pattern: each Stop follows a wave of dispatches (parallel exploration team)."""
+        self._loop_env()
+        lim = completion_gate.BLOCK_LOOP_LIMIT
+        for wave in range(1, 2 * lim + 3):
+            count, exhausted = completion_gate._block_loop_state(
+                "s-wave", ["m"], True, progress=wave
+            )
+            self.assertEqual((count, exhausted), (1, False))
+
+    def test_identical_block_with_no_new_dispatch_is_still_a_loop(self):
+        self._loop_env()
+        lim = completion_gate.BLOCK_LOOP_LIMIT
+        got = [
+            completion_gate._block_loop_state("s-real", ["m"], True, progress=7)[1]
+            for _ in range(lim + 1)
+        ]
+        self.assertEqual(got, [False] * lim + [True])
 
     def test_letter_scoped_reset_only_clears_a_count_that_names_the_letter_alone(self):
         tmp = tempfile.mkdtemp()

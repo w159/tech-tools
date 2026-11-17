@@ -329,6 +329,22 @@ class TestBehaviorKnobs(ControlTestCase):
         self.fail(f"{key} not in any behavior group")
 
 
+    def test_burst_secs_default_matches_hook_constant(self):
+        """The dashboard default must be the hook's BURST_SECS, not a stale copy."""
+        spec = importlib.util.spec_from_file_location(
+            "dispatch_tripwire_core_burst", SCRIPTS.parent / "hooks" / "dispatch_tripwire_core.py"
+        )
+        hook = importlib.util.module_from_spec(spec)
+        sys.path.insert(0, str(SCRIPTS.parent / "hooks"))
+        try:
+            spec.loader.exec_module(hook)
+        finally:
+            sys.path.remove(str(SCRIPTS.parent / "hooks"))
+        knob = next(k for k in self.mod.BEHAVIOR_KNOBS if k["key"] == "ATLAS_BURST_SECS")
+        self.assertEqual(knob["default"], str(int(hook.BURST_SECS)))
+        self.assertIn(f"BURST_SECS = {int(hook.BURST_SECS)}", knob["details"])
+
+
 class TestMcpServers(ControlTestCase):
     def test_toggle_writes_the_disabled_list(self):
         name = "plugin:armada:cipp"

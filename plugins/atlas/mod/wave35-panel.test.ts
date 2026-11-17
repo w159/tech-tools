@@ -209,7 +209,14 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
     const pending = [{ id: 'completion', title: 'Completion', lines: [{ id: 'a', label: 'Todos drained', ok: true }, { id: 'v', label: 'Verified', ok: false }] }];
     const tally = gateTally(withCoreTally(pending, null) as never);
     const t = rows(57, RUN, snap(), pending);
-    expect(t.find((l) => /^\s*GATES\s/.test(l))).toMatch(new RegExp(`${tally.total - tally.green > 0 ? `${tally.total - tally.green} denied` : 'ok'}$`));
+    // fix1728: the unmet completion line waits for Stop: neither a green mark nor a denial, and the head and the row agree
+    expect(tally.failing).toEqual([]);
+    expect(tally.green).toBe(0);
+    expect(t.find((l) => /^\s*GATES\b/.test(l))).not.toMatch(/denied/);
+    expect(t.find((l) => l.includes('Completion'))).toMatch(/◇ Completion +pending/);
+    const real = [...pending, { id: 'tripwire', title: 'Dispatch tripwire', lines: [{ id: 'b', label: 'Team gate', ok: false }] }];
+    const rt = gateTally(withCoreTally(real, null) as never);
+    expect(rows(57, RUN, snap(), real).find((l) => /^\s*GATES\s/.test(l))).toMatch(new RegExp(`${rt.failing.length} denied$`)); // the figure counts the real failures only
   });
   test('the last five events, on the run clock', () => {
     const many = { ...(snap() as object), notes: Array.from({ length: 8 }, (_, i) => ({ seq: i + 1, ts: new Date(NOW - 50000 + i * 6000).toISOString(), owner: i % 2 ? 'alpha-explorer' : 'lead', to: 'all', text: `post number ${i + 1}` })) } as never;

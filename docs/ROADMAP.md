@@ -4,6 +4,10 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ---
 
+## Done
+
+- [done 2026-11-16] atlas 17.28.0: simple task inline with no denial (`ATLAS_INLINE_SIMPLE`), every in-process working dispatch routed to a tmux team, role colour on every worker row, completion lines pending until a refused Stop, run-scoped tripwire and routing rows, stale board rows archived, decision model and Ollama plugin settings (`atlas_settings.py`).
+
 ## In Progress
 
 ### Dashboard redesign (withdrawn 2026-10-22)
@@ -215,14 +219,6 @@ Shipped in `plugins/atlas/CHANGELOG.md` (17.25.0); audit: `docs/audits/2026-11-1
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-14-idle-health.md`.
 
-- [done] Idle band, HUD and side panel show a live health summary (gates, uptime, context, last run, recent hook events) with a clickable `▸ health` expand and a HEALTH card; verified with real SGR mouse clicks in tmux on Claude Code 2.1.325.
-- [done] Key hints removed (`r: status ... ctrl+x tab` rows, band `ctrl+x tab`, tab hotkeys, `Enter sends` placeholder); tabs are clickable chips and toggles use `▸`/`▾`.
-- [done] No empty placeholder boxes at idle: `no plan yet · 0 agents`, `no workers yet`, dim one-separator phase chain.
-- [done] The side panel middle is no longer empty on a fresh session (cad6fe65): `● waiting for first prompt`, a `checks` section and a context gauge fill it; blank rows above the footer at 150 by 45 went from 19 to 10.
-- [done] `cc-health-open.png`, `cc-idle-health-150.png` and `cc-idle-health-110.png` recaptured from the final frames (the band no longer shows tab chips beside the open panel).
-- [done] Run facts are said once in the panel (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`), `recent` reads in words, and the `0 messages` orphan is removed.
-- [done] The run duration is printed once per view (17.25.0). Checked in the final captures: `aa-150/work-12.txt` has `█ 0:06 ok` once (RUNS row) and the band reads `● done 6/6` with no clock; `aa-150/c-5-health-card.txt` has `█ 0:05 ok` once, band `● done 6/6 · ended 42s`; the 110-column frames match. No chat card `▸ run 0:05` is drawn.
-- [done] The idle animation is a slow breathe, not a 1 per second pulse (17.25.0). Checked: `mod/band-motion.ts` `idleRamp` is a 24-phase triangle (2.4 s, 13 truecolor tones, 8 in 256 colours, one step per 100 ms beat); in the 256-colour captures `aa-150/idle-0`, `idle-1` and `idle-2` the pill fill is xterm 97, 135 and 55 on three successive frames. The `waiting for first prompt` line was replaced by a static `◌ idle · no prompt yet`.
 - [planned] The `ATLAS` pill on the band is kept as it was; whether it should say more at idle is undecided.
 - [planned] Host-drawn, not changeable from the plugin: tmux PgUp/PgDn scrolling and the weekly-limit line under the band.
 
@@ -466,8 +462,7 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 - Pay down the findings recorded in `fallow-baselines/` (added with 9.0.0 so the
   fallow commit/push gate stops failing on code this release does not author).
   The baselines are WHOLE-REPO, not only the 8.7.x omp code. Dead-code: 165
-  entries (141 `mcp_servers/*`, 21 `plugins/atlas`, 2 `mcp_node/*`, 1
-  `skills/webapp-testing`). Health: 145 files (113 `mcp_servers/*`, 21
+  entries (141 `mcp_servers/*`, 21 `plugins/atlas`, 2 `mcp_node/*`). Health: 145 files (113 `mcp_servers/*`, 21
   `plugins/atlas`, 10 `mcp_node/*`, plus `test-mcp-tools.mjs`). Everything in
   them is exempt from the gate until fixed. The omp part: 30 complexity
   findings, led by `omp/hook-bridge.ts` `loadBridgedHooksFor` (cyclomatic 32)
@@ -641,7 +636,7 @@ hyphen/comma/rewrite) followed by a clean validator run.
 
 ### Audit and testing proof follow-ups (2026-10-26)
 
-- [planned] Decide whether to vendor graphify into `plugins/atlas/skills` or keep it optional (today optional with a git-churn/fan-in fallback; only an unregistered vendor copy exists at `skills/graphify/`).
+- [planned] Decide whether to vendor graphify into `plugins/atlas/skills` or keep it optional (today optional with a git-churn/fan-in fallback; the unregistered root `skills/graphify/` copy was removed on 2026-11-17).
 - [planned] `testscope detect --root .` hides unittest suites when a pytest config is present at the root; plugins/atlas suites show only with `--root plugins/atlas/<dir>`.
 - [planned] Raise the `testscope.py` mutation score above 31.0%; survivors concentrate in `command_rows`, `detect_misc_files`, `_collect`, `baseline_rows`, `detect_terraform`, `detect_workflows`.
 - [planned] Decide whether the 10 skills without the operating-contract fence should carry it: atlas-audit (now fenced), atlas-loop, atlas-orchestrate, atlas-prompt, atlas-run-watch, atlas-setup, atlas-status, atlas-tui, atlas-ux-test, atlas-wiki.

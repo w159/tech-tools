@@ -791,7 +791,9 @@ test("gates: the session id (or '-') reaches the cache; reported groups become t
 	open();
 	expect(refreshes.at(-1)).toEqual(["-", f.root]);
 	read = [group(false), group(true)];
-	expect(open("sess-9")).toMatch(/checks {2}△ completion/);
+	expect(open("sess-9")).toMatch(/checks {2}◇ completion/); // an unmet line with no refused Stop is pending
+	read = [{ id: "completion", title: "Completion", lines: [{ id: "l", label: "x", ok: false }, { id: "stop-verdict", label: "Last Stop blocked", ok: true, detail: "Todos drained" }] }, group(true)];
+	expect(open("sess-9")).toMatch(/checks {2}△ completion/); // a refused Stop for the session: the unmet line warns
 	read = [group(true)];
 	expect(open("sess-9")).toMatch(/checks {2}● completion/);
 });

@@ -367,7 +367,11 @@ def _log_tmux_failure(args, res) -> None:
     if res.returncode == 0 or args[:1] == ("has-session",):
         return
     try:
-        start = Path(os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()).resolve()
+        start = Path(
+            atlas_paths.sanitize(
+                Path(os.environ.get("ATLAS_PROJECT_ROOT") or os.getcwd()).resolve()
+            )
+        )
         # nearest ancestor with a real .atlas/.run; never create .atlas itself. $HOME, ~/Downloads and bare
         # temp roots are not projects: a stray /tmp/.atlas/.run must not collect logs from every temp cwd.
         root = next(

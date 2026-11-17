@@ -76,6 +76,24 @@ def _line(id_, label, ok, detail=None, fix=None) -> dict:
     return out
 
 
+def _prompt_boundary_ts(conn, session: str) -> float:
+    """Epoch seconds of the session's latest user prompt boundary (atlas_db.mark_prompt_boundary), the start of
+    the current run as the tripwire's _run_key sees it. 0.0 when there is none or it is unreadable: the whole
+    session then counts, the strict reading the panel had before run scoping."""
+    try:
+        rid = atlas_db.current_or_last_run_id(conn, session)
+        if rid is None:
+            return 0.0
+        # the same query as dispatch_tripwire_core._run_key, then that event's time
+        row = conn.execute(
+            "SELECT ts FROM events WHERE id=(SELECT COALESCE(MAX(id),0) FROM events WHERE run_id=? AND tool=?)",
+            (rid, atlas_db.PROMPT_BOUNDARY_TOOL),
+        ).fetchone()
+        return float(row[0] or 0.0) if row else 0.0
+    except Exception:  # noqa: BLE001 -- display only: fail toward the strict whole-session count
+        return 0.0
+
+
 def stop_verdict_line(session: str, root: Path):
     """The completion gate's last Stop verdict for `session`, as one informational line (ok is always
     true: it is a record, not a check). None when no verdict is stored. completion_gate_core writes it."""
@@ -231,11 +249,20 @@ def tripwire_group(session: str) -> dict:
                 f"{n} direct calls since the last dispatch, limit {limit}",
             )
         )
+        # Only a denial in the current run (after the latest user prompt) is a failing row: the
+        # friction log is cumulative, so one early denial used to keep the panel red for hours.
+        since = _prompt_boundary_ts(conn, session)
         rows = conn.execute(
             "SELECT category, snippet, ts FROM friction_events WHERE session_id=? "
-            "AND category LIKE 'dispatch_denied:%' ORDER BY ts DESC LIMIT 5",
-            (session,),
+            "AND category LIKE 'dispatch_denied:%' AND (ts IS NULL OR ts > ?) "
+            "ORDER BY ts DESC LIMIT 5",
+            (session, since),
         ).fetchall()
+        earlier = conn.execute(
+            "SELECT COUNT(*) FROM friction_events WHERE session_id=? "
+            "AND category LIKE 'dispatch_denied:%' AND ts <= ?",
+            (session, since),
+        ).fetchone()[0]
     finally:
         conn.close()
     now = time.time()
@@ -248,6 +275,16 @@ def tripwire_group(session: str) -> dict:
                 f"Denied: {cat.split(':', 1)[1]}",
                 False,
                 f"{(snippet or '')[:80]} ({ago})",
+            )
+        )
+    if not rows and earlier:
+        # the session total stays visible, as a record and not a failure
+        g["lines"].append(
+            _line(
+                "earlier-denials",
+                "Denials earlier this session",
+                True,
+                f"{earlier} this session, none since the latest prompt",
             )
         )
     return g
@@ -275,29 +312,40 @@ def _routed(root) -> bool:
         return True
 
 
+def _run_count(n_run: int, n_all: int) -> str:
+    """`n` when the run holds every call of the session, else `n this run, m this session`: the session
+    total stays readable while only the current run decides the row."""
+    return f"{n_run}" if n_run == n_all else f"{n_run} this run, {n_all} this session"
+
+
 def routing_group(session: str, root=None) -> dict:
     g = {"id": "routing", "title": "Tool routing", "lines": []}
     conn = _ro_conn()
     try:
         rows = conn.execute(
-            "SELECT kind, server, tool_name, denied FROM tool_calls WHERE session_id=?",
+            "SELECT kind, server, tool_name, denied, ts FROM tool_calls WHERE session_id=?",
             (session,),
         ).fetchall()
         agent = conn.execute(
             "SELECT agent FROM session_logs WHERE session_id=?", (session,)
         ).fetchone()
+        since = _prompt_boundary_ts(conn, session)
     finally:
         conn.close()
+    # The native and deny rows judge the current run only (calls after the latest user prompt); a call
+    # with no time is counted, the strict reading. The context-server rows stay session totals (all green).
+    cur = [r for r in rows if r[4] is None or r[4] > since]
     # omp has no Read/Grep/Glob-equivalent shell policy for Bash (its bash is the primary
     # shell tool), so native Bash is not a routing miss there; other natives and denies count.
     native = _NATIVE if not agent or agent[0] != "omp" else _NATIVE[:-1]
     for name, keys in _CONTEXT_SERVERS:
-        n = sum(1 for k, s, t, d in rows if k == "mcp" and (s or "").lower() in keys)
+        n = sum(1 for k, s, t, d, _ts in rows if k == "mcp" and (s or "").lower() in keys)
         g["lines"].append(_line(name, f"{name} calls", True, f"{n} {_ROUTING_NOTE}"))
     routed = _routed(root)
     for tool in native:
-        n = sum(1 for k, s, t, d in rows if k == "builtin" and t == tool)
-        detail = f"{n} {_ROUTING_NOTE}"
+        n_all = sum(1 for k, s, t, d, _ts in rows if k == "builtin" and t == tool)
+        n = sum(1 for k, s, t, d, _ts in cur if k == "builtin" and t == tool)
+        detail = f"{_run_count(n, n_all)} {_ROUTING_NOTE}"
         if not routed:
             detail += "; lean-ctx is not configured here, so native is the route"
         g["lines"].append(
@@ -305,9 +353,15 @@ def routing_group(session: str, root=None) -> dict:
                 f"native-{tool}", f"Native {tool} calls", n == 0 or not routed, detail
             )
         )
-    denies = sum(1 for r in rows if r[3])
+    denies_all = sum(1 for r in rows if r[3])
+    denies = sum(1 for r in cur if r[3])
     g["lines"].append(
-        _line("denied", "Policy denies", denies == 0, f"{denies} {_ROUTING_NOTE}")
+        _line(
+            "denied",
+            "Policy denies",
+            denies == 0,
+            f"{_run_count(denies, denies_all)} {_ROUTING_NOTE}",
+        )
     )
     return g
 

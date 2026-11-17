@@ -30,7 +30,6 @@ import sys
 HOME = os.path.expanduser("~")
 USER_SKILLS = os.path.join(HOME, ".claude", "skills")
 USER_AGENTS = os.path.join(HOME, ".claude", "agents")
-USER_SETTINGS = os.path.join(HOME, ".claude", "settings.json")
 
 # tag -> regexes that mark an asset (by name+desc) or a project (by files/deps)
 # as belonging to that technology/vertical. An asset with NO tag is treated as
@@ -60,9 +59,6 @@ TAXONOMY = {
     "novelty": r"from-the-other-side|caveman|gilfoyle|beast mode|songwriting|minecraft|rhino3d|freecad|comfyui|manim|polymarket|openhue|ascii-art",
 }
 
-# project tags that should NOT, on their own, pull in heavy verticals.
-# (kept for future weighting; unused in v1 scoring)
-UNIVERSAL_HINT = r"git|commit|refactor|review|docs?|readme|changelog|test|debug|skill|plugin|agent|prompt|memory|markdown"
 
 
 def est_tokens(text):

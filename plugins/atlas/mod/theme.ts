@@ -192,3 +192,121 @@ export function formatDuration(ms: number): string {
  if (m < 60) return `${m}m${String(s % 60).padStart(2, '0')}s`
  return `${Math.floor(m / 60)}h${m % 60}m`
 }
+
+// ---- role colours ----------------------------------------------------------------------------------------
+// One role -> colour table for every surface that names a worker. Inline because the host loader refuses .md
+// imports from mod modules (see mod/contract-pattern.ts); role-colour.test.ts fails when it drifts from the
+// `color:` line of plugins/atlas/agents/<role>.md.
+
+/** Role (agents/<role>.md `name:`) -> its frontmatter `color:`. */
+export const ROLE_COLOUR: Readonly<Record<string, string>> = {
+ 'completeness-critic': 'red',
+ 'db-prober': 'yellow',
+ 'docs-auditor': 'orange',
+ 'docs-curator': 'purple',
+ explorer: 'cyan',
+ implementer: 'green',
+ planner: 'blue',
+ runner: 'orange',
+ 'test-engineer': 'cyan',
+ 'ui-runtime-tester': 'pink',
+ verifier: 'red',
+}
+
+/** The palette tokens a role colour may land on. */
+type RoleToken = 'ok' | 'bad' | 'warn' | 'accent' | 'info'
+
+/** Colour name -> the existing palette token it lands on (atlas-ui.ts PALETTES): the nearest chromatic token, never a new colour
+ * value (critique 25 and 26: one palette, every surface on the palette indices). cyan and blue take `info` (Latte's teal, Mocha's
+ * accent), so an explorer never reads as an implementer; pink is nearest to `bad`, orange to `warn`. */
+const ROLE_TOKEN: Readonly<Record<string, RoleToken>> = {
+ green: 'ok',
+ red: 'bad',
+ yellow: 'warn',
+ orange: 'warn',
+ purple: 'accent',
+ pink: 'bad',
+ blue: 'info',
+ cyan: 'info',
+}
+
+/** The token hexes, mirroring atlas-ui.ts PALETTES (read at load it would be a circular import). Each Mocha hex is an exact
+ * xterm-256 index (ok 114, bad 203, warn 179, accent and info 141): a 256-colour run lands on the palette as is. */
+const TOKEN_HEX: Readonly<Record<'mocha' | 'latte', Readonly<Record<RoleToken, string>>>> = {
+ mocha: { ok: '#87d787', bad: '#ff5f5f', warn: '#d7af5f', accent: '#af87ff', info: '#af87ff' },
+ latte: { ok: '#40a02b', bad: '#d20f39', warn: '#df8e1d', accent: '#8534ee', info: '#179299' },
+}
+
+/** Colour name -> its Mocha hex per colour depth: both are the palette token's own hex. */
+export const ROLE_HEX: Readonly<Record<string, { truecolor: string; x256: string }>> = Object.fromEntries(
+ Object.entries(ROLE_TOKEN).map(([name, tok]) => [name, { truecolor: TOKEN_HEX.mocha[tok], x256: TOKEN_HEX.mocha[tok] }]),
+)
+
+/** The role word of a worker that names no known role (a crew worker with a free name such as `notes`). */
+const CREW_ROLE = 'crew'
+
+// Longest first, so `docs-curator-2` resolves to docs-curator and not to a shorter role sharing its head.
+const ROLES_BY_LENGTH = Object.keys(ROLE_COLOUR).sort((a, b) => b.length - a.length)
+
+/** The one role a name's first dash segment abbreviates (`impl-hud` -> implementer, `verif-2` -> verifier): 3+ letters, a unique match. */
+function abbreviated(n: string): string | undefined {
+ const head = n.split('-')[0] ?? ''
+ if (head.length < 3) return undefined
+ const hits = ROLES_BY_LENGTH.filter((r) => r.startsWith(head))
+ return hits.length === 1 ? hits[0] : undefined
+}
+
+/** A worker's role: its persona (`implementer`, `atlas:implementer`), else its name prefix (`implementer-backend`,
+ * `explorer-9a55`), else a dash segment run naming a role (`alpha-explorer`), else a head that abbreviates one role
+ * (`impl-hud`), else `crew`. tmux workers carry persona `unknown` (data/crew.ts, data/mux.ts), so their name decides. */
+export function roleOf(persona: string | undefined, name: string): string {
+ const n = name.toLowerCase().trim().replace(/\s+#\d+$/, '')
+ return personaRole(persona) ?? nameRole(n) ?? CREW_ROLE
+}
+
+/** The role a persona names (`implementer`, `atlas:implementer`), else undefined. */
+function personaRole(persona: string | undefined): string | undefined {
+ const p = (persona ?? '').toLowerCase().replace(/^atlas:/, '')
+ return p in ROLE_COLOUR ? p : undefined
+}
+
+/** Name rules in order: a role prefix, a dash segment run naming a role, a head abbreviating one role. */
+const NAME_RULES: readonly ((n: string) => string | undefined)[] = [
+ (n) => ROLES_BY_LENGTH.find((r) => n === r || n.startsWith(`${r}-`)),
+ (n) => ROLES_BY_LENGTH.find((r) => n.endsWith(`-${r}`) || n.includes(`-${r}-`)),
+ (n) => (n.includes('-') ? abbreviated(n) : undefined),
+]
+
+/** The first role a name rule finds, else undefined. */
+function nameRole(n: string): string | undefined {
+ for (const rule of NAME_RULES) {
+  const role = rule(n)
+  if (role !== undefined) return role
+ }
+ return undefined
+}
+
+/** The hex a role's name is drawn in: its palette token's hex in the theme; undefined for `crew` (the neutral text colour) and under NO_COLOR. */
+export function roleHex(role: string, color: 'truecolor' | '256' | 'none', theme: 'mocha' | 'latte' = 'mocha'): string | undefined {
+ if (color === 'none') return undefined
+ const name = ROLE_COLOUR[role]
+ const tok = name === undefined ? undefined : ROLE_TOKEN[name]
+ return tok === undefined ? undefined : TOKEN_HEX[theme][tok]
+}
+
+/** The ways a lower-cased name already carries its role word. */
+const CARRIES: readonly ((n: string, role: string) => boolean)[] = [
+ (n, role) => n === role,
+ (n, role) => n.startsWith(`${role}-`),
+ (n, role) => n.endsWith(`-${role}`),
+ (n, role) => n.includes(`-${role}-`),
+ (n, role) => n.startsWith(`${role} `),
+ (n, role) => n.includes('-') && abbreviated(n) === role,
+]
+
+/** The AGENT cell text: the name, then the role word when the name does not already carry it (`w1 implementer`, `notes crew`);
+ * a name whose head abbreviates the role (`impl-hud`) already carries it. */
+export function roleLabel(name: string, role: string): string {
+ const n = name.toLowerCase()
+ return CARRIES.some((carries) => carries(n, role)) ? name : `${name} ${role}`
+}

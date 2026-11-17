@@ -1418,6 +1418,29 @@ class LogTmuxFailureTests(unittest.TestCase):
             )
             self.assertFalse((sub / ".atlas").exists())
 
+    def test_marketplace_plugin_cwd_ignores_stray_plugin_atlas(self):
+        import atlas_mux
+
+        res = subprocess.CompletedProcess([], 1, "", "boom")
+        old = os.getcwd()
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_PROJECT_ROOT"}
+        with tempfile.TemporaryDirectory() as d:
+            repo = pathlib.Path(d).resolve()
+            (repo / ".git").mkdir()
+            (repo / ".claude-plugin").mkdir()
+            (repo / ".claude-plugin" / "marketplace.json").write_text("{}")
+            (repo / ".atlas" / ".run").mkdir(parents=True)
+            stray = repo / "plugins" / "atlas" / ".atlas" / ".run"
+            stray.mkdir(parents=True)
+            os.chdir(repo / "plugins" / "atlas")
+            try:
+                with mock.patch.dict(os.environ, env, clear=True):
+                    atlas_mux._log_tmux_failure(("new-session",), res)
+            finally:
+                os.chdir(old)
+            self.assertTrue((repo / ".atlas/.run/logs/atlas_mux.log").is_file())
+            self.assertFalse((stray / "logs").exists())
+
 
 class StatusKillTests(Base):
     def _spawn(self, name="Alpha"):

@@ -4607,9 +4607,9 @@ class ScopeGateTest(unittest.TestCase):
             self._decision(self._dispatch("atlas:implementer", "fix/low"))[0]
         )
 
-    def _burst_session(self):
+    def _burst_session(self, tag=""):
         # The burst clock is per session and may live in the shared temp dir: use a session no other test touches.
-        sess = f"burst-{os.getpid()}-{id(self)}-{self._testMethodName}"
+        sess = f"burst-{os.getpid()}-{id(self)}-{self._testMethodName}{tag}"
         self.env = dict(self.env, ATLAS_BURST_SECS="10")
         import atlas_db
 
@@ -4646,6 +4646,55 @@ class ScopeGateTest(unittest.TestCase):
         self.assertIn("spawn-team", reason)
         self.assertIn("--task-file", reason)
         self.assertIn("bounded worker may stay in-process", reason)
+
+    def _cheap_dispatch(self, agent, model, session, scope="audit/low"):
+        spec = SPEC_BLOCK.replace("SCOPE: fix/medium\n", "")
+        return self._decision(
+            run_hook(
+                {
+                    "session_id": session,
+                    "cwd": self.tmp,
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Agent",
+                    "tool_input": {
+                        "subagent_type": agent,
+                        "name": COLONY_NAME,
+                        "model": model,
+                        "prompt": TOOLS_BLOCK + spec + f"SCOPE: {scope}\n",
+                    },
+                },
+                self.env,
+            )
+        )
+
+    def test_c_parallel_cheap_read_only_exploration_is_never_denied(self):
+        # each read-only role pins its own cheap model; naming the pin is not an override
+        for agent, model, scope in (
+            ("atlas:explorer", "haiku", "audit/low"),
+            ("atlas:db-prober", "sonnet", "db/medium"),
+        ):
+            sess = self._burst_session(model)
+            self._dispatch("atlas:implementer", "fix/low", session=sess)  # a live slot
+            for _ in range(3):  # concurrent: no PostToolUse in between
+                got = self._cheap_dispatch(agent, model, sess, scope)
+                self.assertNotEqual(got[0], "deny", (model, got[1][:300]))
+
+    def test_c_parallel_stays_denied_for_opus_unset_model_or_editor(self):
+        for agent, model in (
+            ("atlas:explorer", "opus"),
+            ("atlas:explorer", ""),
+            ("atlas:implementer", "haiku"),
+        ):
+            sess = self._burst_session(f"{agent}{model}")
+            self._dispatch("atlas:implementer", "fix/low", session=sess)
+            self.assertEqual(
+                self._cheap_dispatch(agent, model, sess)[0], "deny", (agent, model)
+            )
+
+    def test_default_burst_window_is_30s(self):
+        import dispatch_tripwire_core
+
+        self.assertEqual(dispatch_tripwire_core.BURST_SECS, 30)
 
     def test_c_sequential_dispatch_after_return_is_only_an_advisory(self):
         sess = self._burst_session()
@@ -4936,11 +4985,17 @@ class TeamGateTest(unittest.TestCase):
         env = self._env()
         decision, reason = self._dispatch("atlas:implementer", "fix/medium", env)
         self.assertEqual(decision, "deny")
-        self.assertIn("atlas_mux.py spawn-team --class fix --effort medium --paths a,b --task-file T", reason)
+        # 17.28.0 ROUTE wording: the command carries the class, effort and a real --task-file brief.
+        self.assertTrue(reason.startswith("ROUTE - this work goes to a tmux team: run the command below"), reason)
+        m = re.search(r"atlas_mux\.py\" spawn-team --class fix --effort medium --task-file (\S+)", reason)
+        self.assertIsNotNone(m, reason)
+        self.assertTrue(os.path.isfile(m.group(1)), m.group(1))
+        with open(m.group(1), encoding="utf-8") as fh:
+            self.assertIn("SCOPE: fix/medium", fh.read())
         self.assertIn('atlas_crew.py run --spec S --files G --goal "..."', reason)
         self.assertIn("dispatch_denied:team", self._friction())
         self.assertNotIn("SCOPE: audit/low", reason)
-        self.assertIn("Ways out: run that team or crew command", reason)
+        self.assertIn("run the command below", reason)
         self.assertLess(len(reason.encode("utf-8")), 600, reason)
         reason.encode("ascii")
 
@@ -5312,6 +5367,63 @@ class ToolReachabilityTest(unittest.TestCase):
             bash = self._nudge("Bash")
         self.assertIn("ctx_execute", bash)
         self.assertNotIn("lean-ctx", bash)
+
+
+class CloseDispatchSlotTest(unittest.TestCase):
+    SESSION = "slot-unit"
+
+    def setUp(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import dispatch_tripwire
+
+        self.dt = dispatch_tripwire
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.SESSION = f"slot-unit-{self.id()}-{os.getpid()}"  # state is keyed by (root, session)
+        self.cwd = Path(tmp.name)
+        self.root = self.dt.find_root(self.cwd)  # the root PostToolUse derives from the payload cwd
+        env = {"ATLAS_BURST_SECS": "10", "ATLAS_HARNESS": "", "ATLAS_TOOLKIT_LOAD": ""}
+        p = patch.dict(os.environ, env)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def open(self, now, tuid, exempt=False):
+        with patch("time.time", return_value=now):
+            return self.dt._burst_note(self.root, self.SESSION, exempt, tool_use_id=tuid)
+
+    def close(self, tuid):
+        self.dt._close_dispatch(
+            {"cwd": str(self.cwd), "session_id": self.SESSION, "tool_use_id": tuid, "tool_input": {}}
+        )
+
+    def slots(self):
+        with self.dt._name_state(self.root, self.SESSION) as st:
+            return list(st.get("open", []))
+
+    def test_out_of_order_close_pops_its_own_slot_without_a_false_deny(self):
+        self.assertEqual(self.open(0.0, "A", exempt=True), (False, ""))
+        self.assertEqual(self.open(5.0, "B", exempt=True), (False, ""))
+        self.assertEqual(self.slots(), [0.0, 5.0])
+        self.close("B")  # B returns first; the oldest slot (A's) must stay
+        self.assertEqual(self.slots(), [0.0])
+        # t=12: A's slot is outside the 10 s window, so a real dispatch is not "concurrent".
+        # Popping open[0] instead would have left B's stale slot (12-5 < 10) and denied it.
+        concurrent, text = self.open(12.0, "C")
+        self.assertFalse(concurrent, text)
+        self.assertEqual(self.slots(), [12.0])
+        self.close("A")  # A's slot already expired by the window: must not free C's
+        self.assertEqual(self.slots(), [12.0])
+        self.close("C")
+        self.assertEqual(self.slots(), [])  # PostToolUse accounting balanced: 3 opens, 3 closes
+
+    def test_close_without_a_recorded_id_falls_back_to_the_oldest(self):
+        self.open(0.0, "A", exempt=True)
+        self.open(5.0, "B", exempt=True)
+        self.close("")  # a payload with no id (non-Claude harness): old behavior
+        self.assertEqual(self.slots(), [5.0])
+
+
 
 if __name__ == "__main__":
     unittest.main()

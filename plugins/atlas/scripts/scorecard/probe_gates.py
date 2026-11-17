@@ -25,10 +25,10 @@ SPEC = (
     "REPORT: STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT\n" + TOOLS
 )
 GOOD_REPORT = "STATUS: DONE\nSTEPS: 2/2\nFILES_CHANGED: none\nEVIDENCE:\n1. x -> y\nDELIVERABLE: z\nNEXT: none"
+ROUTE_TEXT = "ROUTE - this work goes to a tmux team"
 
 
 class Gates:
-
     """Drives the gate hooks in a sandbox and records (gate, case, expect, got)."""
     def __init__(self, ctx):
         self.sb = Sandbox(ctx, "gates")
@@ -77,6 +77,38 @@ class Gates:
             code += f"atlas_db.mark_orchestrating(c, {s!r}, {self.proj!r})\n"
         code += f"for i in range({n_inline}): atlas_db.log_event(c, rid, 'Bash', 'main', 1, None)\n"
         self.sql(code)
+
+    def scope(self, s, cls, effort, seats):
+        # The session's resolved scope, where arm_orchestration records it (prompt_optimizer_core.resolved_scope).
+        d = Path(self.proj) / ".atlas" / ".run" / "atlas-scope"
+        d.mkdir(parents=True, exist_ok=True)
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", s)[:128]
+        (d / (safe + ".json")).write_text(
+            json.dumps({"task_class": cls, "effort": effort, "working_seats": seats})
+        )
+
+    def friction(self, s):
+        code = (
+            f"import sys; sys.path.insert(0, {str(self.ctx.scripts)!r})\nimport atlas_db\n"
+            "c = atlas_db.connect(); atlas_db.init(c)\n"
+            "rows = c.execute('SELECT category FROM friction_events WHERE session_id=?', "
+            f"({s!r},)).fetchall()\n"
+            "print(' '.join(r[0] for r in rows))\n"
+        )
+        r = run([self.ctx.py, "-c", code], env=self.sb.env, cwd=self.proj)
+        return (r.get("out") or "").split()
+
+    def rec_route(self, gate, name, s, r):
+        # Contract: a routed working dispatch is a deny with code `team` (friction dispatch_denied:team)
+        # carrying the ROUTE instruction text.
+        self.rec(gate, name, "deny", r)
+        res = self.results[-1]
+        route = ROUTE_TEXT in r["out"]
+        coded = "dispatch_denied:team" in self.friction(s)
+        if res["ok"] and not (route and coded):
+            res["ok"] = False
+            res["got"] = "deny(other)"
+            res["note"] = f"route_text={route} code_team={coded}: " + r["out"][:240]
 
     def mkrun(self, s, orchestrating=True, edit=True, dispatch=False, docs=False):
         code = f"rid = atlas_db.start_run(c, pid, {s!r}, 'task')\n"
@@ -512,6 +544,7 @@ class Gates:
         G, sid = "dispatch_tripwire", self.sb.sid
         tw = lambda p, extra=None: self.hook("dispatch_tripwire.py", p, extra)  # noqa: E731
         sub_tp = "/h/projects/p/s/subagents/a.jsonl"
+        team_off = {"ATLAS_TEAM_GATE": "off"}
 
         def disp(s, prompt, name="W1", agent="atlas:implementer", **k):
             ti = dict(
@@ -538,23 +571,39 @@ class Gates:
                 **k,
             )
 
+        def bash(s):
+            return dict(
+                edit(s, ""), tool_name="Bash", tool_input={"command": "make build"}
+            )
+
         p = self.proj
         s = sid()
         self.orchestrating(s)
-        # With tmux on PATH every in-process working dispatch is denied; the team gate
-        # off (or no tmux) is the only way a valid one is allowed.
+        # Contract (17.28): with tmux on PATH every in-process working dispatch is routed to a tmux team, the
+        # FIRST one of a session included, armed or not: a deny with code `team` and the ROUTE text. The team
+        # gate off (or no tmux) is the only way a valid one is allowed.
         if self.ctx.tmux_real:
-            self.rec(
+            sT = sid()
+            self.orchestrating(sT)
+            self.rec_route(
                 G,
-                "deny: in-process implementer dispatch with tmux on PATH",
-                "deny",
-                tw(disp(s, SPEC)),
+                "deny(team, ROUTE): first in-process implementer dispatch with tmux on PATH",
+                sT,
+                tw(disp(sT, SPEC)),
+            )
+            sU = sid()
+            self.orchestrating(sU, orchestrating=False)
+            self.rec_route(
+                G,
+                "deny(team, ROUTE): first dispatch of an unarmed session with tmux on PATH",
+                sU,
+                tw(disp(sU, SPEC)),
             )
         self.rec(
             G,
             "allow: valid atlas:implementer dispatch (team gate off)",
             "allow",
-            tw(disp(s, SPEC), {"ATLAS_TEAM_GATE": "off"}),
+            tw(disp(s, SPEC), team_off),
         )
         self.rec(
             G,
@@ -625,6 +674,32 @@ class Gates:
                     tool_input={"file_path": p + "/src/new.py", "content": "x"},
                 )
             ),
+        )
+        # Contract (17.28 simple-task rule): the lead's inline-edit deny holds for a medium multi-seat scope
+        # and is skipped for a simple one (one working seat or effort low), unless ATLAS_INLINE_SIMPLE=off.
+        sM = sid()
+        self.orchestrating(sM)
+        self.scope(sM, "implement", "medium", 3)
+        self.rec(
+            G,
+            "deny: Edit src/ orchestrating, scope implement/medium (3 seats)",
+            "deny",
+            tw(edit(sM, p + "/src/app.py")),
+        )
+        sS = sid()
+        self.orchestrating(sS)
+        self.scope(sS, "fix", "low", 1)
+        self.rec(
+            G,
+            "allow: Edit src/ orchestrating, simple scope fix/low (1 seat)",
+            "allow",
+            tw(edit(sS, p + "/src/app.py")),
+        )
+        self.rec(
+            G,
+            "deny: Edit src/ simple scope with ATLAS_INLINE_SIMPLE=off",
+            "deny",
+            tw(edit(sS, p + "/src/app.py"), {"ATLAS_INLINE_SIMPLE": "off"}),
         )
         # Contract: an unnamed dispatch is auto-named (injected) unless ATLAS_AUTONAME=off, which denies.
         self.rec(
@@ -700,17 +775,22 @@ class Gates:
             ),
         )
         # Contract (F11): the first unbounded-spec offense per session is an advisory, the second denies.
+        # With tmux on PATH the team route runs ahead of that advisory (17.28), so the spec gate itself is
+        # scored with the team gate off; the route is scored by the deny(team, ROUTE) cases above.
         sP = sid()
         self.orchestrating(sP)
         prose = SPEC.replace("GOAL: do x", "the goal: do x")
         self.rec(
-            G, "first-offense prose 'goal:' is advisory", "allow", tw(disp(sP, prose))
+            G,
+            "first-offense prose 'goal:' is advisory (team gate off)",
+            "allow",
+            tw(disp(sP, prose), team_off),
         )
         self.rec(
             G,
             "BYPASS? prose 'goal:' substitutes GOAL block (2nd offense)",
             "deny",
-            tw(disp(sP, prose)),
+            tw(disp(sP, prose), team_off),
         )
         self.rec(
             G,
@@ -731,11 +811,7 @@ class Gates:
             G,
             "deny: 7th inline Bash op w/o dispatch",
             "deny",
-            tw(
-                dict(
-                    edit(s3, ""), tool_name="Bash", tool_input={"command": "make build"}
-                )
-            ),
+            tw(bash(s3)),
         )
         s4 = sid()
         self.orchestrating(s4, n_inline=5)
@@ -743,11 +819,27 @@ class Gates:
             G,
             "allow: 6th inline Bash op",
             "allow",
-            tw(
-                dict(
-                    edit(s4, ""), tool_name="Bash", tool_input={"command": "make build"}
-                )
-            ),
+            tw(bash(s4)),
+        )
+        # Contract (17.28 simple-task rule): the 7th-inline-op deny holds for a medium multi-seat scope and
+        # is skipped for a simple one.
+        s5 = sid()
+        self.orchestrating(s5, n_inline=6)
+        self.scope(s5, "implement", "medium", 3)
+        self.rec(
+            G,
+            "deny: 7th inline Bash op, scope implement/medium (3 seats)",
+            "deny",
+            tw(bash(s5)),
+        )
+        s6 = sid()
+        self.orchestrating(s6, n_inline=6)
+        self.scope(s6, "fix", "low", 1)
+        self.rec(
+            G,
+            "allow: 7th inline Bash op, simple scope fix/low (1 seat)",
+            "allow",
+            tw(bash(s6)),
         )
         corrupt = self.ctx.sub("gates") / "corrupt.db"
         corrupt.write_bytes(os.urandom(4096))
@@ -1008,6 +1100,8 @@ def probe_gate_correctness(ctx):
 
 
 # -- dispatch spec decoys / worker report nonsense ---------------------------------
+
+
 def probe_dispatch_spec(ctx):
     cmd = CMD + "dispatch_spec"
     names = ["dispatch_spec_decoy_denied", "dispatch_spec_empty_denied"]

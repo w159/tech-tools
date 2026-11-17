@@ -110,11 +110,17 @@ describe('B4: one warning mark and one layout at every width', () => {
   const done = (over: Record<string, unknown> = {}) => idle({ todos: doneStore(), activity: lead(null, 'done'), ...over });
   const glyphsOf = (out: string[], word: string): string => out.filter((l) => l.includes(word)).join('');
   test('the band head and the checks row mark a failing check with the same glyph', () => {
-    const out = rows(done(), gates, 150, core(0));
     expect(gateTally(gates as never).green).toBe(2);
+    // fix1728: the unmet completion line waits for Stop: the band head says no denial and the checks row draws the queued mark, never the warning
+    const pend = rows(done(), gates, 150, core(0));
+    expect(pend[0]).not.toContain('denied');
+    expect(glyphsOf(pend, ' checks ')).toContain('◇ completion');
+    expect(glyphsOf(pend, ' checks ')).not.toContain('△ completion');
+    const real = [grp('completion', false), grp('tripwire', false), grp('routing', true), grp('header', false)]; // a call denied in the current run: a real failure
+    const out = rows(done(), real, 150, core(0));
     expect(out[0]).toContain('denied'); // round 2: the band head says `N denied` (no ratio); the checks row keeps its own mark
     const checks = glyphsOf(out, ' checks ');
-    expect(checks).toContain('△ completion');
+    expect(checks).toContain('△ tripwire');
     expect(checks).not.toContain('■');
   });
   test('110 and 150 draw the same rows: head, the core row carrying the last run, checks, keys', () => {

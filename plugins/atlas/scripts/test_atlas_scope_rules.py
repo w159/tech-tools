@@ -600,3 +600,31 @@ def test_env_assignment():
     assert not sc._is_env_assignment("1A=2")
     assert not sc._is_env_assignment("a-b=2")
     assert not sc._is_env_assignment("=1")
+
+
+def test_harness_settings_are_not_target_code(tmp_path, monkeypatch):
+    monkeypatch.setenv("ATLAS_SCRATCH_ROOTS", "")
+    (tmp_path / ".git").mkdir()
+    root = str(tmp_path)
+    for name in ("settings.json", "settings.local.json"):
+        assert sc.is_target_code(f"{root}/.claude/{name}", root) is False
+    # the rest of .claude/ and real code stay target code
+    assert sc.is_target_code(f"{root}/.claude/rules/x.py", root) is True
+    assert sc.is_target_code(f"{root}/.claude/hooks/settings.json", root) is True
+    assert sc.is_target_code(f"{root}/plugins/atlas/hooks/x.py", root) is True
+
+
+@pytest.mark.parametrize(
+    "cmd,exp",
+    [
+        ("python3 plugins/atlas/scripts/atlas_test.py run --changed", True),
+        ("python3 plugins/atlas/scripts/atlas_test.py select", True),
+        ("python3 plugins/atlas/scripts/atlas_crew.py run", False),
+        ("python3 plugins/atlas/scripts/atlas_test.py status", False),
+        ("cat atlas_test.py", False),
+        ("rm atlas_test.py", False),
+        ("python3 other.py atlas_test.py run", False),
+    ],
+)
+def test_atlas_test_runner_is_verification(cmd, exp):
+    assert sc.is_verification_command(cmd) is exp
