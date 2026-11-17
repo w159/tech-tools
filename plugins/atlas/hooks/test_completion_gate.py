@@ -820,6 +820,32 @@ class FindingsSelfStampTest(unittest.TestCase):
         tp = self._transcript(cmd="cd /x && pytest hooks -q -p no:cacheprovider")
         self.assertTrue(self.check(tp))
 
+    _COMPOUND_REPRO = (
+        "fallow audit --base origin/main --format json; "
+        "cd plugins/atlas && env -u NO_COLOR bun test omp mod"
+    )
+
+    def test_compound_reproduction_counts_when_its_test_segment_passed(self):
+        self._row(reproduction=self._COMPOUND_REPRO)
+        tp = self._transcript(cmd="cd plugins/atlas && env -u NO_COLOR bun test omp mod")
+        self.assertTrue(self.check(tp))
+
+    def test_compound_reproduction_without_a_passing_test_run_stays_rejected(self):
+        self._row(reproduction=self._COMPOUND_REPRO)
+        self.assertFalse(self.check(self._transcript()))
+        tp = self._transcript(
+            cmd="bun test omp mod", out="Exit code 1\n1 fail", is_error=True
+        )
+        self.assertFalse(self.check(tp))
+
+    def test_longer_test_segment_is_not_credited_by_a_prefix_run(self):
+        self._row(reproduction=self._COMPOUND_REPRO)
+        self.assertFalse(self.check(self._transcript(cmd="bun test omp")))
+
+    def test_semicolon_inside_quotes_does_not_split(self):
+        self._row(reproduction="pytest -k 'a; b' -q")
+        self.assertTrue(self.check(self._transcript(cmd="pytest -k 'a; b' -q")))
+
     def test_evidence_entry_with_arrow_suffix_counts(self):
         self._row(evidence=["pytest hooks -q -> 36 passed"])
         self.assertTrue(self.check(self._transcript(cmd="pytest hooks -q")))

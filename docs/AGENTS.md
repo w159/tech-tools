@@ -131,7 +131,7 @@ Verified 2026-07-13 against the shipped tree.
 - Framework(s): none; code is standard library only, runtime is the Claude Code plugin and
   skill markdown system
 - Package manager: none (standard library only); npx used only to run pyright
-- Test runner: unittest, via `python3 -m unittest discover`
+- Test runner: pytest (CI: `python -m pytest -q -p no:cacheprovider`); locally `python3 plugins/atlas/scripts/atlas_test.py run`
 
 ## Architecture
 
@@ -158,8 +158,10 @@ Verified 2026-07-13 against the shipped tree.
 Verified 2026-07-13. Run from repo root.
 
 - Build: none (no compile step; Python is interpreted)
-- Test: `python3 -m unittest discover -s plugins/atlas/hooks`
-  and `python3 -m unittest discover -s plugins/atlas/scripts` (test counts omitted: they drift; re-run to quote them)
+- Test, one file: `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_<name>.py`. The suites need pytest; `python3 -m unittest` fails on 26 files that import pytest or hold pytest-style tests only (test counts omitted: they drift; re-run to quote them)
+- Test, parallel: `python3 plugins/atlas/scripts/atlas_test.py run` starts each test file of the hooks and scripts suites as its own process from a pool (`--jobs N`, `--suite hooks|scripts`, `--changed [BASE]` for the files changed since BASE).
+  `python3 plugins/atlas/scripts/atlas_test.py select <path>...` prints the test files a change can affect; a TypeScript file selects no Python suite.
+  Run the selection locally and leave the full run to branch CI.
 - Lint: `ruff check plugins/atlas/hooks plugins/atlas/scripts` (All checks passed)
 - Typecheck: `npx pyright plugins/atlas/hooks plugins/atlas/scripts` (0 errors, 0 warnings,
   0 informations)

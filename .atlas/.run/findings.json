@@ -12478,5 +12478,95 @@
     "status": "verified",
     "verified_at": "2026-11-17T09:45:05+00:00",
     "verified_by": "completion-gate"
+  },
+  {
+    "id": "crew-role-tiers-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Crew workers default to the role model and effort from agent frontmatter",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_crew.py: 3 new tests fail without the atlas_crew.py change, 9/9 V16Tests pass with it"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_crew.V16Tests",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:30:17+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-segment-match-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Completion gate (b) matches a compound reproduction per ; && || segment",
+    "evidence": [
+      "hooks/test_completion_gate.py: test_compound_reproduction_counts_when_its_test_segment_passed fails with the gate change stashed (738 tests, 1 failure), 738 OK with it"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run plugins/atlas/scripts/atlas_crew.py plugins/atlas/scripts/atlas_test.py plugins/atlas/hooks/completion_gate_core.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:50:32+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-test-runner-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_test.py runs hooks and scripts suites in parallel under pytest and selects tests by changed path",
+    "evidence": [
+      "full run: hooks PASS 74 files, scripts 166/167 (test_connectors_wiring.py fails on the blumira server.mjs deletion that predates this run), wall 172.9s at jobs 8 against about 17 minutes serial"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run plugins/atlas/scripts/atlas_crew.py plugins/atlas/scripts/atlas_test.py plugins/atlas/hooks/completion_gate_core.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:50:32+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-test-pytest-17.28.1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_test.py run starts each file under pytest from the first interpreter that has it",
+    "evidence": [
+      "16 passed; full run under pytest: hooks PASS 74 files, scripts 166/167, wall 172.9s (.atlas/evidence/2026-11-17_perf-fixes-full-parallel-run.txt)"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_atlas_test.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:51:34+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "project-disable-list-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Project-only disable list: plugins 24 to 10, active MCP servers 66 to 26",
+    "evidence": [
+      "init event: plugins 14 (10 user, 4 built-in), mcp_servers connected 24, disabled 14, failed 1, needs-auth 1"
+    ],
+    "doc_refs": [],
+    "reproduction": "claude -p 'Reply with the single word ok.' --model haiku --max-turns 1 --output-format stream-json --verbose (read the init event)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T11:51:34+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

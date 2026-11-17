@@ -55,6 +55,7 @@ sys.path.insert(0, str(SCRIPTS))
 import atlas_crew_seal  # noqa: E402
 import atlas_irc  # noqa: E402
 import atlas_provider  # noqa: E402
+import atlas_resolve  # noqa: E402
 
 CREW_REL = Path(".atlas") / ".run" / "crew"
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,31}$")
@@ -469,16 +470,41 @@ def worker_settings(rundir: Path) -> str:
     return str(p)
 
 
-def worker_effort(w: dict, meta: dict):
-    """ATLAS_CREW_WORKER_EFFORT (low|medium|high) replaces the plan's per-worker effort; unset or invalid: unchanged."""
+def role_effort(role) -> str:
+    """The `effort:` pin in agents/<role>.md frontmatter ("" when unreadable); sibling of atlas_resolve.default_model."""
+    try:
+        head = (atlas_resolve.AGENTS / f"{role}.md").read_text().split("\n---", 1)[0]
+    except OSError:
+        return ""
+    for line in head.splitlines():
+        if line.startswith("effort:"):
+            return line.partition(":")[2].strip().strip("\"'")
+    return ""
+
+
+def worker_effort(w: dict, meta: dict, role_default: bool = True):
+    """ATLAS_CREW_WORKER_EFFORT (low|medium|high) replaces the plan's per-worker effort; unset or invalid: unchanged.
+    With none named anywhere the role's agent-frontmatter effort applies (None when the role has none)."""
     env = os.environ.get("ATLAS_CREW_WORKER_EFFORT", "").strip().lower()
-    return env if env in ("low", "medium", "high") else (w.get("effort") or meta.get("effort"))
+    if env in ("low", "medium", "high"):
+        return env
+    named = w.get("effort") or meta.get("effort")
+    if named or not role_default:
+        return named
+    return role_effort(w.get("role") or "implementer") or None
 
 
-def worker_model(w: dict, meta: dict):
-    """ATLAS_CREW_WORKER_MODEL ([A-Za-z0-9._:/-]+) replaces the worker/plan model; unset or invalid: unchanged."""
+def worker_model(w: dict, meta: dict, role_default: bool = True):
+    """ATLAS_CREW_WORKER_MODEL ([A-Za-z0-9._:/-]+) replaces the worker/plan model; unset or invalid: unchanged.
+    With none named anywhere the role's agent-frontmatter model applies (None when the role has none). The run-wide
+    resolution in cmd_run passes role_default=False: a role default there would override every other role."""
     env = os.environ.get("ATLAS_CREW_WORKER_MODEL", "").strip()
-    return env if re.fullmatch(r"[A-Za-z0-9._:/-]+", env) else (w.get("model") or meta.get("model"))
+    if re.fullmatch(r"[A-Za-z0-9._:/-]+", env):
+        return env
+    named = w.get("model") or meta.get("model")
+    if named or not role_default:
+        return named
+    return atlas_resolve.default_model(w.get("role") or "implementer") or None
 
 
 def worker_provider(w: dict, meta: dict, model) -> dict:
@@ -1381,7 +1407,7 @@ def cmd_run(a) -> int:
         assign_providers(
             rundir,
             plan,
-            {"model": worker_model({}, {"model": a.model}), "provider": plan.get("provider") or getattr(a, "provider", None)},
+            {"model": worker_model({}, {"model": a.model}, role_default=False), "provider": plan.get("provider") or getattr(a, "provider", None)},
         )
     except atlas_provider.ProviderRefused as exc:
         shutil.rmtree(rundir, ignore_errors=True)
@@ -1391,7 +1417,7 @@ def cmd_run(a) -> int:
         "run_id": run_id,
         "root": root,
         "plan": plan,
-        "model": worker_model({}, {"model": a.model}),
+        "model": worker_model({}, {"model": a.model}, role_default=False),
         "effort": a.effort,
         "harness": getattr(a, "harness", None) or "claude",
         "provider": plan.get("provider") or getattr(a, "provider", None),
@@ -1404,6 +1430,10 @@ def cmd_run(a) -> int:
         "timeout": a.timeout,
         "changelog": (getattr(a, "changelog", None) or "").strip() or None,
         "seal_home": str(atlas_crew_seal.home()),  # where the seal record lives, whatever ATLAS_HOME a later reader has
+    }
+    # what each worker will launch with once env, entry, plan and role default are resolved (null: the session default)
+    meta["worker_tiers"] = {
+        w["name"]: {"model": worker_model(w, meta), "effort": worker_effort(w, meta)} for w in plan["workers"]
     }
     for w in plan["workers"]:
         (rundir / "prompts" / f"{w['name']}.md").write_text(

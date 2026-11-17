@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.28.0 (unreleased additions) - 2026-11-17
+
+- Crew workers take their role's tier: a worker with no model or effort from env, worker entry or plan now gets `model:` and `effort:` from `agents/<role>.md` (`atlas_crew.py` `worker_model`, `worker_effort`, `role_effort`).
+- New `plugins/atlas/scripts/atlas_test.py`: `run` runs each test file of the hooks and scripts suites as its own process from a pool (`--jobs`, `--suite`, `--changed [BASE]`), and `select <path>...` prints the test files a change can affect. Each file runs under pytest from the first interpreter that has it (`ATLAS_TEST_PYTHON`, `.venv/bin/python`, then PATH). Measured 2026-11-17 on 18 cores at `--jobs 8`: both suites (241 files) in 172.9 s wall, against about 17 minutes one suite after the other. Documented in `docs/AGENTS.md` Commands.
+- Completion gate (b): `_canon_segments` in `hooks/completion_gate_core.py` compares a compound reproduction per `;`, `&&`, `||` segment, so a self-stamped row whose segment ran passing is credited. Limit: pass status is the whole command's. Documented in `docs/reference/atlas-reference.md`.
+- Script count in `docs/reference/atlas-reference.md` corrected from 87 to 88 non-test scripts (the contract test checks it).
+- New lesson `docs/lessons/2026-11-17_disabling-plugins-and-mcp-per-project.md`.
+
 ## marketplace 5.34.0 - 2026-11-16
 
 - marketplace 5.34.0: atlas 17.28.0. armada and programmer are unchanged.

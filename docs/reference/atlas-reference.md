@@ -268,7 +268,7 @@ while a dispatch is in flight, and prints one block message listing exactly
 which conditions are unmet:
 
 - (a) evidence saved under `.atlas/evidence/` during this run; nested dated folders (`.atlas/evidence/<date>-<slug>/...`) count
-- (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run and backed by a hook-written record for this session and run: an `atlas:verifier` or `atlas:completeness-critic` dispatch row with `ts` at most `verified_at` + 1 s and a role matching `verified_by`, or a team or crew member record (verifier or completeness-critic role) whose name equals `stamped_by`; or a `reproduction` or `evidence` that exactly matches (whitespace collapsed, leading `cd X &&` and env assignments stripped) a passing test-runner command of this session. A bare `--by atlas:verifier` does not credit. Residual limits: an in-process verifier stamps as `lead`, so credit depends on the dispatch row; a lead can pair a real verifier dispatch with a self-stamped row; `ATLAS_WORKER_NAME` can be set from the process environment; an unreadable DB fails open with a stderr line
+- (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run and backed by a hook-written record for this session and run: an `atlas:verifier` or `atlas:completeness-critic` dispatch row with `ts` at most `verified_at` + 1 s and a role matching `verified_by`, or a team or crew member record (verifier or completeness-critic role) whose name equals `stamped_by`; or a `reproduction` or `evidence` that matches a passing test-runner command of this session. The row and each command that ran are split on `;`, `&&` and `||` outside quotes, and each segment is compared with whitespace collapsed, leading `cd X &&` and env assignments stripped (`_canon_segments`, `hooks/completion_gate_core.py`), so a compound reproduction such as `fallow audit ...; cd plugins/atlas && env -u NO_COLOR bun test omp mod` credits when its `bun test omp mod` segment ran passing. Known limit: the pass status is the whole command's status, not one segment's. A bare `--by atlas:verifier` does not credit. Residual limits: an in-process verifier stamps as `lead`, so credit depends on the dispatch row; a lead can pair a real verifier dispatch with a self-stamped row; `ATLAS_WORKER_NAME` can be set from the process environment; an unreadable DB fails open with a stderr line
 - (c) `docs/CHANGELOG.md` exists and is non-empty
 - (d) `docs/ROADMAP.md` exists and is non-empty
 - (e) root `README.md` exists and is non-empty
@@ -485,7 +485,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 87 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 88 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -960,7 +960,7 @@ tech-tools/
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 87 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 88 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator

@@ -321,6 +321,28 @@ def _canon_cmd(cmd: str) -> str:
     return _CMD_PREFIX_RE.sub("", cmd, count=1).strip()
 
 
+def _canon_segments(cmd: str) -> list:
+    """`_canon_cmd` of each `;`, `&&`, `||` segment outside quotes, so a compound command's
+    `cd X && env K=V bun test a` segment compares equal to a row naming `bun test a`.
+    Known limit: a compound command's pass or fail status is that of the whole command, not of one segment."""
+    segs, cur, quote, i = [], [], "", 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "'\"":
+            quote = ch
+        elif ch == ";" or cmd[i : i + 2] in ("&&", "||"):
+            segs.append("".join(cur))
+            cur = []
+            i += 1 if ch == ";" else 2
+            continue
+        cur.append(ch)
+        i += 1
+    segs.append("".join(cur))
+    return [c for c in (_canon_cmd(s) for s in segs) if c]
+
+
 def _log_gate_fail_open(why: str) -> None:
     print(f"completion_gate (b): {why}; crediting the row fail-open", file=sys.stderr)
 
@@ -406,9 +428,9 @@ def _evidence_test_commands(item: dict) -> list:
     for r in raw:
         if not isinstance(r, str):
             continue
-        cmd = _canon_cmd(re.split(r"\s(?:->|=>|#)\s", r, maxsplit=1)[0])
-        if cmd and _EVIDENCE_TEST_RE.search(cmd):
-            out.append(cmd)
+        for cmd in _canon_segments(re.split(r"\s(?:->|=>|#)\s", r, maxsplit=1)[0]):
+            if _EVIDENCE_TEST_RE.search(cmd):
+                out.append(cmd)
     return out
 
 
@@ -461,7 +483,7 @@ def _passing_shell_commands(transcript_path: str, started: float | None) -> list
                             for c in inp.get("commands") or []
                             if isinstance(c, dict)
                         ]
-                        calls[block.get("id", "")] = _canon_cmd(
+                        calls[block.get("id", "")] = _canon_segments(
                             " ".join(str(x) for x in parts if x)
                         )
                     elif block.get("type") == "tool_result":
@@ -480,7 +502,7 @@ def _passing_shell_commands(transcript_path: str, started: float | None) -> list
                             continue
                         if done_claim._FAIL_OUT.search(body):
                             continue
-                        passing.append(cmd)
+                        passing.extend(cmd)
         return passing
     except Exception:
         return None
@@ -545,7 +567,7 @@ def _check_findings(
                 f" {self_stamped} verified row(s) this run are self-stamps: no hook-recorded verifier "
                 "backs them (a verified_by value alone never counts) and no test-runner command (pytest, "
                 "unittest, vitest, bun test, go test, cargo test, npm/yarn test) named by the row ran "
-                "with a passing result in this session, byte-for-byte as the row names it. Dispatch "
+                "with a passing result in this session, exactly as the row names it (compound commands compare per ;, &&, || segment). Dispatch "
                 "atlas:verifier, or run the test command so it shows passing, then stamp the row with "
                 "that exact command as --reproduction."
             )

@@ -143,9 +143,10 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
     backed by a hook-written record for this session and run: an `atlas:verifier` or
     `atlas:completeness-critic` dispatch row with `ts` at most `verified_at` + 1 s and a role
     matching `verified_by`, or a team or crew member record (verifier or completeness-critic role)
-    whose name equals `stamped_by`; or a `reproduction` or `evidence` that exactly matches (whitespace
-    collapsed, leading `cd X &&` and env assignments stripped) a passing test-runner command of this
-    session, recorded via `scripts/atlas_finding.py`. A bare `--by atlas:verifier` does not credit.
+    whose name equals `stamped_by`; or a `reproduction` or `evidence` that matches a passing test-runner command of this
+    session, recorded via `scripts/atlas_finding.py`. The row and each command that ran are split on
+    `;`, `&&` and `||` outside quotes and compared per segment (whitespace collapsed, leading `cd X &&`
+    and env assignments stripped; `_canon_segments`). Known limit: pass status is the whole command's status. A bare `--by atlas:verifier` does not credit.
     Residual limits: an in-process verifier stamps as `lead`; a lead can pair a real verifier dispatch
     with a self-stamped row; `ATLAS_WORKER_NAME` can be set from the process environment; an unreadable
     DB fails open with a stderr line. Only checked when this run wrote non-docs
