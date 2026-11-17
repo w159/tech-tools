@@ -138,10 +138,15 @@ describe('A4: the gates figure never rises and falls in a clean run; a check Sto
     expect(t.failing).toContain('completion');
     expect(t.checks.find((c) => c.id === 'completion')?.pending).toBeUndefined();
   });
-  test('a real failure (not (i) or (s)) is never pending', () => {
+  test('a real failure (a denied call in the current run, outside the completion group) is never pending; every completion line waits for Stop (fix1728)', () => {
     const g = world({});
     (g[0] as { lines: ReturnType<typeof line>[] }).lines.push(line('a', false));
-    expect(gateTally(withCoreTally(g as never, null)).failing).toEqual(['completion']);
+    const t = gateTally(withCoreTally(g as never, null));
+    expect(t.failing).toEqual([]); // fix1728: any unmet completion condition is pending until a Stop refuses, not only (i) and (s)
+    expect(t.checks.find((c) => c.id === 'completion')?.pending).toBe(true);
+    const real = gateTally(withCoreTally(world({ inline: true }) as never, null));
+    expect(real.failing).toEqual(['tripwire']);
+    expect(real.checks.find((c) => c.id === 'tripwire')?.pending).toBeUndefined();
   });
   test('the band checks row and the gates tab draw it as the queued mark with the word pending', () => {
     const snap = idle({ activity: lead(null, 'working') });

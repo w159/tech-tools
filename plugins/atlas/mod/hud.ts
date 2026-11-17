@@ -348,7 +348,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const fn = state === 'done' ? functionsIn([...owned.map((t) => t.evidence), a.lastLine]) : 0; // state 39: the whole report's count, whichever row states the outcome
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(fn > 0 ? { fn } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { ...(a.role ? { persona: a.role } : {}), seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(fn > 0 ? { fn } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');

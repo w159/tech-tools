@@ -12395,5 +12395,88 @@
     "verified_at": "2026-11-16T07:51:21+00:00",
     "verified_by": "audit-docs-curator",
     "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794859302",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_200142_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:01:42+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794859324",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_200204_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:02:04+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794859931",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_201211_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:12:11+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-3f25ef-1794861576",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-16_203936_gate-rerun_3f25ef.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-16T20:39:36+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "hud-surface-fallow-refactor-17.28.0",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hud-surface.ts rows and agentRowResting split into helpers: fallow audit passes (0 introduced), mod and omp suite 5017 pass 0 fail",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_hud-surface-fallow-refactor.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "fallow audit --base origin/main --format json; cd plugins/atlas && env -u NO_COLOR bun test omp mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T09:43:43+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-8cf896-1794908705",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_094505_gate-rerun_8cf896.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-17T09:45:05+00:00",
+    "verified_by": "completion-gate"
   }
 ]

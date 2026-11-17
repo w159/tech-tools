@@ -485,7 +485,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 86 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 87 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -493,6 +493,7 @@ them. The table lists the main entry points, not every module.
 |---|---|
 | `atlas_db.py` | Observability store: the SQLite SSOT for run health. |
 | `atlas_provider.py` | Worker provider selection: claude or a local Ollama model (per-role models, health check with a 30 s cache, fallback reasons, cross-family verifier pairing); `doctor` and `resolve` print the result. |
+| `atlas_settings.py` | Plugin settings: `show` prints each decision-model, Ollama and analytics option with its effective value and source (environment, dashboard setting, plugin setting, default); `decision-status` probes the decision endpoint. |
 | `session_ingest.py` | Mirrors session transcripts into the DB (omp workers ingest as lead sidechains). |
 | `omp_transcript.py` | Converts an omp session file to the Claude transcript shape for the bridge. |
 | `omp_runstate.py` | Writes the omp run/dispatch/edit state Claude hooks would have written. |
@@ -953,13 +954,13 @@ tech-tools/
 |- docs/                     # canonical documentation (SSOT); see docs/architecture/README.md
 |- plugins/
 |  |- atlas/                 # the plugin
-|  |  |- .claude-plugin/     # plugin.json (one userConfig key, `atlas_mod_sound`; connector keys live in armada)
+|  |  |- .claude-plugin/     # plugin.json (userConfig: `atlas_mod_sound` plus 8 decision, Ollama and analytics keys mapped to ATLAS_* by scripts/atlas_env.py; connector keys live in armada)
 |  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 86 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 87 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator

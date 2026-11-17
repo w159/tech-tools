@@ -56,7 +56,19 @@ export function gatesTotal(gates: readonly { pass: number; total: number }[]): G
   return { pass, total, deny, fired, notFired: lines.length - fired, text: deny > 0 ? `${deny} denied` : 'ok', tone: deny > 0 ? 'bad' : fired > 0 ? 'ok' : 'sub' };
 }
 
-/** Denied calls over failing gate lines: a line's own detail says `2 calls denied` (the leading count); a failing line that does not say counts one. Lines whose id is `skip` (the Stop verdict) are not counted. */
-export function deniedCalls(groups: readonly { lines: readonly { id: string; ok: boolean; detail?: string }[] }[], skip = 'stop-verdict'): number {
-  return groups.flatMap((g) => g.lines).filter((l) => !l.ok && l.id !== skip).reduce((n, l) => n + (Number(/(\d+)\s+(?:calls?\s+)?denied/i.exec(l.detail ?? '')?.[1]) || 1), 0);
+type DenyLine = { id: string; ok: boolean; detail?: string; label?: string; pending?: boolean };
+/** Denied calls over failing gate lines: a line's own detail says `2 calls denied` (the leading count); a failing line that does not say counts one. Lines whose id is `skip` (the Stop verdict) are not counted.
+ * A pending line is not a denial (fix1728): one marked `pending` (runstate.withPending), and, for raw groups (register.ts reads them before withPending), a failing `completion` line while no
+ * Stop has been refused: Stop alone decides those, so until it refuses they are conditions not reached yet. The same rule as withPending, kept here so vocab imports no runstate. */
+export function deniedCalls(groups: readonly { id?: string; lines: readonly DenyLine[] }[], skip = 'stop-verdict'): number {
+  const refused = groups.some((g) => g.lines.some((l) => l.id === skip && /blocked$/.test(l.label ?? '')));
+  const counted = refused ? groups : groups.filter((g) => g.id !== 'completion');
+  return counted
+    .flatMap((g) => g.lines.filter((l) => !l.ok && !l.pending && l.id !== skip))
+    .reduce((n, l) => n + deniedIn(l), 0);
+}
+
+/** The leading count a line detail states (`2 calls denied`), else one. */
+function deniedIn(l: DenyLine): number {
+  return Number(/(\d+)\s+(?:calls?\s+)?denied/i.exec(l.detail ?? '')?.[1]) || 1;
 }

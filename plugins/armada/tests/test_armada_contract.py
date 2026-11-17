@@ -203,7 +203,14 @@ class ManifestTest(unittest.TestCase):
             (REPO / "plugins" / "atlas" / ".claude-plugin" / "plugin.json").read_text()
         )
         self.assertNotIn("mcpServers", atlas)
-        self.assertEqual(sorted(atlas.get("userConfig", {})), ["atlas_mod_sound"])
+        # atlas may declare its own settings (atlas_*), but never a vendor
+        # connector credential: those live on armada only.
+        atlas_keys = set(atlas.get("userConfig", {}))
+        self.assertTrue(
+            all(key.startswith("atlas_") for key in atlas_keys),
+            f"non-atlas userConfig keys on atlas: {sorted(atlas_keys)}",
+        )
+        self.assertFalse(atlas_keys & set(manifest["userConfig"]))
 
 
 class EnterpriseModeTest(unittest.TestCase):

@@ -687,12 +687,56 @@ def remove(root: Optional[str], item_id: str) -> dict:
         return {"ok": True, "counts": counts(board)}
 
 
+def _stale_foreign(item: dict, session_id: str, now: float) -> bool:
+    """An open row of another session (or of none) created longer than
+    _ARCHIVE_AGE_S ago: dead backlog the boot pass moves out of todos.json.
+    _KEEP_ORIGINS rows keep their own lifecycle; a live launch is never moved."""
+    if item.get("status") == "completed" or item.get("session_id") == session_id:
+        return False
+    if item.get("origin") in _KEEP_ORIGINS or (
+        item.get("launch") and _launch_live(item)
+    ):
+        return False
+    born = float(item.get("created_at") or item.get("updated_at") or now)
+    return now - born > _ARCHIVE_AGE_S
+
+
+def _write_aside(root: Optional[str], items: List[dict]) -> None:
+    """Append archived rows to .atlas/.run/archive/todos-<YYYY-MM>.jsonl (by
+    archive month): the one aside file, so a moved row is never erased."""
+    adir = board_path(root).parent / "archive"
+    adir.mkdir(parents=True, exist_ok=True)
+    for item in items:
+        at = float(item.get("archived_at") or item.get("updated_at") or 0)
+        month = time.strftime("%Y-%m", time.localtime(at))
+        with open(adir / f"todos-{month}.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(item) + "\n")
+
+
 def carry_over(root: Optional[str], session_id: str) -> dict:
     """New session: archive old completed items, hand unfinished ones to the
     new session as origin=carried. Returns what moved."""
     with _file_lock(board_path(root)):
         board = _locked_load(root)
         carried = archived = 0
+        now = _now()
+        # Old foreign open rows leave the board for the aside file first: carry_expired only
+        # flagged them in place and rotate_archive runs from the CLI `carry` alone, so rows
+        # stamped `session_id: "contract"` (hooks/test_atlas_contract.py booting
+        # session_boot.py against the real repo) or "" (a boot with no session id) piled up
+        # into a 2 MB board. Nothing is erased: rotate_archive's jsonl keeps them.
+        stale = [
+            i for i in board.get("items", []) if _stale_foreign(i, session_id, now)
+        ]
+        if stale:
+            for item in stale:
+                if not item.get("archived"):
+                    item["archived"] = True
+                    item["archived_reason"] = "stale_foreign"
+                    item["archived_at"] = now
+            _write_aside(root, stale)
+            gone = {id(i) for i in stale}
+            board["items"] = [i for i in board.get("items", []) if id(i) not in gone]
         now = _now()
         for item in board.get("items", []):
             if (
@@ -733,12 +777,12 @@ def carry_over(root: Optional[str], session_id: str) -> dict:
                     item["status"] = "pending"
                 # no _touch: carrying must not reset the sweep() staleness clock
                 carried += 1
-        if carried or archived:
+        if carried or archived or stale:
             save(root, board)
         return {
             "ok": True,
             "carried": carried,
-            "archived": archived,
+            "archived": archived, "moved": len(stale),
             "counts": counts(board, session_id),
         }
 
@@ -758,13 +802,7 @@ def rotate_archive(root: Optional[str], max_age_s: float = _ARCHIVE_AGE_S) -> in
             )
         if not old:
             return 0
-        adir = board_path(root).parent / "archive"
-        adir.mkdir(parents=True, exist_ok=True)
-        for item in old:
-            at = float(item.get("archived_at") or item.get("updated_at") or 0)
-            month = time.strftime("%Y-%m", time.localtime(at))
-            with open(adir / f"todos-{month}.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps(item) + "\n")
+        _write_aside(root, old)
         board["items"] = keep
         save(root, board)
         return len(old)

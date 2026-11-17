@@ -22,7 +22,7 @@ export const leadBusy = (s: { activity?: Readonly<Record<string, { mood?: string
 };
 
 /** `name`: only on a failing check, what the blocked reason calls it (the failing line's own words). */
-/** `pending`: the group's only failing lines are conditions Stop alone decides (`Todos drained`, `Team gate`); it counts as not failing and reads `◇ pending` until Stop decides (critique 16 A4). */
+/** `pending`: the group's only failing lines are conditions Stop alone decides (every completion line); it counts as not failing and reads `◇ pending` until Stop decides (critique 16 A4, fix1728). */
 export type GateCheck = { id: string; ok: boolean; name?: string; pending?: true };
 /** `stop`: the completion gate's last Stop verdict for this session (the `stop-verdict` line atlas_gates.py reads from completion_gate_core's record): `gates` are the
  * refusing gates' names, lowercased. null when no Stop has been recorded. Only a blocked Stop makes the band BLOCKED. */
@@ -36,17 +36,19 @@ export const STOP_LINE = 'stop-verdict';
 const hasData = (g: GateGroup): boolean => g.lines.some((l) => l.id !== STOP_LINE) || !!g.error || g.id === 'header';
 
 const NAME_MAX = 16;
-/** The completion gate's lines that only Stop can decide: `i` (Todos drained: a plan has open rows all run long) and `s` (Team gate: red once the second in-process dispatch lands, green
- * again the moment its one advisory is used). Read mid-run they flip a clean run's figure 4/4, 3/4, 2/4, 3/4 (critique 16 A4, live-150-e4a8186a-1 f0034 to f0094), so until a Stop has
- * refused they read PENDING: `ok` with `pending` set, drawn `◇`, never counted as a failure and never as a green mark. A refused Stop makes them real again. */
+/** Kept for callers that name the two first-known Stop-only lines: `i` (Todos drained) and `s` (Team gate). Since fix1728 every completion line is Stop-only (see withPending). */
 export const STOP_ONLY_LINES: ReadonlySet<string> = new Set(['i', 's']);
 export const isPendingLine = (l: unknown): boolean => !!(l as { pending?: boolean }).pending;
+/** Every completion-group line is a condition only Stop decides (`Evidence captured`, `Verified finding recorded`, `Required phases marked`, the docs rows, `Todos drained`, `Team gate`):
+ * atlas_gates.py computes them as a pure function of current state, so mid-run anything not done YET reads as failed. Until a Stop has refused they read PENDING: `ok` with `pending`
+ * set, drawn `◇`, never counted as a failure, a denial or a green mark (critique 16 A4, fix1728). A refused Stop returns the groups untouched, so its failing lines are red. */
 export function withPending<G extends { id: string; lines: readonly unknown[] }>(groups: readonly G[]): readonly G[] {
   if (stopOf(groups as unknown as readonly GateGroup[])?.blocked) return groups;
+  const stopOnly = (l: { id: string; ok: boolean }): boolean => !l.ok && l.id !== STOP_LINE;
   return groups.map((g) => {
     if (g.id !== 'completion') return g;
     const lines = g.lines as readonly { id: string; ok: boolean }[];
-    return lines.some((l) => !l.ok && STOP_ONLY_LINES.has(l.id)) ? { ...g, lines: lines.map((l) => (!l.ok && STOP_ONLY_LINES.has(l.id) ? { ...l, ok: true, pending: true } : l)) } : g;
+    return lines.some(stopOnly) ? { ...g, lines: lines.map((l) => (stopOnly(l) ? { ...l, ok: true, pending: true } : l)) } : g;
   });
 }
 

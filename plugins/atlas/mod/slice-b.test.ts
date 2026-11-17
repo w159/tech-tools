@@ -25,8 +25,10 @@ const worker = (name: string, over: Record<string, unknown> = {}) => ({ name, ro
 // ---- B1: one blocker, one name ---------------------------------------------------------------------------------------
 
 describe('B1: the blocker has one name on the band, the gates tab and the tally', () => {
+  // fix1728: a completion line is pending until a Stop refuses; the Stop that refused on the team gate (a record, never a gate row) makes it the blocker these tests name
+  const refused = { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'Team gate' };
   const teamGate: GateGroup[] = [
-    { id: 'completion', title: 'Completion gate', lines: [{ id: 'a', label: 'Evidence captured', ok: true }, { id: 'g', label: 'Team gate', ok: false, fix: 'run atlas_mux.py spawn-team' }] },
+    { id: 'completion', title: 'Completion gate', lines: [{ id: 'a', label: 'Evidence captured', ok: true }, { id: 'g', label: 'Team gate', ok: false, fix: 'run atlas_mux.py spawn-team' }, refused] },
     { id: 'routing', title: 'Tool routing', lines: [{ id: 'denied', label: 'Policy denies', ok: true }] },
   ];
   test('the failing check is named by its failing line, not its group', () => {
@@ -57,6 +59,19 @@ describe('B1: the blocker has one name on the band, the gates tab and the tally'
     const pass = missionLines(mission({ checks: [{ id: 'a', ok: true }, { id: 'b', ok: true }, { id: 'c', ok: true }] })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
     expect(pass).toContain('3/3 green');
     expect(pass).not.toContain('all 3 pass');
+  });
+  test('fix1728: before any Stop refused the team gate is pending on the tally, the band and the gates tab alike', () => {
+    const open = teamGate.map((g) => ({ ...g, lines: g.lines.filter((l) => l.id !== 'stop-verdict') }));
+    const t = gateTally(open);
+    expect(t.names).toEqual([]);
+    expect(t.failing).toEqual([]);
+    expect(runsText(bandLines(mission({ checks: t.checks }))[0]!.runs)).not.toContain('gate to check');
+    const row = missionLines(mission({ checks: t.checks })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
+    expect(row).toContain('◇ completion');
+    const tab = body(panelWorld('gates', 120, ui, { rows: 40, gates: open as never })).join('\n');
+    expect(tab).toMatch(/◇ Completion gate +pending/);
+    expect(tab).toContain('◇ Team gate');
+    expect(tab).toContain('2 pass · 0 deny');
   });
 });
 

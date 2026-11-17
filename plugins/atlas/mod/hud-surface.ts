@@ -8,12 +8,12 @@ import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { activitySection, contextSection, gatesSection, runsSection, sessionRow, type Health } from './idle-health';
 import { chevron, chipRun } from './clickable';
-import { cardFrame } from './card-frame';
+import { cardFrame } from './card-frame'; import { roleHex, roleLabel, roleOf } from './theme';
 import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 
 export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
 /** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { /** Dispatch order (wave 36): the agent's place in the order it was dispatched; the SUBAGENTS table sorts by it, so a row never moves. */ seq?: number; name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What RESULT reads when the agent has no outcome or call to show (its last tool word): never the state word again. */ fallback?: string; /** State 38: the agent's last tool action in plain words (`read gamma.py`): the SUBAGENTS LAST column shows it when the outcome would only restate the FN count. */ action?: string; /** The LAST column: the elapsed clock since the agent started (`0:13`), frozen at its end. */ elapsed?: string; /** Tool calls the host counted for the agent (wave 35, the finish card's own figure): the CALLS column of the done table; absent when none were seen, never guessed. */ calls?: number; /** State 39: the functions the agent's whole report holds, counted over every evidence row and its closing line (hud.ts functionsIn), so the FN column never depends on which row stated the outcome. */ fn?: number };
+export type AgentRow = { /** The worker's persona (`implementer`, `atlas:explorer`; tmux workers carry `unknown`): its role, else the name prefix decides (theme.ts roleOf). */ persona?: string; /** Dispatch order (wave 36): the agent's place in the order it was dispatched; the SUBAGENTS table sorts by it, so a row never moves. */ seq?: number; name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What RESULT reads when the agent has no outcome or call to show (its last tool word): never the state word again. */ fallback?: string; /** State 38: the agent's last tool action in plain words (`read gamma.py`): the SUBAGENTS LAST column shows it when the outcome would only restate the FN count. */ action?: string; /** The LAST column: the elapsed clock since the agent started (`0:13`), frozen at its end. */ elapsed?: string; /** Tool calls the host counted for the agent (wave 35, the finish card's own figure): the CALLS column of the done table; absent when none were seen, never guessed. */ calls?: number; /** State 39: the functions the agent's whole report holds, counted over every evidence row and its closing line (hud.ts functionsIn), so the FN column never depends on which row stated the outcome. */ fn?: number };
 /** The one spinner frame of the HUD: the shared clock's frame (spinFrameOf of spinClock) when the snapshot's `now` is known, else the caller's tick.
  * Rev 5: ONE phase for every row and title in a frame (no per-row id: out-of-phase spinners read as noise, critique 17.13.0 problem 1). */
 const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), '') : o.tick ?? 0);
@@ -571,33 +571,61 @@ function agentRow(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, n
 }
 
 function agentRowResting(r: AgentRow, o: SurfaceOpts, rich: boolean, stateAt: number, nameW: number, plan: AgentCols): Run[] {
-  const { ui, cols } = o;
-  const finished = r.state === 'done';
-  // A finished row is dim in its name and text but keeps its glyph colour: the green `●` is the one mark that says done (critique 21: done rows went wholly 247, state read from a 1-cell dot).
-  const head: Run[] = [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), t(clipEll(flat(r.name) || flat(r.id ?? '') || 'agent', nameW, ellOf(ui)), finished ? 'muted' : 'text', { bold: r.focus })]; // an agent is never nameless // bold marks the selected row only
-  let row = [...toCol(head, stateAt), r.state === 'failed' && r.tool === KILLED ? (rich ? chip(KILLED, markToken('failed'), ui) : wordRun(r, KILLED)) : rich ? stateChip(r.state, ui) : wordRun(r, r.state)]; // one word for a stopped worker: `■ failed` (critique 28)
-  /** `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. `fallback`: what a cell reads when its text is empty or only a bare verb fits. */
-  const cell = (text: string, at: number | undefined, width: number, words = false, still = false, fallback = '', dim = false): void => {
-    if (at === undefined) return;
-    const room = Math.max(1, Math.min(width, cols - at));
-    const whole = flat(text);
-    const ell = ellOf(ui);
-    const cut = whole === '' ? '' : words ? wordsEll(whole, room, ell) : clipEll(whole, room, ell);
-    const bare = words && new RegExp(`^\\S{1,6}${ell}$`).test(cut) && /\s/.test(whole); // `read…` or `report…` of a longer text: a short verb and a mark say nothing
-    // All or none: a text that fits is whole, one that does not ends in the one-cell ellipsis (on a word, else by the cell), never swapped for another word; only a cell with nothing to say (or under 3 cells) reads its fallback, `-` last.
-    const marked = whole !== '' && (cut === '' || bare) && room >= 3 ? clipEll(whole, room, ell) : cut;
-    const shown = marked !== '' ? marked : clipEll(fallback || NONE, room, ell);
-    const tone = dim || finished || shown === NONE || marked === '' ? 'muted' : 'sub';
-    row = [...toCol(row, at), still ? calmRun(t(shown, tone)) : t(shown, tone)]; // MODEL and TASK never change with the state: the motion leaves them be
-  };
-  if (rich && plan.ctx !== undefined && r.ctx !== null) row = [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
-  if (rich) cell(r.model, plan.model, plan.modelW, false, true);
-  if (!rich) cell(taskLine(r), plan.task, plan.taskW, true, true, NONE); // a column never goes blank: `-` says there is nothing
-  cell(r.elapsed ?? NONE, plan.last, LAST_W); // LAST is one type: the elapsed clock, frozen when the agent ends (hud.ts agentModel)
-  if (rich) cell(lastFor(lastText(r.tool)), plan.result, cols, true, false, r.fallback ?? '', true); // RESULT: the outcome or the last call, whole or cut with the ellipsis, else the last tool word; always the dim tone
-  else cell(resultOf(r), plan.result, RESULT_W, false, false, NONE, true); // wave 31: a count or `-`
-  return row;
+  const e: RestingEnv = { r, o, plan, finished: r.state === 'done' };
+  const row = [...toCol(restingHead(e, nameW), stateAt), restingStateRun(r, rich, o.ui)];
+  const lead = rich ? restingRichLead(row, e) : restingCell(row, e, taskLine(r), plan.task, plan.taskW, true, true, NONE, false); // a column never goes blank: `-` says there is nothing
+  return restingResult(restingLast(lead, e), e, rich);
 }
+type RestingEnv = { r: AgentRow; o: SurfaceOpts; plan: AgentCols; finished: boolean };
+/** A finished row is dim in its name and text but keeps its glyph colour: the green `●` is the one mark that says done (critique 21: done rows went wholly 247, state read from a 1-cell dot). */
+function restingHead({ r, o, finished }: RestingEnv, nameW: number): Run[] {
+  const { ui } = o;
+  const who = agentName(r, ui, nameW); // an agent is never nameless
+  return [focusMark(r.focus, ui), t(' '), markRun(r.state, o), t(' '), withFg(t(clipEll(who.label, nameW, ellOf(ui)), finished ? 'muted' : 'text', { bold: r.focus }), who.fg)]; // bold marks the selected row only
+}
+/** One word for a stopped worker: `■ failed` (critique 28). */
+function restingStateRun(r: AgentRow, rich: boolean, ui: Ui): Run {
+  return r.state === 'failed' && r.tool === KILLED ? restingKilledRun(r, rich, ui) : restingPlainRun(r, rich, ui);
+}
+const restingKilledRun = (r: AgentRow, rich: boolean, ui: Ui): Run => (rich ? chip(KILLED, markToken('failed'), ui) : wordRun(r, KILLED));
+const restingPlainRun = (r: AgentRow, rich: boolean, ui: Ui): Run => (rich ? stateChip(r.state, ui) : wordRun(r, r.state));
+/** The rich row's context gauge, then its MODEL cell. */
+function restingRichLead(row: Run[], e: RestingEnv): Run[] {
+  const withCtx = restingGauge(row, e.r, e.o.ui, e.plan);
+  return restingCell(withCtx, e, e.r.model, e.plan.model, e.plan.modelW, false, true, '', false);
+}
+function restingGauge(row: Run[], r: AgentRow, ui: Ui, plan: AgentCols): Run[] {
+  if (plan.ctx === undefined || r.ctx === null) return row;
+  return [...toCol(row, plan.ctx), t('ctx ', 'muted'), ...gauge(8, r.ctx, ui), t(` ${percent(r.ctx)}`, 'sub')];
+}
+/** LAST is one type: the elapsed clock, frozen when the agent ends (hud.ts agentModel). */
+const restingLast = (row: Run[], e: RestingEnv): Run[] => restingCell(row, e, e.r.elapsed ?? NONE, e.plan.last, LAST_W, false, false, '', false);
+/** RESULT: rich, the outcome or the last call, whole or cut with the ellipsis, else the last tool word, always the dim tone; plain (wave 31), a count or `-`. */
+function restingResult(row: Run[], e: RestingEnv, rich: boolean): Run[] {
+  const { r, plan, o } = e;
+  return rich ? restingCell(row, e, lastFor(lastText(r.tool)), plan.result, o.cols, true, false, r.fallback ?? '', true) : restingCell(row, e, resultOf(r), plan.result, RESULT_W, false, false, NONE, true);
+}
+/** One cell of a resting row. `words`: the text is ended on a whole word when it does not fit (task and last text); a model is a token and is only clipped. `fallback`: what a cell reads when its text is empty or only a bare verb fits.
+ * All or none: a text that fits is whole, one that does not ends in the one-cell ellipsis (on a word, else by the cell), never swapped for another word; only a cell with nothing to say (or under 3 cells) reads its fallback, `-` last. */
+function restingCell(row: Run[], e: RestingEnv, text: string, at: number | undefined, width: number, words: boolean, still: boolean, fallback: string, dim: boolean): Run[] {
+  if (at === undefined) return row;
+  const ell = ellOf(e.o.ui);
+  const room = Math.max(1, Math.min(width, e.o.cols - at));
+  const whole = flat(text);
+  const cut = restingCut(whole, room, words, ell);
+  const marked = restingMarked(whole, cut, restingBare(whole, cut, words, ell), room, ell);
+  const shown = restingShown(marked, fallback, room, ell);
+  const tone = restingTone(dim, e.finished, restingSilent(shown, marked));
+  return [...toCol(row, at), still ? calmRun(t(shown, tone)) : t(shown, tone)]; // MODEL and TASK never change with the state: the motion leaves them be
+}
+const restingCut = (whole: string, room: number, words: boolean, ell: string): string => (whole === '' ? '' : words ? wordsEll(whole, room, ell) : clipEll(whole, room, ell));
+/** `read…` or `report…` of a longer text: a short verb and a mark say nothing. */
+const restingBare = (whole: string, cut: string, words: boolean, ell: string): boolean => words && new RegExp(`^\\S{1,6}${ell}$`).test(cut) && /\s/.test(whole);
+const restingWantsMark = (whole: string, cut: string, bare: boolean): boolean => whole !== '' && (cut === '' || bare);
+const restingMarked = (whole: string, cut: string, bare: boolean, room: number, ell: string): string => (restingWantsMark(whole, cut, bare) && room >= 3 ? clipEll(whole, room, ell) : cut);
+const restingShown = (marked: string, fallback: string, room: number, ell: string): string => (marked !== '' ? marked : clipEll(fallback || NONE, room, ell));
+const restingSilent = (shown: string, marked: string): boolean => shown === NONE || marked === '';
+const restingTone = (dim: boolean, finished: boolean, silent: boolean): Run['tone'] => (dim || finished || silent ? 'muted' : 'sub');
 
 /** `text` in `n` cells on a whole word, ended with `…` (clipWords' own mark is `...`, three cells). */
 function wordsEll(text: string, n: number, ell: string = ELL): string {
@@ -744,24 +772,8 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number, header = t
   const head = [lead, short, lead.slice(0, 1)].map((mid) => titleRow(cols, 'SUBAGENTS', '', mid, ui, false, false)).find((r) => runsCells(r) <= cols) ?? titleRow(cols, 'SUBAGENTS', '', [], ui, false, false);
   const headerRow: Run[] = [t(' '.repeat(LEAD)), cell('AGENT', nameW, 'muted', true), t(' '.repeat(GAP)), cell('STATE', STATE, 'muted', true), t(' '), right('TIME', TIME, 'muted', true),
     ...(showCalls ? [t(' '), right('CALLS', CALLS, 'muted', true)] : []), ...(showFn ? [t(' '), right('FN', FN, 'muted', true)] : []), ...(showLast ? [t(' '.repeat(GAP)), cell('LAST', cols - 1 - lastAt, 'muted', true)] : [])];
-  const rows = shown.map((a): Run[] => {
-    const failed = a.state === 'failed';
-    const done = a.state === 'done';
-    const mark = a.state === 'running' ? { ...stateRun('running', ui, titleSpinOf(o)), ...(ui.ascii ? {} : { tone: 'accent' as const }) } : stateRun(a.state, ui);
-    const word: Run = t(a.state, failed ? (ui.ascii ? 'text' : 'bad') : done ? (ui.ascii ? 'text' : 'ok') : a.state === 'running' ? 'text' : 'sub');
-    const stateCell: Run[] = [mark, t(' '), word, t(' '.repeat(Math.max(0, STATE - 2 - cells(a.state))))];
-    const time = a.elapsed && a.elapsed !== NONE ? a.elapsed : NONE;
-    const callsCell = a.calls !== undefined && a.calls > 0 ? String(a.calls) : NONE;
-    noteWorkerFacts([flat(a.name), flat(a.id ?? '')], time, callsCell); // the worker cards print these two cells (data/live workerFacts)
-    const tone: Run['tone'] = done ? 'muted' : 'sub';
-    const row: Run[] = [
-      t(' '.repeat(LEAD)), cell(flat(a.name) || flat(a.id ?? '') || 'agent', nameW, failed ? (ui.ascii ? 'text' : 'bad') : done ? 'muted' : 'text'), t(' '.repeat(GAP)), ...stateCell, t(' '), right(time, TIME, tone),
-      ...(showCalls ? [t(' '), right(callsCell, CALLS, tone)] : []),
-      ...(showFn ? [t(' '), right(fnOf(a), FN, tone)] : []),
-      ...(showLast ? [t(' '.repeat(GAP)), cell(lastOf(a), cols - 1 - lastAt, 'muted')] : []),
-    ];
-    return row;
-  });
+  const env: AgentTableEnv = { o, nameW, LEAD, GAP, STATE, TIME, CALLS, FN, lastAt, showCalls, showFn, showLast, cell, right, fnOf, lastOf };
+  const rows = shown.map((a) => agentTableRow(a, env));
   if (cap === 0) return [mergedCloser(s, o)]; // wave 38/39: folded to its one title row (the closing rule of the plan box, the tally in it), never an empty two-row box
   const gone = hidden > 0 ? tallyStates(all.filter((a) => !shown.includes(a))) : {};
   return [head, ...(header ? [headerRow] : []), ...rows, ...(Object.keys(gone).length > 0 ? [overflowRow(gone, ui, cols, titleSpinOf(o))] : []), bottomRule(cols, ui)]; // the one overflow idiom: a dim summary row inside the box
@@ -868,3 +880,62 @@ function clipRuns(runs: Run[], cols: number): Run[] {
 export function healthCardRows(h: Health, o: Pick<SurfaceOpts, 'cols' | 'ui'> & { maxRows?: number }): Run[][] {
   return padRows(cardFrame(h, o), Math.max(8, o.cols));
 }
+
+/** The AGENT cell of a worker row: its name with the role word when the name lacks it, and the role's colour as a run `fg` (undefined for a free-named crew worker,
+ * under NO_COLOR, and on a failed row, where the red state word must stay the loudest mark). One rule for an in-process subagent and a tmux team or crew worker. */
+function agentName(r: Pick<AgentRow, 'name' | 'id' | 'persona' | 'state'>, ui: Ui, w: number): { label: string; fg: string | undefined } {
+  const name = agentDisplayName(r);
+  const role = roleOf(r.persona, name);
+  return { label: labelFitting(name, role, w), fg: roleFg(r.state, role, ui) };
+}
+/** The name an agent row shows: its name, else its squad id, else `agent` (an agent is never nameless). */
+function agentDisplayName(r: Pick<AgentRow, 'name' | 'id'>): string {
+  return flat(r.name) || flat(r.id ?? '') || 'agent';
+}
+/** The role word only in spare cells after the whole name: the name keeps its width and clipping, the colour still names the role. */
+function labelFitting(name: string, role: string, w: number): string {
+  const full = roleLabel(name, role);
+  return cells(full) <= w ? full : name;
+}
+/** The role colour of a row name; none on a failed row, where the red state word must stay the loudest mark. */
+function roleFg(state: UiState, role: string, ui: Ui): string | undefined {
+  return state === 'failed' ? undefined : roleHex(role, ui.color, ui.theme);
+}
+const withFg = (run: Run, fg: string | undefined): Run => (fg === undefined ? run : { ...run, fg });
+
+/** What one SUBAGENTS table row needs from agentTable's grid: the column widths and shown flags, the two cell makers and the FN and LAST texts. */
+type AgentTableEnv = {
+  o: SurfaceOpts; nameW: number; LEAD: number; GAP: number; STATE: number; TIME: number; CALLS: number; FN: number; lastAt: number; showCalls: boolean; showFn: boolean; showLast: boolean;
+  cell: (text: string, w: number, tone: Run['tone']) => Run; right: (text: string, w: number, tone: Run['tone']) => Run; fnOf: (a: AgentRow) => string; lastOf: (a: AgentRow) => string;
+};
+function agentTableRow(a: AgentRow, e: AgentTableEnv): Run[] {
+  const { o, cell, right } = e;
+  const time = agentTimeCell(a);
+  const callsCell = agentCallsCell(a);
+  noteWorkerFacts([flat(a.name), flat(a.id ?? '')], time, callsCell); // the worker cards print these two cells (data/live workerFacts)
+  const tone: Run['tone'] = a.state === 'done' ? 'muted' : 'sub';
+  const who = agentName(a, o.ui, e.nameW);
+  return [
+    t(' '.repeat(e.LEAD)), withFg(cell(who.label, e.nameW, agentNameTone(a.state, o.ui)), who.fg), t(' '.repeat(e.GAP)), ...agentStateCell(a, e), t(' '), right(time, e.TIME, tone),
+    ...shownRuns(e.showCalls, () => [t(' '), right(callsCell, e.CALLS, tone)]),
+    ...shownRuns(e.showFn, () => [t(' '), right(e.fnOf(a), e.FN, tone)]),
+    ...shownRuns(e.showLast, () => [t(' '.repeat(e.GAP)), cell(e.lastOf(a), o.cols - 1 - e.lastAt, 'muted')]),
+  ];
+}
+const shownRuns = (show: boolean, runs: () => Run[]): Run[] => (show ? runs() : []);
+function agentStateCell(a: AgentRow, e: AgentTableEnv): Run[] {
+  const { ui } = e.o;
+  const mark = a.state === 'running' ? { ...stateRun('running', ui, titleSpinOf(e.o)), ...(ui.ascii ? {} : { tone: 'accent' as const }) } : stateRun(a.state, ui);
+  return [mark, t(' '), t(a.state, agentWordTone(a.state, ui)), t(' '.repeat(Math.max(0, e.STATE - 2 - cells(a.state))))];
+}
+const LOUD_WORD_TONE: Partial<Record<UiState, Run['tone']>> = { failed: 'bad', done: 'ok' };
+/** The state word: the loud tone of a failed or done row (plain `text` in ascii), `text` while running, `sub` otherwise. */
+function agentWordTone(state: UiState, ui: Ui): Run['tone'] {
+  const loud = LOUD_WORD_TONE[state];
+  if (loud) return ui.ascii ? 'text' : loud;
+  return state === 'running' ? 'text' : 'sub';
+}
+/** The AGENT cell's tone: loud on a failed row (plain `text` in ascii), dim on a done one. */
+const agentNameTone = (state: UiState, ui: Ui): Run['tone'] => (state === 'failed' ? (ui.ascii ? 'text' : 'bad') : state === 'done' ? 'muted' : 'text');
+const agentTimeCell = (a: AgentRow): string => (a.elapsed && a.elapsed !== NONE ? a.elapsed : NONE);
+const agentCallsCell = (a: AgentRow): string => (a.calls !== undefined && a.calls > 0 ? String(a.calls) : NONE);

@@ -186,8 +186,8 @@ class TestConnectorsWiring(unittest.TestCase):
 
 
 class TestAtlasDeclaresNoConnectors(unittest.TestCase):
-    """Clean break: atlas ships no vendor servers, bundles or credential keys."""
 
+    """Clean break: atlas ships no vendor servers, bundles or credential keys."""
     def test_atlas_has_no_mcp_servers_bundles_or_connector_keys(self) -> None:
         manifest = json.loads(
             (PLUGINS_ATLAS / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8")
@@ -195,12 +195,20 @@ class TestAtlasDeclaresNoConnectors(unittest.TestCase):
         self.assertNotIn("mcpServers", manifest)
         self.assertFalse((PLUGINS_ATLAS / ".mcp.json").exists())
         self.assertFalse((PLUGINS_ATLAS / "mcp").exists())
-        self.assertEqual(sorted(manifest.get("userConfig", {})), ["atlas_mod_sound"])
+        # atlas may declare its own settings (atlas_*), but never a vendor
+        # connector credential: those live on armada only.
+        atlas_keys = set(manifest.get("userConfig", {}))
+        self.assertTrue(
+            all(key.startswith("atlas_") for key in atlas_keys),
+            f"non-atlas userConfig keys on atlas: {sorted(atlas_keys)}",
+        )
+        armada = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
+        self.assertFalse(atlas_keys & set(armada.get("userConfig", {})))
 
 
 class TestDisclosureDocMatchesHarness(unittest.TestCase):
-    """references/connector-tool-disclosure.md must state what test-mcp-tools.mjs asserts."""
 
+    """references/connector-tool-disclosure.md must state what test-mcp-tools.mjs asserts."""
     HARNESS = PLUGINS_ATLAS.parent.parent / "test-mcp-tools.mjs"
     DOC = PLUGINS_ATLAS / "references" / "connector-tool-disclosure.md"
 

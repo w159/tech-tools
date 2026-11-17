@@ -1,0 +1,11 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools
+command: .venv/bin/python -m pytest -q -p no:cacheprovider plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -1
+exit: 0
+seconds: 17.53
+--- output tail ---
+............................................................................................................................................................................................... [ 64%]
+...........sss. [ 70%]
+........................................................................................                                                              [100%]
+291 passed, 3 skipped, 249 subtests passed in 17.22s
+

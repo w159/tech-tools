@@ -4,6 +4,10 @@ Newest activity on top. Items move from Backlog -> In Progress -> Done.
 
 ---
 
+## Done
+
+- [done 2026-11-16] atlas 17.28.0: simple task inline with no denial (`ATLAS_INLINE_SIMPLE`), every in-process working dispatch routed to a tmux team, role colour on every worker row, completion lines pending until a refused Stop, run-scoped tripwire and routing rows, stale board rows archived, decision model and Ollama plugin settings (`atlas_settings.py`).
+
 ## In Progress
 
 ### Dashboard redesign (withdrawn 2026-10-22)
@@ -215,14 +219,6 @@ Shipped in `plugins/atlas/CHANGELOG.md` (17.25.0); audit: `docs/audits/2026-11-1
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-14-idle-health.md`.
 
-- [done] Idle band, HUD and side panel show a live health summary (gates, uptime, context, last run, recent hook events) with a clickable `▸ health` expand and a HEALTH card; verified with real SGR mouse clicks in tmux on Claude Code 2.1.325.
-- [done] Key hints removed (`r: status ... ctrl+x tab` rows, band `ctrl+x tab`, tab hotkeys, `Enter sends` placeholder); tabs are clickable chips and toggles use `▸`/`▾`.
-- [done] No empty placeholder boxes at idle: `no plan yet · 0 agents`, `no workers yet`, dim one-separator phase chain.
-- [done] The side panel middle is no longer empty on a fresh session (cad6fe65): `● waiting for first prompt`, a `checks` section and a context gauge fill it; blank rows above the footer at 150 by 45 went from 19 to 10.
-- [done] `cc-health-open.png`, `cc-idle-health-150.png` and `cc-idle-health-110.png` recaptured from the final frames (the band no longer shows tab chips beside the open panel).
-- [done] Run facts are said once in the panel (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`), `recent` reads in words, and the `0 messages` orphan is removed.
-- [done] The run duration is printed once per view (17.25.0). Checked in the final captures: `aa-150/work-12.txt` has `█ 0:06 ok` once (RUNS row) and the band reads `● done 6/6` with no clock; `aa-150/c-5-health-card.txt` has `█ 0:05 ok` once, band `● done 6/6 · ended 42s`; the 110-column frames match. No chat card `▸ run 0:05` is drawn.
-- [done] The idle animation is a slow breathe, not a 1 per second pulse (17.25.0). Checked: `mod/band-motion.ts` `idleRamp` is a 24-phase triangle (2.4 s, 13 truecolor tones, 8 in 256 colours, one step per 100 ms beat); in the 256-colour captures `aa-150/idle-0`, `idle-1` and `idle-2` the pill fill is xterm 97, 135 and 55 on three successive frames. The `waiting for first prompt` line was replaced by a static `◌ idle · no prompt yet`.
 - [planned] The `ATLAS` pill on the band is kept as it was; whether it should say more at idle is undecided.
 - [planned] Host-drawn, not changeable from the plugin: tmux PgUp/PgDn scrolling and the weekly-limit line under the band.
 

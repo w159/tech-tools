@@ -29,7 +29,7 @@ describe('sidebar golden text', () => {
   test('route: phase, gates in words, todo gauge with N of M, agents in words', () => {
     const r = rows('route');
     expect(r).toContain(' phase  ◐ implement');
-    expect(r.some((l) => l.startsWith(' gates ') && l.endsWith('2 denied'))).toBe(true); // the tool-routing group holds no data: it is not a third gate (gateTally)
+    expect(r.some((l) => l.startsWith(' gates ') && l.endsWith('1 denied'))).toBe(true); // the tool-routing group holds no data: it is not a third gate (gateTally); fix1728: the unmet completion line is pending until a Stop refuses, so only the header error denies
     expect(r.some((l) => l.startsWith(' todo ') && l.includes('1/7'))).toBe(true);
     expect(r.some((l) => l.startsWith(' agents ') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);
   });
@@ -66,7 +66,7 @@ describe('sidebar golden text', () => {
   test('gates: group rows with failing lines in words, copy fix when expanded', () => {
     const t = goldenText('gates');
     expect(t).toContain('Completion gate');
-    expect(t).toMatch(/Completion gate.* 1 pass · 1 deny\n/);
+    expect(t).toMatch(/Completion gate +pending.* 2 pass · 0 deny\n/); // fix1728: no Stop refused, so the unmet completion line is pending, the count column stays where it was
     expect(goldenText('gatesExpanded')).toContain('verification coverage');
     expect(goldenText('gatesExpanded')).toContain('run the hooks suite');
   });

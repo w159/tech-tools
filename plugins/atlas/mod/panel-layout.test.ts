@@ -159,9 +159,17 @@ describe('team tab lists the subagents by name and state', () => {
 
 describe('gates tab', () => {
   const long = 'the completion gate found that verification coverage is missing for the changed modules and the docs tree';
-  const g = (over: object = {}) => [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }], ...over }];
+  // fix1728: a completion line is pending until a Stop refuses; the refused Stop (a record, never a gate row) keeps these lines real failures
+  const STOP = { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'verification coverage' };
+  const base = [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }];
+  const g = (over: { lines?: object[] } = {}) => [{ id: 'completion', title: 'Completion gate', ...over, lines: [...(over.lines ?? base), STOP] }];
+  test('fix1728: no Stop refused, the group reads pending on the same count column', () => {
+    const row = rows('gates', 100, { gates: [{ id: 'completion', title: 'Completion gate', lines: base }] }).find((l) => l.includes('Completion gate'))!;
+    expect(row).toMatch(/^▸ ◇ Completion gate {2}pending +2 pass · 0 deny$/);
+    expect(cells(row)).toBe(100);
+  });
   test('a group says how many fail in words and shows the first fix', () => {
-    const row = rows('gates', 100, { gates: g() }).at(-1)!;
+    const row = rows('gates', 100, { gates: g() }).find((l) => l.includes('Completion gate'))!;
     expect(row).toMatch(/^▸ △ Completion gate {2}warning run the hooks suite +1 pass · 1 deny$/);
     expect(cells(row)).toBe(100); // the failing count is the right-aligned value
   });

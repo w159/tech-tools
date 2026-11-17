@@ -1,5 +1,15 @@
 # Changelog
 
+## marketplace 5.34.0 - 2026-11-16
+
+- marketplace 5.34.0: atlas 17.28.0. armada and programmer are unchanged.
+
+## atlas 17.28.0 - 2026-11-16
+
+- atlas 17.28.0: one behaviour in every project. A simple task (one working seat or effort `low`, no team launched) is done by the lead inline with no denial and no STOP nudge (`_simple_task`, `ATLAS_INLINE_SIMPLE=off` restores the gates). With tmux on PATH every in-process working dispatch, the first one included, is routed to a tmux team with a ready `atlas_mux.py spawn-team` command and the prompt saved as its `--task-file` (`_team_note`, `_team_route`). Every worker row draws its name in its role colour (`mod/theme.ts` `ROLE_COLOUR`). Completion-gate lines read pending until a Stop is refused, and the tripwire and routing rows count only the current run (`runstate.withPending`, `atlas_gates.py`). Stale open rows of other sessions move from the board to `.atlas/.run/archive/`, so the TODO block shows the plan again (`atlas_todo.carry_over`). New plugin settings set the decision model, the Ollama worker options and analytics; `atlas_settings.py show|decision-status` prints them. The contract test no longer writes the developer's live board; before, running it re-stamped the open plan rows to session `contract`, which emptied the TODO block in this repository only.
+- No behaviour change: the worker-row and table-row renderers in `mod/hud-surface.ts` (`agentRowResting`, and the `rows` arrow inside `agentTable`) are split into small local helpers (`restingHead`, `restingCell`, `agentTableRow` and others). Both were already simpler than in 17.27.1, but `fallow audit` matches a finding by function name and threshold category, so the lower scores read as two new findings and blocked the commit. After the split the audit passes with 0 introduced findings and the mod and omp suite is unchanged at 5017 pass, 0 fail (`.atlas/evidence/2026-11-17_hud-surface-fallow-refactor.txt`).
+- Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
+
 ## atlas 17.27.1 - 2026-11-16
 
 - atlas 17.27.1: the transcript's reply header line is branded again as `ATLAS <glyph> <phase> [n/m] | <state>`, in the phase colour when it is drawn as a chip and as plain text while a reply streams (`leadRow`, `displayDelta` in `mod/transcript/leadheader.ts`). The mod's session clock is reset between test files (`resetSessionStart`), which fixes three order-dependent `register-core` tests.
@@ -26,6 +36,8 @@
 ## atlas 17.25.0 - 2026-11-15
 
 - atlas 17.25.0: the Claude Code mods were reworked over nine rounds against paired critic scoring ([audit](audits/2026-11-15_atlas-mods-expert-rounds.md)). An idle session shows real figures with history: last run, run count and median, gate counts and hook latency from the last session (labelled `prev`), kept in `.atlas/.run/history.json` (last 50 runs, 64 latency samples per hook, 60 minutes of events). The status tab is an instrument: a stepper that agrees with its count, an ACTIVITY column chart with axes and a named bucket, a GATES table, a HOOKS table with p50 and its colour thresholds, RUNS bars. One module (`mod/metrics.ts`) computes every figure, so the band, panel, tabs, card and strip show the same number. The band has fixed-width slots, a `health` chip and a `gates ok ›` chip that open the card and the gates tab, and the card closes from its title. All six tabs fit at 110 columns, below 144 columns a two-row idle strip carries the summary, the idle animation is a slow breathe of the pill instead of a 1 per second pulse, and the last run's time is printed once per view. The critic panel mean did not reach 8 (Atlas 5.33 fresh, 5.75 with history; btop 7.75 and htop 6.53 in the same runs). Marketplace 5.30.0.
+- Moved from ROADMAP (17.25.0, 2026-11-15): the run duration is printed once per view. Checked in the final captures: `aa-150/work-12.txt` has `█ 0:06 ok` once (RUNS row) and the band reads `● done 6/6` with no clock; `aa-150/c-5-health-card.txt` has `█ 0:05 ok` once, band `● done 6/6 · ended 42s`; the 110-column frames match. No chat card `▸ run 0:05` is drawn.
+- Moved from ROADMAP (17.25.0, 2026-11-15): the idle animation is a slow breathe, not a 1 per second pulse. Checked: `mod/band-motion.ts` `idleRamp` is a 24-phase triangle (2.4 s, 13 truecolor tones, 8 in 256 colours, one step per 100 ms beat); in the 256-colour captures `aa-150/idle-0`, `idle-1` and `idle-2` the pill fill is xterm 97, 135 and 55 on three successive frames. The `waiting for first prompt` line was replaced by a static `◌ idle · no prompt yet`.
 - Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
 
 ## marketplace 5.30.0 - 2026-11-15
@@ -52,6 +64,11 @@
 ## atlas 17.23.0 - 2026-11-15
 
 - atlas 17.23.0: the mods show a live health summary when idle. The band reads `○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health` and `▸ health` opens a HEALTH card (gate state and pass counts, session tokens and window); the side panel status view gets health rows (hooks, gates, session, last run), a `recent` hook-event list and a pinned `atlas <version> · hooks loaded` footer. Every control is a visible chip or `▸`/`▾` toggle; the printed key hints (`r: status ... ctrl+x tab`, `Enter sends`) and the dead tab hotkeys are gone. Empty states read `no plan yet · 0 agents` and `no workers yet` instead of blank boxes. The context figure is the last response's input tokens over the model window (host `session.measure`), not a session total. Real SGR mouse clicks in tmux verified. Audit: `docs/audits/2026-11-14-idle-health.md`.
+- Moved from ROADMAP (17.23.0, 2026-11-15): idle band, HUD and side panel show a live health summary (gates, uptime, context, last run, recent hook events) with a clickable `▸ health` expand and a HEALTH card; verified with real SGR mouse clicks in tmux on Claude Code 2.1.325.
+- Moved from ROADMAP (17.23.0, 2026-11-15): no empty placeholder boxes at idle: `no plan yet · 0 agents`, `no workers yet`, dim one-separator phase chain.
+- Moved from ROADMAP (17.23.0, 2026-11-15): the side panel middle is no longer empty on a fresh session (commit cad6fe65): `● waiting for first prompt`, a `checks` section and a context gauge fill it; blank rows above the footer at 150 by 45 went from 19 to 10.
+- Moved from ROADMAP (17.23.0, 2026-11-15): `cc-health-open.png`, `cc-idle-health-150.png` and `cc-idle-health-110.png` recaptured from the final frames (the band no longer shows tab chips beside the open panel).
+- Moved from ROADMAP (17.23.0, 2026-11-15): run facts are said once in the panel (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`), `recent` reads in words, and the `0 messages` orphan is removed.
 - Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
 
 ## marketplace 5.28.0 - 2026-11-15

@@ -4936,11 +4936,17 @@ class TeamGateTest(unittest.TestCase):
         env = self._env()
         decision, reason = self._dispatch("atlas:implementer", "fix/medium", env)
         self.assertEqual(decision, "deny")
-        self.assertIn("atlas_mux.py spawn-team --class fix --effort medium --paths a,b --task-file T", reason)
+        # 17.28.0 ROUTE wording: the command carries the class, effort and a real --task-file brief.
+        self.assertTrue(reason.startswith("ROUTE - this work goes to a tmux team: run the command below"), reason)
+        m = re.search(r"atlas_mux\.py\" spawn-team --class fix --effort medium --task-file (\S+)", reason)
+        self.assertIsNotNone(m, reason)
+        self.assertTrue(os.path.isfile(m.group(1)), m.group(1))
+        with open(m.group(1), encoding="utf-8") as fh:
+            self.assertIn("SCOPE: fix/medium", fh.read())
         self.assertIn('atlas_crew.py run --spec S --files G --goal "..."', reason)
         self.assertIn("dispatch_denied:team", self._friction())
         self.assertNotIn("SCOPE: audit/low", reason)
-        self.assertIn("Ways out: run that team or crew command", reason)
+        self.assertIn("run the command below", reason)
         self.assertLess(len(reason.encode("utf-8")), 600, reason)
         reason.encode("ascii")
 

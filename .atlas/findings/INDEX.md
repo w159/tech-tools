@@ -64,6 +64,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-17 | hud-surface-fallow-refactor-17.28.0 | verified | hud-surface.ts rows and agentRowResting split into helpers: fallow audit passes (0 introduced), mod and omp suite 5017 pass 0 fail | [2026-11-17_hud-surface-fallow-refactor-17-28-0.md](2026-11-17_hud-surface-fallow-refactor-17-28-0.md) |
 | 2026-11-16 | t808b87de-critics2 | verified | round 5 second critic round: 4/10 and 4/10, open defects listed in round-5 audit | [2026-11-16_t808b87de-critics2.md](2026-11-16_t808b87de-critics2.md) |
 | 2026-11-16 | t558873b1 | verified | round-5 critics (sonnet 4/10, opus 3/10) run; findings checked against code | [2026-11-16_t558873b1.md](2026-11-16_t558873b1.md) |
 | 2026-11-15 | tc0aee6c7 | verified | atlas 17.24.0 HEAD release-ready; doc figures match code output | [2026-11-15_tc0aee6c7.md](2026-11-15_tc0aee6c7.md) |
