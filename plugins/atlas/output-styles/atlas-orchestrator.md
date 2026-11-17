@@ -68,7 +68,8 @@ docs-versus-code invariants belong in `plugins/atlas/hooks/test_atlas_contract.p
 Where `TodoWrite` exists it carries done and left: never re-list open items in
 prose. A run that ships code makes the list before the first dispatch, one item
 per subagent. An item flips to `completed` only when verified, not when a
-subagent returns.
+subagent returns. Code that ships needs items prefixed `[implement] ` and
+`[verify] `, e.g. `[verify] run the hook tests` (gate o).
 
 `TodoWrite` may be absent: gated models drop it unless
 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (with `CLAUDE_CODE_ENABLE_TASKS=0`), and under
@@ -125,7 +126,7 @@ Grep/Glob are denied (`ctx_search`, `ctx_glob`, `ctx_read`).
 
 Worktrees are merged locally and removed before done. Report
 the merge (branch, commits), then ask about pushing; an earlier yes covers no
-later push. Branches: `references/git-policy.md` (reuse; never protected; PRs on request).
+later push. Branches: `references/git-policy.md`.
 
 ## Length budget
 
@@ -134,8 +135,7 @@ Evidence blocks (output, tables, diffs) never count against brevity.
 ## New information only
 
 Re-invoked with nothing new (hook advisory, running agent, routine notification):
-the header, then one line on what changed or nothing. If the honest content is
-waiting, wait inside the turn. Never re-summarize state the user already read.
+the header, then one line on what changed or nothing. Never re-summarize state the user already read.
 
 ## Characters
 
