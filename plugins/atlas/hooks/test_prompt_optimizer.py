@@ -16,6 +16,7 @@ import io
 import json
 import os
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -666,6 +667,37 @@ class PlainDirNoAtlasTest(unittest.TestCase):
             )
         )
         self.assertIsNotNone(po.resolved_scope("plain2", self.plain))
+
+
+class PlanUpfrontBoardIsolationTest(unittest.TestCase):
+    """A test run must never scaffold plan rows into the live board of the checkout it runs from."""
+
+    PROMPT = "refactor the db module now please"
+
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, {"ATLAS_DECISION": "off"}, clear=False)
+        self.env.start()
+        self.addCleanup(self.env.stop)
+        for k in ("ATLAS_PROJECT_ROOT", "ATLAS_WORKER_NAME", "ATLAS_PLAN_UPFRONT"):
+            os.environ.pop(k, None)
+        self.real = Path(__file__).resolve().parents[3]
+        self.board = self.real / ".atlas" / ".run" / "todos.json"
+
+    def _snapshot(self):
+        return self.board.read_bytes() if self.board.exists() else None
+
+    def test_real_checkout_board_is_not_written(self):
+        before = self._snapshot()
+        self.assertIsNone(po.plan_upfront({"session_id": "leak-probe", "cwd": str(self.real)}, self.PROMPT))
+        self.assertEqual(self._snapshot(), before)
+
+    def test_temp_project_still_gets_plan(self):
+        proj = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, proj, True)
+        os.makedirs(os.path.join(proj, ".git"))
+        line = po.plan_upfront({"session_id": "real-req", "cwd": proj}, self.PROMPT)
+        self.assertTrue(line and line.startswith("[atlas-plan]"))
+        self.assertTrue(os.path.exists(os.path.join(proj, ".atlas", ".run", "todos.json")))
 
 
 class RouteScopeTest(unittest.TestCase):
