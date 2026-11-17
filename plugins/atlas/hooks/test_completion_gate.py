@@ -3469,6 +3469,72 @@ class InFlightDispatchHelperTest(unittest.TestCase):
         )
 
 
+class InFlightTmuxTeamTest(unittest.TestCase):
+    """A tmux team launched by this session with a running member is work in
+    flight (its members are not in the Stop payload's `background_tasks`)."""
+
+    SID = "sess-team-1"
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        self.teams = Path(self.root) / ".atlas" / ".run" / "teams"
+        self.teams.mkdir(parents=True)
+        self.addCleanup(shutil.rmtree, self.root, True)
+        self.created = time.time() - 60
+
+    def _team(self, tid="t111111", session=None, created=None, members=("w-1", "w-2")):
+        rec = {
+            "team_id": tid,
+            "transport": "tmux",
+            "created": self.created if created is None else created,
+            "source": {"session": session or self.SID},
+            "members": [{"name": m} for m in members],
+        }
+        (self.teams / f"{tid}.json").write_text(json.dumps(rec), encoding="utf-8")
+
+    def _exit(self, name):
+        atlas_todo.note(self.root, name, "exit 0")
+
+    def _flight(self, tmux_rc=0):
+        import atlas_mux
+
+        res = subprocess.CompletedProcess([], tmux_rc, "", "")
+        with mock.patch.object(atlas_mux, "_tmux", return_value=res):
+            return completion_gate._has_in_flight_dispatch(
+                {"session_id": self.SID}, self.root
+            )
+
+    def test_running_team_of_this_session_is_in_flight(self):
+        self._team()
+        self._exit("w-1")  # w-2 still running
+        self.assertTrue(self._flight())
+
+    def test_all_exited_team_is_not_in_flight(self):
+        self._team()
+        self._exit("w-1")
+        self._exit("w-2")
+        self.assertFalse(self._flight())
+
+    def test_other_session_team_is_not_in_flight(self):
+        self._team(session="sess-other")
+        self.assertFalse(self._flight())
+
+    def test_stale_record_is_not_in_flight(self):
+        self._team(created=time.time() - completion_gate.TEAM_IN_FLIGHT_MAX_AGE_S - 60)
+        self.assertFalse(self._flight())
+
+    def test_gone_tmux_session_is_not_in_flight(self):
+        self._team()
+        self.assertFalse(self._flight(tmux_rc=1))
+
+    def test_missing_record_is_not_in_flight(self):
+        self.assertFalse(self._flight())
+
+    def test_unreadable_record_is_not_in_flight(self):
+        (self.teams / "t222222.json").write_text("{not json", encoding="utf-8")
+        self.assertFalse(self._flight())
+
+
 class InFlightDispatchOrchestrationTest(GateOrchestrationTest):
     """End-to-end: an orchestrating session with everything else missing must
     still pass silently while a dispatched subagent is in flight."""

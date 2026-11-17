@@ -1047,7 +1047,56 @@ _IN_FLIGHT_DISPATCH_TYPES = {"subagent", "workflow", "teammate"}
 _TERMINAL_TASK_STATUSES = {"completed", "failed", "killed", "cancelled", "stopped"}
 
 
-def _has_in_flight_dispatch(data: dict) -> bool:
+# A team record older than this never counts as in flight. `atlas_mux wait` defaults to
+# a shorter timeout, so a record this old belongs to a wedged or forgotten team; the gate
+# must not block a Stop for ever on it. Six hours covers a long real run.
+TEAM_IN_FLIGHT_MAX_AGE_S = 6 * 3600
+
+
+def _team_in_flight(root, session_id: str, now: float | None = None) -> bool:
+    """True when a tmux team launched by this session still has a running member.
+
+    Reads the record `atlas_mux wait` trusts: `.atlas/.run/teams/<id>.json` (reap
+    archives it, so archived records are ignored), a live tmux session
+    `atlas-<id>`, and each member's last board note (`atlas_mux._exited`, scoped to
+    the record's `created`). Ignores: another session's team, a record older than
+    TEAM_IN_FLIGHT_MAX_AGE_S, a dead tmux session, a team whose members all exited.
+    Missing/unreadable record or any error -> False (never fail open)."""
+    if not session_id:
+        return False
+    try:
+        import atlas_mux
+        import atlas_todo
+
+        lead = atlas_todo.lead_name(session_id)
+        now = time.time() if now is None else now
+        for rec_path in sorted((Path(root) / atlas_mux.TEAMS_REL).glob("*.json")):
+            try:
+                team = json.loads(rec_path.read_text(encoding="utf-8"))
+                source = team.get("source") or {}
+                if team.get("lead") != lead and source.get("session") != session_id:
+                    continue
+                created = team.get("created")
+                if not isinstance(created, (int, float)) or now - created > TEAM_IN_FLIGHT_MAX_AGE_S:
+                    continue
+                tid = str(team.get("team_id") or rec_path.stem)
+                if team.get("transport") in ("claude-bg", "herdr"):
+                    continue  # no tmux session to probe
+                if atlas_mux._tmux("has-session", "-t", f"={atlas_mux._session(tid)}").returncode != 0:
+                    continue
+                if any(
+                    not atlas_mux._exited(str(root), m["name"], float(created))
+                    for m in team.get("members") or []
+                ):
+                    return True
+            except (OSError, ValueError, TypeError, KeyError, AttributeError):
+                continue
+    except Exception:  # noqa: BLE001 -- a probe failure must read as "not in flight"
+        return False
+    return False
+
+
+def _has_in_flight_dispatch(data: dict, root=None) -> bool:
     """True when the Stop payload's `background_tasks` lists a dispatched
     subagent/workflow/teammate that has not reached a terminal status.
 
@@ -1062,16 +1111,15 @@ def _has_in_flight_dispatch(data: dict) -> bool:
     Absent/malformed `background_tasks` -> no suppression (current
     behavior)."""
     tasks = data.get("background_tasks")
-    if not isinstance(tasks, list):
-        return False
-    for task in tasks:
+    for task in tasks if isinstance(tasks, list) else []:
         if not isinstance(task, dict):
             continue
         if str(task.get("type", "")).lower() not in _IN_FLIGHT_DISPATCH_TYPES:
             continue
         if str(task.get("status", "")).lower() not in _TERMINAL_TASK_STATUSES:
             return True
-    return False
+    # tmux team members are processes, not Stop-payload tasks: ask the team record.
+    return root is not None and _team_in_flight(root, str(data.get("session_id") or ""))
 
 
 _SHELL_MEMO: dict | None = None  # set by main(): one `git status` per Stop
@@ -2031,7 +2079,7 @@ def _main() -> int:
             data, root
         )
         if not _session_is_orchestrating(session):
-            if missing_delegation and not _has_in_flight_dispatch(data):
+            if missing_delegation and not _has_in_flight_dispatch(data, root):
                 # Same loop cap as an orchestrating run: the continuation is
                 # re-checked, so without it an unfixable (m) never ends.
                 count, loop_exhausted = _block_loop_state(session, ["m"], continuation)
@@ -2077,7 +2125,7 @@ def _main() -> int:
                     done_reason += "\n" + notice
                 _print_decision({"decision": "block", "reason": done_reason})
                 return 0
-        if _has_in_flight_dispatch(data):
+        if _has_in_flight_dispatch(data, root):
             # Dispatched subagent/workflow/teammate still running: not a
             # completion claim yet, so every condition stays silent except
             # (n). The header is a property of the reply text, so like (r) it
