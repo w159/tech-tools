@@ -134,6 +134,9 @@ WORKER_ENV = (
     "SSL_CERT_FILE",
     "SSL_CERT_DIR",
     "ATLAS_OWNER_TOKEN",
+    # atlas's own turn-scoring judge key (typesafe_client): inherited as env only, never in FORWARDED_ENV,
+    # because that tuple travels in the pane command line (tmux argv, ps).
+    "TYPESAFE_API_KEY",
 )
 WORKER_EXTRA_ENV = "ATLAS_WORKER_FORWARD_ENV"
 ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

@@ -2,6 +2,7 @@
 """atlas_mux.clean_env: what a tmux pane and its worker inherit from the lead."""
 
 import unittest
+import unittest.mock
 
 import _test_isolation  # noqa: F401
 import atlas_mux
@@ -59,6 +60,17 @@ class CleanEnvTests(unittest.TestCase):
         self.assertEqual("openai-secret", env["OPENAI_API_KEY"])
         self.assertEqual("extra-secret", env["EXTRA_TOKEN"])
         self.assertNotIn("OTHER_TOKEN", env)
+
+    def test_worker_env_inherits_judge_key_only_when_the_parent_has_it(self):
+        # live 2026-11-17: mux workers scored with 401 "TYPESAFE_API_KEY is not set"; fake value only
+        env = atlas_mux.worker_env({"PATH": "/usr/bin", "TYPESAFE_API_KEY": "fake-key"})
+        self.assertEqual("fake-key", env["TYPESAFE_API_KEY"])
+        self.assertNotIn("TYPESAFE_API_KEY", atlas_mux.worker_env({"PATH": "/usr/bin"}))
+
+    def test_judge_key_never_enters_the_pane_command_line(self):
+        self.assertNotIn("TYPESAFE_API_KEY", atlas_mux.FORWARDED_ENV)
+        with unittest.mock.patch.dict("os.environ", {"TYPESAFE_API_KEY": "fake-key"}):
+            self.assertNotIn("fake-key", atlas_mux.pane_command(atlas_mux.pane_env("/r", "w"), ["w"]))
 
 
 if __name__ == "__main__":
