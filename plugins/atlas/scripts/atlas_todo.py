@@ -211,8 +211,19 @@ def _locked_load(root: Optional[str]) -> dict:
     return board
 
 
+_CHECKOUT = Path(__file__).resolve().parents[3]  # the source checkout this script lives in
+
+
+def _refuse_test_write_to_checkout(path: Path) -> None:
+    """A test (marker set by scripts/_test_isolation) must never write the board of the checkout it runs from:
+    that is the live project board (phantom plan rows once blocked the completion gate)."""
+    if os.environ.get("_ATLAS_TEST_ISOLATED_ROOT") and path.resolve().is_relative_to(_CHECKOUT):
+        raise RuntimeError(f"test isolation: refusing to write the real project board {path}; use a temp project root")
+
+
 def save(root: Optional[str], board: dict) -> None:
     path = board_path(root)
+    _refuse_test_write_to_checkout(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     board["version"] = 1
     board["root"] = str(path.parent.parent.parent)

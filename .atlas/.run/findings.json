@@ -12761,5 +12761,176 @@
     "verified_at": "2026-11-17T17:42:00+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "pushed-head-archive-tests-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Pushed HEAD 73fdaa79 archive: all three test commands green from a pristine checkout",
+    "evidence": [
+      "1093 passed, 31 subtests passed in 169.44s (pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py)",
+      "90 passed in 10.14s (pytest plugins/atlas/scripts/test_atlas_control.py test_typesafe_client.py test_turn_scoring_budget.py test_atlas_db_facet.py)",
+      "Ran 3279 tests in 408.465s / OK (skipped=5) (python -m unittest discover plugins/atlas/hooks)",
+      "archive contains changes: dispatch_tripwire_core.py:478 _cheap_exploration, :393 BURST_SECS = 30, typesafe_client.py:113 MAX_BODY_BYTES = 24_000, atlas_db.py:1120 created_at=COALESCE(?,created_at), CLAUDE.md:134 ## Parallel agents (team rules)"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && git archive HEAD | tar -x -C /tmp/vt_head && cd /tmp/vt_head && /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T18:06:42+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-3d00"
+  },
+  {
+    "id": "pushed-head-guarantees-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Four behavioural guarantees reproduced directly against the pushed HEAD archive",
+    "evidence": [
+      "MUX: _scope_gate direct -> atlas:explorer model=haiku denied=[] (not denied); atlas:implementer model=haiku denied=[('mux','DENY - another in-process atlas:* dispatch of this session is still running...')]; atlas:explorer model=opus denied=[('mux', same deny)]",
+      "STEPS: _runner_steps_problem -> 0 numbered steps: 'DENY - the STEPS: block of this atlas:runner dispatch has no numbered lines. Write each step as a numbered line (1. ..., 2. ...), at most 7.'; 8 steps: 'DENY - this atlas:runner dispatch has 8 numbered STEPS but the cap is 7.'",
+      "BLOCK LOOP: _block_loop_state counts [(1,False),(2,False),(3,False),(4,True)] with no new dispatch (cap trips at 4, FINAL notice 'identical block 3 of 3'); with progress=100..103 counts [(1,False),(1,False),(1,False),(1,False)] (no trip)",
+      "UPSERT: temp DB created_at 1794938756.885785 unchanged after second upsert with different payload (correction_count 1->7); explicit created_at=1234.5 stored as 1234.5",
+      "JUDGE BOUND: hostile exchange body 402499 bytes -> fit_state -> 24000 bytes; hostile facet body 352858 -> 24000; end-to-end score_session sent 9 POSTs, max body 22499 bytes, facet POST 11873 bytes, all <= 24000"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python /tmp/vt_g2.py (and /tmp/vt_guarantees.py) with cwd /tmp/vt_head",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T18:06:45+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-3d00"
+  },
+  {
+    "id": "pushed-branch-second-eyes-2026-11-17",
+    "surface": "atlas plugin source (plugins/atlas/hooks, plugins/atlas/scripts)",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Pushed HEAD 73fdaa79 is green from a pristine git archive (independent second pass, no working-tree state)",
+    "evidence": [
+      "git archive HEAD | tar -x -C /tmp/vt_head ; /tmp/vt_head2 identical (diff -rq empty)",
+      "/tmp/vt_head_evidence.txt: pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q -> '1093 passed, 31 subtests passed in 167.96s (0:02:47)'",
+      "/tmp/vt_head_evidence.txt: pytest plugins/atlas/scripts/{test_atlas_control,test_typesafe_client,test_turn_scoring_budget,test_atlas_db_facet}.py -q -> '90 passed in 9.89s'",
+      "/tmp/vt_head_evidence.txt: python -m unittest discover plugins/atlas/hooks -> 'Ran 3279 tests in 406.911s' / 'OK (skipped=5)' (zero failing ids, so PRE-EXISTING vs REGRESSION classification is vacuous)",
+      "archive greps: dispatch_tripwire_core.py:478 'def _cheap_exploration', :393 'BURST_SECS = 30', typesafe_client.py:113 'MAX_BODY_BYTES = 24_000', atlas_db.py:1120 'created_at=COALESCE(?,created_at)', CLAUDE.md:134 '## Parallel agents (team rules)'",
+      "no scope creep: git diff HEAD --stat -- plugins/atlas/hooks plugins/atlas/scripts is empty; git show --name-only 08d8304d fcec569e 73fdaa79 touches no .env / plugins cache / marketplace / installed_plugins.json; branch HEAD == origin/atlas/routing-17.28.0 (73fdaa79)"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && git archive HEAD | tar -x -C /tmp/vt_head && cd /tmp/vt_head && /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q && /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest plugins/atlas/scripts/test_atlas_control.py plugins/atlas/scripts/test_typesafe_client.py plugins/atlas/scripts/test_turn_scoring_budget.py plugins/atlas/scripts/test_atlas_db_facet.py -q && /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m unittest discover plugins/atlas/hooks",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T18:09:21+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-b020"
+  },
+  {
+    "id": "pushed-branch-guarantees-second-eyes-2026-11-17",
+    "surface": "atlas dispatch tripwire, completion gate, facet upsert and judge budget",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "MUX cheap-exploration exemption, runner STEPS cap, block-loop progress reset, facet created_at COALESCE and the 24k judge body bound all hold when re-derived by hand on the archive",
+    "evidence": [
+      "/tmp/vt_head_evidence.txt (script /tmp/vtg_verify.py): MUX - explorer+haiku second dispatch -> decision='allow' (NOT denied); implementer+sonnet second dispatch -> decision='deny' 'DENY - another in-process atlas:* dispatch of this session is still running'; explorer+opus -> decision='deny' (model_override rule: 'The agent definition pins model: haiku')",
+      "_cheap_exploration: explorer/haiku=True, explorer/sonnet=True, explorer/opus=False, explorer/''=False, implementer/sonnet=False, implementer/haiku=False; _burst_note 2nd (exempt=False) -> (True, 'DENY - another in-process ...'), 3rd (exempt=True) -> (False, '')",
+      "STEPS - runner 0 numbered steps -> 'DENY - the STEPS: block of this atlas:runner dispatch has no numbered lines ... at most 7.'; 8 steps -> 'DENY - this atlas:runner dispatch has 8 numbered STEPS but the cap is 7.'; 7 steps -> allow",
+      "BLOCK LOOP - limit=3; four identical blocks with unchanged dispatch count -> (1,False) (2,False) (3,False) (4,True) exhausted; changed dispatch count 5->6->7 -> (1,False) (1,False) (1,False) never exhausted",
+      "UPSERT - insert created_at=1000 -> (1000.0,'g1','o1'); upsert without created_at -> (1000.0,'g2','o2') created_at UNCHANGED; upsert with explicit created_at=2000 -> (2000.0,'g3','o2')",
+      "JUDGE BOUND - exchange body 100215 bytes -> trimmed 24000 bytes (<= MAX_BODY_BYTES 24000); facet body 90191 bytes -> trimmed 24000 bytes"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python /tmp/vtg_verify.py  (run from the /tmp/vt_head archive; temp ATLAS_DB + ATLAS_HOOKSTATE_DIR, never the real ~/.atlas)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T18:09:21+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-b020"
+  },
+  {
+    "id": "atlas-doctor-team-verification-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "tmux team t892423 (2 verifiers, class=verify) independently reproduced all five guarantees of the pushed branch from a pristine git-archive of HEAD 73fdaa79: 1093 hooks tests + 90 scripts tests + 3279 unittest discover all green with zero failures; mux not denied for cheap read-only but still denied for cheap-writing and opus-read-only; STEPS still denies; block-loop cap still trips without progress and resets with it; upsert created_at unchanged on re-upsert and honours an explicit value; hostile judge body 402499 -> 24000 bytes and facet body 352858 -> 24000",
+    "evidence": [
+      "team t892423; /tmp/vt_head archive of 73fdaa79; findings records .atlas/findings/2026-11-17_pushed-head-archive-tests-2026-11-17.md, 2026-11-17_pushed-head-guarantees-2026-11-17.md, 2026-11-17_pushed-branch-second-eyes-2026-11-17.md, 2026-11-17_pushed-branch-guarantees-second-eyes-2026-11-17.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools && git archive HEAD | tar -x -C /tmp/vt_head && cd /tmp/vt_head && /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest plugins/atlas/hooks/test_dispatch_tripwire.py plugins/atlas/hooks/test_completion_gate.py -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T18:10:45+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-doctor-shipped-and-live-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Shipped and live: the atlas-doctor fixes are merged to main (PR #67), published as atlas-v17.28.0, and installed on BOTH harnesses (omp 17.27.1 -> 17.28.0, Claude Code 17.28.0) via the sanctioned marketplace updater - no install cache was hand-edited",
+    "evidence": [
+      "installed ~/.omp/plugins/cache/plugins/tech-tools___atlas___17.28.0 and ~/.claude/plugins/cache/tech-tools/atlas/17.28.0 both contain _cheap_exploration (2), BURST_SECS = 30 (1), _run_dispatch_count (3), MAX_BODY_BYTES (1), created_at=COALESCE(?,created_at) (1), and the loud missing-key typesafe_client",
+      "installed hook suite run from the install dir: 1093 passed, 31 subtests passed in 160.45s",
+      "installed scorer real judge call on a DB copy: calls=1 rows=6 input_tokens=2573 model=jev-1.14.0 scope_drift=0.12 - no 2048-token overflow error",
+      "atlas_env.apply_store_env() resolves ATLAS_TYPESAFE_URL=https://api.typesafe.ai ATLAS_TYPESAFE_MODEL=jev-latest for every hook run"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd ~/.omp/plugins/cache/plugins/tech-tools___atlas___17.28.0 && ATLAS_DB=/tmp/copy.db ATLAS_TYPESAFE_URL=https://api.typesafe.ai ATLAS_TYPESAFE_MODEL=jev-latest python3 scripts/turn_scoring.py --session <sid> --max-calls 3",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T18:29:21+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-todo-board-test-leak-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Test-suite board leak fixed: a prompt_optimizer test scaffolded six phantom plan rows into the LIVE project board (the string was a test fixture, no user request existed) - atlas_todo.save now refuses any test-isolated write to the checkout board",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_todo.py save() -> _refuse_test_write_to_checkout (raises when _ATLAS_TEST_ISOLATED_ROOT is set and the board path is inside the source checkout)",
+      "plugins/atlas/hooks/test_prompt_optimizer.py PlanUpfrontBoardIsolationTest: 2 tests, fails on HEAD atlas_todo.py (AssertionError: plan rows landed on the board) and passes after",
+      "live board .atlas/.run/todos.json sha256 unchanged across a full test_prompt_optimizer.py run (154213419725fb386b933d192b82dd57c4032c406a366d846e824c064e513d55 before and after)",
+      "suites: prompt_optimizer 151 passed; test_atlas_contract 118 passed 3 skipped 142 subtests; scripts 6325 passed with 1 pre-existing failure; hooks 3276 passed with 2 pre-existing failures - all 3 identical on a pristine HEAD archive"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/hooks && /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest test_prompt_optimizer.py::PlanUpfrontBoardIsolationTest -q",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T19:17:48+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "atlas-worker-judge-key-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Mux workers now inherit the judge key: atlas_mux.WORKER_ENV forwards TYPESAFE_API_KEY by env inheritance (never via FORWARDED_ENV, which travels in the pane argv), so worker turn-scoring stopped failing 401 after the judge endpoint moved off the local loopback",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_mux.py:137-139 adds TYPESAFE_API_KEY to WORKER_ENV with a comment stating it is env-inherited only, never in FORWARDED_ENV (that tuple is serialized into the pane command line and would leak the key to tmux argv/ps)",
+      "plugins/atlas/scripts/test_atlas_mux_env.py: two new tests - worker_env inherits the key only when the parent has it, and the key never enters pane_command",
+      "red-before: against HEAD atlas_mux.py the new test fails with KeyError TYPESAFE_API_KEY; green-after: mux+contract suites 404 passed, 3 skipped, 187 subtests",
+      "end-to-end: a child spawned with worker_env(parent) sees the key and the hosted judge rejects it as authentication_error (past the missing-key check), while a child without the key still gets the missing-key 401",
+      "no secret value in the repo: git diff | grep -c apikey_ -> 0; the test uses the literal fake-key"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts && /Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest -q test_atlas_mux_env.py -k judge_key",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T19:32:59+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]
