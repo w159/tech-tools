@@ -86,5 +86,44 @@ class ProjectRootTests(unittest.TestCase):
         self.assertEqual(atlas_paths.sanitize(p), os.path.join(self.tmp, "p"))
 
 
+class MarketplaceSubdirTests(unittest.TestCase):
+    """An explicit root inside plugins/<name>/ of a marketplace repo must map to the repo root."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = mk(os.path.realpath(self._tmp.name), "market")
+        mk(self.repo, ".git")
+        mk(self.repo, ".claude-plugin")
+        with open(os.path.join(self.repo, ".claude-plugin", "marketplace.json"), "w") as fh:
+            fh.write("{}")
+        self.scripts = mk(self.repo, "plugins", "atlas", "scripts")
+
+    def test_sanitize_maps_plugin_subdir_to_repo_root(self):
+        self.assertEqual(atlas_paths.sanitize(self.scripts), self.repo)
+        self.assertEqual(atlas_paths.sanitize(os.path.dirname(self.scripts)), self.repo)
+
+    def test_board_path_for_plugin_cwd_lands_at_repo_root(self):
+        import atlas_todo
+
+        self.assertEqual(
+            str(atlas_todo.board_path(self.scripts)),
+            os.path.join(self.repo, ".atlas", ".run", "todos.json"),
+        )
+
+    def test_repo_root_itself_is_unchanged(self):
+        self.assertEqual(atlas_paths.sanitize(self.repo), self.repo)
+
+    def test_normal_project_subdir_is_unchanged(self):
+        proj = mk(os.path.realpath(self._tmp.name), "proj")
+        mk(proj, ".git")
+        sub = mk(proj, "plugins", "x")
+        self.assertEqual(atlas_paths.sanitize(sub), sub)
+
+    def test_non_git_cwd_is_unchanged(self):
+        plain = mk(os.path.realpath(self._tmp.name), "plain", "plugins", "x")
+        self.assertEqual(atlas_paths.sanitize(plain), plain)
+
+
 if __name__ == "__main__":
     unittest.main()
