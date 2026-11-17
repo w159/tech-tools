@@ -142,8 +142,6 @@ class WireBodyBoundTest(unittest.TestCase):
             self.assertGreater(len(sent), 8, label)  # 8 exchanges + the facet
             facet_bodies = [b for b in sent if b"first_prompt" in b]
             self.assertEqual(len(facet_bodies), 1, label)
-            worst = max(len(b) for b in sent)
-            print(f"[{label}] worst assembled body: {worst} bytes (budget {ts.JUDGE_BODY_BUDGET_BYTES})")
             for b in sent:
                 self.assertLessEqual(len(b), ts.JUDGE_BODY_BUDGET_BYTES, label)
 

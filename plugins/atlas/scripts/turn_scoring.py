@@ -47,8 +47,6 @@ EARLIER_N = 5
 REQUEST_CAP = JUDGE_BUDGET_CHARS // 5  # request, and again for next_user_message
 EARLIER_CAP = JUDGE_BUDGET_CHARS // 5 // EARLIER_N  # EARLIER_N messages share one fifth
 REPLY_CAP = JUDGE_BUDGET_CHARS * 2 // 5
-if 2 * REQUEST_CAP + EARLIER_N * EARLIER_CAP + REPLY_CAP > JUDGE_BUDGET_CHARS:
-    raise RuntimeError("per-field caps exceed JUDGE_BUDGET_CHARS")
 DIGEST_CAP = 1500
 def _load_header_re():
     """The contract's headerFirstLinePattern, so `header_present` agrees with
