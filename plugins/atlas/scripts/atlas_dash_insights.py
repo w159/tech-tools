@@ -75,7 +75,6 @@ PREFS_PATH = _state_dir() / "dashboard-prefs.json"
 DASHBOARD_LOG = _state_dir() / "dashboard.log"
 HOOKSTATE_DIR = _state_dir() / "hookstate"
 NUDGE_STAMP = _state_dir() / ".atlas_nudge"
-DOCTOR_STATE = _state_dir() / "doctor-state.json"
 
 NUDGE_THROTTLE_MIN = 15  # hooks/nudge.py WINDOW_SECONDS = 900
 STOP_BURST_LIMIT = 5  # atlas_hook_guard circuit-breaker constants

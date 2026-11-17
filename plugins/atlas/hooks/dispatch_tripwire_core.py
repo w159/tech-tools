@@ -521,9 +521,6 @@ def _burst_note(root, session):
 CLOSING_ROLES = frozenset(
     {"planner", "verifier", "completeness-critic", "docs-curator", "docs-auditor"}
 )
-CREW_RUN_CMD = (
-    f'python3 "{_OWN_SCRIPTS / "atlas_crew.py"}" run --spec S --files G --goal "..."'
-)
 
 
 # D11: roles whose agent definition disallows Write/Edit (agents/explorer.md, agents/db-prober.md). They

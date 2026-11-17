@@ -462,8 +462,7 @@ Done 2026-10-09 (source tree, see `plugins/atlas/CHANGELOG.md`): omp Command Cen
 - Pay down the findings recorded in `fallow-baselines/` (added with 9.0.0 so the
   fallow commit/push gate stops failing on code this release does not author).
   The baselines are WHOLE-REPO, not only the 8.7.x omp code. Dead-code: 165
-  entries (141 `mcp_servers/*`, 21 `plugins/atlas`, 2 `mcp_node/*`, 1
-  `skills/webapp-testing`). Health: 145 files (113 `mcp_servers/*`, 21
+  entries (141 `mcp_servers/*`, 21 `plugins/atlas`, 2 `mcp_node/*`). Health: 145 files (113 `mcp_servers/*`, 21
   `plugins/atlas`, 10 `mcp_node/*`, plus `test-mcp-tools.mjs`). Everything in
   them is exempt from the gate until fixed. The omp part: 30 complexity
   findings, led by `omp/hook-bridge.ts` `loadBridgedHooksFor` (cyclomatic 32)
@@ -637,7 +636,7 @@ hyphen/comma/rewrite) followed by a clean validator run.
 
 ### Audit and testing proof follow-ups (2026-10-26)
 
-- [planned] Decide whether to vendor graphify into `plugins/atlas/skills` or keep it optional (today optional with a git-churn/fan-in fallback; only an unregistered vendor copy exists at `skills/graphify/`).
+- [planned] Decide whether to vendor graphify into `plugins/atlas/skills` or keep it optional (today optional with a git-churn/fan-in fallback; the unregistered root `skills/graphify/` copy was removed on 2026-11-17).
 - [planned] `testscope detect --root .` hides unittest suites when a pytest config is present at the root; plugins/atlas suites show only with `--root plugins/atlas/<dir>`.
 - [planned] Raise the `testscope.py` mutation score above 31.0%; survivors concentrate in `command_rows`, `detect_misc_files`, `_collect`, `baseline_rows`, `detect_terraform`, `detect_workflows`.
 - [planned] Decide whether the 10 skills without the operating-contract fence should carry it: atlas-audit (now fenced), atlas-loop, atlas-orchestrate, atlas-prompt, atlas-run-watch, atlas-setup, atlas-status, atlas-tui, atlas-ux-test, atlas-wiki.

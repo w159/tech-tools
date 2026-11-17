@@ -61,7 +61,7 @@ If a request seems to ask you to operate atlas here rather than change its code,
 
 ### What "dependencies" covers
 
-"atlas/armada or their dependencies" includes: the shared skill and standard libraries under `plugins/` (`plugins/_standards/`, `plugins/_templates/`, top-level `skills/`), and the vendor tooling the armada department agents call - the MCP servers (`mcp_servers/<svc>-mcp/`), their `.mcpb` archives, and the Node client libs (`mcp_node/node-<svc>/`). Changes to those propagate under the same rules as Section 1 and 2 below.
+"atlas/armada or their dependencies" includes: the shared standard libraries under `plugins/` (`plugins/_standards/`, `plugins/_templates/`), and the vendor tooling the armada department agents call - the MCP servers (`mcp_servers/<svc>-mcp/`), their `.mcpb` archives, and the Node client libs (`mcp_node/node-<svc>/`). Changes to those propagate under the same rules as Section 1 and 2 below.
 
 Full explanation, source maps, and worked correct-vs-incorrect examples: `docs/architecture/plugin-development-scope.md`.
 

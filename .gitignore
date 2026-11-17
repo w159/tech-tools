@@ -207,10 +207,6 @@ telemetry/server/.vercel/
 !plugins/
 !plugins/**
 
-# ---- skills — canonical skill definitions (SKILL.md, references/, hooks/, scripts/, agents/) ----
-!skills/
-!skills/**
-
 # ---- .claude-plugin — root Claude Code marketplace manifest ----
 # Note: /.* and /.*/ in SECTION 2 block root-level dotdirs; we must re-allow this one.
 !.claude-plugin/

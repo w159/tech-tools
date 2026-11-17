@@ -7,6 +7,13 @@
 - Completion gate (b): `_canon_segments` in `hooks/completion_gate_core.py` compares a compound reproduction per `;`, `&&`, `||` segment, so a self-stamped row whose segment ran passing is credited. Limit: pass status is the whole command's. Documented in `docs/reference/atlas-reference.md`.
 - Script count in `docs/reference/atlas-reference.md` corrected from 87 to 88 non-test scripts (the contract test checks it).
 - New lesson `docs/lessons/2026-11-17_disabling-plugins-and-mcp-per-project.md`.
+- Tripwire: `.claude/settings.json` and `.claude/settings.local.json` at the project root are not target code (`atlas_scope.py:187`). `atlas_test.py run` and `select` are verification commands, not inline ops (`atlas_scope.py:269`).
+- Completion gate: a tmux team of this session with a running member counts as work in flight at Stop (`completion_gate_core.py:1078`).
+- `atlas_paths.sanitize` maps a root under `plugins/<name>/` of a marketplace repo to the repo root (`atlas_paths.py:38`), so the board no longer lands in `plugins/atlas/.atlas/`. The orchestrator style asks for `[implement] ` and `[verify] ` todo prefixes (gate o).
+- Deleted 11 definitions with no reference in the repo (list in `plugins/atlas/CHANGELOG.md`, Removed).
+- Deleted the root `skills/` folder (72 files, 12 skills). No manifest, script or CI job loaded it. References removed from `.gitignore`, `.fallowrc.json`, `AGENTS.md`, `CLAUDE.md`, `docs/architecture/plugin-development-scope.md`, `docs/ROADMAP.md`.
+- Kept: `mcp_servers/` and `mcp_node/`. `scripts/rebuild_armada_bundles.mjs:26-27` builds the armada bundles from them and `.github/workflows/armada-bundles.yml` runs it.
+- New lesson `docs/lessons/2026-11-17_check-for-a-consumer-before-a-delete.md`.
 
 ## marketplace 5.34.0 - 2026-11-16
 

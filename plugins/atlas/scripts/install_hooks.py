@@ -92,8 +92,6 @@ def wired_scripts() -> set[str]:
     return names
 
 
-def is_wired(hid: str) -> bool:
-    return HOOK_SPECS[hid][2] in wired_scripts()
 
 
 def default_selection() -> list[str]:

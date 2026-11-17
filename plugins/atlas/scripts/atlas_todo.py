@@ -57,7 +57,6 @@ import atlas_paths  # noqa: E402
 from atlas_memory import LockTimeout, _file_lock  # noqa: E402
 
 STATUSES = ("pending", "in_progress", "completed", "blocked")
-ORIGINS = ("session", "carried", "manual", "advisor")
 _KEEP_ORIGINS = (
     "manual",
     "advisor",

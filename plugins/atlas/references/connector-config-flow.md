@@ -114,7 +114,7 @@ edits.
 
 ## Runtime wiring
 
-`.mcp.json` launches each server roughly as:
+`.mcp.json` launches each server roughly as (`${CLAUDE_PLUGIN_ROOT}` here is the armada plugin root, `plugins/armada`):
 
 ```bash
 node --import "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs" \

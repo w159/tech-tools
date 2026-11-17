@@ -244,7 +244,9 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
 
 - Inline-op threshold: after 6 unsanctioned main-thread ops with no dispatch in
   between, the 7th is denied (`DENY - 6 inline ops since your last dispatch ...`).
-  Writes to `docs/` and `.atlas/` do not count.
+  Writes to `docs/` and `.atlas/` do not count. A verification command does not
+  count either: a test runner, linter or type check, and `atlas_test.py run` or
+  `atlas_test.py select` (`atlas_scope.py:269`).
 - Native-tool routing: exploration-only `cat`/`grep`/`ls`, and native Grep/Glob,
   are denied toward lean-ctx when it is reachable.
 - Dispatch spec: an `atlas:*` dispatch missing any of `GOAL:`, `DELIVERABLE:`,
@@ -256,7 +258,9 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
   `STEPS`.
 - Production-edit deny: a main-thread `Write`/`Edit` of target code (anything
   outside `docs/` and `.atlas/`) in an orchestration-flagged session is routed
-  to `atlas:implementer`. URI-scheme writes (`agent://`, `xd://`) are never
+  to `atlas:implementer`. `.claude/settings.json` and `.claude/settings.local.json`
+  at the project root are not target code (`atlas_scope.py:187`); the rest of
+  `.claude/` is. URI-scheme writes (`agent://`, `xd://`) are never
   counted as edits.
 
 `ATLAS_TRIPWIRE=off` disables the drift tiers (nudges); `ATLAS_TRIPWIRE_THRESHOLD`
@@ -264,7 +268,10 @@ Denies, all lifted by `ATLAS_TRIPWIRE_HARD=off`:
 
 **Completion gate** (`hooks/completion_gate.py`, Stop). Twenty conditions,
 (a) to (s) and (v). It engages only in a project with a `docs/` directory, stays silent
-while a dispatch is in flight, and prints one block message listing exactly
+while a dispatch is in flight (a running subagent, or a tmux team of this session
+with a member still running; `_team_in_flight`, `completion_gate_core.py:1078`; an
+exited team, a team of another session and a record older than six hours do not
+count), and prints one block message listing exactly
 which conditions are unmet:
 
 - (a) evidence saved under `.atlas/evidence/` during this run; nested dated folders (`.atlas/evidence/<date>-<slug>/...`) count

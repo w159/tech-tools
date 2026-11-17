@@ -204,10 +204,6 @@ def is_enabled() -> bool:
     return state()[0]
 
 
-def _forced_off() -> bool:
-    """Off by an environment opt-out (DO_NOT_TRACK or ATLAS_ANALYTICS=off): silences the notice too."""
-    on, why = state()
-    return not on and (why.startswith("DO_NOT_TRACK") or why.startswith("ATLAS_ANALYTICS"))
 
 
 def is_decided() -> bool:

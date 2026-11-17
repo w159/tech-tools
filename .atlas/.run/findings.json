@@ -12568,5 +12568,95 @@
     "verified_at": "2026-11-17T11:51:34+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "cleanup-delete-list-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Delete list: 1,2,3,7 confirmed; 4,5,6 refuted (keep types/, connector-config-flow.md, herdr scripts)",
+    "evidence": [
+      ".atlas/.run/briefs/cleanup-audit.verified-deletes.report.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "git grep skill names outside skills/; ls node_modules; git status --ignored --short plugins/atlas; grep tsconfig extends .claude-plugin/types; read herdr-web-ui/UPSTREAM.md",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:11:08+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-fab5"
+  },
+  {
+    "id": "gate-scope-fixes-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/t95494f-implementer-ff0f: harness settings are not target code; atlas_test.py run/select is a verification command; output style names the todo phase prefix",
+    "evidence": [
+      "worker/t95494f-implementer-ff0f: 632 passed, 3 skipped"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_atlas_scope_rules.py plugins/atlas/hooks/test_atlas_contract.py plugins/atlas/hooks/test_dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:20:02+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-team-in-flight-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/t95494f-implementer-df41: a running tmux team of this session counts as work in flight at Stop",
+    "evidence": [
+      "worker/t95494f-implementer-df41: 859 passed, 3 skipped"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_completion_gate.py plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:20:02+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "root-sanitize-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker/t95494f-implementer-7f36: sanitize maps plugins/<name> of a marketplace repo to the repo root",
+    "evidence": [
+      "worker/t95494f-implementer-7f36: 385 passed, 3 skipped"
+    ],
+    "doc_refs": [],
+    "reproduction": "/Users/jerry/MEGA/Projects/Agentic/tech-tools/.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_atlas_paths.py plugins/atlas/scripts/test_atlas_mux.py plugins/atlas/hooks/test_todo_capture.py plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:20:02+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "cleanup-deletes-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Cleanup: root skills/ and node_modules, 11 dead definitions, ignored leftovers in plugins/atlas; mcp_servers and mcp_node kept",
+    "evidence": [
+      "merged and cleaned tree: hooks PASS 74 files, scripts PASS 167 files, wall 174.8s; plugins/atlas/.atlas not recreated by the run"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T12:27:45+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

@@ -6,8 +6,7 @@
     "plugins/atlas/scripts/dashboard_ui/vendor/xterm/*",
     "plugins/atlas/scripts/dashboard_ui/css/*.css",
     "plugins/atlas/colony/**",
-    "plugins/atlas/skills/*/templates/**",
-    "skills/*/assets/**"
+    "plugins/atlas/skills/*/templates/**"
   ],
   "entry": [
     "mcp_servers/_shared/__tests__/*.test.ts",

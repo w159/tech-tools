@@ -64,10 +64,15 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-17 | root-sanitize-2026-11-17 | verified | worker/t95494f-implementer-7f36: sanitize maps plugins/<name> of a marketplace repo to the repo root | [2026-11-17_root-sanitize-2026-11-17.md](2026-11-17_root-sanitize-2026-11-17.md) |
 | 2026-11-17 | project-disable-list-2026-11-17 | verified | Project-only disable list: plugins 24 to 10, active MCP servers 66 to 26 | [2026-11-17_project-disable-list-2026-11-17.md](2026-11-17_project-disable-list-2026-11-17.md) |
 | 2026-11-17 | hud-surface-fallow-refactor-17.28.0 | verified | hud-surface.ts rows and agentRowResting split into helpers: fallow audit passes (0 introduced), mod and omp suite 5017 pass 0 fail | [2026-11-17_hud-surface-fallow-refactor-17-28-0.md](2026-11-17_hud-surface-fallow-refactor-17-28-0.md) |
+| 2026-11-17 | gate-team-in-flight-2026-11-17 | verified | worker/t95494f-implementer-df41: a running tmux team of this session counts as work in flight at Stop | [2026-11-17_gate-team-in-flight-2026-11-17.md](2026-11-17_gate-team-in-flight-2026-11-17.md) |
 | 2026-11-17 | gate-segment-match-17.28.1 | verified | Completion gate (b) matches a compound reproduction per ; && // segment | [2026-11-17_gate-segment-match-17-28-1.md](2026-11-17_gate-segment-match-17-28-1.md) |
+| 2026-11-17 | gate-scope-fixes-2026-11-17 | verified | worker/t95494f-implementer-ff0f: harness settings are not target code; atlas_test.py run/select is a verification command; output style names the todo phase prefix | [2026-11-17_gate-scope-fixes-2026-11-17.md](2026-11-17_gate-scope-fixes-2026-11-17.md) |
 | 2026-11-17 | crew-role-tiers-17.28.1 | verified | Crew workers default to the role model and effort from agent frontmatter | [2026-11-17_crew-role-tiers-17-28-1.md](2026-11-17_crew-role-tiers-17-28-1.md) |
+| 2026-11-17 | cleanup-deletes-2026-11-17 | verified | Cleanup: root skills/ and node_modules, 11 dead definitions, ignored leftovers in plugins/atlas; mcp_servers and mcp_node kept | [2026-11-17_cleanup-deletes-2026-11-17.md](2026-11-17_cleanup-deletes-2026-11-17.md) |
+| 2026-11-17 | cleanup-delete-list-2026-11-17 | verified | Delete list: 1,2,3,7 confirmed; 4,5,6 refuted (keep types/, connector-config-flow.md, herdr scripts) | [2026-11-17_cleanup-delete-list-2026-11-17.md](2026-11-17_cleanup-delete-list-2026-11-17.md) |
 | 2026-11-17 | atlas-test-runner-17.28.1 | verified | atlas_test.py runs hooks and scripts suites in parallel under pytest and selects tests by changed path | [2026-11-17_atlas-test-runner-17-28-1.md](2026-11-17_atlas-test-runner-17-28-1.md) |
 | 2026-11-17 | atlas-test-pytest-17.28.1 | verified | atlas_test.py run starts each file under pytest from the first interpreter that has it | [2026-11-17_atlas-test-pytest-17-28-1.md](2026-11-17_atlas-test-pytest-17-28-1.md) |
 | 2026-11-16 | t808b87de-critics2 | verified | round 5 second critic round: 4/10 and 4/10, open defects listed in round-5 audit | [2026-11-16_t808b87de-critics2.md](2026-11-16_t808b87de-critics2.md) |

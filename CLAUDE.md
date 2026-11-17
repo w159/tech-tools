@@ -18,7 +18,7 @@ Read `AGENTS.md` and `docs/architecture/plugin-development-scope.md` next.
 | `plugins/atlas/` | **atlas product source** - edit here |
 | `plugins/armada/` | **armada product source** - edit here |
 | `plugins/programmer/` | **programmer product source** - edit here |
-| `mcp_servers/`, `mcp_node/`, `skills/` | Shared dependencies of those plugins |
+| `mcp_servers/`, `mcp_node/` | Shared dependencies of those plugins |
 | `docs/` | **Project SSOT documentation** - retain and update; never delete as "junk" |
 | `.atlas/` (repo root only) | Dogfood runtime state while atlas is loaded here |
 | `~/.claude/plugins/cache/**` | **Consumer install cache - FORBIDDEN to edit** |
