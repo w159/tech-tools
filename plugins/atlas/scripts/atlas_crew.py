@@ -344,7 +344,11 @@ def resolve_context(entries, root) -> str:
     for e in entries or []:
         path, _, head = str(e).partition("#")
         f = Path(root) / path
-        if "\n" not in path and f.is_file():  # multi-line literal text is never a path
+        try:
+            is_path = "\n" not in path and f.is_file()  # multi-line literal text is never a path
+        except OSError:  # stat raises on an over-long name (ENAMETOOLONG): it is literal text
+            is_path = False
+        if is_path:
             text = f.read_text(encoding="utf-8", errors="replace")
             if head:
                 sec = section(text, head)

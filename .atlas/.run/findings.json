@@ -13636,5 +13636,42 @@
     "verified_at": "2026-11-18T08:33:56+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "resolve-context-oserror",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "resolve_context long-line fix not applied: verifier role cannot edit",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_crew.py:347 unguarded is_file(); git status clean"
+    ],
+    "doc_refs": [],
+    "reproduction": "git status --short; grep -n is_file plugins/atlas/scripts/atlas_crew.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T10:38:59+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-0d32"
+  },
+  {
+    "id": "resolve-context-oserror",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "resolve_context returns an over-long single-line context entry as literal text",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_crew.py:347",
+      "plugins/atlas/scripts/test_atlas_crew.py::PlanTests::test_context_long_single_line_is_literal_text"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/scripts/test_atlas_crew.py plugins/atlas/scripts/test_atlas_crew_hardening.py (274 passed)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T10:41:23+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

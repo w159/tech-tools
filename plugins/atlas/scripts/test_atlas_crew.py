@@ -482,6 +482,13 @@ class PlanTests(unittest.TestCase):
             self.assertNotIn("ranges body", ctx)
             self.assertIn("literal note", ctx)
 
+    def test_context_long_single_line_is_literal_text(self):
+        # stat() raises OSError (ENAMETOOLONG) on an over-long name; it must stay literal text
+        long_line = "x" * 400
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(atlas_crew.resolve_context([long_line], tmp), long_line)
+            self.assertEqual(atlas_crew.resolve_context([long_line + "#head"], tmp), long_line + "#head")
+
     def test_title_heading_hands_over_only_its_preamble(self):
         text = "# Spec\nintro\n## 1. `a.py`\na body\n"
         self.assertEqual(atlas_crew.section(text, "Spec"), "# Spec\nintro")
